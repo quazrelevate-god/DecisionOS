@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import '../widgets/app_bloom.dart';
 import '../widgets/app_header.dart';
+import '../widgets/editorial_icons.dart';
 import '../widgets/segment.dart';
 import '../widgets/neumorphic.dart';
 import '../widgets/sparkline.dart';
@@ -39,8 +40,14 @@ class MoneyScreen extends StatefulWidget {
 class _MoneyScreenState extends State<MoneyScreen> {
   // Canonical tab order — mirrors _TabRail._tabs. Used to compute slide
   // direction when the user swaps tabs.
-  static const _tabOrder = ['overview', 'revenue', 'expenses',
-                             'assets', 'inventory', 'inbox'];
+  static const _tabOrder = [
+    'overview',
+    'revenue',
+    'expenses',
+    'assets',
+    'inventory',
+    'inbox',
+  ];
 
   String _tab = 'overview';
   // +1 = new tab comes in from the right (moving forward through the rail)
@@ -125,52 +132,56 @@ class _MoneyScreenState extends State<MoneyScreen> {
       children: [
         const Positioned.fill(child: AppBloom(tint: BloomTint.smoke)),
         Column(
-      children: [
-        const AppHeader(),
-        Expanded(
-          child: SingleChildScrollView(
-            physics: const ClampingScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(0, 0, 0, 120),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                  child: _Title(),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                _TabRail(active: _tab, onSelect: _setTab),
-                const SizedBox(height: AppSpacing.lg),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                  child: _CaptureHero(
-                    pendingFuture: _pendingFuture!,
-                    onRefresh: _refresh,
-                    onTabChange: _setTab,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                  child: SlidingSwitcher(
-                    tabKey: _tab,
-                    direction: _slideDir,
-                    child: _TabBody(
-                      tab: _tab,
-                      summaryFuture: _summaryFuture,
-                      revenueFuture: _revenueFuture,
-                      expensesFuture: _expensesFuture,
-                      assetsFuture: _assetsFuture,
-                      inventoryFuture: _inventoryFuture,
-                      onTabChange: _setTab,
+          children: [
+            const AppHeader(),
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(0, 0, 0, 120),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                      child: _Title(),
                     ),
-                  ),
+                    const SizedBox(height: AppSpacing.lg),
+                    _TabRail(active: _tab, onSelect: _setTab),
+                    const SizedBox(height: AppSpacing.lg),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                      ),
+                      child: _CaptureHero(
+                        pendingFuture: _pendingFuture!,
+                        onRefresh: _refresh,
+                        onTabChange: _setTab,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                      ),
+                      child: SlidingSwitcher(
+                        tabKey: _tab,
+                        direction: _slideDir,
+                        child: _TabBody(
+                          tab: _tab,
+                          summaryFuture: _summaryFuture,
+                          revenueFuture: _revenueFuture,
+                          expensesFuture: _expensesFuture,
+                          assetsFuture: _assetsFuture,
+                          inventoryFuture: _inventoryFuture,
+                          onTabChange: _setTab,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
-      ],
+          ],
         ),
       ],
     );
@@ -188,11 +199,15 @@ class _Title extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Finance',
-            style: AppText.display().copyWith(fontSize: 30, height: 1.05)),
+        Text(
+          'Finance',
+          style: AppText.display().copyWith(fontSize: 30, height: 1.05),
+        ),
         const SizedBox(height: 6),
-        Text('Money in one place',
-            style: AppText.small().copyWith(color: AppColors.textSecondary)),
+        Text(
+          'Money in one place',
+          style: AppText.small().copyWith(color: AppColors.textSecondary),
+        ),
       ],
     );
   }
@@ -231,17 +246,19 @@ class _TabRail extends StatelessWidget {
         // within a shade of the reference's #e9e6e0.
         palette: NeuPalette.from(trackColorFor(BloomTint.smoke)),
         // Reference is 7 x 9 inside the slot and 5 all round the track.
-        // Two departures, both forced by six tabs sharing a phone's width
-        // where the reference had five and rendered no icons at all:
+        // Roomier here on both, and the icon sits OVER the label rather
+        // than beside it: six tabs plus icons never fit on one line at a
+        // readable size, and stacking buys the height back.
         //
-        //   * horizontal comes down to 5, to buy back width.
-        //   * the extra HEIGHT is spent on the track, not the pill. The
-        //     pill is content-sized, so padding it vertically turns the
-        //     short labels (Assets, Inbox) into circles; fattening the
-        //     track instead keeps every pill a capsule. Track padding
-        //     stays narrow horizontally so height costs no width.
-        trackPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
-        slotPadding: const EdgeInsets.symmetric(horizontal: 5, vertical: 10),
+        // Horizontal stays at 7 on purpose. It is the only axis the
+        // six-tab fit is sensitive to — at 7 all six still spread on a
+        // 360 pt phone, and vertical padding is free.
+        trackPadding: const EdgeInsets.symmetric(horizontal: 7, vertical: 9),
+        slotPadding: const EdgeInsets.symmetric(horizontal: 7, vertical: 9),
+        // Stacked content makes the pill nearly as tall as it is wide, and
+        // a stadium would round the short labels (Assets, Inbox) into
+        // ovals. 20 keeps them rounded rectangles.
+        pillRadius: 20,
         slotBuilder: (context, i, isActive) {
           final t = _tabs[i];
           // Reference ink: active #1F2430, inactive #9AA0AE, applied to
@@ -249,16 +266,16 @@ class _TabRail extends StatelessWidget {
           final fg = isActive
               ? const Color(0xFF1F2430)
               : const Color(0xFF9AA0AE);
-          return Row(
+          return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(t.$3, size: 10, color: fg),
-              const SizedBox(width: 2),
+              Icon(t.$3, size: 15, color: fg),
+              const SizedBox(height: 4),
               AnimatedDefaultTextStyle(
                 duration: const Duration(milliseconds: 200),
                 curve: Curves.easeOutCubic,
                 style: AppText.small().copyWith(
-                  fontSize: 9,
+                  fontSize: 10,
                   fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
                   color: fg,
                   height: 1.25,
@@ -289,20 +306,23 @@ class _TabPill extends StatelessWidget {
     final radius = BorderRadius.circular(AppRadius.pill);
     final child = Padding(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 14, color: AppColors.textPrimary),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppText.small().copyWith(
-            fontSize: 10,
-            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-            color: AppColors.textPrimary.withValues(alpha: active ? 1 : 0.7),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: AppColors.textPrimary),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppText.small().copyWith(
+              fontSize: 10,
+              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+              color: AppColors.textPrimary.withValues(alpha: active ? 1 : 0.7),
+            ),
           ),
-        ),
-      ]),
+        ],
+      ),
     );
     if (active) {
       return KrPressed(
@@ -315,11 +335,7 @@ class _TabPill extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       borderRadius: radius,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: radius,
-        child: child,
-      ),
+      child: InkWell(onTap: onTap, borderRadius: radius, child: child),
     );
   }
 }
@@ -338,19 +354,14 @@ class _CaptureHero extends StatelessWidget {
     required this.onTabChange,
   });
 
-  // Four tinted-icon tiles matching the frontend Capture Hero row —
-  // Upload bill/receipt (orange PDF) · Scan receipt (green camera) · Add
-  // expense (purple plus) · CSV/Excel Export (blue upload). All sit inside
-  // ONE white card, tapping any triggers the corresponding capture flow.
-  static const _tiles = <(String, String, IconData, Color, Color)>[
-    ('Upload bill', '/receipt', Icons.picture_as_pdf_rounded,
-        Color(0xFFFDE5CC), Color(0xFFEA580C)),
-    ('Scan', 'receipt', Icons.photo_camera_outlined,
-        Color(0xFFD3F5DF), Color(0xFF16A34A)),
-    ('Add', 'expense', Icons.add_rounded,
-        Color(0xFFEADFF9), Color(0xFF7C3AED)),
-    ('CSV /Excel', 'Export', Icons.upload_rounded,
-        Color(0xFFDCE7F8), Color(0xFF2563EB)),
+  // KM-59 — the capture row now carries custom editorial line
+  // illustrations rather than tinted circles around Material glyphs. One
+  // ink colour, one stroke weight, drawn as a set.
+  static const _tiles = <(String, EditorialIcon)>[
+    ('Upload bill', EditorialIcon.uploadBill),
+    ('Scan receipt', EditorialIcon.scanReceipt),
+    ('Add expense', EditorialIcon.addExpense),
+    ('CSV / Excel', EditorialIcon.exportSheet),
   ];
 
   Future<void> _onTileTap(BuildContext context, int i) async {
@@ -390,8 +401,9 @@ class _CaptureHero extends StatelessWidget {
           isScrollControlled: true,
           backgroundColor: AppColors.surface,
           shape: const RoundedRectangleBorder(
-            borderRadius:
-                BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(AppRadius.lg),
+            ),
           ),
           builder: (_) => const _AddExpenseSheet(),
         );
@@ -417,13 +429,15 @@ class _CaptureHero extends StatelessWidget {
   }
 
   Future<void> _ingestDoc(
-      BuildContext context, List<int> bytes, String filename) async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Uploading $filename…')),
-    );
+    BuildContext context,
+    List<int> bytes,
+    String filename,
+  ) async {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Uploading $filename…')));
     try {
-      await MoneyRepository()
-          .ingestDocument(bytes: bytes, filename: filename);
+      await MoneyRepository().ingestDocument(bytes: bytes, filename: filename);
       onRefresh();
       onTabChange('inbox');
       if (context.mounted) {
@@ -437,10 +451,13 @@ class _CaptureHero extends StatelessWidget {
   }
 
   Future<void> _ingestCsv(
-      BuildContext context, List<int> bytes, String filename) async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Importing $filename…')),
-    );
+    BuildContext context,
+    List<int> bytes,
+    String filename,
+  ) async {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Importing $filename…')));
     try {
       await MoneyRepository().ingestCsv(bytes: bytes, filename: filename);
       onRefresh();
@@ -467,17 +484,17 @@ class _CaptureHero extends StatelessWidget {
       children: [
         KrPop(
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.lg),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.lg,
+          ),
           child: Row(
             children: [
               for (int i = 0; i < _tiles.length; i++)
                 Expanded(
                   child: _CaptureTile(
                     label: _tiles[i].$1,
-                    sub: _tiles[i].$2,
-                    icon: _tiles[i].$3,
-                    bg: _tiles[i].$4,
-                    fg: _tiles[i].$5,
+                    icon: _tiles[i].$2,
                     onTap: () => _onTileTap(context, i),
                   ),
                 ),
@@ -498,20 +515,32 @@ class _CaptureHero extends StatelessWidget {
                   onTap: () => onTabChange('inbox'),
                   borderRadius: BorderRadius.circular(AppRadius.pill),
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.brandBg,
                       borderRadius: BorderRadius.circular(AppRadius.pill),
                     ),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Text('$count in Inbox',
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '$count in Inbox',
                           style: AppText.smallStrong().copyWith(
-                              fontSize: 11, color: AppColors.brandDeep)),
-                      const SizedBox(width: 4),
-                      const Icon(Icons.arrow_forward_rounded,
-                          size: 12, color: AppColors.brandDeep),
-                    ]),
+                            fontSize: 11,
+                            color: AppColors.brandDeep,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 12,
+                          color: AppColors.brandDeep,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -525,17 +554,11 @@ class _CaptureHero extends StatelessWidget {
 
 class _CaptureTile extends StatelessWidget {
   final String label;
-  final String sub;
-  final IconData icon;
-  final Color bg;
-  final Color fg;
+  final EditorialIcon icon;
   final VoidCallback onTap;
   const _CaptureTile({
     required this.label,
-    required this.sub,
     required this.icon,
-    required this.bg,
-    required this.fg,
     required this.onTap,
   });
   @override
@@ -546,23 +569,24 @@ class _CaptureTile extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.md),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-              alignment: Alignment.center,
-              child: Icon(icon, size: 18, color: fg),
-            ),
-            const SizedBox(height: 8),
-            Text(label,
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Editorial cutout: ink glyph over a pale cut-paper shape.
+              // The tint belongs to the illustration, so the tile passes
+              // nothing but the size.
+              EditorialIllustration(icon: icon, size: 52),
+              const SizedBox(height: 10),
+              Text(
+                label,
                 style: AppText.smallStrong().copyWith(fontSize: 11),
-                maxLines: 1, overflow: TextOverflow.ellipsis),
-            Text(sub,
-                style: AppText.small().copyWith(
-                    fontSize: 10, color: AppColors.textSecondary),
-                maxLines: 1, overflow: TextOverflow.ellipsis),
-          ]),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -596,7 +620,9 @@ class _TabBody extends StatelessWidget {
     switch (tab) {
       case 'overview':
         return _OverviewBody(
-            summaryFuture: summaryFuture, onTabChange: onTabChange);
+          summaryFuture: summaryFuture,
+          onTabChange: onTabChange,
+        );
       case 'revenue':
         return _RevenueBody(future: revenueFuture!);
       case 'expenses':
@@ -636,14 +662,18 @@ class _OverviewBody extends StatelessWidget {
       future: summaryFuture,
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
-          return const Column(children: [
-            LoadingCard(height: 100),
-            SizedBox(height: 12),
-            LoadingCard(height: 160),
-          ]);
+          return const Column(
+            children: [
+              LoadingCard(height: 100),
+              SizedBox(height: 12),
+              LoadingCard(height: 160),
+            ],
+          );
         }
         if (snap.hasError) {
-          return const ErrorState(message: 'Could not load your ledger summary.');
+          return const ErrorState(
+            message: 'Could not load your ledger summary.',
+          );
         }
         final s = snap.data ?? LedgerSummary();
         final net = s.netProfit ?? 0;
@@ -658,7 +688,9 @@ class _OverviewBody extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _NetProfitHero(
-              net: net, monthly: monthly, trendPct: trendPct,
+              net: net,
+              monthly: monthly,
+              trendPct: trendPct,
               onTap: () => onTabChange('revenue'),
             ),
             const SizedBox(height: AppSpacing.md),
@@ -686,7 +718,9 @@ class _NetProfitHero extends StatelessWidget {
   final double trendPct;
   final VoidCallback? onTap;
   const _NetProfitHero({
-    required this.net, required this.monthly, required this.trendPct,
+    required this.net,
+    required this.monthly,
+    required this.trendPct,
     this.onTap,
   });
   @override
@@ -700,58 +734,88 @@ class _NetProfitHero extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppRadius.lg),
       padding: const EdgeInsets.all(AppSpacing.lg),
       onTap: onTap,
-      child: Stack(children: [
-        // Green sparkline runs behind the number.
-        Positioned(
-          top: 12, right: 60,
-          child: SizedBox(
-            width: 130, height: 64,
-            child: Sparkline(points: series, color: green, strokeWidth: 2.2),
+      child: Stack(
+        children: [
+          // Green sparkline runs behind the number.
+          Positioned(
+            top: 12,
+            right: 60,
+            child: SizedBox(
+              width: 130,
+              height: 64,
+              child: Sparkline(points: series, color: green, strokeWidth: 2.2),
+            ),
           ),
-        ),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Net profit',
-                      style: AppText.smallStrong().copyWith(fontSize: 13)),
-                  const SizedBox(height: 8),
-                  Text(_rupee(net),
-                      style: AppText.display().copyWith(fontSize: 30, height: 1)),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    Icon(up ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-                        size: 12,
-                        color: up ? const Color(0xFF16A34A) : AppColors.brand),
-                    const SizedBox(width: 2),
-                    Text('${trendPct.abs().toStringAsFixed(1)}%',
-                        style: AppText.smallStrong().copyWith(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Net profit',
+                      style: AppText.smallStrong().copyWith(fontSize: 13),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _rupee(net),
+                      style: AppText.display().copyWith(
+                        fontSize: 30,
+                        height: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          up
+                              ? Icons.arrow_upward_rounded
+                              : Icons.arrow_downward_rounded,
+                          size: 12,
+                          color: up ? const Color(0xFF16A34A) : AppColors.brand,
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          '${trendPct.abs().toStringAsFixed(1)}%',
+                          style: AppText.smallStrong().copyWith(
                             fontSize: 11,
-                            color: up ? const Color(0xFF16A34A) : AppColors.brand)),
-                    const SizedBox(width: 6),
-                    Text('this month',
-                        style: AppText.small().copyWith(
-                            fontSize: 11, color: AppColors.textSecondary)),
-                  ]),
-                ],
+                            color: up
+                                ? const Color(0xFF16A34A)
+                                : AppColors.brand,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'this month',
+                          style: AppText.small().copyWith(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Container(
-              width: 36, height: 36,
-              decoration: const BoxDecoration(
-                color: AppColors.textPrimary,
-                shape: BoxShape.circle,
+              Container(
+                width: 36,
+                height: 36,
+                decoration: const BoxDecoration(
+                  color: AppColors.textPrimary,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 14,
+                  color: Colors.white,
+                ),
               ),
-              alignment: Alignment.center,
-              child: const Icon(Icons.arrow_forward_rounded,
-                  size: 14, color: Colors.white),
-            ),
-          ],
-        ),
-      ]),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -768,60 +832,80 @@ class _KpiGrid extends StatelessWidget {
       final prev = s.monthlyNet[s.monthlyNet.length - 2];
       if (prev != 0) trend = ((curr - prev) / prev.abs()) * 100;
     }
-    return Column(children: [
-      Row(children: [
-        Expanded(
-          child: _KpiCard(
-            label: 'Revenue',
-            value: s.revenueBilled == null ? '—' : _rupee(s.revenueBilled!),
-            icon: Icons.attach_money_rounded,
-            bg: const Color(0xFFD3F5DF),
-            fg: const Color(0xFF16A34A),
-            trend: trend,
-            onTap: () => onTabChange('revenue'),
+    return Column(
+      children: [
+        // IntrinsicHeight + stretch so the pair in a row is always the
+        // same height, even if a value or label ever needs two lines.
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _KpiCard(
+                  label: 'Revenue',
+                  value: s.revenueBilled == null
+                      ? '—'
+                      : _rupee(s.revenueBilled!),
+                  icon: Icons.attach_money_rounded,
+                  bg: const Color(0xFFD3F5DF),
+                  fg: const Color(0xFF16A34A),
+                  trend: trend,
+                  onTap: () => onTabChange('revenue'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _KpiCard(
+                  label: 'Received',
+                  value: s.revenueReceived == null
+                      ? '—'
+                      : _rupee(s.revenueReceived!),
+                  icon: Icons.chat_bubble_outline_rounded,
+                  bg: const Color(0xFFDCE7F8),
+                  fg: const Color(0xFF2563EB),
+                  onTap: () => onTabChange('revenue'),
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _KpiCard(
-            label: 'Received',
-            value: s.revenueReceived == null ? '—' : _rupee(s.revenueReceived!),
-            icon: Icons.chat_bubble_outline_rounded,
-            bg: const Color(0xFFDCE7F8),
-            fg: const Color(0xFF2563EB),
-            onTap: () => onTabChange('revenue'),
+        const SizedBox(height: 10),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _KpiCard(
+                  label: 'Total spend',
+                  value: s.totalSpend == null ? '—' : _rupee(s.totalSpend!),
+                  icon: Icons.trending_up_rounded,
+                  bg: const Color(0xFFFDE1E5),
+                  fg: const Color(0xFFE11D48),
+                  onTap: () => onTabChange('expenses'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _KpiCard(
+                  label: 'Overdue amount',
+                  value: s.overdueAmount == null
+                      ? '₹0'
+                      : _rupee(s.overdueAmount!),
+                  icon: Icons.error_outline_rounded,
+                  bg: const Color(0xFFFDE5CC),
+                  fg: const Color(0xFFEA580C),
+                  note: s.overdueCount > 0
+                      ? '${s.overdueCount} overdue invoice${s.overdueCount == 1 ? '' : 's'}'
+                      : 'No overdue',
+                  urgent: (s.overdueAmount ?? 0) > 0,
+                  onTap: () => onTabChange('revenue'),
+                ),
+              ),
+            ],
           ),
         ),
-      ]),
-      const SizedBox(height: 10),
-      Row(children: [
-        Expanded(
-          child: _KpiCard(
-            label: 'Total spend',
-            value: s.totalSpend == null ? '—' : _rupee(s.totalSpend!),
-            icon: Icons.trending_up_rounded,
-            bg: const Color(0xFFFDE1E5),
-            fg: const Color(0xFFE11D48),
-            onTap: () => onTabChange('expenses'),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _KpiCard(
-            label: 'Overdue amount',
-            value: s.overdueAmount == null ? '₹0' : _rupee(s.overdueAmount!),
-            icon: Icons.error_outline_rounded,
-            bg: const Color(0xFFFDE5CC),
-            fg: const Color(0xFFEA580C),
-            note: s.overdueCount > 0
-                ? '${s.overdueCount} overdue invoice${s.overdueCount == 1 ? '' : 's'}'
-                : 'No overdue',
-            urgent: (s.overdueAmount ?? 0) > 0,
-            onTap: () => onTabChange('revenue'),
-          ),
-        ),
-      ]),
-    ]);
+      ],
+    );
   }
 }
 
@@ -846,6 +930,53 @@ class _KpiCard extends StatelessWidget {
     this.note,
     this.onTap,
   });
+
+  /// What goes in the reserved footer slot: a trend delta, a note, or
+  /// deliberately nothing.
+  Widget _footer(bool up) {
+    if (trend != null) {
+      final tint = up ? const Color(0xFF16A34A) : AppColors.brand;
+      return Row(
+        children: [
+          Icon(
+            up ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+            size: 11,
+            color: tint,
+          ),
+          const SizedBox(width: 2),
+          Text(
+            '${trend!.abs().toStringAsFixed(1)}%',
+            style: AppText.smallStrong().copyWith(fontSize: 11, color: tint),
+          ),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              'this month',
+              style: AppText.small().copyWith(
+                fontSize: 10,
+                color: AppColors.textSecondary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      );
+    }
+    if (note != null) {
+      return Text(
+        note!,
+        style: AppText.small().copyWith(
+          fontSize: 11,
+          color: urgent ? AppColors.brand : AppColors.textSecondary,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
   @override
   Widget build(BuildContext context) {
     final up = (trend ?? 0) >= 0;
@@ -856,57 +987,52 @@ class _KpiCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Container(
-              width: 34, height: 34,
-              decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-              alignment: Alignment.center,
-              child: Icon(icon, size: 16, color: fg),
-            ),
-            const Spacer(),
-            const Icon(Icons.chevron_right_rounded,
-                size: 16, color: AppColors.textTertiary),
-          ]),
-          const SizedBox(height: 12),
-          Text(label,
-              style: AppText.small().copyWith(fontSize: 12, color: AppColors.textSecondary),
-              maxLines: 1, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 4),
-          Text(value,
-              style: AppText.h3().copyWith(
-                fontSize: 18,
-                height: 1.1,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary,
-                fontFeatures: const [FontFeature.tabularFigures()],
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+                alignment: Alignment.center,
+                child: Icon(icon, size: 16, color: fg),
               ),
-              maxLines: 1, overflow: TextOverflow.ellipsis),
-          if (trend != null) ...[
-            const SizedBox(height: 6),
-            Row(children: [
-              Icon(up ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-                  size: 11,
-                  color: up ? const Color(0xFF16A34A) : AppColors.brand),
-              const SizedBox(width: 2),
-              Text('${trend!.abs().toStringAsFixed(1)}%',
-                  style: AppText.smallStrong().copyWith(
-                    fontSize: 11,
-                    color: up ? const Color(0xFF16A34A) : AppColors.brand,
-                  )),
-              const SizedBox(width: 4),
-              Text('this month',
-                  style: AppText.small().copyWith(
-                      fontSize: 10, color: AppColors.textSecondary)),
-            ]),
-          ],
-          if (note != null) ...[
-            const SizedBox(height: 6),
-            Text(note!,
-                style: AppText.small().copyWith(
-                    fontSize: 11,
-                    color: urgent ? AppColors.brand : AppColors.textSecondary),
-                maxLines: 1, overflow: TextOverflow.ellipsis),
-          ],
+              const Spacer(),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 16,
+                color: AppColors.textTertiary,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            label,
+            style: AppText.small().copyWith(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: AppText.h3().copyWith(
+              fontSize: 18,
+              height: 1.1,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 6),
+          // The footer slot is ALWAYS laid out, even on a card with
+          // nothing to put in it. Only two of these four carry a delta
+          // line, and letting the slot collapse on the other two is what
+          // made the grid uneven.
+          SizedBox(height: 15, child: _footer(up)),
         ],
       ),
     );
@@ -922,12 +1048,21 @@ class _ViewAllButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppRadius.md),
       padding: const EdgeInsets.symmetric(vertical: 14),
       onTap: onTap,
-      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text('View all financials',
-            style: AppText.smallStrong().copyWith(fontSize: 13)),
-        const SizedBox(width: 6),
-        const Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.textPrimary),
-      ]),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'View all financials',
+            style: AppText.smallStrong().copyWith(fontSize: 13),
+          ),
+          const SizedBox(width: 6),
+          const Icon(
+            Icons.arrow_forward_rounded,
+            size: 14,
+            color: AppColors.textPrimary,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -938,7 +1073,8 @@ class _CashFlowPanel extends StatelessWidget {
   const _CashFlowPanel({required this.s, required this.onViewAll});
   @override
   Widget build(BuildContext context) {
-    final double total = s.overdueAmount ??
+    final double total =
+        s.overdueAmount ??
         s.overdueReceivables.fold<double>(0.0, (a, r) => a + r.amount);
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -953,18 +1089,27 @@ class _CashFlowPanel extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.warning_amber_rounded,
-                  size: 20, color: AppColors.brand),
+              const Icon(
+                Icons.warning_amber_rounded,
+                size: 20,
+                color: AppColors.brand,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Cash flow needs attention',
-                        style: AppText.bodyStrong().copyWith(fontSize: 14)),
+                    Text(
+                      'Cash flow needs attention',
+                      style: AppText.bodyStrong().copyWith(fontSize: 14),
+                    ),
                     const SizedBox(height: 2),
-                    Text('${_rupee(total)} is stuck outside',
-                        style: AppText.small().copyWith(color: AppColors.textSecondary)),
+                    Text(
+                      '${_rupee(total)} is stuck outside',
+                      style: AppText.small().copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -976,7 +1121,10 @@ class _CashFlowPanel extends StatelessWidget {
                   onTap: onViewAll,
                   borderRadius: BorderRadius.circular(AppRadius.pill),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(AppRadius.pill),
@@ -988,8 +1136,10 @@ class _CashFlowPanel extends StatelessWidget {
                         ),
                       ],
                     ),
-                    child: Text('View all',
-                        style: AppText.smallStrong().copyWith(fontSize: 11)),
+                    child: Text(
+                      'View all',
+                      style: AppText.smallStrong().copyWith(fontSize: 11),
+                    ),
                   ),
                 ),
               ),
@@ -1014,44 +1164,63 @@ class _CashFlowPanel extends StatelessWidget {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
-                    child: Row(children: [
-                  Container(
-                    width: 30, height: 30,
-                    decoration: BoxDecoration(
-                      color: AppColors.brandBg,
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: const Icon(Icons.apartment_rounded,
-                        size: 14, color: AppColors.brand),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Text(r.name,
-                            style: AppText.smallStrong().copyWith(fontSize: 13),
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: AppColors.brandBg,
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.apartment_rounded,
+                            size: 14,
+                            color: AppColors.brand,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                r.name,
+                                style: AppText.smallStrong().copyWith(
+                                  fontSize: 13,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                r.overdueDays != null
+                                    ? 'Overdue ${r.overdueDays}+ days'
+                                    : 'Outstanding',
+                                style: AppText.small().copyWith(
+                                  fontSize: 11,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         Text(
-                          r.overdueDays != null
-                              ? 'Overdue ${r.overdueDays}+ days'
-                              : 'Outstanding',
-                          style: AppText.small().copyWith(
-                              fontSize: 11, color: AppColors.textSecondary),
+                          _rupee(r.amount),
+                          style: AppText.smallStrong().copyWith(
+                            color: AppColors.brand,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          size: 14,
+                          color: AppColors.textTertiary,
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(_rupee(r.amount),
-                      style: AppText.smallStrong().copyWith(
-                          color: AppColors.brand,
-                          fontFeatures: const [FontFeature.tabularFigures()])),
-                  const SizedBox(width: 6),
-                  const Icon(Icons.chevron_right_rounded,
-                      size: 14, color: AppColors.textTertiary),
-                ]),
                   ),
                 ),
               ),
@@ -1066,16 +1235,23 @@ class _CashFlowPanel extends StatelessWidget {
                 borderRadius: BorderRadius.circular(AppRadius.sm),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(children: [
-                    Text(
-                      'View all ${s.overdueReceivables.length}+ action items',
-                      style: AppText.smallStrong().copyWith(
-                          fontSize: 12, color: AppColors.brand),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.arrow_forward_rounded,
-                        size: 12, color: AppColors.brand),
-                  ]),
+                  child: Row(
+                    children: [
+                      Text(
+                        'View all ${s.overdueReceivables.length}+ action items',
+                        style: AppText.smallStrong().copyWith(
+                          fontSize: 12,
+                          color: AppColors.brand,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 12,
+                        color: AppColors.brand,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1101,7 +1277,8 @@ class _RevenueBody extends StatelessWidget {
         if (snap.connectionState != ConnectionState.done) {
           return const LoadingCard(height: 120);
         }
-        if (snap.hasError) return const ErrorState(message: 'Could not load revenue.');
+        if (snap.hasError)
+          return const ErrorState(message: 'Could not load revenue.');
         final items = snap.data ?? const <Revenue>[];
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1158,7 +1335,8 @@ class _ExpensesBody extends StatelessWidget {
         if (snap.connectionState != ConnectionState.done) {
           return const LoadingCard(height: 120);
         }
-        if (snap.hasError) return const ErrorState(message: 'Could not load expenses.');
+        if (snap.hasError)
+          return const ErrorState(message: 'Could not load expenses.');
         final items = snap.data ?? const <Expense>[];
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1202,8 +1380,10 @@ class _AssetsBody extends StatelessWidget {
     return FutureBuilder<List<Asset>>(
       future: future,
       builder: (context, snap) {
-        if (snap.connectionState != ConnectionState.done) return const LoadingCard(height: 120);
-        if (snap.hasError) return const ErrorState(message: 'Could not load assets.');
+        if (snap.connectionState != ConnectionState.done)
+          return const LoadingCard(height: 120);
+        if (snap.hasError)
+          return const ErrorState(message: 'Could not load assets.');
         final items = snap.data ?? const <Asset>[];
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1252,8 +1432,10 @@ class _InventoryBody extends StatelessWidget {
     return FutureBuilder<List<InventoryItem>>(
       future: future,
       builder: (context, snap) {
-        if (snap.connectionState != ConnectionState.done) return const LoadingCard(height: 120);
-        if (snap.hasError) return const ErrorState(message: 'Could not load inventory.');
+        if (snap.connectionState != ConnectionState.done)
+          return const LoadingCard(height: 120);
+        if (snap.hasError)
+          return const ErrorState(message: 'Could not load inventory.');
         final items = snap.data ?? const <InventoryItem>[];
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1301,7 +1483,8 @@ class _InboxPlaceholder extends StatelessWidget {
     return const EmptyState(
       icon: Icons.inbox_outlined,
       title: 'Capture inbox',
-      subtitle: 'Uploaded receipts land here for you to confirm before they hit the books.',
+      subtitle:
+          'Uploaded receipts land here for you to confirm before they hit the books.',
     );
   }
 }
@@ -1334,52 +1517,67 @@ class _MoneyRowCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: AppText.bodyStrong().copyWith(fontSize: 14),
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(
+                  title,
+                  style: AppText.bodyStrong().copyWith(fontSize: 14),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 if ((meta ?? '').isNotEmpty || status != null) ...[
                   const SizedBox(height: 4),
-                  Row(children: [
-                    if (status != null) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: status!.toLowerCase() == 'overdue'
-                              ? AppColors.brandBg
-                              : AppColors.surfaceMuted,
-                          borderRadius: BorderRadius.circular(AppRadius.pill),
-                        ),
-                        child: Text(
-                          status![0].toUpperCase() + status!.substring(1),
-                          style: AppText.small().copyWith(
-                            fontSize: 11,
+                  Row(
+                    children: [
+                      if (status != null) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
                             color: status!.toLowerCase() == 'overdue'
-                                ? AppColors.brand
-                                : AppColors.textSecondary,
+                                ? AppColors.brandBg
+                                : AppColors.surfaceMuted,
+                            borderRadius: BorderRadius.circular(AppRadius.pill),
+                          ),
+                          child: Text(
+                            status![0].toUpperCase() + status!.substring(1),
+                            style: AppText.small().copyWith(
+                              fontSize: 11,
+                              color: status!.toLowerCase() == 'overdue'
+                                  ? AppColors.brand
+                                  : AppColors.textSecondary,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    if ((meta ?? '').isNotEmpty)
-                      Flexible(
-                        child: Text(meta!,
+                        const SizedBox(width: 8),
+                      ],
+                      if ((meta ?? '').isNotEmpty)
+                        Flexible(
+                          child: Text(
+                            meta!,
                             style: AppText.small().copyWith(
-                                fontSize: 12, color: AppColors.textSecondary),
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
-                      ),
-                  ]),
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                  ),
                 ],
               ],
             ),
           ),
           const SizedBox(width: 8),
-          Text('${income ? '+' : '−'} ${_rupee(amount)}',
-              style: AppText.smallStrong().copyWith(
-                fontSize: 13,
-                color: income ? const Color(0xFF16A34A) : AppColors.brand,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              )),
+          Text(
+            '${income ? '+' : '−'} ${_rupee(amount)}',
+            style: AppText.smallStrong().copyWith(
+              fontSize: 13,
+              color: income ? const Color(0xFF16A34A) : AppColors.brand,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
           if (onDelete != null) ...[
             const SizedBox(width: 4),
             InkWell(
@@ -1387,8 +1585,11 @@ class _MoneyRowCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(999),
               child: const Padding(
                 padding: EdgeInsets.all(6),
-                child: Icon(Icons.delete_outline_rounded,
-                    size: 18, color: AppColors.textSecondary),
+                child: Icon(
+                  Icons.delete_outline_rounded,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
               ),
             ),
           ],
@@ -1418,14 +1619,23 @@ class _AddPill extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppRadius.pill),
           child: Padding(
             padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md, vertical: 10),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.add_rounded, size: 16, color: Colors.white),
-              const SizedBox(width: 6),
-              Text(label,
-                  style: AppText.bodyStrong()
-                      .copyWith(color: Colors.white, fontSize: 13)),
-            ]),
+              horizontal: AppSpacing.md,
+              vertical: 10,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.add_rounded, size: 16, color: Colors.white),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: AppText.bodyStrong().copyWith(
+                    color: Colors.white,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1464,11 +1674,13 @@ Future<void> _confirmDelete(
       content: Text('"$title" will be permanently removed.'),
       actions: [
         TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel')),
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Cancel'),
+        ),
         TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Delete')),
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Delete'),
+        ),
       ],
     ),
   );
@@ -1482,9 +1694,9 @@ Future<void> _confirmDelete(
     }
   } catch (_) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not delete.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Could not delete.')));
     }
   }
 }
@@ -1508,16 +1720,16 @@ class _AddMoneySheetState extends State<_AddMoneySheet> {
   bool _saving = false;
 
   String get _heading => switch (widget.kind) {
-        'income' => 'Add income',
-        'asset' => 'Add asset',
-        _ => 'Add inventory item',
-      };
+    'income' => 'Add income',
+    'asset' => 'Add asset',
+    _ => 'Add inventory item',
+  };
 
   Future<void> _submit() async {
     if (_title.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Title is required.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Title is required.')));
       return;
     }
     setState(() => _saving = true);
@@ -1553,25 +1765,33 @@ class _AddMoneySheetState extends State<_AddMoneySheet> {
       if (mounted) Navigator.of(context).pop(true);
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not save.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Could not save.')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  Widget _field(String label, TextEditingController c,
-      {String? hint, TextInputType? keyboard}) {
+  Widget _field(
+    String label,
+    TextEditingController c, {
+    String? hint,
+    TextInputType? keyboard,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 6, top: 4),
-          child: Text(label,
-              style: AppText.small()
-                  .copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
+          child: Text(
+            label,
+            style: AppText.small().copyWith(
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
         ),
         Container(
           decoration: BoxDecoration(
@@ -1584,8 +1804,7 @@ class _AddMoneySheetState extends State<_AddMoneySheet> {
             keyboardType: keyboard,
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle:
-                  AppText.body().copyWith(color: AppColors.textTertiary),
+              hintStyle: AppText.body().copyWith(color: AppColors.textTertiary),
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(vertical: 12),
             ),
@@ -1618,18 +1837,20 @@ class _AddMoneySheetState extends State<_AddMoneySheet> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(children: [
-                  Text(_heading, style: AppText.h3()),
-                  const Spacer(),
-                  InkWell(
-                    onTap: () => Navigator.of(context).pop(),
-                    borderRadius: BorderRadius.circular(999),
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(Icons.close_rounded, size: 20),
+                Row(
+                  children: [
+                    Text(_heading, style: AppText.h3()),
+                    const Spacer(),
+                    InkWell(
+                      onTap: () => Navigator.of(context).pop(),
+                      borderRadius: BorderRadius.circular(999),
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(Icons.close_rounded, size: 20),
+                      ),
                     ),
-                  ),
-                ]),
+                  ],
+                ),
                 const SizedBox(height: AppSpacing.md),
                 _field('Title', _title, hint: 'What is this?'),
                 _field(
@@ -1640,14 +1861,19 @@ class _AddMoneySheetState extends State<_AddMoneySheet> {
                       : 'Vendor name',
                 ),
                 if (widget.kind == 'inventory')
-                  _field('Quantity', _qty,
-                      hint: '0',
-                      keyboard: const TextInputType.numberWithOptions()),
+                  _field(
+                    'Quantity',
+                    _qty,
+                    hint: '0',
+                    keyboard: const TextInputType.numberWithOptions(),
+                  ),
                 _field(
                   widget.kind == 'inventory' ? 'Unit cost' : 'Amount',
                   _amount,
                   hint: '0',
-                  keyboard: const TextInputType.numberWithOptions(decimal: true),
+                  keyboard: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                 ),
                 if (widget.kind == 'asset')
                   _field('Category', _category, hint: 'Category (optional)'),
@@ -1661,9 +1887,12 @@ class _AddMoneySheetState extends State<_AddMoneySheet> {
                     child: Container(
                       alignment: Alignment.center,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      child: Text(_saving ? 'Saving…' : 'Save',
-                          style: AppText.bodyStrong()
-                              .copyWith(color: Colors.white)),
+                      child: Text(
+                        _saving ? 'Saving…' : 'Save',
+                        style: AppText.bodyStrong().copyWith(
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -1695,31 +1924,43 @@ class _AiInsightPlaceholder extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppRadius.md),
       padding: const EdgeInsets.all(AppSpacing.md),
       color: AppColors.surface,
-      child: Row(children: [
-        Container(
-          width: 32, height: 32,
-          decoration: BoxDecoration(
-            color: AppColors.brandBg,
-            shape: BoxShape.circle,
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: AppColors.brandBg,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.auto_awesome_rounded,
+              size: 15,
+              color: AppColors.brand,
+            ),
           ),
-          alignment: Alignment.center,
-          child: const Icon(Icons.auto_awesome_rounded,
-              size: 15, color: AppColors.brand),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Dex insights',
-                  style: AppText.smallStrong().copyWith(fontSize: 12)),
-              Text('Ask Dex about your $scope',
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Dex insights',
+                  style: AppText.smallStrong().copyWith(fontSize: 12),
+                ),
+                Text(
+                  'Ask Dex about your $scope',
                   style: AppText.small().copyWith(
-                      fontSize: 11, color: AppColors.textSecondary)),
-            ],
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ]),
+        ],
+      ),
     );
   }
 }
@@ -1774,72 +2015,95 @@ class _AskAiPanelState extends State<_AskAiPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Container(
-              width: 32, height: 32,
-              decoration: BoxDecoration(
-                color: const Color(0xFFEADFF9),
-                shape: BoxShape.circle,
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEADFF9),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.auto_awesome_rounded,
+                  size: 15,
+                  color: Color(0xFF7C3AED),
+                ),
               ),
-              alignment: Alignment.center,
-              child: const Icon(Icons.auto_awesome_rounded,
-                  size: 15, color: Color(0xFF7C3AED)),
-            ),
-            const SizedBox(width: 10),
-            Text('Ask AI about your finances',
-                style: AppText.bodyStrong().copyWith(fontSize: 14)),
-          ]),
+              const SizedBox(width: 10),
+              Text(
+                'Ask AI about your finances',
+                style: AppText.bodyStrong().copyWith(fontSize: 14),
+              ),
+            ],
+          ),
           const SizedBox(height: AppSpacing.md),
           // Text field + dark round send button.
           Container(
-            padding: const EdgeInsets.only(left: 14, right: 4, top: 4, bottom: 4),
+            padding: const EdgeInsets.only(
+              left: 14,
+              right: 4,
+              top: 4,
+              bottom: 4,
+            ),
             decoration: BoxDecoration(
               color: AppColors.surfaceMuted,
               borderRadius: BorderRadius.circular(AppRadius.pill),
               border: Border.all(color: AppColors.hairline),
             ),
-            child: Row(children: [
-              Expanded(
-                child: TextField(
-                  controller: _ctrl,
-                  onSubmitted: (_) => _submit(),
-                  style: AppText.body().copyWith(fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'e.g. Which vendor did I spend the most on?',
-                    hintStyle: AppText.small().copyWith(
-                        fontSize: 12, color: AppColors.textTertiary),
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                  ),
-                ),
-              ),
-              Material(
-                color: Colors.transparent,
-                shape: const CircleBorder(),
-                child: InkWell(
-                  customBorder: const CircleBorder(),
-                  onTap: _submit,
-                  child: Container(
-                    width: 36, height: 36,
-                    decoration: const BoxDecoration(
-                      color: AppColors.textPrimary,
-                      shape: BoxShape.circle,
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _ctrl,
+                    onSubmitted: (_) => _submit(),
+                    style: AppText.body().copyWith(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'e.g. Which vendor did I spend the most on?',
+                      hintStyle: AppText.small().copyWith(
+                        fontSize: 12,
+                        color: AppColors.textTertiary,
+                      ),
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
                     ),
-                    alignment: Alignment.center,
-                    child: _asking
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Icon(Icons.send_rounded,
-                            size: 15, color: Colors.white),
                   ),
                 ),
-              ),
-            ]),
+                Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: _submit,
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: const BoxDecoration(
+                        color: AppColors.textPrimary,
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: _asking
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(
+                              Icons.send_rounded,
+                              size: 15,
+                              color: Colors.white,
+                            ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           if (_answer != null) ...[
             const SizedBox(height: AppSpacing.md),
@@ -1855,9 +2119,13 @@ class _AskAiPanelState extends State<_AskAiPanel> {
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.only(top: 4, right: 4),
-                      child: Text(_answer!,
-                          style: AppText.body()
-                              .copyWith(fontSize: 13, height: 1.5)),
+                      child: Text(
+                        _answer!,
+                        style: AppText.body().copyWith(
+                          fontSize: 13,
+                          height: 1.5,
+                        ),
+                      ),
                     ),
                   ),
                   // Dismiss the answer so the panel collapses back to the
@@ -1871,8 +2139,11 @@ class _AskAiPanelState extends State<_AskAiPanel> {
                       onTap: () => setState(() => _answer = null),
                       child: const Padding(
                         padding: EdgeInsets.all(6),
-                        child: Icon(Icons.close_rounded,
-                            size: 16, color: AppColors.textSecondary),
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 16,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ),
                   ),
@@ -1897,8 +2168,11 @@ class _AutoFlowFooter extends StatelessWidget {
         children: [
           const Padding(
             padding: EdgeInsets.only(top: 1),
-            child: Icon(Icons.account_balance_wallet_outlined,
-                size: 13, color: AppColors.textTertiary),
+            child: Icon(
+              Icons.account_balance_wallet_outlined,
+              size: 13,
+              color: AppColors.textTertiary,
+            ),
           ),
           const SizedBox(width: 6),
           Expanded(
@@ -1945,9 +2219,9 @@ class _AddExpenseSheetState extends State<_AddExpenseSheet> {
 
   Future<void> _save() async {
     if (_title.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Title is required.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Title is required.')));
       return;
     }
     setState(() => _saving = true);
@@ -1957,36 +2231,43 @@ class _AddExpenseSheetState extends State<_AddExpenseSheet> {
         if (_vendor.text.trim().isNotEmpty) 'vendor': _vendor.text.trim(),
         if (_amount.text.trim().isNotEmpty)
           'amount': double.tryParse(_amount.text.trim()),
-        if (_category.text.trim().isNotEmpty)
-          'category': _category.text.trim(),
+        if (_category.text.trim().isNotEmpty) 'category': _category.text.trim(),
       });
       if (mounted) {
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Expense added')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Expense added')));
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not add expense.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Could not add expense.')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  Widget _field(String label, TextEditingController c,
-      {String? hint, TextInputType? keyboard}) {
+  Widget _field(
+    String label,
+    TextEditingController c, {
+    String? hint,
+    TextInputType? keyboard,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 6),
-          child: Text(label,
-              style: AppText.small()
-                  .copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
+          child: Text(
+            label,
+            style: AppText.small().copyWith(
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
         ),
         TextField(
           controller: c,
@@ -2000,7 +2281,9 @@ class _AddExpenseSheetState extends State<_AddExpenseSheet> {
               borderSide: BorderSide.none,
             ),
             contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12, vertical: 12),
+              horizontal: 12,
+              vertical: 12,
+            ),
           ),
         ),
       ],
@@ -2024,9 +2307,12 @@ class _AddExpenseSheetState extends State<_AddExpenseSheet> {
             const SizedBox(height: 12),
             _field('Vendor', _vendor, hint: 'Vendor or payee'),
             const SizedBox(height: 12),
-            _field('Amount', _amount,
-                hint: '0',
-                keyboard: const TextInputType.numberWithOptions(decimal: true)),
+            _field(
+              'Amount',
+              _amount,
+              hint: '0',
+              keyboard: const TextInputType.numberWithOptions(decimal: true),
+            ),
             const SizedBox(height: 12),
             _field('Category', _category, hint: 'Categorise (optional)'),
             const SizedBox(height: AppSpacing.lg),
@@ -2040,10 +2326,13 @@ class _AddExpenseSheetState extends State<_AddExpenseSheet> {
                   borderRadius: BorderRadius.circular(AppRadius.pill),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.lg, vertical: 12),
-                    child: Text(_saving ? 'Adding…' : 'Add Expense',
-                        style: AppText.bodyStrong()
-                            .copyWith(color: Colors.white)),
+                      horizontal: AppSpacing.lg,
+                      vertical: 12,
+                    ),
+                    child: Text(
+                      _saving ? 'Adding…' : 'Add Expense',
+                      style: AppText.bodyStrong().copyWith(color: Colors.white),
+                    ),
                   ),
                 ),
               ),

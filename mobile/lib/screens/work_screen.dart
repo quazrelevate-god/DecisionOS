@@ -34,7 +34,7 @@ class _WorkScreenState extends State<WorkScreen> {
   // persist across restarts (MyWork.js persists per-user in localStorage).
   bool _mine = true;
   bool _aiPriority = false;
-  String _tab = 'all';       // 'all' | category key | 'completed'
+  String _tab = 'all'; // 'all' | category key | 'completed'
   // Slide direction for the tab body transition: +1 = new content
   // enters from the right (mine → all), -1 = from the left.
   int _slideDir = 1;
@@ -119,101 +119,118 @@ class _WorkScreenState extends State<WorkScreen> {
       children: [
         const Positioned.fill(child: AppBloom(tint: BloomTint.steelBlue)),
         Column(
-      children: [
-        const AppHeader(),
-        Expanded(
-          child: FutureBuilder<List<Task>>(
-            future: _future,
-            builder: (context, snap) {
-              final all = snap.data ?? const <Task>[];
-              // Category keys observed in the payload — same rule MyWork.js
-              // uses (only show categories that have items).
-              final categoryKeys = <String>{
-                for (final t in all)
-                  if ((t.taskType ?? '').isNotEmpty && !t.isTerminal) t.taskType!,
-              }.toList()..sort();
+          children: [
+            const AppHeader(),
+            Expanded(
+              child: FutureBuilder<List<Task>>(
+                future: _future,
+                builder: (context, snap) {
+                  final all = snap.data ?? const <Task>[];
+                  // Category keys observed in the payload — same rule MyWork.js
+                  // uses (only show categories that have items).
+                  final categoryKeys = <String>{
+                    for (final t in all)
+                      if ((t.taskType ?? '').isNotEmpty && !t.isTerminal)
+                        t.taskType!,
+                  }.toList()..sort();
 
-              final header = Padding(
-                padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 0),
-                child: _MobileHeader(
-                  mine: _mine,
-                  aiPriority: _aiPriority,
-                  tab: _tab,
-                  allTasks: all,
-                  categoryKeys: categoryKeys,
-                  countFor: _countFor,
-                  onScope: _setScope,
-                  onToggleAi: _toggleAi,
-                  onTab: _setTab,
-                  onNewTask: () async {
-                    final saved = await showModalBottomSheet<bool>(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => const _NewTaskSheet(),
+                  final header = Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      0,
+                      AppSpacing.lg,
+                      0,
+                    ),
+                    child: _MobileHeader(
+                      mine: _mine,
+                      aiPriority: _aiPriority,
+                      tab: _tab,
+                      allTasks: all,
+                      categoryKeys: categoryKeys,
+                      countFor: _countFor,
+                      onScope: _setScope,
+                      onToggleAi: _toggleAi,
+                      onTab: _setTab,
+                      onNewTask: () async {
+                        final saved = await showModalBottomSheet<bool>(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (_) => const _NewTaskSheet(),
+                        );
+                        if (saved == true) _refetchAll();
+                      },
+                    ),
+                  );
+
+                  Widget body;
+                  if (snap.connectionState != ConnectionState.done) {
+                    body = const _WorkSkeleton();
+                  } else {
+                    final visible = _applyFilter(all);
+                    body = SingleChildScrollView(
+                      physics: const ClampingScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        AppSpacing.lg,
+                        AppSpacing.lg,
+                        120,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (snap.hasError)
+                            ErrorState(
+                              message: 'Could not load your tasks.',
+                              onRetry: _refetchAll,
+                            )
+                          else if (visible.isEmpty)
+                            const EmptyState(
+                              icon: Icons.assignment_turned_in_outlined,
+                              title: 'Nothing here yet',
+                              subtitle:
+                                  'Tasks in this filter will appear here.',
+                            )
+                          else
+                            for (final t in visible)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: AppSpacing.md,
+                                ),
+                                child: _TaskTile(
+                                  task: t,
+                                  onChanged: _refetchAll,
+                                ),
+                              ),
+                        ],
+                      ),
                     );
-                    if (saved == true) _refetchAll();
-                  },
-                ),
-              );
+                  }
 
-              Widget body;
-              if (snap.connectionState != ConnectionState.done) {
-                body = const _WorkSkeleton();
-              } else {
-                final visible = _applyFilter(all);
-                body = SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 120),
-                  child: Column(
+                  return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      if (snap.hasError)
-                        ErrorState(
-                          message: 'Could not load your tasks.',
-                          onRetry: _refetchAll,
-                        )
-                      else if (visible.isEmpty)
-                        const EmptyState(
-                          icon: Icons.assignment_turned_in_outlined,
-                          title: 'Nothing here yet',
-                          subtitle: 'Tasks in this filter will appear here.',
-                        )
-                      else
-                        for (final t in visible)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                            child: _TaskTile(task: t, onChanged: _refetchAll),
-                          ),
+                      header,
+                      const SizedBox(height: AppSpacing.md),
+                      Expanded(
+                        child: SlidingSwitcher(
+                          // Key ONLY on scope (mine vs all). AI-priority
+                          // toggles keep the same tab visually — the list
+                          // just re-orders in place. Including 'ai' here was
+                          // triggering an extra slide on top of the segment
+                          // pit animation, which read as the page switching
+                          // twice.
+                          tabKey: _mine ? 'mine' : 'all',
+                          direction: _slideDir,
+                          child: body,
+                        ),
+                      ),
                     ],
-                  ),
-                );
-              }
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  header,
-                  const SizedBox(height: AppSpacing.md),
-                  Expanded(
-                    child: SlidingSwitcher(
-                      // Key ONLY on scope (mine vs all). AI-priority
-                      // toggles keep the same tab visually — the list
-                      // just re-orders in place. Including 'ai' here was
-                      // triggering an extra slide on top of the segment
-                      // pit animation, which read as the page switching
-                      // twice.
-                      tabKey: _mine ? 'mine' : 'all',
-                      direction: _slideDir,
-                      child: body,
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ],
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -253,9 +270,12 @@ class _MobileHeader extends StatelessWidget {
     if (key == 'all') return 'All';
     if (key == 'completed') return 'Completed';
     // Titlecase category key.
-    return key.split(RegExp(r'[_\s]+')).map((w) {
-      return w.isEmpty ? w : (w[0].toUpperCase() + w.substring(1));
-    }).join(' ');
+    return key
+        .split(RegExp(r'[_\s]+'))
+        .map((w) {
+          return w.isEmpty ? w : (w[0].toUpperCase() + w.substring(1));
+        })
+        .join(' ');
   }
 
   @override
@@ -264,8 +284,10 @@ class _MobileHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Row 1 — title only. Workflows / Leave moved to the More sheet.
-        Text('My Work',
-            style: AppText.display().copyWith(fontSize: 30, height: 1.05)),
+        Text(
+          'My Work',
+          style: AppText.display().copyWith(fontSize: 30, height: 1.05),
+        ),
         const SizedBox(height: 12),
 
         // Row 2 — lens group + right-hand circles.
@@ -310,15 +332,22 @@ class _MobileHeader extends StatelessWidget {
         const SizedBox(height: 10),
         Row(
           children: [
-            Text(_labelFor(tab),
-                style: AppText.small().copyWith(
-                    color: AppColors.textSecondary, fontSize: 12)),
+            Text(
+              _labelFor(tab),
+              style: AppText.small().copyWith(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+              ),
+            ),
             const SizedBox(width: 4),
-            Text('· ${countFor(tab, allTasks)}',
-                style: AppText.small().copyWith(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                    fontFeatures: const [FontFeature.tabularFigures()])),
+            Text(
+              '· ${countFor(tab, allTasks)}',
+              style: AppText.small().copyWith(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
           ],
         ),
       ],
@@ -342,20 +371,28 @@ class _JoinedSegment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Sliding-pill segment — the raised cool-grey track holds a white pit
-    // that glides between "My Tasks" and "All Tasks" over 220 ms.
-    return SlidingSegment(
+    // KM-57 — the Finance rail's material: recessed track, ONE raised
+    // content-sized pill, flat inactive. Dropped into a Row with no
+    // Expanded, so it shrink-wraps to its two labels.
+    const labels = ['My Tasks', 'All Tasks'];
+    return RaisedPillSegment(
       active: selected ? (mine ? 0 : 1) : 0,
-      count: 2,
+      count: labels.length,
       onSelect: (i) => i == 0 ? onMine() : onAll(),
-      labels: const ['My Tasks', 'All Tasks'],
-      height: 40,
-      trackColor: trackColorFor(BloomTint.steelBlue),
+      palette: NeuPalette.from(trackColorFor(BloomTint.steelBlue)),
+      trackPadding: const EdgeInsets.symmetric(horizontal: 7, vertical: 10),
+      slotPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+      // A 2-3 slot rail has width to spare. Space-between would fling the
+      // slots to the extreme ends of the track with a hole in the middle;
+      // evenly keeps the content-sized pills looking placed.
+      distribution: MainAxisAlignment.spaceEvenly,
+      slotBuilder: (context, i, isActive) =>
+          neuSegmentLabel(context, labels[i], isActive),
     );
   }
 }
 
-// _SegmentHalf removed — SlidingSegment now handles the geometry.
+// _SegmentHalf removed — RaisedPillSegment now handles the geometry.
 
 /// Round 36×36 icon button. `pressed=true` uses the sunken material.
 class _Circle extends StatelessWidget {
@@ -373,7 +410,8 @@ class _Circle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final child = SizedBox(
-      width: 36, height: 36,
+      width: 36,
+      height: 36,
       child: Center(child: Icon(icon, size: 16, color: AppColors.textPrimary)),
     );
     final wrapped = pressed
@@ -413,62 +451,100 @@ class _FilterCircle extends StatelessWidget {
     final result = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: AppColors.surface,
+      // The option list is as long as the tenant has task categories. A
+      // default sheet caps at roughly half the screen and does not
+      // scroll, so a long list overflowed it. Take the height cap off,
+      // set our own, and let the rows scroll inside it.
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 8),
-              Center(
-                child: Container(
-                  width: 44, height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.hairlineStrong,
-                    borderRadius: BorderRadius.circular(2),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(ctx).size.height * 0.75,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 8),
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.hairlineStrong,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-                child: Text('Filter',
-                    style: AppText.label().copyWith(fontSize: 11)),
-              ),
-              for (final k in tabs)
-                InkWell(
-                  onTap: () => Navigator.of(ctx).pop(k),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    child: Row(
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+                  child: Text(
+                    'Filter',
+                    style: AppText.label().copyWith(fontSize: 11),
+                  ),
+                ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Icon(
-                          k == tab
-                              ? Icons.check_circle_rounded
-                              : Icons.radio_button_unchecked_rounded,
-                          size: 18,
-                          color: k == tab ? AppColors.brand : AppColors.textTertiary,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(labelFor(k),
-                              style: AppText.body().copyWith(
-                                  fontWeight: k == tab ? FontWeight.w600 : FontWeight.w400)),
-                        ),
-                        if (showCount)
-                          Text('${countFor(k)}',
-                              style: AppText.small().copyWith(
-                                  color: AppColors.textSecondary,
-                                  fontFeatures: const [FontFeature.tabularFigures()])),
+                        for (final k in tabs)
+                          InkWell(
+                            onTap: () => Navigator.of(ctx).pop(k),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 12,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    k == tab
+                                        ? Icons.check_circle_rounded
+                                        : Icons.radio_button_unchecked_rounded,
+                                    size: 18,
+                                    color: k == tab
+                                        ? AppColors.brand
+                                        : AppColors.textTertiary,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      labelFor(k),
+                                      style: AppText.body().copyWith(
+                                        fontWeight: k == tab
+                                            ? FontWeight.w600
+                                            : FontWeight.w400,
+                                      ),
+                                    ),
+                                  ),
+                                  if (showCount)
+                                    Text(
+                                      '${countFor(k)}',
+                                      style: AppText.small().copyWith(
+                                        color: AppColors.textSecondary,
+                                        fontFeatures: const [
+                                          FontFeature.tabularFigures(),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),
                 ),
-              const SizedBox(height: 12),
-            ],
+                const SizedBox(height: 12),
+              ],
+            ),
           ),
         );
       },
@@ -478,14 +554,16 @@ class _FilterCircle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Builder(builder: (context) {
-      return _Circle(
-        icon: Icons.tune_rounded,
-        pressed: false,
-        onTap: () => _open(context),
-        tooltip: 'Filter',
-      );
-    });
+    return Builder(
+      builder: (context) {
+        return _Circle(
+          icon: Icons.tune_rounded,
+          pressed: false,
+          onTap: () => _open(context),
+          tooltip: 'Filter',
+        );
+      },
+    );
   }
 }
 
@@ -517,16 +595,32 @@ class _TaskTileState extends State<_TaskTile>
 
   double get _titleSize {
     switch (widget.task.priority) {
-      case 'high': return 17;
-      case 'low': return 13;
-      default: return 15;
+      case 'high':
+        return 17;
+      case 'low':
+        return 13;
+      default:
+        return 15;
     }
   }
 
   String? _dueLabel() {
     final d = widget.task.dueAt;
     if (d == null) return null;
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     return 'due ${d.day} ${months[d.month - 1]}';
   }
 
@@ -558,8 +652,11 @@ class _TaskTileState extends State<_TaskTile>
                     AnimatedRotation(
                       turns: _expanded ? 0 : -0.25,
                       duration: const Duration(milliseconds: 180),
-                      child: const Icon(Icons.expand_more_rounded,
-                          size: 16, color: AppColors.textSecondary),
+                      child: const Icon(
+                        Icons.expand_more_rounded,
+                        size: 16,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -597,17 +694,23 @@ class _TaskTileState extends State<_TaskTile>
                     children: [
                       _StatusChip(label: statusLabel, terminal: terminal),
                       if (due != null && !overdue)
-                        Text(due,
-                            style: AppText.small().copyWith(
-                                fontSize: 12,
-                                color: AppColors.textSecondary)),
+                        Text(
+                          due,
+                          style: AppText.small().copyWith(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
                       if ((task.assigneeName ?? '').isNotEmpty)
                         _MetaBadge(
-                            icon: Icons.person_outline_rounded, text: task.assigneeName!),
+                          icon: Icons.person_outline_rounded,
+                          text: task.assigneeName!,
+                        ),
                       if (task.attachmentCount > 0)
                         _MetaBadge(
-                            icon: Icons.attach_file_rounded,
-                            text: '${task.attachmentCount}'),
+                          icon: Icons.attach_file_rounded,
+                          text: '${task.attachmentCount}',
+                        ),
                       if (task.isEscalation) _AccentPill(label: 'Escalation'),
                       if (task.isHandoff) _OutlinedPill(label: 'Handoff'),
                     ],
@@ -655,10 +758,10 @@ class _ExpandedBody extends StatelessWidget {
   // 4 states the task actually MOVES THROUGH (frontend M_STATUS_PILLS).
   // Cancelled + Completed live on the Complete / X buttons, not the track.
   static const _stages = <(String, String, Color, Color)>[
-    ('todo',        'Not Started', Color(0xFFFDE68A), Color(0xFF854D0E)),
+    ('todo', 'Not Started', Color(0xFFFDE68A), Color(0xFF854D0E)),
     ('in_progress', 'In Progress', Color(0xFFF97316), Colors.white),
-    ('waiting',     'Waiting',     Color(0xFFFDBA74), Color(0xFF7C2D12)),
-    ('review',      'Review',      Color(0xFF65A30D), Colors.white),
+    ('waiting', 'Waiting', Color(0xFFFDBA74), Color(0xFF7C2D12)),
+    ('review', 'Review', Color(0xFF65A30D), Colors.white),
   ];
 
   static String _label(String status) {
@@ -674,8 +777,11 @@ class _ExpandedBody extends StatelessWidget {
     return labels[status] ?? status;
   }
 
-  Future<void> _setStatus(BuildContext context, String status,
-      {String? successLabel}) async {
+  Future<void> _setStatus(
+    BuildContext context,
+    String status, {
+    String? successLabel,
+  }) async {
     try {
       await TasksRepository().patch(task.id, {'status': status});
       onChanged();
@@ -704,7 +810,12 @@ class _ExpandedBody extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.hairline)),
       ),
-      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.lg),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.lg,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -712,9 +823,7 @@ class _ExpandedBody extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: overdue && !terminal
-                  ? AppColors.brand
-                  : AppColors.brandBg,
+              color: overdue && !terminal ? AppColors.brand : AppColors.brandBg,
               borderRadius: BorderRadius.circular(AppRadius.pill),
             ),
             child: Text(
@@ -722,9 +831,7 @@ class _ExpandedBody extends StatelessWidget {
               style: AppText.small().copyWith(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: overdue && !terminal
-                    ? Colors.white
-                    : AppColors.brand,
+                color: overdue && !terminal ? Colors.white : AppColors.brand,
               ),
             ),
           ),
@@ -742,20 +849,29 @@ class _ExpandedBody extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: 36, height: 36,
+                    width: 36,
+                    height: 36,
                     decoration: BoxDecoration(
                       color: AppColors.brandBg,
                       borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
                     alignment: Alignment.center,
-                    child: const Icon(Icons.description_outlined,
-                        size: 18, color: AppColors.brand),
+                    child: const Icon(
+                      Icons.description_outlined,
+                      size: 18,
+                      color: AppColors.brand,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(task.description!,
-                        style: AppText.small().copyWith(
-                            fontSize: 13, color: AppColors.textPrimary, height: 1.5)),
+                    child: Text(
+                      task.description!,
+                      style: AppText.small().copyWith(
+                        fontSize: 13,
+                        color: AppColors.textPrimary,
+                        height: 1.5,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -807,37 +923,53 @@ class _ExpandedBody extends StatelessWidget {
               decoration: BoxDecoration(
                 border: Border(top: BorderSide(color: AppColors.hairline)),
               ),
-              child: Row(children: [
-                Container(
-                  width: 22, height: 22,
-                  decoration: const BoxDecoration(
-                    color: AppColors.surfaceMuted,
-                    shape: BoxShape.circle,
+              child: Row(
+                children: [
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: const BoxDecoration(
+                      color: AppColors.surfaceMuted,
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.close_rounded,
+                      size: 12,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.close_rounded,
-                      size: 12, color: AppColors.textSecondary),
-                ),
-                const SizedBox(width: 8),
-                Text('No activity yet',
-                    style: AppText.small()
-                        .copyWith(color: AppColors.textSecondary)),
-                const Spacer(),
-                Container(
-                  width: 22, height: 22,
-                  decoration: BoxDecoration(
-                    color: AppColors.brandBg,
-                    shape: BoxShape.circle,
+                  const SizedBox(width: 8),
+                  Text(
+                    'No activity yet',
+                    style: AppText.small().copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.add_rounded,
-                      size: 14, color: AppColors.brand),
-                ),
-                const SizedBox(width: 8),
-                Text('Log update or hand off',
-                    style: AppText.small()
-                        .copyWith(color: AppColors.textSecondary)),
-              ]),
+                  const Spacer(),
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: AppColors.brandBg,
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.add_rounded,
+                      size: 14,
+                      color: AppColors.brand,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Log update or hand off',
+                    style: AppText.small().copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -863,8 +995,22 @@ class _InfoCard extends StatelessWidget {
   const _InfoCard({required this.task});
 
   String _fullDate(DateTime d) {
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    final t = '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final t =
+        '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
     return 'Due ${d.day} ${months[d.month - 1]} ${d.year}, $t';
   }
 
@@ -879,43 +1025,63 @@ class _InfoCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Container(
-              width: 28, height: 28,
-              decoration: const BoxDecoration(
-                color: Color(0xFFDCFCE7),
-                shape: BoxShape.circle,
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFDCFCE7),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.schedule_rounded,
+                  size: 14,
+                  color: Color(0xFF16A34A),
+                ),
               ),
-              alignment: Alignment.center,
-              child: const Icon(Icons.schedule_rounded,
-                  size: 14, color: Color(0xFF16A34A)),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(_fullDate(task.dueAt!),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  _fullDate(task.dueAt!),
                   style: AppText.small().copyWith(fontSize: 13),
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
-            ),
-          ]),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
           Container(
             margin: const EdgeInsets.only(top: 10),
             padding: const EdgeInsets.only(top: 8),
             decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: AppColors.hairline.withValues(alpha: 0.6))),
-            ),
-            child: Row(children: [
-              Container(
-                width: 4, height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.textTertiary,
-                  shape: BoxShape.circle,
+              border: Border(
+                top: BorderSide(
+                  color: AppColors.hairline.withValues(alpha: 0.6),
                 ),
               ),
-              const SizedBox(width: 6),
-              Text('Created 1 hr ago',
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.textTertiary,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Created 1 hr ago',
                   style: AppText.small().copyWith(
-                      fontSize: 12, color: AppColors.textSecondary)),
-            ]),
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -937,65 +1103,40 @@ class _StatusTrack extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return KrPressed(
-      borderRadius: BorderRadius.circular(AppRadius.pill),
-      padding: const EdgeInsets.all(4),
-      child: Row(children: [
-        for (final s in stages)
-          Expanded(
-            child: _StatusSeg(
-              active: s.$1 == currentStatus,
-              label: s.$2,
-              bg: s.$3,
-              fg: s.$4,
-              onTap: () {
-                if (s.$1 != currentStatus) onPick(s.$1);
-              },
-            ),
-          ),
-      ]),
-    );
-  }
-}
-
-class _StatusSeg extends StatelessWidget {
-  final bool active;
-  final String label;
-  final Color bg;
-  final Color fg;
-  final VoidCallback onTap;
-  const _StatusSeg({
-    required this.active,
-    required this.label,
-    required this.bg,
-    required this.fg,
-    required this.onTap,
-  });
-  @override
-  Widget build(BuildContext context) {
-    final child = Container(
-      height: 30,
-      alignment: Alignment.center,
-      child: Text(label,
-          maxLines: 1, overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-              fontSize: 10, height: 1.1,
-              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-              color: active ? fg : AppColors.textSecondary)),
-    );
-    if (!active) {
-      return InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        child: child,
-      );
-    }
-    return KrPop(
-      color: bg,
-      borderRadius: BorderRadius.circular(AppRadius.pill),
-      padding: EdgeInsets.zero,
-      onTap: onTap,
-      child: child,
+    final i = stages.indexWhere((s) => s.$1 == currentStatus);
+    final active = i < 0 ? 0 : i;
+    // KM-57 — the app's segment material, with one departure: this rail
+    // is a status ladder, so the raised pill keeps the STAGE's own
+    // semantic fill rather than the neutral one. Track and shadow stay
+    // neutral, so only the pill carries colour.
+    return RaisedPillSegment(
+      active: active,
+      count: stages.length,
+      onSelect: (n) {
+        if (stages[n].$1 != currentStatus) onPick(stages[n].$1);
+      },
+      palette: NeuPalette(
+        track: neuSheetPalette.track,
+        shadow: neuSheetPalette.shadow,
+        pill: stages[active].$3,
+      ),
+      trackPadding: const EdgeInsets.symmetric(horizontal: 5, vertical: 6),
+      slotPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 9),
+      // Four stages on a card: equal shares keep the ladder even and
+      // stop the longest label deciding everyone's width.
+      equalSlots: true,
+      slotBuilder: (context, n, isActive) => Text(
+        stages[n].$2,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 10,
+          height: 1.1,
+          fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+          color: isActive ? stages[n].$4 : AppColors.textSecondary,
+        ),
+      ),
     );
   }
 }
@@ -1005,48 +1146,68 @@ class _StatusSeg extends StatelessWidget {
 class _PlanBuilders extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Row(children: [
-      Expanded(
-        child: KrPop(
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Add manually — coming soon')),
-            );
-          },
-          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            const Icon(Icons.edit_outlined,
-                size: 14, color: AppColors.textPrimary),
-            const SizedBox(width: 6),
-            Text('Add manually',
-                style: AppText.smallStrong().copyWith(fontSize: 12)),
-          ]),
+    return Row(
+      children: [
+        Expanded(
+          child: KrPop(
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Add manually — coming soon')),
+              );
+            },
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.edit_outlined,
+                  size: 14,
+                  color: AppColors.textPrimary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Add manually',
+                  style: AppText.smallStrong().copyWith(fontSize: 12),
+                ),
+              ],
+            ),
+          ),
         ),
-      ),
-      const SizedBox(width: 8),
-      Text('or',
-          style: AppText.small().copyWith(color: AppColors.textSecondary)),
-      const SizedBox(width: 8),
-      Expanded(
-        child: KrPop(
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Ask Dex — coming soon')),
-            );
-          },
-          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            const Icon(Icons.auto_awesome_rounded,
-                size: 14, color: AppColors.textPrimary),
-            const SizedBox(width: 6),
-            Text('Ask Dex',
-                style: AppText.smallStrong().copyWith(fontSize: 12)),
-          ]),
+        const SizedBox(width: 8),
+        Text(
+          'or',
+          style: AppText.small().copyWith(color: AppColors.textSecondary),
         ),
-      ),
-    ]);
+        const SizedBox(width: 8),
+        Expanded(
+          child: KrPop(
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Ask Dex — coming soon')),
+              );
+            },
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.auto_awesome_rounded,
+                  size: 14,
+                  color: AppColors.textPrimary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Ask Dex',
+                  style: AppText.smallStrong().copyWith(fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -1065,67 +1226,86 @@ class _ActionsRow extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) {
-    return Row(children: [
-      // Welded Complete + X group.
-      KrPop(
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        padding: const EdgeInsets.all(4),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onComplete,
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              child: Container(
-                height: 36,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.textPrimary,
+    return Row(
+      children: [
+        // Welded Complete + X group.
+        KrPop(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          padding: const EdgeInsets.all(4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onComplete,
                   borderRadius: BorderRadius.circular(AppRadius.pill),
+                  child: Container(
+                    height: 36,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.textPrimary,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.check_circle_rounded,
+                          size: 13,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Complete',
+                          style: AppText.smallStrong().copyWith(
+                            fontSize: 12,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.check_circle_rounded,
-                      size: 13, color: Colors.white),
-                  const SizedBox(width: 6),
-                  Text('Complete',
-                      style: AppText.smallStrong().copyWith(
-                          fontSize: 12, color: Colors.white)),
-                ]),
               ),
-            ),
-          ),
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onCancel,
-              borderRadius: BorderRadius.circular(999),
-              child: Container(
-                width: 36, height: 36,
-                alignment: Alignment.center,
-                child: const Icon(Icons.cancel_outlined,
-                    size: 16, color: AppColors.textSecondary),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onCancel,
+                  borderRadius: BorderRadius.circular(999),
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.cancel_outlined,
+                      size: 16,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-        ]),
-      ),
-      const SizedBox(width: 8),
-      _AttachCircle(
-        icon: Icons.photo_camera_outlined,
-        onTap: () => _attachCamera(context),
-      ),
-      const SizedBox(width: 8),
-      _AttachCircle(
-        icon: Icons.file_upload_outlined,
-        onTap: () => _attachFile(context),
-      ),
-      const SizedBox(width: 8),
-      _AttachCircle(
-        icon: Icons.mic_none_rounded,
-        onTap: () => _attachAudio(context),
-      ),
-    ]);
+        ),
+        const SizedBox(width: 8),
+        _AttachCircle(
+          icon: Icons.photo_camera_outlined,
+          onTap: () => _attachCamera(context),
+        ),
+        const SizedBox(width: 8),
+        _AttachCircle(
+          icon: Icons.file_upload_outlined,
+          onTap: () => _attachFile(context),
+        ),
+        const SizedBox(width: 8),
+        _AttachCircle(
+          icon: Icons.mic_none_rounded,
+          onTap: () => _attachAudio(context),
+        ),
+      ],
+    );
   }
 
   Future<void> _attachCamera(BuildContext context) async {
@@ -1180,21 +1360,20 @@ class _ActionsRow extends StatelessWidget {
   }
 
   Future<void> _upload(
-      BuildContext context, List<int> bytes, String filename) async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Uploading $filename…')),
-    );
+    BuildContext context,
+    List<int> bytes,
+    String filename,
+  ) async {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Uploading $filename…')));
     try {
-      await TasksRepository().attach(
-        taskId,
-        bytes: bytes,
-        filename: filename,
-      );
+      await TasksRepository().attach(taskId, bytes: bytes, filename: filename);
       onAttached();
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Attached $filename')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Attached $filename')));
       }
     } catch (_) {
       _err(context, 'Upload failed — try again.');
@@ -1218,9 +1397,11 @@ class _AttachCircle extends StatelessWidget {
       padding: EdgeInsets.zero,
       onTap: onTap,
       child: SizedBox(
-        width: 44, height: 44,
-        child: Center(child: Icon(icon,
-            size: 16, color: AppColors.textPrimary)),
+        width: 44,
+        height: 44,
+        child: Center(
+          child: Icon(icon, size: 16, color: AppColors.textPrimary),
+        ),
       ),
     );
   }
@@ -1238,7 +1419,10 @@ class _PriorityPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: AppColors.textPrimary.withValues(alpha: 0.55), width: 0.5),
+        border: Border.all(
+          color: AppColors.textPrimary.withValues(alpha: 0.55),
+          width: 0.5,
+        ),
       ),
       child: Text(
         capital,
@@ -1261,9 +1445,14 @@ class _OverduePill extends StatelessWidget {
         color: AppColors.brand,
         borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
-      child: Text('Overdue',
-          style: AppText.small().copyWith(
-              fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white)),
+      child: Text(
+        'Overdue',
+        style: AppText.small().copyWith(
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+          color: Colors.white,
+        ),
+      ),
     );
   }
 }
@@ -1301,12 +1490,20 @@ class _MetaBadge extends StatelessWidget {
   const _MetaBadge({required this.icon, required this.text});
   @override
   Widget build(BuildContext context) {
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, size: 12, color: AppColors.textSecondary),
-      const SizedBox(width: 4),
-      Text(text,
-          style: AppText.small().copyWith(fontSize: 12, color: AppColors.textSecondary)),
-    ]);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: AppColors.textSecondary),
+        const SizedBox(width: 4),
+        Text(
+          text,
+          style: AppText.small().copyWith(
+            fontSize: 12,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -1321,9 +1518,14 @@ class _AccentPill extends StatelessWidget {
         color: AppColors.brand,
         borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
-      child: Text(label,
-          style: AppText.small().copyWith(
-              fontSize: 10, fontWeight: FontWeight.w500, color: Colors.white)),
+      child: Text(
+        label,
+        style: AppText.small().copyWith(
+          fontSize: 10,
+          fontWeight: FontWeight.w500,
+          color: Colors.white,
+        ),
+      ),
     );
   }
 }
@@ -1337,10 +1539,18 @@ class _OutlinedPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: AppColors.textPrimary.withValues(alpha: 0.55), width: 0.5),
+        border: Border.all(
+          color: AppColors.textPrimary.withValues(alpha: 0.55),
+          width: 0.5,
+        ),
       ),
-      child: Text(label,
-          style: AppText.small().copyWith(fontSize: 10, fontWeight: FontWeight.w500)),
+      child: Text(
+        label,
+        style: AppText.small().copyWith(
+          fontSize: 10,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
     );
   }
 }
@@ -1371,12 +1581,28 @@ class _WorkSkeleton extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const _kOpCategories = <String>[
-  'Presentation', 'Meeting', 'Documentation', 'Proposal', 'Planning', 'Review',
-  'Administration', 'Compliance', 'Marketing', 'HR Activity', 'Travel', 'Event',
-  'IT Support', 'Other',
+  'Presentation',
+  'Meeting',
+  'Documentation',
+  'Proposal',
+  'Planning',
+  'Review',
+  'Administration',
+  'Compliance',
+  'Marketing',
+  'HR Activity',
+  'Travel',
+  'Event',
+  'IT Support',
+  'Other',
 ];
 const _kTaskCategories = <String>[
-  'operational', 'sales', 'purchase', 'production', 'finance', 'hr',
+  'operational',
+  'sales',
+  'purchase',
+  'production',
+  'finance',
+  'hr',
 ];
 
 class _NewTaskSheet extends StatefulWidget {
@@ -1440,9 +1666,9 @@ class _NewTaskSheetState extends State<_NewTaskSheet> {
 
   Future<void> _submit() async {
     if (_title.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Task title is required')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Task title is required')));
       return;
     }
     setState(() => _saving = true);
@@ -1479,15 +1705,15 @@ class _NewTaskSheetState extends State<_NewTaskSheet> {
       await TasksRepository().create(body);
       if (mounted) {
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Task created')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Task created')));
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not create task.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Could not create task.')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -1495,11 +1721,15 @@ class _NewTaskSheetState extends State<_NewTaskSheet> {
   }
 
   Widget _label(String s) => Padding(
-        padding: const EdgeInsets.only(bottom: 6, top: 4),
-        child: Text(s,
-            style: AppText.small()
-                .copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
-      );
+    padding: const EdgeInsets.only(bottom: 6, top: 4),
+    child: Text(
+      s,
+      style: AppText.small().copyWith(
+        fontWeight: FontWeight.w600,
+        fontSize: 12,
+      ),
+    ),
+  );
 
   /// Flat form-field surface — no neumorphism inside the dense sheet so
   /// the form reads as a normal scrollable input list rather than a wall
@@ -1510,8 +1740,8 @@ class _NewTaskSheetState extends State<_NewTaskSheet> {
         color: AppColors.surfaceMuted,
         borderRadius: BorderRadius.circular(AppRadius.md),
       ),
-      padding: padding ??
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      padding:
+          padding ?? const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       child: child,
     );
   }
@@ -1524,8 +1754,7 @@ class _NewTaskSheetState extends State<_NewTaskSheet> {
         maxLines: maxLines,
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle:
-              AppText.body().copyWith(color: AppColors.textTertiary),
+          hintStyle: AppText.body().copyWith(color: AppColors.textTertiary),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 12),
         ),
@@ -1546,8 +1775,10 @@ class _NewTaskSheetState extends State<_NewTaskSheet> {
           isExpanded: true,
           hint: hint == null
               ? null
-              : Text(hint,
-                  style: AppText.body().copyWith(color: AppColors.textTertiary)),
+              : Text(
+                  hint,
+                  style: AppText.body().copyWith(color: AppColors.textTertiary),
+                ),
           onChanged: onChanged,
           items: items,
         ),
@@ -1565,21 +1796,24 @@ class _NewTaskSheetState extends State<_NewTaskSheet> {
       borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(children: [
-          Icon(
+        child: Row(
+          children: [
+            Icon(
               value
                   ? Icons.check_box_rounded
                   : Icons.check_box_outline_blank_rounded,
               size: 22,
-              color: value
-                  ? AppColors.textPrimary
-                  : AppColors.textSecondary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(label,
-                style: AppText.bodyStrong().copyWith(fontSize: 13)),
-          ),
-        ]),
+              color: value ? AppColors.textPrimary : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: AppText.bodyStrong().copyWith(fontSize: 13),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1607,222 +1841,267 @@ class _NewTaskSheetState extends State<_NewTaskSheet> {
           shadowColor: Colors.black.withValues(alpha: 0.35),
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(AppSpacing.lg),
-        child: FutureBuilder<List<Person>>(
-          future: _usersFuture,
-          builder: (context, snap) {
-            final users = snap.data ?? const <Person>[];
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(children: [
-                  Text('New Task', style: AppText.h3()),
-                  const Spacer(),
-                  InkWell(
-                    onTap: () => Navigator.of(context).pop(),
-                    borderRadius: BorderRadius.circular(999),
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(Icons.close_rounded, size: 20),
+            child: FutureBuilder<List<Person>>(
+              future: _usersFuture,
+              builder: (context, snap) {
+                final users = snap.data ?? const <Person>[];
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Text('New Task', style: AppText.h3()),
+                        const Spacer(),
+                        InkWell(
+                          onTap: () => Navigator.of(context).pop(),
+                          borderRadius: BorderRadius.circular(999),
+                          child: const Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(Icons.close_rounded, size: 20),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ]),
-                const SizedBox(height: 4),
-                Text(
-                  'Capture any company task — operational or department work.',
-                  style: AppText.small()
-                      .copyWith(color: AppColors.textSecondary),
-                ),
-                const SizedBox(height: AppSpacing.md),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Capture any company task — operational or department work.',
+                      style: AppText.small().copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
 
-                _textField(_title, 'Task title'),
-                const SizedBox(height: 10),
-                _textField(_description, 'Description', maxLines: 3),
+                    _textField(_title, 'Task title'),
+                    const SizedBox(height: 10),
+                    _textField(_description, 'Description', maxLines: 3),
 
-                _label('Task type'),
-                _dropdown<String>(
-                  value: _taskType,
-                  onChanged: (v) => setState(() {
-                    _taskType = v ?? 'operational';
-                  }),
-                  items: [
-                    for (final t in _kTaskCategories)
-                      DropdownMenuItem(
-                          value: t,
-                          child: Text(t[0].toUpperCase() + t.substring(1))),
-                  ],
-                ),
-
-                if (_taskType == 'operational') ...[
-                  _label('Operational category'),
-                  _dropdown<String>(
-                    value: _opCategory,
-                    onChanged: (v) => setState(() => _opCategory = v ?? 'Other'),
-                    items: [
-                      for (final c in _kOpCategories)
-                        DropdownMenuItem(value: c, child: Text(c)),
-                    ],
-                  ),
-                ],
-
-                _label('Assigned employee'),
-                _dropdown<String>(
-                  value: _assigneeId,
-                  hint: '— Pick a person —',
-                  onChanged: (v) => setState(() => _assigneeId = v),
-                  items: [
-                    const DropdownMenuItem(
-                        value: null, child: Text('— Pick a person —')),
-                    for (final u in users)
-                      DropdownMenuItem(
-                          value: u.id,
-                          child: Text(
-                              '${u.name}${u.role != null ? " · ${u.role}" : ""}')),
-                  ],
-                ),
-
-                _label('Supporting employee (optional)'),
-                _dropdown<String>(
-                  value: _supportId,
-                  hint: '— None —',
-                  onChanged: (v) => setState(() => _supportId = v),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('— None —')),
-                    for (final u in users)
-                      DropdownMenuItem(value: u.id, child: Text(u.name)),
-                  ],
-                ),
-
-                if (_assigneeId == null) ...[
-                  _label('…or assign by team/role'),
-                  _dropdown<String>(
-                    value: _assigneeRole,
-                    hint: 'Any / unassigned',
-                    onChanged: (v) => setState(() => _assigneeRole = v),
-                    items: [
-                      const DropdownMenuItem(
-                          value: null, child: Text('Any / unassigned')),
-                      for (final r in roles)
-                        DropdownMenuItem(value: r.key, child: Text(r.label)),
-                    ],
-                  ),
-                ],
-
-                _label('Priority'),
-                _dropdown<String>(
-                  value: _priority,
-                  onChanged: (v) => setState(() => _priority = v ?? 'medium'),
-                  items: const [
-                    DropdownMenuItem(value: 'low', child: Text('Low')),
-                    DropdownMenuItem(value: 'medium', child: Text('Medium')),
-                    DropdownMenuItem(value: 'high', child: Text('High')),
-                  ],
-                ),
-
-                Row(children: [
-                  Expanded(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _label('Due date'),
-                      InkWell(
-                        onTap: _pickDate,
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        child: _pit(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 14),
-                          child: Text(
-                            _due == null
-                                ? 'Pick date'
-                                : '${_due!.year}-${_due!.month.toString().padLeft(2, '0')}-${_due!.day.toString().padLeft(2, '0')}',
-                            style: AppText.body().copyWith(
-                                color: _due == null
-                                    ? AppColors.textTertiary
-                                    : AppColors.textPrimary),
+                    _label('Task type'),
+                    _dropdown<String>(
+                      value: _taskType,
+                      onChanged: (v) => setState(() {
+                        _taskType = v ?? 'operational';
+                      }),
+                      items: [
+                        for (final t in _kTaskCategories)
+                          DropdownMenuItem(
+                            value: t,
+                            child: Text(t[0].toUpperCase() + t.substring(1)),
                           ),
-                        ),
+                      ],
+                    ),
+
+                    if (_taskType == 'operational') ...[
+                      _label('Operational category'),
+                      _dropdown<String>(
+                        value: _opCategory,
+                        onChanged: (v) =>
+                            setState(() => _opCategory = v ?? 'Other'),
+                        items: [
+                          for (final c in _kOpCategories)
+                            DropdownMenuItem(value: c, child: Text(c)),
+                        ],
                       ),
                     ],
-                  )),
-                  const SizedBox(width: 8),
-                  Expanded(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _label('Due time'),
-                      InkWell(
-                        onTap: _pickTime,
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        child: _pit(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 14),
-                          child: Text(
-                            _dueTime == null
-                                ? 'Pick time'
-                                : _dueTime!.format(context),
-                            style: AppText.body().copyWith(
-                                color: _dueTime == null
-                                    ? AppColors.textTertiary
-                                    : AppColors.textPrimary),
-                          ),
-                        ),
-                      ),
-                    ],
-                  )),
-                ]),
 
-                _label('Expected output'),
-                _textField(_expectedOutput,
-                    'Expected output (e.g. Final deck in PDF)'),
-
-                const SizedBox(height: 8),
-                _checkbox(
-                    label: 'Approval required',
-                    value: _approvalRequired,
-                    onChanged: (v) => setState(() {
-                          _approvalRequired = v;
-                          if (!v) _approverId = null;
-                        })),
-                if (_approvalRequired) ...[
-                  _label('Approver'),
-                  _dropdown<String>(
-                    value: _approverId,
-                    hint: '— Anyone with approval access —',
-                    onChanged: (v) => setState(() => _approverId = v),
-                    items: [
-                      const DropdownMenuItem(
+                    _label('Assigned employee'),
+                    _dropdown<String>(
+                      value: _assigneeId,
+                      hint: '— Pick a person —',
+                      onChanged: (v) => setState(() => _assigneeId = v),
+                      items: [
+                        const DropdownMenuItem(
                           value: null,
-                          child: Text('— Anyone with approval access —')),
-                      for (final u in users)
-                        DropdownMenuItem(value: u.id, child: Text(u.name)),
-                    ],
-                  ),
-                ],
-                _checkbox(
-                    label: 'Require proof of work before completion',
-                    value: _evidenceRequired,
-                    onChanged: (v) => setState(() => _evidenceRequired = v)),
-
-                const SizedBox(height: AppSpacing.lg),
-                Material(
-                  color: AppColors.textPrimary,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                  child: InkWell(
-                    onTap: _saving ? null : _submit,
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
-                    child: Container(
-                      alignment: Alignment.center,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      child: Text(_saving ? 'Creating…' : 'Create task',
-                          style: AppText.bodyStrong()
-                              .copyWith(color: Colors.white)),
+                          child: Text('— Pick a person —'),
+                        ),
+                        for (final u in users)
+                          DropdownMenuItem(
+                            value: u.id,
+                            child: Text(
+                              '${u.name}${u.role != null ? " · ${u.role}" : ""}',
+                            ),
+                          ),
+                      ],
                     ),
-                  ),
-                ),
-              ],
-            );
-          },
+
+                    _label('Supporting employee (optional)'),
+                    _dropdown<String>(
+                      value: _supportId,
+                      hint: '— None —',
+                      onChanged: (v) => setState(() => _supportId = v),
+                      items: [
+                        const DropdownMenuItem(
+                          value: null,
+                          child: Text('— None —'),
+                        ),
+                        for (final u in users)
+                          DropdownMenuItem(value: u.id, child: Text(u.name)),
+                      ],
+                    ),
+
+                    if (_assigneeId == null) ...[
+                      _label('…or assign by team/role'),
+                      _dropdown<String>(
+                        value: _assigneeRole,
+                        hint: 'Any / unassigned',
+                        onChanged: (v) => setState(() => _assigneeRole = v),
+                        items: [
+                          const DropdownMenuItem(
+                            value: null,
+                            child: Text('Any / unassigned'),
+                          ),
+                          for (final r in roles)
+                            DropdownMenuItem(
+                              value: r.key,
+                              child: Text(r.label),
+                            ),
+                        ],
+                      ),
+                    ],
+
+                    _label('Priority'),
+                    _dropdown<String>(
+                      value: _priority,
+                      onChanged: (v) =>
+                          setState(() => _priority = v ?? 'medium'),
+                      items: const [
+                        DropdownMenuItem(value: 'low', child: Text('Low')),
+                        DropdownMenuItem(
+                          value: 'medium',
+                          child: Text('Medium'),
+                        ),
+                        DropdownMenuItem(value: 'high', child: Text('High')),
+                      ],
+                    ),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _label('Due date'),
+                              InkWell(
+                                onTap: _pickDate,
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.md,
+                                ),
+                                child: _pit(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 14,
+                                  ),
+                                  child: Text(
+                                    _due == null
+                                        ? 'Pick date'
+                                        : '${_due!.year}-${_due!.month.toString().padLeft(2, '0')}-${_due!.day.toString().padLeft(2, '0')}',
+                                    style: AppText.body().copyWith(
+                                      color: _due == null
+                                          ? AppColors.textTertiary
+                                          : AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _label('Due time'),
+                              InkWell(
+                                onTap: _pickTime,
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.md,
+                                ),
+                                child: _pit(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 14,
+                                  ),
+                                  child: Text(
+                                    _dueTime == null
+                                        ? 'Pick time'
+                                        : _dueTime!.format(context),
+                                    style: AppText.body().copyWith(
+                                      color: _dueTime == null
+                                          ? AppColors.textTertiary
+                                          : AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    _label('Expected output'),
+                    _textField(
+                      _expectedOutput,
+                      'Expected output (e.g. Final deck in PDF)',
+                    ),
+
+                    const SizedBox(height: 8),
+                    _checkbox(
+                      label: 'Approval required',
+                      value: _approvalRequired,
+                      onChanged: (v) => setState(() {
+                        _approvalRequired = v;
+                        if (!v) _approverId = null;
+                      }),
+                    ),
+                    if (_approvalRequired) ...[
+                      _label('Approver'),
+                      _dropdown<String>(
+                        value: _approverId,
+                        hint: '— Anyone with approval access —',
+                        onChanged: (v) => setState(() => _approverId = v),
+                        items: [
+                          const DropdownMenuItem(
+                            value: null,
+                            child: Text('— Anyone with approval access —'),
+                          ),
+                          for (final u in users)
+                            DropdownMenuItem(value: u.id, child: Text(u.name)),
+                        ],
+                      ),
+                    ],
+                    _checkbox(
+                      label: 'Require proof of work before completion',
+                      value: _evidenceRequired,
+                      onChanged: (v) => setState(() => _evidenceRequired = v),
+                    ),
+
+                    const SizedBox(height: AppSpacing.lg),
+                    Material(
+                      color: AppColors.textPrimary,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                      child: InkWell(
+                        onTap: _saving ? null : _submit,
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                        child: Container(
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          child: Text(
+                            _saving ? 'Creating…' : 'Create task',
+                            style: AppText.bodyStrong().copyWith(
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
         ),
-      ),
-      ),
       ),
     );
   }
@@ -1862,18 +2141,20 @@ class _LogUpdateSheetState extends State<_LogUpdateSheet> {
 
   Future<void> _submit() async {
     if (_text.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add a note first.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Add a note first.')));
       return;
     }
     if (_action != 'note' && _toId == null && (_toRole ?? '').isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(
-          _action == 'handoff'
-              ? 'Pick who to hand off to.'
-              : 'Pick who to escalate to.',
-        )),
+        SnackBar(
+          content: Text(
+            _action == 'handoff'
+                ? 'Pick who to hand off to.'
+                : 'Pick who to escalate to.',
+          ),
+        ),
       );
       return;
     }
@@ -1889,58 +2170,38 @@ class _LogUpdateSheetState extends State<_LogUpdateSheet> {
       if (mounted) {
         Navigator.of(context).pop(true);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(
-            _action == 'handoff'
-                ? 'Handed off'
-                : _action == 'escalate'
-                    ? 'Escalated'
-                    : 'Update posted',
-          )),
+          SnackBar(
+            content: Text(
+              _action == 'handoff'
+                  ? 'Handed off'
+                  : _action == 'escalate'
+                  ? 'Escalated'
+                  : 'Update posted',
+            ),
+          ),
         );
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not post update.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Could not post update.')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  Widget _actionSeg(String label, String value) {
-    final active = _action == value;
-    final child = Center(
-      child: Text(label,
-          style: (active ? AppText.bodyStrong() : AppText.body())
-              .copyWith(fontSize: 12)),
-    );
-    if (active) {
-      return KrPressed(
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        color: AppColors.surface,
-        onTap: () => setState(() => _action = value),
-        child: child,
-      );
-    }
-    return InkWell(
-      onTap: () => setState(() => _action = value),
-      borderRadius: BorderRadius.circular(AppRadius.pill),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: child,
-      ),
-    );
-  }
-
   Widget _label(String s) => Padding(
-        padding: const EdgeInsets.only(bottom: 6, top: 4),
-        child: Text(s,
-            style: AppText.small()
-                .copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
-      );
+    padding: const EdgeInsets.only(bottom: 6, top: 4),
+    child: Text(
+      s,
+      style: AppText.small().copyWith(
+        fontWeight: FontWeight.w600,
+        fontSize: 12,
+      ),
+    ),
+  );
 
   Widget _flatBox({required Widget child, EdgeInsets? padding}) {
     return Container(
@@ -1948,8 +2209,8 @@ class _LogUpdateSheetState extends State<_LogUpdateSheet> {
         color: AppColors.surfaceMuted,
         borderRadius: BorderRadius.circular(AppRadius.md),
       ),
-      padding: padding ??
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      padding:
+          padding ?? const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       child: child,
     );
   }
@@ -1982,34 +2243,34 @@ class _LogUpdateSheetState extends State<_LogUpdateSheet> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(children: [
-                      Text('Log update', style: AppText.h3()),
-                      const Spacer(),
-                      InkWell(
-                        onTap: () => Navigator.of(context).pop(),
-                        borderRadius: BorderRadius.circular(999),
-                        child: const Padding(
-                          padding: EdgeInsets.all(4),
-                          child: Icon(Icons.close_rounded, size: 20),
+                    Row(
+                      children: [
+                        Text('Log update', style: AppText.h3()),
+                        const Spacer(),
+                        InkWell(
+                          onTap: () => Navigator.of(context).pop(),
+                          borderRadius: BorderRadius.circular(999),
+                          child: const Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(Icons.close_rounded, size: 20),
+                          ),
                         ),
-                      ),
-                    ]),
+                      ],
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       'Post a note, hand this off to a teammate, or escalate to a leader.',
-                      style: AppText.small()
-                          .copyWith(color: AppColors.textSecondary),
+                      style: AppText.small().copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    KrPop(
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                      padding: const EdgeInsets.all(4),
-                      color: AppColors.surfaceMuted,
-                      child: Row(children: [
-                        Expanded(child: _actionSeg('Note', 'note')),
-                        Expanded(child: _actionSeg('Hand off', 'handoff')),
-                        Expanded(child: _actionSeg('Escalate', 'escalate')),
-                      ]),
+                    // KM-57 — was inverted: a RAISED track with the
+                    // active slot pressed into it. Now one raised pill on
+                    // a recessed track, like every other rail.
+                    _ActionSegment(
+                      active: _action,
+                      onSelect: (v) => setState(() => _action = v),
                     ),
                     _label('Note'),
                     _flatBox(
@@ -2022,13 +2283,15 @@ class _LogUpdateSheetState extends State<_LogUpdateSheet> {
                           hintText: _action == 'note'
                               ? 'What changed?'
                               : _action == 'handoff'
-                                  ? 'Why are you handing this off?'
-                                  : 'Why does this need to escalate?',
-                          hintStyle: AppText.body()
-                              .copyWith(color: AppColors.textTertiary),
+                              ? 'Why are you handing this off?'
+                              : 'Why does this need to escalate?',
+                          hintStyle: AppText.body().copyWith(
+                            color: AppColors.textTertiary,
+                          ),
                           border: InputBorder.none,
-                          contentPadding:
-                              const EdgeInsets.symmetric(vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                          ),
                         ),
                       ),
                     ),
@@ -2039,17 +2302,23 @@ class _LogUpdateSheetState extends State<_LogUpdateSheet> {
                           child: DropdownButton<String>(
                             value: _toId,
                             isExpanded: true,
-                            hint: Text('— Pick a person —',
-                                style: AppText.body().copyWith(
-                                    color: AppColors.textTertiary)),
+                            hint: Text(
+                              '— Pick a person —',
+                              style: AppText.body().copyWith(
+                                color: AppColors.textTertiary,
+                              ),
+                            ),
                             onChanged: (v) => setState(() => _toId = v),
                             items: [
                               const DropdownMenuItem(
-                                  value: null,
-                                  child: Text('— Pick a person —')),
+                                value: null,
+                                child: Text('— Pick a person —'),
+                              ),
                               for (final u in users)
                                 DropdownMenuItem(
-                                    value: u.id, child: Text(u.name)),
+                                  value: u.id,
+                                  child: Text(u.name),
+                                ),
                             ],
                           ),
                         ),
@@ -2061,17 +2330,23 @@ class _LogUpdateSheetState extends State<_LogUpdateSheet> {
                             child: DropdownButton<String>(
                               value: _toRole,
                               isExpanded: true,
-                              hint: Text('— Any / unassigned —',
-                                  style: AppText.body().copyWith(
-                                      color: AppColors.textTertiary)),
+                              hint: Text(
+                                '— Any / unassigned —',
+                                style: AppText.body().copyWith(
+                                  color: AppColors.textTertiary,
+                                ),
+                              ),
                               onChanged: (v) => setState(() => _toRole = v),
                               items: [
                                 const DropdownMenuItem(
-                                    value: null,
-                                    child: Text('— Any / unassigned —')),
+                                  value: null,
+                                  child: Text('— Any / unassigned —'),
+                                ),
                                 for (final r in roles)
                                   DropdownMenuItem(
-                                      value: r.key, child: Text(r.label)),
+                                    value: r.key,
+                                    child: Text(r.label),
+                                  ),
                               ],
                             ),
                           ),
@@ -2092,12 +2367,13 @@ class _LogUpdateSheetState extends State<_LogUpdateSheet> {
                             _saving
                                 ? 'Posting…'
                                 : (_action == 'handoff'
-                                    ? 'Hand off'
-                                    : _action == 'escalate'
-                                        ? 'Escalate'
-                                        : 'Post note'),
-                            style: AppText.bodyStrong()
-                                .copyWith(color: Colors.white),
+                                      ? 'Hand off'
+                                      : _action == 'escalate'
+                                      ? 'Escalate'
+                                      : 'Post note'),
+                            style: AppText.bodyStrong().copyWith(
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
@@ -2113,3 +2389,31 @@ class _LogUpdateSheetState extends State<_LogUpdateSheet> {
   }
 }
 
+/// Note / Hand off / Escalate, on the app's segment material.
+class _ActionSegment extends StatelessWidget {
+  final String active;
+  final ValueChanged<String> onSelect;
+  const _ActionSegment({required this.active, required this.onSelect});
+
+  static const _opts = <(String, String)>[
+    ('Note', 'note'),
+    ('Hand off', 'handoff'),
+    ('Escalate', 'escalate'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final i = _opts.indexWhere((o) => o.$2 == active);
+    return RaisedPillSegment(
+      active: i < 0 ? 0 : i,
+      count: _opts.length,
+      onSelect: (n) => onSelect(_opts[n].$2),
+      palette: neuSheetPalette,
+      trackPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
+      slotPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+      equalSlots: true,
+      slotBuilder: (context, n, isActive) =>
+          neuSegmentLabel(context, _opts[n].$1, isActive),
+    );
+  }
+}

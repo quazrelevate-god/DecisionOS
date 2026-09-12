@@ -40,7 +40,9 @@ class _CrmScreenState extends State<CrmScreen> {
   }
 
   void _reload() {
-    setState(() { _future = ContactsRepository().list(); });
+    setState(() {
+      _future = ContactsRepository().list();
+    });
   }
 
   @override
@@ -58,7 +60,11 @@ class _CrmScreenState extends State<CrmScreen> {
                 child: SingleChildScrollView(
                   physics: const ClampingScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.lg, 0, AppSpacing.lg, 120),
+                    AppSpacing.lg,
+                    0,
+                    AppSpacing.lg,
+                    120,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -66,15 +72,17 @@ class _CrmScreenState extends State<CrmScreen> {
                       const SizedBox(height: AppSpacing.md),
                       _AddContactPill(onPressed: _onAddContact),
                       const SizedBox(height: AppSpacing.md),
-                      Row(children: [
-                        Expanded(
-                          child: _SearchBar(
-                            onChanged: (v) => setState(() => _query = v),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _SearchBar(
+                              onChanged: (v) => setState(() => _query = v),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        _FilterButton(onSelect: _onFilterSelect),
-                      ]),
+                          const SizedBox(width: 10),
+                          _FilterButton(onSelect: _onFilterSelect),
+                        ],
+                      ),
                       const SizedBox(height: AppSpacing.md),
                       _ScopeSegment(
                         buyers: _showBuyers,
@@ -104,7 +112,8 @@ class _CrmScreenState extends State<CrmScreen> {
                               return const EmptyState(
                                 icon: Icons.person_search_outlined,
                                 title: 'No records match your filters.',
-                                subtitle: 'Try clearing the search or switching the scope.',
+                                subtitle:
+                                    'Try clearing the search or switching the scope.',
                               );
                             }
                             return _ContactGrid(items: list);
@@ -143,16 +152,25 @@ class _CrmScreenState extends State<CrmScreen> {
         list.sort((a, b) => a.name.compareTo(b.name));
         break;
       case _SortMode.recent:
-        list.sort((a, b) => (b.touchedAt ?? DateTime(1970))
-            .compareTo(a.touchedAt ?? DateTime(1970)));
+        list.sort(
+          (a, b) => (b.touchedAt ?? DateTime(1970)).compareTo(
+            a.touchedAt ?? DateTime(1970),
+          ),
+        );
         break;
       case _SortMode.outstanding:
-        list.sort((a, b) => (b.receivables + b.payables)
-            .compareTo(a.receivables + a.payables));
+        list.sort(
+          (a, b) => (b.receivables + b.payables).compareTo(
+            a.receivables + a.payables,
+          ),
+        );
         break;
       case _SortMode.oldestTouched:
-        list.sort((a, b) => (a.touchedAt ?? DateTime(1970))
-            .compareTo(b.touchedAt ?? DateTime(1970)));
+        list.sort(
+          (a, b) => (a.touchedAt ?? DateTime(1970)).compareTo(
+            b.touchedAt ?? DateTime(1970),
+          ),
+        );
         break;
     }
     return list;
@@ -180,7 +198,8 @@ class _CrmScreenState extends State<CrmScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
       ),
-      builder: (_) => _AddContactSheet(defaultType: _showBuyers ? 'customer' : 'vendor'),
+      builder: (_) =>
+          _AddContactSheet(defaultType: _showBuyers ? 'customer' : 'vendor'),
     );
     if (saved == true) _reload();
   }
@@ -218,17 +237,24 @@ class _AddContactPill extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppRadius.pill),
           child: Padding(
             padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.lg, vertical: 12),
+              horizontal: AppSpacing.lg,
+              vertical: 12,
+            ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Icon(Icons.add_rounded, size: 18, color: Colors.white),
                 const SizedBox(width: 6),
-                Text('Add contact',
-                    style: AppText.bodyStrong().copyWith(color: Colors.white)),
+                Text(
+                  'Add contact',
+                  style: AppText.bodyStrong().copyWith(color: Colors.white),
+                ),
                 const SizedBox(width: 4),
-                const Icon(Icons.expand_more_rounded,
-                    size: 18, color: Colors.white),
+                const Icon(
+                  Icons.expand_more_rounded,
+                  size: 18,
+                  color: Colors.white,
+                ),
               ],
             ),
           ),
@@ -253,26 +279,30 @@ class _SearchBar extends StatelessWidget {
         border: Border.all(color: AppColors.hairline),
       ),
       child: Row(
-          children: [
-            const Icon(Icons.search_rounded,
-                size: 18, color: AppColors.textSecondary),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                onChanged: onChanged,
-                style: AppText.body(),
-                decoration: InputDecoration(
-                  isDense: true,
-                  hintText: 'Search name, company, phone, email…',
-                  hintStyle:
-                      AppText.body().copyWith(color: AppColors.textTertiary),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        children: [
+          const Icon(
+            Icons.search_rounded,
+            size: 18,
+            color: AppColors.textSecondary,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              onChanged: onChanged,
+              style: AppText.body(),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: 'Search name, company, phone, email…',
+                hintStyle: AppText.body().copyWith(
+                  color: AppColors.textTertiary,
                 ),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -293,10 +323,7 @@ class _FilterButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppRadius.md),
         ),
         itemBuilder: (_) => const [
-          PopupMenuItem<String>(
-            enabled: false,
-            child: Text('All statuses'),
-          ),
+          PopupMenuItem<String>(enabled: false, child: Text('All statuses')),
           PopupMenuItem(value: 'status:all', child: Text('All statuses')),
           PopupMenuItem(value: 'status:lead', child: Text('Lead')),
           PopupMenuItem(value: 'status:active', child: Text('Active')),
@@ -306,16 +333,22 @@ class _FilterButton extends StatelessWidget {
           PopupMenuItem(value: 'sort:name', child: Text('Name A–Z')),
           PopupMenuItem(value: 'sort:recent', child: Text('Recently added')),
           PopupMenuItem(
-              value: 'sort:outstanding', child: Text('Outstanding (highest)')),
+            value: 'sort:outstanding',
+            child: Text('Outstanding (highest)'),
+          ),
           PopupMenuItem(
-              value: 'sort:oldestTouched',
-              child: Text('Last touched (oldest)')),
+            value: 'sort:oldestTouched',
+            child: Text('Last touched (oldest)'),
+          ),
         ],
         child: KrPop(
           borderRadius: BorderRadius.circular(999),
           padding: const EdgeInsets.all(10),
-          child: const Icon(Icons.tune_rounded,
-              size: 20, color: AppColors.textPrimary),
+          child: const Icon(
+            Icons.tune_rounded,
+            size: 20,
+            color: AppColors.textPrimary,
+          ),
         ),
       ),
     );
@@ -328,39 +361,21 @@ class _ScopeSegment extends StatelessWidget {
   const _ScopeSegment({required this.buyers, required this.onChanged});
   @override
   Widget build(BuildContext context) {
-    return SlidingSegment(
+    // KM-57 — same material as the Finance rail.
+    const labels = ['Buyers', 'Suppliers'];
+    return RaisedPillSegment(
       active: buyers ? 0 : 1,
-      count: 2,
+      count: labels.length,
       onSelect: (i) => onChanged(i == 0),
-      labels: const ['Buyers', 'Suppliers'],
-      height: 48,
-      trackColor: trackColorFor(BloomTint.steel),
-    );
-  }
-
-  // ignore: unused_element
-  Widget _seg(String label, bool active, VoidCallback onTap) {
-    if (active) {
-      return KrPressed(
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        onTap: onTap,
-        color: AppColors.surface,
-        child: Center(
-          child: Text(label, style: AppText.bodyStrong()),
-        ),
-      );
-    }
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.pill),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Center(
-          child: Text(label,
-              style: AppText.body().copyWith(color: AppColors.textSecondary)),
-        ),
-      ),
+      palette: NeuPalette.from(trackColorFor(BloomTint.steel)),
+      trackPadding: const EdgeInsets.symmetric(horizontal: 7, vertical: 10),
+      slotPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      // Two slots, so they split the track down the middle: Buyers and
+      // Suppliers get the same pill whatever is selected, and the halves
+      // always add up to the track width, so nothing can overflow.
+      equalSlots: true,
+      slotBuilder: (context, i, isActive) =>
+          neuSegmentLabel(context, labels[i], isActive),
     );
   }
 }
@@ -429,63 +444,80 @@ class _ContactCard extends StatelessWidget {
           ),
           padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
           child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              _StatusDot(status: c.status),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(c.name,
-                    style: AppText.bodyStrong().copyWith(fontSize: 14),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+              Row(
+                children: [
+                  _StatusDot(status: c.status),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      c.name,
+                      style: AppText.bodyStrong().copyWith(fontSize: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (c.complaintCount > 0) ...[
+                    const SizedBox(width: 6),
+                    _ComplaintBadge(count: c.complaintCount),
+                  ],
+                  const SizedBox(width: 4),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 16,
+                    color: AppColors.textTertiary,
+                  ),
+                ],
               ),
-              if (c.complaintCount > 0) ...[
-                const SizedBox(width: 6),
-                _ComplaintBadge(count: c.complaintCount),
+              if ((c.company ?? '').isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  c.company!,
+                  style: AppText.small().copyWith(
+                    color: AppColors.textSecondary,
+                    fontSize: 11,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
-              const SizedBox(width: 4),
-              const Icon(Icons.chevron_right_rounded,
-                  size: 16, color: AppColors.textTertiary),
-            ],
-          ),
-          if ((c.company ?? '').isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(c.company!,
-                style: AppText.small().copyWith(
-                    color: AppColors.textSecondary, fontSize: 11),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
-          ],
-          if (_KeySignal.has(c)) ...[
-            const SizedBox(height: 10),
-            _KeySignal(c: c),
-          ],
-          const SizedBox(height: 10),
-          // Hairline separator matches the reference — a very light rule
-          // between the signal/body and the touched-ago footer.
-          Container(
-              height: 1,
-              color: AppColors.textPrimary.withValues(alpha: 0.06)),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              const Icon(Icons.schedule_rounded,
-                  size: 11, color: AppColors.textTertiary),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(_touchedLabel(c.touchedAt),
-                    style: AppText.small().copyWith(
-                        color: AppColors.textTertiary, fontSize: 10),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+              if (_KeySignal.has(c)) ...[
+                const SizedBox(height: 10),
+                _KeySignal(c: c),
+              ],
+              const SizedBox(height: 10),
+              // Hairline separator matches the reference — a very light rule
+              // between the signal/body and the touched-ago footer.
+              Container(
+                height: 1,
+                color: AppColors.textPrimary.withValues(alpha: 0.06),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.schedule_rounded,
+                    size: 11,
+                    color: AppColors.textTertiary,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      _touchedLabel(c.touchedAt),
+                      style: AppText.small().copyWith(
+                        color: AppColors.textTertiary,
+                        fontSize: 10,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
         ),
       ),
     );
@@ -529,12 +561,15 @@ class _ComplaintBadge extends StatelessWidget {
         shape: BoxShape.circle,
       ),
       alignment: Alignment.center,
-      child: Text('$count',
-          style: AppText.small().copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-              fontSize: 10,
-              height: 1)),
+      child: Text(
+        '$count',
+        style: AppText.small().copyWith(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+          fontSize: 10,
+          height: 1,
+        ),
+      ),
     );
   }
 }
@@ -578,10 +613,12 @@ class _KeySignal extends StatelessWidget {
         Icon(icon, size: 12, color: color),
         const SizedBox(width: 4),
         Expanded(
-          child: Text(text,
-              style: AppText.small().copyWith(color: color, fontSize: 11),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis),
+          child: Text(
+            text,
+            style: AppText.small().copyWith(color: color, fontSize: 11),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ],
     );
@@ -643,9 +680,9 @@ class _AddContactSheetState extends State<_AddContactSheet> {
 
   Future<void> _save() async {
     if (_name.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Name is required.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Name is required.')));
       return;
     }
     setState(() => _saving = true);
@@ -659,31 +696,39 @@ class _AddContactSheetState extends State<_AddContactSheet> {
       );
       if (mounted) {
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Contact added')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Contact added')));
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not add contact.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Could not add contact.')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  Widget _field(String label, TextEditingController c,
-      {String? hint, TextInputType? keyboard}) {
+  Widget _field(
+    String label,
+    TextEditingController c, {
+    String? hint,
+    TextInputType? keyboard,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 6),
-          child: Text(label,
-              style: AppText.small()
-                  .copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
+          child: Text(
+            label,
+            style: AppText.small().copyWith(
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
         ),
         TextField(
           controller: c,
@@ -697,35 +742,13 @@ class _AddContactSheetState extends State<_AddContactSheet> {
               borderSide: BorderSide.none,
             ),
             contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12, vertical: 12),
+              horizontal: 12,
+              vertical: 12,
+            ),
           ),
         ),
       ],
     );
-  }
-
-  Widget _typeSeg(String label, String value) {
-    final active = _type == value;
-    final child = Center(
-      child: Text(label,
-          style: (active ? AppText.bodyStrong() : AppText.body())
-              .copyWith(fontSize: 12)),
-    );
-    return active
-        ? KrPop(
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            onTap: () => setState(() => _type = value),
-            child: child,
-          )
-        : InkWell(
-            onTap: () => setState(() => _type = value),
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: child,
-            ),
-          );
   }
 
   @override
@@ -741,25 +764,46 @@ class _AddContactSheetState extends State<_AddContactSheet> {
           children: [
             Text('New contact', style: AppText.h3()),
             const SizedBox(height: AppSpacing.md),
-            KrPressed(
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              padding: const EdgeInsets.all(4),
-              child: Row(children: [
-                Expanded(child: _typeSeg('Buyer', 'customer')),
-                Expanded(child: _typeSeg('Supplier', 'vendor')),
-              ]),
+            // KM-57 — the app's segment material.
+            RaisedPillSegment(
+              active: _type == 'customer' ? 0 : 1,
+              count: 2,
+              onSelect: (i) =>
+                  setState(() => _type = i == 0 ? 'customer' : 'vendor'),
+              palette: neuSheetPalette,
+              trackPadding: const EdgeInsets.symmetric(
+                horizontal: 6,
+                vertical: 7,
+              ),
+              slotPadding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 10,
+              ),
+              equalSlots: true,
+              slotBuilder: (context, i, isActive) => neuSegmentLabel(
+                context,
+                const ['Buyer', 'Supplier'][i],
+                isActive,
+              ),
             ),
             const SizedBox(height: 12),
             _field('Name', _name, hint: 'Contact name'),
             const SizedBox(height: 12),
             _field('Company', _company, hint: 'Company / business name'),
             const SizedBox(height: 12),
-            _field('Phone', _phone,
-                hint: '+91 98765 43210', keyboard: TextInputType.phone),
+            _field(
+              'Phone',
+              _phone,
+              hint: '+91 98765 43210',
+              keyboard: TextInputType.phone,
+            ),
             const SizedBox(height: 12),
-            _field('Email', _email,
-                hint: 'name@example.com',
-                keyboard: TextInputType.emailAddress),
+            _field(
+              'Email',
+              _email,
+              hint: 'name@example.com',
+              keyboard: TextInputType.emailAddress,
+            ),
             const SizedBox(height: AppSpacing.lg),
             Align(
               alignment: Alignment.centerLeft,
@@ -771,10 +815,13 @@ class _AddContactSheetState extends State<_AddContactSheet> {
                   borderRadius: BorderRadius.circular(AppRadius.pill),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.lg, vertical: 12),
-                    child: Text(_saving ? 'Adding…' : 'Add contact',
-                        style: AppText.bodyStrong()
-                            .copyWith(color: Colors.white)),
+                      horizontal: AppSpacing.lg,
+                      vertical: 12,
+                    ),
+                    child: Text(
+                      _saving ? 'Adding…' : 'Add contact',
+                      style: AppText.bodyStrong().copyWith(color: Colors.white),
+                    ),
                   ),
                 ),
               ),

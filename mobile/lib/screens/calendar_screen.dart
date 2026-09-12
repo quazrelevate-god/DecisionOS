@@ -6,6 +6,7 @@ import '../widgets/app_bloom.dart';
 import '../widgets/app_header.dart';
 import '../widgets/neumorphic.dart';
 import '../widgets/overlay_dock.dart';
+import '../widgets/segment.dart';
 import '../widgets/states.dart';
 
 /// The Business Calendar — ported from frontend `pages/Calendar.js`. One
@@ -34,7 +35,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   void _reload() {
-    setState(() { _future = CalendarRepository().feed(); });
+    setState(() {
+      _future = CalendarRepository().feed();
+    });
   }
 
   @override
@@ -55,7 +58,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     return SingleChildScrollView(
                       physics: const ClampingScrollPhysics(),
                       padding: const EdgeInsets.fromLTRB(
-                          AppSpacing.lg, 0, AppSpacing.lg, 120),
+                        AppSpacing.lg,
+                        0,
+                        AppSpacing.lg,
+                        120,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -83,8 +90,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
                               _selected = d;
                               _mode = _ViewMode.day;
                             }),
-                            onShiftWeek: (delta) => setState(() =>
-                                _selected = _selected.add(Duration(days: delta * 7))),
+                            onShiftWeek: (delta) => setState(
+                              () => _selected = _selected.add(
+                                Duration(days: delta * 7),
+                              ),
+                            ),
                           ),
                           const SizedBox(height: AppSpacing.md),
                           _FilterRail(
@@ -112,17 +122,23 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Widget _body(AsyncSnapshot<CalendarFeed> snap) {
     if (snap.connectionState != ConnectionState.done) {
       return Column(
-        children: List.generate(3, (_) => const Padding(
-              padding: EdgeInsets.only(bottom: AppSpacing.md),
-              child: LoadingCard(height: 80),
-            )),
+        children: List.generate(
+          3,
+          (_) => const Padding(
+            padding: EdgeInsets.only(bottom: AppSpacing.md),
+            child: LoadingCard(height: 80),
+          ),
+        ),
       );
     }
     if (snap.hasError) {
       return ErrorState(
-          message: 'Could not load the calendar.', onRetry: _reload);
+        message: 'Could not load the calendar.',
+        onRetry: _reload,
+      );
     }
-    final feed = snap.data ?? const CalendarFeed(days: [], counts: {}, total: 0);
+    final feed =
+        snap.data ?? const CalendarFeed(days: [], counts: {}, total: 0);
     if (_mode == _ViewMode.day) return _dayView(feed);
     return _weekView(feed);
   }
@@ -149,17 +165,21 @@ class _CalendarScreenState extends State<CalendarScreen> {
           .where(_matchesFilter)
           .toList();
       if (events.isNotEmpty) anyEvents = true;
-      children.add(_DaySection(
-        iso: iso,
-        events: events,
-        emptyPlaceholder: events.isEmpty ? 'Nothing scheduled' : null,
-      ));
+      children.add(
+        _DaySection(
+          iso: iso,
+          events: events,
+          emptyPlaceholder: events.isEmpty ? 'Nothing scheduled' : null,
+        ),
+      );
       children.add(const SizedBox(height: 18));
     }
     if (!anyEvents) return _emptyState(dayMode: false);
     if (children.isNotEmpty) children.removeLast();
     return Column(
-        crossAxisAlignment: CrossAxisAlignment.start, children: children);
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children,
+    );
   }
 
   Widget _emptyState({required bool dayMode}) {
@@ -223,49 +243,31 @@ class _ModeSegment extends StatelessWidget {
   final _ViewMode mode;
   final ValueChanged<_ViewMode> onChanged;
   const _ModeSegment({required this.mode, required this.onChanged});
+
+  static const _labels = ['Day', 'Week'];
+  static const _modes = [_ViewMode.day, _ViewMode.week];
+
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: KrPressed(
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        padding: const EdgeInsets.all(4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _seg('Day', mode == _ViewMode.day, () => onChanged(_ViewMode.day)),
-            _seg('Week', mode == _ViewMode.week, () => onChanged(_ViewMode.week)),
-          ],
+    // KM-57 — the app's segment material. A bare Row (not Align) so the
+    // control gets unbounded width and shrink-wraps to its two labels,
+    // rather than stretching across the page.
+    return Row(
+      children: [
+        RaisedPillSegment(
+          active: _modes.indexOf(mode).clamp(0, 1),
+          count: _labels.length,
+          onSelect: (i) => onChanged(_modes[i]),
+          palette: NeuPalette.from(trackColorFor(BloomTint.amber)),
+          trackPadding: const EdgeInsets.symmetric(horizontal: 7, vertical: 9),
+          slotPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+          slotBuilder: (context, i, isActive) =>
+              neuSegmentLabel(context, _labels[i], isActive),
         ),
-      ),
-    );
-  }
-
-  Widget _seg(String label, bool active, VoidCallback onTap) {
-    if (active) {
-      return KrPop(
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
-        onTap: onTap,
-        child: Text(label, style: AppText.bodyStrong().copyWith(fontSize: 13)),
-      );
-    }
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.pill),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
-        child: Text(label,
-            style: AppText.body().copyWith(
-                color: AppColors.textSecondary, fontSize: 13)),
-      ),
+      ],
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Month strip (KrPop card with month name + prev/next + Mon-Sun day cells)
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _MonthStrip extends StatelessWidget {
   final DateTime selected;
@@ -299,8 +301,10 @@ class _MonthStrip extends StatelessWidget {
             children: [
               _chev(Icons.chevron_left_rounded, () => onShiftWeek(-1)),
               const Spacer(),
-              Text(_monthYear(anchor),
-                  style: AppText.bodyStrong().copyWith(fontSize: 14)),
+              Text(
+                _monthYear(anchor),
+                style: AppText.bodyStrong().copyWith(fontSize: 14),
+              ),
               const Spacer(),
               _chev(Icons.chevron_right_rounded, () => onShiftWeek(1)),
             ],
@@ -343,8 +347,18 @@ bool _sameDay(DateTime a, DateTime b) =>
 
 String _monthYear(DateTime d) {
   const months = [
-    'January','February','March','April','May','June',
-    'July','August','September','October','November','December',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
   return '${months[d.month - 1]} ${d.year}';
 }
@@ -370,15 +384,22 @@ class _DayCell extends StatelessWidget {
     final body = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(dayLabel,
-            style: AppText.small().copyWith(
-                color: AppColors.textSecondary, fontSize: 11)),
+        Text(
+          dayLabel,
+          style: AppText.small().copyWith(
+            color: AppColors.textSecondary,
+            fontSize: 11,
+          ),
+        ),
         const SizedBox(height: 6),
-        Text('${date.day}',
-            style: AppText.bodyStrong().copyWith(
-                fontSize: 15,
-                color: AppColors.textPrimary,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
+        Text(
+          '${date.day}',
+          style: AppText.bodyStrong().copyWith(
+            fontSize: 15,
+            color: AppColors.textPrimary,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
         const SizedBox(height: 4),
         SizedBox(
           height: 4,
@@ -415,8 +436,7 @@ class _DayCell extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: isToday
-              ? Border.all(
-                  color: AppColors.textPrimary.withValues(alpha: 0.45))
+              ? Border.all(color: AppColors.textPrimary.withValues(alpha: 0.45))
               : null,
         ),
         child: body,
@@ -445,68 +465,85 @@ class _FilterRail extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = <_FilterSpec>[
       _FilterSpec('all', 'All', Icons.calendar_month_rounded, total),
-      _FilterSpec('meetings', 'Meetings', Icons.groups_2_outlined,
-          counts['meeting'] ?? 0),
-      _FilterSpec('payments', 'Payments', Icons.attach_money_rounded,
-          counts['payment_due'] ?? 0),
-      _FilterSpec('tasks', 'Tasks', Icons.check_box_outlined,
-          counts['task'] ?? 0),
-      _FilterSpec('deliveries', 'Deliveries', Icons.local_shipping_outlined,
-          counts['delivery'] ?? 0),
-      _FilterSpec('complaints', 'Complaints', Icons.warning_amber_rounded,
-          counts['complaint'] ?? 0),
-      _FilterSpec('birthdays', 'Birthdays', Icons.cake_outlined,
-          counts['birthday'] ?? 0),
-      _FilterSpec('leave', 'Leave', Icons.flight_takeoff_rounded,
-          counts['leave'] ?? 0),
-    ];
-    return SizedBox(
-      height: 40,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        physics: const ClampingScrollPhysics(),
-        itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (_, i) {
-          final s = items[i];
-          final isActive = active == s.key;
-          final label = Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(s.icon, size: 14, color: AppColors.textPrimary),
-              const SizedBox(width: 6),
-              Text(s.label,
-                  style: AppText.small().copyWith(
-                      fontSize: 12,
-                      fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                      color: isActive
-                          ? AppColors.textPrimary
-                          : AppColors.textPrimary.withValues(alpha: 0.70))),
-              const SizedBox(width: 6),
-              Text('${s.count}',
-                  style: AppText.small().copyWith(
-                      fontSize: 12,
-                      color: AppColors.textPrimary.withValues(alpha: 0.55))),
-            ],
-          );
-          if (isActive) {
-            return KrPressed(
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              onTap: () => onSelect(s.key),
-              child: label,
-            );
-          }
-          return KrPop(
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            onTap: () => onSelect(s.key),
-            child: label,
-          );
-        },
+      _FilterSpec(
+        'meetings',
+        'Meetings',
+        Icons.groups_2_outlined,
+        counts['meeting'] ?? 0,
       ),
+      _FilterSpec(
+        'payments',
+        'Payments',
+        Icons.attach_money_rounded,
+        counts['payment_due'] ?? 0,
+      ),
+      _FilterSpec(
+        'tasks',
+        'Tasks',
+        Icons.check_box_outlined,
+        counts['task'] ?? 0,
+      ),
+      _FilterSpec(
+        'deliveries',
+        'Deliveries',
+        Icons.local_shipping_outlined,
+        counts['delivery'] ?? 0,
+      ),
+      _FilterSpec(
+        'complaints',
+        'Complaints',
+        Icons.warning_amber_rounded,
+        counts['complaint'] ?? 0,
+      ),
+      _FilterSpec(
+        'birthdays',
+        'Birthdays',
+        Icons.cake_outlined,
+        counts['birthday'] ?? 0,
+      ),
+      _FilterSpec(
+        'leave',
+        'Leave',
+        Icons.flight_takeoff_rounded,
+        counts['leave'] ?? 0,
+      ),
+    ];
+    final i = items.indexWhere((f) => f.key == active);
+    // KM-57 — the app's segment material. Note this rail had the states
+    // the wrong way round before: the ACTIVE chip was recessed and the
+    // inactive ones raised, which reads as "everything is a button except
+    // the one you picked". Now one chip is raised and the rest are flat,
+    // on a single recessed track, like every other rail.
+    //
+    // Eight filters never fit a phone, so the rail scrolls — and the
+    // control pulls the selected chip into view on its own.
+    return RaisedPillSegment(
+      active: i < 0 ? 0 : i,
+      count: items.length,
+      onSelect: (n) => onSelect(items[n].key),
+      palette: NeuPalette.from(trackColorFor(BloomTint.amber)),
+      trackPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
+      slotPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      slotBuilder: (context, n, isActive) {
+        final f = items[n];
+        final fg = isActive ? const Color(0xFF1F2430) : const Color(0xFF9AA0AE);
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(f.icon, size: 14, color: fg),
+            const SizedBox(width: 6),
+            neuSegmentLabel(context, f.label, isActive),
+            const SizedBox(width: 6),
+            Text(
+              '${f.count}',
+              style: AppText.small().copyWith(
+                fontSize: 12,
+                color: fg.withValues(alpha: 0.65),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -527,8 +564,11 @@ class _DaySection extends StatelessWidget {
   final String iso;
   final List<CalendarEvent> events;
   final String? emptyPlaceholder;
-  const _DaySection(
-      {required this.iso, required this.events, this.emptyPlaceholder});
+  const _DaySection({
+    required this.iso,
+    required this.events,
+    this.emptyPlaceholder,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -551,24 +591,32 @@ class _DaySection extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(title,
-                style: AppText.bodyStrong().copyWith(
-                    fontSize: 14,
-                    color: past ? AppColors.danger : AppColors.textPrimary)),
+            Text(
+              title,
+              style: AppText.bodyStrong().copyWith(
+                fontSize: 14,
+                color: past ? AppColors.danger : AppColors.textPrimary,
+              ),
+            ),
             const Spacer(),
             if (events.isNotEmpty)
-              Text('${events.length}',
-                  style: AppText.small().copyWith(
-                      color: AppColors.textSecondary, fontSize: 12)),
+              Text(
+                '${events.length}',
+                style: AppText.small().copyWith(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
           ],
         ),
         const SizedBox(height: 10),
         if (events.isEmpty && emptyPlaceholder != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 4),
-            child: Text(emptyPlaceholder!,
-                style: AppText.small()
-                    .copyWith(color: AppColors.textSecondary)),
+            child: Text(
+              emptyPlaceholder!,
+              style: AppText.small().copyWith(color: AppColors.textSecondary),
+            ),
           ),
         for (int i = 0; i < events.length; i++) ...[
           _EventCard(e: events[i]),
@@ -580,10 +628,28 @@ class _DaySection extends StatelessWidget {
 }
 
 String _weekdayDayMonth(DateTime d) {
-  const wk = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const wk = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
   const mo = [
-    'January','February','March','April','May','June',
-    'July','August','September','October','November','December',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
   return '${wk[d.weekday - 1]}, ${d.day} ${mo[d.month - 1]}';
 }
@@ -599,8 +665,8 @@ class _EventCard extends StatelessWidget {
     final onTap = e.contactId == null
         ? null
         : () => ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Open ${e.title} — coming soon')),
-            );
+            SnackBar(content: Text('Open ${e.title} — coming soon')),
+          );
     return Material(
       color: Colors.transparent,
       borderRadius: radius,
@@ -636,17 +702,23 @@ class _EventCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(e.title,
-                        style: AppText.bodyStrong().copyWith(fontSize: 14),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
+                    Text(
+                      e.title,
+                      style: AppText.bodyStrong().copyWith(fontSize: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     if ((e.subtitle ?? '').isNotEmpty) ...[
                       const SizedBox(height: 2),
-                      Text(e.subtitle!,
-                          style: AppText.small().copyWith(
-                              color: AppColors.textSecondary, fontSize: 12),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
+                      Text(
+                        e.subtitle!,
+                        style: AppText.small().copyWith(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
                   ],
                 ),
@@ -655,16 +727,21 @@ class _EventCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.danger.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Text('Overdue',
-                      style: AppText.small().copyWith(
-                          color: AppColors.danger,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 11)),
+                  child: Text(
+                    'Overdue',
+                    style: AppText.small().copyWith(
+                      color: AppColors.danger,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                    ),
+                  ),
                 ),
               ],
             ],

@@ -1,13 +1,19 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../theme/app_theme.dart';
-import '../widgets/neumorphic.dart';
+import '../widgets/neu_surface.dart';
 
-/// The More menu — a floating neumorphic + subtle glassmorphic sheet that
-/// slides up OVER the current screen (the bottom nav stays visible). It's
-/// not a full-screen page; the app has 3 screens (Desk/Work/Money) and More
-/// opens as a modal sheet the user dismisses by tapping outside or the nav.
+/// The More menu — a floating soft-UI sheet that slides up OVER the
+/// current screen (the bottom nav stays visible). It's not a full-screen
+/// page; the app has 3 screens (Desk/Work/Money) and More opens as a modal
+/// sheet the user dismisses by tapping outside or the nav.
+///
+/// KM-57 — the sheet was glass: a translucent white panel over a 30 px
+/// backdrop blur. Soft UI cannot live on glass, because a raised tile
+/// needs an opaque surface to cast its light and shadow onto; over a
+/// blur the two shadows just tint whatever happens to be behind. So the
+/// panel is now a solid ground, and the bento tiles are raised on it —
+/// the same material as every rail in the app.
 ///
 /// Bento layout:
 ///   [ CRM       ] [ Team    ]
@@ -15,6 +21,12 @@ import '../widgets/neumorphic.dart';
 ///   [ Workflows ] [ Coach   ]
 ///   [   Settings (full width row)   ]
 ///   [   Sign out (destructive outlined pill)   ]
+
+/// The sheet's own ground. Fixed rather than tinted per screen: More
+/// floats over whichever page is behind it, so it needs one surface of
+/// its own to be lit consistently.
+const _ground = Color(0xFFEDEFEF);
+final _palette = NeuPalette.from(_ground);
 
 /// Shows the More menu as a modal bottom sheet. Called from BottomNav when
 /// the More slot is tapped.
@@ -41,34 +53,27 @@ class _MoreSheet extends StatelessWidget {
       top: false,
       // Bottom = dock clearance so the floating nav still shows through.
       minimum: const EdgeInsets.only(
-          left: AppSpacing.lg, right: AppSpacing.lg, bottom: 96),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadius.xl + 4),
-        child: BackdropFilter(
-          // Stronger blur — the underlying page frosts through more clearly.
-          filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-          child: Container(
-            decoration: BoxDecoration(
-              // Real glass: low opacity so the background bleeds through.
-              color: Colors.white.withValues(alpha: 0.55),
-              borderRadius: BorderRadius.circular(AppRadius.xl + 4),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.55),
-                width: 1,
-              ),
-              boxShadow: [
-                // KM-51 — soft-UI single drop.
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  offset: const Offset(0, 4),
-                  blurRadius: 16,
-                ),
-              ],
+        left: AppSpacing.lg,
+        right: AppSpacing.lg,
+        bottom: 96,
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: _ground,
+          borderRadius: BorderRadius.circular(AppRadius.xl + 4),
+          boxShadow: [
+            // One soft drop so the panel reads as lifted off the page
+            // behind it. The tiles carry the soft-UI pair; the panel
+            // does not, or the whole sheet would look embossed.
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.16),
+              offset: const Offset(0, 10),
+              blurRadius: 30,
             ),
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            child: const MoreBody(),
-          ),
+          ],
         ),
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: const MoreBody(),
       ),
     );
   }
@@ -173,9 +178,12 @@ class _WideTile extends StatelessWidget {
   const _WideTile({required this.tile});
   @override
   Widget build(BuildContext context) {
-    return KrPop(
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      padding: const EdgeInsets.all(AppSpacing.md),
+    return NeuRaised(
+      palette: _palette,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      padding: const EdgeInsets.all(AppSpacing.md + 2),
+      distance: 5,
+      blur: 11,
       onTap: () {
         Navigator.of(context).pop();
         context.push(tile.route);
@@ -183,19 +191,26 @@ class _WideTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Icon(tile.icon, size: 18, color: AppColors.textPrimary),
-            const SizedBox(width: 8),
-            Text(tile.label,
-                style: AppText.bodyStrong().copyWith(fontSize: 14)),
-          ]),
+          Row(
+            children: [
+              Icon(tile.icon, size: 18, color: AppColors.textPrimary),
+              const SizedBox(width: 8),
+              Text(
+                tile.label,
+                style: AppText.bodyStrong().copyWith(fontSize: 14),
+              ),
+            ],
+          ),
           const Spacer(),
           if ((tile.blurb ?? '').isNotEmpty)
-            Text(tile.blurb!,
-                style: AppText.small().copyWith(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                    height: 1.3)),
+            Text(
+              tile.blurb!,
+              style: AppText.small().copyWith(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+                height: 1.3,
+              ),
+            ),
         ],
       ),
     );
@@ -207,9 +222,12 @@ class _SmallTile extends StatelessWidget {
   const _SmallTile({required this.tile});
   @override
   Widget build(BuildContext context) {
-    return KrPop(
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      padding: const EdgeInsets.all(AppSpacing.md),
+    return NeuRaised(
+      palette: _palette,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      padding: const EdgeInsets.all(AppSpacing.md + 2),
+      distance: 5,
+      blur: 11,
       onTap: () {
         Navigator.of(context).pop();
         context.push(tile.route);
@@ -220,9 +238,11 @@ class _SmallTile extends StatelessWidget {
         children: [
           Icon(tile.icon, size: 22, color: AppColors.textPrimary),
           const SizedBox(height: 8),
-          Text(tile.label,
-              style: AppText.bodyStrong().copyWith(fontSize: 12, height: 1.2),
-              textAlign: TextAlign.center),
+          Text(
+            tile.label,
+            style: AppText.bodyStrong().copyWith(fontSize: 12, height: 1.2),
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );
@@ -232,10 +252,15 @@ class _SmallTile extends StatelessWidget {
 class _SettingsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return KrPop(
-      borderRadius: BorderRadius.circular(AppRadius.md),
+    return NeuRaised(
+      palette: _palette,
+      borderRadius: BorderRadius.circular(AppRadius.pill),
       padding: const EdgeInsets.symmetric(
-          vertical: AppSpacing.md, horizontal: AppSpacing.md),
+        vertical: AppSpacing.md + 1,
+        horizontal: AppSpacing.md,
+      ),
+      distance: 5,
+      blur: 11,
       onTap: () {
         Navigator.of(context).pop();
         context.push('/settings');
@@ -243,14 +268,15 @@ class _SettingsRow extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.settings_outlined,
-              size: 18, color: AppColors.textPrimary),
+          const Icon(
+            Icons.settings_outlined,
+            size: 18,
+            color: AppColors.textPrimary,
+          ),
           const SizedBox(width: 8),
-          Text('Settings',
-              style: AppText.bodyStrong().copyWith(fontSize: 13)),
+          Text('Settings', style: AppText.bodyStrong().copyWith(fontSize: 13)),
         ],
       ),
     );
   }
 }
-

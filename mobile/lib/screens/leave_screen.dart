@@ -50,7 +50,8 @@ class _LeaveBodyState extends State<LeaveBody> {
   String _tab = 'mine';
   int _slideDir = 1; // +1 rightward, -1 leftward, in _tabOrder
   // Status filter shared by both mine + approvals lists.
-  String _statusFilter = 'all'; // all | pending | approved | rejected | cancelled
+  String _statusFilter =
+      'all'; // all | pending | approved | rejected | cancelled
   late Future<List<LeaveRequest>> _mineFuture;
   Future<List<LeaveRequest>>? _apprFuture;
 
@@ -89,8 +90,10 @@ class _LeaveBodyState extends State<LeaveBody> {
           child: Row(
             children: [
               Expanded(
-                child: Text('Leave',
-                    style: AppText.display().copyWith(fontSize: 30, height: 1.05)),
+                child: Text(
+                  'Leave',
+                  style: AppText.display().copyWith(fontSize: 30, height: 1.05),
+                ),
               ),
               _LeaveFilterCircle(
                 active: _statusFilter,
@@ -112,10 +115,22 @@ class _LeaveBodyState extends State<LeaveBody> {
             tabKey: _tab,
             direction: _slideDir,
             child: _tab == 'mine'
-                ? _LeaveList(future: _mineFuture, canAct: false, onRefresh: _refresh, emptyText: 'No leave requests yet — tap Request Leave.', statusFilter: _statusFilter)
+                ? _LeaveList(
+                    future: _mineFuture,
+                    canAct: false,
+                    onRefresh: _refresh,
+                    emptyText: 'No leave requests yet — tap Request Leave.',
+                    statusFilter: _statusFilter,
+                  )
                 : _tab == 'approvals'
-                    ? _LeaveList(future: _apprFuture!, canAct: true, onRefresh: _refresh, emptyText: 'Nothing to approve — you’re all clear.', statusFilter: _statusFilter)
-                    : const _SettingsPanel(),
+                ? _LeaveList(
+                    future: _apprFuture!,
+                    canAct: true,
+                    onRefresh: _refresh,
+                    emptyText: 'Nothing to approve — you’re all clear.',
+                    statusFilter: _statusFilter,
+                  )
+                : const _SettingsPanel(),
           ),
         ),
       ],
@@ -145,9 +160,9 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     try {
       await SettingsRepository().patchLeaveApprovers(_approvers);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Leave approvers saved')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Leave approvers saved')));
       }
     } catch (_) {
       if (mounted) {
@@ -162,8 +177,9 @@ class _SettingsPanelState extends State<_SettingsPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final roles =
-        AuthRepository.I.roles.where((r) => r.key != 'owner').toList();
+    final roles = AuthRepository.I.roles
+        .where((r) => r.key != 'owner')
+        .toList();
     return FutureBuilder<List<Person>>(
       future: _usersFuture,
       builder: (context, snap) {
@@ -177,35 +193,55 @@ class _SettingsPanelState extends State<_SettingsPanel> {
         return SingleChildScrollView(
           physics: const ClampingScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xxxl),
+            AppSpacing.lg,
+            0,
+            AppSpacing.lg,
+            AppSpacing.xxxl,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(children: [
-                const Icon(Icons.settings_outlined,
-                    size: 18, color: AppColors.textPrimary),
-                const SizedBox(width: 8),
-                Text('Leave Approvers by Department',
-                    style: AppText.bodyStrong().copyWith(fontSize: 15)),
-              ]),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.settings_outlined,
+                    size: 18,
+                    color: AppColors.textPrimary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Leave Approvers by Department',
+                    style: AppText.bodyStrong().copyWith(fontSize: 15),
+                  ),
+                ],
+              ),
               const SizedBox(height: 6),
               Text(
                 'Choose who approves leave for each role. If an employee has a Reporting Manager set (in People → Employees), that manager takes priority. Otherwise this mapping is used, then the Owner.',
-                style: AppText.small()
-                    .copyWith(color: AppColors.textSecondary, fontSize: 12),
+                style: AppText.small().copyWith(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
               if (roles.isEmpty)
-                Text('No roles configured yet.',
-                    style: AppText.small()
-                        .copyWith(color: AppColors.textSecondary))
+                Text(
+                  'No roles configured yet.',
+                  style: AppText.small().copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                )
               else
                 for (final r in roles) ...[
                   Padding(
                     padding: const EdgeInsets.only(bottom: 6, top: 4),
-                    child: Text(r.label,
-                        style: AppText.small().copyWith(
-                            fontWeight: FontWeight.w600, fontSize: 12)),
+                    child: Text(
+                      r.label,
+                      style: AppText.small().copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -217,19 +253,23 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                       child: DropdownButton<String?>(
                         value: _approvers[r.key],
                         isExpanded: true,
-                        hint: Text('Owner (default)',
-                            style: AppText.body()
-                                .copyWith(color: AppColors.textTertiary)),
-                        onChanged: (v) =>
-                            setState(() => _approvers[r.key] = v),
+                        hint: Text(
+                          'Owner (default)',
+                          style: AppText.body().copyWith(
+                            color: AppColors.textTertiary,
+                          ),
+                        ),
+                        onChanged: (v) => setState(() => _approvers[r.key] = v),
                         items: [
                           const DropdownMenuItem<String?>(
-                              value: null, child: Text('Owner (default)')),
+                            value: null,
+                            child: Text('Owner (default)'),
+                          ),
                           for (final u in users)
                             DropdownMenuItem<String?>(
-                                value: u.id,
-                                child: Text(
-                                    '${u.name} · ${u.role ?? "member"}')),
+                              value: u.id,
+                              child: Text('${u.name} · ${u.role ?? "member"}'),
+                            ),
                         ],
                       ),
                     ),
@@ -247,10 +287,15 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                     borderRadius: BorderRadius.circular(AppRadius.pill),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.lg, vertical: 12),
-                      child: Text(_saving ? 'Saving…' : 'Save Approvers',
-                          style: AppText.bodyStrong()
-                              .copyWith(color: Colors.white)),
+                        horizontal: AppSpacing.lg,
+                        vertical: 12,
+                      ),
+                      child: Text(
+                        _saving ? 'Saving…' : 'Save Approvers',
+                        style: AppText.bodyStrong().copyWith(
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -269,10 +314,18 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.sm,
+      ),
       child: Row(
         children: [
-          IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back_rounded)),
+          IconButton(
+            onPressed: onBack,
+            icon: const Icon(Icons.arrow_back_rounded),
+          ),
           const SizedBox(width: 4),
           Text('Leave', style: AppText.h1().copyWith(fontSize: 24)),
         ],
@@ -325,16 +378,26 @@ class _Actions extends StatelessWidget {
                 onTap: () => _reportAbsence(context),
                 borderRadius: BorderRadius.circular(AppRadius.pill),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.warning_amber_rounded,
-                          size: 14, color: Colors.white),
+                      const Icon(
+                        Icons.warning_amber_rounded,
+                        size: 14,
+                        color: Colors.white,
+                      ),
                       const SizedBox(width: 6),
-                      Text('Report Absence Today',
-                          style: AppText.smallStrong().copyWith(
-                              fontSize: 12, color: Colors.white)),
+                      Text(
+                        'Report Absence Today',
+                        style: AppText.smallStrong().copyWith(
+                          fontSize: 12,
+                          color: Colors.white,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -350,16 +413,26 @@ class _Actions extends StatelessWidget {
                 onTap: () => _requestLeave(context),
                 borderRadius: BorderRadius.circular(AppRadius.pill),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.add_rounded,
-                          size: 14, color: Colors.white),
+                      const Icon(
+                        Icons.add_rounded,
+                        size: 14,
+                        color: Colors.white,
+                      ),
                       const SizedBox(width: 6),
-                      Text('Request Leave',
-                          style: AppText.smallStrong().copyWith(
-                              fontSize: 12, color: Colors.white)),
+                      Text(
+                        'Request Leave',
+                        style: AppText.smallStrong().copyWith(
+                          fontSize: 12,
+                          color: Colors.white,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -380,13 +453,21 @@ class _TabTrack extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final active = _keys.indexOf(tab).clamp(0, _keys.length - 1);
-    return SlidingSegment(
+    // KM-57 — same material as the Finance rail.
+    const labels = ['My Leave', 'Approvals', 'Settings'];
+    return RaisedPillSegment(
       active: active,
-      count: 3,
+      count: labels.length,
       onSelect: (i) => onSelect(_keys[i]),
-      labels: const ['My Leave', 'Approvals', 'Settings'],
-      height: 48,
-      trackColor: trackColorFor(BloomTint.steelBlue),
+      palette: NeuPalette.from(trackColorFor(BloomTint.steelBlue)),
+      trackPadding: const EdgeInsets.symmetric(horizontal: 7, vertical: 10),
+      slotPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+      // A 2-3 slot rail has width to spare. Space-between would fling the
+      // slots to the extreme ends of the track with a hole in the middle;
+      // evenly keeps the content-sized pills looking placed.
+      distribution: MainAxisAlignment.spaceEvenly,
+      slotBuilder: (context, i, isActive) =>
+          neuSegmentLabel(context, labels[i], isActive),
     );
   }
 }
@@ -395,18 +476,25 @@ class _TabPill extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  const _TabPill({required this.label, required this.selected, required this.onTap});
+  const _TabPill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
   @override
   Widget build(BuildContext context) {
     final content = Container(
       alignment: Alignment.center,
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Text(label,
-          style: AppText.smallStrong().copyWith(
-              fontSize: 13,
-              color: selected
-                  ? AppColors.textPrimary
-                  : AppColors.textPrimary.withValues(alpha: 0.6))),
+      child: Text(
+        label,
+        style: AppText.smallStrong().copyWith(
+          fontSize: 13,
+          color: selected
+              ? AppColors.textPrimary
+              : AppColors.textPrimary.withValues(alpha: 0.6),
+        ),
+      ),
     );
     return selected
         ? KrPop(
@@ -474,10 +562,16 @@ class _LeaveList extends StatelessWidget {
           );
         }
         return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xxxl),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            0,
+            AppSpacing.lg,
+            AppSpacing.xxxl,
+          ),
           itemCount: items.length,
           separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
-          itemBuilder: (context, i) => _LeaveCard(lv: items[i], canAct: canAct, onRefresh: onRefresh),
+          itemBuilder: (context, i) =>
+              _LeaveCard(lv: items[i], canAct: canAct, onRefresh: onRefresh),
         );
       },
     );
@@ -488,24 +582,66 @@ class _LeaveCard extends StatelessWidget {
   final LeaveRequest lv;
   final bool canAct;
   final VoidCallback onRefresh;
-  const _LeaveCard({required this.lv, required this.canAct, required this.onRefresh});
+  const _LeaveCard({
+    required this.lv,
+    required this.canAct,
+    required this.onRefresh,
+  });
 
   // Status colours — using existing AppColors tokens (leave_screen doesn't
   // have direct access to the ramp steps; these approximate the frontend
   // STATUS_META with what's defined in the theme file).
   static const _statusMeta = {
-    'pending': ('Pending', Color(0xFFFEF3C7), Color(0xFF854D0E), Color(0xFFFDE68A)),
-    'approved': ('Approved', AppColors.successBg, AppColors.success, Color(0xFFA7D8A3)),
-    'rejected': ('Rejected', Color(0xFFFEE2E2), Color(0xFF991B1B), Color(0xFFFECACA)),
-    'info_requested': ('Info requested', AppColors.brandBg, AppColors.brandDeep, Color(0xFFF5C39F)),
-    'cancelled': ('Cancelled', AppColors.surfaceMuted, AppColors.textSecondary, AppColors.hairline),
+    'pending': (
+      'Pending',
+      Color(0xFFFEF3C7),
+      Color(0xFF854D0E),
+      Color(0xFFFDE68A),
+    ),
+    'approved': (
+      'Approved',
+      AppColors.successBg,
+      AppColors.success,
+      Color(0xFFA7D8A3),
+    ),
+    'rejected': (
+      'Rejected',
+      Color(0xFFFEE2E2),
+      Color(0xFF991B1B),
+      Color(0xFFFECACA),
+    ),
+    'info_requested': (
+      'Info requested',
+      AppColors.brandBg,
+      AppColors.brandDeep,
+      Color(0xFFF5C39F),
+    ),
+    'cancelled': (
+      'Cancelled',
+      AppColors.surfaceMuted,
+      AppColors.textSecondary,
+      AppColors.hairline,
+    ),
   };
 
   String _typeLabel(String t) => t[0].toUpperCase() + t.substring(1);
 
   String _range() {
     if (lv.fromDate == null) return '';
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     String fmt(DateTime d) => '${d.day} ${months[d.month - 1]}';
     if (lv.toDate == null || lv.toDate == lv.fromDate) return fmt(lv.fromDate!);
     return '${fmt(lv.fromDate!)} — ${fmt(lv.toDate!)}';
@@ -517,9 +653,15 @@ class _LeaveCard extends StatelessWidget {
       onRefresh();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(
-            kind == 'approve' ? 'Approved' : kind == 'reject' ? 'Rejected' : 'Info requested',
-          )),
+          SnackBar(
+            content: Text(
+              kind == 'approve'
+                  ? 'Approved'
+                  : kind == 'reject'
+                  ? 'Rejected'
+                  : 'Info requested',
+            ),
+          ),
         );
       }
     } catch (_) {
@@ -534,7 +676,8 @@ class _LeaveCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final meta = _statusMeta[lv.status] ?? _statusMeta['pending']!;
-    final canDecide = canAct && (lv.status == 'pending' || lv.status == 'info_requested');
+    final canDecide =
+        canAct && (lv.status == 'pending' || lv.status == 'info_requested');
     return KrPop(
       borderRadius: BorderRadius.circular(AppRadius.lg),
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -542,73 +685,104 @@ class _LeaveCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Wrap(
-            spacing: 6, runSpacing: 6,
+            spacing: 6,
+            runSpacing: 6,
             children: [
               _Chip(label: meta.$1, bg: meta.$2, fg: meta.$3, border: meta.$4),
-              _Chip(label: _typeLabel(lv.leaveType), bg: AppColors.textPrimary, fg: Colors.white),
+              _Chip(
+                label: _typeLabel(lv.leaveType),
+                bg: AppColors.textPrimary,
+                fg: Colors.white,
+              ),
               if (lv.dayPortion == 'half')
-                _Chip(label: 'Half day', bg: Colors.white, fg: AppColors.textPrimary, border: AppColors.hairline),
+                _Chip(
+                  label: 'Half day',
+                  bg: Colors.white,
+                  fg: AppColors.textPrimary,
+                  border: AppColors.hairline,
+                ),
               if (lv.isEmergency)
                 _Chip(label: 'Emergency', bg: Colors.black, fg: Colors.white),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          Text(lv.userName,
-              style: AppText.bodyStrong().copyWith(fontSize: 15)),
+          Text(lv.userName, style: AppText.bodyStrong().copyWith(fontSize: 15)),
           const SizedBox(height: 6),
           Text(_range(), style: AppText.body()),
           if ((lv.reason ?? '').isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text(lv.reason!,
-                style: AppText.small().copyWith(color: AppColors.textSecondary)),
+            Text(
+              lv.reason!,
+              style: AppText.small().copyWith(color: AppColors.textSecondary),
+            ),
           ],
           if ((lv.approverName ?? '').isNotEmpty) ...[
             const SizedBox(height: 10),
-            Row(children: [
-              const Icon(Icons.access_time_rounded, size: 12, color: AppColors.textTertiary),
-              const SizedBox(width: 4),
-              Text('Approver: ${lv.approverName!}',
+            Row(
+              children: [
+                const Icon(
+                  Icons.access_time_rounded,
+                  size: 12,
+                  color: AppColors.textTertiary,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Approver: ${lv.approverName!}',
                   style: AppText.small().copyWith(
-                      color: AppColors.textTertiary, fontSize: 11)),
-            ]),
+                    color: AppColors.textTertiary,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
           ],
-          if (lv.status == 'info_requested' && (lv.infoNote ?? '').isNotEmpty) ...[
+          if (lv.status == 'info_requested' &&
+              (lv.infoNote ?? '').isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: AppColors.brand.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(AppRadius.sm),
-                border: Border(left: BorderSide(color: AppColors.brand, width: 3)),
+                border: Border(
+                  left: BorderSide(color: AppColors.brand, width: 3),
+                ),
               ),
-              child: Text('Info requested: ${lv.infoNote}',
-                  style: AppText.small().copyWith(fontSize: 12)),
+              child: Text(
+                'Info requested: ${lv.infoNote}',
+                style: AppText.small().copyWith(fontSize: 12),
+              ),
             ),
           ],
           if (canDecide) ...[
             const SizedBox(height: AppSpacing.md),
-            Row(children: [
-              Expanded(
-                child: _DecisionButton(
-                  label: 'Approve', icon: Icons.check_rounded,
-                  onTap: () => _decide(context, 'approve'),
-                  primary: true,
+            Row(
+              children: [
+                Expanded(
+                  child: _DecisionButton(
+                    label: 'Approve',
+                    icon: Icons.check_rounded,
+                    onTap: () => _decide(context, 'approve'),
+                    primary: true,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              _DecisionButton(
-                label: 'Reject', icon: Icons.close_rounded,
-                onTap: () => _decide(context, 'reject'),
-                primary: false,
-              ),
-              const SizedBox(width: 6),
-              _DecisionButton(
-                label: 'Info', icon: Icons.chat_bubble_outline_rounded,
-                onTap: () => _decide(context, 'request-info'),
-                primary: false,
-                accent: true,
-              ),
-            ]),
+                const SizedBox(width: 6),
+                _DecisionButton(
+                  label: 'Reject',
+                  icon: Icons.close_rounded,
+                  onTap: () => _decide(context, 'reject'),
+                  primary: false,
+                ),
+                const SizedBox(width: 6),
+                _DecisionButton(
+                  label: 'Info',
+                  icon: Icons.chat_bubble_outline_rounded,
+                  onTap: () => _decide(context, 'request-info'),
+                  primary: false,
+                  accent: true,
+                ),
+              ],
+            ),
           ],
           if (lv.status == 'approved') ...[
             const SizedBox(height: AppSpacing.md),
@@ -625,17 +799,26 @@ class _LeaveCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(AppRadius.pill),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   alignment: Alignment.center,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.auto_awesome_rounded,
-                          size: 14, color: Colors.white),
+                      const Icon(
+                        Icons.auto_awesome_rounded,
+                        size: 14,
+                        color: Colors.white,
+                      ),
                       const SizedBox(width: 6),
-                      Text('AI Impact Analysis',
-                          style: AppText.bodyStrong()
-                              .copyWith(fontSize: 13, color: Colors.white)),
+                      Text(
+                        'AI Impact Analysis',
+                        style: AppText.bodyStrong().copyWith(
+                          fontSize: 13,
+                          color: Colors.white,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -671,9 +854,9 @@ class _AiImpactSheetState extends State<_AiImpactSheet> {
       final iso = '${now.year}-${pad(now.month)}-${pad(now.day)}';
       await TasksRepository().patch(taskId, {'due_at': iso});
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Pushed by $days days')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Pushed by $days days')));
         setState(() {
           _future = LeaveRepository().impact(widget.leaveId);
         });
@@ -713,27 +896,30 @@ class _AiImpactSheetState extends State<_AiImpactSheet> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(children: [
-                      Text('AI Impact', style: AppText.h3()),
-                      const Spacer(),
-                      InkWell(
-                        onTap: () => Navigator.of(context).pop(),
-                        borderRadius: BorderRadius.circular(999),
-                        child: const Padding(
-                          padding: EdgeInsets.all(4),
-                          child: Icon(Icons.close_rounded, size: 20),
+                    Row(
+                      children: [
+                        Text('AI Impact', style: AppText.h3()),
+                        const Spacer(),
+                        InkWell(
+                          onTap: () => Navigator.of(context).pop(),
+                          borderRadius: BorderRadius.circular(999),
+                          child: const Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(Icons.close_rounded, size: 20),
+                          ),
                         ),
-                      ),
-                    ]),
+                      ],
+                    ),
                     const SizedBox(height: 6),
                     Text(
                       snap.connectionState != ConnectionState.done
                           ? 'Analyzing workload & suggesting cover…'
                           : ((snap.data ?? const []).isEmpty
-                              ? 'No tasks at risk. This person has no active tasks due during their absence. You\'re all set.'
-                              : 'Tasks due while they\'re out. Push each one by a few days.'),
-                      style: AppText.small()
-                          .copyWith(color: AppColors.textSecondary),
+                                ? 'No tasks at risk. This person has no active tasks due during their absence. You\'re all set.'
+                                : 'Tasks due while they\'re out. Push each one by a few days.'),
+                      style: AppText.small().copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.md),
                     if (snap.connectionState != ConnectionState.done)
@@ -750,38 +936,55 @@ class _AiImpactSheetState extends State<_AiImpactSheet> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(t.title,
-                                  style: AppText.bodyStrong()
-                                      .copyWith(fontSize: 13)),
+                              Text(
+                                t.title,
+                                style: AppText.bodyStrong().copyWith(
+                                  fontSize: 13,
+                                ),
+                              ),
                               if (t.dueAt != null) ...[
                                 const SizedBox(height: 4),
-                                Text('due ${t.dueAt!.day}/${t.dueAt!.month}',
-                                    style: AppText.small().copyWith(
-                                        color: AppColors.textSecondary,
-                                        fontSize: 11)),
+                                Text(
+                                  'due ${t.dueAt!.day}/${t.dueAt!.month}',
+                                  style: AppText.small().copyWith(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 11,
+                                  ),
+                                ),
                               ],
                               if ((t.assigneeName ?? '').isNotEmpty)
-                                Text(t.assigneeName!,
-                                    style: AppText.small().copyWith(
-                                        color: AppColors.textSecondary,
-                                        fontSize: 11)),
-                              const SizedBox(height: 8),
-                              Row(children: [
-                                for (final d in [3, 7])
-                                  Padding(
-                                    padding: const EdgeInsets.only(right: 6),
-                                    child: KrPop(
-                                      borderRadius:
-                                          BorderRadius.circular(AppRadius.pill),
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 12, vertical: 6),
-                                      onTap: () => _push(t.id, d),
-                                      child: Text('+$d days',
-                                          style: AppText.smallStrong()
-                                              .copyWith(fontSize: 11)),
-                                    ),
+                                Text(
+                                  t.assigneeName!,
+                                  style: AppText.small().copyWith(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 11,
                                   ),
-                              ]),
+                                ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  for (final d in [3, 7])
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 6),
+                                      child: KrPop(
+                                        borderRadius: BorderRadius.circular(
+                                          AppRadius.pill,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
+                                        ),
+                                        onTap: () => _push(t.id, d),
+                                        child: Text(
+                                          '+$d days',
+                                          style: AppText.smallStrong().copyWith(
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ],
                           ),
                         ),
@@ -801,7 +1004,12 @@ class _Chip extends StatelessWidget {
   final Color bg;
   final Color fg;
   final Color? border;
-  const _Chip({required this.label, required this.bg, required this.fg, this.border});
+  const _Chip({
+    required this.label,
+    required this.bg,
+    required this.fg,
+    this.border,
+  });
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -811,9 +1019,14 @@ class _Chip extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.pill),
         border: border != null ? Border.all(color: border!) : null,
       ),
-      child: Text(label,
-          style: AppText.small().copyWith(
-              fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
+      child: Text(
+        label,
+        style: AppText.small().copyWith(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: fg,
+        ),
+      ),
     );
   }
 }
@@ -846,26 +1059,35 @@ class _DecisionButton extends StatelessWidget {
             border: primary
                 ? null
                 : Border.all(
-                    color: accent ? AppColors.brand : AppColors.hairlineStrong),
+                    color: accent ? AppColors.brand : AppColors.hairlineStrong,
+                  ),
           ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
                 size: 12,
                 color: primary
                     ? Colors.white
                     : accent
-                        ? AppColors.brand
-                        : AppColors.textPrimary),
-            const SizedBox(width: 4),
-            Text(label,
+                    ? AppColors.brand
+                    : AppColors.textPrimary,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                label,
                 style: AppText.smallStrong().copyWith(
-                    fontSize: 11,
-                    color: primary
-                        ? Colors.white
-                        : accent
-                            ? AppColors.brand
-                            : AppColors.textPrimary)),
-          ]),
+                  fontSize: 11,
+                  color: primary
+                      ? Colors.white
+                      : accent
+                      ? AppColors.brand
+                      : AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -973,15 +1195,30 @@ class _RequestLeaveSheetState extends State<_RequestLeaveSheet> {
   }
 
   Widget _label(String s) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Text(s,
-            style: AppText.small()
-                .copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
-      );
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Text(
+      s,
+      style: AppText.small().copyWith(
+        fontWeight: FontWeight.w600,
+        fontSize: 12,
+      ),
+    ),
+  );
 
   Widget _dateBtn(String label, DateTime d, VoidCallback onTap) {
     const months = [
-      'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return InkWell(
       onTap: onTap,
@@ -992,8 +1229,10 @@ class _RequestLeaveSheetState extends State<_RequestLeaveSheet> {
           color: AppColors.surfaceMuted,
           borderRadius: BorderRadius.circular(AppRadius.md),
         ),
-        child: Text('${d.day} ${months[d.month - 1]} ${d.year}',
-            style: AppText.body()),
+        child: Text(
+          '${d.day} ${months[d.month - 1]} ${d.year}',
+          style: AppText.body(),
+        ),
       ),
     );
   }
@@ -1036,32 +1275,52 @@ class _RequestLeaveSheetState extends State<_RequestLeaveSheet> {
               ),
             ),
             const SizedBox(height: 12),
-            Row(children: [
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _label('From'),
-                  _dateBtn('From', _from, () => _pickDate(true)),
-                ],
-              )),
-              const SizedBox(width: 8),
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _label('To'),
-                  _dateBtn('To', _to, () => _pickDate(false)),
-                ],
-              )),
-            ]),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _label('From'),
+                      _dateBtn('From', _from, () => _pickDate(true)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _label('To'),
+                      _dateBtn('To', _to, () => _pickDate(false)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
             _label('Day portion'),
-            KrPressed(
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              padding: const EdgeInsets.all(4),
-              child: Row(children: [
-                Expanded(child: _portionSeg('Full Day', 'full')),
-                Expanded(child: _portionSeg('Half Day', 'half')),
-              ]),
+            // KM-57 — the app's segment material.
+            RaisedPillSegment(
+              active: _portion == 'full' ? 0 : 1,
+              count: 2,
+              onSelect: (i) =>
+                  setState(() => _portion = i == 0 ? 'full' : 'half'),
+              palette: neuSheetPalette,
+              trackPadding: const EdgeInsets.symmetric(
+                horizontal: 6,
+                vertical: 7,
+              ),
+              slotPadding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 10,
+              ),
+              equalSlots: true,
+              slotBuilder: (context, i, isActive) => neuSegmentLabel(
+                context,
+                const ['Full Day', 'Half Day'][i],
+                isActive,
+              ),
             ),
             const SizedBox(height: 12),
             _label('Reason'),
@@ -1088,9 +1347,13 @@ class _RequestLeaveSheetState extends State<_RequestLeaveSheet> {
                 borderRadius: BorderRadius.circular(AppRadius.pill),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg, vertical: 12),
-                  child: Text(_saving ? 'Submitting…' : 'Submit',
-                      style: AppText.bodyStrong().copyWith(color: Colors.white)),
+                    horizontal: AppSpacing.lg,
+                    vertical: 12,
+                  ),
+                  child: Text(
+                    _saving ? 'Submitting…' : 'Submit',
+                    style: AppText.bodyStrong().copyWith(color: Colors.white),
+                  ),
                 ),
               ),
             ),
@@ -1098,30 +1361,6 @@ class _RequestLeaveSheetState extends State<_RequestLeaveSheet> {
         ),
       ),
     );
-  }
-
-  Widget _portionSeg(String label, String value) {
-    final active = _portion == value;
-    final child = Center(
-      child: Text(label,
-          style: (active ? AppText.bodyStrong() : AppText.body())
-              .copyWith(fontSize: 12)),
-    );
-    return active
-        ? KrPop(
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            onTap: () => setState(() => _portion = value),
-            child: child,
-          )
-        : InkWell(
-            onTap: () => setState(() => _portion = value),
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: child,
-            ),
-          );
   }
 }
 
@@ -1145,13 +1384,16 @@ class _ReportAbsenceSheetState extends State<_ReportAbsenceSheet> {
   Future<void> _submit() async {
     setState(() => _saving = true);
     try {
-      await LeaveRepository()
-          .reportAbsence(reason: _reason, note: _note.text.trim());
+      await LeaveRepository().reportAbsence(
+        reason: _reason,
+        note: _note.text.trim(),
+      );
       if (mounted) {
         Navigator.of(context).pop(true);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Absence reported — your approver was notified')),
+            content: Text('Absence reported — your approver was notified'),
+          ),
         );
       }
     } catch (_) {
@@ -1185,9 +1427,13 @@ class _ReportAbsenceSheetState extends State<_ReportAbsenceSheet> {
             const SizedBox(height: AppSpacing.md),
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
-              child: Text('Reason',
-                  style: AppText.small()
-                      .copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
+              child: Text(
+                'Reason',
+                style: AppText.small().copyWith(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -1210,9 +1456,13 @@ class _ReportAbsenceSheetState extends State<_ReportAbsenceSheet> {
             const SizedBox(height: 12),
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
-              child: Text('Note',
-                  style: AppText.small()
-                      .copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
+              child: Text(
+                'Note',
+                style: AppText.small().copyWith(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
             ),
             TextField(
               controller: _note,
@@ -1237,9 +1487,13 @@ class _ReportAbsenceSheetState extends State<_ReportAbsenceSheet> {
                 borderRadius: BorderRadius.circular(AppRadius.pill),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg, vertical: 12),
-                  child: Text(_saving ? 'Notifying…' : 'Notify Now',
-                      style: AppText.bodyStrong().copyWith(color: Colors.white)),
+                    horizontal: AppSpacing.lg,
+                    vertical: 12,
+                  ),
+                  child: Text(
+                    _saving ? 'Notifying…' : 'Notify Now',
+                    style: AppText.bodyStrong().copyWith(color: Colors.white),
+                  ),
                 ),
               ),
             ),
@@ -1282,7 +1536,8 @@ class _LeaveFilterCircle extends StatelessWidget {
             const SizedBox(height: 8),
             Center(
               child: Container(
-                width: 44, height: 4,
+                width: 44,
+                height: 4,
                 decoration: BoxDecoration(
                   color: AppColors.hairlineStrong,
                   borderRadius: BorderRadius.circular(2),
@@ -1292,34 +1547,43 @@ class _LeaveFilterCircle extends StatelessWidget {
             const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-              child: Text('Status',
-                  style: AppText.label().copyWith(fontSize: 11)),
+              child: Text(
+                'Status',
+                style: AppText.label().copyWith(fontSize: 11),
+              ),
             ),
             for (final o in _options)
               InkWell(
                 onTap: () => Navigator.of(ctx).pop(o.$1),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 12),
-                  child: Row(children: [
-                    Icon(
-                      o.$1 == active
-                          ? Icons.check_circle_rounded
-                          : Icons.radio_button_unchecked_rounded,
-                      size: 18,
-                      color: o.$1 == active
-                          ? AppColors.brand
-                          : AppColors.textTertiary,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(o.$2,
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        o.$1 == active
+                            ? Icons.check_circle_rounded
+                            : Icons.radio_button_unchecked_rounded,
+                        size: 18,
+                        color: o.$1 == active
+                            ? AppColors.brand
+                            : AppColors.textTertiary,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          o.$2,
                           style: AppText.body().copyWith(
-                              fontWeight: o.$1 == active
-                                  ? FontWeight.w600
-                                  : FontWeight.w400)),
-                    ),
-                  ]),
+                            fontWeight: o.$1 == active
+                                ? FontWeight.w600
+                                : FontWeight.w400,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             const SizedBox(height: 12),
@@ -1336,8 +1600,11 @@ class _LeaveFilterCircle extends StatelessWidget {
       borderRadius: BorderRadius.circular(999),
       padding: const EdgeInsets.all(10),
       onTap: () => _open(context),
-      child: const Icon(Icons.tune_rounded,
-          size: 16, color: AppColors.textPrimary),
+      child: const Icon(
+        Icons.tune_rounded,
+        size: 16,
+        color: AppColors.textPrimary,
+      ),
     );
   }
 }

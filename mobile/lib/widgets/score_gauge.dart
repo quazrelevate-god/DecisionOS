@@ -22,7 +22,9 @@ class ScoreGauge extends StatelessWidget {
     return SizedBox(
       width: size,
       height: h,
-      child: CustomPaint(painter: _ArcGaugePainter(score: score, size: size)),
+      child: CustomPaint(
+        painter: _ArcGaugePainter(score: score, size: size),
+      ),
     );
   }
 }
@@ -77,11 +79,7 @@ class _ArcGaugePainter extends CustomPainter {
         ..strokeWidth = 1
         ..strokeCap = StrokeCap.round;
       canvas.drawLine(needleStart, needleEnd, needle);
-      canvas.drawCircle(
-        needleEnd,
-        2.5,
-        Paint()..color = AppColors.textPrimary,
-      );
+      canvas.drawCircle(needleEnd, 2.5, Paint()..color = AppColors.textPrimary);
     }
 
     // Hub at the diameter, always drawn — even without a score, the pivot is
@@ -98,67 +96,203 @@ class _ArcGaugePainter extends CustomPainter {
       old.score != score || old.size != size;
 }
 
-/// A tinted mini-gauge — same half-circle geometry, smaller, with a coloured
-/// fill for use in per-category tiles.
-class MiniGauge extends StatelessWidget {
-  final int score;
-  final Color fillColor;
+/// KM-60 · The Ops screen's headline gauge.
+///
+/// Wider than a half circle — it starts below the horizontal on the left,
+/// sweeps over the top and drops below on the right, so the dial reads as
+/// an instrument rather than a progress bar bent in half. Thick track,
+/// thick fill, a needle on a visible pivot, and the two end labels the
+/// scale needs to mean anything.
+///
+/// Separate from [ScoreGauge] on purpose: Desk uses that one, and this is
+/// a different, heavier instrument.
+class OpsArcGauge extends StatelessWidget {
+  final int? score;
   final double size;
+  final Color color;
 
-  const MiniGauge({
+  const OpsArcGauge({
     super.key,
     required this.score,
-    required this.fillColor,
-    this.size = 62,
+    this.size = 150,
+    this.color = AppColors.success,
   });
 
   @override
   Widget build(BuildContext context) {
-    final h = size / 2 + 6;
     return SizedBox(
       width: size,
-      height: h,
+      height: size * 0.68,
       child: CustomPaint(
-        painter: _MiniGaugePainter(score: score, size: size, fill: fillColor),
+        painter: _OpsArcPainter(score: score, color: color),
       ),
     );
   }
 }
 
-class _MiniGaugePainter extends CustomPainter {
-  final int score;
-  final double size;
-  final Color fill;
-  _MiniGaugePainter({required this.score, required this.size, required this.fill});
+class _OpsArcPainter extends CustomPainter {
+  final int? score;
+  final Color color;
+  _OpsArcPainter({required this.score, required this.color});
+
+  // Screen angles: 0 = due right, growing clockwise. 170° starts just
+  // below due left; 200° of sweep lands just below due right.
+  static const _start = math.pi * (170 / 180);
+  static const _sweep = math.pi * (200 / 180);
 
   @override
   void paint(Canvas canvas, Size s) {
-    final c = size / 2;
-    final r = c - 6;
-    final rect = Rect.fromCircle(center: Offset(c, c), radius: r);
+    final w = s.width;
+    final r = w / 2 - 12;
+    final centre = Offset(w / 2, w / 2 - 4);
+    final rect = Rect.fromCircle(center: centre, radius: r);
 
-    final track = Paint()
-      ..color = AppColors.hairline
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(rect, math.pi, math.pi, false, track);
-
-    final pct = (score.clamp(0, 100)) / 100.0;
-    if (pct > 0) {
-      final f = Paint()
-        ..color = fill
+    canvas.drawArc(
+      rect,
+      _start,
+      _sweep,
+      false,
+      Paint()
+        ..color = color.withValues(alpha: 0.16)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..strokeCap = StrokeCap.round;
-      canvas.drawArc(rect, math.pi, math.pi * pct, false, f);
-      final a = math.pi + math.pi * pct;
-      final end = Offset(c + r * math.cos(a), c + r * math.sin(a));
-      canvas.drawCircle(end, 2, Paint()..color = fill);
+        ..strokeWidth = 9
+        ..strokeCap = StrokeCap.round,
+    );
+
+    if (score != null) {
+      final pct = score!.clamp(0, 100) / 100.0;
+      if (pct > 0) {
+        canvas.drawArc(
+          rect,
+          _start,
+          _sweep * pct,
+          false,
+          Paint()
+            ..color = color
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 9
+            ..strokeCap = StrokeCap.round,
+        );
+      }
+      // Needle, from the pivot out to the value.
+      final a = _start + _sweep * pct;
+      final tip = Offset(
+        centre.dx + (r - 9) * math.cos(a),
+        centre.dy + (r - 9) * math.sin(a),
+      );
+      canvas.drawLine(
+        centre,
+        tip,
+        Paint()
+          ..color = AppColors.textPrimary
+          ..strokeWidth = 1.6
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+    canvas.drawCircle(centre, 4, Paint()..color = AppColors.textPrimary);
+
+    // End labels — a scale without them is decoration.
+    for (final (value, angle) in [(0, _start), (100, _start + _sweep)]) {
+      final p = Offset(
+        centre.dx + (r + 2) * math.cos(angle),
+        centre.dy + (r + 2) * math.sin(angle),
+      );
+      final tp = TextPainter(
+        text: TextSpan(
+          text: '$value',
+          style: AppText.small().copyWith(
+            fontSize: 11,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(p.dx - tp.width / 2, p.dy + 6));
     }
   }
 
   @override
-  bool shouldRepaint(covariant _MiniGaugePainter old) =>
-      old.score != score || old.fill != fill;
+  bool shouldRepaint(covariant _OpsArcPainter old) =>
+      old.score != score || old.color != color;
+}
+
+/// A category score as a ring around its own icon — the Key-scores tile.
+///
+/// The ring opens at the bottom (270° of sweep), so the gap reads as a
+/// dial rather than a closed donut, and the icon sits in the middle where
+/// a number would be too small to help.
+class ScoreRing extends StatelessWidget {
+  final int score;
+  final Color color;
+  final IconData icon;
+  final double size;
+
+  const ScoreRing({
+    super.key,
+    required this.score,
+    required this.color,
+    required this.icon,
+    this.size = 58,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(
+        painter: _RingPainter(score: score, color: color),
+        child: Center(
+          child: Icon(icon, size: size * 0.3, color: AppColors.textPrimary),
+        ),
+      ),
+    );
+  }
+}
+
+class _RingPainter extends CustomPainter {
+  final int score;
+  final Color color;
+  _RingPainter({required this.score, required this.color});
+
+  static const _start = math.pi * (135 / 180);
+  static const _sweep = math.pi * (270 / 180);
+
+  @override
+  void paint(Canvas canvas, Size s) {
+    final r = s.width / 2 - 3.5;
+    final rect = Rect.fromCircle(
+      center: Offset(s.width / 2, s.height / 2),
+      radius: r,
+    );
+    canvas.drawArc(
+      rect,
+      _start,
+      _sweep,
+      false,
+      Paint()
+        ..color = AppColors.textPrimary.withValues(alpha: 0.08)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5
+        ..strokeCap = StrokeCap.round,
+    );
+    final pct = score.clamp(0, 100) / 100.0;
+    if (pct > 0) {
+      canvas.drawArc(
+        rect,
+        _start,
+        _sweep * pct,
+        false,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 5
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _RingPainter old) =>
+      old.score != score || old.color != color;
 }

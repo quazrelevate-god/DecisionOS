@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import '../widgets/app_bloom.dart';
 import '../widgets/app_header.dart';
 import '../widgets/neumorphic.dart';
+import '../widgets/segment.dart';
 import '../widgets/overlay_dock.dart';
 
 /// The Settings screen — ported from frontend `pages/Settings.js`. Owners
@@ -211,50 +212,30 @@ class _TabBar extends StatelessWidget {
   final _Tab active;
   final ValueChanged<_Tab> onChanged;
   const _TabBar({required this.active, required this.onChanged});
+
+  static const _tabs = <(_Tab, String)>[
+    (_Tab.business, 'Business'),
+    (_Tab.operations, 'Ops'),
+    (_Tab.money, 'Money'),
+    (_Tab.account, 'Account'),
+  ];
+
   @override
   Widget build(BuildContext context) {
-    return KrPressed(
-      borderRadius: BorderRadius.circular(AppRadius.pill),
-      padding: const EdgeInsets.all(4),
-      child: Row(
-        children: [
-          Expanded(child: _seg('Business', _Tab.business)),
-          Expanded(child: _seg('Ops', _Tab.operations)),
-          Expanded(child: _seg('Money', _Tab.money)),
-          Expanded(child: _seg('Account', _Tab.account)),
-        ],
-      ),
-    );
-  }
-
-  Widget _seg(String label, _Tab t) {
-    final isActive = active == t;
-    final content = Center(
-      child: Text(
-        label,
-        style: (isActive ? AppText.bodyStrong() : AppText.body()).copyWith(
-          fontSize: 12,
-          color: isActive
-              ? AppColors.textPrimary
-              : AppColors.textSecondary,
-        ),
-      ),
-    );
-    if (isActive) {
-      return KrPop(
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        onTap: () => onChanged(t),
-        child: content,
-      );
-    }
-    return InkWell(
-      onTap: () => onChanged(t),
-      borderRadius: BorderRadius.circular(AppRadius.pill),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: content,
-      ),
+    final i = _tabs.indexWhere((t) => t.$1 == active);
+    // KM-57 — the app's segment material. Equal slots: four labels of very
+    // different lengths would give wildly uneven pills, and equal shares
+    // also mean the bar can never overflow however narrow the phone.
+    return RaisedPillSegment(
+      active: i < 0 ? 0 : i,
+      count: _tabs.length,
+      onSelect: (n) => onChanged(_tabs[n].$1),
+      palette: NeuPalette.from(trackColorFor(BloomTint.coolGrey)),
+      trackPadding: const EdgeInsets.symmetric(horizontal: 7, vertical: 9),
+      slotPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      equalSlots: true,
+      slotBuilder: (context, n, isActive) =>
+          neuSegmentLabel(context, _tabs[n].$2, isActive),
     );
   }
 }

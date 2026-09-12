@@ -67,36 +67,40 @@ class _OpsScreenState extends State<OpsScreen> {
                     // demo defaults so the layout is still legible.
                     final ops = snap.data;
                     return SingleChildScrollView(
-                    physics: const ClampingScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.lg, 0, AppSpacing.lg, 120),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _OpsHeader(ops: ops),
-                        const SizedBox(height: AppSpacing.lg),
-                        _KeyScoresCard(ops: ops),
-                        const SizedBox(height: AppSpacing.md),
-                        _DoTheseFirst(ops: ops),
-                        const SizedBox(height: AppSpacing.md),
-                        _TodaysOperations(ops: ops),
-                        const SizedBox(height: AppSpacing.md),
-                        _OwnExecution(ops: ops),
-                        const SizedBox(height: AppSpacing.md),
-                        const _CalculationNote(),
-                        const SizedBox(height: AppSpacing.md),
-                        _TeamExecution(ops: ops),
-                      ],
-                    ),
-                  );
-                },
+                      physics: const ClampingScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        0,
+                        AppSpacing.lg,
+                        120,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _OpsHeader(ops: ops),
+                          const SizedBox(height: AppSpacing.lg),
+                          _KeyScoresCard(ops: ops),
+                          const SizedBox(height: AppSpacing.md),
+                          _DoTheseFirst(ops: ops),
+                          const SizedBox(height: AppSpacing.md),
+                          _TodaysOperations(ops: ops),
+                          const SizedBox(height: AppSpacing.md),
+                          _OwnExecution(ops: ops),
+                          const SizedBox(height: AppSpacing.md),
+                          const _CalculationNote(),
+                          const SizedBox(height: AppSpacing.md),
+                          _TeamExecution(ops: ops),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
-        ),
-        const OverlayDock(),
-      ],
-    ),
+            ],
+          ),
+          const OverlayDock(),
+        ],
+      ),
     );
   }
 }
@@ -129,19 +133,36 @@ class _OpsHeader extends StatelessWidget {
   final OperatingScore? ops;
   const _OpsHeader({this.ops});
 
-  static String _bandFor(int s) {
-    if (s >= 80) return 'On track';
-    if (s >= 60) return 'Fair';
-    if (s >= 40) return 'Watch';
-    return 'Needs work';
+  /// Band, and the colour that goes with it. The band is the sentence the
+  /// founder actually reads — a bare number says nothing about whether it
+  /// is good.
+  static (String, Color, Color) _bandFor(int s) {
+    if (s >= 80) return ('On track', AppColors.success, AppColors.successBg);
+    if (s >= 60) return ('Fair', AppColors.success, AppColors.successBg);
+    if (s >= 40) return ('Watch', AppColors.warning, AppColors.brandBg);
+    return ('Needs work', AppColors.brand, AppColors.brandBg);
+  }
+
+  /// The weakest category, named. "17/100" tells you there is a problem;
+  /// this tells you where it is.
+  String? _drag() {
+    final cats = ops?.categories;
+    if (cats == null || cats.isEmpty) return 'Execution';
+    final sorted = cats.entries.toList()
+      ..sort((x, y) => x.value.compareTo(y.value));
+    final worst = sorted.first;
+    if (worst.value >= 60) return null;
+    final n = worst.key;
+    return n.isEmpty ? null : n[0].toUpperCase() + n.substring(1);
   }
 
   @override
   Widget build(BuildContext context) {
     final overall = ops?.overall ?? 17;
-    final band = _bandFor(overall);
+    final (band, ink, bg) = _bandFor(overall);
+    final drag = _drag();
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           child: Column(
@@ -150,27 +171,74 @@ class _OpsHeader extends StatelessWidget {
               Text('HOW WELL THE BUSINESS IS RUNNING', style: AppText.label()),
               const SizedBox(height: 6),
               Text('Operating score', style: AppText.h1()),
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.sm),
               RichText(
                 text: TextSpan(
-                  style: AppText.display().copyWith(fontSize: 44),
+                  style: AppText.display().copyWith(fontSize: 52, height: 1.0),
                   children: [
                     TextSpan(text: '$overall'),
                     TextSpan(
                       text: ' /100',
-                      style: AppText.body().copyWith(color: AppColors.textSecondary),
+                      style: AppText.body().copyWith(
+                        fontSize: 17,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(band,
-                  style: AppText.smallStrong().copyWith(color: AppColors.success)),
+              const SizedBox(height: 10),
+              // Band pill — dot plus word, on its own tint.
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: bg,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: ink,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      band,
+                      style: AppText.smallStrong().copyWith(
+                        fontSize: 13,
+                        color: ink,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (drag != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  '$drag is currently the biggest drag.',
+                  style: AppText.body().copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.35,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
-        const SizedBox(width: AppSpacing.md),
-        ScoreGauge(score: overall, size: 108),
+        // 132, not more: at 150 the dial squeezed "Operating score" onto
+        // two lines on a 390 pt phone.
+        Padding(
+          padding: const EdgeInsets.only(top: 46),
+          child: OpsArcGauge(score: overall, size: 132),
+        ),
       ],
     );
   }
@@ -211,13 +279,41 @@ class _KeyScoresCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: _KeyScoreTile(icon: Icons.flash_on_rounded, label: 'Execution', score: exec, color: exec > 0 ? AppColors.success : AppColors.textPrimary)),
+              Expanded(
+                child: _KeyScoreTile(
+                  icon: Icons.flash_on_rounded,
+                  label: 'Execution',
+                  score: exec,
+                  color: exec > 0 ? AppColors.success : AppColors.textPrimary,
+                ),
+              ),
               const SizedBox(width: 6),
-              Expanded(child: _KeyScoreTile(icon: Icons.attach_money_rounded, label: 'Finance', score: fin, color: AppColors.success)),
+              Expanded(
+                child: _KeyScoreTile(
+                  icon: Icons.attach_money_rounded,
+                  label: 'Finance',
+                  score: fin,
+                  color: AppColors.success,
+                ),
+              ),
               const SizedBox(width: 6),
-              Expanded(child: _KeyScoreTile(icon: Icons.trending_up_rounded, label: 'Sales', score: sales, color: AppColors.brand)),
+              Expanded(
+                child: _KeyScoreTile(
+                  icon: Icons.trending_up_rounded,
+                  label: 'Sales',
+                  score: sales,
+                  color: AppColors.brand,
+                ),
+              ),
               const SizedBox(width: 6),
-              Expanded(child: _KeyScoreTile(icon: Icons.forum_outlined, label: 'Responsive', score: resp, color: resp > 0 ? AppColors.success : AppColors.textPrimary)),
+              Expanded(
+                child: _KeyScoreTile(
+                  icon: Icons.forum_outlined,
+                  label: 'Responsive',
+                  score: resp,
+                  color: resp > 0 ? AppColors.success : AppColors.textPrimary,
+                ),
+              ),
             ],
           ),
         ],
@@ -242,71 +338,41 @@ class _KeyScoreTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 12, color: AppColors.textSecondary),
-            const SizedBox(width: 3),
-            Flexible(
-              child: Text(
-                label,
-                style: AppText.small().copyWith(
-                    color: AppColors.textSecondary, fontSize: 11),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        MiniGauge(score: score, fillColor: color, size: 56),
-        const SizedBox(height: 4),
+        ScoreRing(score: score, color: color, icon: icon, size: 58),
+        const SizedBox(height: 10),
         FittedBox(
           fit: BoxFit.scaleDown,
           child: RichText(
             text: TextSpan(
-              style: AppText.h3().copyWith(fontSize: 18, fontWeight: FontWeight.w800),
+              style: AppText.h3().copyWith(
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
+              ),
               children: [
                 TextSpan(text: '$score'),
                 TextSpan(
                   text: ' /100',
-                  style: AppText.small().copyWith(color: AppColors.textSecondary, fontSize: 10),
+                  style: AppText.small().copyWith(
+                    color: AppColors.textSecondary,
+                    fontSize: 11,
+                  ),
                 ),
               ],
             ),
           ),
         ),
-        const SizedBox(height: 6),
-        _MiniBar(score: score, color: color),
-      ],
-    );
-  }
-}
-
-class _MiniBar extends StatelessWidget {
-  final int score;
-  final Color color;
-  const _MiniBar({required this.score, required this.color});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 4,
-      decoration: BoxDecoration(
-        color: AppColors.hairline,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: FractionallySizedBox(
-        alignment: Alignment.centerLeft,
-        widthFactor: (score / 100).clamp(0.0, 1.0),
-        child: Container(
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(4),
+        const SizedBox(height: 3),
+        Text(
+          label,
+          style: AppText.small().copyWith(
+            color: AppColors.textSecondary,
+            fontSize: 11,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
-      ),
+      ],
     );
   }
 }
@@ -322,24 +388,31 @@ class _DoTheseFirst extends StatelessWidget {
     final rows = <(String, VoidCallback)>[];
     final s = ops?.stats;
     if (s != null && s.overdue > 0) {
-      rows.add(('Clear ${s.overdue} overdue task${s.overdue == 1 ? '' : 's'}',
-          () => _goToWorkTab(context)));
+      rows.add((
+        'Clear ${s.overdue} overdue task${s.overdue == 1 ? '' : 's'}',
+        () => _goToWorkTab(context),
+      ));
     }
     if (s != null && s.openComplaints > 0) {
       final n = s.openComplaints;
-      rows.add(('Close $n open complaint${n == 1 ? '' : 's'}', () {
-        // Complaints live on CRM in the frontend; on mobile CRM is a
-        // route pushed above the shell.
-        Navigator.of(context).popUntil((r) => r.isFirst);
-        appShellTab.value = 0; // land on Desk; from there the More sheet
-        // opens CRM. Kept simple — the row is at least tappable and
-        // ends the drill.
-      }));
+      rows.add((
+        'Close $n open complaint${n == 1 ? '' : 's'}',
+        () {
+          // Complaints live on CRM in the frontend; on mobile CRM is a
+          // route pushed above the shell.
+          Navigator.of(context).popUntil((r) => r.isFirst);
+          appShellTab.value = 0; // land on Desk; from there the More sheet
+          // opens CRM. Kept simple — the row is at least tappable and
+          // ends the drill.
+        },
+      ));
     }
     final exec = ops?.categories['execution'];
     if (exec != null && exec < 40) {
-      rows.add(('Execution is at $exec — knock down a few today',
-          () => _goToWorkTab(context)));
+      rows.add((
+        'Execution is at $exec — knock down a few today',
+        () => _goToWorkTab(context),
+      ));
     }
     if (rows.isEmpty) {
       rows.add(("You're all clear — nothing urgent right now.", () {}));
@@ -350,16 +423,31 @@ class _DoTheseFirst extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rows = _actionsFor(context);
+    final clear =
+        ops?.stats == null ||
+        (ops!.stats.overdue == 0 && ops!.stats.openComplaints == 0);
+    // White like the other cards, not a green panel: the green belongs to
+    // the state of the list, and when there is nothing to do that is the
+    // only green on it.
     return SoftCard(
-      color: AppColors.successBg,
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Do these first', style: AppText.bodyStrong()),
+          Row(
+            children: [
+              Text('Do these first', style: AppText.h3()),
+              const Spacer(),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: AppColors.textPrimary,
+              ),
+            ],
+          ),
           const SizedBox(height: AppSpacing.md),
           for (int i = 0; i < rows.length; i++) ...[
-            _DoFirstRow(text: rows[i].$1, onTap: rows[i].$2),
+            _DoFirstRow(text: rows[i].$1, onTap: rows[i].$2, clear: clear),
             if (i != rows.length - 1) const SizedBox(height: AppSpacing.sm),
           ],
         ],
@@ -371,7 +459,12 @@ class _DoTheseFirst extends StatelessWidget {
 class _DoFirstRow extends StatelessWidget {
   final String text;
   final VoidCallback onTap;
-  const _DoFirstRow({required this.text, required this.onTap});
+  final bool clear;
+  const _DoFirstRow({
+    required this.text,
+    required this.onTap,
+    required this.clear,
+  });
   @override
   Widget build(BuildContext context) {
     return InkWell(
@@ -380,23 +473,39 @@ class _DoFirstRow extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(right: 10),
-              child: Container(
-                width: 5,
-                height: 5,
-                decoration: const BoxDecoration(
-                  color: AppColors.textPrimary,
-                  shape: BoxShape.circle,
-                ),
+            // A tinted disc, not a bullet: green tick when the list is
+            // empty, amber bolt when it is not.
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: clear
+                    ? const Color(0xFFD8F0DF)
+                    : const Color(0xFFFBE2D2),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                clear ? Icons.check_rounded : Icons.bolt_rounded,
+                size: 18,
+                color: clear
+                    ? const Color(0xFF16A34A)
+                    : const Color(0xFFEA580C),
               ),
             ),
-            Expanded(child: Text(text, style: AppText.body())),
-            const SizedBox(width: 8),
-            const Icon(Icons.chevron_right_rounded,
-                size: 20, color: AppColors.textPrimary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(text, style: AppText.body().copyWith(height: 1.3)),
+            ),
+            if (!clear) ...[
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: AppColors.textPrimary,
+              ),
+            ],
           ],
         ),
       ),
@@ -427,27 +536,39 @@ class _TodaysOperations extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                  child: _StatTile(
-                      icon: Icons.check_rounded,
-                      label: 'Tasks done',
-                      value: '${s.done}')),
+                child: _StatTile(
+                  icon: Icons.check_rounded,
+                  label: 'Tasks done',
+                  tone: StatTone.good,
+                  value: '${s.done}',
+                ),
+              ),
               Expanded(
-                  child: _StatTile(
-                      icon: Icons.assignment_outlined,
-                      label: 'Open tasks',
-                      value: '${s.open}')),
+                child: _StatTile(
+                  icon: Icons.assignment_outlined,
+                  label: 'Open tasks',
+                  tone: StatTone.info,
+                  value: '${s.open}',
+                ),
+              ),
               Expanded(
-                  child: _StatTile(
-                      icon: Icons.flash_on_rounded,
-                      label: 'Overdue',
-                      value: '${s.overdue}',
-                      urgent: s.overdue > 0)),
+                child: _StatTile(
+                  icon: Icons.flash_on_rounded,
+                  label: 'Overdue',
+                  tone: StatTone.urgent,
+                  value: '${s.overdue}',
+                  alert: s.overdue > 0,
+                ),
+              ),
               Expanded(
-                  child: _StatTile(
-                      icon: Icons.chat_bubble_outline_rounded,
-                      label: 'Open complaints',
-                      value: '${s.openComplaints}',
-                      urgent: s.openComplaints > 0)),
+                child: _StatTile(
+                  icon: Icons.chat_bubble_outline_rounded,
+                  label: 'Open complaints',
+                  tone: StatTone.note,
+                  value: '${s.openComplaints}',
+                  alert: s.openComplaints > 0,
+                ),
+              ),
             ],
           ),
         ],
@@ -478,7 +599,10 @@ class _OwnExecution extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       'You are an operator too — this is your work, not the company’s.',
-                      style: AppText.small().copyWith(color: AppColors.textSecondary, fontSize: 12),
+                      style: AppText.small().copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
@@ -492,28 +616,40 @@ class _OwnExecution extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                  child: _StatTile(
-                      icon: Icons.trending_up_rounded,
-                      label: 'Completion',
-                      value: '${m.completionRate}',
-                      unit: '%')),
+                child: _StatTile(
+                  icon: Icons.trending_up_rounded,
+                  label: 'Completed',
+                  tone: StatTone.good,
+                  value: '${m.completionRate}',
+                  unit: '%',
+                ),
+              ),
               Expanded(
-                  child: _StatTile(
-                      icon: Icons.assignment_outlined,
-                      label: 'Open',
-                      value: '${m.open}')),
+                child: _StatTile(
+                  icon: Icons.assignment_outlined,
+                  label: 'Open tasks',
+                  tone: StatTone.info,
+                  value: '${m.open}',
+                ),
+              ),
               Expanded(
-                  child: _StatTile(
-                      icon: Icons.flash_on_rounded,
-                      label: 'Overdue',
-                      value: '${m.overdue}',
-                      urgent: m.overdue > 0)),
+                child: _StatTile(
+                  icon: Icons.flash_on_rounded,
+                  label: 'Overdue',
+                  tone: StatTone.urgent,
+                  value: '${m.overdue}',
+                  alert: m.overdue > 0,
+                ),
+              ),
               Expanded(
-                  child: _StatTile(
-                      icon: Icons.camera_alt_outlined,
-                      label: 'Proof rate',
-                      value: '${m.proofUploadRate}',
-                      unit: '%')),
+                child: _StatTile(
+                  icon: Icons.camera_alt_outlined,
+                  label: 'Proofs',
+                  tone: StatTone.note,
+                  value: '${m.proofUploadRate}',
+                  unit: '%',
+                ),
+              ),
             ],
           ),
         ],
@@ -535,14 +671,20 @@ class _ViewAll extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('View all',
-                style: AppText.small().copyWith(
-                    color: AppColors.textPrimary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600)),
+            Text(
+              'View all',
+              style: AppText.small().copyWith(
+                color: AppColors.textPrimary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(width: 4),
-            const Icon(Icons.chevron_right_rounded,
-                size: 18, color: AppColors.textPrimary),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: AppColors.textPrimary,
+            ),
           ],
         ),
       ),
@@ -550,59 +692,83 @@ class _ViewAll extends StatelessWidget {
   }
 }
 
+/// The tint a stat wears. Reads as a category at a glance — green for
+/// done, blue for open, orange for late, violet for conversations.
+enum StatTone { good, info, urgent, note }
+
 class _StatTile extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
   final String? unit;
-  final bool urgent;
+  final StatTone tone;
+  final bool alert;
   const _StatTile({
     required this.icon,
     required this.label,
     required this.value,
+    required this.tone,
     this.unit,
-    this.urgent = false,
+    this.alert = false,
   });
+
+  (Color, Color) get _tint => switch (tone) {
+    StatTone.good => (const Color(0xFFD8F0DF), const Color(0xFF16A34A)),
+    StatTone.info => (const Color(0xFFDDE9FB), const Color(0xFF2563EB)),
+    StatTone.urgent => (const Color(0xFFFBE2D2), const Color(0xFFEA580C)),
+    StatTone.note => (const Color(0xFFE7DFF9), const Color(0xFF7C3AED)),
+  };
 
   @override
   Widget build(BuildContext context) {
+    final (bg, fg) = _tint;
     return Column(
       children: [
         Stack(
           clipBehavior: Clip.none,
           children: [
             Container(
-              width: 34,
-              height: 34,
-              decoration: const BoxDecoration(
-                color: AppColors.surfaceMuted,
-                shape: BoxShape.circle,
-              ),
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
               alignment: Alignment.center,
-              child: Icon(icon, size: 15, color: AppColors.textPrimary),
+              child: Icon(icon, size: 19, color: fg),
             ),
-            if (urgent) const Positioned(right: -1, top: -1, child: StatDot()),
+            if (alert) const Positioned(right: -1, top: -1, child: StatDot()),
           ],
         ),
-        const SizedBox(height: 8),
-        Text(label,
-            style: AppText.small().copyWith(color: AppColors.textSecondary, fontSize: 11),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis),
-        const SizedBox(height: 4),
+        const SizedBox(height: 10),
         FittedBox(
           fit: BoxFit.scaleDown,
           child: RichText(
             text: TextSpan(
-              style: AppText.h3().copyWith(fontSize: 22, fontWeight: FontWeight.w800),
+              style: AppText.h3().copyWith(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+              ),
               children: [
                 TextSpan(text: value),
                 if (unit != null)
-                  TextSpan(text: ' $unit', style: AppText.small().copyWith(color: AppColors.textSecondary)),
+                  TextSpan(
+                    text: ' $unit',
+                    style: AppText.small().copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
               ],
             ),
           ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          label,
+          style: AppText.small().copyWith(
+            color: AppColors.textSecondary,
+            fontSize: 11,
+          ),
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     );
@@ -615,12 +781,22 @@ class _CalculationNote extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Icon(Icons.info_outline_rounded, size: 14, color: AppColors.textSecondary),
+        const Icon(
+          Icons.info_outline_rounded,
+          size: 14,
+          color: AppColors.textSecondary,
+        ),
         const SizedBox(width: 6),
-        Text('How is this calculated?',
-            style: AppText.small().copyWith(color: AppColors.textSecondary)),
+        Text(
+          'How is this calculated?',
+          style: AppText.small().copyWith(color: AppColors.textSecondary),
+        ),
         const SizedBox(width: 2),
-        const Icon(Icons.expand_more_rounded, size: 16, color: AppColors.textSecondary),
+        const Icon(
+          Icons.expand_more_rounded,
+          size: 16,
+          color: AppColors.textSecondary,
+        ),
       ],
     );
   }
@@ -670,9 +846,13 @@ class _TeamExecutionState extends State<_TeamExecution> {
 
     if (_query.isNotEmpty) {
       final q = _query.toLowerCase();
-      rows = rows.where((r) =>
-          r.name.toLowerCase().contains(q) ||
-          r.role.toLowerCase().contains(q)).toList();
+      rows = rows
+          .where(
+            (r) =>
+                r.name.toLowerCase().contains(q) ||
+                r.role.toLowerCase().contains(q),
+          )
+          .toList();
     }
 
     switch (_sort) {
@@ -683,9 +863,11 @@ class _TeamExecutionState extends State<_TeamExecution> {
         rows.sort((a, b) => a.name.compareTo(b.name));
         break;
       case _OpsSort.activity:
-        rows.sort((a, b) =>
-            (b.lastActivity ?? DateTime(1970))
-                .compareTo(a.lastActivity ?? DateTime(1970)));
+        rows.sort(
+          (a, b) => (b.lastActivity ?? DateTime(1970)).compareTo(
+            a.lastActivity ?? DateTime(1970),
+          ),
+        );
         break;
     }
     for (int i = 0; i < rows.length; i++) {
@@ -699,8 +881,7 @@ class _TeamExecutionState extends State<_TeamExecution> {
       context: context,
       backgroundColor: AppColors.surfaceDark,
       shape: const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
       ),
       builder: (_) => SafeArea(
         child: Column(
@@ -708,11 +889,15 @@ class _TeamExecutionState extends State<_TeamExecution> {
           children: [
             for (final s in _OpsSort.values)
               ListTile(
-                title: Text(_sortLabel(s),
-                    style: const TextStyle(color: AppColors.textOnDark)),
+                title: Text(
+                  _sortLabel(s),
+                  style: const TextStyle(color: AppColors.textOnDark),
+                ),
                 trailing: s == _sort
-                    ? const Icon(Icons.check_rounded,
-                        color: AppColors.textOnDark)
+                    ? const Icon(
+                        Icons.check_rounded,
+                        color: AppColors.textOnDark,
+                      )
                     : null,
                 onTap: () => Navigator.of(context).pop(s),
               ),
@@ -740,41 +925,65 @@ class _TeamExecutionState extends State<_TeamExecution> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Team execution',
-                        style: AppText.h3().copyWith(color: AppColors.textOnDark)),
+                    Text(
+                      'Team execution',
+                      style: AppText.h3().copyWith(color: AppColors.textOnDark),
+                    ),
                     const SizedBox(height: 2),
-                    Text('Last 30 days · open anyone to see their full ops',
-                        style: AppText.small().copyWith(
-                            color: AppColors.textOnDarkMuted, fontSize: 12),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
+                    Text(
+                      'Last 30 days · open anyone to see their full ops',
+                      style: AppText.small().copyWith(
+                        color: AppColors.textOnDarkMuted,
+                        fontSize: 12,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
-              Text('Sort',
-                  style: AppText.small().copyWith(color: AppColors.textOnDarkMuted, fontSize: 12)),
+              Text(
+                'Sort',
+                style: AppText.small().copyWith(
+                  color: AppColors.textOnDarkMuted,
+                  fontSize: 12,
+                ),
+              ),
               const SizedBox(width: 6),
               InkWell(
                 onTap: _pickSort,
                 borderRadius: BorderRadius.circular(AppRadius.pill),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.surfaceDarkAlt,
                     borderRadius: BorderRadius.circular(AppRadius.pill),
-                    border:
-                        Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.1),
+                    ),
                   ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Text(_sortLabel(_sort),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _sortLabel(_sort),
                         style: AppText.smallStrong().copyWith(
-                            color: AppColors.textOnDark, fontSize: 12)),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.expand_more_rounded,
-                        size: 14, color: AppColors.textOnDark),
-                  ]),
+                          color: AppColors.textOnDark,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.expand_more_rounded,
+                        size: 14,
+                        color: AppColors.textOnDark,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -786,27 +995,35 @@ class _TeamExecutionState extends State<_TeamExecution> {
               color: AppColors.surfaceDarkAlt,
               borderRadius: BorderRadius.circular(AppRadius.pill),
             ),
-            child: Row(children: [
-              const Icon(Icons.search_rounded,
-                  size: 18, color: AppColors.textOnDarkMuted),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  onChanged: (v) => setState(() => _query = v),
-                  style: AppText.small().copyWith(
-                      color: AppColors.textOnDark, fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'Search team, member, department…',
-                    hintStyle: AppText.small().copyWith(
-                        color: AppColors.textOnDarkMuted, fontSize: 12),
-                    isDense: true,
-                    border: InputBorder.none,
-                    contentPadding:
-                        const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.search_rounded,
+                  size: 18,
+                  color: AppColors.textOnDarkMuted,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    onChanged: (v) => setState(() => _query = v),
+                    style: AppText.small().copyWith(
+                      color: AppColors.textOnDark,
+                      fontSize: 13,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Search team, member, department…',
+                      hintStyle: AppText.small().copyWith(
+                        color: AppColors.textOnDarkMuted,
+                        fontSize: 12,
+                      ),
+                      isDense: true,
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
                   ),
                 ),
-              ),
-            ]),
+              ],
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           if (members.isEmpty)
@@ -816,31 +1033,33 @@ class _TeamExecutionState extends State<_TeamExecution> {
                 _query.isEmpty
                     ? 'No team activity to rank yet.'
                     : 'No matches — try a different name or role.',
-                style: AppText.small()
-                    .copyWith(color: AppColors.textOnDarkMuted, fontSize: 13),
+                style: AppText.small().copyWith(
+                  color: AppColors.textOnDarkMuted,
+                  fontSize: 13,
+                ),
               ),
             )
           else
-          Column(
-            children: [
-              for (int r = 0; r < members.length; r += 2)
-                Padding(
-                  padding: EdgeInsets.only(top: r == 0 ? 0 : AppSpacing.sm),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: _MemberCard(m: members[r])),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: r + 1 < members.length
-                            ? _MemberCard(m: members[r + 1])
-                            : const SizedBox(),
-                      ),
-                    ],
+            Column(
+              children: [
+                for (int r = 0; r < members.length; r += 2)
+                  Padding(
+                    padding: EdgeInsets.only(top: r == 0 ? 0 : AppSpacing.sm),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _MemberCard(m: members[r])),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: r + 1 < members.length
+                              ? _MemberCard(m: members[r + 1])
+                              : const SizedBox(),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );
@@ -863,13 +1082,13 @@ class _Member {
     this.lastActivity,
   });
   _Member copyWith({int? rank}) => _Member(
-        id: id,
-        rank: rank ?? this.rank,
-        name: name,
-        role: role,
-        score: score,
-        lastActivity: lastActivity,
-      );
+    id: id,
+    rank: rank ?? this.rank,
+    name: name,
+    role: role,
+    score: score,
+    lastActivity: lastActivity,
+  );
 }
 
 class _MemberCard extends StatelessWidget {
@@ -897,41 +1116,59 @@ class _MemberCard extends StatelessWidget {
       },
       borderRadius: radius,
       child: Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceDarkAlt,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text('${m.rank}',
-              style: AppText.small().copyWith(color: AppColors.textOnDarkMuted, fontSize: 13)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(m.name,
-                    style: AppText.smallStrong().copyWith(color: AppColors.textOnDark),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 2),
-                Text(m.role,
-                    style: AppText.meta().copyWith(
-                        color: AppColors.textOnDarkMuted, fontSize: 11),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-              ],
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceDarkAlt,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              '${m.rank}',
+              style: AppText.small().copyWith(
+                color: AppColors.textOnDarkMuted,
+                fontSize: 13,
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Text('${m.score}',
-              style: AppText.h3().copyWith(color: AppColors.textOnDark, fontWeight: FontWeight.w800)),
-        ],
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    m.name,
+                    style: AppText.smallStrong().copyWith(
+                      color: AppColors.textOnDark,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    m.role,
+                    style: AppText.meta().copyWith(
+                      color: AppColors.textOnDarkMuted,
+                      fontSize: 11,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '${m.score}',
+              style: AppText.h3().copyWith(
+                color: AppColors.textOnDark,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
     );
   }
 }

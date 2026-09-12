@@ -6,6 +6,7 @@ import '../widgets/app_bloom.dart';
 import '../widgets/app_header.dart';
 import '../widgets/neumorphic.dart';
 import '../widgets/overlay_dock.dart';
+import '../widgets/segment.dart';
 import '../widgets/states.dart';
 
 /// The CEO Journal — ported from frontend `pages/Journal.js`. Shows the
@@ -44,11 +45,15 @@ class _JournalScreenState extends State<JournalScreen> {
 
   void _submitSearch() {
     _term = _searchCtrl.text.trim();
-    setState(() { _future = JournalRepository().feed(q: _term); });
+    setState(() {
+      _future = JournalRepository().feed(q: _term);
+    });
   }
 
   void _reload() {
-    setState(() { _future = JournalRepository().feed(q: _term); });
+    setState(() {
+      _future = JournalRepository().feed(q: _term);
+    });
   }
 
   @override
@@ -69,7 +74,11 @@ class _JournalScreenState extends State<JournalScreen> {
                     return SingleChildScrollView(
                       physics: const ClampingScrollPhysics(),
                       padding: const EdgeInsets.fromLTRB(
-                          AppSpacing.lg, 0, AppSpacing.lg, 120),
+                        AppSpacing.lg,
+                        0,
+                        AppSpacing.lg,
+                        120,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -113,15 +122,20 @@ class _JournalScreenState extends State<JournalScreen> {
   Widget _body(AsyncSnapshot<JournalFeed> snap) {
     if (snap.connectionState != ConnectionState.done) {
       return Column(
-        children: List.generate(3, (_) => const Padding(
-              padding: EdgeInsets.only(bottom: AppSpacing.md),
-              child: LoadingCard(height: 96),
-            )),
+        children: List.generate(
+          3,
+          (_) => const Padding(
+            padding: EdgeInsets.only(bottom: AppSpacing.md),
+            child: LoadingCard(height: 96),
+          ),
+        ),
       );
     }
     if (snap.hasError) {
       return ErrorState(
-          message: 'Could not load the journal.', onRetry: _reload);
+        message: 'Could not load the journal.',
+        onRetry: _reload,
+      );
     }
     final feed = snap.data ?? const JournalFeed(days: []);
     if (feed.days.isEmpty) {
@@ -157,26 +171,28 @@ class _JournalScreenState extends State<JournalScreen> {
           selected: _selected,
           hasEvents: {
             for (final d in feed.days)
-              d.date: (d.decisions.isNotEmpty || d.notes.isNotEmpty)
+              d.date: (d.decisions.isNotEmpty || d.notes.isNotEmpty),
           },
           onPickDay: (d) => setState(() => _selected = d),
-          onShiftWeek: (delta) => setState(() =>
-              _selected = _selected.add(Duration(days: delta * 7))),
+          onShiftWeek: (delta) => setState(
+            () => _selected = _selected.add(Duration(days: delta * 7)),
+          ),
         ),
         const SizedBox(height: AppSpacing.lg),
-        Builder(builder: (_) {
-          final iso = _iso(_selected);
-          final day = byDate[iso];
-          if (day == null ||
-              (day.decisions.isEmpty && day.notes.isEmpty)) {
-            return const EmptyState(
-              icon: Icons.event_note_outlined,
-              title: 'Nothing logged on this day.',
-              subtitle: 'Pick another date from the strip above.',
-            );
-          }
-          return _DayGroup(day: day);
-        }),
+        Builder(
+          builder: (_) {
+            final iso = _iso(_selected);
+            final day = byDate[iso];
+            if (day == null || (day.decisions.isEmpty && day.notes.isEmpty)) {
+              return const EmptyState(
+                icon: Icons.event_note_outlined,
+                title: 'Nothing logged on this day.',
+                subtitle: 'Pick another date from the strip above.',
+              );
+            }
+            return _DayGroup(day: day);
+          },
+        ),
       ],
     );
   }
@@ -205,8 +221,11 @@ class _SearchRow extends StatelessWidget {
               color: AppColors.surface,
               child: Row(
                 children: [
-                  const Icon(Icons.search_rounded,
-                      size: 18, color: AppColors.textSecondary),
+                  const Icon(
+                    Icons.search_rounded,
+                    size: 18,
+                    color: AppColors.textSecondary,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
@@ -216,11 +235,13 @@ class _SearchRow extends StatelessWidget {
                       decoration: InputDecoration(
                         isDense: true,
                         hintText: 'Search decisions & notes…',
-                        hintStyle: AppText.body()
-                            .copyWith(color: AppColors.textTertiary),
+                        hintStyle: AppText.body().copyWith(
+                          color: AppColors.textTertiary,
+                        ),
                         border: InputBorder.none,
-                        contentPadding:
-                            const EdgeInsets.symmetric(vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 12,
+                        ),
                       ),
                     ),
                   ),
@@ -238,9 +259,13 @@ class _SearchRow extends StatelessWidget {
             onTap: onSubmit,
             child: Padding(
               padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg, vertical: 12),
-              child: Text('Search',
-                  style: AppText.bodyStrong().copyWith(color: Colors.white)),
+                horizontal: AppSpacing.lg,
+                vertical: 12,
+              ),
+              child: Text(
+                'Search',
+                style: AppText.bodyStrong().copyWith(color: Colors.white),
+              ),
             ),
           ),
         ),
@@ -253,41 +278,28 @@ class _ViewSegment extends StatelessWidget {
   final _JView view;
   final ValueChanged<_JView> onChanged;
   const _ViewSegment({required this.view, required this.onChanged});
+
+  static const _labels = ['Timeline', 'Calendar'];
+  static const _views = [_JView.timeline, _JView.calendar];
+
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: KrPressed(
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        padding: const EdgeInsets.all(4),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          _seg('Timeline', view == _JView.timeline,
-              () => onChanged(_JView.timeline)),
-          _seg('Calendar', view == _JView.calendar,
-              () => onChanged(_JView.calendar)),
-        ]),
-      ),
-    );
-  }
-
-  Widget _seg(String label, bool active, VoidCallback onTap) {
-    if (active) {
-      return KrPop(
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
-        onTap: onTap,
-        child: Text(label, style: AppText.bodyStrong().copyWith(fontSize: 13)),
-      );
-    }
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.pill),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
-        child: Text(label,
-            style: AppText.body().copyWith(
-                color: AppColors.textSecondary, fontSize: 13)),
-      ),
+    // KM-57 — the app's segment material. A bare Row (not Align) so the
+    // control gets unbounded width and shrink-wraps to its two labels,
+    // rather than stretching across the page.
+    return Row(
+      children: [
+        RaisedPillSegment(
+          active: _views.indexOf(view).clamp(0, 1),
+          count: _labels.length,
+          onSelect: (i) => onChanged(_views[i]),
+          palette: NeuPalette.from(trackColorFor(BloomTint.amber)),
+          trackPadding: const EdgeInsets.symmetric(horizontal: 7, vertical: 9),
+          slotPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+          slotBuilder: (context, i, isActive) =>
+              neuSegmentLabel(context, _labels[i], isActive),
+        ),
+      ],
     );
   }
 }
@@ -330,8 +342,10 @@ class _WeekStrip extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              Text(_monthYear(anchor),
-                  style: AppText.bodyStrong().copyWith(fontSize: 14)),
+              Text(
+                _monthYear(anchor),
+                style: AppText.bodyStrong().copyWith(fontSize: 14),
+              ),
               const Spacer(),
               InkWell(
                 onTap: () => onShiftWeek(1),
@@ -344,19 +358,21 @@ class _WeekStrip extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          Row(children: [
-            for (int i = 0; i < 7; i++)
-              Expanded(
-                child: _StripCell(
-                  dayLabel: dayLabels[i],
-                  date: week[i],
-                  selected: _sameDay(week[i], selected),
-                  isToday: _sameDay(week[i], today),
-                  hasEvents: hasEvents[_iso(week[i])] == true,
-                  onTap: () => onPickDay(week[i]),
+          Row(
+            children: [
+              for (int i = 0; i < 7; i++)
+                Expanded(
+                  child: _StripCell(
+                    dayLabel: dayLabels[i],
+                    date: week[i],
+                    selected: _sameDay(week[i], selected),
+                    isToday: _sameDay(week[i], today),
+                    hasEvents: hasEvents[_iso(week[i])] == true,
+                    onTap: () => onPickDay(week[i]),
+                  ),
                 ),
-              ),
-          ]),
+            ],
+          ),
         ],
       ),
     );
@@ -380,30 +396,40 @@ class _StripCell extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) {
-    final body = Column(mainAxisSize: MainAxisSize.min, children: [
-      Text(dayLabel,
-          style: AppText.small()
-              .copyWith(color: AppColors.textSecondary, fontSize: 11)),
-      const SizedBox(height: 6),
-      Text('${date.day}',
+    final body = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          dayLabel,
+          style: AppText.small().copyWith(
+            color: AppColors.textSecondary,
+            fontSize: 11,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '${date.day}',
           style: AppText.bodyStrong().copyWith(
-              fontSize: 15,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
-      const SizedBox(height: 4),
-      SizedBox(
-        height: 4,
-        child: hasEvents
-            ? Container(
-                width: 4,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.textPrimary.withValues(alpha: 0.55),
-                  shape: BoxShape.circle,
-                ),
-              )
-            : null,
-      ),
-    ]);
+            fontSize: 15,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 4),
+        SizedBox(
+          height: 4,
+          child: hasEvents
+              ? Container(
+                  width: 4,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.textPrimary.withValues(alpha: 0.55),
+                    shape: BoxShape.circle,
+                  ),
+                )
+              : null,
+        ),
+      ],
+    );
     if (selected) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -423,8 +449,7 @@ class _StripCell extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: isToday
-              ? Border.all(
-                  color: AppColors.textPrimary.withValues(alpha: 0.45))
+              ? Border.all(color: AppColors.textPrimary.withValues(alpha: 0.45))
               : null,
         ),
         child: body,
@@ -459,15 +484,25 @@ class _DayGroup extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(children: [
-          Text(title,
+        Row(
+          children: [
+            Text(
+              title,
               style: AppText.bodyStrong().copyWith(
-                  fontSize: 14, color: AppColors.textPrimary)),
-          const Spacer(),
-          Text('$count',
+                fontSize: 14,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              '$count',
               style: AppText.small().copyWith(
-                  color: AppColors.textSecondary, fontSize: 12)),
-        ]),
+                color: AppColors.textSecondary,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
         // Notes render as individual neumorphic cards — same shell as the
         // decision cards below — so the day reads as one consistent stack
@@ -503,8 +538,11 @@ class _NoteCard extends StatelessWidget {
               color: const Color(0xFFFEF3C7),
               borderRadius: BorderRadius.circular(999),
             ),
-            child: const Icon(Icons.sticky_note_2_rounded,
-                size: 16, color: Color(0xFFB45309)),
+            child: const Icon(
+              Icons.sticky_note_2_rounded,
+              size: 16,
+              color: Color(0xFFB45309),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -542,29 +580,38 @@ class _DecisionCard extends StatelessWidget {
             children: [
               _CategoryChip(dtype: entry.dtype),
               const Spacer(),
-              if (entry.status.isNotEmpty)
-                _StatusChip(status: entry.status),
+              if (entry.status.isNotEmpty) _StatusChip(status: entry.status),
             ],
           ),
           const SizedBox(height: 8),
-          Text(entry.title,
-              style: AppText.body().copyWith(
-                  fontSize: 14,
-                  height: 1.35,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textPrimary)),
+          Text(
+            entry.title,
+            style: AppText.body().copyWith(
+              fontSize: 14,
+              height: 1.35,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 8),
-          Row(children: [
-            Text('View timeline',
+          Row(
+            children: [
+              Text(
+                'View timeline',
                 style: AppText.small().copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary.withValues(alpha: 0.70),
-                    fontSize: 12)),
-            const SizedBox(width: 4),
-            Icon(Icons.arrow_forward_rounded,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary.withValues(alpha: 0.70),
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.arrow_forward_rounded,
                 size: 14,
-                color: AppColors.textPrimary.withValues(alpha: 0.70)),
-          ]),
+                color: AppColors.textPrimary.withValues(alpha: 0.70),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -691,8 +738,10 @@ class _StatusChip extends StatelessWidget {
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration:
-          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
       child: Text(
         label,
         style: AppText.small().copyWith(
@@ -751,17 +800,45 @@ bool _sameDay(DateTime a, DateTime b) =>
 
 String _monthYear(DateTime d) {
   const months = [
-    'January','February','March','April','May','June',
-    'July','August','September','October','November','December',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
   return '${months[d.month - 1]} ${d.year}';
 }
 
 String _weekdayDayMonth(DateTime d) {
-  const wk = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const wk = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
   const mo = [
-    'January','February','March','April','May','June',
-    'July','August','September','October','November','December',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
   return '${wk[d.weekday - 1]} ${d.day} ${mo[d.month - 1]}';
 }

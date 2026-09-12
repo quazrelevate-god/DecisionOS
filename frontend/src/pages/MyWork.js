@@ -27,6 +27,7 @@ import {
   FlowArrow,  // WE-11 stage chip
   SlidersHorizontal,  // KR-14.6 · mobile MyWork filter icon (reference)
   Buildings, CalendarBlank, // KR-14.22 · mobile expanded task card
+  DotsThreeVertical, // MW-02 · overflow menu on the summary row
 } from "@phosphor-icons/react";
 
 // RD-2 (2026-08-17): the toolbar control. Was uppercase + wide tracking +
@@ -187,8 +188,15 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) 
 
 const UPDATE_ICON = { note: ChatText, handoff: ArrowBendUpRight, escalate: WarningCircle };
 
-function TaskTrail({ t, members, roleOptions, onChange }) {
+function TaskTrail({ t, members, roleOptions, onChange, openTrigger = 0 }) {
   const [open, setOpen] = useState(false);
+  // MW-09 fix: the mobile "Log update or hand off" button on the collapsed
+  // card can nudge this counter; each nudge opens the UpdateForm here.
+  // useEffect (not a lazy initializer) so a second tap while the form is
+  // closed reopens it.
+  useEffect(() => {
+    if (openTrigger > 0) setOpen(true);
+  }, [openTrigger]);
   const updates = t.updates || [];
   const hasUpdates = updates.length > 0;
   // U7-05.EXP: when there is no activity, the heavy "ACTIVITY &
@@ -1000,6 +1008,11 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
   // cache first means the card shows the new status immediately; the
   // subsequent invalidate + refetch just confirms it.
   const qc = useQueryClient();
+  // MW-09 fix: a counter TaskTrail watches. Every tick opens the
+  // UpdateForm inside the trail. Wired to the mobile "Log update or
+  // hand off" button below, whose desktop counterpart already lives
+  // inside TaskTrail (line ~219) and sets its own local open state.
+  const [trailOpenTrigger, setTrailOpenTrigger] = useState(0);
   const applyPatched = (patched) => {
     if (!patched?.id) return;
     // The tasks list query is keyed by `mine` (boolean). We update both
@@ -1326,6 +1339,35 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
           </div>
         </div>
       </button>
+      {/* MW-02 fix: overflow menu on the summary row. Before, the task
+          detail dialog was unreachable from anywhere in My Work -- the
+          component and its Delete action existed but had no way in, so
+          proof gallery / source-reference / AI insight panels + delete
+          were all dead UI. This "•••" opens the detail dialog directly.
+          stopPropagation on click so opening the menu does not also
+          toggle the card expand-collapse. */}
+      <div className="flex items-center pr-2" onClick={(e) => e.stopPropagation()}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Task actions"
+              data-testid={`task-overflow-${t.id}`}
+              className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-nm-sunken/50 hover:text-foreground"
+            >
+              <DotsThreeVertical size={16} weight="bold" aria-hidden="true" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-[10rem]">
+            <DropdownMenuItem
+              onSelect={() => setDetailOpen(true)}
+              data-testid={`task-overflow-details-${t.id}`}
+            >
+              View details
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
       </div>
 
       {/* KR-14.22 · MOBILE EXPANDED BODY — reference-driven layout for the
@@ -1536,6 +1578,15 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
           </span>
           <button
             type="button"
+            /* MW-09 fix: the button used to render with no onClick at
+               all -- inert on tap. Now it opens the same UpdateForm the
+               desktop button opens: if the card is collapsed we expand
+               it first (so TaskTrail actually mounts), then nudge
+               trailOpenTrigger to open the form inside TaskTrail. */
+            onClick={() => {
+              if (!open && onToggleOpen) onToggleOpen();
+              setTrailOpenTrigger((n) => n + 1);
+            }}
             data-testid={`log-update-m-${t.id}`}
             className="flex items-center gap-2 text-sm text-muted-foreground"
           >
@@ -1831,7 +1882,7 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
       )}
 
       {!awaitingApproval && <ExecutionPlan t={t} onChange={onChange} members={members} roleOptions={roleOptions} />}
-      <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} />
+      <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} openTrigger={trailOpenTrigger} />
       </div>
       )}
 
@@ -2464,10 +2515,34 @@ export default function MyWork() {
       {/* ─── DESKTOP HEADER (lg and up) ─────────────────────────────────── */}
       <header className="mb-7 hidden gap-4 lg:flex lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("mywork.eyebrow")}</p>
-          <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">{t("mywork.title")}</h1>
+          {/* MW-14 fix: eyebrow + title track the active view instead of
+              staying pinned to "MY WORK / Your day, simplified" while
+              the body is entirely leave requests or delivery pipelines.
+              The toggle pill below is small; the page header needs to
+              say what you are looking at above the fold. */}
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            {view === "workflows" ? t("mywork.view_workflows") :
+             view === "leave"     ? t("mywork.view_leave") :
+             t("mywork.eyebrow")}
+          </p>
+          <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">
+            {view === "workflows" ? t("mywork.view_workflows") :
+             view === "leave"     ? t("mywork.view_leave") :
+             t("mywork.title")}
+          </h1>
         </div>
         <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:items-center" data-testid="mywork-controls">
+          {/* MW-11 fix: task-scope controls (New Task / My Tasks / All
+              Tasks / AI Priority) render only while view === "mywork".
+              In the Leave view "New Task" was previously the largest,
+              darkest button on the page and created a TASK rather than a
+              leave request. The three lens buttons also silently threw
+              the reader back to the task list on click. Both broken by
+              the same audience-mismatch; both fixed by simply not
+              rendering the cluster when the audience isn't there.
+              work-view-toggle (Workflows / Leave) stays -- that's how a
+              reader returns to My Work. */}
+          {view === "mywork" && (
           <div className="order-2 flex flex-wrap items-center gap-2.5 lg:order-1" data-testid="mywork-actions">
             <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
               triggerClassName={`${SECTION_BTN} kr-lift bg-kr-ink text-white`} />
@@ -2514,6 +2589,7 @@ export default function MyWork() {
                 </div>
             )}
           </div>
+          )}
           <div className="order-1 flex flex-wrap items-center gap-2.5 lg:order-2" data-testid="work-view-toggle">
             {/* U7-05.11 (2026-08-17): 'Tasks' view toggle removed for
                 owner. The MY TASKS / ALL TASKS / AI PRIORITY buttons
@@ -2594,6 +2670,12 @@ export default function MyWork() {
               borderless pills, sentence case, indigo tint on the active one.
               The bordered-uppercase version stacked a frame on every tab and
               the count badge carried a second frame inside it. */}
+          {/* MW-06 fix: while the tasks query is loading, tabs render a
+              dash instead of a hard 0. The card skeleton below is
+              already loading-shaped; the tab strip should match. Only
+              the "all" tab renders during load because every other
+              tab's filter is `countFor(k) > 0` and would filter itself
+              out at 0. */}
           <div className="mb-5 hidden flex-wrap gap-2 border-b border-nm-edge/40 pb-4 lg:flex" data-testid="work-tabs">
             {WORK_TABS
               .filter((tb) => tb.key === "all" || countFor(tb.key) > 0)
@@ -2602,7 +2684,9 @@ export default function MyWork() {
                   aria-pressed={tab === tb.key}
                   className={`flex h-8 items-center gap-1.5 rounded-pill border-[0.5px] pl-3 pr-2 text-xs transition-colors ${tab === tb.key ? "border-kr-ink font-medium text-foreground" : "border-kr-ink/55 text-foreground/65 hover:text-foreground/85"}`}>
                   {tb.label}
-                  <span className="min-w-[17px] rounded-pill px-1 py-0.5 text-center font-mono text-[10px] leading-none tabular-nums opacity-65">{countFor(tb.key)}</span>
+                  <span className="min-w-[17px] rounded-pill px-1 py-0.5 text-center font-mono text-[10px] leading-none tabular-nums opacity-65">
+                    {tasksQ.isLoading && !tasksQ.data ? "—" : countFor(tb.key)}
+                  </span>
                 </button>
               ))}
           </div>

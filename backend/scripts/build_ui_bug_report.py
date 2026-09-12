@@ -370,6 +370,35 @@ FINDINGS = [
         found="2026-09-12",
     ),
     dict(
+        id="TM-06", section="Team", screen="Add member - all form fields",
+        viewport="Mobile + Desktop", persona="Owner", severity="Medium", status="Open",
+        area="Accessibility",
+        tested="Inspected every input and select in the Add member dialog for a "
+               "programmatic label, in the live preview.",
+        expected="Each field is named for assistive technology, and keeps its name once "
+                 "the user has typed into it.",
+        actual="Not one of the six fields has a programmatic label. Name, Email, Temp "
+               "password and Mobile number are placeholder-only, so the field name "
+               "disappears the moment anything is typed -- a sighted user who tabs away "
+               "and back cannot tell which box is which. Role and Reporting Manager LOOK "
+               "labelled, but their text is not associated with the control, so a screen "
+               "reader gets nothing from them either.",
+        evidence="Every field returns labelled:false -- no for/id pairing, no wrapping "
+                 "label, no aria-label. The visible 'Role' and 'Reporting Manager (for "
+                 "leave approvals)' text is rendered as a bare label element with no for "
+                 "attribute.",
+        cause="The form was built with placeholders standing in for labels, and the two "
+              "later fields got visual labels that were never wired to their inputs.",
+        fix="Give all six a real label with htmlFor pointing at the input's id. Keep "
+            "placeholders for examples ('e.g. 98765 43210'), not for the field name. "
+            "This is part of the ASK-14 redesign but is worth doing even if that "
+            "redesign is deferred -- it is a few lines and it is the difference between "
+            "the form being usable with a screen reader and not.",
+        code="pages/Team.js:120, :121, :129, :132 (placeholder-only), "
+             ":137-138 and :143-144 (unassociated labels)",
+        found="2026-09-12",
+    ),
+    dict(
         id="TM-02", section="Team", screen="Owner section grid",
         viewport="Desktop", persona="All", severity="Nit", status="Open",
         area="Visual / layout",
@@ -772,6 +801,23 @@ COVERAGE = [
      "and the complete 'No access to' denial list. Only the Edit button is gated.",
      "TM-05"),
 
+    ("T-224", "Team", "Add member - all fields", "Desktop 1440x900", "Owner",
+     "Every form field is programmatically labelled", "Accessibility", "FAIL",
+     "All six report labelled:false; four are placeholder-only so the name "
+     "vanishes on typing, and the two visible labels are not associated", "TM-06"),
+    ("T-225", "Team", "Add member dialog", "Desktop 1440x900", "Owner",
+     "The primary action is reachable without hunting", "Usability", "FAIL",
+     "Submit is 66x44px, position:static, at the end of 2.17 screens of scroll",
+     "ASK-14"),
+    ("T-226", "Team", "Add member - login method", "Desktop 1440x900", "Owner",
+     "The method toggle gates the fields it governs", "Usability", "FAIL",
+     "'Password login' selected, yet 'Mobile number (for OTP login)' still shows",
+     "ASK-14"),
+    ("T-227", "Team", "Add member - menu preview", "Desktop 1440x900", "Owner",
+     "The form shows what the new member will actually see", "Usability", "PASS",
+     "'This member will see these menus' renders the resulting nav live, greying "
+     "out what is not granted - the strongest part of the form", ""),
+
     # --- personas ---
     ("T-070", "My Work", "Page load", "Desktop 1440x900", "Owner",
      "Owner sees all tasks, can create, and gets the All Tasks scope",
@@ -1087,17 +1133,28 @@ ASKS = [
     dict(
         id="ASK-14", section="Team", item="Redesign the Add team member dialog",
         type="Change request", prio="Medium",
-        what="Rework the Add member form. It is one long scroll of eight controls with no "
-             "grouping, ending in a fourteen-item permission checklist, and the submit "
-             "button sits below the fold. Group it into who they are, how they sign in, "
-             "where they sit, and what they can reach.",
-        why="Founder review. Two concrete problems back it up. First, the first four "
-            "fields (Name, Email, Temp password, Mobile number) use placeholders INSTEAD "
-            "of labels, so the moment you type the field name disappears -- while Role "
-            "and Reporting Manager directly below them do have real labels, so the form "
-            "is inconsistent with itself. Second, access is chosen from a flat list of "
-            "fourteen checkboxes at the bottom of a scrolling dialog, which is the "
-            "densest part of the form and the least explained.",
+        what="Rework the Add member form. PLAN, in priority order: (1) give all six "
+             "fields real associated labels -- see TM-06, worth doing on its own; "
+             "(2) stop rendering Name and Email in IBM Plex Mono, which reads as an "
+             "identifier rather than a person -- keep mono for IDs and amounts; (3) make "
+             "the login-method toggle actually gate its fields, since choosing Password "
+             "login still shows 'Mobile number (for OTP login)' -- or rename it 'Primary "
+             "sign-in method' and mark mobile always-optional; (4) put the submit in a "
+             "sticky footer, because today it is a 66x44px 'Add' at the end of 2.17 "
+             "screens of scroll; (5) add three section headers for identity, sign-in, "
+             "and placement; (6) collapse the fourteen-checkbox Access grid behind "
+             "'Customise access - n of 14 areas', since Role already sets a sensible "
+             "default and most additions will not deviate. Together (4) and (6) turn a "
+             "two-screen form into roughly one screen for the common case. KEEP the "
+             "'This member will see these menus' preview exactly as it is.",
+        why="Founder review, then measured in the live preview. Dialog is 512x538 with "
+            "1163px of content -- 2.17 screens of scroll. All six fields report "
+            "labelled:false. Name and Email render in IBM Plex Mono 16px. Password and "
+            "mobile fields are both visible at once despite the method toggle. Submit is "
+            "66x44px, position:static, at the very bottom. The one thing that is "
+            "genuinely strong is the menu preview: it turns fourteen abstract "
+            "permissions into what the person will actually see on login, greying out "
+            "what they will not get. That is rare and should survive the redesign.",
         code="pages/Team.js:118-196 (member form); placeholder-only inputs at "
              ":120, :121, :129, :132; real labels at :137 and :143",
         dep="", status="To do",
@@ -1129,10 +1186,42 @@ ASKS = [
             "REPORTING LINES and the roster never shows them. Worth noting before "
             "building: only 1 of 12 members currently has a reporting manager set, so a "
             "chart drawn today would be one line and eleven orphans -- the chart is only "
-            "as good as the reporting data behind it, and that needs filling first.",
+            "as good as the reporting data behind it. SEQUENCING: do ASK-17 first. "
+            "Putting the reporting line on every card is what makes its absence visible "
+            "and creates the pressure to fill it in; once most members have a manager, "
+            "the chart draws itself. Building the chart first would just render the gap "
+            "at a larger size.",
         code="pages/Team.js:475 (manager already resolved); "
              "reporting_manager_id on the user record",
         dep="TM-03", status="Parked - needs design",
+    ),
+    dict(
+        id="ASK-17", section="Team", item="Show the team data that actually answers a question",
+        type="Change request", prio="Medium",
+        what="Rework what a member card carries. THREE CHANGES. (1) Replace the status "
+             "pill: every one of the twelve members reads 'Active', including six "
+             "placeholder accounts that have never signed in, so the field distinguishes "
+             "nobody. accepted_at and invited_at are both on the record -- show 'Joined "
+             "17 Aug' or 'Invited - not yet signed in', which is the question an owner "
+             "actually has. (2) Put the reporting line where the permission count is: "
+             "'6 permissions' is a number nobody can act on, and per ASK-13 access "
+             "should not be on the roster at all, while the page header promises "
+             "REPORTING LINES and never delivers them. (3) Surface the invite blocker: "
+             "only 4 of 12 members have a phone, and for the other 8 the Get invite link "
+             "button simply does not render with no explanation -- say 'No mobile - "
+             "cannot send invite' on the card so the owner can fix it.",
+        why="The API already returns fourteen fields per member and the card uses four "
+            "of them, two of which say nothing. reporting_manager_id, phone, "
+            "passwordless, invited_at and accepted_at are all available and all unused. "
+            "Also worth revisiting the grouping: twelve people across five roles gives "
+            "five sections, several holding a single card, with the Owner row leaving "
+            "two thirds of its width empty (TM-02). Under about thirty people a single "
+            "sorted list with the role as a chip would scan better; group by department "
+            "once the org chart exists.",
+        code="pages/Team.js:411 (accessLabel), :417-450 (card), :475 (manager already "
+             "resolved); the user record carries invited_at, accepted_at, phone, "
+             "passwordless",
+        dep="ASK-13, TM-02, TM-03", status="To do",
     ),
 ]
 

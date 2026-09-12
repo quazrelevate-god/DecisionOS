@@ -399,6 +399,72 @@ FINDINGS = [
         found="2026-09-12",
     ),
     dict(
+        id="CR-01", section="CRM", screen="Scope chips (Buyers / Suppliers)",
+        viewport="Desktop", persona="All", severity="Low", status="Open",
+        area="Accessibility",
+        tested="Compared the desktop scope chips with their mobile counterparts, and "
+               "confirmed the filtering itself works.",
+        expected="The selected scope is exposed to assistive technology on both "
+                 "viewports.",
+        actual="The desktop chips carry no aria-pressed at all, while the mobile twins "
+               "of the same control set it correctly (true on Buyers, false on "
+               "Suppliers). So the identical control is announced properly on a phone "
+               "and not on a laptop. The filtering itself is correct - Buyers shows 11, "
+               "Suppliers shows 6, and switching back restores 11.",
+        evidence="crm-scope-customers and crm-scope-suppliers both report "
+                 "aria-pressed=None; crm-scope-mobile-customers reports 'true' and "
+                 "crm-scope-mobile-suppliers 'false'.",
+        cause="The desktop chip row was built separately from the mobile segmented "
+              "control and did not carry the ARIA across.",
+        fix="Add aria-pressed to the desktop chips, mirroring the mobile pair, and give "
+            "the row a role='group' with a label. Same family as TM-01.",
+        code="pages/CRM.js:819-836 (crm-scope-chips, desktop); the correct pattern is "
+             "at :794-805 (crm-scope-mobile)",
+        found="2026-09-12",
+    ),
+    dict(
+        id="CR-02", section="CRM", screen="Add contact dialog - all fields",
+        viewport="Mobile + Desktop", persona="Owner", severity="Medium", status="Open",
+        area="Accessibility",
+        tested="Opened Add customer and inspected every field for a programmatic label.",
+        expected="Each field is named for assistive technology and keeps its name after "
+                 "the user types.",
+        actual="None of the six fields has a label of any kind - the dialog contains no "
+               "label elements at all. Name, Company, Phone and Email are "
+               "placeholder-only, and the two selects have nothing naming them. This is "
+               "the same defect as TM-06 in Team, in a different dialog, which makes it "
+               "a pattern across the app rather than a one-off.",
+        evidence="All six fields report labelled:false and the dialog's label count is "
+                 "zero. Four of the six also carry no data-testid, which makes them hard "
+                 "to assert on.",
+        cause="Placeholders are being used as labels throughout the app's forms.",
+        fix="Associate a real label with every field here and in Team's Add member "
+            "(TM-06). Worth doing as one pass over both dialogs rather than twice, and "
+            "worth adding a lint rule or a test so the next form starts labelled.",
+        code="pages/CRM.js:282 (crm-contact-name), :313 (lifecycle), and the four "
+             "unlabelled inputs between them",
+        found="2026-09-12",
+    ),
+    dict(
+        id="CR-03", section="CRM", screen="Add contact dialog - dismiss controls",
+        viewport="Desktop", persona="Owner", severity="Nit", status="Open",
+        area="Redundancy",
+        tested="Listed the buttons in the Add contact dialog.",
+        expected="One way to back out of the dialog.",
+        actual="Two: a 'Cancel' button beside Add contact, and a separate 'Close' X. "
+               "Team's profile dialog has the same duplication (TM-04), so it is worth "
+               "settling once for the app rather than per dialog.",
+        evidence="Dialog buttons: Customer, Dealer, Supplier, More details, Cancel, "
+                 "Add contact, Close.",
+        cause="A footer Cancel was added while the dialog primitive still renders its "
+              "own close control.",
+        fix="Pick one convention for the whole app - most products keep the X and drop "
+            "the Cancel, or keep Cancel on destructive-ish forms only - and apply it to "
+            "both this dialog and TM-04.",
+        code="pages/CRM.js:242-365 (crm-contact-dialog footer)",
+        found="2026-09-12",
+    ),
+    dict(
         id="TM-02", section="Team", screen="Owner section grid",
         viewport="Desktop", persona="All", severity="Nit", status="Open",
         area="Visual / layout",
@@ -818,6 +884,60 @@ COVERAGE = [
      "'This member will see these menus' renders the resulting nav live, greying "
      "out what is not granted - the strongest part of the form", ""),
 
+    # --- CRM ---
+    ("T-300", "CRM", "Page load", "Desktop 1440x900", "Owner",
+     "/crm loads directly with the contact list", "Routing", "PASS",
+     "11 buyer cards; no redirect", ""),
+    ("T-301", "CRM", "Page load", "Mobile 390x844", "Owner",
+     "/crm loads and reflows to a single column", "Responsive", "PASS",
+     "207 visible elements, 22 interactive", ""),
+    ("T-302", "CRM", "Page shell", "Both", "Owner",
+     "No horizontal overflow on either viewport", "Responsive", "PASS",
+     "desktop 1440=1440, mobile 390=390", ""),
+    ("T-303", "CRM", "All controls", "Mobile 390x844", "Owner",
+     "Every control meets the 24px tap-target minimum", "Accessibility", "PASS",
+     "0 under 24px", ""),
+    ("T-304", "CRM", "All text", "Both", "Owner",
+     "All interactive text meets 4.5:1 contrast", "Accessibility", "PASS",
+     "0 below 4.5:1 on either viewport", ""),
+    ("T-305", "CRM", "All controls", "Both", "Owner",
+     "Every button and link has an accessible name", "Accessibility", "PASS",
+     "0 unnamed; 0 images missing alt", ""),
+    ("T-306", "CRM", "Control sweep", "Desktop 1440x900", "Owner",
+     "Every control can be pressed without crashing the app", "Stability", "PASS",
+     "17 pressed incl. dialogs descended into; 0 crashes", ""),
+    ("T-307", "CRM", "Control sweep", "Mobile 390x844", "Owner",
+     "Every control can be pressed without crashing the app", "Stability", "PASS",
+     "13 pressed incl. dialogs; 0 crashes", ""),
+    ("T-308", "CRM", "Scope chips", "Desktop 1440x900", "Owner",
+     "Buyers / Suppliers filter the list correctly", "Functional", "PASS",
+     "Buyers 11, Suppliers 6, back to Buyers 11", ""),
+    ("T-309", "CRM", "Scope chips", "Desktop 1440x900", "Owner",
+     "The selected scope is exposed to assistive technology", "Accessibility",
+     "FAIL", "Desktop chips have no aria-pressed; the mobile twins set it", "CR-01"),
+    ("T-310", "CRM", "Add contact dialog", "Desktop 1440x900", "Owner",
+     "Add customer opens a complete contact form", "Functional", "PASS",
+     "Type segmented control, name, company, phone, email, lifecycle, and a "
+     "'More details' disclosure for GSTIN", ""),
+    ("T-311", "CRM", "Add contact dialog", "Desktop 1440x900", "Owner",
+     "The form fits without scrolling", "Usability", "PASS",
+     "576x541 with 539px of content - no scroll, unlike Team's 2.17 screens", ""),
+    ("T-312", "CRM", "Add contact validation", "Desktop 1440x900", "Owner",
+     "An empty form is refused with a clear reason", "Functional", "PASS",
+     "No API call; dialog stayed open; 'Name is required'", ""),
+    ("T-313", "CRM", "Add contact dialog", "Desktop 1440x900", "Owner",
+     "Every field is programmatically labelled", "Accessibility", "FAIL",
+     "Zero label elements in the dialog; all six fields placeholder-only", "CR-02"),
+    ("T-314", "CRM", "Add contact dialog", "Desktop 1440x900", "Owner",
+     "One way to dismiss the dialog", "Redundancy", "FAIL",
+     "Both a 'Cancel' button and a separate 'Close' X", "CR-03"),
+    ("T-315", "CRM", "Contact profile route", "Desktop 1440x900", "Owner",
+     "A contact card opens that contact's profile page", "Routing", "PASS",
+     "crm-card-<id> navigates to /contacts/<id>; page renders, no errors", ""),
+    ("T-316", "CRM", "Console + network", "Both", "Owner",
+     "No application errors and no failing API calls", "Stability", "PASS",
+     "Only the pre-login 401 on /auth/me", ""),
+
     # --- personas ---
     ("T-070", "My Work", "Page load", "Desktop 1440x900", "Owner",
      "Owner sees all tasks, can create, and gets the All Tasks scope",
@@ -1146,7 +1266,7 @@ ASKS = [
              "'Customise access - n of 14 areas', since Role already sets a sensible "
              "default and most additions will not deviate. Together (4) and (6) turn a "
              "two-screen form into roughly one screen for the common case. KEEP the "
-             "'This member will see these menus' preview exactly as it is.",
+             "'This member will see these menus' preview exactly as it is. MODEL TO COPY: CRM's own Add contact dialog already does most of this right -- it fits one screen with no scrolling at all, uses the body face rather than mono, and hides GSTIN and the rest behind a 'More details' disclosure. Team's Add member should look like that dialog, not the other way round.",
         why="Founder review, then measured in the live preview. Dialog is 512x538 with "
             "1163px of content -- 2.17 screens of scroll. All six fields report "
             "labelled:false. Name and Email render in IBM Plex Mono 16px. Password and "

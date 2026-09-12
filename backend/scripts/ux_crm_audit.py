@@ -1,4 +1,4 @@
-"""Team section -- exhaustive UI/UX audit, desktop then mobile.
+"""CRM section -- exhaustive UI/UX audit, desktop then mobile.
 
 Written after the My Work pass missed two real defects by refusing to press
 anything destructive. Here EVERY control is pressed, including delete and save;
@@ -24,8 +24,8 @@ from ux_login import demo_login  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent.parent
 BASE = "http://localhost:3000"
-ROUTE = "/team"
-OUT = REPO / ".audit-artifacts" / "ux" / "team"
+ROUTE = "/crm"
+OUT = REPO / ".audit-artifacts" / "ux" / "crm"
 
 MUTATING = ("POST", "PATCH", "PUT", "DELETE")
 
@@ -371,7 +371,7 @@ def audit(browser, vp, dims, mobile):
     import re as _re
     sampled, seen_pref = [], {}
     for c in ctrls:
-        m = _re.match(r"^(team-member-)", c.get("tid") or "")
+        m = _re.match(r"^(crm-card-|crm-log-complaint-)", c.get("tid") or "")
         if m:
             seen_pref["m"] = seen_pref.get("m", 0) + 1
             if seen_pref["m"] > 3:
@@ -492,7 +492,7 @@ def main():
             audit(b, vp, dims, mob)
         b.close()
 
-    (OUT / "team-audit.json").write_text(
+    (OUT / "crm-audit.json").write_text(
         json.dumps({"results": results, "controls": controls_seen}, indent=2),
         encoding="utf-8")
     fails = [r for r in results if r["status"] == "FAIL"]
@@ -500,7 +500,7 @@ def main():
     print(f"  {sum(1 for r in results if r['status']=='PASS')} passed, {len(fails)} failed")
     for r in fails:
         print(f"    FAIL [{r['viewport']}] {r['step']}  {r['detail']}")
-    print(f"\n  report: {(OUT / 'team-audit.json').relative_to(REPO)}")
+    print(f"\n  report: {(OUT / 'crm-audit.json').relative_to(REPO)}")
     return 0
 
 

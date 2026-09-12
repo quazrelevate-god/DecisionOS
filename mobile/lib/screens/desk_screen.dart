@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../app_shell.dart';
 import '../data/repositories.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
@@ -520,7 +521,12 @@ class _InsightWell extends StatelessWidget {
           // "Chase it" routes to Money — the overdue cash number Dex is
           // reading lives on the Revenue tab; that's the follow-up screen.
           Row(children: [
-            _PopPill(label: 'Chase it', onTap: () => context.go('/money')),
+            // Switch the AppShell to its Money tab rather than routing to
+            // `/money` as a standalone screen — that route mounts a fresh
+            // MoneyScreen outside AppShell (no Scaffold ancestor, no dock,
+            // no shared state) and errors out. Toggling the tab notifier
+            // reuses the instance the bottom nav already renders.
+            _PopPill(label: 'Chase it', onTap: () => appShellTab.value = 2),
             const Spacer(),
             _PopCircle(onTap: () => context.go('/dex')),
           ]),

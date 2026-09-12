@@ -697,12 +697,11 @@ ASKS = [
         why="VERIFIED: as owner, clicking Delete produces no dialog, removes no card and "
             "issues no DELETE request at all. The handler is wired correctly but sits "
             "behind window.confirm, which silently returns false in some browser and "
-            "embedded contexts. This codebase already hit and fixed exactly this -- "
-            "FUP-49 removed window.confirm from My Work's Complete button because 'some "
-            "browsers / embed contexts silently returned without showing UI, so the click "
-            "looked like a silent no-op'. Workflows still carries the old pattern. RBAC "
-            "was checked across all four logins and is already correct: only the owner "
-            "sees Delete (5 buttons); sales, production and finance see none.",
+            "embedded contexts -- the exact failure FUP-49 already documented when it "
+            "removed window.confirm from My Work's Complete button for looking like 'a "
+            "silent no-op'. Workflows still carries the old pattern. RBAC was checked "
+            "across all four logins and is already correct: only the owner sees Delete "
+            "(5 buttons); sales, production and finance see none.",
         code="pages/Workflows.js:340 (del handler); precedent at pages/MyWork.js:1108",
         dep="", status="To do",
     ),
@@ -764,60 +763,109 @@ ASKS = [
         dep="ASK-6", status="To do",
     ),
     dict(
-        id="ASK-8", section="Leave / Settings", item="Move 'Leave Approvers by Department'",
-        type="Needs discussion", prio="Medium",
-        what="Remove the settings gear from Leave and move 'Leave Approvers by "
-             "Department' into Settings. RECOMMENDED HOME: Settings > Operations, whose "
-             "own description is 'Pipelines, stages, task templates and approval gates -- "
-             "the single source of truth for how work moves'. Leave approval routing is "
-             "an approval gate, and Settings already owns the money approval threshold "
-             "under Money. Alternatives considered: Settings > Business (owns roles, but "
-             "this is routing, not structure) and People > Employees (where a Reporting "
-             "Manager already overrides this mapping). Suggested resolution: put the "
-             "control in Operations and show a read-only line on People > Employees "
-             "pointing at it, so the override and the default are visibly connected "
-             "without duplicating the control.",
-        why="Founder: configuration belongs in Settings, not inside a work surface. "
-            "Placement to be confirmed before the move.",
-        code="pages/Leave.js:387-417 (leave-approver-config), :500-510 (gear); "
-             "pages/Settings.js:150-159 (TABS)",
+        id="ASK-8", section="Leave / Settings",
+        item="DELETE 'Leave Approvers by Department' (do not move it)",
+        type="Product decision", prio="Medium",
+        what="Founder asked whether this setting is needed at all, given the approver is "
+             "already chosen when a team member is added. VERIFIED ANSWER: it is not. "
+             "Recommendation is now to DELETE the screen and the tenant mapping behind "
+             "it, not relocate it into Settings. Keep the two tiers that carry real "
+             "meaning -- the member's reporting manager, then the owner.",
+        why="The resolver runs reporting manager, then the department mapping, then the "
+            "owner (services/leave.py:_resolve_leave_approver). Team.js:144 already has "
+            "a Reporting Manager picker on both add and edit, so tier 1 is set where the "
+            "person is created. Measured against live data: of 12 members, 1 has a "
+            "reporting manager and the tenant mapping is EMPTY, so 11 of 12 resolve "
+            "straight to the owner and the middle tier is used by nobody. A settings "
+            "screen that configures a tier no one reaches is a third place to express "
+            "the same decision, and the most likely outcome of keeping it is a mapping "
+            "that quietly disagrees with the org chart. If some department genuinely "
+            "needs an approver who is not the member's manager, the honest fix is to set "
+            "that person as their reporting manager.",
+        code="services/leave.py:_resolve_leave_approver; pages/Team.js:144 "
+             "(member-manager-select); pages/Leave.js:387-417 + :500-510 (to remove); "
+             "routers/calendar.py:24 (PATCH /tenant/leave-approvers)",
         dep="ASK-6", status="Awaiting decision",
     ),
     dict(
-        id="ASK-9", section="My Work", item="Task expanded view + 'Log update or hand off'",
+        id="ASK-9", section="My Work", item="Redesign the expanded task card (whole surface)",
         type="Change request", prio="High",
-        what="Redesign the expanded task view, and rework the 'Log update or hand off' "
-             "control at the bottom of it -- both how it looks and the fact that it does "
-             "not work. Today it is a quiet text link in the bottom-right corner, which "
-             "is the wrong weight for the one action that records what happened on a task "
-             "and hands it to someone else. Fixing the crash (MW-08) and wiring the "
-             "mobile twin (MW-09) are prerequisites, not the whole job.",
-        why="VERIFIED on the exact control the founder pointed at. On desktop it is "
-            "add-update-<id>, labelled 'Log update or hand off' -- clicking it renders no "
-            "form, throws 'CTRL_ON is not defined' and leaves the React root empty, so "
-            "the whole app goes down. Its mobile twin log-update-m-<id> carries the same "
-            "label and has no onClick at all. Between them there is no working way to log "
-            "an update or hand a task off on either viewport.",
-        code="pages/MyWork.js:147 (crash), :195/:207 (desktop button), :1496-1505 (mobile)",
-        dep="MW-08, MW-09", status="To do",
+        what="Rework the UI and UX of the expanded task card end to end, not control by "
+             "control. Today it stacks description, a status line, a progress rail, a "
+             "status dropdown, a '% manually' disclosure, a Complete button, an Attach "
+             "row, a plan row and an activity footer -- nine bands with no grouping, and "
+             "the one action that records what happened is a quiet text link in the "
+             "bottom-right corner. Group it into what the task IS, where it stands, and "
+             "what you do next. ASK-11 and ASK-12 are the two specific decisions inside "
+             "this redesign.",
+        why="Founder review. Reinforced by what the audit already found on this exact "
+            "surface: the log / hand-off control crashes the app (MW-08), its mobile "
+            "twin is inert (MW-09), and the status and progress controls do not reflect "
+            "their own changes until a reload (MW-01).",
+        code="pages/MyWork.js:1295-1800 (expanded body, mobile + desktop)",
+        dep="MW-01, MW-08, MW-09", status="To do",
     ),
     dict(
-        id="ASK-10", section="My Work", item="Multi-select bar",
+        id="ASK-10", section="My Work", item="Multi-select bar: contrast + wording",
         type="Change request", prio="High",
-        what="Rework the multi-select action bar. Two of its three actions are close to "
-             "unreadable and one is too small to hit comfortably.",
-        why="MEASURED, not impression. The bar is near-black (bg-kr-ink) with white text. "
-            "'Complete' was re-themed for that dark ground (black on a white pill, 19.6:1) "
-            "and reads correctly. The other two were left on light-theme tokens: "
-            "'Reassign' uses bg-nm / nm-btn -- a light grey #E9EAEC surface -- while "
-            "inheriting the bar's white text, giving white-on-light-grey at 1.2:1; "
-            "'Clear' uses text-muted-foreground, a light-theme grey #585551, on the "
-            "near-black bar at 2.64:1. WCAG AA needs 4.5:1. 'Clear' is also only 45x16px, "
-            "under the 24px minimum hit size. Selection counting and pluralisation are "
-            "correct ('2 selected / Complete 2'), so the logic is sound - this is purely "
-            "the dark-bar treatment being applied to one button out of three.",
-        code="pages/MyWork.js:918-962 (bulk-action-bar; bulk-reassign :946, bulk-clear :955)",
+        what="Two fixes. (1) Readability: re-theme the bar's actions for its dark ground. "
+             "(2) Wording: 'Reassign' here and 'hand off' on the task card are the same "
+             "act -- give the work to someone else -- so settle on ONE verb and use it in "
+             "both places, in the bulk bar, on the card, and in the activity trail.",
+        why="MEASURED. The bar is near-black (bg-kr-ink) with white text. 'Complete' was "
+            "re-themed for that ground (black on a white pill, 19.6:1) and reads fine. "
+            "The other two were left on light-theme tokens: 'Reassign' uses bg-nm / "
+            "nm-btn -- a light grey #E9EAEC surface -- while inheriting the bar's white "
+            "text, giving white-on-light-grey at 1.2:1; 'Clear' uses "
+            "text-muted-foreground, a light-theme grey #585551, on the near-black bar at "
+            "2.64:1. WCAG AA wants 4.5:1. 'Clear' is also only 45x16px, under the 24px "
+            "hit minimum. Counting and pluralisation are correct ('2 selected / Complete "
+            "2'), so none of this is logic -- the dark-bar treatment reached one button "
+            "out of three. On wording, the founder's point stands: the product currently "
+            "calls the same action 'Reassign' in bulk and 'hand off' on the card.",
+        code="pages/MyWork.js:918-962 (bulk-action-bar; bulk-reassign :946, "
+             "bulk-clear :955); card wording at :195/:207",
         dep="", status="To do",
+    ),
+    dict(
+        id="ASK-11", section="My Work", item="'Complete' exists twice -- button and dropdown",
+        type="Change request", prio="Medium",
+        what="Take the terminal states out of the desktop status dropdown. It currently "
+             "offers Completed and Cancelled alongside the four in-flight states, while "
+             "Complete is also its own button and Cancel is its own button -- two routes "
+             "to the same ending, and the dropdown route gives none of the confirmation "
+             "or the proof prompt the button does.",
+        why="Founder asked why Complete appears in both places. The team already decided "
+            "this once, for mobile: MyWork.js:1594 records that Completed and Cancelled "
+            "were removed from the mobile status pills because both are TERMINAL, so "
+            "choosing either 'removed the task from the list the bar was sitting in -- "
+            "the control deleted its own context', noting Complete already has its own "
+            "button. That reasoning was applied to the mobile pills and never carried "
+            "across to the desktop dropdown, which still lists all six. Tested for a "
+            "worse version of this -- whether the dropdown lets you finish a task that "
+            "requires proof -- and it does not: both routes correctly refused to "
+            "complete an evidence-required task. So this is redundancy and inconsistency, "
+            "not a hole.",
+        code="pages/MyWork.js:79-86 (STATUS_OPTIONS), :1602 (desktop select), "
+             ":102-108 + :1594 (the mobile decision and its reasoning)",
+        dep="ASK-9", status="To do",
+    ),
+    dict(
+        id="ASK-12", section="My Work", item="Put logging where the work is",
+        type="Change request", prio="Medium",
+        what="Move logging up next to Attach, so the row reads as one act: attach a "
+             "photo, a file, a voice note -- or write what happened. Escalate and hand "
+             "off then become choices WITHIN that one flow rather than separate controls "
+             "elsewhere on the card, which is what the underlying form already models.",
+        why="Founder direction, and the code already agrees. UpdateForm takes an action "
+             "of exactly this shape -- a note plus a choice of update, escalate or hand "
+             "off, with a person picker appearing for hand-off -- so the three are "
+             "already one flow in the data model and only look like separate features on "
+             "screen. Today the entry point sits far from Attach, in the footer, as the "
+             "lightest control on the card despite recording the most important thing.",
+        code="pages/MyWork.js:111-166 (UpdateForm + its ACTIONS), :1740-1780 (attach "
+             "row), :195/:207 (current entry point)",
+        dep="ASK-9", status="To do",
     ),
 ]
 

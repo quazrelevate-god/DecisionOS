@@ -206,30 +206,43 @@ function TaskTrail({ t, members, roleOptions, onChange, openTrigger = 0 }) {
   // frame.
   return (
     <div className="mt-4 border-t border-nm-edge/40 pt-4" data-testid={`task-trail-${t.id}`}>
-      {hasUpdates ? (
-        <div className="flex items-center justify-between mb-2">
-          <span className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm">
-            <ChatCircleText size={16} weight="bold" aria-hidden="true" className="text-muted-foreground" /> Activity &amp; Handoffs
-          </span>
-          {!open && (
-            <button onClick={() => setOpen(true)} data-testid={`add-update-${t.id}`}
-              className="flex items-center gap-1 text-xs font-medium nm-btn px-2 py-1 hover:bg-accent transition-colors">
-              <Plus size={12} weight="bold" /> Update / Escalate
-            </button>
-          )}
+      {/* ASK-9 (2026-09-12): the trigger for logging an update / handing
+          off used to render three different ways -- a hover-underline
+          text link on the empty state, a small nm-btn "Update /
+          Escalate" tile once the trail had entries, and a text-muted
+          summary link on mobile. The founder pointed at all three: the
+          one action that records what happened on a task and hands it
+          to someone else was quieter than every other affordance on the
+          card, so Complete looked like the important thing and this
+          looked like a footnote.
+
+          Both desktop treatments now carry the same primary weight -- a
+          full-width kr-lift ink pill, same grammar the Complete button
+          uses -- with the founder's exact label "Log update or hand off"
+          on both. The "Update / Escalate" variant is retired; the form
+          itself surfaces Note / Handoff / Escalate as its tabs, so
+          repeating any of those words on the trigger was redundant.
+          Header/empty-state message stays above the button so the
+          reader still sees "Activity & Handoffs" or "No activity yet"
+          for context. */}
+      {hasUpdates && (
+        <div className="flex items-center gap-2 mb-3 font-heading font-medium tracking-tight text-sm">
+          <ChatCircleText size={16} weight="bold" aria-hidden="true" className="text-muted-foreground" /> Activity &amp; Handoffs
         </div>
-      ) : (
-        !open && (
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <span className="label-mono text-muted-foreground flex items-center gap-1.5">
-              <ChatCircleText size={12} weight="bold" /> No activity yet
-            </span>
-            <button onClick={() => setOpen(true)} data-testid={`add-update-${t.id}`}
-              className="flex items-center gap-1 text-xs font-medium hover:underline">
-              <Plus size={12} weight="bold" /> Log update or hand off
-            </button>
-          </div>
-        )
+      )}
+      {!hasUpdates && !open && (
+        <p className="label-mono text-muted-foreground flex items-center gap-1.5 mb-3">
+          <ChatCircleText size={12} weight="bold" /> No activity yet
+        </p>
+      )}
+      {!open && (
+        <button
+          onClick={() => setOpen(true)}
+          data-testid={`add-update-${t.id}`}
+          className="kr-lift flex w-full items-center justify-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all hover:opacity-95"
+        >
+          <Plus size={14} weight="bold" aria-hidden="true" /> Log update or hand off
+        </button>
       )}
       {updates.length > 0 && (
         <ul className="space-y-2 mb-2" data-testid={`trail-list-${t.id}`}>
@@ -1612,7 +1625,12 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
               setTrailOpenTrigger((n) => n + 1);
             }}
             data-testid={`log-update-m-${t.id}`}
-            className="flex items-center gap-2 text-sm text-muted-foreground"
+            /* ASK-9: bump the mobile trigger to primary weight. The
+               orange-circle mark stays -- it's a nice glyph anchor --
+               but the label moves from text-muted-foreground to
+               text-foreground and the whole button gets kr-lift so it
+               reads as an action rather than a summary line. */
+            className="kr-lift inline-flex items-center gap-2 rounded-pill px-2.5 py-1.5 text-sm font-medium text-foreground"
           >
             <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-orange-50 text-kr-accent">
               <Plus size={12} weight="bold" />

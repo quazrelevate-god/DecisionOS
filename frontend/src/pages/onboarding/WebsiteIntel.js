@@ -28,6 +28,8 @@ export function WebsiteIntel({ companyName, onDone, onBack }) {
   const [industry, setIndustry] = useState("");
   const [model, setModel] = useState("");
   const scanTimer = useRef(null);
+  // Why the scan gave up, or "" when the founder chose manual themselves.
+  const [failure, setFailure] = useState("");
 
   useEffect(() => {
     if (stage !== "scanning") { clearInterval(scanTimer.current); return; }
@@ -47,7 +49,21 @@ export function WebsiteIntel({ companyName, onDone, onBack }) {
         setStage("confirm");
         return;
       }
-    } catch (e) { console.debug("website-intel scan failed — falling back to manual", e); }
+      /* KM-63 — SAY WHY. Founder: "once I click Read my website it takes some
+         time and then straightaway moves to this manual config page."
+
+         It always did — the fallback is intended — but it happened in total
+         silence, so a scan that failed was indistinguishable from a button
+         that was broken. Reproduced with their own input: amazon.com answers
+         202 with an empty body (bot mitigation), the extractor gets zero
+         characters, and the form moves on without a word. example.com returns
+         a full summary through the same code, so nothing is wrong with the
+         scanner — it is just that some sites refuse to be read. */
+      setFailure(data.reason || "unreadable");
+    } catch (e) {
+      console.debug("website-intel scan failed — falling back to manual", e);
+      setFailure("unreachable");
+    }
     setStage("manual");
   };
 
@@ -223,7 +239,24 @@ export function WebsiteIntel({ companyName, onDone, onBack }) {
             <h1 className="mb-2 font-display text-3xl leading-[1.04] sm:text-4xl">
               Place {companyName} on the map.
             </h1>
-            <p className="mb-7 text-sm text-muted-foreground">Just the industry and who you sell to — Dex will ask about your operations in the interview.</p>
+            {failure ? (
+              <div className="kr-frost-min mb-6 rounded-2xl px-4 py-3" data-testid="signup-scan-failed">
+                <p className="text-sm">
+                  {failure === "blocked"
+                    ? <>We couldn&apos;t read <strong>{url.trim()}</strong> — its server turned us away. Big sites often block automated readers.</>
+                    : failure === "unreachable"
+                      ? <>We couldn&apos;t reach <strong>{url.trim()}</strong>. Check the address, or carry on below.</>
+                      : failure === "thin"
+                        ? <>There wasn&apos;t enough text on <strong>{url.trim()}</strong> for us to learn from — a lot of sites render their words with JavaScript we can&apos;t see.</>
+                        : <>We couldn&apos;t make sense of <strong>{url.trim()}</strong> this time.</>}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  No harm done — tell us these two things and Dex will ask the rest in the interview.
+                </p>
+              </div>
+            ) : (
+              <p className="mb-7 text-sm text-muted-foreground">Just the industry and who you sell to — Dex will ask about your operations in the interview.</p>
+            )}
             <div className="space-y-5">
               <div>
                 <label className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Industry</label>

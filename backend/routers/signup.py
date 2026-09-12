@@ -253,25 +253,64 @@ async def website_intel(inp: WebsiteIntelInput, request: Request):
     # (localhost, metadata.google.internal, kubernetes.default.svc).
     # Prevents an attacker from using this endpoint to probe/attack
     # our internal network or exfiltrate cloud metadata IAM tokens.
-    safe, reason = is_url_safe_for_fetch(url)
+    safe, block_reason = is_url_safe_for_fetch(url)
     if not safe:
-        logger.warning(f"website-intel SSRF blocked: url={url!r} reason={reason}")
+        logger.warning(f"website-intel SSRF blocked: url={url!r} reason={block_reason}")
+        # KM-63 — a typo is not an attack. The guard returns dns_failure for a
+        # domain that simply does not resolve, and answering that with "This
+        # URL isn't allowed" tells a founder who mistyped their own address
+        # that they have done something suspicious. The refusal for genuinely
+        # private targets is unchanged.
         raise HTTPException(
             status_code=400,
-            detail="This URL isn't allowed. Enter a public website.",
+            detail=("We couldn't find that domain — check the spelling."
+                    if block_reason == "dns_failure"
+                    else "This URL isn't allowed. Enter a public website."),
         )
+    # KM-63 — SAY WHY IT FAILED, and log it.
+    #
+    # This returned a bare {"fetched": False} for every kind of failure, so the
+    # signup form dropped the founder onto the manual screen with no
+    # explanation and the server said nothing at all. They read that as the
+    # feature being broken; the log could not contradict them because there was
+    # nothing in it.
+    #
+    # Reproduced: amazon.com answers 202 with a COMPLETELY EMPTY body — its bot
+    # mitigation. 202 is < 400 so the fetch "succeeded", _clean_html produced
+    # zero characters, and the length check below rejected it silently. Nothing
+    # was wrong with the scanner: example.com returns a full summary through
+    # the same path.
+    #
+    # The reason now travels to the client so the UI can tell the truth, and
+    # every branch leaves a log line so the next report is answerable from
+    # Railway instead of from a local reproduction.
     text = ""
+    reason = "unreadable"
+    status = None
     try:
         async with httpx.AsyncClient(timeout=12, follow_redirects=True, headers={
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
         }) as client:
             r = await client.get(url)
+            status = r.status_code
             if r.status_code < 400:
                 text = _clean_html(r.text)[:7000]
+                # A 2xx with nothing in it is a bot wall, not a thin page.
+                if not r.text.strip():
+                    reason = "blocked"
+            else:
+                reason = "blocked" if r.status_code in (401, 403, 405, 406, 429) else "unreachable"
     except Exception as e:
-        logger.warning(f"website-intel fetch failed for {url}: {e}")
+        reason = "unreachable"
+        logger.warning(f"website-intel fetch failed for {url}: {type(e).__name__}: {e}")
     if len(text) < 120:
-        return {"fetched": False}
+        if reason == "unreadable":
+            reason = "thin"
+        logger.info(
+            f"website-intel no-read url={url!r} status={status} "
+            f"cleaned_chars={len(text)} reason={reason}"
+        )
+        return {"fetched": False, "reason": reason}
 
     system = render("onboarding.web_intel",
                     industries=", ".join(INDUSTRIES), business_models=", ".join(BUSINESS_MODELS))
@@ -280,8 +319,8 @@ async def website_intel(inp: WebsiteIntelInput, request: Request):
         chat = claude_chat(task="onboarding.web_intel", session_id=f"webintel-{new_id()}", system_message=system).with_model(*model_for("onboarding.web_intel"))
         data = _extract_json(await chat.send_message(UserMessage(text=prompt))) or {}
     except Exception as e:
-        logger.error(f"website-intel analysis failed: {e}")
-        return {"fetched": False}
+        logger.error(f"website-intel analysis failed for {url}: {type(e).__name__}: {e}")
+        return {"fetched": False, "reason": "analysis_failed"}
     industry = data.get("industry") if data.get("industry") in INDUSTRIES else "Other"
     model = data.get("business_model") if data.get("business_model") in BUSINESS_MODELS else ""
     return {

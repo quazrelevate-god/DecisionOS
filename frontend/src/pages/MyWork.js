@@ -961,21 +961,37 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
         <CheckCircle size={13} weight="bold" />
         Complete{openCount ? ` ${openCount}` : ""}
       </button>
+      {/* ASK-10 fix (2026-09-12): Reassign was styled for a light ground
+          (bg-nm on #E9EAEC) while inheriting the bar's white text, so
+          the label read at 1.2:1 -- functionally invisible on the near-
+          black bar. Re-themed as a proper outline/ghost secondary on
+          dark: transparent fill, white/45 hairline border, white text.
+          Contrast on the label is now ~19:1 against bg-kr-ink (the same
+          as any other white text on the bar), and the border stays
+          visible without competing with Complete's filled white pill.
+          Complete stays untouched -- it's already correctly themed and
+          reads as the primary action by virtue of being the filled
+          pill in a row of two outlines. */}
       <button
         type="button"
         onClick={openReassign}
         disabled={busy}
-        className="inline-flex items-center gap-1.5 bg-nm px-3 py-1.5 text-xs font-medium nm-btn hover:bg-accent disabled:opacity-40"
+        className="inline-flex items-center gap-1.5 rounded-pill border border-white/45 px-3.5 py-2 text-xs font-medium text-white transition-colors hover:bg-white/10 disabled:opacity-40"
         data-testid="bulk-reassign"
       >
         <ArrowBendUpRight size={13} weight="bold" />
         Reassign
       </button>
+      {/* ASK-10 fix: Clear was text-muted-foreground (#585551) on the
+          near-black bar -- 2.64:1, below the AA floor. And it was 45x16
+          pixels, under WCAG's 24x24 target-size minimum. Now white/80
+          (~12:1) on a proper h-9 px-3 pill so a shaky thumb still
+          lands on it. Hover deepens to full white for the affordance. */}
       <button
         type="button"
         onClick={onClear}
         disabled={busy}
-        className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-40"
+        className="inline-flex h-9 items-center gap-1 rounded-pill px-3 text-xs font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40"
         data-testid="bulk-clear"
       >
         <X size={12} weight="bold" /> Clear

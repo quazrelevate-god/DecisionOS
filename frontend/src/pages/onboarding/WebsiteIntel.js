@@ -102,7 +102,7 @@ export function WebsiteIntel({ companyName, onDone, onBack }) {
               Does {companyName} live on the web?
             </h1>
             <p className="mb-7 text-sm text-muted-foreground">Drop your website — our AI reads it so you don&apos;t have to explain yourself twice.</p>
-            <div className="kr-pressed flex items-center gap-3 rounded-2xl px-5 py-4 focus-within:ring-2 focus-within:ring-[hsl(var(--kr-gold))]">
+            <div className="kr-pressed flex items-center gap-3 rounded-2xl px-5 py-4 focus-within:ring-1 focus-within:ring-foreground/40">
               <Globe size={24} weight="bold" className="shrink-0 text-muted-foreground" />
               <input
                 autoFocus
@@ -179,7 +179,7 @@ export function WebsiteIntel({ companyName, onDone, onBack }) {
                 <div>
                   <label className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Industry</label>
                   <select data-testid="signup-intel-industry" value={industry} onChange={(e) => setIndustry(e.target.value)}
-                    className="kr-pressed mt-1.5 h-11 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--kr-gold))]">
+                    className="kr-pressed mt-1.5 h-11 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-1 focus:ring-foreground/40">
                     {INDUSTRIES.map((i) => <option key={i} value={i}>{i}</option>)}
                   </select>
                 </div>
@@ -270,7 +270,7 @@ export function WebsiteIntel({ companyName, onDone, onBack }) {
               <div>
                 <label className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Industry</label>
                 <select autoFocus data-testid="signup-manual-industry" value={industry} onChange={(e) => setIndustry(e.target.value)}
-                  className="kr-pressed mt-1.5 h-12 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--kr-gold))]">
+                  className="kr-pressed mt-1.5 h-12 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-1 focus:ring-foreground/40">
                   <option value="">Select industry…</option>
                   {INDUSTRIES.map((i) => <option key={i} value={i}>{i}</option>)}
                 </select>

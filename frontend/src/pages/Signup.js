@@ -9,6 +9,7 @@ import { useAuth } from "../context/AuthContext";
    KR-8.2. The PNG (Wordmark.jsx) keeps Landing and Login, the two marketing
    surfaces that still carry the registered artwork. */
 import { KarmaLogo } from "../components/karma/Logo";
+import { Check } from "@phosphor-icons/react";
 import { BasicsFlow } from "./onboarding/BasicsFlow";
 import { WebsiteIntel } from "./onboarding/WebsiteIntel";
 import { VoiceInterview } from "./onboarding/VoiceInterview";
@@ -123,6 +124,16 @@ export default function Signup() {
               sitting inside the header's own glass pill as well — a second
               container around a container. The phases now sit directly on the
               header, and only the live one is drawn. */}
+          {/* KM-66 follow-up — completed phases now carry a visible done
+              state, not a slightly-darker dot that reads identically to
+              pending. Three explicit states:
+
+                Live    → gold dot, bold foreground text, glass wash pill
+                Done    → filled foreground disc with a white check, ink text
+                Pending → hairline dim dot, muted text
+
+              A user moving forward now sees "Basics" close with a check
+              rather than just fading to grey. */}
           <div className="hidden items-center gap-1 rounded-pill lg:flex" data-testid="signup-phase-bar">
             {PHASES.map((p, i) => {
               const done = i < phaseIdx;
@@ -132,21 +143,32 @@ export default function Signup() {
                   key={p.key}
                   aria-current={live ? "step" : undefined}
                   title={p.label}
-                  /* The live pill is a wash rather than .kr-pop's full white:
-                     with the trough removed it no longer has to out-read a
-                     surface behind it, only mark which of four words you are
-                     on — and the picture should still come through it. */
                   className={`flex h-7 items-center gap-2 rounded-pill px-2 lg:px-3 ${
                     live ? "bg-white/35 shadow-[0_1px_3px_-1px_hsl(230_30%_18%/.18)]" : ""
                   }`}
                 >
+                  {done ? (
+                    <span
+                      aria-hidden="true"
+                      className="grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full bg-foreground text-background"
+                    >
+                      <Check size={9} weight="bold" />
+                    </span>
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                        live ? "bg-[hsl(var(--kr-gold))]" : "bg-foreground/15"
+                      }`}
+                    />
+                  )}
                   <span
-                    aria-hidden="true"
-                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                      live ? "bg-[hsl(var(--kr-gold))]" : done ? "bg-foreground/45" : "bg-foreground/15"
+                    className={`hidden text-[11px] lg:inline ${
+                      live ? "font-semibold text-foreground"
+                        : done ? "font-medium text-foreground/85"
+                        : "text-foreground/50"
                     }`}
-                  />
-                  <span className={`hidden text-[11px] lg:inline ${live ? "font-semibold text-foreground" : "text-foreground/50"}`}>
+                  >
                     {p.label}
                   </span>
                 </div>

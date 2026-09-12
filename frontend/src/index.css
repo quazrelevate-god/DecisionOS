@@ -1815,6 +1815,33 @@ html[data-page="workflows"] {
         box-shadow: 0 2px 8px -3px hsl(230 30% 18% / .40);
     }
 
+    /* KM-66 follow-up — every button on signup / login rises 2px on hover.
+       Applies to .kr-pop (which is what every neumorphic button on both
+       stages carries), animates with the same 200ms curve the shadow
+       already fades in on, and covers both bg-less popovers and any
+       bg-kr-ink action button. Framer-motion buttons that set their own
+       inline transform (whileHover, animate) override this CSS transform,
+       so the two Continue-style motion buttons still elevate via their
+       own whileHover — no double-lift. */
+    .signup-stage .kr-pop ,
+    .login-stage .kr-pop {
+        transition: transform 200ms ease-out,
+                    box-shadow 200ms ease-out,
+                    background-color 200ms ease-out,
+                    border-color 200ms ease-out;
+    }
+    .signup-stage .kr-pop:hover ,
+    .login-stage .kr-pop:hover {
+        transform: translateY(-2px);
+    }
+    /* Exception: any .kr-pop nested inside .kr-pressed is a "selected pill
+       in a trough" (the phase rail's live phase); lifting it out of the
+       trough would break that reading. */
+    .signup-stage .kr-pressed .kr-pop:hover ,
+    .login-stage .kr-pressed .kr-pop:hover {
+        transform: none;
+    }
+
     .signup-stage .kr-well__pane ,
 
     .login-stage .kr-well__pane {

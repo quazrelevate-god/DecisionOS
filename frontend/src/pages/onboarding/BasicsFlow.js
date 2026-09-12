@@ -119,6 +119,8 @@ export function BasicsFlow({ form, setForm, onDone }) {
                      outset for inset shadows, which do not interpolate, so a
                      declared transition would stall the swap. */
                   aria-pressed={value === s}
+                  whileHover={value === s ? undefined : { y: -2 }}
+                  whileTap={{ scale: 0.98 }}
                   className={`flex h-12 items-center rounded-pill px-6 text-base font-semibold ${value === s ? "kr-chip-on" : "kr-pop"}`}>
                   {s}
                 </motion.button>
@@ -134,7 +136,11 @@ export function BasicsFlow({ form, setForm, onDone }) {
                 value={value}
                 onChange={(e) => setVal(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); advance(); } }}
-                className="kr-pressed w-full rounded-2xl bg-transparent px-5 py-4 pr-14 text-xl font-semibold tracking-tight placeholder:font-normal placeholder:text-foreground/25 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--kr-gold))] sm:text-2xl"
+                /* KM-66 follow-up: focus ring is a thin, softened ink line
+                   (foreground/40, ring-1). Full black at ring-2 read as a
+                   heavy frame around the field; a single hairline at 40%
+                   ink says "focus" without dressing up as a border. */
+                className="kr-pressed w-full rounded-2xl bg-transparent px-5 py-4 pr-14 text-xl font-semibold tracking-tight placeholder:font-normal placeholder:text-foreground/25 focus:outline-none focus:ring-1 focus:ring-foreground/40 sm:text-2xl"
               />
               {step.type === "password" && (
                 <button type="button" onClick={() => setShowPw(!showPw)} data-testid="signup-toggle-password"
@@ -151,11 +157,16 @@ export function BasicsFlow({ form, setForm, onDone }) {
 
           {step.type !== "chips" && (
             <div className="mt-8 flex items-center gap-4">
-              <button onClick={() => advance()} disabled={checking} data-testid="signup-basics-next"
+              {/* KM-66 follow-up: Continue elevates on hover. -2px lift +
+                  1.03 scale via framer whileHover — same grammar as the
+                  Login demo pill. No idle animation. */}
+              <motion.button onClick={() => advance()} disabled={checking} data-testid="signup-basics-next"
+                whileHover={{ y: -2, scale: 1.03 }}
+                whileTap={{ scale: 0.98 }}
                 className="kr-pop flex h-12 items-center gap-2 rounded-pill bg-kr-ink px-8 text-sm font-medium text-white disabled:opacity-50">
                 {checking ? <CircleNotch size={16} className="animate-spin" /> : null}
                 {step.optional && !value.trim() ? "Skip" : "Continue"} <ArrowRight size={16} weight="bold" />
-              </button>
+              </motion.button>
               <span className="hidden text-xs text-muted-foreground sm:block">
                 press <kbd className="kr-pressed rounded-md px-1.5 py-0.5 text-[11px]">Enter ↵</kbd>
               </span>

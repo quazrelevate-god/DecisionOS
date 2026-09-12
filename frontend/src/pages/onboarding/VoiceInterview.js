@@ -78,6 +78,8 @@ const LanguagePick = ({ onPick, onSkip }) => (
           data-testid={`lang-pick-${l.code}`}
           initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
           onClick={() => onPick(l.code)}
+          whileHover={{ y: -2 }}
+          whileTap={{ scale: 0.98 }}
           className="kr-pop rounded-2xl p-4 text-left"
         >
           <p className="text-2xl font-semibold leading-none">{l.short}</p>
@@ -364,7 +366,7 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack }) {
       </div>
 
       {/* Answer area */}
-      <div className="kr-frost-min mt-7 rounded-2xl p-4" data-testid="interview-answer-box">
+      <div className="kr-frost-min mt-7 rounded-2xl p-4 focus-within:ring-1 focus-within:ring-foreground/40" data-testid="interview-answer-box">
         <textarea
           ref={inputRef}
           data-testid="interview-answer-input"

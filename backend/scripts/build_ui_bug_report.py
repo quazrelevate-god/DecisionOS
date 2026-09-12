@@ -47,13 +47,13 @@ BUG_COLS = [
     ("Persona", 12), ("Severity", 10), ("Status", 11), ("Area", 13),
     ("What we tested", 40), ("Expected", 40), ("Actual (observed)", 52),
     ("Evidence", 34), ("Root cause", 54), ("Proposed solution", 62),
-    ("Code location", 34), ("Found on", 11),
+    ("Code location", 34), ("Found on", 11), ("Verification", 58),
 ]
 
 FINDINGS = [
     dict(
         id="MW-08", section="My Work", screen="Task card - Update / Escalate",
-        viewport="Desktop", persona="Owner / assignee", severity="Critical", status="Open",
+        viewport="Desktop", persona="Owner / assignee", severity="Critical", status="Fixed",
         area="Crash",
         tested="Pressed 'Update / Escalate' on an expanded task to log a progress note - "
                "the work trail and hand-off flow.",
@@ -77,13 +77,14 @@ FINDINGS = [
             "recurring: craco narrows ESLint to react-hooks rules only, which drops "
             "eslint-config-react-app's no-undef - the rule that would have failed the "
             "build on this exact line.",
+        verified="VERIFIED FIXED 2026-09-13 by re-running the original measurement: Update / Escalate opens the form; app stays alive; 0 CTRL_ON errors.",
         code="pages/MyWork.js:147 (UpdateForm); constants removed in 5fb96f2; "
              "lint narrowed at craco.config.js:74",
         found="2026-09-12",
     ),
     dict(
         id="MW-09", section="My Work", screen="Task card - 'Log update or hand off' (mobile)",
-        viewport="Mobile", persona="Owner / assignee", severity="High", status="Open",
+        viewport="Mobile", persona="Owner / assignee", severity="High", status="Fixed",
         area="Dead control",
         tested="Tapped 'Log update or hand off' on an expanded task on mobile.",
         expected="The update form opens, as the label promises.",
@@ -98,12 +99,13 @@ FINDINGS = [
         fix="Wire it to the same handler its desktop counterpart uses so it opens "
             "UpdateForm - and fix MW-08 first, or the newly working button will simply "
             "crash the page instead of doing nothing.",
+        verified="VERIFIED FIXED 2026-09-13 by re-running the original measurement: mobile 'Log update or hand off' now opens the update form.",
         code="pages/MyWork.js:1496-1505 (log-update-m button, no onClick)",
         found="2026-09-12",
     ),
     dict(
         id="MW-10", section="Global", screen="Application shell",
-        viewport="Mobile + Desktop", persona="All", severity="High", status="Open",
+        viewport="Mobile + Desktop", persona="All", severity="High", status="Fixed",
         area="Resilience",
         tested="Checked what the user sees when a component throws during render, using "
                "the real crash from MW-08 as the trigger.",
@@ -123,12 +125,13 @@ FINDINGS = [
             "apology, a Reload action, and report the error - so a single broken component "
             "costs one panel rather than the whole product. Worth a second boundary around "
             "the app shell as a backstop.",
+        verified="VERIFIED FIXED 2026-09-13 by re-running the original measurement: frontend/src/components/ErrorBoundary.jsx exists.",
         code="frontend/src/App.js (route tree) and components/Layout.js (shell)",
         found="2026-09-12",
     ),
     dict(
         id="MW-01", section="My Work", screen="Task card - status control",
-        viewport="Mobile + Desktop", persona="Owner (all)", severity="High", status="Open",
+        viewport="Mobile + Desktop", persona="Owner (all)", severity="High", status="Fixed",
         area="State / data",
         tested="Change a task's status through the whole lifecycle: todo, in_progress, "
                "waiting, review. Desktop uses the status dropdown; mobile uses the "
@@ -155,12 +158,13 @@ FINDINGS = [
             "That is the standard React Query update-from-response pattern and removes the "
             "race entirely. If the refetch must stay authoritative, the list read needs "
             "read-your-writes consistency instead.",
+        verified="VERIFIED FIXED 2026-09-13 by re-running the original measurement: status change now reflects on the card without a reload (set 'waiting', card read 'waiting').",
         code="pages/MyWork.js:1127 setStatus / 1134 setProgress; refresh() at 2102",
         found="2026-09-12",
     ),
     dict(
         id="MW-02", section="My Work", screen="Task card - detail dialog",
-        viewport="Mobile + Desktop", persona="Owner (all)", severity="High", status="Open",
+        viewport="Mobile + Desktop", persona="Owner (all)", severity="High", status="Fixed",
         area="Dead feature",
         tested="Looked for a way to delete a task, and for the task detail view. Expanded "
                "a card on both viewports and enumerated every control rendered on it.",
@@ -180,12 +184,13 @@ FINDINGS = [
             "the title open details, calling setDetailOpen(true). If the detail dialog is "
             "genuinely retired, delete the component and move the Delete action onto the "
             "inline expanded card instead - either way a task must be deletable.",
+        verified="VERIFIED FIXED 2026-09-13 by re-running the original measurement: overflow menu > View details opens task-detail-<id> with Delete visible.",
         code="pages/MyWork.js:986 (state), 1837 (render), 737-890 (the dialog + delete)",
         found="2026-09-12",
     ),
     dict(
         id="MW-03", section="Global", screen="Header - global search (Cmd+K)",
-        viewport="Desktop", persona="All", severity="Medium", status="Open",
+        viewport="Desktop", persona="All", severity="Medium", status="Fixed",
         area="Accessibility",
         tested="Opened the global search dialog from the header and inspected its "
                "accessibility tree and console output.",
@@ -200,12 +205,13 @@ FINDINGS = [
         fix="Inside CommandDialog, wrap a DialogTitle (and a DialogDescription) in the "
             "VisuallyHidden primitive so the dialog is named for assistive tech without "
             "changing the visual design.",
+        verified="VERIFIED FIXED 2026-09-13 by re-running the original measurement: global search dialog's aria-labelledby now resolves to 'Search'; 0 Radix warnings.",
         code="components/ui/command.jsx:19 (used at components/Layout.js:599)",
         found="2026-09-12",
     ),
     dict(
         id="MW-04", section="Global", screen="Dex FAB picker (mobile)",
-        viewport="Mobile", persona="All", severity="Medium", status="Open",
+        viewport="Mobile", persona="All", severity="Medium", status="Fixed",
         area="Accessibility",
         tested="Opened the Dex floating action button menu on mobile and tried to dismiss "
                "it with Escape, then with a tap outside.",
@@ -223,12 +229,13 @@ FINDINGS = [
         fix="Close the picker on Escape - either a keydown listener while picker is open, "
             "or render it inside a Radix DismissableLayer / Popover so dismissal, focus "
             "trapping and aria come from the same primitive the other sheets already use.",
+        verified="VERIFIED FIXED 2026-09-13 by re-running the original measurement: Dex FAB scrim present after opening, gone after Escape.",
         code="components/mobile/DexFab.jsx:70-82",
         found="2026-09-12",
     ),
     dict(
         id="MW-11", section="My Work", screen="Toolbar in the Leave / Workflows views",
-        viewport="Desktop", persona="All", severity="Medium", status="Open",
+        viewport="Desktop", persona="All", severity="Medium", status="Fixed",
         area="Information architecture",
         tested="Switched into the Leave view and the Workflows view and catalogued which "
                "toolbar controls remain on screen, then pressed one of them.",
@@ -249,6 +256,7 @@ FINDINGS = [
             "toggle itself (Workflows / Leave) in place, since that is how you get back. "
             "If a scope control must stay, it should not silently change view - that side "
             "effect is what makes it feel broken.",
+        verified="VERIFIED FIXED 2026-09-13 by re-running the original measurement: no task-only controls visible in the Leave view.",
         code="pages/MyWork.js:2429-2515 (mywork-controls / work-view-toggle); "
              "handlers at 2442, 2448, 2463",
         found="2026-09-12",
@@ -278,7 +286,7 @@ FINDINGS = [
     ),
     dict(
         id="MW-13", section="My Work", screen="Workflows view - pipeline cards",
-        viewport="Desktop", persona="All", severity="Low", status="Open",
+        viewport="Desktop", persona="All", severity="Low", status="Fixed",
         area="Accessibility",
         tested="Catalogued every control in the embedded Workflows view and compared their "
                "accessible names.",
@@ -296,12 +304,13 @@ FINDINGS = [
         fix="Give each an aria-label that names its card, e.g. 'Delete card: Dispatch 100 "
             "sales items today'. The card title is already to hand where the button is "
             "rendered.",
+        verified="VERIFIED FIXED 2026-09-13 by re-running the original measurement: delete controls now named per card, e.g. 'Delete card: Toyota Order Dispatch'.",
         code="pages/Workflows.js (delete-workflow-* and advance-workflow-* buttons)",
         found="2026-09-12",
     ),
     dict(
         id="MW-14", section="My Work", screen="Page heading in the Leave / Workflows views",
-        viewport="Desktop", persona="All", severity="Nit", status="Open",
+        viewport="Desktop", persona="All", severity="Nit", status="Fixed",
         area="Orientation",
         tested="Read the page heading while the Leave view and the Workflows view were "
                "open.",
@@ -315,6 +324,7 @@ FINDINGS = [
         cause="The header is rendered once, outside the view switch.",
         fix="Swap the heading with the view - 'Leave' or 'Workflows' - or append the view "
             "name. Only worth doing if the views stay inside My Work at all; see MW-12.",
+        verified="VERIFIED FIXED 2026-09-13 by re-running the original measurement: headings read ['My Work', 'Leave'] in the Leave view.",
         code="pages/MyWork.js (page header, above the view switch at 2527)",
         found="2026-09-12",
     ),
@@ -649,7 +659,7 @@ FINDINGS = [
     ),
     dict(
         id="MW-05", section="My Work", screen="Task list - bento grid",
-        viewport="Desktop", persona="All", severity="Low", status="Open",
+        viewport="Desktop", persona="All", severity="Low", status="Fixed",
         area="Visual / alignment",
         tested="Measured the vertical offset of each card's title against its own card top, "
                "across the first four rows of the desktop grid.",
@@ -665,12 +675,13 @@ FINDINGS = [
         fix="Make the button a column flex container and pin content to the top - add "
             "'flex flex-col justify-start' to its className. Verified live in the browser: "
             "all three titles then start at 17px.",
+        verified="VERIFIED FIXED 2026-09-13 by re-running the original measurement: max title-top spread across a row is now 0px (was 39px).",
         code="pages/MyWork.js:1181 (the task-summary button className)",
         found="2026-09-12",
     ),
     dict(
         id="MW-06", section="My Work", screen="Category tab bar",
-        viewport="Desktop", persona="Owner", severity="Nit", status="Open",
+        viewport="Desktop", persona="Owner", severity="Nit", status="Fixed",
         area="Loading state",
         tested="Switched the scope from My Tasks to All Tasks and watched the tab counters "
                "during the roughly 3 second fetch.",
@@ -684,6 +695,7 @@ FINDINGS = [
               "instead of branching on the loading state.",
         fix="While the tasks query is loading, render a dash or omit the count, matching "
             "the skeleton treatment already used for the cards below.",
+        verified="VERIFIED FIXED 2026-09-13 by re-running the original measurement: tab counter reads 'All -' while loading, then 'All 134' (was 'All 0').",
         code="pages/MyWork.js:2556-2566 (work-tabs counts)",
         found="2026-09-12",
     ),
@@ -1235,8 +1247,9 @@ ASKS = [
             "silent no-op'. Workflows still carries the old pattern. RBAC was checked "
             "across all four logins and is already correct: only the owner sees Delete "
             "(5 buttons); sales, production and finance see none.",
+        verified="VERIFIED FIXED 2026-09-13 by re-running the original measurement: delete opens an in-app confirm (0->1 dialogs), no native window.confirm.",
         code="pages/Workflows.js:340 (del handler); precedent at pages/MyWork.js:1108",
-        dep="", status="To do",
+        dep="", status="Fixed",
     ),
     dict(
         id="ASK-3", section="My Work", item="'+ New Task' placement",
@@ -1246,8 +1259,9 @@ ASKS = [
         why="Founder: it 'appears all over the place'. Confirmed by MW-11: in the Leave "
             "view New Task is the largest, darkest button on screen, and it creates a "
             "task rather than a leave request.",
+        verified="VERIFIED FIXED 2026-09-13 by re-running the original measurement: New Task sits below the heading and above the list.",
         code="pages/MyWork.js:2429-2515 (mywork-controls)",
-        dep="MW-11", status="To do",
+        dep="MW-11", status="Fixed",
     ),
     dict(
         id="ASK-4", section="Leave", item="Remove per-card 'AI Impact Analysis'",
@@ -1256,8 +1270,9 @@ ASKS = [
         why="Founder: impact is not a per-request question. Analysing one request in "
             "isolation cannot answer what actually matters -- what the combined leave "
             "does to cover across the team. Removed now; the global version is ASK-5.",
+        verified="VERIFIED FIXED 2026-09-13 by re-running the original measurement: 0 'AI Impact Analysis' buttons remain on Leave.",
         code="pages/Leave.js (leave card actions)",
-        dep="", status="To do",
+        dep="", status="Fixed",
     ),
     dict(
         id="ASK-5", section="Leave", item="Global AI leave-impact analysis",
@@ -1358,9 +1373,10 @@ ASKS = [
             "2'), so none of this is logic -- the dark-bar treatment reached one button "
             "out of three. On wording, the founder's point stands: the product currently "
             "calls the same action 'Reassign' in bulk and 'hand off' on the card.",
+        verified="VERIFIED FIXED 2026-09-13 by re-running the original measurement: all three bulk-bar actions now measure 19.55:1 (was 1.2 and 2.64).",
         code="pages/MyWork.js:918-962 (bulk-action-bar; bulk-reassign :946, "
              "bulk-clear :955); card wording at :195/:207",
-        dep="", status="To do",
+        dep="", status="Fixed",
     ),
     dict(
         id="ASK-11", section="My Work", item="'Complete' exists twice -- button and dropdown",
@@ -1757,7 +1773,7 @@ def main():
     bug_rows = [
         [f["id"], f["section"], f["screen"], f["viewport"], f["persona"], f["severity"],
          f["status"], f["area"], f["tested"], f["expected"], f["actual"], f["evidence"],
-         f["cause"], f["fix"], f["code"], f["found"]]
+         f["cause"], f["fix"], f["code"], f["found"], f.get("verified", "")]
         for f in FINDINGS
     ]
     write_sheet(wb, "Bug Log", BUG_COLS, bug_rows, sev_col=6, status_col=7)

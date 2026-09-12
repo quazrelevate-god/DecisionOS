@@ -319,6 +319,94 @@ FINDINGS = [
         found="2026-09-12",
     ),
     dict(
+        id="TM-01", section="Team", screen="Add member - login method toggle",
+        viewport="Mobile + Desktop", persona="Owner", severity="Low", status="Open",
+        area="Accessibility",
+        tested="Opened Add member and pressed both halves of the Password login / Mobile "
+               "OTP toggle, checking what each exposes to assistive technology.",
+        expected="The selected login method is announced, as the permission toggles in "
+                 "the same dialog already are.",
+        actual="Neither half carries aria-pressed. The selection is conveyed only by a "
+               "class swap (kr-pressed against kr-pop), so a sighted user sees which "
+               "method is active and a screen-reader user hears two identical unlabelled "
+               "buttons. Choosing between a password and an OTP decides how that person "
+               "will sign in for good, so it is worth announcing.",
+        evidence="Team.js:165 gives every perm-<key> toggle aria-pressed={on}; the two "
+                 "login-method buttons at :123 and :125 set className only. Pressing the "
+                 "already-active half produced no detectable state change of any kind.",
+        cause="The toggle was styled as a segmented control but never given the ARIA the "
+              "rest of the same file uses.",
+        fix="Add aria-pressed to both buttons, and wrap them in a role='group' with an "
+            "accessible label such as 'Login method' - matching the permission grid "
+            "immediately below it.",
+        code="pages/Team.js:122-127 (login-method-toggle); the pattern to copy is at :165",
+        found="2026-09-12",
+    ),
+    dict(
+        id="TM-02", section="Team", screen="Owner section grid",
+        viewport="Desktop", persona="All", severity="Nit", status="Open",
+        area="Visual / layout",
+        tested="Measured the grid that renders each role group on the team roster.",
+        expected="A section holding one person does not leave two thirds of the row empty.",
+        actual="The Owner group uses the same three-column grid as every other role but "
+               "will almost always hold exactly one card, so 874px of a 1336px row is "
+               "blank. It reads as a rendering fault rather than a deliberate space.",
+        evidence="grid-template-columns resolves to three 437px tracks with a single "
+                 "child; the card occupies 437px of 1336px.",
+        cause="One grid definition is applied to every role group regardless of how many "
+              "people it can contain.",
+        fix="Either let a single-card group span the row, or give the owner its own "
+            "treatment at the top of the page - it is a different kind of row from a "
+            "department, and looks like one.",
+        code="pages/Team.js:366 (team-cards-<role> grid)",
+        found="2026-09-12",
+    ),
+    dict(
+        id="TM-03", section="Team", screen="Member cards",
+        viewport="Mobile + Desktop", persona="All", severity="Nit", status="Open",
+        area="Information design",
+        tested="Compared what the page's own eyebrow promises with what the member cards "
+               "actually show, for a member who has a reporting manager set.",
+        expected="A roster headed EMPLOYEES / ACCESS / REPORTING LINES shows something of "
+                 "each at list level.",
+        actual="The cards show name, email, status and a permission COUNT. The reporting "
+               "line is absent entirely, and access is reduced to a number that says "
+               "nothing about what the person can reach. Both exist one click deeper - "
+               "the profile dialog reads 'REPORTS TO Sunita Rao' and '13 of 14 areas' "
+               "with the areas listed - so the data is there and simply is not surfaced "
+               "where the page says it will be.",
+        evidence="Card for a member with a manager reads: 'sai / csaicsai300@gmail.com / "
+                 "Active / 13 permissions'. Their profile dialog carries the manager and "
+                 "the full access list.",
+        cause="The card was designed as an identity tile; the eyebrow describes the "
+              "section's full remit, which only the dialog delivers.",
+        fix="Put the reporting line on the card - one line, 'Reports to Sunita Rao' - and "
+            "consider replacing the bare count with the two or three areas that "
+            "distinguish this person, keeping the full list in the dialog. Cheapest "
+            "alternative: soften the eyebrow so it stops promising what the list does "
+            "not show.",
+        code="pages/Team.js:417-450 (member card); manager already resolved at :475",
+        found="2026-09-12",
+    ),
+    dict(
+        id="TM-04", section="Team", screen="Member profile dialog",
+        viewport="Mobile + Desktop", persona="Owner", severity="Nit", status="Open",
+        area="Accessibility",
+        tested="Enumerated the controls in a member profile dialog by accessible name.",
+        expected="Each control in a dialog is distinguishable by name.",
+        actual="Two separate visible buttons are both named exactly 'Close'. A "
+               "screen-reader user tabbing the dialog meets the same name twice with "
+               "nothing to separate them.",
+        evidence="Control inventory of the profile dialog for Priya Nair: "
+                 "['Close', 'Edit access', 'Get invite link', 'Close'].",
+        cause="A custom close control was added at Team.js:530 while the dialog "
+              "primitive still renders its own.",
+        fix="Keep one. If the custom 36px control is the intended one, hide the "
+            "primitive's default close for this dialog.",
+        code="pages/Team.js:497-535 (profile dialog header)",
+        found="2026-09-12",
+    ),
+    dict(
         id="MW-05", section="My Work", screen="Task list - bento grid",
         viewport="Desktop", persona="All", severity="Low", status="Open",
         area="Visual / alignment",
@@ -569,6 +657,85 @@ COVERAGE = [
     ("T-100", "Leave", "Standalone /leave route", "Mobile 390x844", "Owner",
      "Leave is usable on mobile through its own route", "Routing", "PASS",
      "/leave renders the user's leave records directly", ""),
+
+    # --- TEAM ---
+    ("T-200", "Team", "Page load", "Desktop 1440x900", "Owner",
+     "/team loads directly with the full roster", "Routing", "PASS",
+     "12 members grouped by role; no redirect", ""),
+    ("T-201", "Team", "Page load", "Mobile 390x844", "Owner",
+     "/team loads and reflows to a single column", "Responsive", "PASS",
+     "224 visible elements, 20 interactive, no layout break", ""),
+    ("T-202", "Team", "Page shell", "Both", "Owner",
+     "No horizontal overflow on either viewport", "Responsive", "PASS",
+     "desktop 1440=1440, mobile 390=390", ""),
+    ("T-203", "Team", "All controls", "Mobile 390x844", "Owner",
+     "Every control meets the 24px tap-target minimum", "Accessibility", "PASS",
+     "0 under 24px", ""),
+    ("T-204", "Team", "All text", "Both", "Owner",
+     "All interactive text meets 4.5:1 contrast", "Accessibility", "PASS",
+     "0 below 4.5:1 on either viewport", ""),
+    ("T-205", "Team", "All controls", "Both", "Owner",
+     "Every button and link has an accessible name", "Accessibility", "PASS",
+     "0 unnamed; 0 images missing alt", ""),
+    ("T-206", "Team", "Control sweep", "Desktop 1440x900", "Owner",
+     "Every control can be pressed without crashing the app", "Stability", "PASS",
+     "15 pressed incl. every dialog descended into; 0 crashes", ""),
+    ("T-207", "Team", "Control sweep", "Mobile 390x844", "Owner",
+     "Every control can be pressed without crashing the app", "Stability", "PASS",
+     "10 pressed incl. dialogs; 0 crashes, 0 dead controls", ""),
+    ("T-208", "Team", "Navigation", "Both", "Owner",
+     "Every nav destination routes correctly", "Routing", "PASS",
+     "desktop rail and mobile dock both resolve; aria-current set on Team", ""),
+    ("T-209", "Team", "Add member dialog", "Both", "Owner",
+     "Add member opens a complete form", "Functional", "PASS",
+     "6 fields, 18 controls: name, email, login method, password, phone, role, "
+     "manager, permission grid, menu preview", ""),
+    ("T-210", "Team", "Add member validation", "Desktop 1440x900", "Owner",
+     "An empty form is refused with a clear reason", "Functional", "PASS",
+     "No API call fired; dialog stayed open; 'Name and email are required'", ""),
+    ("T-211", "Team", "Add member - login method", "Both", "Owner",
+     "The selected login method is exposed to assistive technology",
+     "Accessibility", "FAIL", "No aria-pressed on either half of the toggle", "TM-01"),
+    ("T-212", "Team", "Member profile dialog", "Both", "Owner",
+     "A member card opens their profile with contact, reporting line and access",
+     "Functional", "PASS",
+     "Shows CONTACT, REPORTS TO, and ACCESS as 'n of 14 areas' with the list", ""),
+    ("T-213", "Team", "Member profile dialog", "Both", "Owner",
+     "The dialog has a proper accessible name", "Accessibility", "PASS",
+     "sr-only DialogHeader + DialogTitle at Team.js:497 - the pattern MW-03 lacks", ""),
+    ("T-214", "Team", "Member profile dialog", "Both", "Owner",
+     "Every control in the dialog is distinguishable by name", "Accessibility", "FAIL",
+     "Two visible buttons both named 'Close'", "TM-04"),
+    ("T-215", "Team", "Edit access", "Desktop 1440x900", "Owner",
+     "Edit access opens the permission editor in place", "Functional", "PASS",
+     "Dialog content grows 1411 to 2299 chars; no error", ""),
+    ("T-216", "Team", "Get invite link", "Desktop 1440x900", "Owner",
+     "The invite control is present, unobstructed and correctly gated",
+     "Functional", "PASS",
+     "Rendered only for non-owners who have a phone; clickable and not covered", ""),
+    ("T-217", "Team", "Get invite link", "Desktop 1440x900", "Owner",
+     "An invite link is generated end to end", "Functional", "N/A",
+     "NOT RUN by choice - it would mint a real invite token for a live teammate. "
+     "The only disposable accounts have no phone, so the control is correctly "
+     "hidden for them. Needs one manual pass.", ""),
+    ("T-218", "Team", "Access control", "Desktop 1440x900", "Owner",
+     "The owner can add and manage members", "Permissions", "PASS",
+     "Add member visible; no view-only banner", ""),
+    ("T-219", "Team", "Access control", "Desktop 1440x900", "Sales / Production / Finance",
+     "Non-managers see the roster but cannot change it", "Permissions", "PASS",
+     "All three: 12 cards visible, Add member hidden, view-only banner shown, "
+     "no page errors", ""),
+    ("T-220", "Team", "Owner section grid", "Desktop 1440x900", "All",
+     "Role groups fill their row", "Visual", "FAIL",
+     "Owner group is a 3-column grid holding one card; 874 of 1336px empty", "TM-02"),
+    ("T-221", "Team", "Member cards", "Both", "All",
+     "The roster shows what its own heading promises", "Information architecture",
+     "FAIL",
+     "Eyebrow says EMPLOYEES / ACCESS / REPORTING LINES; cards show neither the "
+     "reporting line nor what the access is, only a count", "TM-03"),
+    ("T-222", "Team", "Console + network", "Both", "Owner",
+     "No application errors and no failing API calls", "Stability", "PASS",
+     "Only the pre-login 401 on /auth/me", ""),
 
     # --- personas ---
     ("T-070", "My Work", "Page load", "Desktop 1440x900", "Owner",

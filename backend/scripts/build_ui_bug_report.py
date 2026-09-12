@@ -1567,6 +1567,21 @@ COVERAGE = [
      "The capture row offers upload, scan, add and export", "Functional", "PASS",
      "Upload bill, Scan receipt, Add expense, Export all render", ""),
 
+    ("T-511", "Finance", "Control sweep", "Both", "Owner",
+     "Every control pressed without crashing the app", "Stability", "PASS",
+     "37 checks passed across both viewports; 0 crashes; 8 mutations blocked "
+     "including POST ledger/ai/brief/refresh", ""),
+    ("T-512", "Finance", "KPI tiles as links", "Both", "Owner",
+     "Each KPI tile navigates to its tab", "Routing", "PASS",
+     "mkpi-revenue is an <a href='/finance?tab=revenue'>; clicking moves the URL "
+     "from '' to '?tab=revenue'. The sweep first flagged all 14 tiles as dead - "
+     "a false positive from comparing only the path, now fixed in the harness", ""),
+    ("T-513", "Finance", "Mobile tab strip", "Mobile 375x812", "Owner",
+     "The six tabs are reachable on a phone", "Responsive", "PASS",
+     "Horizontally scrollable strip: scrollWidth 639 > clientWidth 446, "
+     "overflow-x auto. The sweep first reported a 130px spill - a false positive "
+     "on a deliberately scrollable strip, now excluded in the harness", ""),
+
     # --- personas ---
     ("T-070", "My Work", "Page load", "Desktop 1440x900", "Owner",
      "Owner sees all tasks, can create, and gets the All Tasks scope",

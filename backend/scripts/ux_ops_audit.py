@@ -57,8 +57,17 @@ LAYOUT_JS = r"""() => {
     'button,a[href],input,select,textarea,[role="button"],[role="tab"],[role="switch"]')].filter(vis);
 
   const overflowing = [];
+  // A tab bar that scrolls sideways is a pattern, not a spill -- skip anything
+  // sitting inside a deliberately scrollable strip.
+  const inScroller = (e) => {
+    for (let n=e.parentElement; n && n!==document.body; n=n.parentElement) {
+      const ov=getComputedStyle(n).overflowX;
+      if ((ov==='auto'||ov==='scroll') && n.scrollWidth>n.clientWidth+4) return true;
+    }
+    return false;
+  };
   for (const e of all) { const r=e.getBoundingClientRect();
-    if (r.right>vw+1 && r.width<=vw+2 && r.width>8)
+    if (r.right>vw+1 && r.width<=vw+2 && r.width>8 && !inScroller(e))
       overflowing.push({label:label(e), overhang:Math.round(r.right-vw)}); }
 
   const tiny = [];
@@ -413,6 +422,7 @@ def audit(browser, vp, dims, mobile):
         except Exception:
             continue
         before_sig = p.evaluate(SIG_JS)
+        before_url = p.url.replace(BASE, "")
         before_err = len(errs)
         before_blocked = len(blocked)
         outcome = "ok"
@@ -445,7 +455,7 @@ def audit(browser, vp, dims, mobile):
             rec(vp, f"[{ident}] raises no error", False, new_errs[0][:110])
         if outcome.startswith("click-failed"):
             rec(vp, f"[{ident}] is clickable", False, outcome)
-        elif not entry["changed"] and url_now.startswith(ROUTE) and not fired:
+        elif (not entry["changed"] and url_now == before_url and not fired):
             dead.append(ident)
         if not url_now.startswith(ROUTE):
             routed.append(f"{ident} -> {url_now}")

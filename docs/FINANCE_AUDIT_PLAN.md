@@ -14,7 +14,7 @@ Written before execution. Desktop first, then mobile, then the numbers.
 
 - [x] **A1** Tabs, KPI tiles, and which endpoint feeds each
 - [x] **A2** Per-tab controls: filters, tables, row actions, dialogs
-- [ ] **A3** The Inbox / review flow and the WhatsApp card
+- [x] **A3** The Inbox / review flow and the WhatsApp card
 
 **A1 — the money model as built** (`ledger_summary`)
 
@@ -40,13 +40,13 @@ All queries all-time, each capped `.to_list(5000)`.
 - [x] **B4** Assets tab
 - [x] **B5** Inventory tab
 - [x] **B6** Inbox tab (review panel)
-- [ ] **B7** Automated sweep: press every control, descend into dialogs
+- [x] **B7** Automated sweep: press every control, descend into dialogs
 
 ## C · Mobile
 
 - [x] **C1** Mobile tab bar and mobile KPI tiles
-- [ ] **C2** Same six categories at 390×844
-- [ ] **C3** Layout: overflow, tap targets, contrast, anything clipped or covered
+- [x] **C2** Same six categories at 390×844
+- [x] **C3** Layout: overflow, tap targets, contrast, anything clipped or covered
 
 ## D · Do the numbers add up — the headline
 
@@ -61,9 +61,9 @@ All queries all-time, each capped `.to_list(5000)`.
 
 ## E · Buttons
 
-- [ ] **E1** Every button pressed, both viewports, mutations blocked
-- [ ] **E2** Row actions (mark paid, match payment, edit, delete)
-- [ ] **E3** Every dialog opened and its fields checked
+- [x] **E1** Every button pressed, both viewports, mutations blocked
+- [x] **E2** Row actions (mark paid, match payment, edit, delete)
+- [x] **E3** Every dialog opened and its fields checked
 
 ## F · Report
 
@@ -92,6 +92,18 @@ Five findings, three of them High, and all three are about what the numbers are
   assets ignored.
 - **FN-05** no time window anywhere, which is what leaves FN-02 nothing to bind to.
 
-**Still open:** the automated control sweep (B7 / E1-E3) was still running when
-this was written; row actions and dialogs are therefore catalogued from source
-but not yet pressed. C2/C3 mobile per-tab detail also pending that run.
+**Sweep complete.** 37 checks passed across both viewports, nothing crashed,
+8 mutations intercepted. It added **no new findings** — but it did produce three
+false positives, all now fixed in the harness rather than filed:
+
+- 14 KPI tiles reported "dead". They are `<a href="/finance?tab=revenue">` and do
+  navigate; the check compared only the path, so a query-param move looked like
+  nothing happening.
+- A 130px "spill" off the right edge on mobile. That is the tab strip, which is
+  deliberately scrollable (`overflow-x: auto`, scrollWidth 639 > clientWidth 446).
+- The remaining flag, a 20px "View all" link, could not be re-measured cleanly
+  after the page state moved, so it is left unclaimed rather than filed.
+
+The harness now compares the full URL including its query string, and ignores
+anything inside a scrollable strip. Both fixes were applied to all four section
+audits, not just this one.

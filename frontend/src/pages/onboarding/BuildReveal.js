@@ -247,7 +247,12 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
             <div className="mb-6 grid grid-cols-3 gap-3" data-testid="build-counts">
               {counts.map((c, i) => (
                 <motion.div key={c.label} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.08 }}
-                  className="kr-pop rounded-2xl p-4 text-center">
+                  /* KM-65 — .kr-frost-min: a flat tile drawn by its hairline,
+                     with none of .kr-pop's lift. These three are a readout —
+                     "2 departments, 4 recurring tasks, 1 approval rule" — and
+                     they sat raised, in the same material as "Looks good, Enter
+                     DecisionOS" directly below them. */
+                  className="kr-frost-min rounded-2xl p-4 text-center">
                   <p className="text-3xl font-semibold tabular-nums">{c.n}</p>
                   <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{c.label}</p>
                 </motion.div>
@@ -274,7 +279,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                   `.signup-stage .kr-pressed:not([class*="bg-"])`, which would
                   otherwise force both to the same .20. */}
               <PreviewBlock label="Departments" items={bp.departments || []} tint="kr-pressed bg-white/[.34]" />
-              <PreviewBlock label="Workflows — named after how you actually work" items={workflowNames} tint="kr-pop bg-[hsl(var(--kr-gold)/.22)]" />
+              <PreviewBlock label="Workflows — named after how you actually work" items={workflowNames} tint="kr-pressed bg-[hsl(var(--kr-gold)/.22)]" />
               <PreviewBlock label="Recurring tasks Dex will keep on rails" items={taskTitles.slice(0, 8)} tint="kr-pressed" />
             </div>
 
@@ -374,7 +379,12 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
             <div className="mb-6 grid grid-cols-3 gap-3" data-testid="build-counts">
               {counts.map((c, i) => (
                 <motion.div key={c.label} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 + i * 0.1 }}
-                  className="kr-pop rounded-2xl p-4 text-center">
+                  /* KM-65 — .kr-frost-min: a flat tile drawn by its hairline,
+                     with none of .kr-pop's lift. These three are a readout —
+                     "2 departments, 4 recurring tasks, 1 approval rule" — and
+                     they sat raised, in the same material as "Looks good, Enter
+                     DecisionOS" directly below them. */
+                  className="kr-frost-min rounded-2xl p-4 text-center">
                   <p className="text-3xl font-semibold tabular-nums">{c.n}</p>
                   <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{c.label}</p>
                 </motion.div>
@@ -386,7 +396,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                 <div className="flex flex-wrap gap-1.5">
                   {workflowNames.slice(0, 6).map((n, i) => (
                     <motion.span key={n} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.5 + i * 0.08 }}
-                      className="kr-pop rounded-pill bg-[hsl(var(--kr-gold)/.22)] px-3 py-1.5 text-xs">{n}</motion.span>
+                      className="kr-pressed rounded-pill bg-[hsl(var(--kr-gold)/.22)] px-3 py-1.5 text-xs">{n}</motion.span>
                   ))}
                 </div>
               </div>

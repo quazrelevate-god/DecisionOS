@@ -205,7 +205,11 @@ export function WebsiteIntel({ companyName, onDone, onBack }) {
                   <label className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">What you offer</label>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {intel.products.map((p) => (
-                      <span key={p.name} className="kr-pop rounded-pill px-3 py-1.5 text-xs">{p.name}</span>
+                      /* KM-65 — sunken, not raised. These are things we FOUND
+                         on the website, not things to press; .kr-pop is the
+                         recipe every button on this screen uses, so a row of
+                         them read as five more controls. */
+                      <span key={p.name} className="kr-pressed rounded-pill px-3 py-1.5 text-xs">{p.name}</span>
                     ))}
                   </div>
                 </div>

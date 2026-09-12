@@ -806,6 +806,137 @@ FINDINGS = [
         found="2026-09-13",
     ),
     dict(
+        id="FN-01", section="Finance", screen="Every money figure",
+        viewport="Mobile + Desktop", persona="All", severity="High", status="Open",
+        area="Localisation",
+        tested="Read the rendered text of all six Overview tiles and compared it with "
+               "what Intl produces for the same number in Indian grouping.",
+        expected="An India-first product groups rupees the Indian way, the same way "
+                 "everywhere.",
+        actual="Finance renders 2685000 as Rs 2,685,000 -- Western thousands grouping. "
+               "Indian convention is Rs 26,85,000. Every tile is affected: Asset Value "
+               "shows Rs 4,085,000 for what an Indian owner reads as Rs 40,85,000. "
+               "Worse than being consistently wrong, it is inconsistent: the AI panels "
+               "ON THE SAME PAGE correctly say 'Rs 7.49L' and 'Rs 13.18 L', and CRM "
+               "cards elsewhere show 'Rs 4,00,000'. And because the locale is left "
+               "undefined, the grouping follows each viewer's browser -- the same "
+               "figure renders differently for different people.",
+        evidence="Tiles read 'Rs 2,685,000'; Intl.NumberFormat('en-IN') gives "
+                 "'Rs 26,85,000'. Ledger.js:61 uses Intl.NumberFormat(undefined, ...).",
+        cause="Ledger.js defines its own private fmt() with an undefined locale, "
+              "instead of the shared helper. lib/format.js already exports inr(), "
+              "which uses en-IN and whose own docstring reads: 'no component formats "
+              "currency inline -- everything goes through here.' Finance is the "
+              "component that does.",
+        fix="Delete the private fmt() and import inr from lib/format. The helper "
+            "already exists and already does the right thing, so this is an import "
+            "swap rather than a rewrite. Worth a lint rule banning "
+            "Intl.NumberFormat with a currency style outside lib/format.js.",
+        code="pages/Ledger.js:61-64 (private fmt); lib/format.js:19-30 (inr, and the "
+             "rule it states)",
+        found="2026-09-13",
+    ),
+    dict(
+        id="FN-02", section="Finance", screen="Net profit hero (mobile)",
+        viewport="Mobile", persona="All", severity="High", status="Open",
+        area="Truthfulness",
+        tested="Compared the number under the 'This month' chip with the API figure and "
+               "with the date range of the underlying records.",
+        expected="A figure captioned 'This month' covers this month.",
+        actual="It is the all-time figure. The hero shows Rs 738,034 beneath a chip "
+               "reading 'This month', and 738034 is exactly net_profit from the API, "
+               "which is computed with no date filter over records spanning June to "
+               "August. So an owner glancing at their phone reads a lifetime number as "
+               "a monthly one -- and on a money screen that is the kind of mistake that "
+               "gets acted on.",
+        evidence="Hero binds {f(net)} where net = tt.net_profit; ledger_summary applies "
+                 "no date filter; sales invoices span 2026-06-14 to 2026-08-12.",
+        cause="The chip was written for a windowed figure the endpoint does not "
+              "provide.",
+        fix="Either compute a monthly net and show that, or drop the chip. The backend "
+            "already buckets by month for expenses, so half the machinery exists -- it "
+            "needs the revenue side to match (see FN-03).",
+        code="pages/Ledger.js:1005 (net), :1042 ('This month' chip), :1048 (the value)",
+        found="2026-09-13",
+    ),
+    dict(
+        id="FN-03", section="Finance", screen="Revenue and Net profit trend badges (mobile)",
+        viewport="Mobile", persona="All", severity="High", status="Open",
+        area="Wrong data",
+        tested="Traced the series behind each trend percentage and recomputed it.",
+        expected="A trend shown beside Revenue describes revenue.",
+        actual="Both trend badges are computed from EXPENSES. The Revenue tile reads "
+               "'Rs 2,685,000, down 22.1%' -- but that 22.1% is the month-on-month fall "
+               "in SPENDING, from Rs 10,77,500 in July to Rs 8,39,469 in August. "
+               "Revenue did not fall; costs did, which is usually good news being "
+               "reported in red as bad. The Net profit trend is the same number from "
+               "the same series.",
+        evidence="months = summary.by_month, which ledger_summary builds by summing "
+                 "EXPENSES per month. pct(839469, 1077500) = -22.1%, exactly what the "
+                 "UI shows. netPoints = months.map(m => Number(m.net ?? m.amount ?? 0)) "
+                 "-- by_month carries no 'net' key, so every point silently falls "
+                 "through to the expense amount.",
+        cause="The frontend was written expecting by_month to carry a net figure per "
+              "month. The backend never added one, and the ?? fallback turned a missing "
+              "contract into a plausible-looking wrong number instead of an error.",
+        fix="Have ledger_summary return revenue and net per month alongside expenses, "
+            "and bind each trend to its own series. Until then the honest move is to "
+            "hide the badges rather than show a number that means something else -- and "
+            "drop the ?? fallback, which is what let this ship silently.",
+        code="pages/Ledger.js:1009-1015 (months, netPoints, netTrend), :1061 (revenue "
+             "trend); routers/ledger.py:1237-1245 (by_month is expenses only)",
+        found="2026-09-13",
+    ),
+    dict(
+        id="FN-04", section="Finance", screen="'Net profit' tile",
+        viewport="Mobile + Desktop", persona="All", severity="Medium", status="Open",
+        area="Metric design",
+        tested="Read what net_profit is composed of and compared it with a cash-basis "
+               "calculation from the same records.",
+        expected="A figure called net profit is close to what an owner means by it.",
+        actual="It is revenue BILLED minus ALL recorded expenses, including expenses "
+               "not yet paid. It subtracts no cost of goods and no inventory movement, "
+               "and ignores assets entirely -- Rs 40,85,000 of them. On live data it "
+               "reports Rs 7,38,034, where the cash-basis figure is Rs 6,44,500, a gap "
+               "of Rs 93,534. The arithmetic is right; the name is doing more work than "
+               "the formula can support.",
+        evidence="net_profit = revenue_billed - total_spend = 2685000 - 1946966 = "
+                 "738034, verified against a recomputation. Cash basis "
+                 "(received - paid expenses) = 1936000 - 1291500 = 644500.",
+        cause="A simple difference was given the accounting term that sits closest to "
+              "it.",
+        fix="Rename to something the formula actually supports -- 'Billed minus spend', "
+            "or 'Gross margin (billed)' -- or compute a real net that accounts for COGS "
+            "and inventory. The former is a one-line change and stops the page "
+            "overclaiming.",
+        code="routers/ledger.py:1257 (net_profit); pages/Ledger.js:566-573 (the tile)",
+        found="2026-09-13",
+    ),
+    dict(
+        id="FN-05", section="Finance", screen="All figures",
+        viewport="Mobile + Desktop", persona="All", severity="Medium", status="Open",
+        area="Metric design",
+        tested="Checked ledger_summary for any date filtering.",
+        expected="A finance dashboard can show a period.",
+        actual="Every figure is all-time and there is no way to change that. Expenses, "
+               "invoices, payments, assets and inventory are each queried for the whole "
+               "tenant with no window and capped at 5000 records. So the page can tell "
+               "an owner what they have billed since the company started, but not what "
+               "they billed this month -- which is the question a finance screen is "
+               "opened to answer. It is also why FN-02's 'This month' chip has nothing "
+               "to bind to.",
+        evidence="ledger_summary contains no date filter; every find() is "
+                 "{tenant_id} only, .to_list(5000).",
+        cause="The endpoint was built to summarise everything, and the period-aware UI "
+              "arrived later.",
+        fix="Accept a period parameter (this month, this quarter, this FY -- the Indian "
+            "financial year matters here) and filter each query by it, defaulting to "
+            "the current month. That single change also gives FN-02 and FN-03 the data "
+            "they are currently faking.",
+        code="routers/ledger.py:1223-1262 (ledger_summary)",
+        found="2026-09-13",
+    ),
+    dict(
         id="TM-02", section="Team", screen="Owner section grid",
         viewport="Desktop", persona="All", severity="Nit", status="Open",
         area="Visual / layout",
@@ -1390,6 +1521,51 @@ COVERAGE = [
     ("T-418", "Ops", "Weighting", "n/a", "Finance-less roles",
      "Weights renormalise when a leg is unavailable", "Functional", "PASS",
      "finance is null without the permission and the remaining weights rescale", ""),
+
+    # --- FINANCE ---
+    ("T-500", "Finance", "Page load", "Desktop 1280x800", "Owner",
+     "/finance loads the Overview with six KPI tiles", "Routing", "PASS",
+     "Revenue billed, Received, Net profit, Total Spend, Asset Value, "
+     "Inventory Value", ""),
+    ("T-501", "Finance", "Tabs", "Desktop 1280x800", "Owner",
+     "All six tabs switch content", "Functional", "PASS",
+     "Overview, Revenue, Expenses, Assets, Inventory, Inbox all render", ""),
+    ("T-502", "Finance", "Arithmetic", "n/a", "Owner",
+     "Every reported figure reconciles with a recomputation from raw records",
+     "Data quality", "PASS",
+     "8 of 8 reconcile to the paisa: billed 26,85,000; received 19,36,000; spend "
+     "19,46,966; paid 12,91,500; outstanding 6,55,466; assets 40,85,000; "
+     "inventory 13,18,800; net 7,38,034", ""),
+    ("T-503", "Finance", "Cross-tab consistency", "Desktop 1280x800", "Owner",
+     "The same figure agrees across tabs", "Data quality", "PASS",
+     "Overview 'Revenue billed' = Revenue tab 'Billed' = 26,85,000; status "
+     "buckets (2 paid + 3 unpaid) sum to sales_count 5", ""),
+    ("T-504", "Finance", "Money formatting", "Both", "All",
+     "Rupees are grouped the Indian way, consistently", "Localisation", "FAIL",
+     "Tiles render Rs 2,685,000 instead of Rs 26,85,000, via a private formatter "
+     "with an undefined locale; AI panels on the same page use Rs 7.49L", "FN-01"),
+    ("T-505", "Finance", "Net profit hero", "Mobile 375x812", "All",
+     "A figure captioned 'This month' covers this month", "Data quality", "FAIL",
+     "Shows the all-time 7,38,034 under a 'This month' chip", "FN-02"),
+    ("T-506", "Finance", "Trend badges", "Mobile 375x812", "All",
+     "A trend beside Revenue describes revenue", "Data quality", "FAIL",
+     "Both Revenue and Net profit trends are the month-on-month change in "
+     "EXPENSES; pct(839469, 1077500) = -22.1%, exactly what is displayed", "FN-03"),
+    ("T-507", "Finance", "'Net profit' definition", "n/a", "All",
+     "The label matches the formula", "Metric design", "FAIL",
+     "billed minus all expenses; no COGS, no inventory, assets ignored; cash "
+     "basis differs by 93,534", "FN-04"),
+    ("T-508", "Finance", "Time window", "n/a", "All",
+     "The page can show a period", "Metric design", "FAIL",
+     "No date filter anywhere; every figure is all-time", "FN-05"),
+    ("T-509", "Finance", "Revenue tab", "Desktop 1280x800", "Owner",
+     "Billed / Received / Outstanding tiles are correct and unambiguous",
+     "Functional", "PASS",
+     "26,85,000 / 19,36,000 / 7,49,000 - and 'Outstanding' here is receivables, "
+     "distinct from the payables figure which is not shown as a tile", ""),
+    ("T-510", "Finance", "Mobile quick actions", "Mobile 375x812", "Owner",
+     "The capture row offers upload, scan, add and export", "Functional", "PASS",
+     "Upload bill, Scan receipt, Add expense, Export all render", ""),
 
     # --- personas ---
     ("T-070", "My Work", "Page load", "Desktop 1440x900", "Owner",

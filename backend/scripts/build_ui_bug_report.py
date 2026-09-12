@@ -29,6 +29,10 @@ SEV = {
 }
 STATUS_FILL = {
     "Open": "FDE7E7",
+    "To do": "FDE7E7",
+    "Awaiting decision": "FFF4E5",
+    "Parked - needs design": "F3F4F6",
+    "Not a defect": "E8F3EC",
     "By design": "E8F3EC",
     "Fixed": "E8F3EC",
     "Won't fix": "EFEFEF",
@@ -664,6 +668,124 @@ NON_ISSUES = [
 ]
 
 # ---------------------------------------------------------------------------
+# 5. ACTION LIST -- everything to be done: the founder's asks plus every defect
+# ---------------------------------------------------------------------------
+ACT_COLS = [
+    ("ID", 10), ("Source", 13), ("Section", 12), ("Item", 34), ("Type", 17),
+    ("Priority", 10), ("What to change", 62), ("Why / evidence", 62),
+    ("Where (code)", 34), ("Depends on", 13), ("Status", 13),
+]
+
+ASKS = [
+    dict(
+        id="ASK-1", section="Workflows", item="Stage-not-ready override dialog",
+        type="Change request", prio="Medium",
+        what="Redesign the 'Stage not ready' override popup. It is a plain centred modal "
+             "with a mono-styled textarea; it should carry the same material as the rest "
+             "of the redesign, and Override should read as the consequential action.",
+        why="Founder review of the override flow. Forcing a reason is right -- it goes "
+            "into workflow history and the audit log -- but the styling predates the "
+            "current design language and the two actions carry equal visual weight.",
+        code="pages/Workflows.js (stage override dialog)",
+        dep="", status="To do",
+    ),
+    dict(
+        id="ASK-2", section="Workflows", item="'Delete card' does nothing",
+        type="Bug fix", prio="High",
+        what="Replace window.confirm with the in-app confirmation dialog, matching the "
+             "delete-task-confirm pattern used elsewhere. RBAC needs no change.",
+        why="VERIFIED: as owner, clicking Delete produces no dialog, removes no card and "
+            "issues no DELETE request at all. The handler is wired correctly but sits "
+            "behind window.confirm, which silently returns false in some browser and "
+            "embedded contexts. This codebase already hit and fixed exactly this -- "
+            "FUP-49 removed window.confirm from My Work's Complete button because 'some "
+            "browsers / embed contexts silently returned without showing UI, so the click "
+            "looked like a silent no-op'. Workflows still carries the old pattern. RBAC "
+            "was checked across all four logins and is already correct: only the owner "
+            "sees Delete (5 buttons); sales, production and finance see none.",
+        code="pages/Workflows.js:340 (del handler); precedent at pages/MyWork.js:1108",
+        dep="", status="To do",
+    ),
+    dict(
+        id="ASK-3", section="My Work", item="'+ New Task' placement",
+        type="Change request", prio="Medium",
+        what="Move New Task below the header and stop rendering it outside the task list "
+             "-- it should not appear while the Leave or Workflows view is open.",
+        why="Founder: it 'appears all over the place'. Confirmed by MW-11: in the Leave "
+            "view New Task is the largest, darkest button on screen, and it creates a "
+            "task rather than a leave request.",
+        code="pages/MyWork.js:2429-2515 (mywork-controls)",
+        dep="MW-11", status="To do",
+    ),
+    dict(
+        id="ASK-4", section="Leave", item="Remove per-card 'AI Impact Analysis'",
+        type="Change request", prio="Medium",
+        what="Remove the AI Impact Analysis button from the individual leave card.",
+        why="Founder: impact is not a per-request question. Analysing one request in "
+            "isolation cannot answer what actually matters -- what the combined leave "
+            "does to cover across the team. Removed now; the global version is ASK-5.",
+        code="pages/Leave.js (leave card actions)",
+        dep="", status="To do",
+    ),
+    dict(
+        id="ASK-5", section="Leave", item="Global AI leave-impact analysis",
+        type="Future scope", prio="Low",
+        what="Reintroduce impact analysis at SECTION level, scoped by period -- this "
+             "week, this financial year, or just what is pending approval -- so it can "
+             "answer what the combined leave does to cover.",
+        why="Founder: the useful question is aggregate, not per-request. Explicitly "
+            "parked -- not yet ideated, so this is scope to design before it is built.",
+        code="(design first)",
+        dep="ASK-4", status="Parked - needs design",
+    ),
+    dict(
+        id="ASK-6", section="Leave / Team", item="Move Leave into Team",
+        type="Product decision", prio="High",
+        what="Move the Leave surface out of My Work into Team. Only 'Request Leave' stays "
+             "reachable from a person's own work surface; the register, history and "
+             "per-department configuration live in Team.",
+        why="Founder decision, and it matches what the audit found independently. Leave "
+            "is an HR request-and-approval flow, not task execution: MW-11 shows four "
+            "task-only controls bleeding into the Leave view with three of them ejecting "
+            "you, and MW-12 shows the product already disagrees with itself -- on mobile "
+            "Leave is not in My Work at all, but a separate destination in the More panel.",
+        code="pages/MyWork.js (view switch), pages/Leave.js, pages/Team.js",
+        dep="MW-11, MW-12", status="To do",
+    ),
+    dict(
+        id="ASK-7", section="Decision Desk", item="Leave approvals move to the Desk",
+        type="Product decision", prio="High",
+        what="Move the leave Approvals queue out of Leave and into the Decision Desk, "
+             "alongside the rest of the approvals.",
+        why="Founder decision. Consistent with the audit: an approvals queue carrying 5 "
+            "pending items currently sits inside a page titled 'My Work', while every "
+            "other approval in the product is handled on the Desk.",
+        code="pages/Leave.js (leave-tab-approvals), pages/Desk.js",
+        dep="ASK-6", status="To do",
+    ),
+    dict(
+        id="ASK-8", section="Leave / Settings", item="Move 'Leave Approvers by Department'",
+        type="Needs discussion", prio="Medium",
+        what="Remove the settings gear from Leave and move 'Leave Approvers by "
+             "Department' into Settings. RECOMMENDED HOME: Settings > Operations, whose "
+             "own description is 'Pipelines, stages, task templates and approval gates -- "
+             "the single source of truth for how work moves'. Leave approval routing is "
+             "an approval gate, and Settings already owns the money approval threshold "
+             "under Money. Alternatives considered: Settings > Business (owns roles, but "
+             "this is routing, not structure) and People > Employees (where a Reporting "
+             "Manager already overrides this mapping). Suggested resolution: put the "
+             "control in Operations and show a read-only line on People > Employees "
+             "pointing at it, so the override and the default are visibly connected "
+             "without duplicating the control.",
+        why="Founder: configuration belongs in Settings, not inside a work surface. "
+            "Placement to be confirmed before the move.",
+        code="pages/Leave.js:387-417 (leave-approver-config), :500-510 (gear); "
+             "pages/Settings.js:150-159 (TABS)",
+        dep="ASK-6", status="Awaiting decision",
+    ),
+]
+
+# ---------------------------------------------------------------------------
 # 4. HOW TO USE
 # ---------------------------------------------------------------------------
 LEGEND = [
@@ -782,6 +904,22 @@ def main():
     write_sheet(wb, "Bug Log", BUG_COLS, bug_rows, sev_col=6, status_col=7)
     write_sheet(wb, "Test Coverage", COV_COLS, COVERAGE, result_col=8)
     write_sheet(wb, "Verified Non-Issues", NON_COLS, NON_ISSUES)
+
+    # ---- Action List: the founder's asks first, then every defect by severity ----
+    PRIO_RANK = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3, "Nit": 4}
+    act_rows = [
+        [a["id"], "Founder review", a["section"], a["item"], a["type"], a["prio"],
+         a["what"], a["why"], a["code"], a["dep"], a["status"]]
+        for a in ASKS
+    ]
+    for f in sorted(FINDINGS, key=lambda x: PRIO_RANK.get(x["severity"], 9)):
+        act_rows.append([
+            f["id"], "UI audit", f["section"], f["screen"],
+            "By design" if f["status"] == "By design" else "Bug fix",
+            f["severity"], f["fix"], f["actual"], f["code"], "",
+            "Not a defect" if f["status"] == "By design" else "To do",
+        ])
+    write_sheet(wb, "Action List", ACT_COLS, act_rows, sev_col=6, status_col=11)
 
     ws = wb.create_sheet("How to use")
     ws.column_dimensions["A"].width = 30

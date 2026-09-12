@@ -559,6 +559,31 @@ FINDINGS = [
         found="2026-09-12",
     ),
     dict(
+        id="CR-08", section="CRM", screen="Contact profile (mobile) - In progress list",
+        viewport="Mobile", persona="All", severity="Medium", status="Open",
+        area="Data leak to UI",
+        tested="Read the 'In progress' accordion on a contact profile where some "
+               "pending deliveries have no due date.",
+        expected="A missing due date is either omitted or says something a person can "
+                 "read.",
+        actual="The literal word 'undefined' is printed to the user: two rows read "
+               "'Due undefined - Rs 1' and 'Due undefined - Rs 6,00,000'. It is the "
+               "kind of thing a customer screenshots.",
+        evidence="ContactProfileMobile.jsx:215 renders "
+                 "{humanDate(d.due_date) || `Due ${d.due_date}`}. humanDate is "
+                 "dueLabel(iso)?.text || null, so a missing date returns null and the "
+                 "fallback interpolates the undefined value straight into the string.",
+        cause="The fallback was written for a date the humaniser cannot PARSE, but it "
+              "also catches a date that is simply ABSENT, and prints it.",
+        fix="Guard on the value, not on the humaniser: render the human date when there "
+            "is one, the raw date only when the value exists but will not parse, and "
+            "nothing at all when there is no date. Worth grepping for the same "
+            "`|| \`... ${value}\`` shape elsewhere -- this pattern fails the same way "
+            "wherever it appears.",
+        code="pages/mobile/ContactProfileMobile.jsx:215 (fallback), :24 (humanDate)",
+        found="2026-09-12",
+    ),
+    dict(
         id="TM-02", section="Team", screen="Owner section grid",
         viewport="Desktop", persona="All", severity="Nit", status="Open",
         area="Visual / layout",
@@ -1068,6 +1093,16 @@ COVERAGE = [
      "Header controls meet the 44px touch guideline", "Accessibility", "PASS",
      "Filter 44x44, Add contact 44x44, scope segment 166x44, bell 48x48", ""),
 
+    ("T-327", "CRM", "Contact profile - In progress", "Mobile 375x812", "All",
+     "A missing due date does not print raw values to the user", "Data quality",
+     "FAIL", "Rows read 'Due undefined - Rs 1' and 'Due undefined - Rs 6,00,000'",
+     "CR-08"),
+    ("T-328", "CRM", "Contact profile - In progress", "Mobile 375x812", "All",
+     "The list distinguishes workflows from deliveries and rows are actionable",
+     "Information design", "FAIL",
+     "Two entity types share identical styling; titles repeat as bare 'sale'; a "
+     "'Delivered' row sits under 'In progress'; no row is tappable", "ASK-18"),
+
     # --- personas ---
     ("T-070", "My Work", "Page load", "Desktop 1440x900", "Owner",
      "Owner sees all tasks, can create, and gets the All Tasks scope",
@@ -1472,6 +1507,33 @@ ASKS = [
              "resolved); the user record carries invited_at, accepted_at, phone, "
              "passwordless",
         dep="ASK-13, TM-02, TM-03", status="To do",
+    ),
+    dict(
+        id="ASK-18", section="CRM", item="Iterate the 'In progress' / task listing",
+        type="Change request", prio="Medium",
+        what="Rework the In progress list on the contact profile. FIVE THINGS. "
+             "(1) Fix the 'Due undefined' leak first -- that is CR-08 and it is visible "
+             "to customers. (2) The list silently mixes two different kinds of thing: "
+             "workflows, whose second line is a STAGE ('Delivered', 'In transit', "
+             "'Ordered'), and pending deliveries, whose second line is a DATE AND "
+             "AMOUNT. They share identical typography with nothing separating them, so "
+             "the reader has to infer which is which from the shape of the text. Split "
+             "them into labelled groups, or give each row a type marker. (3) Titles are "
+             "not doing their job -- three rows read simply 'sale', which identifies "
+             "nothing when there are three of them; fall back to something "
+             "distinguishing (the order, the amount, the date) rather than the bare "
+             "record type. (4) A row showing stage 'Delivered' sits under a heading "
+             "that says In progress, which contradicts itself -- either exclude "
+             "terminal stages or rename the group to something like 'Open with them'. "
+             "(5) Nothing in the list is tappable: these are plain list items, so a "
+             "user who sees an order they care about cannot open it. Make each row "
+             "navigate to its workflow or delivery.",
+        why="Founder review of the In progress card. Everything above is visible in one "
+            "screenshot of five rows, which is the tell -- a list this short should not "
+            "have this many ways to confuse. The underlying data is fine; it is the "
+            "presentation layer that needs the pass.",
+        code="pages/mobile/ContactProfileMobile.jsx:199-222 (the In progress accordion)",
+        dep="CR-08", status="To do",
     ),
 ]
 

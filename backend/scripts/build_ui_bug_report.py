@@ -465,6 +465,100 @@ FINDINGS = [
         found="2026-09-12",
     ),
     dict(
+        id="CR-04", section="CRM", screen="Add contact menu (mobile)",
+        viewport="Mobile", persona="Owner", severity="High", status="Open",
+        area="Responsive / layout",
+        tested="Tapped the + button in the CRM header on a 375px phone and measured "
+               "where the menu it opens actually lands.",
+        expected="The menu opens inside the screen with its options readable.",
+        actual="Four fifths of the menu is off-screen. It opens anchored to the + button "
+               "and runs off the right edge, so all the user sees is a 55px strip "
+               "carrying three anonymous icons -- every label is cut off. 'New Buyer', "
+               "'New Supplier' and 'Import from spreadsheet' are all invisible, so "
+               "adding a contact on a phone means guessing which icon to press.",
+        evidence="Viewport 375px; the menu spans x=315 to x=615, width 300px, "
+                 "overflowing the right edge by 240px -- 80 per cent clipped. Each item "
+                 "is 290px wide starting at x=320, leaving 55px visible.",
+        cause="The menu is right-anchored to its trigger with a fixed 300px width and no "
+              "collision handling, which is fine beside a desktop toolbar and wrong "
+              "beside a button that already sits at the right edge of a phone.",
+        fix="Give the popover collision-aware placement so it flips and clamps inside "
+            "the viewport, or on mobile present the same three choices as a bottom "
+            "sheet -- the pattern the app already uses elsewhere for phone menus.",
+        code="pages/CRM.js:405-480 (crm-add-menu popover)",
+        found="2026-09-12",
+    ),
+    dict(
+        id="CR-05", section="CRM", screen="Filter button (mobile)",
+        viewport="Mobile", persona="Owner", severity="High", status="Open",
+        area="Dead control",
+        tested="Tapped the Filter control in the CRM header on a 375px phone and "
+               "compared the page before and after.",
+        expected="It reveals the status and sort controls, which desktop shows inline.",
+        actual="Nothing happens at all. Not a single thing changes -- same text, same "
+               "element count, no dialog, no menu, no sheet. Meanwhile the status filter "
+               "and the sort control both exist in the DOM at zero size, so on a phone "
+               "there is no way to filter by status or change the sort order.",
+        evidence="Before and after the tap: body text 746 chars both times, 356 elements "
+                 "both times, 0 dialogs, 0 menus, 0 sheets. crm-status-filter and "
+                 "crm-sort are present but measure 0x0.",
+        cause="The control was given an icon and an aria-label but never wired to the "
+              "state that reveals the filter row.",
+        fix="Wire it to a sheet or popover containing the status filter and sort that "
+            "desktop shows inline. Both controls already exist and only need somewhere "
+            "to be shown.",
+        code="pages/CRM.js:739 (crm-mobile-filter); the controls it should reveal are "
+             "at :858 (crm-status-filter) and :869 (crm-sort)",
+        found="2026-09-12",
+    ),
+    dict(
+        id="CR-06", section="CRM", screen="Contact cards (mobile)",
+        viewport="Mobile", persona="All", severity="Medium", status="Open",
+        area="Responsive / layout",
+        tested="Measured the card grid and every text node inside it at 375px.",
+        expected="On a phone a contact list is readable, and a customer's name is not "
+                 "cut off.",
+        actual="The grid stays two columns on a 375px screen, giving each card 161px. "
+               "Eight text nodes truncate as a result, including the customer names "
+               "themselves -- 'Krishna Garments Pvt Ltd' needs 144px and gets 114, "
+               "'Anand Fabrics' needs 88 and gets 76. Supporting lines like '6 open "
+               "complaints' and 'Touched 29 days ago' wrap onto two lines, and the card "
+               "heights go ragged. Team's roster drops to a single column on the same "
+               "screen and reads cleanly, so the app already has the better answer.",
+        evidence="grid-template-columns resolves to '160.5px 160.5px' at a 375px "
+                 "viewport; 8 leaf text nodes have scrollWidth greater than clientWidth.",
+        cause="The grid keeps two columns below the breakpoint where the content stops "
+              "fitting.",
+        fix="Go single column under about 480px, matching Team. If two columns are "
+            "wanted on larger phones, drop the company line and the touched line to keep "
+            "the name whole.",
+        code="pages/CRM.js:940-1050 (contact card grid)",
+        found="2026-09-12",
+    ),
+    dict(
+        id="CR-07", section="CRM", screen="Contact profile - Log activity",
+        viewport="Desktop", persona="All", severity="Low", status="Open",
+        area="Design system",
+        tested="Measured the colour of every primary button on the contact profile page "
+               "and compared it with primaries elsewhere in the app.",
+        expected="One primary colour across the product.",
+        actual="The Log button on the contact profile is indigo, rgb(55,58,205), while "
+               "every other primary action in the app -- Add contact, Add member, "
+               "Complete, Approve -- is the near-black ink colour. Contrast is fine at "
+               "7.93:1; the problem is that it reads as a different product for a "
+               "moment. The contact profile also sits on a strong amber gradient while "
+               "the CRM list it came from is neutral grey, which compounds the shift.",
+        evidence="Log button background rgb(55,58,205) with white text; the app's "
+                 "primaries elsewhere measure rgb(12,12,13).",
+        cause="An indigo accent from a different design direction survived on this "
+              "screen when the rest of the app settled on ink.",
+        fix="Repaint Log with the standard primary, and check the contact profile's "
+            "background against the list it is reached from -- a detail page changing "
+            "ground colour makes the two feel like separate apps.",
+        code="pages/ContactProfile.js (Log button and page background)",
+        found="2026-09-12",
+    ),
+    dict(
         id="TM-02", section="Team", screen="Owner section grid",
         viewport="Desktop", persona="All", severity="Nit", status="Open",
         area="Visual / layout",
@@ -937,6 +1031,42 @@ COVERAGE = [
     ("T-316", "CRM", "Console + network", "Both", "Owner",
      "No application errors and no failing API calls", "Stability", "PASS",
      "Only the pre-login 401 on /auth/me", ""),
+
+    ("T-317", "CRM", "Scope chips", "Desktop 1280x800", "Owner",
+     "Switching to Suppliers reloads the list", "Functional", "PASS",
+     "Buyers 11 -> Suppliers 6, correct records, chip state flips", ""),
+    ("T-318", "CRM", "Sort control", "Desktop 1280x800", "Owner",
+     "Sorting by outstanding puts the biggest debtor first", "Functional", "PASS",
+     "Krishna Garments Rs 4,00,000 first, then Nashik Traders Rs 64,000", ""),
+    ("T-319", "CRM", "Add contact menu", "Desktop 1280x800", "Owner",
+     "The menu opens with its three options readable", "Functional", "PASS",
+     "aria-expanded flips, role=menu appears: New Buyer, New Supplier, Import", ""),
+    ("T-320", "CRM", "Add contact menu", "Mobile 375x812", "Owner",
+     "The menu opens inside the screen", "Responsive", "FAIL",
+     "80% clipped off the right edge; only a 55px strip of icons is visible", "CR-04"),
+    ("T-321", "CRM", "New customer dialog", "Desktop 1280x800", "Owner",
+     "The form is grouped and fits one screen", "Usability", "PASS",
+     "Sections Type / Identity / Contact / Classification, required marked, "
+     "More details disclosure, Cancel beside Add contact, no scrolling", ""),
+    ("T-322", "CRM", "Filter control", "Mobile 375x812", "Owner",
+     "Filter reveals the status and sort controls", "Functional", "FAIL",
+     "Completely inert; status filter and sort exist at 0x0 so neither is "
+     "reachable on a phone", "CR-05"),
+    ("T-323", "CRM", "Contact cards", "Mobile 375x812", "All",
+     "Customer names are readable on a phone", "Responsive", "FAIL",
+     "Two-column grid at 160.5px per card truncates 8 text nodes including names",
+     "CR-06"),
+    ("T-324", "CRM", "Contact profile", "Desktop 1280x800", "Owner",
+     "A contact card opens a profile with money and activity", "Functional", "PASS",
+     "Outstanding / Total Billed / Total Paid / Open Complaints tiles, AI scoring, "
+     "and inline activity logging", ""),
+    ("T-325", "CRM", "Contact profile", "Desktop 1280x800", "All",
+     "Primary actions use the app's primary colour", "Design system", "FAIL",
+     "Log button is indigo rgb(55,58,205); the app's primaries are rgb(12,12,13)",
+     "CR-07"),
+    ("T-326", "CRM", "Mobile header controls", "Mobile 375x812", "Owner",
+     "Header controls meet the 44px touch guideline", "Accessibility", "PASS",
+     "Filter 44x44, Add contact 44x44, scope segment 166x44, bell 48x48", ""),
 
     # --- personas ---
     ("T-070", "My Work", "Page load", "Desktop 1440x900", "Owner",

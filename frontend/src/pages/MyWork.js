@@ -2404,10 +2404,12 @@ export default function MyWork() {
                   {t("mywork.all_tasks")}
                 </button>
               </div>
-              <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
-                triggerClassName={`${MCIRCLE} kr-pop`}
-                triggerAriaLabel={t("mywork.new_task", "New Task")}
-                triggerChildren={<Plus size={16} weight="bold" aria-hidden="true" />} />
+              {/* ASK-3: the mobile [+] circle used to sit here on Row 2 of
+                  the sticky header. Moved out to a right-aligned bar just
+                  above the task list (below MOBILE HEADER, above the
+                  first card) so New Task reads as an action for the list
+                  rather than a fifth control in an already busy header
+                  row. */}
             </div>
           )}
 
@@ -2568,8 +2570,12 @@ export default function MyWork() {
               reader returns to My Work. */}
           {view === "mywork" && (
           <div className="order-2 flex flex-wrap items-center gap-2.5 lg:order-1" data-testid="mywork-actions">
-            <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
-              triggerClassName={`${SECTION_BTN} kr-lift bg-kr-ink text-white`} />
+            {/* ASK-3: the desktop New Task ink button used to sit here at
+                the head of mywork-actions. Moved out to the tab-strip
+                row below so it reads as an action for the list rather
+                than the largest, darkest button on the page header. The
+                scope + AI-priority cluster stays here -- those are
+                lenses ON the header row, not primary actions. */}
             {/* THE CLUSTER. My Tasks and All Tasks are joined by GEOMETRY —
                 touching, outer corners round, inner corners square, a
                 hairline on the seam. No track, no fill, no tint, per the
@@ -2694,25 +2700,45 @@ export default function MyWork() {
               borderless pills, sentence case, indigo tint on the active one.
               The bordered-uppercase version stacked a frame on every tab and
               the count badge carried a second frame inside it. */}
+          {/* ASK-3: mobile-only New Task row. Sits directly above the task
+              list, right-aligned, once the sticky header lets go. Absent
+              on desktop -- the tab strip below carries the desktop
+              instance on its right side. This row is naturally scoped
+              to `view === "mywork"` because it sits inside the mywork-
+              list branch of the view guard above. */}
+          <div className="mb-3 flex justify-end lg:hidden">
+            <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
+              triggerClassName="kr-lift inline-flex items-center gap-1.5 rounded-pill bg-kr-ink px-3.5 py-2 text-xs font-medium text-white" />
+          </div>
+
           {/* MW-06 fix: while the tasks query is loading, tabs render a
               dash instead of a hard 0. The card skeleton below is
               already loading-shaped; the tab strip should match. Only
               the "all" tab renders during load because every other
               tab's filter is `countFor(k) > 0` and would filter itself
-              out at 0. */}
-          <div className="mb-5 hidden flex-wrap gap-2 border-b border-nm-edge/40 pb-4 lg:flex" data-testid="work-tabs">
-            {WORK_TABS
-              .filter((tb) => tb.key === "all" || countFor(tb.key) > 0)
-              .map((tb) => (
-                <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`work-tab-${tb.key}`}
-                  aria-pressed={tab === tb.key}
-                  className={`flex h-8 items-center gap-1.5 rounded-pill border-[0.5px] pl-3 pr-2 text-xs transition-colors ${tab === tb.key ? "border-kr-ink font-medium text-foreground" : "border-kr-ink/55 text-foreground/65 hover:text-foreground/85"}`}>
-                  {tb.label}
-                  <span className="min-w-[17px] rounded-pill px-1 py-0.5 text-center font-mono text-[10px] leading-none tabular-nums opacity-65">
-                    {tasksQ.isLoading && !tasksQ.data ? "—" : countFor(tb.key)}
-                  </span>
-                </button>
-              ))}
+              out at 0.
+
+              ASK-3: this row is now flex-justify-between so New Task
+              sits at the right end of the tab strip on desktop -- one
+              place for filtering, one place for adding, on the same
+              rule. */}
+          <div className="mb-5 hidden items-end justify-between gap-4 border-b border-nm-edge/40 pb-4 lg:flex">
+            <div className="flex flex-wrap gap-2" data-testid="work-tabs">
+              {WORK_TABS
+                .filter((tb) => tb.key === "all" || countFor(tb.key) > 0)
+                .map((tb) => (
+                  <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`work-tab-${tb.key}`}
+                    aria-pressed={tab === tb.key}
+                    className={`flex h-8 items-center gap-1.5 rounded-pill border-[0.5px] pl-3 pr-2 text-xs transition-colors ${tab === tb.key ? "border-kr-ink font-medium text-foreground" : "border-kr-ink/55 text-foreground/65 hover:text-foreground/85"}`}>
+                    {tb.label}
+                    <span className="min-w-[17px] rounded-pill px-1 py-0.5 text-center font-mono text-[10px] leading-none tabular-nums opacity-65">
+                      {tasksQ.isLoading && !tasksQ.data ? "—" : countFor(tb.key)}
+                    </span>
+                  </button>
+                ))}
+            </div>
+            <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
+              triggerClassName={`${SECTION_BTN} kr-lift bg-kr-ink text-white`} />
           </div>
           {/* E2-14: skeleton on first load so the tab strip doesn't
               jump when tasks land. */}

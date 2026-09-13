@@ -14,6 +14,7 @@ import { toast } from "sonner";
 // New-task launcher.
 import { NewTaskDialog } from "./Tasks";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "../components/ui/sheet";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../components/ui/dropdown-menu";
 import Workflows from "./Workflows";
 // ASK-6 (2026-09-12): Leave no longer embedded here. Register lives on
@@ -1418,12 +1419,22 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
       </div>
       </div>
 
+      {/* ASK-15 (2026-09-13): task detail slides in from the right as a
+          Sheet, not an inline expand — kept as one drawer holding BOTH the
+          mobile and desktop bodies so the two `hidden`/`lg:hidden` gates
+          decide which one renders at each breakpoint. */}
+      <Sheet open={expanded} onOpenChange={(o) => { if (!o && expanded) setExpanded(); }}>
+        <SheetContent side="right"
+          className="w-full sm:max-w-2xl overflow-y-auto p-0"
+          data-testid={`task-drawer-${t.id}`}>
+          <SheetHeader className="sticky top-0 z-10 border-b border-nm-edge/40 bg-background px-5 py-4">
+            <SheetTitle className="font-display text-xl leading-tight">{t.title}</SheetTitle>
+          </SheetHeader>
       {/* KR-14.22 · MOBILE EXPANDED BODY — reference-driven layout for the
           task expanded view on phones. Uses the same handlers/state as the
           desktop body below; the desktop body is `hidden lg:block` from
-          here on. Rendered only when `expanded`. */}
-      {expanded && (
-      <div className="px-4 pb-5 space-y-5 border-t border-nm-edge/40 pt-4 lg:hidden" data-testid={`task-body-m-${t.id}`}>
+          here on. */}
+      <div className="px-4 pb-5 space-y-5 pt-4 lg:hidden" data-testid={`task-body-m-${t.id}`}>
         {/* KR-14.23 — a single accent status pill leads the body. The
             summary row above already shows the full meta row (status +
             due + context), so repeating it here made the pill look
@@ -1650,11 +1661,9 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
           </button>
         </div>
       </div>
-      )}
 
-      {/* EXPANDED BODY -- everything else lives here. Rendered only when open. */}
-      {expanded && (
-      <div id={`task-card-body-${t.id}`} className="hidden px-4 pb-4 space-y-3 border-t border-nm-edge/40 pt-3 lg:block">
+      {/* EXPANDED BODY (desktop) — same content as before, now inside the Sheet. */}
+      <div id={`task-card-body-${t.id}`} className="hidden px-5 pb-6 space-y-3 pt-4 lg:block">
       {t.description && <p className="text-sm text-muted-foreground">{t.description}</p>}
       {showAssignee && !isOp && (
         <p className="label-mono text-muted-foreground flex items-center gap-1" data-testid={`assignee-line-${t.id}`}>
@@ -1937,7 +1946,8 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
       {!awaitingApproval && <ExecutionPlan t={t} onChange={onChange} members={members} roleOptions={roleOptions} />}
       <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} openTrigger={trailOpenTrigger} />
       </div>
-      )}
+        </SheetContent>
+      </Sheet>
 
       {/* U7-05 dialog: reject / clarify reason (replaced window.prompt). */}
       <Dialog open={!!reasonDialog} onOpenChange={(o) => !o && !reasonBusy && setReasonDialog(null)}>
@@ -2050,18 +2060,16 @@ function FilterDropdown({ testid, label, value, options, counts, onSelect, loadi
   );
 }
 
-/* ASK-13 (2026-09-13): uniform 4-column grid at xl, 3 at lg, 2 at sm, 1 below.
-   An opened card takes the whole row via col-span-full, same rule as before. */
+/* ASK-13/15 (2026-09-13): uniform 4-column grid at xl, 3 at lg, 2 at sm, 1
+   below. Opened cards no longer expand inline — details live in a right-side
+   drawer (see the Sheet inside TaskCard), so every cell stays the same size. */
 function TaskGrid({ list, openId, setOpenId, cardProps }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" data-testid="mywork-grid">
       {list.map((t) => {
         const isOpen = openId === t.id;
         return (
-          <div
-            key={t.id}
-            className={isOpen ? "sm:col-span-2 lg:col-span-3 xl:col-span-4" : "min-h-[112px]"}
-          >
+          <div key={t.id} className="min-h-[112px]">
             <TaskCard
               t={t}
               open={isOpen}

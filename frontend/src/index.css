@@ -2541,7 +2541,10 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
 
     .kr-bento {
         position: relative;
-        border-radius: var(--radius-tile);
+        /* ASK-15 (2026-09-13): softer than a chip but tighter than a card.
+           Was --radius-tile (24px); 16px reads as a distinct rectangle rather
+           than a rounded blob on a wall of tiles. */
+        border-radius: var(--radius-xl);
         background: linear-gradient(152deg,
             hsl(214 44% 99% / .90),
             hsl(214 26% 95% / .76));

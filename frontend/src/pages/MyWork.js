@@ -2327,7 +2327,11 @@ export default function MyWork() {
   const activeTabLabel = (WORK_TABS.find((tb) => tb.key === tab) || WORK_TABS[0]).label;
 
   return (
-    <div>
+    /* ASK-20 (2026-09-13): on desktop the page owns its own height and only
+       the CARD GRID scrolls. Header and filter row are plain block children
+       that never move, so they need no sticky offset and no backdrop blur —
+       nothing passes behind them. */
+    <div className="lg:h-full lg:min-h-0 lg:flex lg:flex-col lg:overflow-hidden">
       {/* ─── MOBILE HEADER (below lg) ───────────────────────────────────── */}
       {/* KM-48 — gap-2 and mb-2: one 8px rhythm for every gap in this header,
           where it used to be 10px between rows and then whatever the body's
@@ -2518,7 +2522,7 @@ export default function MyWork() {
       </StickyHeader>
 
       {/* ─── DESKTOP HEADER (lg and up) ─────────────────────────────────── */}
-      <header className="mb-7 hidden gap-4 lg:flex lg:flex-row lg:items-end lg:justify-between lg:sticky lg:top-0 lg:z-30 lg:-mx-8 lg:-mt-8 lg:px-8 lg:pt-8 lg:pb-4 lg:backdrop-blur-xl">
+      <header className="mb-7 hidden shrink-0 gap-4 lg:flex lg:flex-row lg:items-end lg:justify-between">
         <div>
           {/* MW-14 fix: eyebrow + title track the active view instead of
               staying pinned to "MY WORK / Your day, simplified" while
@@ -2618,12 +2622,12 @@ export default function MyWork() {
         // data. Any /my-work?view=workflows&wf_tab=board deep link
         // now silently lands on the pipelines view -- the wf_tab
         // param is intentionally ignored below.
-        <div data-testid="workflows-hub">
+        <div data-testid="workflows-hub" className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
           <Workflows embedded />
         </div>
       ) : (
-      <div data-testid="mywork-list">
-        <div>
+      <div data-testid="mywork-list" className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+        <div className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
           {/* U7-05.9 (2026-08-17): only render tabs with something in them.
               Founder ask: 'why are we showing all the chips here, only
               open we can show that right'. Rule: 'All' always visible
@@ -2666,7 +2670,7 @@ export default function MyWork() {
               through the AI-priority view switch), and Status (new, was mobile-only
               inside the AI-priority row). All three read the same state the
               filters already used; New Task keeps its right-end position. */}
-          <div className="mb-5 hidden items-end justify-between gap-4 border-b border-nm-edge/40 pb-4 lg:flex lg:sticky lg:top-[104px] lg:z-20 lg:-mx-8 lg:px-8 lg:pt-3 lg:backdrop-blur-xl">
+          <div className="mb-5 hidden shrink-0 items-end justify-between gap-4 border-b border-nm-edge/40 pb-4 lg:flex">
             <div className="flex flex-wrap items-center gap-2.5" data-testid="work-filters">
               <FilterDropdown
                 testid="work-filter-department"
@@ -2689,6 +2693,11 @@ export default function MyWork() {
               onOpenChange={(o) => { if (o) setOpenId(null); }}
               triggerClassName={`${SECTION_BTN} kr-lift bg-kr-ink text-white`} />
           </div>
+          {/* ASK-20 (2026-09-13): THE ONLY SCROLLER on desktop. Everything
+              above this — page header, lens slider, filter row — is a fixed
+              block child of the flex column, so it cannot move at all and
+              needs no sticky offset. */}
+          <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
           {/* E2-14: skeleton on first load so the tab strip doesn't
               jump when tasks land. */}
           {tasksQ.isLoading && !tasksQ.data && (
@@ -2758,6 +2767,7 @@ export default function MyWork() {
               ? <TaskPriorityColumns {...shared} band={band} />
               : <TaskGrid {...shared} />;
           })()}
+          </div>
 
           {/* U7-05.3 dialog: bulk-reassign target picker. */}
           <Dialog open={bulkReassignOpen} onOpenChange={(o) => !o && !bulkBusy && setBulkReassignOpen(false)}>

@@ -699,7 +699,7 @@ export default function Layout({ children }) {
           className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-dock app-canvas lg:overflow-x-clip lg:pb-8"
         >
           <AnnouncementBanner />
-          <div className="p-4 lg:p-8 px-gutter-safe">{children}</div>
+          <div className="p-4 lg:p-8 px-gutter-safe lg:h-full lg:min-h-0 lg:flex lg:flex-col">{children}</div>
         </main>
       </div>
 

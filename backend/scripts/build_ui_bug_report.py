@@ -3358,6 +3358,42 @@ ASKS = [
              "pages/OperatingScore.js (cards, captions, delta chip)",
         dep="OP-01, OP-03, OP-04, OP-05, OP-06, OP-07", status="To do",
     ),
+    dict(
+        id='ASK-20',
+        section='Global',
+        item='One load-error pattern for every page (root cause 1 of 3)',
+        type='Change request',
+        prio='High',
+        what="Build ONE shared <QueryError> (message + Retry) and use it wherever a query's data drives the page. It must branch on the failure: 403 -> 'You don't have access to this' (with who to ask), 404 -> 'This no longer exists' (with a way back), network / 5xx -> 'Couldn't load - Retry'. While loading or failed, counts show '-', never 0. Rule for code review: a page may not render its empty state unless the query SUCCEEDED with zero rows.",
+        why="The audit found the same fault on every major page: the page reads only data / isLoading, so a failed request falls through to the empty state or an endless skeleton. An owner on a weak connection is told 'Nothing waiting on you' (DD-02), 'No expenses yet' (FN-09), 'You're all caught up' (CL-01), or watches a skeleton that never ends (OP-10, CR-10). A missing decision traps the user with no way out (DD-01). Staff refused by the ledger see fake empty books (FN-07, DD-03). Fixing it once, in one component, closes nine findings.",
+        code='pages/Desk.js:284-292, pages/OperatingScore.js:85-92, pages/CRM.js:524-527, pages/Ledger.js:1522-1527, pages/ContactProfile.js:151-160, components/DecisionDialog.js:188-218, pages/Notifications.js, pages/People.js, pages/Journal.js, pages/Calendar.js; pattern to copy: pages/WorkCoach.js:36-57',
+        dep='OP-10, CR-10, CR-11, FN-07, FN-09, DD-01, DD-02, DD-03, CL-01',
+        status='To do',
+    ),
+    dict(
+        id='ASK-21',
+        section='Global',
+        item='One permission map for route, nav and API (root cause 2 of 3)',
+        type='Change request',
+        prio='High',
+        what="Define each surface's access rule ONCE - e.g. finance: needs 'finance' or 'ledger'; crm: needs 'people'; ops: everyone (self view); team: everyone (read-only without team_manage) - and have App.js routes, Layout.js nav pills, AllAppsPanel.jsx tiles, the Desk's KPI tiles and the backend require_* guards all read from it. Add a test that walks every role x route and fails if the page opens while its data 403s, or if a nav/tile/link points at a page the role is refused. Decide separately whether data_input-only users get a capture-only Finance.",
+        why="The rules have drifted apart in five places. The Finance route admits data_input but its API needs ledger/finance, so Sales and Production open an empty Finance (FN-07). /crm/outstanding checks nothing and serves per-customer money totals to any signed-in user (CR-12). The Desk links non-CRM roles to Access Denied (CR-13) and fetches ledger data it is refused (DD-03). The mobile More panel hides Ops, Team and Settings that the routes allow (GL-02). Every colleague can read every other colleague's access matrix (TM-05). Each fix done alone will drift again.",
+        code='App.js:187-254 (Protected perms), components/Layout.js:58-84 (nav perms), components/mobile/AllAppsPanel.jsx:54-128 (tile filters), pages/Desk.js:563-661, lib/perms.js, routers/ledger.py:619-625, routers/crm.py:37-38, routers/finance.py',
+        dep='FN-07, CR-12, CR-13, DD-03, GL-02, TM-05; ASK-13, ASK-15',
+        status='To do',
+    ),
+    dict(
+        id='ASK-22',
+        section='Global',
+        item='Phone parity: no desktop-only actions (root cause 3 of 3)',
+        type='Change request',
+        prio='High',
+        what="Adopt a rule: any action available on desktop must have a reachable, tappable (24px+) equivalent below lg, or be deliberately marked desktop-only in the code. Audit every 'hidden lg:*' / 'lg:block' control against it. Immediate cases: Add income / expense / asset / inventory on Finance (FN-08), the CRM add menu and filter (CR-04, CR-05), Score with AI on the contact profile (CR-09), Company / You on the Desk (DD-04), Ops / Team / Settings for staff (GL-02), and a 44px bulk-select checkbox that does not open the task on a near-miss (MW-22).",
+        why="DecisionOS is used from the owner's phone first, yet six findings are actions that exist on desktop and vanish, clip or shrink on a phone - most often because a control was wrapped in 'hidden lg:block' with no mobile placement. A cash expense with no bill cannot be recorded from a phone at all (FN-08).",
+        code='pages/Ledger.js:1422-1437, :1630; pages/CRM.js (mobile add + filter); pages/mobile/ContactProfileMobile.jsx; pages/Desk.js:426, :470; components/mobile/AllAppsPanel.jsx; pages/MyWork.js (bulk-select checkbox)',
+        dep='FN-08, CR-04, CR-05, CR-09, DD-04, GL-02, MW-22',
+        status='To do',
+    ),
 ]
 
 # ---------------------------------------------------------------------------
@@ -3383,6 +3419,12 @@ NOTES = [
            "close five Team items."),
     ("Suggest", "Use this workbook as the one numbering source, or prefix the other "
                 "list (e.g. FA-13) so the two cannot collide."),
+    ("Update", "Still happening. Later commits label ASK-18 (Workflows well), ASK-19 (card "
+               "summary), ASK-20 (My Work scroll) and ASK-21 (New Task dialog) from the other "
+               "list. In this workbook ASK-18 is the CRM In-progress list, ASK-19 the operating "
+               "score KPIs, and ASK-20 / ASK-21 / ASK-22 are the three root causes from the "
+               "full audit (load errors, permission map, phone parity). Match commits to this "
+               "sheet by content, not by number."),
     ("", ""),
     ("HEAD", "Leave approvals: who approves, and is the Settings screen needed?"),
     ("META", "Raised 2026-09-12 by Yogesh - Owner. Status: DEFERRED, Yogesh deciding. "

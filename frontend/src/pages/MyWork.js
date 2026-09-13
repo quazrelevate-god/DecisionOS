@@ -2518,7 +2518,7 @@ export default function MyWork() {
       </StickyHeader>
 
       {/* ─── DESKTOP HEADER (lg and up) ─────────────────────────────────── */}
-      <header className="mb-7 hidden gap-4 lg:flex lg:flex-row lg:items-end lg:justify-between">
+      <header className="mb-7 hidden gap-4 lg:flex lg:flex-row lg:items-end lg:justify-between lg:sticky lg:top-0 lg:z-30 lg:-mx-8 lg:-mt-8 lg:px-8 lg:pt-8 lg:pb-4 lg:bg-nm/95 lg:backdrop-blur">
         <div>
           {/* MW-14 fix: eyebrow + title track the active view instead of
               staying pinned to "MY WORK / Your day, simplified" while
@@ -2666,7 +2666,7 @@ export default function MyWork() {
               through the AI-priority view switch), and Status (new, was mobile-only
               inside the AI-priority row). All three read the same state the
               filters already used; New Task keeps its right-end position. */}
-          <div className="mb-5 hidden items-end justify-between gap-4 border-b border-nm-edge/40 pb-4 lg:flex">
+          <div className="mb-5 hidden items-end justify-between gap-4 border-b border-nm-edge/40 pb-4 lg:flex lg:sticky lg:top-[104px] lg:z-20 lg:-mx-8 lg:px-8 lg:pt-3 lg:bg-nm/95 lg:backdrop-blur">
             <div className="flex flex-wrap items-center gap-2.5" data-testid="work-filters">
               <FilterDropdown
                 testid="work-filter-department"

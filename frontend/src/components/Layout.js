@@ -455,7 +455,7 @@ export default function Layout({ children }) {
      with the theme instead of snapping — see .app-sky::before. */
   return (
     <HeaderSlotContext.Provider value={isMobileShell ? headerSlot : null}>
-    <div className="app-sky flex h-[100dvh] flex-col overflow-hidden bg-nm text-foreground lg:h-auto lg:min-h-screen lg:overflow-visible">
+    <div className="app-sky flex h-[100dvh] flex-col overflow-hidden bg-nm text-foreground lg:h-screen">
       {/* The page-artwork layer. Empty and invisible until a room sets
           --sky-art (see "PAGE ARTWORK" in index.css); position:fixed keeps it
           out of this flex column. It is a real element rather than a third
@@ -696,7 +696,7 @@ export default function Layout({ children }) {
             const y = e.currentTarget.scrollTop;
             setBrandGone((was) => (was ? y > 2 : y > 4));
           }}
-          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-dock app-canvas lg:overflow-x-clip lg:overflow-y-visible lg:pb-8"
+          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-dock app-canvas lg:overflow-x-clip lg:pb-8"
         >
           <AnnouncementBanner />
           <div className="p-4 lg:p-8 px-gutter-safe">{children}</div>

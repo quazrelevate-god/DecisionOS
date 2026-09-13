@@ -8,8 +8,15 @@ deleted -- and does each persona see the right thing?
 This drives all of that through the browser as a real user, for:
     Owner / Sales / Production / Finance   (the four demo logins)
 
-WRITES TO THE DEV DB. Every task it makes is titled "[UXTEST] ..." and the
+WRITES TO THE DATABASE. Every task it makes is titled "[UXTEST] ..." and the
 cleanup phase deletes them, including on failure.
+
+2026-09-14: the local MONGO_URL is the PRODUCTION database, so this script now
+refuses to run unless UX_ALLOW_WRITES=1 is set, which you should only do when
+the backend points at a separate test database. The same journeys are covered
+with real saves, safely, by backend/tests/test_task_management_e2e.py.
+Selectors follow the current My Work (glass dropdowns, the progress slider, the
+Status filter instead of the old category tabs, ?view= links).
 
     .venv/Scripts/python.exe scripts/ux_lifecycle_mywork.py
     .venv/Scripts/python.exe scripts/ux_lifecycle_mywork.py --keep   # skip cleanup
@@ -25,7 +32,35 @@ from playwright.sync_api import sync_playwright
 
 from ux_login import demo_login
 
+import os  # noqa: E402
+
+if os.environ.get("UX_ALLOW_WRITES") != "1":
+    sys.exit("REFUSING TO RUN: this audit creates and deletes real tasks, and the local MONGO_URL points at "
+             "the production database. Point the backend at a separate test database and set UX_ALLOW_WRITES=1. "
+             "Real-save coverage without that risk: tests/test_task_management_e2e.py.")
+
 REPO = Path(__file__).resolve().parent.parent.parent
+
+STATUS_LABELS = {"todo": "Not Started", "in_progress": "In Progress", "waiting": "Waiting",
+                 "review": "Under Review", "done": "Completed", "cancelled": "Cancelled",
+                 "blocked": "Pending Approval"}
+
+
+def glass_options(page, testid):
+    """Open a GlassSelect and read its options (value from `<testid>-option-<value>`)."""
+    page.locator(f'[data-testid="{testid}"]:visible').first.click()
+    page.locator('[role="option"]').first.wait_for(state="visible", timeout=5000)
+    opts = page.evaluate("""(tid) => [...document.querySelectorAll('[role="option"]')].map(o => ({
+        v: (o.getAttribute('data-testid') || '').replace(tid + '-option-', ''), t: o.textContent.trim() }))""", testid)
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(300)
+    return opts
+
+
+def glass_choose(page, testid, value):
+    page.locator(f'[data-testid="{testid}"]:visible').first.click()
+    page.locator(f'[data-testid="{testid}-option-{value or "none"}"]').click()
+    page.wait_for_timeout(300)
 BASE = "http://localhost:3000"
 OUT = REPO / ".audit-artifacts" / "ux" / "my-work" / "lifecycle"
 TAG = "[UXTEST]"
@@ -115,28 +150,32 @@ def create_task(page, title, *, assign_to="owner", priority="high",
     dlg.fill(title)
     page.locator(f'[data-testid="task-description-input"]:visible').fill(
         "Created by the automated UI lifecycle audit. Safe to delete.")
-    page.locator(f'[data-testid="task-priority-select"]:visible').select_option(priority)
+    page.locator(f'[data-testid="task-priority-{priority}"]:visible').click()
     if due_days is not None:
+        page.locator('[data-testid="task-due-pick"]:visible').first.click()
         page.locator(f'[data-testid="task-due-date"]:visible').fill(
             (date.today() + timedelta(days=due_days)).isoformat())
 
     # Assign by ROLE, not by list position: a task assigned to someone else is
     # correctly absent from the creator's "My Tasks", which would read as a
-    # failed create rather than a working scope filter.
-    opts = page.evaluate("""() => [...document.querySelectorAll(
-        '[data-testid="task-member-select"] option')].map(o => ({v:o.value, t:o.textContent.trim()}))""")
-    real = [o for o in opts if o["v"]]
+    # failed create rather than a working scope filter. People are "u:<id>"
+    # options labelled "Name · Role" (the signed-in person reads "Me · Name").
+    opts = glass_options(page, "task-assign-select")
+    real = [o for o in opts if o["v"].startswith("u:")]
     assignee = None
     if real:
-        match = [o for o in real if f"· {assign_to}" in o["t"].lower()]
+        if assign_to == "owner":
+            match = [o for o in real if o["t"].startswith("Me ·")]
+        else:
+            match = [o for o in real if f"· {assign_to}" in o["t"].lower()]
         assignee = match[0] if match else real[0]
-        page.locator(f'[data-testid="task-member-select"]:visible').select_option(assignee["v"])
+        glass_choose(page, "task-assign-select", assignee["v"])
 
     if approval:
-        page.locator(f'[data-testid="task-approval-required"]:visible').check()
+        page.locator('[data-testid="task-approval-start"]:visible').click()
         page.wait_for_timeout(400)
     if evidence:
-        page.locator(f'[data-testid="task-evidence-required"]:visible').check()
+        page.locator(f'[data-testid="task-evidence-required"]:visible').click()
 
     page.locator(f'[data-testid="task-create-submit"]:visible').click()
     # A successful create closes the dialog itself; give the close animation
@@ -181,11 +220,16 @@ def phase_create(page):
 # Phase 2 -- move through the states
 # ---------------------------------------------------------------------------
 def status_of(page, cid):
-    return page.evaluate("""(id) => {
+    """The status key, read from the drawer's status dropdown label or the card chip."""
+    txt = page.evaluate("""(id) => {
         const s = document.querySelector(`[data-testid="status-select-${id}"]`);
-        if (s) return s.value;
+        if (s) return s.innerText.trim();
         const chip = document.querySelector(`[data-testid="status-chip-${id}"]`);
         return chip ? chip.innerText.trim() : null; }""", cid)
+    for key, label in STATUS_LABELS.items():
+        if txt and label in txt:
+            return key
+    return txt
 
 
 def phase_transitions(page, cid):
@@ -200,7 +244,7 @@ def phase_transitions(page, cid):
 
     for state in ("in_progress", "waiting", "review", "todo"):
         try:
-            sel.select_option(state)
+            glass_choose(page, f"status-select-{cid}", state)
             page.wait_for_timeout(1400)
             settle(page)
             now = status_of(page, cid)
@@ -208,15 +252,16 @@ def phase_transitions(page, cid):
         except Exception as e:
             rec(ph, f"status -> {state}", False, str(e).split("\n")[0][:90])
 
-    # progress
+    # progress: a range slider now (saves on release / key up); the % shows beside it
     pr = page.locator(f'[data-testid="progress-select-{cid}"]:visible')
     if pr.count():
         try:
-            pr.select_option("50")
+            pr.first.fill("50")
+            pr.first.dispatch_event("keyup")
             page.wait_for_timeout(1300)
             val = page.evaluate("""(id) => document.querySelector(
-                `[data-testid="progress-select-${id}"]`)?.value""", cid)
-            rec(ph, "progress -> 50%", val == "50", f"reads back {val!r}")
+                `[data-testid="progress-bar-${id}"]`)?.innerText.trim()""", cid)
+            rec(ph, "progress -> 50%", val == "50%", f"reads back {val!r}")
         except Exception as e:
             rec(ph, "progress -> 50%", False, str(e).split("\n")[0][:90])
     else:
@@ -268,13 +313,13 @@ def phase_complete_reopen(page, cid):
     gone = find_card_id(page, TAG) != cid or status_of(page, cid) in ("done", "Completed")
     rec(ph, "Complete moves the task out of the active list", gone)
 
-    tab = page.locator(f'[data-testid="work-tab-completed"]:visible')
-    if tab.count():
-        tab.click()
-        page.wait_for_timeout(1400)
-        settle(page)
+    # Completed is a Status filter now (ASK-24), not a tab.
+    page.goto(f"{BASE}/my-work?view=mine&status=completed", wait_until="domcontentloaded")
+    page.wait_for_timeout(1800)
+    settle(page)
+    if True:
         found = has(page, f"mywork-task-{cid}")
-        rec(ph, "completed task appears under the Completed tab", found)
+        rec(ph, "completed task appears under Status: Completed", found)
         shot(page, "04-completed")
         if found:
             L(page, f"task-summary-{cid}").click()
@@ -430,7 +475,7 @@ def phase_handoff(browser):
         prod.wait_for_timeout(900)
         sel = prod.locator(f'[data-testid="status-select-{got}"]:visible')
         if sel.count():
-            sel.select_option("in_progress")
+            glass_choose(prod, f"status-select-{got}", "in_progress")
             prod.wait_for_timeout(1500)
             settle(prod)
             rec(ph, "the assignee can accept / start the task",
@@ -459,11 +504,11 @@ def phase_personas(browser):
             can_create = has(p, f"new-task-button")
             restricted = has(p, f"access-restricted-banner")
             scope_all = has(p, f"work-scope-all")
-            tabs = p.evaluate("""() => [...document.querySelectorAll('[data-testid^="work-tab-"]')]
-                .map(e => e.getAttribute('data-testid').replace('work-tab-',''))""")
+            filters = p.evaluate("""() => ['department', 'person', 'status']
+                .map(n => document.querySelector(`[data-testid="work-filter-${n}"]`)?.innerText.replace(/\\n/g, ' ') || null)""")
             rec(ph, f"{role}: My Work loads", cards >= 0 and not errs,
                 f"{cards} tasks, create={can_create}, all-scope={scope_all}, "
-                f"tabs={tabs}, restricted={restricted}")
+                f"filters={filters}, restricted={restricted}")
             shot(p, f"10-persona-{role}")
             if errs:
                 rec(ph, f"{role}: no page errors", False, errs[0])
@@ -521,19 +566,16 @@ def cleanup(browser):
     p = ctx.new_page()
     login(p, "owner")
     removed, left = 0, 0
+    def open_list(tab):
+        # All Tasks (hand-off tasks belong to other people), then Status:
+        # Completed for finished ones -- both are links now (?view=, ?status=).
+        p.goto(f"{BASE}/my-work?view=all" + ("&status=completed" if tab == "completed" else ""),
+               wait_until="domcontentloaded")
+        p.wait_for_timeout(1800)
+        settle(p)
+
     for tab in ("all", "completed"):
-        go_work(p)
-        # widen to All Tasks first -- hand-off tasks are assigned to other
-        # people and never appear in the owner's own scope.
-        if has(p, "work-scope-all"):
-            L(p, "work-scope-all").click()
-            p.wait_for_timeout(1800)
-            settle(p)
-        tb = p.locator(f'[data-testid="work-tab-{tab}"]:visible')
-        if tb.count():
-            tb.click()
-            p.wait_for_timeout(1200)
-            settle(p)
+        open_list(tab)
         for _ in range(12):
             cid = find_card_id(p, TAG)
             if not cid:
@@ -551,16 +593,7 @@ def cleanup(browser):
                 p.wait_for_timeout(1800)
                 settle(p)
                 removed += 1
-                go_work(p)
-                if has(p, "work-scope-all"):
-                    L(p, "work-scope-all").click()
-                    p.wait_for_timeout(1800)
-                    settle(p)
-                tb2 = p.locator(f'[data-testid="work-tab-{tab}"]:visible')
-                if tb2.count():
-                    tb2.click()
-                    p.wait_for_timeout(1000)
-                    settle(p)
+                open_list(tab)
             except Exception:
                 left += 1
                 break

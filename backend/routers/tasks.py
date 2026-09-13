@@ -173,6 +173,19 @@ def _can_approve_task(user: dict, t: dict) -> bool:
     return "approvals" in user_perms(user)
 
 
+async def _member_can_approve(tenant_id: str, member: dict) -> bool:
+    """ASK-28 TK-05 / plan 4.3 — may this member approve tasks? The owner, or
+    anyone whose effective permissions (own list, else the company's role
+    settings, else the role default — the same order as get_current_user)
+    include `approvals`."""
+    if member.get("role") == "owner":
+        return True
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "roles": 1})
+    role_map = {r["key"]: list(r["permissions"]) for r in ((tenant or {}).get("roles") or [])
+                if r.get("key") and isinstance(r.get("permissions"), list) and r.get("permissions")}
+    return "approvals" in user_perms({**member, "_role_perms_map": role_map})
+
+
 async def _team_ids(user: dict) -> list:
     """ASK-28 TK-03 — my direct reports: people whose Reporting Manager is me."""
     rows = await db.users.find({"tenant_id": user["tenant_id"], "reporting_manager_id": user["id"]},
@@ -421,7 +434,18 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
         role = (lead or {}).get("role")
     task_type = (inp.task_type or "").strip() or None
     support_id = inp.support_id if inp.support_id and await db.users.find_one({"id": inp.support_id, "tenant_id": user["tenant_id"]}, {"_id": 0}) else None
-    approver_id = inp.approver_id if inp.approver_id and await db.users.find_one({"id": inp.approver_id, "tenant_id": user["tenant_id"]}, {"_id": 0}) else None
+    # Plan 4.3: a named approver must be able to approve. Someone outside the
+    # company is still dropped (anyone with approval access approves instead).
+    approver_id = None
+    if inp.approver_id:
+        approver = await db.users.find_one({"id": inp.approver_id, "tenant_id": user["tenant_id"]},
+                                           {"_id": 0, "id": 1, "name": 1, "role": 1, "permissions": 1})
+        if approver:
+            if not await _member_can_approve(user["tenant_id"], approver):
+                raise HTTPException(status_code=400, detail=(
+                    f"{approver.get('name') or 'That person'} can't approve tasks. Pick someone with approval "
+                    "access, or leave it as anyone with approval access."))
+            approver_id = approver["id"]
     progress = max(0, min(100, inp.progress)) if isinstance(inp.progress, int) else 0
     needs_approval = bool(inp.approval_required)
     # ASK-28 TK-05: approval before work starts locks the task now; approval

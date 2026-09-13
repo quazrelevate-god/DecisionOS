@@ -225,10 +225,12 @@ with sync_playwright() as pw:
     p.route("**/api/**", block)
     p.goto(BASE + "/my-work?view=asked")
     settle(p)
-    mine_pressed = p.locator('[data-testid="work-mobile-mine"]').get_attribute("aria-pressed")
+    # Phone pass: one view pill names the view on screen (was a My Tasks | All Tasks pair).
+    pill = p.locator('[data-testid="work-mobile-view"]')
+    pill_txt = pill.inner_text().replace("\n", " ") if pill.count() else None
     overflow = p.evaluate("() => document.documentElement.scrollWidth - innerWidth")
-    rec("phone-link-lands", cards(p) == len(open_rows) and mine_pressed != "true" and overflow <= 0,
-        f"cards {cards(p)} / {len(open_rows)}; My Tasks pressed={mine_pressed}; overflow {overflow}")
+    rec("phone-link-lands", cards(p) == len(open_rows) and bool(pill_txt) and "Asked by me" in pill_txt and overflow <= 0,
+        f"cards {cards(p)} / {len(open_rows)}; view pill '{pill_txt}'; overflow {overflow}")
     rec("no-page-errors-phone", not errors, errors[:3] or "none")
     p.unroute_all(behavior="ignoreErrors")
     ctx.close()

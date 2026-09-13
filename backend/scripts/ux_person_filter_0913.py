@@ -138,6 +138,13 @@ def menu_items(p, name):
     return items
 
 
+def phone_view(p, key):
+    """Phone pass: pick a view from the view pill's sheet (was a My/All button pair)."""
+    p.locator('[data-testid="work-mobile-view"]').click()
+    p.locator(f'[data-testid="work-mobile-view-{key}"]').click()
+    p.wait_for_timeout(500)
+
+
 def ensure_ai_off(p, testid):
     b = p.locator(f'[data-testid="{testid}"]')
     if b.count() and b.first.get_attribute("aria-pressed") == "true":
@@ -332,7 +339,7 @@ def owner_phone(browser, rows, pid, pname):
     p.goto(BASE + "/my-work")
     settle(p)
     ensure_ai_off(p, "work-mobile-priority")
-    p.locator('[data-testid="work-mobile-all"]').click()
+    phone_view(p, "all")
     settle(p)
     open_total = expect(rows)
 
@@ -387,7 +394,7 @@ def owner_phone(browser, rows, pid, pname):
     rec("phone-status-visible-without-ai", VP, cap.count() == 1 and "Overdue" in cap.inner_text(),
         f"caption {cap.inner_text() if cap.count() else None}")
 
-    p.locator('[data-testid="work-mobile-mine"]').click()
+    phone_view(p, "mine")
     settle(p, 1200)
     p.locator('[data-testid="work-mobile-category"]').click()
     p.wait_for_timeout(700)

@@ -2817,6 +2817,7 @@ export default function MyWork() {
   const personFilter = (isOwner && scope === "all") || scope === "asked" || scope === "team" ? (params.get("person") || "") : "";
   const setPersonFilter = (v) => setFilterParams({ person: v });
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [viewSheetOpen, setViewSheetOpen] = useState(false);
   /* Priority band picker for the AI-priority kanban view. Owned by the page so
      the mobile band bar can sit in the fixed header while the columns render
      in the body; desktop shows all three columns and ignores it. */
@@ -3099,6 +3100,20 @@ export default function MyWork() {
     return "mine";
   })();
   const inSegmentView = mobileView === "mine" || mobileView === "all" || mobileView === "asked" || mobileView === "team";
+  // ASK-28 phone pass — the views this person has, for the phone's view
+  // picker: the same set the desktop switcher offers (Workflows is a page of
+  // its own on the phone, reached from More).
+  const mobileViewOptions = [
+    { key: "mine", label: t("mywork.my_tasks"), pick: () => goView("mine") },
+    { key: "asked", label: t("mywork.asked_by_me", "Asked by me"), pick: () => goView("asked") },
+    ...(hasReports ? [{ key: "team", label: t("mywork.my_team", "My team"), pick: () => goView("team") }] : []),
+    ...(isOwner ? [{ key: "all", label: t("mywork.all_tasks"), pick: () => goView("all") }] : []),
+    ...(showApprovalsView
+      ? [{ key: "approvals", label: t("mywork.view_approvals"), count: waitingOnMe, pick: () => goView(null, "approvals") }]
+      : []),
+  ];
+  const mobileViewLabel = mobileViewOptions.find((o) => o.key === mobileView)?.label
+    || (mobileView === "workflows" ? t("mywork.view_workflows") : t("mywork.my_tasks"));
   // The filter dropdown lists only tabs that have items — same rule the old
   // chip strip used. "Completed" appears when any completed task exists.
   /* KM-49 — EVERY category, not just the ones with work in them. The `> 0`
@@ -3240,30 +3255,25 @@ export default function MyWork() {
               same list, so it belongs in the same group, and being round is
               what stops it reading as a third tab. Same anatomy the desktop
               cluster uses for AI priority. */}
-          {isOwner && (
-            <div className="flex shrink-0 items-center gap-1.5"
-                 role="group" aria-label={t("mywork.title", "My Work")} data-testid="work-mobile-segment">
-              <div className="flex items-center">
-                <button type="button" onClick={() => goView("mine")}
-                  aria-pressed={mobileView === "mine"} data-testid="work-mobile-mine"
-                  className={`${MSEG} rounded-l-pill ${mobileView === "mine" ? MSEG_ON : MSEG_OFF}`}>
-                  {t("mywork.my_tasks")}
-                </button>
-                <span aria-hidden="true" className="h-5 w-px shrink-0 bg-kr-ink/15" />
-                <button type="button" onClick={() => goView("all")}
-                  aria-pressed={mobileView === "all"} data-testid="work-mobile-all"
-                  className={`${MSEG} rounded-r-pill ${mobileView === "all" ? MSEG_ON : MSEG_OFF}`}>
-                  {t("mywork.all_tasks")}
-                </button>
-              </div>
-              {/* ASK-3: the mobile [+] circle used to sit here on Row 2 of
-                  the sticky header. Moved out to a right-aligned bar just
-                  above the task list (below MOBILE HEADER, above the
-                  first card) so New Task reads as an action for the list
-                  rather than a fifth control in an already busy header
-                  row. */}
-            </div>
-          )}
+          {/* ASK-28 phone pass — ONE view pill for everyone, naming the view
+              on screen and opening a sheet of the views this person has. The
+              owner-only My Tasks | All Tasks pair could not hold five views in
+              a 390px row, and everyone else had no way to reach Asked by me,
+              My team or Approvals on a phone at all. The count is the task
+              approvals waiting on you, as on the desktop Approvals button.
+              (ASK-3: the [+] New Task circle lives above the list, not here.) */}
+          <button type="button" onClick={() => setViewSheetOpen(true)} data-testid="work-mobile-view"
+            aria-haspopup="dialog" aria-label={`View: ${mobileViewLabel}`}
+            className="kr-pop flex h-11 min-w-0 shrink items-center gap-1.5 rounded-pill pl-4 pr-3 text-[13px] font-semibold">
+            <span className="truncate">{mobileViewLabel}</span>
+            {mobileView !== "approvals" && showApprovalsView && waitingOnMe > 0 && (
+              <span data-testid="work-mobile-view-badge"
+                className="grid h-5 min-w-[1.25rem] place-items-center rounded-full bg-kr-ink px-1.5 text-[11px] font-semibold tabular-nums text-white">
+                {waitingOnMe}
+              </span>
+            )}
+            <CaretDown size={12} weight="bold" aria-hidden="true" className="shrink-0 opacity-60" />
+          </button>
 
 
           {/* The two circles, as a pair, hard right. AI priority moved up here
@@ -3342,6 +3352,42 @@ export default function MyWork() {
             </button>
           </div>
         )}
+
+        {/* ASK-28 phone pass — the view picker's sheet. */}
+        <Sheet open={viewSheetOpen} onOpenChange={setViewSheetOpen}>
+          <SheetContent side="bottom" hideClose data-testid="work-mobile-view-sheet"
+            className="flex max-h-[85vh] flex-col gap-0 rounded-t-cardlg p-0 lg:hidden">
+            <SheetHeader className="flex-row items-center justify-between space-y-0 px-5 pb-3 pt-5 text-left">
+              <SheetTitle className="text-base">Show</SheetTitle>
+              <SheetClose asChild>
+                <button type="button" aria-label="Close" data-testid="work-mobile-view-close"
+                  className="kr-pop grid h-9 w-9 place-items-center rounded-full">
+                  <X size={14} weight="bold" aria-hidden="true" />
+                </button>
+              </SheetClose>
+            </SheetHeader>
+            <div className="flex flex-col gap-2 overflow-y-auto px-5 pb-6" role="group" aria-label="View">
+              {mobileViewOptions.map((o) => {
+                const on = mobileView === o.key;
+                return (
+                  <button key={o.key} type="button" aria-pressed={on} data-testid={`work-mobile-view-${o.key}`}
+                    onClick={() => { o.pick(); setViewSheetOpen(false); }}
+                    className={`flex h-12 items-center justify-between gap-3 rounded-pill px-5 text-[15px] ${on ? "kr-pressed font-semibold" : "kr-pop font-medium"}`}>
+                    <span className="truncate">{o.label}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      {o.count > 0 && (
+                        <span className="grid h-6 min-w-[1.5rem] place-items-center rounded-full bg-kr-ink px-2 text-xs font-semibold tabular-nums text-white">
+                          {o.count}
+                        </span>
+                      )}
+                      {on && <Check size={16} weight="bold" aria-hidden="true" />}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </SheetContent>
+        </Sheet>
 
         <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
           <SheetContent side="bottom" hideClose data-testid="work-mobile-filter-sheet"

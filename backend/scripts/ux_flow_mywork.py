@@ -83,14 +83,17 @@ def run_mobile(browser, outdir):
     check("mobile: task list renders", len(base_ids) > 0, f"{len(base_ids)} cards")
 
     # scope: My Tasks -> All Tasks must widen the set
-    click(page, "work-mobile-all")
+    # Phone pass (ASK-28): views live in the view pill's sheet now.
+    click(page, "work-mobile-view", wait=500)
+    click(page, "work-mobile-view-all")
     all_ids = page.evaluate(IDS_JS)
     page.screenshot(path=str(outdir / "m-scope-all.png"))
     check("mobile: 'All Tasks' widens the set",
           len(all_ids) >= len(base_ids) and set(base_ids) <= set(all_ids),
           f"mine={len(base_ids)} all={len(all_ids)}")
 
-    click(page, "work-mobile-mine")
+    click(page, "work-mobile-view", wait=500)
+    click(page, "work-mobile-view-mine")
     back_ids = page.evaluate(IDS_JS)
     check("mobile: 'My Tasks' restores the narrower set",
           set(back_ids) == set(base_ids), f"{len(back_ids)} cards")

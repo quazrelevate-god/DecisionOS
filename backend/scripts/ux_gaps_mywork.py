@@ -9,8 +9,15 @@ page) rather than the card, so MW-01's stale re-render cannot mask a result.
          (keyed to the demo login's real user id, which the first attempt got wrong)
   Gap 3  bulk complete and bulk reassign, fired only at throwaway rows
 
-WRITES TO THE DEV DB. Everything it makes is titled "[UXTEST] ..." and deleted at
+WRITES TO THE DATABASE. Everything it makes is titled "[UXTEST] ..." and deleted at
 the end, including on failure.
+
+2026-09-14: the local MONGO_URL is the PRODUCTION database, so this script now
+refuses to run unless UX_ALLOW_WRITES=1 is set, which you should only do when
+the backend points at a separate test database. Progress, notes and the
+hand-off are covered with real saves, safely, by
+backend/tests/test_task_management_e2e.py. Selectors follow the current My Work
+(glass dropdowns, the progress slider).
 
     .venv/Scripts/python.exe scripts/ux_gaps_mywork.py
 """
@@ -23,7 +30,21 @@ from playwright.sync_api import sync_playwright
 
 from ux_login import demo_login
 
+import os  # noqa: E402
+
+if os.environ.get("UX_ALLOW_WRITES") != "1":
+    sys.exit("REFUSING TO RUN: this audit creates and deletes real tasks, and the local MONGO_URL points at "
+             "the production database. Point the backend at a separate test database and set UX_ALLOW_WRITES=1. "
+             "Real-save coverage without that risk: tests/test_task_management_e2e.py.")
+
 REPO = Path(__file__).resolve().parent.parent.parent
+
+
+def glass_choose(page, testid, value):
+    """Pick a GlassSelect option (each option is `<testid>-option-<value>`)."""
+    page.locator(f'[data-testid="{testid}"]:visible').first.click()
+    page.locator(f'[data-testid="{testid}-option-{value or "none"}"]').click()
+    page.wait_for_timeout(300)
 BASE = "http://localhost:3000"
 API = "http://localhost:8001"
 OUT = REPO / ".audit-artifacts" / "ux" / "my-work" / "gaps"
@@ -116,7 +137,7 @@ def make_task(page, title, assignee_id):
     L(page, "new-task-button").click()
     page.wait_for_timeout(900)
     page.locator('[data-testid="task-title-input"]:visible').fill(title)
-    page.locator('[data-testid="task-member-select"]:visible').select_option(assignee_id)
+    glass_choose(page, "task-assign-select", f"u:{assignee_id}")
     page.locator('[data-testid="task-create-submit"]:visible').click()
     try:
         page.locator('[data-testid="task-title-input"]').first.wait_for(
@@ -157,30 +178,26 @@ def gap1(browser, me_id):
     p.wait_for_timeout(1000)
 
     # --- progress ---
-    # The progress dropdown is deliberately tucked inside a collapsed
-    # "Set % manually" disclosure, so open that first -- it is hidden by
-    # design, not missing.
-    p.evaluate("""(id) => {
-        const sel = document.querySelector(`[data-testid="progress-select-${id}"]`);
-        const d = sel && sel.closest('details');
-        if (d) d.open = true; }""", cid)
-    p.wait_for_timeout(500)
+    # A range slider beside the status (ASK-27), saving on release / key up;
+    # the % it holds shows in progress-bar-<id>.
     if has(p, f"progress-select-{cid}"):
-        p.locator(f'[data-testid="progress-select-{cid}"]:visible').select_option("50")
+        slider = p.locator(f'[data-testid="progress-select-{cid}"]:visible').first
+        slider.fill("50")
+        slider.dispatch_event("keyup")
         p.wait_for_timeout(2000)
         srv = api(p, "GET", f"/api/tasks/{cid}")["data"] or {}
         ui = p.evaluate("""(id)=>document.querySelector(
-            `[data-testid="progress-select-${id}"]`)?.value""", cid)
+            `[data-testid="progress-bar-${id}"]`)?.innerText.trim()""", cid)
         rec(g, "progress 50% is saved on the server", srv.get("progress") == 50,
             f"server progress={srv.get('progress')}")
-        rec(g, "…and the card shows it without a reload", ui == "50",
-            f"card still reads {ui!r} - same stale render as MW-01" if ui != "50" else "")
+        rec(g, "…and the card shows it without a reload", ui == "50%",
+            f"card still reads {ui!r} - same stale render as MW-01" if ui != "50%" else "")
         work(p)
         L(p, f"task-summary-{cid}").click()
         p.wait_for_timeout(900)
         ui2 = p.evaluate("""(id)=>document.querySelector(
-            `[data-testid="progress-select-${id}"]`)?.value""", cid)
-        rec(g, "…and shows it after a reload", ui2 == "50", f"reads {ui2!r}")
+            `[data-testid="progress-bar-${id}"]`)?.innerText.trim()""", cid)
+        rec(g, "…and shows it after a reload", ui2 == "50%", f"reads {ui2!r}")
     else:
         rec(g, "progress control is offered on the card", False, "progress-select absent")
 
@@ -267,7 +284,7 @@ def gap2(browser, users_by_email):
         L(p, f"task-summary-{seen}").click()
         p.wait_for_timeout(1000)
         if has(p, f"status-select-{seen}"):
-            p.locator(f'[data-testid="status-select-{seen}"]:visible').select_option("in_progress")
+            glass_choose(p, f"status-select-{seen}", "in_progress")
             p.wait_for_timeout(2200)
             after = api(p, "GET", f"/api/tasks/{seen}")["data"] or {}
             rec(g, "the assignee can accept the task (move it to In Progress)",
@@ -347,25 +364,17 @@ def gap3(browser, me_id, users_by_email):
         rec(g, "bulk reassign opens its target picker", opened)
         shot(p, "gap3-reassign-dialog")
         if opened:
-            # pick the sales user in whatever select/option the dialog offers
-            done = p.evaluate("""(uid) => {
-                const dlg = document.querySelector('[data-testid="bulk-reassign-dialog"]');
-                if (!dlg) return 'no-dialog';
-                const sel = dlg.querySelector('select');
-                if (sel) { sel.value = uid;
-                  sel.dispatchEvent(new Event('change', {bubbles:true})); return 'select'; }
-                return 'no-select'; }""", target["id"])
+            # The dialog's person picker is a GlassSelect (bulk-reassign-member)
+            # and its confirm button is bulk-reassign-submit.
+            done = "picked"
+            try:
+                glass_choose(p, "bulk-reassign-member", target["id"])
+            except Exception as e:
+                done = f"picker failed: {str(e).splitlines()[0][:80]}"
             p.wait_for_timeout(600)
-            # confirm button inside the dialog
-            btn = p.evaluate("""() => {
-                const dlg = document.querySelector('[data-testid="bulk-reassign-dialog"]');
-                if (!dlg) return null;
-                const b = [...dlg.querySelectorAll('button')].find(x =>
-                  /reassign|assign|confirm|save|apply/i.test(x.innerText||''));
-                if (b) { b.setAttribute('data-ux-confirm','1'); return (b.innerText||'').trim(); }
-                return null; }""")
-            if btn:
-                p.locator('[data-ux-confirm="1"]').first.click()
+            btn = has(p, "bulk-reassign-submit")
+            if btn and done == "picked":
+                L(p, "bulk-reassign-submit").click()
                 p.wait_for_timeout(3000)
                 settle(p)
                 who = {i: (api(p, "GET", f"/api/tasks/{i}")["data"] or {}).get("assignee_id")

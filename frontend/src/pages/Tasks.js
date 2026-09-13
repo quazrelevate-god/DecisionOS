@@ -458,7 +458,9 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                     return (
                       <button key={c.key} type="button" aria-pressed={on} data-testid={`task-approval-${c.key}`}
                         onClick={() => setForm({ ...form, approval: c.key, approver_id: c.key === "none" ? "" : form.approver_id })}
-                        className={`h-9 flex-1 whitespace-nowrap rounded-pill px-2 text-xs ${on ? "kr-pressed font-semibold text-foreground" : "kr-pop text-foreground/75"}`}>
+                        /* Phone pass: at 390px "Before it's marked done" did not fit one
+                           line in a third of the row, so labels may wrap below lg. */
+                        className={`min-h-9 flex-1 rounded-pill px-2 py-1.5 text-xs leading-tight lg:h-9 lg:whitespace-nowrap lg:py-0 ${on ? "kr-pressed font-semibold text-foreground" : "kr-pop text-foreground/75"}`}>
                         {c.label}
                       </button>
                     );

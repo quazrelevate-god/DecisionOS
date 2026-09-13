@@ -10,7 +10,7 @@ and phone, and updates `docs/DecisionOS_UI_Bug_Report.xlsx` in the same push.
 
 1. **New Task form — desktop** (Phase 5) · ASK-29 · ✅ built 2026-09-14
 2. **Task views — desktop** (Phase 1) · ASK-28 · checklist: https://claude.ai/code/artifact/53a2b23e-66a5-4eeb-bfb3-52a87ce08043
-3. **Phone** for the form and the views
+3. **Phone** for the form and the views · ✅ 2026-09-14
 4. Phases 2, 3, 4, 6, 7
 
 Tracker numbers: ASK-25 cards + photos and ASK-26 helpers (registered after
@@ -67,19 +67,19 @@ is assigned.
   - [x] Backend: `GET /tasks?view=asked` — tasks I created that aren't mine to do (`services/tasks.task_list_query`, unit-tested).
   - [x] My Work: Asked by me in the desktop switcher, kept in the URL, not saved as default; Department, Person and Status filters work on it; AI priority off; own empty state. Phone link lands on the list (the phone switcher comes with the mobile pass).
   - [x] The person who asked can leave a note (not hand off or escalate) — server and form.
-  - [ ] Acceptance: a non-owner creates a task for someone else and still sees it — **waits on a test database** (checked read-only: owner 53/53 vs API, sales empty state, note-only form mocked).
+  - [x] Acceptance: a non-owner creates a task for someone else and still sees it — **real saves** in an isolated test database, `tests/test_task_management_e2e.py` (2026-09-14); browser checks read-only: owner 53/53 vs API, sales empty state, note-only form mocked.
 - [x] **1.2 "Waiting for my approval" view** *(TK-02, desktop, 2026-09-14)*
   - [x] Backend: `GET /tasks?view=approvals` — approval required, not yet approved (changes requested still counts), not finished, and I may approve: owner all; named approver their own; `approvals` holder also the unnamed ones. Unit-tested against the `_can_approve_task` rule.
   - [x] My Work: merged into the Approvals view from 3c23e49 (Tasks | Leave tabs, All / My approvals). Its Tasks tab and the Desk's Task approvals card now read the server rule instead of `/tasks?mine=false`; the Approvals button carries the pending count and shows for a named approver without approval access; oldest first; Approve / Request changes / Ask clarification reachable.
   - [x] Approval-requested notification opens `/my-work?view=approvals&task=<id>`.
-  - [ ] Acceptance: a non-owner named approver approves a real task — **waits on a test database** (checked: owner 7/7 vs API, no-access user, named approver with a mocked list, Approve click path).
+  - [x] Acceptance: a non-owner named approver approves a real task — **real saves** in an isolated test database, `tests/test_task_management_e2e.py` (2026-09-14); browser checks: owner 7/7 vs API, no-access user, named approver with a mocked list, Approve click path.
 - [x] **1.3 "My team" view** *(TK-03, desktop, 2026-09-14)*
   - [x] Backend: `GET /tasks?view=team` — tasks where the doer or a helper reports to me (direct reports only). Unit-tested.
   - [x] My Work: shown only to a non-owner with direct reports (the owner keeps All Tasks); in the URL, not saved as default; Person filter lists the team; AI priority off; own empty state; a link opened without reports lands on My Tasks.
   - [x] The manager can open a report's task and activity and leave a note; outside their own department the drawer is note-only, inside it the department rule still gives full controls.
   - [x] Acceptance: a manager sees their reports' tasks and no one else's — **real data** (Sunita Rao → sai, 16 tasks), 21/21, writes blocked.
 - [x] **1.4 Opening a task by link always works.** *(TK-04, 2026-09-14)* `/my-work?task=<id>` (and the older `?focus=task:<id>`) opens the drawer whatever the view — from the single-task request when the task isn't in the list; opens again when followed while My Work is open; closing clears the link. A missing task says so; a refused one keeps Access restricted; both can be dismissed. Every view is in `?view=` and survives refresh, Back and Forward. Checked on real data with writes blocked, 23/23.
-- [ ] **1.5 Desk hook.** The Decision Desk "Task approvals" card (ASK-27) reads from 1.2.
+- [x] **1.5 Desk hook.** The Decision Desk "Task approvals" card (ASK-27) reads from 1.2. *(done with TK-02: the card reads `/tasks?view=approvals`; counts agree, T-722)*
 - [ ] Tracker rows + coverage; full backend tests; API parity baseline regenerated (routes change).
 
 ## Phase 2 — Who is on a task (P1)
@@ -102,9 +102,9 @@ is assigned.
 
 - [x] **4.1 Approval moment** *(D2 confirmed 2026-09-14)*: New Task → More options → Needs approval: No / Before work starts / Before it's marked done. Stored as `approval_stage` ("start" | "close"); older approval tasks read as "start". *(ASK-28 TK-05, desktop)*
 - [x] **4.2 Before closing:** work starts straight away; Complete (proof still required) moves it to Under review with approval pending and tells the approver; Approve → Done (workflow advance, Brain record and invoice draft run then); Request changes → back to In progress with the reason shown to the doer; moving the status back withdraws the request; a person who may approve closes it directly. Same through a checklist reaching 100%.
-- [ ] **4.3 Server checks the approver** actually has approval access (today it only checks they're in the company).
+- [x] **4.3 Server checks the approver** actually has approval access. *(2026-09-14)* `POST /tasks` refuses (400, names the person) an approver who isn't the owner and has no `approvals` through their own permissions or the company's role settings; someone outside the company is still dropped. Real-save tested.
 - [x] **4.4 Notifications and counts** for both moments feed the Approvals view and the Desk card: "Approval needed to close" notification opens Approvals; a before-done task counts only while it waits. Cards say "Approval to start" / "Approval to close" / "Needs approval to close".
-- [ ] Acceptance with real saves — **waits on a test database** (checked: 19/19 with made-up tasks and writes blocked, 17 unit tests, real approvals feed read-only).
+- [x] Acceptance with real saves — `tests/test_task_management_e2e.py` in an isolated test database (2026-09-14): complete → sign-off → changes → complete → approve → reopen, and the approver who completes. Browser: 19/19 with made-up tasks and writes blocked, 17 unit tests.
 
 ## Phase 5 — The New Task form (P1)
 
@@ -112,7 +112,7 @@ is assigned.
 - [x] **5.2 "More options" (desktop):** priority, helpers, description, due time, expected result, needs approval + approver, needs proof, reference files; closed section shows how many are set. Approval moment (before closing) waits for Phase 4.
 - [x] **5.3 Dropped from the form:** Operational category (stored data kept), Supporting employee.
 - [x] **5.3b Due "Today" no longer reads Overdue the same morning** (date-only due dates compare as calendar days).
-- [ ] **5.4 Phone:** same form as a full-screen sheet; nothing moves when More opens.
+- [x] **5.4 Phone:** same form as a full-screen sheet (0eaa411 opens it in full; there is no More row any more). Checked at 390x844 on 2026-09-14: nothing past the edge, Create in reach, the approval choice now wraps instead of cutting off. My Work views on the phone: one view pill for everyone opening a sheet of that person's views (My Tasks, Asked by me, My team, All Tasks, Approvals with its count).
 - [ ] **5.5 Doer list respects access** (Phase 6): only people this user may assign to.
 
 ## Phase 6 — Access rules for tasks (P2)

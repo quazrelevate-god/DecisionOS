@@ -247,8 +247,17 @@ ALIVE_JS = r"""
 
 
 def sign_in(page, role):
-    """Use the login screen's own demo seats -- no password in logs."""
-    return demo_login(page, BASE, role)
+    """Use the login screen's own demo seats -- no password in logs.
+
+    2026-09-13: after sign-in, every POST/PATCH/PUT/DELETE is aborted at the
+    network layer. The DESTRUCTIVE name filter alone let non-obvious writers
+    through (status pills, AI-priority scoring), and the dev DB is shared.
+    Installed AFTER login because the login itself is a POST.
+    """
+    ok = demo_login(page, BASE, role)
+    page.route("**/api/**", lambda r: r.abort()
+               if r.request.method in ("POST", "PATCH", "PUT", "DELETE") else r.continue_())
+    return ok
 
 
 def audit_viewport(browser, vp, route, role, outdir):

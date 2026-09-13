@@ -58,7 +58,7 @@ anything that creates an account or messages a real person.
       invite link landing (`/login?invite=`) — validation and failure paths only,
       no account is created
 - [x] **H · Admin portal** — `/admin/*`
-- [ ] **I · My Work full re-sweep** — once MW-20 (drawer closes on any click) is
+- [x] **I · My Work full re-sweep** — once MW-20 (drawer closes on any click) is
       fixed; if it is still open, sweep everything outside the drawer
 - [x] **J · Cross-cutting report** — the error-state pattern across all pages,
       role × route matrix, open Highs by area, what still needs the founder's go
@@ -140,13 +140,23 @@ in scope again.
   lands on the close; Log update form visible on phones; View details → Delete →
   confirm; /finance and /team capped at 1400 while /my-work is full width;
   Department lists only departments with work. MW-15…MW-21 marked Fixed.
-- Full control sweep (`backend/scripts/ux_audit.py`, writes blocked): running.
+- Full control sweep (`backend/scripts/ux_audit.py`): the script only skipped
+  controls whose NAME looked destructive, with no network-level block. It was
+  stopped mid-run; the backend log showed no PATCH/PUT/DELETE and no POST other
+  than sign-in, so nothing was written. Network write-blocking was added to its
+  sign-in helper and it was re-run.
+- Re-run result: mobile 36 controls / 13 clicked, desktop 43 / 20 clicked; **0 click
+  failures, 0 overflow, 0 page errors**. Console errors were the harness's own
+  blocked writes. The 'overlay not dismissed by Escape' flag did not reproduce
+  (More and the Dex picker both close on Escape) — not filed.
+- New finding **MW-22** (Medium): the mobile bulk-select checkbox is now a 16x22 hit
+  area and a near-miss opens the task drawer. N-01 marked superseded.
 
 ### J · Cross-cutting report — 2026-09-13
 
-**Totals** (workbook `DecisionOS_UI_Bug_Report.xlsx`): 83 findings — 62 open,
-20 fixed and verified, 1 by design. Open by severity: **15 High**, 22 Medium,
-22 Low, 3 Nit. Coverage 270 checks, 184 pass / 84 fail / 2 not run.
+**Totals** (workbook `DecisionOS_UI_Bug_Report.xlsx`): 84 findings — 63 open,
+20 fixed and verified, 1 by design. Open by severity: **15 High**, 23 Medium,
+22 Low, 3 Nit. Coverage 272 checks, 185 pass / 85 fail / 2 not run.
 
 **Open Highs by area**
 
@@ -172,7 +182,7 @@ in scope again.
    backend `require_*` guards would stop them drifting.
 3. **Phone parity** — FN-08 (no add), CR-04 / CR-05 (clipped mobile controls),
    CR-09 (no Score with AI), DD-04 (no Company/You), GL-02 (no Ops/Team/Settings
-   for staff). Desktop-only controls hidden with `hidden lg:*` and no mobile
+   for staff), MW-22 (16px bulk-select checkbox; near-misses open the task). Desktop-only controls hidden with `hidden lg:*` and no mobile
    placement.
 
 **Not run — needs the founder's go**

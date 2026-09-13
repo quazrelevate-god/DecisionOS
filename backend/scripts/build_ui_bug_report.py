@@ -1742,6 +1742,25 @@ FINDINGS = [
         found="2026-09-12",
     ),
     dict(
+        id='MW-22',
+        section='My Work',
+        screen='Task card - bulk-select checkbox (mobile)',
+        viewport='Mobile',
+        persona='Owner',
+        severity='Medium',
+        status='Open',
+        area='Accessibility / mis-tap',
+        tested='Measured the bulk-select checkbox on a 390px phone after the card redesign, and hit-tested taps 10px to its left, above and right.',
+        expected='The checkbox has at least a 24px tap area (it had 44x114 through its padded wrapper when N-01 was recorded), and a near-miss does not trigger something else.',
+        actual='The checkbox is now 16x16 inside a 16x22 label - nothing larger is clickable. A tap 10px off in any direction lands on the card, and since 78d01df the whole card opens the task drawer. So on a phone, trying to select tasks for a bulk action frequently opens a task instead. 12 checkboxes on the first screen, all the same.',
+        evidence='Full control sweep at 390x844: 25 controls under 24px, the bulk-select-* checkboxes at 16x22. Probe: own 16x16, label 16x22; taps at -10px left / top / right hit the card (false, false, false for the checkbox).',
+        cause="98b43f4 moved the checkbox to the card's top-left corner and dropped the padded wrapper that gave it the 44x114 hit box N-01 relied on.",
+        fix='Give the checkbox a 44x44 hit area again (a padded label around it, or a transparent ::before), and keep stopPropagation on that area so it never opens the drawer.',
+        verified='',
+        code='pages/MyWork.js (task card summary - bulk-select checkbox, top-left)',
+        found='2026-09-13',
+    ),
+    dict(
         id='GL-01',
         section='Global',
         screen='Desktop header - notification bell',
@@ -2888,6 +2907,8 @@ COVERAGE = [
     ('T-673', 'Sign-in', 'Sign-up validation', 'Both', 'Signed out', 'Empty company name is refused before anything is created', 'Validation', 'PASS', "'Tell us your company name', focus moved to the field (preview)", ''),
     ('T-674', 'Sign-in', 'Field labels', 'Both', 'Signed out', 'Every sign-in field is labelled', 'Accessibility', 'FAIL', 'Login, sign-up company name and admin fields unlabelled', 'AU-01'),
     ('T-675', 'Sign-in', 'OTP number', 'Both', 'Signed out', 'An invalid mobile number is refused before sending', 'Validation', 'FAIL', '3-digit number sent', 'AU-02'),
+    ('T-126', 'My Work', 'Full control sweep', 'Mobile 390x844 + Desktop 1440x900', 'Owner', 'Every non-destructive control responds without breaking the page (writes blocked)', 'Stability', 'PASS', "Re-run after the drawer repair: mobile 36 controls, 13 clicked, desktop 43 controls, 20 clicked; 0 click failures, 0 overflow, 0 page errors. Console errors were the harness's own blocked writes. An 'overlay not dismissed by Escape' flag did not reproduce - More and the Dex picker both close on Escape", ''),
+    ('T-127', 'My Work', 'Bulk-select checkbox', 'Mobile 390x844', 'Owner', 'The checkbox has a 24px tap area and near-misses do not open the task', 'Accessibility', 'FAIL', '16x22 hit area; taps 10px away open the drawer', 'MW-22'),
     ('T-676', 'Admin', 'Admin portal gating', 'Both', 'Signed out / Owner', 'Only platform admins reach the portal', 'Permissions', 'PASS', 'Signed out and tenant owner both get the admin sign-in; /admin/me 401; deep link /admin/tenants too', ''),
 ]
 
@@ -2901,7 +2922,9 @@ NON_COLS = [
 
 NON_ISSUES = [
     ("N-01", "My Work",
-     "Bulk-select checkboxes measure only 16x16, below the 24px tap-target minimum.",
+     "Bulk-select checkboxes measure only 16x16, below the 24px tap-target minimum. "
+     "[SUPERSEDED 2026-09-13: true when recorded; the card redesign (98b43f4) removed the "
+     "padded wrapper - see MW-22.]",
      "The checkbox is wrapped in a padded label that is itself clickable, so the real "
      "tap area is 44x114 - comfortably above both the WCAG minimum and the 44px "
      "touch guidance.",

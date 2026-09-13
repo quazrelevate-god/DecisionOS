@@ -1,0 +1,160 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Urbanist:ital,wght@0,100..900;1,100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Urbanist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 14px; line-height: 21px; letter-spacing: 0; color: hsl(40 6% 5%); -webkit-font-smoothing: antialiased; }
+    a { color: hsl(40 6% 5%); text-decoration: none; } a:hover { color: hsl(40 4% 33%); }
+    h1, h2, h3, h4, p { margin: 0; }
+    .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+    .sky { background-color: hsl(225 7% 92%); background-image:
+        radial-gradient(46% 52% at 56% 30%, hsl(38 97% 58% / .62), transparent 68%),
+        radial-gradient(30% 36% at 62% 52%, hsl(22 95% 52% / .38), transparent 70%),
+        radial-gradient(26% 30% at 44% 16%, hsl(45 95% 68% / .38), transparent 72%),
+        radial-gradient(60% 64% at 55% 35%, hsl(33 90% 60% / .22), transparent 76%); }
+    /* one phone-of-a-desktop per column: the page, then the band as its floor */
+    .page { border-radius: 20px; overflow: hidden; background-color: hsl(225 7% 92%); background-image:
+        radial-gradient(52% 48% at 60% 22%, hsl(38 97% 58% / .58), transparent 68%),
+        radial-gradient(34% 34% at 66% 44%, hsl(22 95% 52% / .34), transparent 70%),
+        radial-gradient(60% 56% at 58% 30%, hsl(33 90% 60% / .20), transparent 76%);
+        display: flex; flex-direction: column; }
+    .nm-tile { background: #fff; border-radius: 16px; border: 1px solid hsl(225 5% 77% / .40); }
+    .well { border-radius: 16px; background: linear-gradient(160deg, hsl(0 0% 100% / .34), hsl(0 0% 100% / .20)); box-shadow: inset 5px 5px 10px hsl(230 22% 34% / .20), inset -5px -5px 10px hsl(0 0% 100% / .62); }
+    .glass { border-radius: 14px; border: 1px solid rgb(255 255 255 / .16); color: hsl(40 20% 97%); background: linear-gradient(145deg, hsl(var(--from) / var(--a1, .10)), hsl(var(--to) / var(--a2, .05))); }
+    .glass--blue { --from: 214 45% 58%; --to: 28 55% 50%; --a1: .60; --a2: .42; }
+    .desk--needs { --from: 33 92% 56%;  --to: 16 82% 36%; }
+    .desk--fire  { --from: 6 78% 52%;   --to: 348 55% 26%; }
+    .desk--today { --from: 210 55% 50%; --to: 228 42% 27%; }
+    .desk--flag  { --from: 92 34% 42%;  --to: 155 30% 22%; }
+    .band { margin: 14px -14px 0; padding: 16px 14px 18px; background: hsl(240 4% 5%); border-radius: 10px 28px 0 0; color: hsl(40 20% 97%); flex: 1; display: flex; flex-direction: column; gap: 10px; }
+    .dot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+    .countpill { border-radius: 999px; background: rgb(255 255 255 / .10); padding: 1px 7px; font-size: 11px; line-height: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .ln { height: 6px; border-radius: 999px; background: rgb(255 255 255 / .16); }
+    .card { padding: 10px 11px; min-height: 92px; box-sizing: border-box; display: flex; flex-direction: column; gap: 7px; }
+    .card h4 { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; font-weight: 600; }
+    .tile-l { font-size: 11px; line-height: 15px; color: hsl(40 6% 5% / .80); }
+    .tile-v { font-size: 20px; line-height: 1; font-weight: 600; letter-spacing: -0.02em; }
+    .role { display: flex; flex-direction: column; gap: 2px; }
+    .role h3 { font-size: 15px; line-height: 1.35; font-weight: 650; letter-spacing: -0.006em; }
+    .role span { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; line-height: 15px; color: hsl(40 4% 33%); }
+    .leave { border-radius: 999px; background: hsl(19 100% 50%); color: hsl(240 4% 5%); padding: 4px 9px; font-size: 10px; line-height: 14px; font-weight: 600; white-space: nowrap; }
+    .note { padding: 9px 12px; border-radius: 12px; border: 1px dashed hsl(225 5% 77%); font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; line-height: 15px; color: hsl(40 4% 33%); }
+  </style>
+</helmet>
+
+<div class="sky" style="width: 1440px; min-height: 760px; box-sizing: border-box; padding: 28px 32px 32px; display: flex; flex-direction: column; gap: 18px;">
+
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <p class="mono" style="font-size: 11px; line-height: 15px; letter-spacing: .008em; font-weight: 600; text-transform: uppercase; color: hsl(40 4% 33%);">The same page at three access levels &middot; top untouched, one row in the band</p>
+    <h2 style="font-size: 22px; line-height: 1.2; letter-spacing: -0.01em; font-weight: 700;">Less access shortens the row. It never punches a hole.</h2>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; align-items: stretch; flex: 1;">
+
+    <!-- ═══ OWNER ═══ -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div class="role"><h3>Owner</h3><span>all permissions</span></div>
+      <div class="page" style="padding: 14px 14px 0; flex: 1;">
+        <div style="display: grid; grid-template-columns: minmax(0, 29fr) minmax(0, 45fr); gap: 14px;">
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <p style="font-size: 15px; line-height: 1.2; text-align: center;">Good morning, <span style="color: hsl(40 4% 33%);">Rajesh.</span></p>
+            <p style="font-size: 26px; line-height: 1; font-weight: 600; letter-spacing: -0.02em; text-align: center; margin: 6px 0;">72<span style="font-size: 11px; font-weight: 400; color: hsl(40 4% 33%);"> / 100</span></p>
+            <div class="well" style="margin-top: auto; padding: 10px; min-height: 60px; display: flex; flex-direction: column; gap: 5px;"><span style="font-size: 9px; line-height: 12px; font-weight: 600; opacity: .75;">Dex &middot; today&#39;s read</span><span class="ln" style="background: hsl(40 6% 5% / .18); width: 90%;"></span><span class="ln" style="background: hsl(40 6% 5% / .18); width: 60%;"></span></div>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;">
+            <div class="nm-tile" style="padding: 9px; display: flex; flex-direction: column; gap: 6px;"><p class="tile-l">Delayed</p><span class="tile-v">3</span></div>
+            <div class="nm-tile" style="padding: 9px; display: flex; flex-direction: column; gap: 6px;"><p class="tile-l">Complaints</p><span class="tile-v">2</span></div>
+            <div class="glass glass--blue" style="padding: 9px; display: flex; flex-direction: column; gap: 6px;"><p class="tile-l" style="color: inherit; opacity: .9;">Weakest</p><span class="tile-v">54</span></div>
+            <div class="nm-tile" style="padding: 9px; display: flex; flex-direction: column; gap: 6px;"><p class="tile-l">To collect</p><span class="tile-v">&#8377;1.8L</span></div>
+            <div class="nm-tile" style="padding: 9px; display: flex; flex-direction: column; gap: 6px;"><p class="tile-l">Net profit</p><span class="tile-v">&#8377;18.4L</span></div>
+            <div class="nm-tile" style="padding: 9px; display: flex; flex-direction: column; gap: 6px;"><p class="tile-l">Spend</p><span class="tile-v">&#8377;4.19L</span></div>
+          </div>
+        </div>
+        <div class="band">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <span style="font-size: 13px; line-height: 18px; font-weight: 700;">Decision desk <span style="font-weight: 400; opacity: .7; font-size: 11px;">&middot; 5 &middot; 12 &middot; 3 &middot; 5</span></span>
+            <span class="leave">5 leave</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 6fr 2fr 2fr 2fr; gap: 6px;">
+            <div class="glass desk--needs card"><h4><span class="dot" style="background: hsl(30 88% 52%);"></span>Decisions <span class="countpill">53</span></h4><span class="ln" style="width: 85%;"></span><span class="ln" style="width: 55%;"></span></div>
+            <div class="glass desk--flag card"><h4><span class="dot" style="background: hsl(92 34% 44%);"></span>Approvals</h4><span class="ln"></span><span class="ln" style="width: 70%;"></span><span class="ln" style="width: 80%;"></span></div>
+            <div class="glass desk--fire card"><h4><span class="dot" style="background: hsl(6 78% 50%);"></span>Slipping</h4><span class="ln"></span><span class="ln" style="width: 70%;"></span><span class="ln" style="width: 80%;"></span></div>
+            <div class="glass desk--today card"><h4><span class="dot" style="background: hsl(210 55% 52%);"></span>Due today</h4><span class="ln"></span><span class="ln" style="width: 70%;"></span><span class="ln" style="width: 80%;"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ MANAGER ═══ -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div class="role"><h3>Manager / approver</h3><span>base + approvals + leave_approve</span></div>
+      <div class="page" style="padding: 14px 14px 0; flex: 1;">
+        <div style="display: grid; grid-template-columns: minmax(0, 29fr) minmax(0, 45fr); gap: 14px;">
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <p style="font-size: 15px; line-height: 1.2; text-align: center;">Good morning, <span style="color: hsl(40 4% 33%);">Kamal.</span></p>
+            <p style="font-size: 26px; line-height: 1; font-weight: 600; letter-spacing: -0.02em; text-align: center; margin: 6px 0;">68<span style="font-size: 11px; font-weight: 400; color: hsl(40 4% 33%);"> / 100</span></p>
+            <div class="well" style="margin-top: auto; padding: 10px; min-height: 60px; display: flex; flex-direction: column; gap: 5px;"><span style="font-size: 9px; line-height: 12px; font-weight: 600; opacity: .75;">Dex &middot; today&#39;s read</span><span class="ln" style="background: hsl(40 6% 5% / .18); width: 90%;"></span><span class="ln" style="background: hsl(40 6% 5% / .18); width: 60%;"></span></div>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px;">
+            <div class="nm-tile" style="padding: 9px; display: flex; flex-direction: column; gap: 6px;"><p class="tile-l">My overdue</p><span class="tile-v">2</span></div>
+            <div class="nm-tile" style="padding: 9px; display: flex; flex-direction: column; gap: 6px;"><p class="tile-l">Due today</p><span class="tile-v">4</span></div>
+            <div class="nm-tile" style="padding: 9px; display: flex; flex-direction: column; gap: 6px;"><p class="tile-l">Team waiting</p><span class="tile-v">12</span></div>
+            <div class="glass glass--blue" style="padding: 9px; display: flex; flex-direction: column; gap: 6px;"><p class="tile-l" style="color: inherit; opacity: .9;">My score</p><span class="tile-v">68</span></div>
+          </div>
+        </div>
+        <div class="band">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <span style="font-size: 13px; line-height: 18px; font-weight: 700;">Decision desk <span style="font-weight: 400; opacity: .7; font-size: 11px;">&middot; 12 &middot; 2 &middot; 4</span></span>
+            <span class="leave">5 leave</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 6fr 3fr 3fr; gap: 6px;">
+            <div class="glass desk--flag card"><h4><span class="dot" style="background: hsl(92 34% 44%);"></span>Approvals <span class="countpill">12</span></h4><span class="ln" style="width: 85%;"></span><span class="ln" style="width: 55%;"></span></div>
+            <div class="glass desk--fire card"><h4><span class="dot" style="background: hsl(6 78% 50%);"></span>Slipping</h4><span class="ln"></span><span class="ln" style="width: 70%;"></span></div>
+            <div class="glass desk--today card"><h4><span class="dot" style="background: hsl(210 55% 52%);"></span>Due today</h4><span class="ln"></span><span class="ln" style="width: 70%;"></span><span class="ln" style="width: 80%;"></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="note">no decisions, no money &mdash; and no request is sent for either</div>
+    </div>
+
+    <!-- ═══ SALES ═══ -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div class="role"><h3>Sales / production</h3><span>base only</span></div>
+      <div class="page" style="padding: 14px 14px 0; flex: 1;">
+        <div style="display: grid; grid-template-columns: minmax(0, 29fr) minmax(0, 45fr); gap: 14px;">
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <p style="font-size: 15px; line-height: 1.2; text-align: center;">Good morning, <span style="color: hsl(40 4% 33%);">Priya.</span></p>
+            <p style="font-size: 26px; line-height: 1; font-weight: 600; letter-spacing: -0.02em; text-align: center; margin: 6px 0;">74<span style="font-size: 11px; font-weight: 400; color: hsl(40 4% 33%);"> / 100</span></p>
+            <div class="well" style="margin-top: auto; padding: 10px; min-height: 60px; display: flex; flex-direction: column; gap: 5px;"><span style="font-size: 9px; line-height: 12px; font-weight: 600; opacity: .75;">Dex &middot; today&#39;s read</span><span class="ln" style="background: hsl(40 6% 5% / .18); width: 90%;"></span><span class="ln" style="background: hsl(40 6% 5% / .18); width: 60%;"></span></div>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px;">
+            <div class="nm-tile" style="padding: 9px; display: flex; flex-direction: column; gap: 6px;"><p class="tile-l">My overdue</p><span class="tile-v">1</span></div>
+            <div class="nm-tile" style="padding: 9px; display: flex; flex-direction: column; gap: 6px;"><p class="tile-l">Due today</p><span class="tile-v">4</span></div>
+            <div class="nm-tile" style="padding: 9px; display: flex; flex-direction: column; gap: 6px;"><p class="tile-l">Follow-ups, this week</p><span class="tile-v">6</span></div>
+            <div class="glass glass--blue" style="padding: 9px; display: flex; flex-direction: column; gap: 6px;"><p class="tile-l" style="color: inherit; opacity: .9;">My score</p><span class="tile-v">74</span></div>
+          </div>
+        </div>
+        <div class="band">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <span style="font-size: 13px; line-height: 18px; font-weight: 700;">Your day <span style="font-weight: 400; opacity: .7; font-size: 11px;">&middot; 1 &middot; 4</span></span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+            <div class="glass desk--fire card"><h4><span class="dot" style="background: hsl(6 78% 50%);"></span>Slipping <span class="countpill">1</span></h4><span class="ln" style="width: 85%;"></span></div>
+            <div class="glass desk--today card"><h4><span class="dot" style="background: hsl(210 55% 52%);"></span>Due today <span class="countpill">4</span></h4><span class="ln"></span><span class="ln" style="width: 70%;"></span><span class="ln" style="width: 80%;"></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="note">the short row is the point &mdash; not a row with things missing</div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

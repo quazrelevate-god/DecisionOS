@@ -191,6 +191,11 @@ function App() {
                 moves to Settings > Operations. Deep links land readers on
                 /team, which is now the home for the leave register. */}
             <Route path="/leave" element={<Navigate to="/team" replace />} />
+            {/* ASK-25 F3 — the approvals that aren't decisions (task sign-offs
+                and leave) live as a view inside My Work, beside My Tasks /
+                All Tasks / Workflows. The standalone path stays as a deep
+                link that lands there. */}
+            <Route path="/approvals" element={<Navigate to="/my-work?view=approvals" replace />} />
             <Route path="/settings" element={<Protected><Settings /></Protected>} />
             <Route path="/review" element={<Navigate to="/ingest" replace />} />
             <Route path="/notifications" element={<Protected><Notifications /></Protected>} />

@@ -1,0 +1,99 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Urbanist:ital,wght@0,100..900;1,100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Urbanist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-size: 14px; line-height: 21px; letter-spacing: 0;
+      color: hsl(40 6% 5%);
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: hsl(239 60% 51%); text-decoration: none; }
+    a:hover { color: hsl(238 57% 41%); }
+    .ref { font-weight: 650; color: hsl(239 60% 44%); border-bottom: 1.5px solid hsl(236 100% 89%); }
+    .ref-hot { font-weight: 650; color: hsl(19 100% 36%); border-bottom: 1.5px solid hsl(19 100% 78%); }
+  </style>
+</helmet>
+
+<div style="width: 1440px; min-height: 900px; box-sizing: border-box; padding: 28px 32px 32px; background: hsl(225 7% 92%); display: flex; flex-direction: column; gap: 20px;">
+
+  <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 24px;">
+    <div style="display: flex; flex-direction: column; gap: 5px;">
+      <div style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; letter-spacing: 0.008em; font-weight: 600; text-transform: uppercase; color: hsl(40 3% 45%);">Tuesday, 15 September &middot; your morning read</div>
+      <div style="font-size: 22px; line-height: 1.2; letter-spacing: -0.01em; font-weight: 700;">Morning, Rajesh.</div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px; border-radius: 999px; background: #fff; border: 1px solid hsl(225 5% 77%); font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 13px; color: hsl(40 4% 33%); white-space: nowrap;">
+      Ask a follow-up
+    </div>
+  </div>
+
+  <!-- THE READ -->
+  <div style="border-radius: 28px; background: #fff; border: 1px solid hsl(225 5% 77%); padding: 32px 36px; display: flex; flex-direction: column; gap: 20px;">
+
+    <div style="font-size: 19px; line-height: 1.62; letter-spacing: -0.004em; color: hsl(40 6% 5%); max-width: 92ch; text-wrap: pretty;">
+      Three things are holding other people up this morning. The one that matters most is
+      <span class="ref-hot">Priya&#39;s advance for the Delhi retailer</span> &mdash; it has been with you since Friday and
+      four tasks and two people are parked behind it. After that,
+      <span class="ref">Kamal&#39;s dye lot pricing</span> unblocks the weaving floor,
+      and <span class="ref-hot">INV-45 has gone nine days past due</span> with two hundred thousand still uncollected.
+    </div>
+
+    <div style="font-size: 19px; line-height: 1.62; letter-spacing: -0.004em; color: hsl(40 4% 33%); max-width: 92ch; text-wrap: pretty;">
+      The rest can wait. Twelve approvals are queued but none of them block anyone today, and the
+      <span class="ref">five leave requests</span> are all for next week &mdash; though three of them overlap on the weaving floor,
+      so you may want to look before you approve them one at a time.
+    </div>
+
+    <div style="display: flex; gap: 10px; flex-wrap: wrap; padding-top: 4px;">
+      <div style="display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px; border-radius: 999px; background: hsl(240 4% 5%); color: hsl(0 0% 96%); font-size: 14px; font-weight: 650;">
+        Open the Delhi advance
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13"></path><path d="M12 5l7 7-7 7"></path></svg>
+      </div>
+      <div style="display: flex; align-items: center; height: 44px; padding: 0 18px; border-radius: 999px; background: #fff; border: 1px solid hsl(225 5% 77%); font-size: 14px; font-weight: 650; color: hsl(40 6% 5%);">
+        All 3 decisions
+      </div>
+      <div style="display: flex; align-items: center; height: 44px; padding: 0 18px; border-radius: 999px; background: #fff; border: 1px solid hsl(225 5% 77%); font-size: 14px; font-weight: 650; color: hsl(40 6% 5%);">
+        Chase INV-45
+      </div>
+      <div style="display: flex; align-items: center; height: 44px; padding: 0 18px; border-radius: 999px; background: #fff; border: 1px solid hsl(225 5% 77%); font-size: 14px; font-weight: 650; color: hsl(40 6% 5%);">
+        Leave, all five
+      </div>
+    </div>
+
+  </div>
+
+  <!-- AND THE NUMBERS -->
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <div style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; letter-spacing: 0.008em; font-weight: 600; text-transform: uppercase; color: hsl(40 3% 45%);">And the numbers, if you want them</div>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px;">
+      <div style="border-radius: 24px; background: #fff; border: 1px solid hsl(225 5% 77%); padding: 18px 20px; display: flex; flex-direction: column; gap: 6px;">
+        <div style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; font-weight: 600; text-transform: uppercase; color: hsl(40 3% 45%);">Net profit</div>
+        <div style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 24px; font-weight: 500; line-height: 1.15;">&#8377;18.4L</div>
+      </div>
+      <div style="border-radius: 24px; background: #fff; border: 1px solid hsl(225 5% 77%); padding: 18px 20px; display: flex; flex-direction: column; gap: 6px;">
+        <div style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; font-weight: 600; text-transform: uppercase; color: hsl(40 3% 45%);">To collect</div>
+        <div style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 24px; font-weight: 500; line-height: 1.15;">&#8377;6,32,000</div>
+      </div>
+      <div style="border-radius: 24px; background: #fff; border: 1px solid hsl(225 5% 77%); padding: 18px 20px; display: flex; flex-direction: column; gap: 6px;">
+        <div style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; font-weight: 600; text-transform: uppercase; color: hsl(40 3% 45%);">Spend this month</div>
+        <div style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 24px; font-weight: 500; line-height: 1.15;">&#8377;4,18,900</div>
+      </div>
+      <div style="border-radius: 24px; background: hsl(239 60% 51%); padding: 18px 20px; display: flex; flex-direction: column; gap: 6px;">
+        <div style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; font-weight: 600; text-transform: uppercase; color: hsl(236 100% 89%);">Company score</div>
+        <div style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 24px; font-weight: 500; line-height: 1.15; color: #fff;">72</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

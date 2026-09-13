@@ -17,6 +17,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "../components/ui/sheet";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel } from "../components/ui/dropdown-menu";
 import Workflows from "./Workflows";
+// ASK-25 — the Approvals view: every approval that is not a decision. Task
+// sign-offs render in the SAME grid and cards as the task list (a card
+// opened there carries Approve / Request changes / Ask clarification
+// natively); leave uses the LeaveCard the register uses.
+import { LeaveCard } from "./Leave";
+import { ScopeSlider } from "../components/karma";
+// UI-SCALE — the page scales with the screen (pilot: this page only).
+import { useUiScale } from "../hooks/useUiScale";
 // ASK-6 (2026-09-12): Leave no longer embedded here. Register lives on
 // Team, approvals live on Desk, config lives on Settings > Operations.
 // Import retired. If a follow-up ever needs the Request Leave dialog
@@ -84,6 +92,10 @@ import { motion, useReducedMotion } from "framer-motion";
 const SEG = "flex h-10 items-center justify-center gap-1.5 px-4 text-xs font-medium leading-tight lg:text-sm";
 const SEG_ON = "kr-pressed font-semibold text-foreground";
 const SEG_OFF = "kr-pop text-foreground/70";
+// ASK-25 — the Approvals view's Tasks sub-tab lenses. ALL is everything this
+// person may sign off (an owner: the whole tenant); MINE is only what was
+// routed to them by name (approver_id).
+const APPR_SCOPES = [{ key: "all", label: "All approvals" }, { key: "mine", label: "My approvals" }];
 const SECTION_BTN = "flex h-10 items-center justify-center gap-1.5 rounded-pill px-4 text-xs font-medium leading-tight lg:text-sm";
 
 /* ASK-11 (2026-09-13): terminal states removed from the desktop status
@@ -131,11 +143,23 @@ const todayYmd = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
+const ymdOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const isOverdue = (t) => {
   if (!t.due_date || isTerminal(t)) return false;
   const due = String(t.due_date);
   if (due.length <= 10) return due < todayYmd();
   return new Date(due) < new Date();
+};
+// ASK-25 — a task waiting for a sign-off: the Approvals view's predicate,
+// shared with the Desk's Task approvals card so the two never disagree.
+const isPendingApproval = (t) => !!t.approval_required && t.approval_status === "pending" && !isTerminal(t);
+// ASK-25 F4 — the Desk's "Due today" card lands here. Same calendar rule as
+// ASK-29's isOverdue: a date-only due string IS a local day, a timestamp is
+// read in local time and compared by calendar day.
+const isDueToday = (t) => {
+  if (!t.due_date || isTerminal(t)) return false;
+  const due = String(t.due_date);
+  return (due.length <= 10 ? due : ymdOf(new Date(due))) === todayYmd();
 };
 
 function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel, noteOnly = false }) {
@@ -2588,10 +2612,12 @@ const STATUS_FILTER_OPTIONS = [
   { key: "blocked", label: "Pending Approval" },
   { key: "review", label: "Under Review" },
   { key: "overdue", label: "Overdue" },
+  // ASK-25 F4 — the Desk's "Due today" card needs somewhere to land.
+  { key: "due_today", label: "Due today" },
   { key: "completed", label: "Completed" },
 ];
-// Overdue and Completed are LENSES, not t.status values.
-const STATUS_LENSES = new Set(["overdue", "completed"]);
+// Overdue, Due today and Completed are LENSES, not t.status values.
+const STATUS_LENSES = new Set(["overdue", "due_today", "completed"]);
 // ASK-24 — a Priority filter shipped briefly and was removed on a founder
 // call (2026-09-13): the AI-priority view already splits by High/Medium/Low.
 
@@ -2605,6 +2631,7 @@ function matchesFilters(t, { tab, person, status }) {
   if (completedLens !== isTerminal(t)) return false;
   if (tab !== "all" && tab !== "completed" && t.task_type !== tab) return false;
   if (status === "overdue" && !isOverdue(t)) return false;
+  if (status === "due_today" && !isDueToday(t)) return false;
   if (status && !STATUS_LENSES.has(status) && t.status !== status) return false;
   if (person === "unassigned") return !t.assignee_id && !t.assignee_role;
   if (person && person.startsWith("role:")) return !t.assignee_id && t.assignee_role === person.slice(5);
@@ -2614,6 +2641,7 @@ function matchesFilters(t, { tab, person, status }) {
 }
 
 export default function MyWork() {
+  useUiScale();
   // MPWA-08: rebuilt below lg (§8). Above lg the original tree renders
   // unchanged, keeping §9.2's desktop diff empty by construction.
   const qc = useQueryClient();
@@ -2635,7 +2663,10 @@ export default function MyWork() {
   // reader on their task list rather than a 404; the App.js redirect for the
   // standalone /leave route sends them onward to /team.
   const initialView = rawView === "board" ? "workflows"
-    : (rawView === "workflows" ? "workflows" : "mywork");
+    : rawView === "workflows" ? "workflows"
+    // ASK-25 — ?view=approvals is where the Desk's Approvals pill and leave chip land.
+    : rawView === "approvals" ? "approvals"
+    : "mywork";
   const [view, setView] = useState(focusTaskId ? "mywork" : initialView);
   // KR-11.2 — which tile is expanded. Lifted out of TaskCard so the grid can
   // give it the whole row; see TaskBento. Seeded from ?task= so a deep link
@@ -2646,6 +2677,27 @@ export default function MyWork() {
   // rawView so eslint's no-unused-vars doesn't fire on line above.
   void rawView;
   const canSeeWorkflows = isOwner || userPerms(user).includes("workflows");
+  // ASK-25 — Approvals shows for anyone who can sign something off: tasks
+  // (the "approvals" access) or leave ("leave_approve"). Owners always.
+  const canApprove = isOwner || userPerms(user).includes("approvals") || userPerms(user).includes("leave_approve");
+  const canApproveLeave = isOwner || userPerms(user).includes("leave_approve");
+  // ASK-25 — the Approvals view's own state and feeds. Sub-tab Tasks | Leave
+  // (?sub=leave is where the Desk's leave chip lands), the All/My lens on
+  // tasks, and the two feeds. Tasks come from the UNSCOPED list so an
+  // approver sees every task routed to them, not only their own lane; the
+  // key is shared with the Desk's card so the two never disagree.
+  const [apprSub, setApprSub] = useState(params.get("sub") === "leave" ? "leave" : "tasks");
+  const [apprScope, setApprScope] = useState("all");
+  const apprTasksQ = useQuery({
+    queryKey: ["tasks", false],
+    queryFn: () => api.get("/tasks?mine=false").then((r) => r.data),
+    enabled: view === "approvals",
+  });
+  const leavesQ = useQuery({
+    queryKey: ["leaves", "approvals"],
+    queryFn: () => api.get("/leaves?scope=approvals").then((r) => r.data),
+    enabled: view === "approvals" && canApproveLeave,
+  });
   // U7-05.5: filter chips persist per-user in localStorage. Reload the page
   // and the scope + tab + aiPriority toggle come back where you left them.
   // Founder ask 2026-08-17: 'remove the uneasy UX' -- resetting to All every
@@ -2787,7 +2839,7 @@ export default function MyWork() {
     if (f && isOwner && scope !== "all") setScope("all");
     // ASK-24 — the Desk's ?filter= link becomes the visible Status filter, so
     // the reader can see why the list is narrowed and clear it.
-    if (f === "completed" || f === "overdue") {
+    if (f === "completed" || f === "overdue" || f === "due_today") {
       setTab("all");
       setFilterParams({ filter: "", status: f });
     }
@@ -2831,7 +2883,7 @@ export default function MyWork() {
   const filters = {
     tab: urlFilter === "completed" ? "completed" : tab,
     person: personFilter,
-    status: statusFilter || (urlFilter === "overdue" ? "overdue" : ""),
+    status: statusFilter || (STATUS_LENSES.has(urlFilter) && urlFilter !== "completed" ? urlFilter : ""),
   };
   const countWith = (over) => all.filter((tk) => matchesFilters(tk, { ...filters, ...over })).length;
   let list = all.filter((tk) => matchesFilters(tk, filters));
@@ -2880,6 +2932,9 @@ export default function MyWork() {
   const MCIRCLE = "grid h-9 w-9 shrink-0 place-items-center rounded-full text-foreground";
   const mobileView = (() => {
     if (view === "workflows") return "workflows";
+    // ASK-25 — in the Approvals view neither lens pill is pressed; the list
+    // controls (AI priority, filters) hide because there is no task list.
+    if (view === "approvals") return "approvals";
     // ASK-6: leave sub-view retired; the branch that returned "leave" here
     // was mapping to a case that no longer renders.
     if (isOwner && scope === "all") return "all";
@@ -2988,7 +3043,12 @@ export default function MyWork() {
        the CARD GRID scrolls. Header and filter row are plain block children
        that never move, so they need no sticky offset and no backdrop blur —
        nothing passes behind them. */
-    <div className="lg:h-full lg:min-h-0 lg:flex lg:flex-col lg:overflow-hidden">
+    /* UI-SCALE — `ui-scale`: the page zooms with the viewport (hooks/useUiScale),
+       so a 27" monitor shows the 1440 composition bigger, not smaller in a sea
+       of margin. Only this page for now; see the hook for the one-line move
+       to the whole app. The task sheet is portalled outside this root, so it
+       stays at 1× until that move. */
+    <div className="ui-scale lg:h-full lg:min-h-0 lg:flex lg:flex-col lg:overflow-hidden">
       {/* ─── MOBILE HEADER (below lg) ───────────────────────────────────── */}
       {/* KM-48 — gap-2 and mb-2: one 8px rhythm for every gap in this header,
           where it used to be 10px between rows and then whatever the body's
@@ -3235,10 +3295,10 @@ export default function MyWork() {
               The toggle pill below is small; the page header needs to
               say what you are looking at above the fold. */}
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            {view === "workflows" ? t("mywork.view_workflows") : t("mywork.eyebrow")}
+            {view === "workflows" ? t("mywork.view_workflows") : view === "approvals" ? t("mywork.view_approvals") : t("mywork.eyebrow")}
           </p>
           <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">
-            {view === "workflows" ? t("mywork.view_workflows") : t("mywork.title")}
+            {view === "workflows" ? t("mywork.view_workflows") : view === "approvals" ? t("mywork.view_approvals") : t("mywork.title")}
           </h1>
         </div>
         <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:items-center" data-testid="mywork-controls">
@@ -3280,6 +3340,15 @@ export default function MyWork() {
                 onClick: () => go("mine"),
               });
               segments.push(askedSegment);
+            }
+            // ASK-25 — Approvals sits between the task lenses and Workflows:
+            // it is about tasks (and leave), not pipelines.
+            if (canApprove) {
+              segments.push({
+                key: "approvals", label: t("mywork.view_approvals"), testid: "work-view-approvals",
+                active: view === "approvals",
+                onClick: () => setView("approvals"),
+              });
             }
             if (canSeeWorkflows) {
               segments.push({
@@ -3334,14 +3403,120 @@ export default function MyWork() {
         </div>
       )}
 
-      {view === "workflows" && canSeeWorkflows ? (
+      {view === "approvals" && canApprove ? (
+        // ASK-25 — the approvals that are not decisions. Two sub-tabs: Tasks
+        // (the All/My lens, cards in the task grid) and Leave (the register's
+        // cards). Decisions stay on the Desk and /decisions/:id.
+        <div data-testid="approvals-hub" className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+          {(() => {
+            // The same rule as tasks.py's _can_approve_task, mirrored so the
+            // Desk's count, this list and the card's buttons all agree.
+            const canApproveTask = (t) =>
+              isOwner || (t.approver_id ? user?.id === t.approver_id : userPerms(user).includes("approvals"));
+            const apprAll = (Array.isArray(apprTasksQ.data) ? apprTasksQ.data : [])
+              .filter((t) => isPendingApproval(t) && canApproveTask(t));
+            const apprList = apprScope === "mine" ? apprAll.filter((t) => t.approver_id === user?.id) : apprAll;
+            const pendingLeaves = (leavesQ.data || []).filter((l) => l.status === "pending" || l.status === "info_requested");
+            const subs = [
+              { key: "tasks", label: "Tasks", icon: Check, n: apprTasksQ.data ? apprAll.length : null },
+              ...(canApproveLeave ? [{ key: "leave", label: "Leave", icon: CalendarBlank, n: leavesQ.data ? pendingLeaves.length : null }] : []),
+            ];
+            const sub = subs.some((s) => s.key === apprSub) ? apprSub : "tasks";
+            return (
+              <>
+                {/* ASK-25 — UNDERLINE tabs on a full-width rule (the founder's
+                    reference): icon + label + count, the chosen one in ink
+                    with a 2px ink underline that sits ON the rule (-mb-px),
+                    the rest quiet. The lens slider rides the same row on the
+                    right, above the rule. */}
+                {/* min-h pins the rule: the slider's track (44px + its 4px lift)
+                    is taller than the 44px tabs, so without it the whole row
+                    jumped when Leave (no slider) was chosen. 48 < the pinned
+                    49px content box, so the slider never sets the height. */}
+                <div className="mb-4 flex min-h-[50px] items-end gap-3 border-b border-kr-ink/[.12]" data-testid="approvals-controls">
+                  <div role="tablist" aria-label="Approvals" className="-mb-px flex items-end gap-1" data-testid="approvals-sub">
+                    {subs.map((s) => {
+                      const on = sub === s.key;
+                      const Icon = s.icon;
+                      return (
+                        <button key={s.key} type="button" role="tab" aria-selected={on}
+                          onClick={() => setApprSub(s.key)} data-testid={`approvals-sub-${s.key}`}
+                          className={`flex h-11 items-center gap-2 border-b-2 px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60 ${
+                            on ? "border-kr-ink font-semibold text-foreground" : "border-transparent font-medium text-foreground/60 hover:text-foreground/85"
+                          }`}>
+                          <Icon size={16} weight={on ? "bold" : "regular"} aria-hidden="true" />
+                          {s.label}
+                          <span className={`font-mono text-xs tabular-nums ${on ? "opacity-70" : "opacity-55"}`}>{s.n ?? "–"}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {sub === "tasks" && (
+                    <ScopeSlider options={APPR_SCOPES} value={apprScope} onChange={setApprScope}
+                      segWidth={128} label="Which approvals" testid="approvals-scope" className="mb-1 ml-auto" />
+                  )}
+                </div>
+
+                <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+                  {sub === "tasks" ? (
+                    apprTasksQ.isLoading ? (
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" aria-hidden="true">
+                        {[0, 1, 2].map((i) => <div key={i} className="ds-skeleton h-36 rounded-tile" />)}
+                      </div>
+                    ) : apprList.length === 0 ? (
+                      <div className="kr-frost-min p-6 text-sm text-muted-foreground" data-testid="approvals-tasks-empty">
+                        {apprScope === "mine" && apprAll.length > 0
+                          ? "Nothing is routed to you by name — switch to All approvals to see what you can still sign off."
+                          : "Tasks that need your sign-off will appear here."}
+                      </div>
+                    ) : (
+                      <TaskGrid
+                        list={apprList}
+                        openId={openId}
+                        setOpenId={setOpenId}
+                        cardProps={(t) => ({
+                          onChange: refresh,
+                          members,
+                          roleOptions,
+                          showAssignee: true,
+                          highlight: t.id === focusTaskId,
+                        })}
+                      />
+                    )
+                  ) : (
+                    leavesQ.isLoading ? (
+                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-hidden="true">
+                        {[0, 1, 2].map((i) => <div key={i} className="ds-skeleton h-44 rounded-tile" />)}
+                      </div>
+                    ) : pendingLeaves.length === 0 ? (
+                      <div className="kr-frost-min p-6 text-sm text-muted-foreground" data-testid="approvals-leave-empty">
+                        Leave requests routed to you will appear here.
+                      </div>
+                    ) : (
+                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" data-testid="approvals-leave">
+                        {pendingLeaves.map((lv) => (
+                          <LeaveCard key={lv.id} lv={lv} canAct
+                            onRefresh={() => qc.invalidateQueries({ queryKey: ["leaves"] })}
+                            highlight={lv.id === params.get("leave")} />
+                        ))}
+                      </div>
+                    )
+                  )}
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      ) : view === "workflows" && canSeeWorkflows ? (
         // WE-14 (2026-08-16): "Board" sub-tab retired. The pipelines
         // view now carries inline task lists per card (WE-12), so a
         // separate role-lane kanban was a redundant lens on the same
         // data. Any /my-work?view=workflows&wf_tab=board deep link
         // now silently lands on the pipelines view -- the wf_tab
         // param is intentionally ignored below.
-        <div data-testid="workflows-hub" className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+        // ASK-25 — the hub no longer scrolls as a whole: it hands its height
+        // down so each STAGE COLUMN scrolls on its own (Workflows.js).
+        <div data-testid="workflows-hub" className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
           <Workflows embedded />
         </div>
       ) : (
@@ -3522,7 +3697,10 @@ export default function MyWork() {
               // says it. Priority is handled by TaskPriorityColumns when AI
               // Priority is on (each column already names the band).
               // ASK-24: Overdue is not a status, so the chip still has news.
-              hideStatus: Boolean(statusFilter) && statusFilter !== "overdue",
+              // A LENS narrows by a reason, not a status, so the status chip
+              // still carries information under it; a real status filter
+              // makes the chip redundant on every card.
+              hideStatus: Boolean(statusFilter) && !STATUS_LENSES.has(statusFilter),
               selected: selected.has(t.id),
               onToggleSelect: () => toggleSelected(t.id),
             });

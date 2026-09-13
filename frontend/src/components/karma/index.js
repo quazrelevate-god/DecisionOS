@@ -21,3 +21,5 @@ export { ScoreMeter } from "./ScoreMeter";
 export { DonutBreak } from "./DonutBreak";
 // KM-4 additions
 export { DataList } from "./DataList";
+// ASK-25 additions
+export { ScopeSlider } from "./ScopeSlider";

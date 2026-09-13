@@ -24,10 +24,16 @@ import { cn } from "@/lib/utils";
  * @param {{headline: string, lines: string[], to: string, cta: string, tone: string}|null} insight
  * @param {boolean} loading
  */
-export function InsightWell({ insight, loading = false, className, testid }) {
+/**
+ * @param {boolean} compact  ASK-25 — the Desk's tightened well: 16px pad,
+ *                           an 18px headline, 40px controls. Everything the
+ *                           well says is still said; it just says it in the
+ *                           height the shorter KPI rows leave it.
+ */
+export function InsightWell({ insight, loading = false, compact = false, className, testid }) {
   return (
     <div className={cn("kr-well", className)} data-testid={testid}>
-      <div className="kr-well__pane flex h-full flex-col p-5">
+      <div className={cn("kr-well__pane flex h-full flex-col", compact ? "p-4 lg:px-[18px]" : "p-5")}>
         <span className="text-xs font-semibold tracking-wide text-foreground/75">
           Dex · today&rsquo;s read
         </span>
@@ -40,7 +46,7 @@ export function InsightWell({ insight, loading = false, className, testid }) {
         ) : (
           <>
             <p
-              className="mt-2 text-lg font-semibold leading-snug xl:text-xl"
+              className={cn("font-semibold leading-snug", compact ? "mt-1.5 text-lg" : "mt-2 text-lg xl:text-xl")}
               data-testid="desk-insight-headline"
             >
               {insight.headline}
@@ -82,14 +88,14 @@ export function InsightWell({ insight, loading = false, className, testid }) {
             the top of the Chase it" — the bullets were crowding it.
             The row renders even while the insight is loading, because the
             way into Dex should not depend on Dex having finished thinking. */}
-        <div className="mt-auto flex items-center justify-between gap-3 pt-5 lg:pt-7">
+        <div className={cn("mt-auto flex items-center justify-between gap-3", compact ? "pt-3" : "pt-5 lg:pt-7")}>
           {insight && (
             /* Borderless too — a hairline pill next to a shadow-modelled
                well would be two different materials in one box. */
             <Link
               to={insight.to}
               data-testid="desk-insight-cta"
-              className="kr-pop inline-flex h-11 w-fit items-center gap-2 rounded-pill px-4 text-xs font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60"
+              className={cn("kr-pop inline-flex w-fit items-center gap-2 rounded-pill px-4 text-xs font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60", compact ? "h-10" : "h-11")}
             >
               {insight.cta}
               <ArrowRight size={12} weight="bold" aria-hidden="true" className="kr-arrow transition-transform duration-200" />
@@ -105,7 +111,7 @@ export function InsightWell({ insight, loading = false, className, testid }) {
             aria-label="Ask Dex"
             title="Ask Dex"
             data-testid="desk-insight-dex"
-            className="kr-pop ml-auto grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60"
+            className={cn("kr-pop ml-auto grid shrink-0 place-items-center rounded-full text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60", compact ? "h-10 w-10" : "h-11 w-11")}
           >
             <Brain size={19} weight="duotone" aria-hidden="true" />
           </Link>

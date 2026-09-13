@@ -403,7 +403,13 @@ export default function Workflows({ embedded = false }) {
   const total = (data || []).length;
 
   return (
-    <div data-testid="workflows-page">
+    /* ASK-25 — THE COLUMNS SCROLL, NOT THE PAGE. From lg the page is a flex
+       column that fills the frame Layout (or My Work's hub) hands it; the
+       header keeps its height and the board takes the rest, and inside the
+       board each stage's card list is the scroller. Founder: "entire page is
+       scrollable instead, that particular column must be scrollable." The
+       phone is untouched — it stacks and scrolls the document as before. */
+    <div data-testid="workflows-page" className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
       <StandaloneHeader
         show={!embedded}
         title={t("workflows.title")}
@@ -504,8 +510,8 @@ export default function Workflows({ embedded = false }) {
           wanted the sunken tray look for the whole board, just not the
           per-column white cards. Columns clear their own background below
           (bg-none) so only the outer well reads as a container. */}
-      <div className="flex flex-col gap-3 lg:kr-glass-well lg:gap-0 lg:p-4 lg:overflow-x-auto" data-testid="workflow-board">
-        <div className="flex flex-col gap-4 lg:min-w-max lg:flex-row lg:items-stretch">
+      <div className="flex flex-col gap-3 lg:kr-glass-well lg:min-h-0 lg:flex-1 lg:gap-0 lg:p-4 lg:overflow-x-auto" data-testid="workflow-board">
+        <div className="flex flex-col gap-4 lg:h-full lg:min-h-0 lg:min-w-max lg:flex-row lg:items-stretch">
           {stages.map((stg) => {
             const cards = (data || []).filter((w) => w.stage === stg.key);
             const draggedWf = dragId ? (data || []).find((w) => w.id === dragId) : null;
@@ -544,7 +550,7 @@ export default function Workflows({ embedded = false }) {
                    sitting on the sky like a sticker. It is .kr-frost now — the
                    same light glass the Desk's "today's read" wears — so the
                    bloom reads through it. Desktop keeps the transparent column. */
-                className={`flex w-full flex-col rounded-tile transition-all kr-frost p-2 lg:border-0 lg:bg-transparent lg:bg-none lg:p-0 lg:shadow-none lg:w-[300px] lg:shrink-0 ${
+                className={`flex w-full flex-col rounded-tile transition-all kr-frost p-2 lg:border-0 lg:bg-transparent lg:bg-none lg:p-0 lg:shadow-none lg:w-[300px] lg:shrink-0 lg:min-h-0 ${
                   isTarget ? "bg-kr-accent/10 ring-2 ring-kr-accent/60"
                   : dropOk ? "ring-1 ring-dashed ring-foreground/30"
                   : dragId && !isSource ? "opacity-40"
@@ -578,7 +584,11 @@ export default function Workflows({ embedded = false }) {
                 {/* KR-14.21 · MOBILE — when expanded, cards render as a
                     HORIZONTAL scroller (`-mx-2 overflow-x-auto flex-row`).
                     Desktop keeps the original vertical stack. */}
-                <div className={`min-h-[140px] flex-1 gap-3 p-1.5 lg:min-h-[320px] lg:flex lg:flex-col ${
+                {/* ASK-25 — from lg this list is the column's own scroller:
+                    min-h-0 lets it shrink to the board's height and
+                    overflow-y-auto scrolls the cards inside it, so a long
+                    stage never lengthens the page. */}
+                <div className={`min-h-[140px] flex-1 gap-3 p-1.5 lg:min-h-0 lg:overflow-y-auto lg:flex lg:flex-col ${
                   /* KM-31 — a COLUMN on mobile, not a horizontal scroller.
                      With the card now full-width, a row scroller would show one
                      card and hide the rest behind a swipe nobody is told about;
@@ -625,7 +635,7 @@ export default function Workflows({ embedded = false }) {
                            the height floors rather than fixes, so a short card
                            is short. The scroller keeps its fixed 256px track
                            from lg up, where several columns are side by side. */
-                        className={`kr-bento group cursor-grab p-3 active:cursor-grabbing w-full min-h-[220px] lg:w-64 lg:h-[260px] lg:shrink-0 flex flex-col overflow-hidden text-left lg:h-auto lg:w-auto lg:shrink lg:overflow-visible lg:p-3.5 ${
+                        className={`kr-bento group cursor-grab p-3 active:cursor-grabbing w-full min-h-[220px] lg:w-64 lg:h-[260px] lg:shrink-0 flex flex-col overflow-hidden text-left lg:h-auto lg:w-auto lg:overflow-visible lg:p-3.5 ${
                           dragging ? "opacity-40" : ""
                         } ${busyId === w.id ? "opacity-60" : ""} ${
                           w.id === focusWf ? "ring-2 ring-kr-ink ring-offset-2" : ""

@@ -24,6 +24,10 @@ const SIZES = {
   // KR-8.1: measured against the full-res reference — the score is ~110px
   // and tile numerals ~44px. Everything stepped up accordingly.
   xl: { main: "text-7xl sm:text-8xl", side: "text-3xl" },  // the dashboard score
+  // ASK-25 — the Desk score once the gauge sits BESIDE it rather than under
+  // it: 72px at every width, so the row's height is the gauge's, not the
+  // numeral's.
+  hero: { main: "text-7xl", side: "text-2xl" },
   lg: { main: "text-5xl", side: "text-2xl" },              // wide money cards
   md: { main: "text-4xl", side: "text-lg" },               // KPI tiles
   sm: { main: "text-xl",  side: "text-sm" },               // inline stats

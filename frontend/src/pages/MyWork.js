@@ -1275,18 +1275,12 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
           <button
             type="button"
             onClick={() => (controlled ? onToggleOpen?.() : setSelfExpanded((v) => !v))}
-            className="flex-1 min-w-0 flex items-start gap-2 text-left"
+            className="flex-1 min-w-0 text-left"
             aria-expanded={expanded}
             aria-controls={`task-card-body-${t.id}`}
             data-testid={`task-summary-${t.id}`}
           >
-            <CaretDown
-              size={14}
-              weight="bold"
-              className={`text-muted-foreground shrink-0 mt-1 transition-transform ${expanded ? "" : "-rotate-90"}`}
-              aria-hidden="true"
-            />
-            <p className="flex-1 min-w-0 text-base font-normal leading-snug">
+            <p className="min-w-0 text-base font-normal leading-snug">
               {t.title}
             </p>
           </button>

@@ -22,16 +22,18 @@ import { cn } from "@/lib/utils";
  * bare canvas) drops to 3.44:1 on it and has to come up.
  *
  * The three states become a single idea — how lit is this pill:
- *   rest    ink at 75%, hairline at 35%        5.84:1, quiet but legible
- *   hover   a white wash lifts it half way     full ink, the hairline firms up
- *   active  a solid white pill, ink label      18.9:1, the one lit thing
+ *   rest    no fill at all, label white at 80%      a word on the black
+ *   hover   the label comes up to full white         pointing at the selection
+ *   active  a milk-white pill, black bold label     the one lit thing
  *
- * Active goes WHITE rather than staying the ink pill it is off-plate, on the
- * founder's call — and it is the right way round: the plate darkens everything,
- * so the selected destination should be the thing that stays bright. Ink on
- * ink-tinted grey would have been a shape you find rather than one you see.
- * The white wash on hover is a preview of that, which is what makes hover feel
- * like it is pointing at the selection rather than a separate effect.
+ * 2026-09-14, founder — the shelf is BLACK now (index.css .kr-navplate), on
+ * their reference: a solid dark rail, the unselected items plain white
+ * labels on it ("rest no circle in bg just letters"), and the selected one
+ * cut out in milk white with a black, bold label. No fill and no hairline on
+ * the quiet pills: the only shape on the rail is the selected page, which is
+ * what makes it findable. The selected fill is a literal (#fbfaf6, not
+ * bg-white) for the KM-51 reason below: the dark-mode shim rewrites every
+ * `bg-white`, and the Dex room runs dark.
  */
 export function PillNav({ items = [], size = "md", className, testid, plate = false, navRef }) {
   const pad = size === "sm" ? "h-9 px-3.5 text-sm" : "h-10 px-4 text-sm";
@@ -85,7 +87,7 @@ export function PillNav({ items = [], size = "md", className, testid, plate = fa
                      white this design always meant. Identical on light pages;
                      19.6:1 in the Dex room, where a white pill on the dark
                      plate is exactly the "one lit thing" this variant is for. */
-                  ? "bg-[#fff] text-kr-ink shadow-[0_0_0_1px_hsl(230_30%_18%/.28),0_2px_10px_-3px_hsl(230_30%_18%/.45)]"
+                  ? "bg-[#fbfaf6] font-semibold text-[#0c0c0d] shadow-[0_2px_12px_-4px_hsl(0_0%_0%/.7)]"
                   : "bg-kr-ink text-white"
                 /* KR-14 — the unselected pills step BACK, then light up on
                    hover without moving.
@@ -104,7 +106,7 @@ export function PillNav({ items = [], size = "md", className, testid, plate = fa
                      founder's call and took the resting label from 5.76 to
                      4.48, just under the line. Darkening the ink is the lever
                      that costs nothing here — the fill stays where it was. */
-                  ? "border-[0.5px] border-kr-ink/40 bg-white/20 text-foreground/85 hover:border-kr-ink/70 hover:bg-white/45 hover:text-foreground"
+                  ? "text-white/80 hover:text-white"
                   : "kr-glow border-[0.5px] border-kr-ink/45 text-foreground/55"
             )
           }

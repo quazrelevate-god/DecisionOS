@@ -24,7 +24,7 @@
 // Deep-link contract preserved: /inbox?decision=<id> redirects to the
 // decision page (KM-28).
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -37,6 +37,12 @@ import {
   BigNumeral, KDeltaChip, MiniBars, CircleDots, TinySpark,
 } from "../components/karma";
 import { useDeskMetrics } from "./desk/useDeskMetrics";
+// 2026-09-14, founder — the Task approvals column opens My Work's task
+// drawer HERE, on the Desk, instead of sending the founder to My Work.
+import { TaskCard } from "./MyWork";
+// 2026-09-14, founder — a decision opens as a POPUP here too, on the glass,
+// at 70% of the screen, instead of leaving for /decisions/:id.
+import { DecisionDialog } from "../components/DecisionDialog";
 import { deskInsight } from "../lib/deskInsight";
 import {
   ArrowSquareOut, CaretRight, Timer,
@@ -54,12 +60,14 @@ const SECTIONS = [
 ];
 
 /* ASK-25 — the section identities. `tone` is the class that carries the
-   two-tone hue variables (.kr-desk--* and .kr-glass--warm in index.css);
-   it goes on the card's CONTENT wrapper, not on the frost itself, because
-   .kr-desk--* also switches backdrop-filter off (KM-35) and the frost
-   needs its blur. The title prints the DEEP end of the gradient, the dot
-   the bright end, the pill the bright end at full strength — amber prints
-   ink on the pill per KM-35, every other hue prints white. */
+   two-tone hue variables (.kr-desk--* and .kr-glass--warm in index.css).
+   2026-09-14, founder — the board is ONE BLACK CONTAINER now, not three
+   frost cards ("instead of glass or frost glass we go with the black
+   container, print the text on the container itself in white font, use
+   lines for horizontal and vertical separator; for the three rows we can
+   use white cards"). So on the black the title is white and only the dot
+   and the action pill carry the hue; on the white stack cards the title
+   prints the hue's deep end as before. */
 const TONE = {
   needs: "kr-desk--needs",
   flag:  "kr-desk--flag",
@@ -104,24 +112,48 @@ function OpenButton({ onClick, label }) {
       onClick={onClick}
       aria-label={label}
       title="Open"
-      className="kr-pop grid h-8 w-8 shrink-0 place-items-center rounded-full text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60"
+      /* On the black board: a white-glass circle, no blur (nothing behind it
+         to blur), lit a step on hover. */
+      className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/[.10] text-white/80 transition-colors hover:bg-white/[.20] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
     >
       <ArrowSquareOut size={14} weight="bold" aria-hidden="true" />
     </button>
   );
 }
 
-function CountPill({ n }) {
+function CountPill({ n, onInk = false }) {
   return (
-    <span className="rounded-pill bg-kr-ink/[.08] px-2 py-0.5 text-xs font-semibold tabular-nums">
+    <span className={`rounded-pill px-2 py-0.5 text-xs font-semibold tabular-nums ${onInk ? "bg-white/[.10] text-white/80" : "bg-kr-ink/[.08]"}`}>
       {n ?? "—"}
     </span>
   );
 }
 
+/** The column's heading: dot · title · count · note. On desktop it is a
+ *  browser TAB standing on the board (2026-09-14, founder: "Decisions and
+ *  Task approvals is a Chrome tab header and the contents like the page");
+ *  on the phone the same row sits at the top of its column. */
+function DeskHeading({ tone, title, count, note, className = "" }) {
+  return (
+    <div className={`${TONE[tone]} flex min-w-0 items-center gap-2.5 ${className}`}>
+      <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full bg-[hsl(var(--kr-glass-from))]" />
+      {/* 2026-09-14, founder — "white is too bright": medium weight and
+          white at 85%, never full white, everywhere on the board. */}
+      <h3 className="text-base font-medium tracking-[-0.006em] text-white/85">{title}</h3>
+      <CountPill n={count} onInk />
+      {note && <span className="ml-0.5 hidden truncate text-xs text-white/50 xl:inline">{note}</span>}
+    </div>
+  );
+}
+
 /**
- * A list card: title row, up to four rows, and a floor with the overflow
- * note on the left and the section-hued action pill on the right.
+ * A list COLUMN on the black board: as many rows as fit, and a floor with
+ * the overflow note on the left and the section-hued action pill on the
+ * right. GREY type on the container itself (2026-09-14, founder: "use grey
+ * color for the contents" — neutral-300 for what matters, neutral-500 for
+ * the rest; only the tab headings keep their white); rows are parted by
+ * hairlines, not boxed. The heading is a tab above the board from lg (DeskHeading in
+ * the strip) and rides the column only on the phone.
  * @param {Array<{id, title, meta, amount?, onOpen}>} rows
  */
 function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix = "", cta, onCta, testid, className = "" }) {
@@ -161,14 +193,9 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
   const more = loading ? "" : remaining > 0 ? `${remaining} more${moreSuffix}` : rows.length > 0 ? "That's all of them" : "";
 
   return (
-    <div className={`kr-desk-card ${className}`} data-testid={testid}>
-      <div className={`${TONE[tone]} flex h-full min-h-0 flex-col gap-1 p-3 lg:px-[18px]`}>
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full bg-[hsl(var(--kr-glass-from))]" />
-          <h3 className="text-base font-semibold tracking-[-0.006em] text-[hsl(var(--kr-glass-to))]">{title}</h3>
-          <CountPill n={count} />
-          {note && <span className="ml-0.5 hidden truncate text-xs text-foreground/70 xl:inline">{note}</span>}
-        </div>
+    <div className={`min-w-0 ${className}`} data-testid={testid}>
+      <div className={`${TONE[tone]} flex h-full min-h-0 flex-col gap-1`}>
+        <DeskHeading tone={tone} title={title} count={count} note={note} className="lg:hidden" />
 
         <div ref={listRef} className="min-h-0 flex-1 overflow-hidden">
           {loading && (
@@ -178,7 +205,7 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
             </div>
           )}
           {!loading && rows.length === 0 && (
-            <p className="py-3 text-sm text-foreground/70" data-testid={`${testid}-empty`}>{empty}</p>
+            <p className="py-3 text-sm text-neutral-500" data-testid={`${testid}-empty`}>{empty}</p>
           )}
           {!loading && shown.map((r, i) => (
             <div
@@ -189,14 +216,14 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
               onClick={r.onOpen}
               onKeyDown={(e) => { if (e.key === "Enter") r.onOpen(); }}
               data-testid={`${testid}-row-${r.id}`}
-              className={`flex cursor-pointer items-center justify-between gap-3 py-[7px] ${i > 0 ? "border-t border-kr-ink/[.12]" : ""}`}
+              className={`flex cursor-pointer items-center justify-between gap-3 py-[7px] ${i > 0 ? "border-t border-white/[.14]" : ""}`}
             >
               <div className="flex min-w-0 flex-col gap-0.5">
-                <p className="truncate text-[15px] font-semibold leading-5 tracking-[-0.006em]">{r.title}</p>
-                {r.meta && <p className="truncate text-xs leading-4 text-foreground/70">{r.meta}</p>}
+                <p className="truncate text-[15px] font-medium leading-5 tracking-[-0.006em] text-neutral-300">{r.title}</p>
+                {r.meta && <p className="truncate text-xs leading-4 text-neutral-500">{r.meta}</p>}
               </div>
               <span className="flex shrink-0 items-center gap-2.5">
-                {r.amount && <span className="font-mono text-[13px] font-medium leading-5">{r.amount}</span>}
+                {r.amount && <span className="font-mono text-[13px] leading-5 text-neutral-400">{r.amount}</span>}
                 <OpenButton onClick={(e) => { e.stopPropagation(); r.onOpen(); }} label={`Open: ${r.title}`} />
               </span>
             </div>
@@ -204,7 +231,7 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
         </div>
 
         <div className="mt-auto flex shrink-0 items-end justify-between gap-3 pt-2">
-          <p className="min-w-0 flex-1 truncate text-xs text-foreground/70">{more}</p>
+          <p className="min-w-0 flex-1 truncate text-xs text-neutral-500">{more}</p>
           {cta && (
             <button
               type="button"
@@ -212,7 +239,7 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
               data-testid={`${testid}-cta`}
               /* ASK-25 — MATTE. The section's bright hue as a flat fill: no
                  lip, no glow, no shadow (the founder: "no glow just matte"). */
-              className="flex h-9 shrink-0 items-center gap-1.5 rounded-pill bg-[hsl(var(--kr-glass-from))] px-4 text-xs font-semibold text-[hsl(var(--kr-glass-btn-fg,0_0%_100%))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60"
+              className="flex h-9 shrink-0 items-center gap-1.5 rounded-pill bg-[hsl(var(--kr-glass-from))] px-4 text-xs font-semibold text-[hsl(var(--kr-glass-btn-fg,0_0%_100%))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
             >
               {cta}
               <CaretRight size={11} weight="bold" aria-hidden="true" />
@@ -224,31 +251,36 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
   );
 }
 
-/** One of the three stacked cards: dot · title · count on one line, one
- *  line of content, and a single centred chevron — the card is the link. */
+/** One of the three stacked cards, on the black board: dot · title · count
+ *  on one line, one line of content, and a single centred chevron — the card
+ *  is the link.
+ *  2026-09-14, founder — "use the card color in the image": the old dark
+ *  band's cards, i.e. .kr-glass in the section's hue at the .10/.05 tint the
+ *  .kr-desk--* variants dial it to, with the recipe's own white hairline. The
+ *  tone class sits on the card itself so the glass reads its hue. */
 function StackCard({ tone, title, count, line, tail, loading, empty, to, testid }) {
   return (
     <Link
       to={to}
       data-testid={testid}
-      className="kr-desk-card kr-lift flex min-h-0 flex-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
+      className={`kr-glass kr-lift ${TONE[tone]} flex min-h-0 flex-1 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70`}
     >
-      <div className={`${TONE[tone]} flex w-full items-center justify-between gap-3 px-3.5 py-2.5`}>
+      <div className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5">
         <div className="flex min-w-0 flex-col gap-1">
           <div className="flex min-w-0 items-center gap-2">
             <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full bg-[hsl(var(--kr-glass-from))]" />
-            <h3 className="text-base font-semibold tracking-[-0.006em] text-[hsl(var(--kr-glass-to))]">{title}</h3>
-            <CountPill n={count} />
+            <h3 className="text-base font-medium tracking-[-0.006em] text-white/85">{title}</h3>
+            <CountPill n={count} onInk />
           </div>
           {loading
             ? <div className="ds-skeleton h-4 w-2/3 rounded-control" aria-hidden="true" />
-            : <p className="truncate text-sm font-medium">
+            : <p className="truncate text-sm text-neutral-300">
                 {line
-                  ? <>{line}{tail && <span className="font-normal text-foreground/60"> &middot; {tail}</span>}</>
-                  : <span className="text-foreground/70">{empty}</span>}
+                  ? <>{line}{tail && <span className="text-neutral-500"> &middot; {tail}</span>}</>
+                  : <span className="text-neutral-500">{empty}</span>}
               </p>}
         </div>
-        <CaretRight size={22} weight="bold" aria-hidden="true" className="kr-arrow shrink-0 text-foreground/60 transition-transform duration-200" />
+        <CaretRight size={22} weight="bold" aria-hidden="true" className="kr-arrow shrink-0 text-white/50 transition-transform duration-200" />
       </div>
     </Link>
   );
@@ -268,7 +300,14 @@ export default function Desk() {
   const focusDecisionId = searchParams.get("decision");
   // KM-28 — ?decision=<id> redirects to the page rather than raising the
   // modal behind the Desk, so a notification and a tap land in the same place.
-  useEffect(() => { if (focusDecisionId) navigate(`/decisions/${focusDecisionId}`, { replace: true }); }, [focusDecisionId, navigate]);
+  // ?decision=<id> (notifications, pasted links) opens the same popup over
+  // the Desk; closing it drops the parameter so the Desk is plain again.
+  const [openDecisionId, setOpenDecisionId] = useState(null);
+  useEffect(() => { if (focusDecisionId) setOpenDecisionId(focusDecisionId); }, [focusDecisionId]);
+  const closeDecision = () => {
+    setOpenDecisionId(null);
+    if (focusDecisionId) navigate("/inbox", { replace: true });
+  };
 
   // The board fetch — the three chips in parallel, cache-shared, 30s fresh.
   const boardQs = useQueries({
@@ -303,6 +342,26 @@ export default function Desk() {
     [approvalsQ.data, user] // eslint-disable-line react-hooks/exhaustive-deps
   );
   const showApprovals = user?.role === "owner" || hasPerm(user, "approvals") || approvals.length > 0;
+  /* 2026-09-14, founder — "if I click the open icon for the approvals, open
+     the drawer in the Decision Desk itself, don't go to My Work". The row
+     opens TaskCard's drawer (drawerOnly) over this page; the people list and
+     the role options the drawer's Reassign needs are fetched only once a
+     drawer is open. Any change the drawer makes refreshes the approvals
+     feed and the task list the KPI tiles read, so the row leaves the column
+     the moment it is signed off. */
+  const qc = useQueryClient();
+  const [openTaskId, setOpenTaskId] = useState(null);
+  const openTask = openTaskId ? (approvalsQ.data || []).find((t) => t.id === openTaskId) : null;
+  const usersQ = useQuery({
+    queryKey: ["users"],
+    queryFn: () => api.get("/users").then((r) => r.data),
+    enabled: !!openTaskId,
+  });
+  const roleOptions = useMemo(() => [{ key: "owner", label: "Owner" }, ...(tenant?.roles || [])], [tenant?.roles]);
+  const refreshTasks = () => {
+    qc.invalidateQueries({ queryKey: ["tasks"] });
+    qc.invalidateQueries({ queryKey: ["desk-summary"] });
+  };
 
   // ASK-25 · Leave: the chip on the Desk, the cards on /approvals.
   const canApproveLeave = user?.role === "owner" || hasPerm(user, "leave_approve");
@@ -548,10 +607,54 @@ export default function Desk() {
           trough between Decisions and Approvals is the tighter 32px the
           founder asked for. The right column splits 1.35 : 1 between Task
           approvals and the stack. Below lg everything is one column. */}
+      {/* 2026-09-14, founder — ONE BLACK CONTAINER. The three columns sit on
+          the ink and are parted by 1px white hairlines (vertical between the
+          columns, horizontal between the rows) rather than boxed in frost;
+          only the three-row stack keeps cards, in the old band's dark glass.
+          The column formula is unchanged — Decisions still takes the well's
+          share — but the 32px trough is now padding either side of the
+          rule instead of a grid gap, so the line sits centred in it.
+          lg:-mb-8 + square bottom corners: the black runs to the viewport's
+          floor through the content wrapper's 2rem bottom padding (Layout's
+          lg:p-8) — the founder: "there is a gap in the bottom, fill it with
+          black". The board's own bottom padding keeps the rows off the edge.
+
+          THE TABS. From lg the two list headings stand ABOVE the board as
+          browser tabs (.kr-desk-tab), and the board is the page under them.
+          The strip is a second grid with the board's exact columns and
+          padding. Each tab is pulled left by the column's own padding and
+          pads itself by the same amount, so the tab's BOX starts where the
+          column's box starts and the tab's TEXT sits over the column's text
+          (founder: "left align the header tab"). The first tab therefore
+          begins at the board's own corner, the way Chrome's first tab meets
+          the window: no fillet on its outer side, and the board's top-left
+          corner is squared under it. The stack column's cell is empty.
+          Below lg the headings ride their columns instead. */}
+      <div className="flex flex-col lg:min-h-0 lg:flex-1">
+        <div
+          aria-hidden="true"
+          data-testid="desk-tabs"
+          className={`hidden shrink-0 px-5 lg:grid ${showDecisions ? "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]" : ""}`}
+        >
+          {showDecisions && (
+            <div className="flex items-end">
+              <DeskHeading tone="needs" title="Decisions" count={counters ? counters.needs_decision : null}
+                note="longest waiting first" className="kr-desk-tab kr-desk-tab--first -ml-5 h-10 pl-5 pr-4" />
+            </div>
+          )}
+          <div className={`grid min-w-0 ${showDecisions ? "lg:pl-5" : ""} ${showApprovals ? "lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]" : ""}`}>
+            {showApprovals && (
+              <div className="flex items-end">
+                <DeskHeading tone="flag" title="Task approvals" count={approvalsQ.data ? approvals.length : null}
+                  className={`kr-desk-tab -ml-5 h-10 pl-5 pr-4 ${showDecisions ? "" : "kr-desk-tab--first"}`} />
+              </div>
+            )}
+          </div>
+        </div>
       <section
         aria-label="Decision desk"
         data-testid="desk-board"
-        className={`grid gap-4 lg:min-h-0 lg:flex-1 lg:gap-8 lg:pb-3 ${showDecisions ? "lg:grid-cols-[calc((100%-5rem)*29/74)_minmax(0,1fr)]" : ""}`}
+        className={`kr-desk-board grid gap-5 lg:-mb-8 lg:min-h-0 lg:flex-1 lg:gap-0 ${showDecisions || showApprovals ? "lg:rounded-tl-none" : ""} ${showDecisions ? "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]" : ""}`}
       >
         {showDecisions && (
           <DeskCard
@@ -569,16 +672,17 @@ export default function Desk() {
               title: c.title,
               meta: c.context_line,
               amount: Number(c.amount) > 0 ? inrCompact(c.amount) : null,
-              onOpen: () => navigate(`/decisions/${c.target_id}`),
+              onOpen: () => setOpenDecisionId(c.target_id),
             }))}
             moreSuffix=" waiting"
             cta={topDecision ? "Review" : null}
-            onCta={() => topDecision && navigate(`/decisions/${topDecision.target_id}`)}
+            onCta={() => topDecision && setOpenDecisionId(topDecision.target_id)}
             testid="desk-decisions"
+            className="lg:border-r lg:border-white/[.14] lg:pr-5"
           />
         )}
 
-        <div className={`grid min-w-0 gap-4 ${showApprovals ? "lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]" : ""}`}>
+        <div className={`grid min-w-0 gap-5 ${showDecisions ? "lg:pl-5" : ""} ${showApprovals ? "lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:gap-0" : ""}`}>
           {showApprovals && (
             <DeskCard
               tone="flag"
@@ -590,15 +694,17 @@ export default function Desk() {
                 id: t.id,
                 title: t.title,
                 meta: [t.assignee_name, daysLabel(daysSince(t.created_at))].filter(Boolean).join(" · "),
-                onOpen: () => navigate(`/my-work?task=${t.id}`),
+                onOpen: () => setOpenTaskId(t.id),
               }))}
               cta="Approvals"
-              onCta={() => navigate("/my-work?view=approvals")}
+              /* The pill goes to My Work's Approvals view on MY approvals. */
+              onCta={() => navigate("/my-work?view=approvals&scope=mine")}
               testid="desk-approvals"
+              className="lg:border-r lg:border-white/[.14] lg:pr-5"
             />
           )}
 
-          <div className="flex min-w-0 flex-col gap-2.5">
+          <div className={`flex min-w-0 flex-col gap-2.5 ${showApprovals ? "lg:pl-5" : ""}`}>
             <StackCard
               tone="today"
               title="Due today"
@@ -636,6 +742,23 @@ export default function Desk() {
           </div>
         </div>
       </section>
+      </div>
+
+      {openDecisionId && (
+        <DecisionDialog decisionId={openDecisionId} open onClose={closeDecision} />
+      )}
+
+      {openTask && (
+        <TaskCard
+          drawerOnly
+          t={openTask}
+          open
+          onToggleOpen={() => setOpenTaskId(null)}
+          onChange={refreshTasks}
+          members={usersQ.data || []}
+          roleOptions={roleOptions}
+        />
+      )}
     </div>
   );
 }

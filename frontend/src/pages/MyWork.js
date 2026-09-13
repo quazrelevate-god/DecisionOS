@@ -1478,7 +1478,7 @@ function dueLabel(iso) {
  * `showAssignee` too: the faces on the card and the Assigned section in the
  * drawer show everyone on the task, for everyone.
  */
-function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions = [], scores, highlight = false, selected = false, onToggleSelect, open, onToggleOpen }) {
+export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions = [], scores, highlight = false, selected = false, onToggleSelect, open, onToggleOpen, drawerOnly = false }) {
   const { user } = useAuth();
   // MW-01 fix: the queryClient is used to write PATCH responses straight
   // into the cache before onChange() invalidates. The old flow was
@@ -1734,6 +1734,655 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
 
   const isOp = t.task_type === "operational" || !!t.op_category;
 
+
+  /* 2026-09-14, founder — the drawer is a value of its own so a caller that
+     only wants the DRAWER (the Decision Desk's Task approvals column: "open
+     the drawer in the decision desk itself, don't go to My Work") can render
+     it without the tile. `drawerOnly` returns just this; the tile below
+     embeds the same element where the Sheet always was. Declared last, so
+     everything the drawer reads is already in scope. */
+  const drawer = (
+    <>
+    {/* ASK-15 (2026-09-13): task detail slides in from the right as a
+        Sheet, not an inline expand — kept as one drawer holding BOTH the
+        mobile and desktop bodies so the two `hidden`/`lg:hidden` gates
+        decide which one renders at each breakpoint. */}
+    <Sheet open={expanded} onOpenChange={(o) => { if (!o && expanded) setExpanded(); }}>
+      <SheetContent side="right"
+        hideClose
+        /* MW-15 — w-[92%] below sm, not w-full. The in-header close fixed
+           the dead end, but at full width there is no scrim left to tap,
+           and tapping outside is the gesture a phone user reaches for
+           first. An 8% strip costs nothing and restores it, so the drawer
+           now has three ways out on a phone: the close, the scrim, and
+           Escape for anyone on a keyboard. */
+        /* ASK-27 — the founder's frosted sheet, with a rounded leading edge
+           and a long soft shadow onto the page. ASK-30: its wash is a light
+           neutral gray now, not blue-white — just dark enough that the
+           white pills sit visibly on top of it. */
+        className="w-[92%] overflow-hidden border-l-0 p-0 sm:w-full sm:max-w-2xl sm:rounded-l-[2rem] bg-[linear-gradient(165deg,hsl(0_0%_95%),hsl(0_0%_90.5%))] shadow-[-30px_0_80px_-30px_hsl(0_0%_0%/0.45)]"
+        data-testid={`task-drawer-${t.id}`}
+        /* MW-17 — the drawer supplies its own close, so send focus there on
+           open. Without this Radix focuses the stock close. */
+        onOpenAutoFocus={(e) => { e.preventDefault(); closeRef.current?.focus(); }}>
+        <div className="h-full overflow-y-auto">
+        {/* ASK-27 — the close is INSIDE the sheet now, at every width. It
+            was a tab hanging off the left edge, which the founder read as
+            detached from the card. It sits at the header's right as a
+            glass button with a soft blue halo, so it is the easiest thing
+            in the drawer to find; MW-15's rule (one close, reachable at
+            every width) holds without the tab. ASK-28: the ⋯ beside it is
+            gone on the founder's call — Delete now sits at the bottom of
+            the drawer and attachments already show in its body. */}
+        <SheetHeader className="sticky top-0 z-10 flex-row items-start gap-3 space-y-0 bg-[hsl(0_0%_95%/0.85)] px-5 pb-4 pt-5 text-left backdrop-blur-xl lg:px-7 lg:pt-6">
+          <div className="min-w-0 flex-1 pt-1.5">
+            <SheetTitle className="text-left text-[22px] font-semibold leading-tight tracking-tight text-slate-900">{t.title}</SheetTitle>
+            {/* The due date sits under the title on desktop (the phone body
+                has its own info card for it). ASK-29: the "Status → waiting
+                2 min ago" line that used to share this row is gone — every
+                change is on the Activity timeline at the bottom instead. */}
+            {t.due_date && (
+              <p className="mt-1.5 hidden items-center gap-1 text-[13px] text-slate-500 lg:flex" data-testid={`task-meta-${t.id}`}>
+                <CalendarBlank size={13} weight="bold" aria-hidden="true" /> Due {dueLabel(t.due_date)}
+              </p>
+            )}
+          </div>
+          <SheetClose
+            ref={closeRef}
+            data-testid={`task-drawer-close-${t.id}`}
+            aria-label="Close task"
+            title="Close"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/90 text-slate-900 ring-1 ring-inset ring-white shadow-[0_8px_22px_-8px_hsl(0_0%_0%/0.45),0_0_0_4px_hsl(0_0%_0%/0.07)] backdrop-blur-md transition-shadow hover:bg-white hover:shadow-[0_10px_26px_-8px_hsl(0_0%_0%/0.5),0_0_0_4px_hsl(0_0%_0%/0.13)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40">
+            <X size={18} weight="bold" aria-hidden="true" />
+          </SheetClose>
+        </SheetHeader>
+    {/* KR-14.22 · MOBILE EXPANDED BODY — reference-driven layout for the
+        task expanded view on phones. Uses the same handlers/state as the
+        desktop body below; the desktop body is `hidden lg:block` from
+        here on. */}
+    <div className="px-4 pb-5 space-y-5 pt-4 lg:hidden" data-testid={`task-body-m-${t.id}`}>
+      {/* KR-14.23 — a single accent status pill leads the body. The
+          summary row above already shows the full meta row (status +
+          due + context), so repeating it here made the pill look
+          doubled on tasks that had all three fields. */}
+      <div>
+        <span className={`inline-flex rounded-pill px-2.5 py-0.5 text-xs font-medium ${
+          overdue && !terminal ? "bg-kr-accent text-white"
+          : "bg-orange-50 text-kr-accent"
+        }`}>
+          {STATUS_LABEL[t.status] || t.status}
+        </span>
+      </div>
+
+      <AssigneesEditor t={t} members={members} roleOptions={roleOptions}
+        canEdit={canEditPeople} onPatched={onPeoplePatched} />
+
+      {/* Description card (orange) */}
+      {t.description && (
+        <div className="flex items-start gap-3 rounded-cardlg bg-orange-50/70 p-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-tile bg-orange-100 text-kr-accent">
+            <File size={18} weight="regular" />
+          </span>
+          <p className="text-sm leading-relaxed">{t.description}</p>
+        </div>
+      )}
+
+      {/* Info card — the top row (workflow / due date) only renders when
+          there is something to show; the created-ago footnote only gets a
+          top border when the top row is present. Prevents the hollow
+          curve above a lone "Created X ago" line. */}
+      {(t.workflow_summary?.title || t.due_date || t.created_at) && (() => {
+        const hasTop = !!(t.workflow_summary?.title || t.due_date);
+        return (
+          <div className="rounded-cardlg border border-nm-edge/40 p-3">
+            {hasTop && (
+              <div className="flex items-center gap-2">
+                {t.workflow_summary?.title && (
+                  <>
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-violet-50 text-violet-500">
+                      <Buildings size={14} weight="regular" />
+                    </span>
+                    <span className="min-w-0 truncate text-sm">{t.workflow_summary.title}</span>
+                  </>
+                )}
+                {t.workflow_summary?.title && t.due_date && (
+                  <span className="mx-1 h-5 w-px shrink-0 bg-nm-edge/60" />
+                )}
+                {t.due_date && (
+                  <>
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-green-50 text-green-600">
+                      <ClockCounterClockwise size={14} weight="regular" />
+                    </span>
+                    <span className="min-w-0 truncate text-sm">
+                      Due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+            {t.created_at && (
+              <div className={`flex items-center gap-1 text-xs text-muted-foreground ${hasTop ? "mt-3 border-t border-nm-edge/30 pt-2" : ""}`}>
+                <span aria-hidden="true" className="h-1 w-1 rounded-full bg-muted-foreground/60" />
+                Created {timeAgo(t.created_at)}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* KM-5 · STATUS — ONE ROW, A SEGMENTED BAR.
+          KM-6 note: `blocked` (pending approval) still matches no segment —
+          it is a gate the approver controls, not a state the assignee sets.
+          KM-3 put five pills in a flex-wrap, which at 343px could not hold
+          them and broke onto a second line — and five states genuinely do
+          not fit one row, so "Waiting" goes on the founder's call. Four
+          remain and they are the states work actually moves through.
+          It is a segmented bar now rather than five loose chips: a single
+          .kr-pressed track with four equal segments, and the selected one
+          fills with ITS OWN status colour, so choosing a status visibly
+          moves the coloured pill along the track. Not Started stays the
+          default and has no segment — it is the absence of a choice, and
+          tapping the active segment returns to it.
+          No transition utility: the track's children swap fills, and the
+          selected segment also swaps against .kr-pressed's shadow, which is
+          not interpolable against an outset pair. */}
+      {!terminal && !awaitingApproval && !noteOnly && (
+        <div className="kr-pressed flex items-center gap-1 rounded-pill p-1" role="group"
+             aria-label="Task status" data-testid={`status-pills-m-${t.id}`}>
+          {M_STATUS_PILLS.map((sp) => {
+            const on = stageOf(t.status) === sp.key;
+            return (
+              <button
+                key={sp.key}
+                type="button"
+                onClick={() => setStatus(sp.key)}
+                aria-pressed={on}
+                data-testid={`status-pill-m-${sp.key}-${t.id}`}
+                /* text-[10px] and px-0.5: four segments share 323px of a
+                   343px row, so each label gets ~76px and "Not Started" is
+                   the one that decides the size. */
+                className={`flex h-9 min-w-0 flex-1 basis-0 items-center justify-center rounded-pill px-0.5 text-[10px] leading-tight ${
+                  /* KM-6 — the selected segment is RAISED, not a flat
+                     swatch: .kr-pop supplies the lift and the colour
+                     utility overrides its white ground (utilities layer
+                     beats components), so the moving pill reads as a
+                     physical thing sitting in the track. */
+                  on ? `kr-pop ${sp.on} font-semibold` : "text-foreground/60"
+                }`}
+              >
+                <span className="truncate">{sp.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {/* ASK-28 TK-07 — Waiting on, under the two stages. */}
+      {!terminal && !awaitingApproval && (
+        <WaitingOn t={t} members={members} onPatched={onPeoplePatched} readOnly={noteOnly} />
+      )}
+
+      {/* ASK-27 — the Execution Guide is NOT rendered here any more. MW-16
+          already renders it (and the trail) once, below both bodies, for
+          every width — this second copy put the guide and its buttons on
+          the phone twice. */}
+
+      {/* Actions row — Complete + attach controls, now below the two
+          plan-building buttons above. */}
+      {!isTerminal(t) && !awaitingApproval && !signoffPending && !noteOnly && (
+        /* KM-6 — flex-wrap. Cancel joining this row made five controls
+           (Complete, Cancel, photo, file, voice) share 343px, and Complete
+           was truncating to "Comp…". Wrapping lets the two endings hold the
+           first line and the three attachment circles drop to the second. */
+        <div className="flex items-center gap-2">
+          {/* KM-7 — Complete and Cancel are ONE welded control, and Cancel is
+              icon-only. Five worded/round controls could not share 343px, so
+              KM-6 wrapped the row onto two lines; dropping the word "Cancel"
+              and joining the two endings into a single .kr-pop group buys
+              back enough width for the whole row to fit again.
+              Cancel keeps a real aria-label and title — an icon-only
+              destructive action with no name is not a control, it is a
+              guess. */}
+          <div className="kr-pop flex shrink-0 items-center gap-1 rounded-pill p-1"
+               role="group" aria-label="Finish this task">
+            <button
+              onClick={complete}
+              data-testid={`complete-m-${t.id}`}
+              title={t.evidence_required && !hasEvidence ? "Add proof first" : "Mark as complete"}
+              className="flex h-9 items-center gap-1.5 rounded-pill bg-kr-ink px-3.5 text-xs font-medium text-white"
+            >
+              <CheckCircle size={13} weight="bold" aria-hidden="true" /> Complete
+            </button>
+            <button
+              onClick={() => setStatus("cancelled")}
+              data-testid={`cancel-m-${t.id}`}
+              aria-label="Cancel this task"
+              title="Cancel this task"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-foreground/70"
+            >
+              <XCircle size={15} weight="bold" aria-hidden="true" />
+            </button>
+          </div>
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            data-testid={`photo-m-${t.id}`}
+            aria-label="Attach a photo"
+            className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground disabled:opacity-40"
+          >
+            <Camera size={16} weight="regular" />
+          </button>
+          <button
+            onClick={() => evidenceRef.current?.click()}
+            disabled={uploading}
+            data-testid={`upload-file-m-${t.id}`}
+            aria-label="Upload a file"
+            className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground disabled:opacity-40"
+          >
+            <FileArrowUp size={16} weight="regular" />
+          </button>
+          <button
+            onClick={toggleVoice}
+            data-testid={`voice-m-${t.id}`}
+            aria-label={recording ? "Stop recording" : "Record voice reply"}
+            className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${recording ? "bg-kr-accent text-white" : "kr-pop text-foreground"}`}
+          >
+            {recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="regular" />}
+          </button>
+        </div>
+      )}
+
+      {/* ASK-27 — the phone footer ("No activity yet" + its own "Log update
+          or hand off") is gone: TaskTrail below renders both, full width, at
+          every size, so the phone drawer showed each of them twice. */}
+    </div>
+
+    {/* EXPANDED BODY (desktop) — ASK-27 layout, top to bottom as in the
+        founder's reference: the context card, Assigned to, Status with the
+        % control beside it, then Complete and Attach. The Execution Guide
+        and Activity follow below both bodies (MW-16). */}
+    <div id={`task-card-body-${t.id}`} className="hidden space-y-6 px-7 pb-6 pt-2 lg:block">
+    {t.description && (
+      <div className={`${DRAWER_CARD} flex items-start gap-4 p-4`} data-testid={`task-context-${t.id}`}>
+        <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[linear-gradient(160deg,hsl(0_0%_100%),hsl(0_0%_88%))] text-neutral-800 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.9)]">
+          <File size={24} weight="duotone" aria-hidden="true" />
+        </span>
+        <p className="min-w-0 whitespace-pre-line pt-1 text-[15px] leading-relaxed text-slate-600">{t.description}</p>
+      </div>
+    )}
+    {/* ASK-26 — replaces the owner-only one-name assignee line: everyone on
+        the task, for everyone who opens it. */}
+    <AssigneesEditor t={t} members={members} roleOptions={roleOptions}
+      canEdit={canEditPeople} onPatched={onPeoplePatched} />
+    {/* U7-05.4: AI-priority bars get a "why?" tooltip on the container
+        so users understand what drove the ranking. */}
+    {scores && (
+      <div title="AI ranker: higher score = more urgent to open next. Bars show what drove it -- priority signal, overdue, workflow blockage, complaints touched." data-testid={`ai-scores-${t.id}`}>
+        <PriorityScoreBars scores={scores} />
+      </div>
+    )}
+
+    {isOp && (
+      <div className="flex flex-wrap items-center gap-2" data-testid={`op-meta-${t.id}`}>
+        {t.op_category && <span className={`${PILL} ${QUIET_PILL}`}><Tag size={11} weight="bold" /> {t.op_category}</span>}
+        {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
+        {t.approval_required && (
+          /* 2026-09-14 — the card-face chip, in the leave card's tones:
+             amber while it waits, emerald once approved, rose for changes.
+             The words are ASK-28 TK-05's, which name the moment (start or
+             close). */
+          <span data-testid={`op-approval-${t.id}`} className={`${PILL} ${
+            t.approval_status === "approved" ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
+            : t.approval_status === "rejected" ? "bg-rose-50 text-rose-700 ring-rose-100"
+            : t.approval_status === "pending" ? "bg-amber-50 text-amber-800 ring-amber-100"
+            : QUIET_PILL}`}>
+            <ShieldCheck size={11} weight="bold" /> {t.approval_status === "approved" ? "Approved" : t.approval_status === "pending" ? (apprStage === "close" ? "Waiting for approval to close" : "Pending approval") : t.approval_status === "rejected" ? "Changes requested" : `${t.approver_name || "Approval"} required${apprStage === "close" ? " to close" : ""}`}
+          </span>
+        )}
+      </div>
+    )}
+
+    {/* Full workflow chip in the expanded body -- carries the full title
+        alongside the stage, since we only show the stage snippet in
+        the summary row. */}
+    {t.workflow_summary && t.workflow_summary.id && (
+      <div>
+        <a
+          href={`/my-work?view=workflows&type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
+          data-testid={`wf-chip-full-${t.id}`}
+          className="inline-flex items-center gap-1.5 nm-tile px-2.5 py-1 text-xs font-mono bg-nm-sunken hover:bg-accent transition-colors"
+          title={`Open workflow: ${t.workflow_summary.title}`}
+        >
+          <FlowArrow size={12} weight="bold" aria-hidden="true" className="text-muted-foreground" />
+          <span className="font-medium text-[10px]">
+            {(t.workflow_summary.title || "Workflow").slice(0, 40)}
+          </span>
+          <span className="text-muted-foreground">·</span>
+          <span className=" text-[10px]">
+            {(t.workflow_summary.stage || "").replace(/_/g, " ")}
+          </span>
+        </a>
+      </div>
+    )}
+
+    {/* ASK-27 — STATUS: the status pill on the left, a rule, and the %
+        control on the right. "Set % manually" is no longer behind a
+        disclosure toggle — the bar beside it is the control. */}
+    {!terminal && !awaitingApproval && (
+      noteOnly ? (
+        /* ASK-28 TK-01 — the person who asked sees where the work is, not
+           the controls that move it: those belong to whoever does it. */
+        <section data-testid={`task-status-${t.id}`}>
+          <p className={DRAWER_LABEL}>Status</p>
+          <p className="text-[15px] font-medium text-slate-800" data-testid={`requester-status-${t.id}`}>
+            {STATUS_LABEL[t.status] || t.status} · {checklist ? checklist.pct : (t.progress || 0)}% done
+          </p>
+          {t.status === "waiting" && <div className="mt-3"><WaitingOn t={t} readOnly /></div>}
+        </section>
+      ) : (
+      <section data-testid={`task-status-${t.id}`}>
+        <p className={DRAWER_LABEL}>Status</p>
+        <div className="flex items-stretch gap-5">
+          <GlassSelect testid={`status-select-${t.id}`} ariaLabel="Task status" icon={Clock}
+            value={stageOf(t.status)} onChange={setStatus}
+            options={STATUS_OPTIONS.map((s) => ({ value: s.key, label: s.label }))}
+            triggerClassName="w-56 shrink-0 font-medium text-slate-800" />
+          <span aria-hidden="true" className="w-px shrink-0 bg-slate-900/10" />
+          <ProgressControl value={checklist ? checklist.pct : (t.progress || 0)} onCommit={setProgress}
+            checklist={checklist}
+            testid={`progress-select-${t.id}`} valueTestid={`progress-bar-${t.id}`} />
+        </div>
+        <div className="mt-3">
+          <WaitingOn t={t} members={members} onPatched={onPeoplePatched} />
+        </div>
+      </section>
+      )
+    )}
+
+    {(() => {
+      const beUrl = process.env.REACT_APP_BACKEND_URL;
+      const atts = t.attachments || [];
+      const refs = atts.filter((a) => a.kind === "reference");
+      const proof = atts.filter((a) => a.kind !== "reference");
+      const insights = t.reference_insights || [];
+      const isImg = (a) => a.kind === "photo" || (a.content_type || "").startsWith("image/");
+      const isAudio = (a) => a.kind === "voice" || (a.content_type || "").startsWith("audio/");
+      const renderAtt = (a) => (
+        isImg(a)
+          ? <button key={a.url} type="button" onClick={() => setLightbox(`${beUrl}${a.url}`)}
+              className="relative w-20 h-20 nm-tile overflow-hidden group" title="Click to view full image"
+              data-testid={`att-photo-${t.id}-${a.url}`}>
+              <img src={`${beUrl}${a.url}`} alt={a.filename || "attachment"} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+              <span className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
+                <MagnifyingGlassPlus size={20} weight="bold" className="text-white" />
+              </span>
+            </button>
+          : isAudio(a)
+            ? <audio key={a.url} controls preload="none" src={`${beUrl}${a.url}`} className="h-9" data-testid={`att-voice-${t.id}-${a.url}`} />
+            : <a key={a.url} href={`${beUrl}${a.url}`} target="_blank" rel="noreferrer" data-testid={`att-file-${t.id}-${a.url}`}
+                className="inline-flex items-center gap-1.5 nm-tile px-2.5 py-1.5 text-xs font-mono hover:bg-accent transition-colors max-w-[180px]">
+                <File size={13} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
+              </a>
+      );
+      return (
+        <>
+          {refs.length > 0 && (
+            <div className="nm-inset mt-3 p-3" data-testid={`reference-block-${t.id}`}>
+              <p className="label-mono text-brand-blue flex items-center gap-1.5 mb-2">
+                <Paperclip size={13} weight="bold" /> Reference material · {refs.length}
+              </p>
+              <div className="flex flex-wrap gap-2 items-center">{refs.map(renderAtt)}</div>
+              {insights.length > 0 && (
+                <div className="mt-2 flex items-start gap-1.5" data-testid={`reference-insight-${t.id}`}>
+                  <Lightbulb size={13} weight="fill" className="text-brand-yellow shrink-0 mt-0.5" />
+                  <p className="text-xs text-muted-foreground line-clamp-2">{insights[insights.length - 1].summary}</p>
+                </div>
+              )}
+            </div>
+          )}
+          {proof.length > 0 && (
+            <div className="mt-3 nm-inset p-3" data-testid={`proof-block-${t.id}`}>
+              <p className="label-mono text-muted-foreground flex items-center gap-1.5 mb-2">
+                <Paperclip size={13} weight="bold" /> Proof of work · {proof.length}
+              </p>
+              <div className="flex flex-wrap gap-2 items-center">{proof.map(renderAtt)}</div>
+            </div>
+          )}
+        </>
+      );
+    })()}
+
+    <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
+      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-3xl p-2" data-testid={`photo-lightbox-${t.id}`}>
+        <DialogHeader>
+          <DialogTitle className="sr-only">Proof photo</DialogTitle>
+        </DialogHeader>
+        {lightbox && <img src={lightbox} alt="proof full" className="w-full h-auto max-h-[calc(80vh/var(--ui-scale,1))] object-contain" />}
+      </DialogContent>
+    </Dialog>
+
+    {/* 2026-09-14, founder — the approval step joins the drawer's glass: a
+        DRAWER_CARD holding the ink Approve pill, with white glass pills for
+        the two ways to push back. ASK-28 TK-05 decides when it shows
+        (before work starts, or once the work is marked done) and what it
+        says for each. */}
+    {needsMyApproval && (
+      <div className={`mt-4 p-4 ${DRAWER_CARD}`} data-testid={`approval-actions-${t.id}`} data-stage={apprStage}>
+        <p className={DRAWER_LABEL}>Needs your approval</p>
+        <p className="text-sm text-slate-700">{apprStage === "close"
+          ? `${t.assignee_name || "The assignee"} marked this task complete. Check the work — approving closes it.`
+          : `This task needs your approval before ${t.assignee_name || "the assignee"} can start work.`}</p>
+        {t.approval_status === "rejected" && t.rejection_reason && <p className="mt-1.5 text-xs text-slate-500">Previously requested: {t.rejection_reason}</p>}
+        <div className="mt-3.5 flex flex-wrap gap-2">
+          <button onClick={approveTask} data-testid={`approve-${t.id}`}
+            className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-pill px-5 text-sm font-medium ${INK_PILL}`}>
+            <CheckCircle size={16} weight="bold" aria-hidden="true" /> Approve
+          </button>
+          <button onClick={rejectTask} data-testid={`reject-${t.id}`}
+            className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
+            <WarningCircle size={16} weight="bold" aria-hidden="true" /> Request changes
+          </button>
+          <button onClick={clarifyTask} data-testid={`clarify-${t.id}`}
+            className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
+            <ChatText size={16} weight="bold" aria-hidden="true" /> Ask clarification
+          </button>
+        </div>
+      </div>
+    )}
+
+    {lockedForAssignee && (
+      <div className={`mt-4 flex items-start gap-3 p-4 ${DRAWER_CARD}`} data-testid={`approval-locked-${t.id}`}>
+        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-600 ${GLASS_PILL}`}>
+          <LockKey size={16} weight="bold" aria-hidden="true" />
+        </span>
+        <div>
+          <p className="text-sm font-semibold text-neutral-900">{t.approval_status === "rejected" ? "Changes requested" : "Awaiting approval"}</p>
+          <p className="mt-0.5 text-xs text-slate-600">You can start once {t.approver_name || "the approver"} approves this task. Status, progress and the execution plan are locked until then.</p>
+          {t.approval_status === "rejected" && t.rejection_reason && <p className="mt-1.5 text-xs text-slate-500">Note: {t.rejection_reason}</p>}
+        </div>
+      </div>
+    )}
+
+    {/* ASK-28 TK-05 — approval before closing, seen by everyone but the approver.
+        2026-09-14 — both banners wear the same glass card as "Awaiting
+        approval" above; the sent-back one carries the rose of the
+        "Changes requested" chip. */}
+    {signoffPending && !canApprove && (
+      <div className={`mt-4 flex items-start gap-3 p-4 ${DRAWER_CARD}`} data-testid={`approval-signoff-${t.id}`}>
+        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-600 ${GLASS_PILL}`}>
+          <ShieldCheck size={16} weight="bold" aria-hidden="true" />
+        </span>
+        <div>
+          <p className="text-sm font-semibold text-neutral-900">Waiting for approval</p>
+          <p className="mt-0.5 text-xs text-slate-600">Marked complete. {t.approver_name || "The approver"} will check the work and close it. Moving the status back takes the request away.</p>
+        </div>
+      </div>
+    )}
+    {signoffSentBack && (
+      <div className={`mt-4 flex items-start gap-3 p-4 ${DRAWER_CARD}`} data-testid={`approval-changes-${t.id}`}>
+        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-rose-700 ${GLASS_PILL}`}>
+          <WarningCircle size={16} weight="bold" aria-hidden="true" />
+        </span>
+        <div>
+          <p className="text-sm font-semibold text-neutral-900">Changes requested</p>
+          <p className="mt-0.5 text-xs text-slate-600">{t.rejection_reason ? `${t.approver_name || "The approver"}: ${t.rejection_reason}` : `${t.approver_name || "The approver"} sent this back.`} Complete it again when it's fixed — it goes back for approval.</p>
+        </div>
+      </div>
+    )}
+
+    {t.evidence_required && !isTerminal(t) && !awaitingApproval && (
+      <div className={`mt-3 flex items-start gap-2 nm-tile p-2.5 ${hasEvidence ? "bg-nm-sunken" : "bg-kr-accent/8"}`} data-testid={`evidence-required-${t.id}`}>
+        {hasEvidence ? <CheckCircle size={16} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0" /> : <Info size={16} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0 text-kr-accent" />}
+        <p className="text-xs">{hasEvidence
+          ? "Proof attached — you can mark this task complete."
+          : "This task requires proof before it can be completed. Add a photo, voice note, or file below."}</p>
+      </div>
+    )}
+
+    {!isTerminal(t) && !awaitingApproval && !signoffPending && !noteOnly && (
+      <div className="flex items-center gap-4">
+        {/* FUP-49: don't disable -- always click-through, handler shows
+            a clear toast if evidence is missing. Silent-disabled
+            buttons were the original bug. */}
+        <button onClick={complete} data-testid={`complete-${t.id}`}
+          title={t.evidence_required && !hasEvidence ? "Add a voice note or file first" : "Mark as complete"}
+          className={`flex h-14 shrink-0 items-center gap-2.5 rounded-pill px-7 text-base font-medium ${t.evidence_required && !hasEvidence ? `${GLASS_PILL} text-slate-500` : INK_PILL}`}>
+          <CheckCircle size={22} weight="fill" aria-hidden="true" /> Complete
+        </button>
+
+        <span aria-hidden="true" className="h-8 w-px shrink-0 bg-slate-900/10" />
+        <span className="text-[15px] text-slate-500">Attach:</span>
+        {/* ASK-27 — no camera button on desktop (the founder: a desktop is
+            not where anyone attaches with a camera). Its input stays: the
+            phone body's camera button opens it. */}
+        <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhoto} />
+        <input ref={evidenceRef} type="file" className="hidden" onChange={onEvidence} />
+        {/* ASK-28 — the two circles become two labelled pills, Document and
+            Voice, sharing the rest of the row equally (flex-1 basis-0). */}
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <button
+            onClick={() => evidenceRef.current?.click()}
+            disabled={uploading}
+            data-testid={`upload-file-${t.id}`}
+            title="Upload a document"
+            className={`flex h-12 min-w-0 flex-1 basis-0 items-center justify-center gap-2 rounded-pill text-[15px] font-medium text-slate-700 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}
+          >
+            <File size={19} weight="regular" aria-hidden="true" /> Document
+          </button>
+          <button
+            onClick={toggleVoice}
+            data-testid={`voice-${t.id}`}
+            title={recording ? "Stop and send voice reply" : "Record a voice reply"}
+            aria-label={recording ? "Stop recording and send" : undefined}
+            className={`flex h-12 min-w-0 flex-1 basis-0 items-center justify-center gap-2 rounded-pill text-[15px] font-medium transition-colors ${
+              recording ? "bg-kr-accent text-white" : `text-slate-700 hover:bg-white ${GLASS_PILL}`
+            }`}
+          >
+            {recording
+              ? <><Stop size={17} weight="fill" aria-hidden="true" /> Stop</>
+              : <><Microphone size={19} weight="regular" aria-hidden="true" /> Voice</>}
+          </button>
+        </div>
+        {recording && (
+          <button
+            onClick={cancelVoice}
+            data-testid={`voice-cancel-${t.id}`}
+            title="Discard recording"
+            aria-label="Discard recording"
+            className={GLASS_ICON_BTN}
+          >
+            <X size={18} weight="bold" aria-hidden="true" />
+          </button>
+        )}
+      </div>
+    )}
+
+    {isTerminal(t) && !awaitingApproval && !noteOnly && (
+      <div className="flex flex-wrap gap-2 mt-4" data-testid={`reopen-actions-${t.id}`}>
+        <button onClick={reopen} data-testid={`reopen-${t.id}`} className="flex items-center gap-2 bg-nm px-4 py-2 text-sm font-medium nm-btn hover:bg-accent transition-colors">
+          <ArrowClockwise size={16} weight="bold" /> Reopen
+        </button>
+        <span className="flex items-center text-xs text-muted-foreground">Completed by mistake? Reopen brings it back to your active work.</span>
+      </div>
+    )}
+
+    </div>
+
+    {/* MW-16 — the plan and the trail live OUTSIDE both breakpoint bodies,
+        because there is only ever one of each and the mobile layout needs
+        them too. They used to sit inside the desktop body, which is
+        `hidden lg:block`: the phone's 'Log update or hand off' bumped
+        trailOpenTrigger, TaskTrail dutifully opened its form, and the form
+        rendered inside a display:none subtree — MW-09 all over again, the
+        one control that records what happened inert on phones. Shared here,
+        both triggers open the same visible form. */}
+    <div className="space-y-6 px-4 pb-6 lg:px-7 lg:pb-8">
+      {!awaitingApproval && !noteOnly && (
+        <ExecutionPlan t={t} onChange={onChange} onPatched={applyPatched} members={members} roleOptions={roleOptions} />
+      )}
+      {/* ASK-28 TK-01 — the person who asked for this task isn't on it: the
+          status, plan and completion controls belong to whoever does it
+          (the server refuses a plan from anyone else), so say what they CAN
+          do here instead of showing controls. */}
+      {noteOnly && (
+        <p className="text-sm text-slate-500" data-testid={`requester-hint-${t.id}`}>
+          {t.created_by === user?.id
+            ? `You asked for this task, so ${t.assignee_name || "the team"} does the work. Leave a note below to follow up.`
+            : waitedOnMe
+            ? `${t.assignee_name || "The team"} is waiting on you for this task. Leave a note below with what they need.`
+            : `${t.assignee_name || "Your team"} is doing this task. Leave a note below to follow up.`}
+        </p>
+      )}
+      <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} noteOnly={noteOnly} />
+
+      {/* ASK-28 — Delete sits under "Log update or hand off", full width like
+          it, and asks first in the drawer's own glass. ASK-29: the same
+          gradient pill as the navy one, in maroon with white type. */}
+      {canDelete && (
+        <>
+          <button type="button" onClick={() => setConfirmDelete(true)}
+            data-testid={`drawer-delete-task-${t.id}`}
+            className={`-mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-pill text-[15px] font-medium ${MAROON_PILL}`}>
+            <Trash size={17} weight="bold" aria-hidden="true" /> Delete task
+          </button>
+          <AlertDialog open={confirmDelete} onOpenChange={(o) => { if (!deleting) setConfirmDelete(o); }}>
+            <AlertDialogContent data-testid={`drawer-delete-dialog-${t.id}`}
+              className="max-w-md gap-5 rounded-[1.75rem] border-0 bg-[linear-gradient(165deg,hsl(0_0%_96%),hsl(0_0%_91%))] p-6 shadow-[0_30px_80px_-20px_hsl(0_0%_0%/0.45)] sm:rounded-[1.75rem]">
+              <div className="flex items-start gap-4">
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-red-50 text-red-600 ring-1 ring-inset ring-red-100">
+                  <Trash size={22} weight="duotone" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 pt-0.5">
+                  <AlertDialogTitle className="text-lg font-semibold text-slate-900">Delete this task?</AlertDialogTitle>
+                  <AlertDialogDescription className="mt-1.5 text-sm leading-relaxed text-slate-600">
+                    “{t.title}” will be deleted permanently. It can no longer be opened or accessed by anyone, and this cannot be undone.
+                  </AlertDialogDescription>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <AlertDialogCancel disabled={deleting} data-testid={`drawer-delete-cancel-${t.id}`}
+                  className={`mt-0 h-11 rounded-pill border-0 px-5 text-sm font-medium text-slate-700 hover:bg-white ${GLASS_PILL}`}>
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction disabled={deleting} data-testid={`drawer-delete-confirm-${t.id}`}
+                  /* preventDefault keeps the dialog open while the request
+                     runs; deleteTask closes it once the server agrees. */
+                  onClick={(e) => { e.preventDefault(); deleteTask(); }}
+                  className={`h-11 rounded-pill px-5 text-sm font-medium disabled:opacity-60 ${MAROON_PILL}`}>
+                  {deleting ? "Deleting…" : "Yes, delete task"}
+                </AlertDialogAction>
+              </div>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      )}
+    </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+    </>
+  );
+  if (drawerOnly) return drawer;
+
   return (
     /* KR-11.2 — the red left stripe is GONE on the founder's call ("don't
        copy the old red strip… just use the overdue pill, that's it"). The
@@ -1905,642 +2554,7 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
         </div>
       </div>
 
-      {/* ASK-15 (2026-09-13): task detail slides in from the right as a
-          Sheet, not an inline expand — kept as one drawer holding BOTH the
-          mobile and desktop bodies so the two `hidden`/`lg:hidden` gates
-          decide which one renders at each breakpoint. */}
-      <Sheet open={expanded} onOpenChange={(o) => { if (!o && expanded) setExpanded(); }}>
-        <SheetContent side="right"
-          hideClose
-          /* MW-15 — w-[92%] below sm, not w-full. The in-header close fixed
-             the dead end, but at full width there is no scrim left to tap,
-             and tapping outside is the gesture a phone user reaches for
-             first. An 8% strip costs nothing and restores it, so the drawer
-             now has three ways out on a phone: the close, the scrim, and
-             Escape for anyone on a keyboard. */
-          /* ASK-27 — the founder's frosted sheet, with a rounded leading edge
-             and a long soft shadow onto the page. ASK-30: its wash is a light
-             neutral gray now, not blue-white — just dark enough that the
-             white pills sit visibly on top of it. */
-          className="w-[92%] overflow-hidden border-l-0 p-0 sm:w-full sm:max-w-2xl sm:rounded-l-[2rem] bg-[linear-gradient(165deg,hsl(0_0%_95%),hsl(0_0%_90.5%))] shadow-[-30px_0_80px_-30px_hsl(0_0%_0%/0.45)]"
-          data-testid={`task-drawer-${t.id}`}
-          /* MW-17 — the drawer supplies its own close, so send focus there on
-             open. Without this Radix focuses the stock close. */
-          onOpenAutoFocus={(e) => { e.preventDefault(); closeRef.current?.focus(); }}>
-          <div className="h-full overflow-y-auto">
-          {/* ASK-27 — the close is INSIDE the sheet now, at every width. It
-              was a tab hanging off the left edge, which the founder read as
-              detached from the card. It sits at the header's right as a
-              glass button with a soft blue halo, so it is the easiest thing
-              in the drawer to find; MW-15's rule (one close, reachable at
-              every width) holds without the tab. ASK-28: the ⋯ beside it is
-              gone on the founder's call — Delete now sits at the bottom of
-              the drawer and attachments already show in its body. */}
-          <SheetHeader className="sticky top-0 z-10 flex-row items-start gap-3 space-y-0 bg-[hsl(0_0%_95%/0.85)] px-5 pb-4 pt-5 text-left backdrop-blur-xl lg:px-7 lg:pt-6">
-            <div className="min-w-0 flex-1 pt-1.5">
-              <SheetTitle className="text-left text-[22px] font-semibold leading-tight tracking-tight text-slate-900">{t.title}</SheetTitle>
-              {/* The due date sits under the title on desktop (the phone body
-                  has its own info card for it). ASK-29: the "Status → waiting
-                  2 min ago" line that used to share this row is gone — every
-                  change is on the Activity timeline at the bottom instead. */}
-              {t.due_date && (
-                <p className="mt-1.5 hidden items-center gap-1 text-[13px] text-slate-500 lg:flex" data-testid={`task-meta-${t.id}`}>
-                  <CalendarBlank size={13} weight="bold" aria-hidden="true" /> Due {dueLabel(t.due_date)}
-                </p>
-              )}
-            </div>
-            <SheetClose
-              ref={closeRef}
-              data-testid={`task-drawer-close-${t.id}`}
-              aria-label="Close task"
-              title="Close"
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/90 text-slate-900 ring-1 ring-inset ring-white shadow-[0_8px_22px_-8px_hsl(0_0%_0%/0.45),0_0_0_4px_hsl(0_0%_0%/0.07)] backdrop-blur-md transition-shadow hover:bg-white hover:shadow-[0_10px_26px_-8px_hsl(0_0%_0%/0.5),0_0_0_4px_hsl(0_0%_0%/0.13)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40">
-              <X size={18} weight="bold" aria-hidden="true" />
-            </SheetClose>
-          </SheetHeader>
-      {/* KR-14.22 · MOBILE EXPANDED BODY — reference-driven layout for the
-          task expanded view on phones. Uses the same handlers/state as the
-          desktop body below; the desktop body is `hidden lg:block` from
-          here on. */}
-      <div className="px-4 pb-5 space-y-5 pt-4 lg:hidden" data-testid={`task-body-m-${t.id}`}>
-        {/* KR-14.23 — a single accent status pill leads the body. The
-            summary row above already shows the full meta row (status +
-            due + context), so repeating it here made the pill look
-            doubled on tasks that had all three fields. */}
-        <div>
-          <span className={`inline-flex rounded-pill px-2.5 py-0.5 text-xs font-medium ${
-            overdue && !terminal ? "bg-kr-accent text-white"
-            : "bg-orange-50 text-kr-accent"
-          }`}>
-            {STATUS_LABEL[t.status] || t.status}
-          </span>
-        </div>
-
-        <AssigneesEditor t={t} members={members} roleOptions={roleOptions}
-          canEdit={canEditPeople} onPatched={onPeoplePatched} />
-
-        {/* Description card (orange) */}
-        {t.description && (
-          <div className="flex items-start gap-3 rounded-cardlg bg-orange-50/70 p-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-tile bg-orange-100 text-kr-accent">
-              <File size={18} weight="regular" />
-            </span>
-            <p className="text-sm leading-relaxed">{t.description}</p>
-          </div>
-        )}
-
-        {/* Info card — the top row (workflow / due date) only renders when
-            there is something to show; the created-ago footnote only gets a
-            top border when the top row is present. Prevents the hollow
-            curve above a lone "Created X ago" line. */}
-        {(t.workflow_summary?.title || t.due_date || t.created_at) && (() => {
-          const hasTop = !!(t.workflow_summary?.title || t.due_date);
-          return (
-            <div className="rounded-cardlg border border-nm-edge/40 p-3">
-              {hasTop && (
-                <div className="flex items-center gap-2">
-                  {t.workflow_summary?.title && (
-                    <>
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-violet-50 text-violet-500">
-                        <Buildings size={14} weight="regular" />
-                      </span>
-                      <span className="min-w-0 truncate text-sm">{t.workflow_summary.title}</span>
-                    </>
-                  )}
-                  {t.workflow_summary?.title && t.due_date && (
-                    <span className="mx-1 h-5 w-px shrink-0 bg-nm-edge/60" />
-                  )}
-                  {t.due_date && (
-                    <>
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-green-50 text-green-600">
-                        <ClockCounterClockwise size={14} weight="regular" />
-                      </span>
-                      <span className="min-w-0 truncate text-sm">
-                        Due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}
-                      </span>
-                    </>
-                  )}
-                </div>
-              )}
-              {t.created_at && (
-                <div className={`flex items-center gap-1 text-xs text-muted-foreground ${hasTop ? "mt-3 border-t border-nm-edge/30 pt-2" : ""}`}>
-                  <span aria-hidden="true" className="h-1 w-1 rounded-full bg-muted-foreground/60" />
-                  Created {timeAgo(t.created_at)}
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
-        {/* KM-5 · STATUS — ONE ROW, A SEGMENTED BAR.
-            KM-6 note: `blocked` (pending approval) still matches no segment —
-            it is a gate the approver controls, not a state the assignee sets.
-            KM-3 put five pills in a flex-wrap, which at 343px could not hold
-            them and broke onto a second line — and five states genuinely do
-            not fit one row, so "Waiting" goes on the founder's call. Four
-            remain and they are the states work actually moves through.
-            It is a segmented bar now rather than five loose chips: a single
-            .kr-pressed track with four equal segments, and the selected one
-            fills with ITS OWN status colour, so choosing a status visibly
-            moves the coloured pill along the track. Not Started stays the
-            default and has no segment — it is the absence of a choice, and
-            tapping the active segment returns to it.
-            No transition utility: the track's children swap fills, and the
-            selected segment also swaps against .kr-pressed's shadow, which is
-            not interpolable against an outset pair. */}
-        {!terminal && !awaitingApproval && !noteOnly && (
-          <div className="kr-pressed flex items-center gap-1 rounded-pill p-1" role="group"
-               aria-label="Task status" data-testid={`status-pills-m-${t.id}`}>
-            {M_STATUS_PILLS.map((sp) => {
-              const on = stageOf(t.status) === sp.key;
-              return (
-                <button
-                  key={sp.key}
-                  type="button"
-                  onClick={() => setStatus(sp.key)}
-                  aria-pressed={on}
-                  data-testid={`status-pill-m-${sp.key}-${t.id}`}
-                  /* text-[10px] and px-0.5: four segments share 323px of a
-                     343px row, so each label gets ~76px and "Not Started" is
-                     the one that decides the size. */
-                  className={`flex h-9 min-w-0 flex-1 basis-0 items-center justify-center rounded-pill px-0.5 text-[10px] leading-tight ${
-                    /* KM-6 — the selected segment is RAISED, not a flat
-                       swatch: .kr-pop supplies the lift and the colour
-                       utility overrides its white ground (utilities layer
-                       beats components), so the moving pill reads as a
-                       physical thing sitting in the track. */
-                    on ? `kr-pop ${sp.on} font-semibold` : "text-foreground/60"
-                  }`}
-                >
-                  <span className="truncate">{sp.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-        {/* ASK-28 TK-07 — Waiting on, under the two stages. */}
-        {!terminal && !awaitingApproval && (
-          <WaitingOn t={t} members={members} onPatched={onPeoplePatched} readOnly={noteOnly} />
-        )}
-
-        {/* ASK-27 — the Execution Guide is NOT rendered here any more. MW-16
-            already renders it (and the trail) once, below both bodies, for
-            every width — this second copy put the guide and its buttons on
-            the phone twice. */}
-
-        {/* Actions row — Complete + attach controls, now below the two
-            plan-building buttons above. */}
-        {!isTerminal(t) && !awaitingApproval && !signoffPending && !noteOnly && (
-          /* KM-6 — flex-wrap. Cancel joining this row made five controls
-             (Complete, Cancel, photo, file, voice) share 343px, and Complete
-             was truncating to "Comp…". Wrapping lets the two endings hold the
-             first line and the three attachment circles drop to the second. */
-          <div className="flex items-center gap-2">
-            {/* KM-7 — Complete and Cancel are ONE welded control, and Cancel is
-                icon-only. Five worded/round controls could not share 343px, so
-                KM-6 wrapped the row onto two lines; dropping the word "Cancel"
-                and joining the two endings into a single .kr-pop group buys
-                back enough width for the whole row to fit again.
-                Cancel keeps a real aria-label and title — an icon-only
-                destructive action with no name is not a control, it is a
-                guess. */}
-            <div className="kr-pop flex shrink-0 items-center gap-1 rounded-pill p-1"
-                 role="group" aria-label="Finish this task">
-              <button
-                onClick={complete}
-                data-testid={`complete-m-${t.id}`}
-                title={t.evidence_required && !hasEvidence ? "Add proof first" : "Mark as complete"}
-                className="flex h-9 items-center gap-1.5 rounded-pill bg-kr-ink px-3.5 text-xs font-medium text-white"
-              >
-                <CheckCircle size={13} weight="bold" aria-hidden="true" /> Complete
-              </button>
-              <button
-                onClick={() => setStatus("cancelled")}
-                data-testid={`cancel-m-${t.id}`}
-                aria-label="Cancel this task"
-                title="Cancel this task"
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-foreground/70"
-              >
-                <XCircle size={15} weight="bold" aria-hidden="true" />
-              </button>
-            </div>
-            <button
-              onClick={() => fileRef.current?.click()}
-              disabled={uploading}
-              data-testid={`photo-m-${t.id}`}
-              aria-label="Attach a photo"
-              className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground disabled:opacity-40"
-            >
-              <Camera size={16} weight="regular" />
-            </button>
-            <button
-              onClick={() => evidenceRef.current?.click()}
-              disabled={uploading}
-              data-testid={`upload-file-m-${t.id}`}
-              aria-label="Upload a file"
-              className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground disabled:opacity-40"
-            >
-              <FileArrowUp size={16} weight="regular" />
-            </button>
-            <button
-              onClick={toggleVoice}
-              data-testid={`voice-m-${t.id}`}
-              aria-label={recording ? "Stop recording" : "Record voice reply"}
-              className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${recording ? "bg-kr-accent text-white" : "kr-pop text-foreground"}`}
-            >
-              {recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="regular" />}
-            </button>
-          </div>
-        )}
-
-        {/* ASK-27 — the phone footer ("No activity yet" + its own "Log update
-            or hand off") is gone: TaskTrail below renders both, full width, at
-            every size, so the phone drawer showed each of them twice. */}
-      </div>
-
-      {/* EXPANDED BODY (desktop) — ASK-27 layout, top to bottom as in the
-          founder's reference: the context card, Assigned to, Status with the
-          % control beside it, then Complete and Attach. The Execution Guide
-          and Activity follow below both bodies (MW-16). */}
-      <div id={`task-card-body-${t.id}`} className="hidden space-y-6 px-7 pb-6 pt-2 lg:block">
-      {t.description && (
-        <div className={`${DRAWER_CARD} flex items-start gap-4 p-4`} data-testid={`task-context-${t.id}`}>
-          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[linear-gradient(160deg,hsl(0_0%_100%),hsl(0_0%_88%))] text-neutral-800 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.9)]">
-            <File size={24} weight="duotone" aria-hidden="true" />
-          </span>
-          <p className="min-w-0 whitespace-pre-line pt-1 text-[15px] leading-relaxed text-slate-600">{t.description}</p>
-        </div>
-      )}
-      {/* ASK-26 — replaces the owner-only one-name assignee line: everyone on
-          the task, for everyone who opens it. */}
-      <AssigneesEditor t={t} members={members} roleOptions={roleOptions}
-        canEdit={canEditPeople} onPatched={onPeoplePatched} />
-      {/* U7-05.4: AI-priority bars get a "why?" tooltip on the container
-          so users understand what drove the ranking. */}
-      {scores && (
-        <div title="AI ranker: higher score = more urgent to open next. Bars show what drove it -- priority signal, overdue, workflow blockage, complaints touched." data-testid={`ai-scores-${t.id}`}>
-          <PriorityScoreBars scores={scores} />
-        </div>
-      )}
-
-      {isOp && (
-        <div className="flex flex-wrap items-center gap-2" data-testid={`op-meta-${t.id}`}>
-          {t.op_category && <span className={`${PILL} ${QUIET_PILL}`}><Tag size={11} weight="bold" /> {t.op_category}</span>}
-          {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
-          {t.approval_required && (
-            /* 2026-09-14 — the card-face chip, in the leave card's tones:
-               amber while it waits, emerald once approved, rose for changes.
-               The words are ASK-28 TK-05's, which name the moment (start or
-               close). */
-            <span data-testid={`op-approval-${t.id}`} className={`${PILL} ${
-              t.approval_status === "approved" ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
-              : t.approval_status === "rejected" ? "bg-rose-50 text-rose-700 ring-rose-100"
-              : t.approval_status === "pending" ? "bg-amber-50 text-amber-800 ring-amber-100"
-              : QUIET_PILL}`}>
-              <ShieldCheck size={11} weight="bold" /> {t.approval_status === "approved" ? "Approved" : t.approval_status === "pending" ? (apprStage === "close" ? "Waiting for approval to close" : "Pending approval") : t.approval_status === "rejected" ? "Changes requested" : `${t.approver_name || "Approval"} required${apprStage === "close" ? " to close" : ""}`}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Full workflow chip in the expanded body -- carries the full title
-          alongside the stage, since we only show the stage snippet in
-          the summary row. */}
-      {t.workflow_summary && t.workflow_summary.id && (
-        <div>
-          <a
-            href={`/my-work?view=workflows&type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
-            data-testid={`wf-chip-full-${t.id}`}
-            className="inline-flex items-center gap-1.5 nm-tile px-2.5 py-1 text-xs font-mono bg-nm-sunken hover:bg-accent transition-colors"
-            title={`Open workflow: ${t.workflow_summary.title}`}
-          >
-            <FlowArrow size={12} weight="bold" aria-hidden="true" className="text-muted-foreground" />
-            <span className="font-medium text-[10px]">
-              {(t.workflow_summary.title || "Workflow").slice(0, 40)}
-            </span>
-            <span className="text-muted-foreground">·</span>
-            <span className=" text-[10px]">
-              {(t.workflow_summary.stage || "").replace(/_/g, " ")}
-            </span>
-          </a>
-        </div>
-      )}
-
-      {/* ASK-27 — STATUS: the status pill on the left, a rule, and the %
-          control on the right. "Set % manually" is no longer behind a
-          disclosure toggle — the bar beside it is the control. */}
-      {!terminal && !awaitingApproval && (
-        noteOnly ? (
-          /* ASK-28 TK-01 — the person who asked sees where the work is, not
-             the controls that move it: those belong to whoever does it. */
-          <section data-testid={`task-status-${t.id}`}>
-            <p className={DRAWER_LABEL}>Status</p>
-            <p className="text-[15px] font-medium text-slate-800" data-testid={`requester-status-${t.id}`}>
-              {STATUS_LABEL[t.status] || t.status} · {checklist ? checklist.pct : (t.progress || 0)}% done
-            </p>
-            {t.status === "waiting" && <div className="mt-3"><WaitingOn t={t} readOnly /></div>}
-          </section>
-        ) : (
-        <section data-testid={`task-status-${t.id}`}>
-          <p className={DRAWER_LABEL}>Status</p>
-          <div className="flex items-stretch gap-5">
-            <GlassSelect testid={`status-select-${t.id}`} ariaLabel="Task status" icon={Clock}
-              value={stageOf(t.status)} onChange={setStatus}
-              options={STATUS_OPTIONS.map((s) => ({ value: s.key, label: s.label }))}
-              triggerClassName="w-56 shrink-0 font-medium text-slate-800" />
-            <span aria-hidden="true" className="w-px shrink-0 bg-slate-900/10" />
-            <ProgressControl value={checklist ? checklist.pct : (t.progress || 0)} onCommit={setProgress}
-              checklist={checklist}
-              testid={`progress-select-${t.id}`} valueTestid={`progress-bar-${t.id}`} />
-          </div>
-          <div className="mt-3">
-            <WaitingOn t={t} members={members} onPatched={onPeoplePatched} />
-          </div>
-        </section>
-        )
-      )}
-
-      {(() => {
-        const beUrl = process.env.REACT_APP_BACKEND_URL;
-        const atts = t.attachments || [];
-        const refs = atts.filter((a) => a.kind === "reference");
-        const proof = atts.filter((a) => a.kind !== "reference");
-        const insights = t.reference_insights || [];
-        const isImg = (a) => a.kind === "photo" || (a.content_type || "").startsWith("image/");
-        const isAudio = (a) => a.kind === "voice" || (a.content_type || "").startsWith("audio/");
-        const renderAtt = (a) => (
-          isImg(a)
-            ? <button key={a.url} type="button" onClick={() => setLightbox(`${beUrl}${a.url}`)}
-                className="relative w-20 h-20 nm-tile overflow-hidden group" title="Click to view full image"
-                data-testid={`att-photo-${t.id}-${a.url}`}>
-                <img src={`${beUrl}${a.url}`} alt={a.filename || "attachment"} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
-                <span className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
-                  <MagnifyingGlassPlus size={20} weight="bold" className="text-white" />
-                </span>
-              </button>
-            : isAudio(a)
-              ? <audio key={a.url} controls preload="none" src={`${beUrl}${a.url}`} className="h-9" data-testid={`att-voice-${t.id}-${a.url}`} />
-              : <a key={a.url} href={`${beUrl}${a.url}`} target="_blank" rel="noreferrer" data-testid={`att-file-${t.id}-${a.url}`}
-                  className="inline-flex items-center gap-1.5 nm-tile px-2.5 py-1.5 text-xs font-mono hover:bg-accent transition-colors max-w-[180px]">
-                  <File size={13} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
-                </a>
-        );
-        return (
-          <>
-            {refs.length > 0 && (
-              <div className="nm-inset mt-3 p-3" data-testid={`reference-block-${t.id}`}>
-                <p className="label-mono text-brand-blue flex items-center gap-1.5 mb-2">
-                  <Paperclip size={13} weight="bold" /> Reference material · {refs.length}
-                </p>
-                <div className="flex flex-wrap gap-2 items-center">{refs.map(renderAtt)}</div>
-                {insights.length > 0 && (
-                  <div className="mt-2 flex items-start gap-1.5" data-testid={`reference-insight-${t.id}`}>
-                    <Lightbulb size={13} weight="fill" className="text-brand-yellow shrink-0 mt-0.5" />
-                    <p className="text-xs text-muted-foreground line-clamp-2">{insights[insights.length - 1].summary}</p>
-                  </div>
-                )}
-              </div>
-            )}
-            {proof.length > 0 && (
-              <div className="mt-3 nm-inset p-3" data-testid={`proof-block-${t.id}`}>
-                <p className="label-mono text-muted-foreground flex items-center gap-1.5 mb-2">
-                  <Paperclip size={13} weight="bold" /> Proof of work · {proof.length}
-                </p>
-                <div className="flex flex-wrap gap-2 items-center">{proof.map(renderAtt)}</div>
-              </div>
-            )}
-          </>
-        );
-      })()}
-
-      <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
-        <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-3xl p-2" data-testid={`photo-lightbox-${t.id}`}>
-          <DialogHeader>
-            <DialogTitle className="sr-only">Proof photo</DialogTitle>
-          </DialogHeader>
-          {lightbox && <img src={lightbox} alt="proof full" className="w-full h-auto max-h-[calc(80vh/var(--ui-scale,1))] object-contain" />}
-        </DialogContent>
-      </Dialog>
-
-      {/* 2026-09-14, founder — the approval step joins the drawer's glass: a
-          DRAWER_CARD holding the ink Approve pill, with white glass pills for
-          the two ways to push back. ASK-28 TK-05 decides when it shows
-          (before work starts, or once the work is marked done) and what it
-          says for each. */}
-      {needsMyApproval && (
-        <div className={`mt-4 p-4 ${DRAWER_CARD}`} data-testid={`approval-actions-${t.id}`} data-stage={apprStage}>
-          <p className={DRAWER_LABEL}>Needs your approval</p>
-          <p className="text-sm text-slate-700">{apprStage === "close"
-            ? `${t.assignee_name || "The assignee"} marked this task complete. Check the work — approving closes it.`
-            : `This task needs your approval before ${t.assignee_name || "the assignee"} can start work.`}</p>
-          {t.approval_status === "rejected" && t.rejection_reason && <p className="mt-1.5 text-xs text-slate-500">Previously requested: {t.rejection_reason}</p>}
-          <div className="mt-3.5 flex flex-wrap gap-2">
-            <button onClick={approveTask} data-testid={`approve-${t.id}`}
-              className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-pill px-5 text-sm font-medium ${INK_PILL}`}>
-              <CheckCircle size={16} weight="bold" aria-hidden="true" /> Approve
-            </button>
-            <button onClick={rejectTask} data-testid={`reject-${t.id}`}
-              className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
-              <WarningCircle size={16} weight="bold" aria-hidden="true" /> Request changes
-            </button>
-            <button onClick={clarifyTask} data-testid={`clarify-${t.id}`}
-              className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
-              <ChatText size={16} weight="bold" aria-hidden="true" /> Ask clarification
-            </button>
-          </div>
-        </div>
-      )}
-
-      {lockedForAssignee && (
-        <div className={`mt-4 flex items-start gap-3 p-4 ${DRAWER_CARD}`} data-testid={`approval-locked-${t.id}`}>
-          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-600 ${GLASS_PILL}`}>
-            <LockKey size={16} weight="bold" aria-hidden="true" />
-          </span>
-          <div>
-            <p className="text-sm font-semibold text-neutral-900">{t.approval_status === "rejected" ? "Changes requested" : "Awaiting approval"}</p>
-            <p className="mt-0.5 text-xs text-slate-600">You can start once {t.approver_name || "the approver"} approves this task. Status, progress and the execution plan are locked until then.</p>
-            {t.approval_status === "rejected" && t.rejection_reason && <p className="mt-1.5 text-xs text-slate-500">Note: {t.rejection_reason}</p>}
-          </div>
-        </div>
-      )}
-
-      {/* ASK-28 TK-05 — approval before closing, seen by everyone but the approver.
-          2026-09-14 — both banners wear the same glass card as "Awaiting
-          approval" above; the sent-back one carries the rose of the
-          "Changes requested" chip. */}
-      {signoffPending && !canApprove && (
-        <div className={`mt-4 flex items-start gap-3 p-4 ${DRAWER_CARD}`} data-testid={`approval-signoff-${t.id}`}>
-          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-600 ${GLASS_PILL}`}>
-            <ShieldCheck size={16} weight="bold" aria-hidden="true" />
-          </span>
-          <div>
-            <p className="text-sm font-semibold text-neutral-900">Waiting for approval</p>
-            <p className="mt-0.5 text-xs text-slate-600">Marked complete. {t.approver_name || "The approver"} will check the work and close it. Moving the status back takes the request away.</p>
-          </div>
-        </div>
-      )}
-      {signoffSentBack && (
-        <div className={`mt-4 flex items-start gap-3 p-4 ${DRAWER_CARD}`} data-testid={`approval-changes-${t.id}`}>
-          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-rose-700 ${GLASS_PILL}`}>
-            <WarningCircle size={16} weight="bold" aria-hidden="true" />
-          </span>
-          <div>
-            <p className="text-sm font-semibold text-neutral-900">Changes requested</p>
-            <p className="mt-0.5 text-xs text-slate-600">{t.rejection_reason ? `${t.approver_name || "The approver"}: ${t.rejection_reason}` : `${t.approver_name || "The approver"} sent this back.`} Complete it again when it's fixed — it goes back for approval.</p>
-          </div>
-        </div>
-      )}
-
-      {t.evidence_required && !isTerminal(t) && !awaitingApproval && (
-        <div className={`mt-3 flex items-start gap-2 nm-tile p-2.5 ${hasEvidence ? "bg-nm-sunken" : "bg-kr-accent/8"}`} data-testid={`evidence-required-${t.id}`}>
-          {hasEvidence ? <CheckCircle size={16} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0" /> : <Info size={16} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0 text-kr-accent" />}
-          <p className="text-xs">{hasEvidence
-            ? "Proof attached — you can mark this task complete."
-            : "This task requires proof before it can be completed. Add a photo, voice note, or file below."}</p>
-        </div>
-      )}
-
-      {!isTerminal(t) && !awaitingApproval && !signoffPending && !noteOnly && (
-        <div className="flex items-center gap-4">
-          {/* FUP-49: don't disable -- always click-through, handler shows
-              a clear toast if evidence is missing. Silent-disabled
-              buttons were the original bug. */}
-          <button onClick={complete} data-testid={`complete-${t.id}`}
-            title={t.evidence_required && !hasEvidence ? "Add a voice note or file first" : "Mark as complete"}
-            className={`flex h-14 shrink-0 items-center gap-2.5 rounded-pill px-7 text-base font-medium ${t.evidence_required && !hasEvidence ? `${GLASS_PILL} text-slate-500` : INK_PILL}`}>
-            <CheckCircle size={22} weight="fill" aria-hidden="true" /> Complete
-          </button>
-
-          <span aria-hidden="true" className="h-8 w-px shrink-0 bg-slate-900/10" />
-          <span className="text-[15px] text-slate-500">Attach:</span>
-          {/* ASK-27 — no camera button on desktop (the founder: a desktop is
-              not where anyone attaches with a camera). Its input stays: the
-              phone body's camera button opens it. */}
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhoto} />
-          <input ref={evidenceRef} type="file" className="hidden" onChange={onEvidence} />
-          {/* ASK-28 — the two circles become two labelled pills, Document and
-              Voice, sharing the rest of the row equally (flex-1 basis-0). */}
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            <button
-              onClick={() => evidenceRef.current?.click()}
-              disabled={uploading}
-              data-testid={`upload-file-${t.id}`}
-              title="Upload a document"
-              className={`flex h-12 min-w-0 flex-1 basis-0 items-center justify-center gap-2 rounded-pill text-[15px] font-medium text-slate-700 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}
-            >
-              <File size={19} weight="regular" aria-hidden="true" /> Document
-            </button>
-            <button
-              onClick={toggleVoice}
-              data-testid={`voice-${t.id}`}
-              title={recording ? "Stop and send voice reply" : "Record a voice reply"}
-              aria-label={recording ? "Stop recording and send" : undefined}
-              className={`flex h-12 min-w-0 flex-1 basis-0 items-center justify-center gap-2 rounded-pill text-[15px] font-medium transition-colors ${
-                recording ? "bg-kr-accent text-white" : `text-slate-700 hover:bg-white ${GLASS_PILL}`
-              }`}
-            >
-              {recording
-                ? <><Stop size={17} weight="fill" aria-hidden="true" /> Stop</>
-                : <><Microphone size={19} weight="regular" aria-hidden="true" /> Voice</>}
-            </button>
-          </div>
-          {recording && (
-            <button
-              onClick={cancelVoice}
-              data-testid={`voice-cancel-${t.id}`}
-              title="Discard recording"
-              aria-label="Discard recording"
-              className={GLASS_ICON_BTN}
-            >
-              <X size={18} weight="bold" aria-hidden="true" />
-            </button>
-          )}
-        </div>
-      )}
-
-      {isTerminal(t) && !awaitingApproval && !noteOnly && (
-        <div className="flex flex-wrap gap-2 mt-4" data-testid={`reopen-actions-${t.id}`}>
-          <button onClick={reopen} data-testid={`reopen-${t.id}`} className="flex items-center gap-2 bg-nm px-4 py-2 text-sm font-medium nm-btn hover:bg-accent transition-colors">
-            <ArrowClockwise size={16} weight="bold" /> Reopen
-          </button>
-          <span className="flex items-center text-xs text-muted-foreground">Completed by mistake? Reopen brings it back to your active work.</span>
-        </div>
-      )}
-
-      </div>
-
-      {/* MW-16 — the plan and the trail live OUTSIDE both breakpoint bodies,
-          because there is only ever one of each and the mobile layout needs
-          them too. They used to sit inside the desktop body, which is
-          `hidden lg:block`: the phone's 'Log update or hand off' bumped
-          trailOpenTrigger, TaskTrail dutifully opened its form, and the form
-          rendered inside a display:none subtree — MW-09 all over again, the
-          one control that records what happened inert on phones. Shared here,
-          both triggers open the same visible form. */}
-      <div className="space-y-6 px-4 pb-6 lg:px-7 lg:pb-8">
-        {!awaitingApproval && !noteOnly && (
-          <ExecutionPlan t={t} onChange={onChange} onPatched={applyPatched} members={members} roleOptions={roleOptions} />
-        )}
-        {/* ASK-28 TK-01 — the person who asked for this task isn't on it: the
-            status, plan and completion controls belong to whoever does it
-            (the server refuses a plan from anyone else), so say what they CAN
-            do here instead of showing controls. */}
-        {noteOnly && (
-          <p className="text-sm text-slate-500" data-testid={`requester-hint-${t.id}`}>
-            {t.created_by === user?.id
-              ? `You asked for this task, so ${t.assignee_name || "the team"} does the work. Leave a note below to follow up.`
-              : waitedOnMe
-              ? `${t.assignee_name || "The team"} is waiting on you for this task. Leave a note below with what they need.`
-              : `${t.assignee_name || "Your team"} is doing this task. Leave a note below to follow up.`}
-          </p>
-        )}
-        <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} noteOnly={noteOnly} />
-
-        {/* ASK-28 — Delete sits under "Log update or hand off", full width like
-            it, and asks first in the drawer's own glass. ASK-29: the same
-            gradient pill as the navy one, in maroon with white type. */}
-        {canDelete && (
-          <>
-            <button type="button" onClick={() => setConfirmDelete(true)}
-              data-testid={`drawer-delete-task-${t.id}`}
-              className={`-mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-pill text-[15px] font-medium ${MAROON_PILL}`}>
-              <Trash size={17} weight="bold" aria-hidden="true" /> Delete task
-            </button>
-            <AlertDialog open={confirmDelete} onOpenChange={(o) => { if (!deleting) setConfirmDelete(o); }}>
-              <AlertDialogContent data-testid={`drawer-delete-dialog-${t.id}`}
-                className="max-w-md gap-5 rounded-[1.75rem] border-0 bg-[linear-gradient(165deg,hsl(0_0%_96%),hsl(0_0%_91%))] p-6 shadow-[0_30px_80px_-20px_hsl(0_0%_0%/0.45)] sm:rounded-[1.75rem]">
-                <div className="flex items-start gap-4">
-                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-red-50 text-red-600 ring-1 ring-inset ring-red-100">
-                    <Trash size={22} weight="duotone" aria-hidden="true" />
-                  </span>
-                  <div className="min-w-0 pt-0.5">
-                    <AlertDialogTitle className="text-lg font-semibold text-slate-900">Delete this task?</AlertDialogTitle>
-                    <AlertDialogDescription className="mt-1.5 text-sm leading-relaxed text-slate-600">
-                      “{t.title}” will be deleted permanently. It can no longer be opened or accessed by anyone, and this cannot be undone.
-                    </AlertDialogDescription>
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <AlertDialogCancel disabled={deleting} data-testid={`drawer-delete-cancel-${t.id}`}
-                    className={`mt-0 h-11 rounded-pill border-0 px-5 text-sm font-medium text-slate-700 hover:bg-white ${GLASS_PILL}`}>
-                    Cancel
-                  </AlertDialogCancel>
-                  <AlertDialogAction disabled={deleting} data-testid={`drawer-delete-confirm-${t.id}`}
-                    /* preventDefault keeps the dialog open while the request
-                       runs; deleteTask closes it once the server agrees. */
-                    onClick={(e) => { e.preventDefault(); deleteTask(); }}
-                    className={`h-11 rounded-pill px-5 text-sm font-medium disabled:opacity-60 ${MAROON_PILL}`}>
-                    {deleting ? "Deleting…" : "Yes, delete task"}
-                  </AlertDialogAction>
-                </div>
-              </AlertDialogContent>
-            </AlertDialog>
-          </>
-        )}
-      </div>
-          </div>
-        </SheetContent>
-      </Sheet>
+      {drawer}
 
       {/* U7-05 dialog: reject / clarify reason (replaced window.prompt).
           2026-09-14, founder — on the gray glass sheet the Reassign window
@@ -2915,7 +2929,9 @@ export default function MyWork() {
   // on every view: the switcher carries its count. The key is shared with the
   // Desk's Task approvals card so the two never disagree.
   const [apprSub, setApprSub] = useState(params.get("sub") === "leave" ? "leave" : "tasks");
-  const [apprScope, setApprScope] = useState("all");
+  // 2026-09-14, founder — the Desk's Approvals pill lands on MY approvals
+  // (?scope=mine); everything else starts on All.
+  const [apprScope, setApprScope] = useState(params.get("scope") === "mine" ? "mine" : "all");
   const apprTasksQ = useQuery({
     queryKey: ["tasks", "approvals"],
     queryFn: () => api.get("/tasks?view=approvals").then((r) => r.data),

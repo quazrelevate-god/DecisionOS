@@ -1,16 +1,15 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { DecisionDialog } from "../components/DecisionDialog";
 
-// KM-28 · /decisions/:id — the decision review, as a page.
+// KM-28 · /decisions/:id — the decision review at its own URL, for
+// notifications and pasted links.
 //
-// The founder asked for this to stop being a pop-up: at phone width the modal
-// could not hold its own content, and a stray tap outside threw away a review
-// you were part-way through. Both are properties of being a modal, so it is a
-// route instead — its own URL, the system back gesture, and the whole screen.
-//
-// The body is unchanged. DecisionDialog renders it full-bleed under
-// `variant="page"` and stops answering outside taps; see the note there for
-// why the Radix shell stayed rather than the markup being rewritten.
+// 2026-09-14, founder — it is a POPUP again ("no full screen, instead a popup
+// which covers 70% of the screen"): the Desk opens DecisionDialog in place,
+// and this route mounts the same 70% card over the bare canvas. The phone
+// still gets the full screen — the dialog does that itself below lg — and a
+// stray tap outside is ignored while a note is being typed, so the two things
+// KM-28 fixed stay fixed without the route being full-bleed.
 export default function DecisionReview() {
   const { id } = useParams();
   const navigate = useNavigate();

@@ -1410,17 +1410,17 @@ html[data-dex="1"] .app-sky__art { opacity: 0; }
    picture. */
 html[data-page="inbox"] {
     --sky-art:    url("/sky/inbox.webp");
-    /* ASK-25 — THE DESKTOP DESK IS BACK ON THE GRADIENT. KM-49 gave /inbox a
-       desktop plate (inbox-lg.png); the Desk redesign was drawn and signed
-       off on the four-stop amber gradient instead, whose bloom sits top-centre
-       and leaves the lower half of the page cool silver — the three frost
-       cards below the hero only read as pale frost on that ground. Under the
-       plate's yellow lower half they read as amber slabs, which is the
-       "not what we designed" the founder called out. So from lg the artwork
-       stands down (opacity 0) and the gradient beneath shows through; the
-       phone keeps its 17 KB WebP, which the redesign never covered. The PNG
-       is no longer referenced, so desktop never fetches the 1 MB file. */
-    --sky-art-opacity-lg: 0;
+    /* KM-49 — /inbox has a desktop plate. The phone picture is 800x1200
+       portrait, and `cover` on a landscape viewport shows 34% of its height
+       (see the note at the top of this table); the landscape source shows the
+       whole composition instead. The browser never fetches a background whose
+       media query does not match, so the phone still pulls only the 17 KB
+       WebP and never sees the 1 MB PNG.
+       ASK-25 briefly stood the plate down (opacity 0) so the redesigned Desk
+       sat on the amber gradient it was drawn on; 2026-09-14 the founder asked
+       for the inbox picture back under the frost cards, so the plate is on
+       again at full opacity. */
+    --sky-art-lg: url("/sky/inbox-lg.png");
 }
 
 html[data-page="my-work"] {
@@ -1626,7 +1626,19 @@ html[data-page="workflows"] {
        sky. Reading "black colour transparency a little bit more" as MORE
        BLACK — the opposite reading would wash the row out just as the fills
        came off it, which is the wrong direction for the same sentence. */
-    background: hsl(0 0% 0% / .32);
+    /* 2026-09-14, founder — THE SHELF IS BLACK NOW, not a 32% tint: "i need
+       the black color, selected milk white, rest no circle in bg just
+       letters". The founder's reference is a solid dark rail with the
+       selected item cut out in milk white; the translucency that let the sky
+       show through the shelf is gone with it. Only the dip is painted — the
+       wordmark and the account block sit on the bare sky either side, as
+       they always did, and keep their ink.
+       2026-09-14, founder — "use the color of the create task button": the
+       INK_PILL recipe (karma/glass.js), a 24%→6% vertical gradient with a
+       lit top edge, so the shelf, the Desk board and the filled buttons are
+       one material. */
+    background: linear-gradient(180deg, hsl(0 0% 24%), hsl(0 0% 6%));
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / .16);
 
     --kr-plate-h: 88px;                                       /* the header */
     --kr-plate-cap: calc(var(--kr-plate-h) * 173 / 126);      /* their aspect */
@@ -2947,29 +2959,100 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
        This and .kr-pop are the deliberate exceptions to KR-2's shadow kill
        — that rule retired DROP shadows on resting surfaces; depth modelled
        from a fixed light is a different material claim. */
-    /* ASK-25 · .kr-desk-card — the Desk's three columns, in the WELL'S
-       material rather than the section-coloured glass the bento wore: the
-       same .34→.20 white wash and 22px blur as .kr-well__pane, a .40 white
-       hairline, and a soft drop shadow in place of the inset light (these
-       are objects ON the ground, the well is a pit IN it). Neutral on
-       purpose — the founder's call was "colour in the title and the button,
-       not the whole card" — so section hue comes from the .kr-desk--* /
-       .kr-glass--* class on the card's inner wrapper, never from here. */
-    .kr-desk-card {
+    /* ASK-25 · .kr-desk-board — the Desk's lower half is ONE BLACK CONTAINER
+       (2026-09-14, founder: "instead of glass or frost glass we go with the
+       black container"). The ink token, the tile radius, white type; the
+       columns and rows inside are parted by white hairlines drawn in
+       Desk.js, and the three-row stack sits on it as white cards. The
+       frost .kr-desk-card this replaces is gone — the black is opaque, so
+       there is nothing behind it to blur and no reason to keep the recipe. */
+    .kr-desk-board {
         border-radius: var(--radius-tile);
-        border: 1px solid hsl(0 0% 100% / .40);
-        color: hsl(var(--text-primary));
-        background: linear-gradient(160deg,
-            hsl(0 0% 100% / .34),
-            hsl(0 0% 100% / .20));
-        -webkit-backdrop-filter: blur(22px) saturate(1.6);
-        backdrop-filter: blur(22px) saturate(1.6);
+        /* 2026-09-14, founder — PRESSED LIKE THE DEX WELL, IN BLACK
+           ("similar to dex-today's pressed style for black colour"). The
+           well's recipe (.kr-well__pane) is a 7px/14px pair of inset shadows,
+           dark from the top-left and light from the bottom-right, on a
+           translucent wash. Re-cut for ink: the ground sits ONE STEP above
+           pure black (9%, --kr-desk-ink) so the dark inset has something to
+           be darker than, the shadow is near-black at .9, and the light is a
+           10% white catch on the lower-right edges. The tabs above are the
+           same flat 9%, so they stay one surface with it. */
+        --kr-desk-ink: 240 4% 9%;
+        background: hsl(var(--kr-desk-ink));
         box-shadow:
-            inset 0 1px 0 hsl(0 0% 100% / .85),
-            0 1px 2px hsl(230 20% 20% / .10),
-            0 6px 14px -6px hsl(230 20% 20% / .22);
-        overflow: hidden;
+            inset 7px 7px 14px hsl(0 0% 0% / .90),
+            inset -7px -7px 14px hsl(0 0% 100% / .10);
+        color: #fff;
+        padding: 1rem;
         min-width: 0;
+    }
+    @media (min-width: 1024px) {
+        .kr-desk-board {
+            /* 2026-09-14, founder — "Decisions and Task approvals is a Chrome
+               tab header and the contents like the page": the board is the
+               PAGE under a strip of tabs (.kr-desk-tab), so its top edge is
+               flat with 14px corners and the bottom corners are square — it
+               runs to the floor. */
+            padding: 1.125rem 1.25rem 1.375rem;
+            border-radius: 14px 14px 0 0;
+        }
+    }
+
+    /* 2026-09-14, founder · .kr-desk-tab — a browser tab. The same ink as the
+       board it stands on, rounded at the top, and joined to the board at the
+       bottom by a pair of concave quarter-circle fillets, the way Chrome's
+       active tab flows into its page. Each fillet is one radial gradient in
+       an r×r square outside the tab's bottom corner: a circle of radius r
+       centred on the square's OUTER top corner is cut transparent and what
+       remains is the curve from the tab's side down to the board. The
+       half-pixel before r is the anti-aliasing step. isolation: isolate keeps
+       the z-index:-1 fillets behind the label without ever falling behind
+       the strip. */
+    .kr-desk-tab {
+        position: relative;
+        isolation: isolate;
+        --tab-r: 10px;
+        /* The same flat ink as the board (its 9% ground, not the page's
+           5% token), so tab and board are one surface; the fillets are
+           painted in it too. */
+        --tab-ink: hsl(240 4% 9%);
+        background: var(--tab-ink);
+        border-radius: 12px 12px 0 0;
+        color: hsl(0 0% 100% / .85);
+    }
+    .kr-desk-tab::before,
+    .kr-desk-tab::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        width: var(--tab-r);
+        height: var(--tab-r);
+        z-index: -1;
+    }
+    .kr-desk-tab::before {
+        left: calc(-1 * var(--tab-r));
+        background: radial-gradient(circle at 0 0, transparent calc(var(--tab-r) - .5px), var(--tab-ink) var(--tab-r));
+    }
+    .kr-desk-tab::after {
+        right: calc(-1 * var(--tab-r));
+        background: radial-gradient(circle at 100% 0, transparent calc(var(--tab-r) - .5px), var(--tab-ink) var(--tab-r));
+    }
+    /* The first tab starts at the board's corner: its outer side runs
+       straight down into the board's left edge (Desk.js squares that corner
+       under it), so there is no fillet to draw, and its outer top corner
+       takes the board's 14px so the silhouette reads as one shape. */
+    .kr-desk-tab--first { border-top-left-radius: 14px; }
+    .kr-desk-tab--first::before { display: none; }
+    /* The three-row stack's cards are the old dark band's glass: the section
+       hue at a whisper over the ink, no blur (the board is opaque — nothing
+       behind it to blur). .kr-desk--* already dial the tint to .10/.05; this
+       covers .kr-glass--warm (Leave), which otherwise keeps the light page's
+       .60/.42 and would read as a pale slab on the black. */
+    .kr-desk-board .kr-glass {
+        --kr-glass-a1: .10;
+        --kr-glass-a2: .05;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
     }
 
     .kr-well {

@@ -555,6 +555,8 @@ FINDINGS = [
         fix="Add aria-pressed to both buttons, and wrap them in a role='group' with an "
             "accessible label such as 'Login method' - matching the permission grid "
             "immediately below it.",
+        verified="RE-CHECKED 2026-09-13 (desktop 1440 + mobile 390): still open - "
+                 "aria-pressed is null on both halves of the toggle.",
         code="pages/Team.js:122-127 (login-method-toggle); the pattern to copy is at :165",
         found="2026-09-12",
     ),
@@ -581,6 +583,9 @@ FINDINGS = [
             "the founder asked for in ASK-13 and ASK-15, so treat them as one piece of "
             "work: hide access on the roster, and show the section only to people who "
             "hold the permission that governs it.",
+        verified="RE-CHECKED 2026-09-13 signed in as Sales, on a COLLEAGUE's profile "
+                 "(TEST Limited), desktop and mobile: the 'n of 14 areas' block and the "
+                 "'No access to ...' list are both still visible.",
         code="pages/Team.js:411 + :441 (card count), :580-606 (ACCESS block, "
              "granted-perms and the denial list)",
         found="2026-09-12",
@@ -612,7 +617,58 @@ FINDINGS = [
             "the form being usable with a screen reader and not.",
         code="pages/Team.js:120, :121, :129, :132 (placeholder-only), "
              ":137-138 and :143-144 (unassociated labels)",
+        verified="RE-CHECKED 2026-09-13 (desktop 1440 + mobile 390): still open - all "
+                 "six fields have no label, aria-label or aria-labelledby.",
         found="2026-09-12",
+    ),
+    dict(
+        id="TM-07", section="Team", screen="Member profile dialog - closing",
+        viewport="Desktop", persona="All", severity="Low", status="Open",
+        area="Accessibility",
+        tested="Focused a member card with the keyboard, pressed Enter to open the "
+               "profile, pressed Escape, and read document.activeElement. Repeated as "
+               "Owner and as Sales.",
+        expected="Focus returns to the card that opened the dialog, so a keyboard user "
+                 "carries on from where they were.",
+        actual="Focus drops to <body>. A keyboard or screen-reader user who opens the "
+               "fifth card and closes it is thrown back to the top of the page and has "
+               "to Tab through the header, search and every earlier card to get back. "
+               "On a 12-person roster that is a nuisance; on the larger teams the search "
+               "box is built for, it makes the roster hard to work through.",
+        evidence="Enter on team-member-<id> opens the dialog (pass); after Escape "
+                 "activeElement = BODY, as Owner and as Sales.",
+        cause="The profile dialog has no DialogTrigger - it is opened by setting "
+              "profileUser state - and MemberProfileDialog returns null the moment u is "
+              "cleared, so the dialog is unmounted before Radix can restore focus to "
+              "where it came from.",
+        fix="Keep the Dialog mounted with open={!!u} and render only its content "
+            "conditionally, so Radix's own focus return runs; or remember the opening "
+            "card and focus it in onCloseAutoFocus.",
+        code="pages/Team.js:450 (onOpen sets profileUser), :541-542 (openChange, "
+             "'if (!u) return null')",
+        found="2026-09-13",
+    ),
+    dict(
+        id="TM-08", section="Global", screen="Default close button on every dialog",
+        viewport="Desktop", persona="All", severity="Low", status="Open",
+        area="Accessibility / tap target",
+        tested="Measured the close control inside Add member on desktop and mobile.",
+        expected="A close control is at least 24x24px (WCAG 2.5.8).",
+        actual="On desktop the close X is 16x16px - the bare icon with no padding. On "
+               "mobile the same control measures 44x44, so the fault is desktop-only. "
+               "It comes from the shared dialog component, so it applies to every "
+               "dialog that keeps the default close: Add member, Edit access, the invite "
+               "link modal, and the rest of the app's dialogs that use it. The Team "
+               "profile dialog avoids it by hiding the default and drawing its own 36px "
+               "close.",
+        evidence="Add member close: 16x16 at 1440x900, 44x44 at 390x844.",
+        cause="components/ui/dialog.jsx renders DialogPrimitive.Close as a bare "
+              "h-4 w-4 icon with no padding or minimum size.",
+        fix="Give the default close a hit area: 'grid h-8 w-8 place-items-center' "
+            "around the icon (32px), keeping the icon at 16px. One change fixes every "
+            "dialog at once.",
+        code="components/ui/dialog.jsx:37-41",
+        found="2026-09-13",
     ),
     dict(
         id="CR-01", section="CRM", screen="Scope chips (Buyers / Suppliers)",
@@ -1190,7 +1246,7 @@ FINDINGS = [
     ),
     dict(
         id="TM-04", section="Team", screen="Member profile dialog",
-        viewport="Mobile + Desktop", persona="Owner", severity="Nit", status="Open",
+        viewport="Mobile + Desktop", persona="Owner", severity="Nit", status="Fixed",
         area="Accessibility",
         tested="Enumerated the controls in a member profile dialog by accessible name.",
         expected="Each control in a dialog is distinguishable by name.",
@@ -1203,6 +1259,9 @@ FINDINGS = [
               "primitive still renders its own.",
         fix="Keep one. If the custom 36px control is the intended one, hide the "
             "primitive's default close for this dialog.",
+        verified="VERIFIED FIXED 2026-09-13: the profile dialog now exposes ONE Close "
+                 "(36px desktop, 44px mobile) as Owner and as Sales; Team.js:572 hides the "
+                 "primitive's default close with [&>button.absolute]:hidden.",
         code="pages/Team.js:497-535 (profile dialog header)",
         found="2026-09-12",
     ),
@@ -1570,8 +1629,9 @@ COVERAGE = [
      "The dialog has a proper accessible name", "Accessibility", "PASS",
      "sr-only DialogHeader + DialogTitle at Team.js:497 - the pattern MW-03 lacks", ""),
     ("T-214", "Team", "Member profile dialog", "Both", "Owner",
-     "Every control in the dialog is distinguishable by name", "Accessibility", "FAIL",
-     "Two visible buttons both named 'Close'", "TM-04"),
+     "Every control in the dialog is distinguishable by name", "Accessibility", "PASS",
+     "Was two buttons named 'Close'; re-checked 2026-09-13 - one Close as Owner and as "
+     "Sales, both viewports", "TM-04"),
     ("T-215", "Team", "Edit access", "Desktop 1440x900", "Owner",
      "Edit access opens the permission editor in place", "Functional", "PASS",
      "Dialog content grows 1411 to 2299 chars; no error", ""),
@@ -1627,6 +1687,83 @@ COVERAGE = [
      "The form shows what the new member will actually see", "Usability", "PASS",
      "'This member will see these menus' renders the resulting nav live, greying "
      "out what is not granted - the strongest part of the form", ""),
+
+    # --- TEAM hands-on pass, 2026-09-13 (desktop 1440 + mobile 390, Owner + Sales, writes blocked) ---
+    ("T-230", "Team", "Search", "Both", "Owner + Sales",
+     "Search filters by name, email and role, and says when nothing matches",
+     "Functional", "PASS",
+     "'priya' 1 of 12; 'sharma.com' 5 of 12; 'production' 2 of 12 (role + email); "
+     "'zzqq' 0 of 12 with 'Nobody matches \"zzqq\".'; clearing restores all 12", ""),
+    ("T-231", "Team", "Member cards", "Both", "Owner + Sales",
+     "Every member card opens that member's profile", "Functional", "PASS",
+     "12 of 12 on all four passes", ""),
+    ("T-232", "Team", "Profile dialog - close", "Both", "Owner + Sales",
+     "Close button, Escape and clicking outside all close the profile", "Functional",
+     "PASS", "All three close it on both viewports", ""),
+    ("T-233", "Team", "Profile dialog - fit + targets", "Both", "Owner + Sales",
+     "The dialog fits the screen and every control is at least 24px", "Responsive",
+     "PASS", "Desktop 576px wide, mobile full width; Close 36px / 44px, Edit access and "
+     "Get invite link 30-44px tall", ""),
+    ("T-234", "Team", "Profile dialog - keyboard", "Desktop 1440x900", "Owner + Sales",
+     "Enter opens a card and focus returns to it on close", "Accessibility", "FAIL",
+     "Enter opens it; after Escape focus is on <body>", "TM-07"),
+    ("T-235", "Team", "Edit access - stacking", "Both", "Owner",
+     "Edit access opens over the profile, and one Escape returns to the profile",
+     "Functional", "PASS", "2 dialogs open, title 'Edit access - Priya Nair'; one Escape "
+     "leaves the profile open", ""),
+    ("T-236", "Team", "Edit access - permissions", "Both", "Owner",
+     "Every permission toggle flips and the menu preview follows it", "Functional",
+     "PASS", "14 of 14 toggles flip aria-pressed and back; preview chips for People, "
+     "Company Brain, Capture, Workflows and Decision Desk strike and un-strike", ""),
+    ("T-237", "Team", "Edit access - promote to Owner", "Both", "Owner",
+     "Choosing Owner explains full access and asks before saving", "Functional", "PASS",
+     "Grid swaps for the 'Full company access' note; Save asks 'This makes them a "
+     "co-owner with FULL control...' (dismissed, nothing sent)", ""),
+    ("T-238", "Team", "Edit access - failed save", "Both", "Owner",
+     "A failed save says so and keeps the user's changes open", "Functional", "PASS",
+     "PATCH blocked -> 'Something went wrong. Please try again.', dialog stays open", ""),
+    ("T-239", "Team", "Edit access - Save reachable", "Both", "Owner",
+     "Save access is visible without scrolling", "Usability", "FAIL",
+     "Desktop: visible. Mobile: off-screen - dialog content 1,309px in a 758px window",
+     "ASK-14"),
+    ("T-240", "Team", "Add member - validation", "Both", "Owner",
+     "Each invalid submit is refused with its own reason", "Functional", "PASS",
+     "Empty -> 'Name and email are required'; 3-char password -> 'Set a 6+ char "
+     "password...'; OTP with 5-digit phone -> 'A valid mobile number is required...'", ""),
+    ("T-241", "Team", "Add member - login method", "Both", "Owner",
+     "Mobile OTP hides the password and makes the phone required; Password restores it",
+     "Functional", "PASS", "Password field hidden, hint shown, placeholder 'Mobile number "
+     "(required for OTP login)'; switching back restores the password field", ""),
+    ("T-242", "Team", "Add member - role + manager", "Both", "Owner",
+     "Changing role applies that role's default access; manager list is populated",
+     "Functional", "PASS", "Defaults: sales 6, production 6, finance 8 areas; manager "
+     "select has 12 people + None", ""),
+    ("T-243", "Team", "Add member - failed save + reopen", "Both", "Owner",
+     "A failed add keeps the form open; reopening starts blank", "Functional", "PASS",
+     "POST blocked -> error toast, dialog open; reopened with an empty name field", ""),
+    ("T-244", "Team", "Add member - Add reachable", "Both", "Owner",
+     "The Add button is visible without scrolling", "Usability", "FAIL",
+     "Off-screen on both: content 1,026px in 808px (desktop), 1,535px in 758px (mobile, "
+     "about two screens)", "ASK-14"),
+    ("T-245", "Global", "Dialog close size", "Desktop 1440x900", "Owner",
+     "The dialog close control is at least 24px", "Accessibility", "FAIL",
+     "Add member close is 16x16 on desktop (44x44 on mobile)", "TM-08"),
+    ("T-246", "Team", "Read-only role", "Both", "Sales",
+     "A non-manager sees the roster read-only, with no edit or invite controls",
+     "Permissions", "PASS", "Read-only banner shown; no Add member, Edit access or Get "
+     "invite link; leave history shown on her own profile, hidden on a colleague's", ""),
+    ("T-247", "Team", "Read-only role - colleague access", "Both", "Sales",
+     "A colleague's access list is not readable by a non-manager", "Permissions",
+     "FAIL", "Sales still reads TEST Limited's 'n of 14 areas' and 'No access to ...'",
+     "TM-05"),
+    ("T-248", "Team", "Desktop scrolling (after 7d2fabe)", "Desktop 1440x900", "Owner",
+     "The roster scrolls and the last member is reachable", "Responsive", "PASS",
+     "<main> is now the scroll container (scrollTop 643 after one wheel); last card "
+     "reachable; page title scrolls away, which is by design (common.js KM-25)", ""),
+    ("T-249", "Team", "Get invite link - pressed", "Both", "Owner",
+     "Pressing Get invite link gives feedback and no token is minted by the test",
+     "Functional", "PASS", "POST blocked -> 'Something went wrong. Please try again.', "
+     "profile stays open. End-to-end generation still not run (see T-217)", ""),
 
     # --- CRM ---
     ("T-300", "CRM", "Page load", "Desktop 1440x900", "Owner",

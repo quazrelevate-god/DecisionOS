@@ -140,8 +140,16 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
           it jumps off in both desktop, android and iOS." Three platforms
           because it was never a platform bug.
 
-          Desktop: anchor the panel to the top instead. Height then grows and
-          shrinks downward only, and nothing above the change moves.
+          Desktop: KM-51 answered this by anchoring the panel to the TOP, so
+          height grew downward only. ASK-21 puts it back in the CENTRE on the
+          founder's ask and pays for it the other way: the panel now has a
+          FIXED height, so the thing that caused the jump — a changing height
+          under a -50% translate — cannot happen at all. Measured variance
+          across the three conditional blocks is 86px (804 / 891 / 823 at a
+          1080 viewport), which centred would have moved the top edge 43px on
+          a single click. h-[min(86vh,55rem)] clears the tallest state on a
+          tall screen and falls back to 86vh on a short one; the body scrolls
+          inside either way and the panel's box never moves.
 
           Phone: go full-bleed, which is the founder's own fallback ("if can't
           fix then make it as a full screen page") and independently right —
@@ -150,25 +158,33 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
           it has nowhere to go, and h-full resolves against the layout
           viewport, which the picker does not touch.
 
-          The slide offsets are zeroed to match — they were written for a
-          centred panel and would otherwise start it 48% of its own height
-          above the screen. They are zeroed by writing tailwindcss-animate's
-          VARIABLES rather than by passing `slide-in-from-top-0`: those class
-          names are not in tailwind-merge's group table, so cn() keeps both
-          and the arbitrary `-[48%]` wins on source order. Measured: the
-          override class was present and --tw-enter-translate-y was still
-          -48%. Setting the custom property has no such contest. */}
+          The slide offsets are zeroed FOR THE PHONE ONLY — they were written
+          for a centred panel and would otherwise start the full-bleed sheet
+          48% of its own height above the screen. At lg the panel is centred
+          again, so the base values have to come back: tailwindcss-animate's
+          `enter` keyframe carries only a `from` frame and interpolates to the
+          element's own computed transform, so leaving the vars at 0 against a
+          translate(-50%,-50%) panel would fly it in from half a screen away.
+          -50% / -48% makes that a 2% settle instead. They are written as
+          VARIABLES rather than `slide-in-from-*` classes: those names are not
+          in tailwind-merge's group table, so cn() keeps both and the
+          arbitrary `-[48%]` wins on source order. Measured: the override
+          class was present and --tw-enter-translate-y was still -48%. Setting
+          the custom property has no such contest. */}
       <DialogContent
         className="kr-bento overflow-y-auto border-0 [&>button.absolute]:hidden
                    left-0 top-0 h-full w-full max-w-none translate-x-0 translate-y-0
                    [border-radius:0]
                    [padding-top:max(1rem,env(safe-area-inset-top))]
                    [padding-bottom:max(1rem,env(safe-area-inset-bottom))]
-                   lg:left-[50%] lg:top-[6vh] lg:h-auto lg:max-h-[88vh] lg:max-w-lg
-                   lg:-translate-x-1/2 lg:[border-radius:var(--radius-card)]
+                   lg:left-[50%] lg:top-[50%] lg:h-[min(86vh,55rem)] lg:max-w-lg
+                   lg:-translate-x-1/2 lg:-translate-y-1/2
+                   lg:[border-radius:var(--radius-card)]
                    lg:[padding-block:1.5rem]
                    data-[state=open]:[--tw-enter-translate-x:0] data-[state=open]:[--tw-enter-translate-y:0]
-                   data-[state=closed]:[--tw-exit-translate-x:0] data-[state=closed]:[--tw-exit-translate-y:0]"
+                   data-[state=closed]:[--tw-exit-translate-x:0] data-[state=closed]:[--tw-exit-translate-y:0]
+                   lg:data-[state=open]:[--tw-enter-translate-x:-50%] lg:data-[state=open]:[--tw-enter-translate-y:-48%]
+                   lg:data-[state=closed]:[--tw-exit-translate-x:-50%] lg:data-[state=closed]:[--tw-exit-translate-y:-48%]"
       >
         <DialogHeader className="pr-11">
           <DialogPrimitiveClose

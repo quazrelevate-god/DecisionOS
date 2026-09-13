@@ -80,13 +80,21 @@ const SEG_ON = "kr-pressed font-semibold text-foreground";
 const SEG_OFF = "kr-pop text-foreground/70";
 const SECTION_BTN = "flex h-10 items-center justify-center gap-1.5 rounded-pill px-4 text-xs font-medium leading-tight lg:text-sm";
 
+/* ASK-11 (2026-09-13): terminal states removed from the desktop status
+   dropdown. Complete and Cancel each have their own button, and the
+   Complete button carries the evidence-required guard the dropdown
+   route did not. Two routes to the same ending, one of them silent, is
+   what the founder called out. Same call the mobile progress pills
+   made earlier (see KM-6 comment below): a terminal state chosen via
+   a control that lives inside the task deletes the control's own
+   container, and there is no evidence check on the way. STATUS_LABEL
+   below keeps "Completed" and "Cancelled" -- those are still needed
+   for read-only rendering of a task already in either state. */
 const STATUS_OPTIONS = [
   { key: "todo", label: "Not Started" },
   { key: "in_progress", label: "In Progress" },
   { key: "waiting", label: "Waiting" },
   { key: "review", label: "Under Review" },
-  { key: "done", label: "Completed" },
-  { key: "cancelled", label: "Cancelled" },
 ];
 const STATUS_LABEL = {
   todo: "Not Started", in_progress: "In Progress", waiting: "Waiting",

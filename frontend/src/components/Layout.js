@@ -631,7 +631,7 @@ export default function Layout({ children }) {
           an unbounded height, so main never becomes a scrollport and the page
           scrolls the document exactly as before. The clip only exists if the
           height constraint reaches all the way down. */}
-      <div className="flex min-h-0 flex-1 flex-col min-w-0 app-shell lg:max-w-[1400px] lg:w-full lg:mx-auto">
+      <div className="flex min-h-0 flex-1 flex-col min-w-0 app-shell lg:w-full lg:mx-auto">
         {/* Mobile top app bar — MPWA-03.
             Two controls, not four; min-h + top inset so nothing sits under the
             status bar in iOS standalone. Untouched by KR-5 beyond what the

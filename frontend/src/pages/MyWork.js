@@ -2012,47 +2012,59 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
    reason `expanded` had to be lifted out of TaskCard. */
 const TIER_OF = (t) => (t?.priority === "high" || t?.priority === "low") ? t.priority : "medium";
 
-/* KM-28 — every tile is the same span and the same floor now. The bento gave
-   `high` a double-width box and three different minimum heights, so a list of
-   tasks read as a mosaic whose tile size encoded urgency. The founder asked for
-   one height and one type size: priority is carried by the chip on the card,
-   which is where a status belongs. `high` keeps its dense-flow placement order,
-   so urgent work still surfaces first — it just stops being a different shape
-   when it gets there. */
-const TIER_SPAN = {
-  high:   "col-span-6 sm:col-span-3 lg:col-span-2",
-  medium: "col-span-6 sm:col-span-3 lg:col-span-2",
-  low:    "col-span-6 sm:col-span-3 lg:col-span-2",
-};
-/* KR-14.2 — 210/182/156 → 148/128/112. The tiles were sized for a card that
-   does not exist: a task's summary is a title, a status chip and a meta row,
-   which lands around 80px, so a third of every box was empty. The founder
-   asked for spacious and got hollow.
-   Measured on the way down: at 148 the ink sat with 46px of air above AND
-   below it — the content is vertically centred, so every pixel of excess
-   floor is paid twice. 128 leaves ~16px each side of a one-line card and
-   still clears the tallest real content (a two-line title measures 94px)
-   without clipping, because these are FLOORS — a tile grows if its card
-   needs it.
-   Ratios stay rectangular, the original ask: at 1280 a high tile is
-   799 × 128 and a medium 391 × 128. */
-const TIER_MINH = { high: "min-h-[112px]", medium: "min-h-[112px]", low: "min-h-[112px]" };
-
-function TaskBento({ list, openId, setOpenId, cardProps }) {
+/* ASK-13 (2026-09-13): one dropdown shape for Department / Priority / Status.
+   Reads a value + options list + optional counts fn and renders a labelled
+   pill trigger + menu. counts.optional: if provided, each row gets a count. */
+function FilterDropdown({ testid, label, value, options, counts, onSelect, loading }) {
+  const active = options.find((o) => o.key === value) || options[0];
   return (
-    <div className="grid grid-flow-row-dense grid-cols-6 gap-4" data-testid="mywork-bento">
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" data-testid={testid}
+          className="kr-pop flex h-9 items-center gap-2 rounded-pill pl-3.5 pr-3 text-xs font-medium text-foreground">
+          <span className="text-muted-foreground">{label}:</span>
+          <span>{active.label}</span>
+          {counts && (
+            <span className="tabular-nums opacity-55">
+              {loading ? "—" : counts(active.key)}
+            </span>
+          )}
+          <CaretDown size={11} weight="bold" aria-hidden="true" className="opacity-60" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="max-h-[60vh] w-52 overflow-y-auto">
+        {options.map((o) => (
+          <DropdownMenuItem key={o.key || "__all__"} onSelect={() => onSelect(o.key)}
+            data-testid={`${testid}-${o.key || "all"}`}
+            className="flex items-center justify-between gap-3">
+            <span className={value === o.key ? "font-semibold" : ""}>{o.label}</span>
+            {counts && (
+              <span className="tabular-nums text-xs opacity-55">
+                {loading ? "—" : counts(o.key)}
+              </span>
+            )}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/* ASK-13 (2026-09-13): the bento is gone. Every card is one uniform cell in a
+   plain responsive grid; priority is a dropdown filter now, not a size code.
+   An opened card takes the whole row via col-span-full, same rule as before. */
+function TaskGrid({ list, openId, setOpenId, cardProps }) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" data-testid="mywork-grid">
       {list.map((t) => {
-        const tier = TIER_OF(t);
         const isOpen = openId === t.id;
         return (
           <div
             key={t.id}
-            data-tier={tier}
-            className={isOpen ? "col-span-6" : `${TIER_SPAN[tier]} ${TIER_MINH[tier]}`}
+            className={isOpen ? "sm:col-span-2 xl:col-span-3" : "min-h-[112px]"}
           >
             <TaskCard
               t={t}
-              tier={tier}
               open={isOpen}
               onToggleOpen={() => setOpenId(isOpen ? null : t.id)}
               {...cardProps(t)}
@@ -2064,80 +2076,24 @@ function TaskBento({ list, openId, setOpenId, cardProps }) {
   );
 }
 
-/* AI PRIORITY ON → three columns, high | medium | low.
-   The ranker already sorts the whole list by score; splitting it by the
-   priority band turns "a long sorted list" into "how much is on fire, how
-   much is next, how much can wait" — which is the question the toggle is
-   asked. Within a column the ranker's order is preserved.
-   A tile opened here still takes its column's full width, so the same
-   nothing-beside-it rule holds. */
-const BANDS = [
-  /* KM-48 — "High", not "High priority". The bar it labels is already called
-     Priority, so the word was printed twice in one control, and it was the one
-     segment wide enough to push the other two off a 343px row. */
+/* Priority bands, kept as a top-level list so both the desktop dropdown and
+   the mobile priority row read from one source. Was `BANDS` when it drove the
+   3-column TaskPriorityColumns layout; the name changed with its job. */
+const PRIORITY_BANDS = [
   { key: "high", label: "High" },
   { key: "medium", label: "Medium" },
   { key: "low", label: "Low" },
 ];
 
-function TaskPriorityColumns({ list, openId, setOpenId, cardProps, band = "high" }) {
-  const grouped = BANDS.map((b) => ({ ...b, items: list.filter((t) => TIER_OF(t) === b.key) }));
-  /* KM-3 — ON A PHONE THE THREE COLUMNS BECOME THREE TABS.
-     A 3-col grid linearises to three stacked sections, so turning AI priority
-     on used to make the page THREE TIMES LONGER and buried Medium and Low
-     below two full screens of High — the opposite of what "sort by priority"
-     is for. A segmented bar shows one band at a time and names the other two,
-     so the grouping is visible at a glance and switching costs one tap.
-     Default is High: if you asked for priority order, that is the band you
-     asked to see. Desktop keeps all three columns side by side, untouched. */
-  /* KM-48 — the band bar MOVED to the mobile header, beside the status bar.
-     It used to live here, which put one filter in the fixed header and the
-     other in the scrolling body: they could never be spaced evenly against
-     each other because one of them slid away. `band` is owned by the page now
-     and arrives as a prop; desktop shows all three columns and ignores it. */
-  return (
-    <>
-    <div className="grid gap-4 lg:grid-cols-3" data-testid="mywork-priority-columns">
-      {grouped.map((col) => (
-        <section key={col.key} data-testid={`priority-col-${col.key}`}
-                 className={`min-w-0 lg:block ${band === col.key ? "block" : "hidden"}`}>
-          {/* The heading is desktop-only: below lg the segmented bar above
-              already names the band and carries its count, so repeating it
-              here would label a list that has just been labelled. */}
-          <div className="mb-3 hidden items-baseline gap-2 lg:flex">
-            <h3 className="text-sm font-semibold">{col.label}</h3>
-            <span className="font-mono text-xs tabular-nums opacity-55">{col.items.length}</span>
-          </div>
-          <div className="flex flex-col gap-3">
-            {col.items.length === 0 && (
-              <div className="rounded-tile border border-dashed border-foreground/15 p-5">
-                <p className="text-center text-xs text-muted-foreground">Nothing here</p>
-              </div>
-            )}
-            {col.items.map((t) => {
-              const isOpen = openId === t.id;
-              return (
-                <TaskCard
-                  key={t.id}
-                  t={t}
-                  tier={col.key}
-                  /* KM-30 — the column IS the priority: the band bar names it
-                     on mobile and the column heading names it on desktop, so a
-                     chip repeating it on every card is the third time. */
-                  hidePrio
-                  open={isOpen}
-                  onToggleOpen={() => setOpenId(isOpen ? null : t.id)}
-                  {...cardProps(t)}
-                />
-              );
-            })}
-          </div>
-        </section>
-      ))}
-    </div>
-    </>
-  );
-}
+/* Desktop filter options include an "All" row that clears the filter. */
+const PRIORITY_FILTER_OPTIONS = [{ key: "", label: "All priorities" }, ...PRIORITY_BANDS];
+const STATUS_FILTER_OPTIONS = [
+  { key: "", label: "All statuses" },
+  { key: "todo", label: "Not Started" },
+  { key: "in_progress", label: "In Progress" },
+  { key: "waiting", label: "Waiting" },
+  { key: "review", label: "Under Review" },
+];
 
 export default function MyWork() {
   // MPWA-08: rebuilt below lg (§8). Above lg the original tree renders
@@ -2197,18 +2153,10 @@ export default function MyWork() {
      posture, not a destination — you flick through it while scanning and you
      do not want twenty history entries for it. */
   const [statusFilter, setStatusFilter] = useState("");
-  /* KM-48 — the priority band lens. Lifted out of TaskPriorityColumns so its
-     bar can sit in the fixed header next to the status bar; see the note
-     there. Reset with the toggle, like statusFilter, so turning AI priority
-     off and on again does not land you in a band you chose ten minutes ago. */
-  const [band, setBand] = useState("high");
-  // Dismissing the bar clears it, so the list can never stay filtered by a
-  // control that is no longer on screen. An effect rather than a patch to each
-  // toggle, because the toggle exists twice — mobile and desktop — and a rule
-  // enforced in one of two places is not a rule.
-  useEffect(() => {
-    if (!aiPriority) { setStatusFilter(""); setBand("high"); }
-  }, [aiPriority]);
+  /* ASK-13 (2026-09-13): priority is a filter now, not a view-mode switch.
+     Default is "" (unfiltered); "high"/"medium"/"low" narrows the list. Shared
+     between the desktop dropdown and the mobile priority row. */
+  const [priorityFilter, setPriorityFilter] = useState("");
 
   // Persist on any change. Guard on prefsKey so pre-login / test envs stay
   // no-op.
@@ -2313,8 +2261,12 @@ export default function MyWork() {
   } else {
     list = all.filter((t) => !isTerminal(t) && t.task_type === tab);
   }
+  // ASK-13: department (tab), priority and status filter regardless of AI
+  // Priority. Sparkle toggle only re-orders — it no longer switches into a
+  // 3-column view.
+  if (priorityFilter) list = list.filter((t) => TIER_OF(t) === priorityFilter);
+  if (statusFilter) list = list.filter((t) => t.status === statusFilter);
   if (aiPriority && tab !== "completed") {
-    if (statusFilter) list = list.filter((t) => t.status === statusFilter);
     list = [...list].sort((a, b) => (scoreMap[b.id]?.priority_score || 0) - (scoreMap[a.id]?.priority_score || 0));
   }
 
@@ -2530,13 +2482,15 @@ export default function MyWork() {
                   interpolate. */}
               <div className="kr-pressed flex items-center gap-1 rounded-pill p-1"
                    role="group" aria-label="Filter by priority" data-testid="mywork-priority-bands">
-                {BANDS.map((b) => {
+                {PRIORITY_BANDS.map((b) => {
                   const n = list.filter((tk) => TIER_OF(tk) === b.key).length;
+                  const active = priorityFilter === b.key;
                   return (
-                    <button key={b.key} type="button" onClick={() => setBand(b.key)}
-                      aria-pressed={band === b.key} data-testid={`priority-band-${b.key}`}
+                    <button key={b.key} type="button"
+                      onClick={() => setPriorityFilter((cur) => (cur === b.key ? "" : b.key))}
+                      aria-pressed={active} data-testid={`priority-band-${b.key}`}
                       className={`kr-seg-compact flex h-9 flex-1 items-center justify-center gap-1.5 rounded-pill px-2 text-[12px] ${
-                        band === b.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
+                        active ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
                       {b.label}
                       <span className="tabular-nums opacity-55">{n}</span>
                     </button>
@@ -2747,20 +2701,36 @@ export default function MyWork() {
               sits at the right end of the tab strip on desktop -- one
               place for filtering, one place for adding, on the same
               rule. */}
+          {/* ASK-13 (2026-09-13): the desktop chip strip is now three dropdowns
+              — Department (was the chip strip), Priority (new, was only reachable
+              through the AI-priority view switch), and Status (new, was mobile-only
+              inside the AI-priority row). All three read the same state the
+              filters already used; New Task keeps its right-end position. */}
           <div className="mb-5 hidden items-end justify-between gap-4 border-b border-nm-edge/40 pb-4 lg:flex">
-            <div className="flex flex-wrap gap-2" data-testid="work-tabs">
-              {WORK_TABS
-                .filter((tb) => tb.key === "all" || countFor(tb.key) > 0)
-                .map((tb) => (
-                  <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`work-tab-${tb.key}`}
-                    aria-pressed={tab === tb.key}
-                    className={`flex h-8 items-center gap-1.5 rounded-pill border-[0.5px] pl-3 pr-2 text-xs transition-colors ${tab === tb.key ? "border-kr-ink font-medium text-foreground" : "border-kr-ink/55 text-foreground/65 hover:text-foreground/85"}`}>
-                    {tb.label}
-                    <span className="min-w-[17px] rounded-pill px-1 py-0.5 text-center font-mono text-[10px] leading-none tabular-nums opacity-65">
-                      {tasksQ.isLoading && !tasksQ.data ? "—" : countFor(tb.key)}
-                    </span>
-                  </button>
-                ))}
+            <div className="flex flex-wrap items-center gap-2.5" data-testid="work-filters">
+              <FilterDropdown
+                testid="work-filter-department"
+                label="Department"
+                value={tab}
+                options={WORK_TABS}
+                counts={countFor}
+                onSelect={setTab}
+                loading={tasksQ.isLoading && !tasksQ.data}
+              />
+              <FilterDropdown
+                testid="work-filter-priority"
+                label="Priority"
+                value={priorityFilter}
+                options={PRIORITY_FILTER_OPTIONS}
+                onSelect={setPriorityFilter}
+              />
+              <FilterDropdown
+                testid="work-filter-status"
+                label="Status"
+                value={statusFilter}
+                options={STATUS_FILTER_OPTIONS}
+                onSelect={setStatusFilter}
+              />
             </div>
             <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
               triggerClassName={`${SECTION_BTN} kr-lift bg-kr-ink text-white`} />
@@ -2823,16 +2793,14 @@ export default function MyWork() {
               highlight: t.id === focusTaskId,
               scores: aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined,
               // KM-30 — the card drops the status chip when the lens already
-              // says it. Priority is handled inside TaskPriorityColumns, whose
-              // band/column names it on every card it renders.
+              // says it. Same rule now for priority: hide the chip when the
+              // dropdown or the mobile row is narrowing to a single band.
               hideStatus: Boolean(statusFilter),
+              hidePrio: Boolean(priorityFilter),
               selected: selected.has(t.id),
               onToggleSelect: () => toggleSelected(t.id),
             });
-            const shared = { list, openId, setOpenId, cardProps };
-            return aiPriority && tab !== "completed"
-              ? <TaskPriorityColumns {...shared} band={band} />
-              : <TaskBento {...shared} />;
+            return <TaskGrid list={list} openId={openId} setOpenId={setOpenId} cardProps={cardProps} />;
           })()}
 
           {/* U7-05.3 dialog: bulk-reassign target picker. */}

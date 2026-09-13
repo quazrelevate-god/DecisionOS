@@ -261,6 +261,87 @@ async def get_task(task_id: str, user: dict = Depends(get_current_user)):
     return await enrich_task(t)
 
 
+# ---------------------------------------------------------------------------
+# ASK-29 — the task's activity timeline
+# ---------------------------------------------------------------------------
+# Every event on a task is written to db.activity (log_activity), and the
+# drawer's Activity section reads them back as one timeline. `message` keeps
+# the task title for the tenant-wide feeds (Dashboard, Brief); `detail` is the
+# short line the task's own timeline shows, where repeating the title is noise.
+_STATUS_WORDS = {
+    "todo": "Not Started", "in_progress": "In Progress", "waiting": "Waiting",
+    "review": "Under Review", "done": "Completed", "cancelled": "Cancelled",
+    "blocked": "Pending Approval",
+}
+# Notes, hand-offs and escalations carry their full text (step, target) on the
+# task's own `updates` trail, so the log's copy of them is skipped to avoid
+# listing each one twice.
+_TRAIL_LOG_KINDS = {"task_note", "task_handoff", "task_escalate", "handoff_resolved"}
+_TRAIL_KIND = {"note": "task_note", "handoff": "task_handoff", "escalate": "task_escalate",
+               "response": "task_reply", "handoff_reply": "task_reply"}
+
+
+async def _log_task_event(user: dict, task_id: str, kind: str, message: str, detail: str) -> None:
+    """log_activity, plus the short `detail` line for the task's timeline."""
+    await db.activity.insert_one({
+        "id": new_id(), "tenant_id": user["tenant_id"], "actor": user["id"], "kind": kind,
+        "message": message, "detail": detail, "entity_type": "task", "entity_id": task_id,
+        "created_at": now_iso(),
+    })
+
+
+def _timeline_text(row: dict) -> str:
+    """The timeline line for a log row. Rows written before `detail` existed
+    fall back to a fixed phrase per kind, so old tasks read cleanly too."""
+    if row.get("detail"):
+        return row["detail"]
+    kind, msg = row.get("kind"), row.get("message") or ""
+    fixed = {
+        "task_created": "Created the task", "task_done": "Marked complete",
+        "task_approved": "Approved — work can start", "task_rejected": "Requested changes",
+        "task_clarify": "Asked for clarification", "task_people": "Updated who is on the task",
+        "invoice_auto_drafted": "Drafted an invoice from this task",
+    }
+    if kind in fixed:
+        return fixed[kind]
+    if kind == "task_assigned" and " to " in msg:
+        return ("Reassigned to " if msg.startswith("Reassigned") else "Assigned to ") + msg.rsplit(" to ", 1)[1]
+    return msg
+
+
+@router.get("/tasks/{task_id}/activity")
+async def task_activity(task_id: str, user: dict = Depends(get_current_user)):
+    t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Task not found")
+    allowed = (user.get("role") == "owner" or _can_work_task(user, t)
+               or t.get("approver_id") == user["id"] or t.get("created_by") == user["id"]
+               or t.get("support_id") == user["id"])
+    if not allowed:
+        raise HTTPException(status_code=403, detail="You don't have access to this work")
+    rows = await db.activity.find(
+        {"tenant_id": user["tenant_id"], "entity_type": "task", "entity_id": task_id}, {"_id": 0},
+    ).sort("created_at", -1).to_list(200)
+    rows = [r for r in rows if r.get("kind") not in _TRAIL_LOG_KINDS]
+    actor_ids = list({r.get("actor") for r in rows if r.get("actor")})
+    names = {}
+    if actor_ids:
+        for u in await db.users.find({"id": {"$in": actor_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(len(actor_ids)):
+            names[u["id"]] = u.get("name")
+    items = [{
+        "id": r.get("id"), "kind": r.get("kind"), "text": _timeline_text(r),
+        "actor_name": names.get(r.get("actor")), "created_at": r.get("created_at"),
+    } for r in rows]
+    for u in t.get("updates") or []:
+        items.append({
+            "id": u.get("id"), "kind": _TRAIL_KIND.get(u.get("kind"), f"task_{u.get('kind')}"),
+            "text": u.get("text") or "", "actor_name": u.get("author_name"),
+            "to_name": u.get("to_name"), "step_text": u.get("step_text"), "created_at": u.get("created_at"),
+        })
+    items.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+    return items
+
+
 @router.delete("/tasks/{task_id}")
 async def delete_task(task_id: str, user: dict = Depends(require_role("owner"))):
     # FIX-004-C (RBAC-07): decorator gate now matches the inline
@@ -364,7 +445,7 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
             await push_notification(user["tenant_id"], to_notify, 1,
                                     f"New work assigned: '{inp.title}'", "task", tid,
                                     ntype="assigned", title=inp.title, sender=user["name"])
-    await log_activity(user["tenant_id"], user["id"], "task_created", f"Created task '{inp.title}'", "task", tid)
+    await _log_task_event(user, tid, "task_created", f"Created task '{inp.title}'", "Created the task")
     return await enrich_task(await db.tasks.find_one({"id": tid}, {"_id": 0}))
 
 
@@ -384,6 +465,13 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
         )
     if "progress" in updates:
         updates["progress"] = max(0, min(100, int(updates["progress"])))
+        # ASK-28: a task with a checklist takes its progress from the list —
+        # the drawer locks its % control to it — so a manual value (including
+        # a reopen's progress:0) is replaced by the checklist's own number.
+        # Completing the task still sets 100 just below.
+        plan_steps = (t.get("execution_plan") or {}).get("steps") or []
+        if plan_steps:
+            updates["progress"] = _plan_progress(plan_steps)
     if updates.get("status") == "done":
         updates["progress"] = 100
     # Completion-evidence gate: tasks flagged evidence_required need >=1 evidence file before "done".
@@ -451,8 +539,19 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
                                     f"You've been added to '{t['title']}'", "task", task_id,
                                     ntype="assigned", title=t["title"], sender=user["name"])
         if "co_assignee_ids" in inp.model_fields_set:
-            await log_activity(user["tenant_id"], user["id"], "task_people",
-                               f"Updated who is on '{t['title']}'", "task", task_id)
+            # ASK-29: name who came on and who came off, for the timeline.
+            removed_co = [i for i in old_co if i not in (updates.get("co_assignee_ids") or [])]
+            who = {}
+            if added_co or removed_co:
+                for u in await db.users.find({"id": {"$in": added_co + removed_co}}, {"_id": 0, "id": 1, "name": 1}).to_list(50):
+                    who[u["id"]] = u.get("name") or "a member"
+            parts = []
+            if added_co:
+                parts.append("Added " + ", ".join(who.get(i, "a member") for i in added_co))
+            if removed_co:
+                parts.append("Removed " + ", ".join(who.get(i, "a member") for i in removed_co))
+            await _log_task_event(user, task_id, "task_people", f"Updated who is on '{t['title']}'",
+                                  " · ".join(parts) or "Updated who is on the task")
         if updates.get("status") and updates["status"] != t.get("status"):
             watchers = [w for w in ([t.get("created_by")] + await _owner_ids(user["tenant_id"])) if w and w != user["id"]]
             await push_notification(user["tenant_id"], watchers, 1,
@@ -460,8 +559,17 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
                                     ntype="status", title=t["title"], sender=user["name"])
         if updates.get("status") and t.get("decision_id"):
             await add_decision_event(t["decision_id"], f"{t['title']} → {updates['status'].replace('_',' ')}", user["name"], "task")
+        # ASK-29: every status move lands on the task's timeline. It used to
+        # show only as "last_action" under the drawer's title; "done" is its
+        # own event just below, so it is not written twice.
+        if updates.get("status") and updates["status"] != t.get("status") and updates["status"] != "done":
+            word = _STATUS_WORDS.get(updates["status"], updates["status"])
+            await _log_task_event(user, task_id, "task_status", f"'{t['title']}' status → {word}", f"Status → {word}")
+        if "progress" in updates and "status" not in updates and updates["progress"] != t.get("progress"):
+            await _log_task_event(user, task_id, "task_progress", f"'{t['title']}' progress {updates['progress']}%",
+                                  f"Progress set to {updates['progress']}%")
         if updates.get("status") == "done":
-            await log_activity(user["tenant_id"], user["id"], "task_done", f"Completed task '{t['title']}'", "task", task_id)
+            await _log_task_event(user, task_id, "task_done", f"Completed task '{t['title']}'", "Marked complete")
             # WE-06.5 (2026-08-16, live-test surfaced): task-close hook.
             # If the task was linked to a workflow (WE-01 fields set) and
             # its stage_key matches the workflow's current stage, ask
@@ -514,8 +622,8 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             await _maybe_auto_invoice(user["tenant_id"], user["id"], t, task_id)
         elif updates.get("assignee_id"):
             member = await db.users.find_one({"id": updates["assignee_id"]}, {"_id": 0, "name": 1})
-            await log_activity(user["tenant_id"], user["id"], "task_assigned",
-                               f"Assigned '{t['title']}' to {(member or {}).get('name', 'a member')}", "task", task_id)
+            who_name = (member or {}).get("name", "a member")
+            await _log_task_event(user, task_id, "task_assigned", f"Assigned '{t['title']}' to {who_name}", f"Assigned to {who_name}")
     return await enrich_task(await db.tasks.find_one(tenant_filter(task_id, user["tenant_id"]), {"_id": 0}))  # FIX-001-C
 
 
@@ -564,7 +672,7 @@ async def reassign_task(task_id: str, inp: TaskReassignInput, user: dict = Depen
         await push_notification(user["tenant_id"], [new_assignee_id], 1,
                                 f"Work assigned to you: '{t['title']}'", "task", task_id,
                                 ntype="assigned", title=t["title"], sender=user["name"])
-    await log_activity(user["tenant_id"], user["id"], "task_assigned", f"Reassigned '{t['title']}' to {who}", "task", task_id)
+    await _log_task_event(user, task_id, "task_assigned", f"Reassigned '{t['title']}' to {who}", f"Reassigned to {who}")
     if t.get("decision_id"):
         await add_decision_event(t["decision_id"], f"{t['title']} reassigned to {who}", user["name"], "task")
     return await enrich_task(await db.tasks.find_one(tenant_filter(task_id, user["tenant_id"]), {"_id": 0}))  # FIX-001-C
@@ -593,7 +701,7 @@ async def approve_task(task_id: str, user: dict = Depends(get_current_user)):
     if assignee_ids_of(t):  # ASK-26: everyone on the task can start
         await push_notification(user["tenant_id"], assignee_ids_of(t), 1, f"Approved: you can start '{t['title']}'", "task", task_id,
                                 ntype="approved", title=t["title"], sender=user["name"])
-    await log_activity(user["tenant_id"], user["id"], "task_approved", f"Approved '{t['title']}'", "task", task_id)
+    await _log_task_event(user, task_id, "task_approved", f"Approved '{t['title']}'", "Approved — work can start")
     # FIX-007-B (S4-02): pass decision_id when set.
     await brain_context.record_context(
         tenant_id=user["tenant_id"], kind="approval", title=t.get("title") or "Task approved",
@@ -628,7 +736,8 @@ async def reject_task(task_id: str, inp: TaskRejectInput, user: dict = Depends(g
     if assignee_ids_of(t):  # ASK-26
         await push_notification(user["tenant_id"], assignee_ids_of(t), 2, msg, "task", task_id,
                                 ntype="rejected", title=t["title"], sender=user["name"])
-    await log_activity(user["tenant_id"], user["id"], "task_rejected", f"Requested changes on '{t['title']}'", "task", task_id)
+    await _log_task_event(user, task_id, "task_rejected", f"Requested changes on '{t['title']}'",
+                          "Requested changes" + (f": {reason[:140]}" if reason else ""))
     # FIX-007-B (S4-02): pass decision_id when set.
     await brain_context.record_context(
         tenant_id=user["tenant_id"], kind="approval", title=t.get("title") or "Task rejected",
@@ -665,7 +774,8 @@ async def clarify_task(task_id: str, inp: TaskRejectInput, user: dict = Depends(
         await push_notification(user["tenant_id"], assignee_ids_of(t), 2,
                                 f"Clarification needed on '{t['title']}': {note[:120]}", "task", task_id,
                                 ntype="clarification", title=t["title"], sender=user["name"])
-    await log_activity(user["tenant_id"], user["id"], "task_clarify", f"Requested clarification on '{t['title']}'", "task", task_id)
+    await _log_task_event(user, task_id, "task_clarify", f"Requested clarification on '{t['title']}'",
+                          f"Asked for clarification: {note[:140]}")
     return await enrich_task(await db.tasks.find_one(tenant_filter(task_id, user["tenant_id"]), {"_id": 0}))  # FIX-001-C
 
 
@@ -689,7 +799,11 @@ async def generate_execution_plan(task_id: str, user: dict = Depends(get_current
     steps = [{"id": new_id(), "text": s, "done": False} for s in gen["steps"]]
     plan = {"status": "draft", "task_type": gen["task_type"], "steps": steps,
             "progress": 0, "generated_at": now_iso(), "updated_at": now_iso()}
-    await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$set": {"execution_plan": plan}})  # FIX-001-C
+    # ASK-28: a fresh checklist starts at 0 ticked, and the task's progress now
+    # follows it.
+    await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$set": {"execution_plan": plan, "progress": 0}})  # FIX-001-C
+    await _log_task_event(user, task_id, "task_plan", f"Dex drafted a checklist for '{t['title']}'",
+                          f"Dex drafted a checklist ({len(steps)} steps)")
     return await enrich_task(await db.tasks.find_one(tenant_filter(task_id, user["tenant_id"]), {"_id": 0}))  # FIX-001-C
 
 
@@ -712,6 +826,10 @@ async def save_execution_plan(task_id: str, inp: ExecPlanInput, user: dict = Dep
         "generated_at": existing.get("generated_at") or now_iso(), "updated_at": now_iso(),
     }
     updates = {"execution_plan": plan}
+    # ASK-28: with a checklist, the task's own progress IS the checklist's, so
+    # cards, Desk and the drawer's locked % bar all read the same number.
+    if steps:
+        updates["progress"] = plan["progress"]
     # Keep the task board in sync: starting work moves a todo task into progress; finishing all steps can complete it.
     if plan["status"] == "accepted" and steps:
         if plan["progress"] == 100 and t.get("status") not in ("done", "blocked"):
@@ -719,8 +837,26 @@ async def save_execution_plan(task_id: str, inp: ExecPlanInput, user: dict = Dep
         elif plan["progress"] > 0 and t.get("status") == "todo":
             updates["status"] = "in_progress"
     await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$set": updates})  # FIX-001-C
+    # ASK-29: what changed in the checklist, for the task's timeline — each
+    # step ticked or unticked, and accepting or editing the list itself.
+    old_steps = existing.get("steps") or []
+    old_done = {s.get("id"): bool(s.get("done")) for s in old_steps}
+    for s in steps:
+        if s["id"] in old_done and s["done"] != old_done[s["id"]]:
+            verb = "Completed step" if s["done"] else "Reopened step"
+            await _log_task_event(user, task_id, "task_step", f"{verb} on '{t['title']}': {s['text'][:80]}",
+                                  f"{verb}: {s['text'][:140]}")
+    shape_changed = ([(s.get("id"), (s.get("text") or "").strip()) for s in old_steps]
+                     != [(s["id"], s["text"]) for s in steps])
+    if existing.get("status") != "accepted" and plan["status"] == "accepted":
+        await _log_task_event(user, task_id, "task_plan", f"Accepted the checklist on '{t['title']}'",
+                              f"Accepted the checklist ({len(steps)} steps)")
+    elif shape_changed:
+        await _log_task_event(user, task_id, "task_plan", f"Edited the checklist on '{t['title']}'",
+                              f"Edited the checklist ({len(steps)} steps)")
     if updates.get("status") == "done":
-        await log_activity(user["tenant_id"], user["id"], "task_done", f"Completed task '{t['title']}'", "task", task_id)
+        await _log_task_event(user, task_id, "task_done", f"Completed task '{t['title']}'",
+                              "Completed — every checklist step is done")
         if t.get("decision_id"):
             await add_decision_event(t["decision_id"], f"{t['title']} → done", user["name"], "task")
         # FIX-007-B (S4-02): this endpoint was the ONE task-completion
@@ -757,6 +893,7 @@ async def delete_execution_plan(task_id: str, user: dict = Depends(require_perm(
     if not _can_work_task(user, t):
         raise HTTPException(status_code=403, detail="Only the assignee or owner can clear this plan")
     await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$unset": {"execution_plan": ""}, "$set": {"updated_at": now_iso()}})  # FIX-001-C
+    await _log_task_event(user, task_id, "task_plan", f"Cleared the checklist on '{t['title']}'", "Cleared the checklist")
     return await enrich_task(await db.tasks.find_one(tenant_filter(task_id, user["tenant_id"]), {"_id": 0}))  # FIX-001-C
 
 
@@ -938,6 +1075,10 @@ async def upload_task_attachment(task_id: str, file: UploadFile = File(...), kin
     att = _file_public(rec)
     await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$push": {"attachments": att},  # FIX-001-C
                               "$set": {"updated_at": now_iso(), "last_action": f"{kind.title()} attached"}})
+    what = {"photo": "Attached a photo", "voice": "Sent a voice note",
+            "reference": "Added reference material"}.get(kind, "Attached a document")
+    await _log_task_event(user, task_id, "task_attachment", f"{what} on '{t['title']}'",
+                          f"{what}: {att.get('filename') or 'file'}" if kind != "voice" else what)
     if kind == "reference" and background is not None:
         background.add_task(_analyze_reference_file, user["tenant_id"], task_id, rec)
     return att

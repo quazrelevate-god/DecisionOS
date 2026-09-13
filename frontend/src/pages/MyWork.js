@@ -23,18 +23,21 @@ import Workflows from "./Workflows";
 // on this page, it can be pulled from pages/Leave.js as a named export.
 import {
   CheckCircle, Camera, Microphone, Stop, ChatCircleText,
-  Sparkle, Plus, Trash, Robot, PencilSimple, ListChecks, CaretDown, CaretUp,
+  Sparkle, Plus, Trash, PencilSimple, ListChecks, CaretDown, CaretUp,
   ArrowBendUpRight, WarningCircle, ChatText, ArrowRight, Kanban,
   Paperclip, UserCircle, ShieldCheck, Tag, ClockCounterClockwise,
-  ArrowClockwise, XCircle, LockKey, X, MagnifyingGlassPlus, Eye,
+  ArrowClockwise, XCircle, LockKey, X, MagnifyingGlassPlus,
   File, FileArrowUp, Lightbulb, Info,
   FlowArrow,  // WE-11 stage chip
   SlidersHorizontal,  // KR-14.6 · mobile MyWork filter icon (reference)
   Buildings, CalendarBlank, // KR-14.22 · mobile expanded task card
   DotsThreeVertical, // MW-02 · overflow menu on the summary row
   Check, Clock, ArrowFatLinesUp, // ASK-25 · card checkbox, Overdue + Escalation pills
+  ChartBar, UserPlus, // ASK-27 · % control, add a person
 } from "@phosphor-icons/react";
 import { AvatarStack, PersonAvatar } from "../components/karma/PersonAvatar";
+import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel, AlertDialogAction } from "../components/ui/alert-dialog";
+import { motion, useReducedMotion } from "framer-motion";
 
 // RD-2 (2026-08-17): the toolbar control. Was uppercase + wide tracking +
 // hard black border — eight of these in a row read as a control panel. Now a
@@ -103,7 +106,6 @@ const STATUS_LABEL = {
   todo: "Not Started", in_progress: "In Progress", waiting: "Waiting",
   review: "Under Review", done: "Completed", cancelled: "Cancelled", blocked: "Pending Approval",
 };
-const PROGRESS_OPTIONS = [0, 25, 50, 75, 100];
 
 /* KM-6 — the bar is a PROGRESS track now, not a status dropdown in disguise.
    Completed and Cancelled are gone from it, and that was a correctness fix
@@ -142,7 +144,6 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) 
   const [toId, setToId] = useState("");
   const [toRole, setToRole] = useState("");
   const [busy, setBusy] = useState(false);
-  const inp = "w-full nm-field px-2.5 py-2 text-sm";
 
   const submit = async () => {
     if (!text.trim()) return toast.error("Write what you found");
@@ -166,54 +167,164 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) 
   ];
 
   return (
-    <div className="nm-btn p-3 space-y-2 bg-nm-sunken/40" data-testid={`update-form-${taskId}`}>
-      <textarea rows={2} value={text} onChange={(e) => setText(e.target.value)} data-testid={`update-text-${taskId}`}
-        placeholder="What did you find? e.g. Logistics can't commit to a date — supplier issue" className={inp} />
-      <div className="flex gap-1">
-        {ACTIONS.map((a) => (
-          <button key={a.key} onClick={() => setAction(a.key)} data-testid={`update-action-${a.key}-${taskId}`}
-            /* MW-08 fix: the previous CTRL_ON / CTRL_OFF constants were
-               deleted in 5fb96f2 (KR-11.3, "Workflows and Leave join the
-               material") when the rest of the toolbar moved to
-               .kr-pressed / .kr-pop, but this line still referenced the
-               removed identifiers, so UpdateForm threw a ReferenceError
-               at render time and the whole app unmounted. Segmented
-               controls elsewhere in this file already carry the same
-               pair (see MW-01 view toggle around L2489), so the fix is
-               to adopt that grammar here too rather than restore the
-               dead constants. No transition class -- .kr-pressed and
-               .kr-pop swap outset for inset shadows and those do not
-               interpolate; a transition would stall the swap. */
-            className={`flex-1 flex items-center justify-center gap-1 rounded-pill px-2 py-1.5 text-xs font-medium ${action === a.key ? "kr-pressed" : "kr-pop"}`}>
-            <a.icon size={13} weight="bold" /> {a.label}
-          </button>
-        ))}
+    /* ASK-28 — the form that opens from "Log update or hand off" (and from a
+       step's ⋮) was still the retired neumorphic kit: an nm-btn slab with
+       square nm-field inputs and a tiny 12px pill row, inside a drawer that
+       is otherwise frosted glass. It now speaks the drawer's language: a
+       glass card, a soft white field, the three kinds of update as a
+       segmented track whose chosen segment lifts out as a glass pill (no
+       transition — outset and inset shadows do not interpolate, MW-08),
+       glass select pills for the hand-off target, and the navy Post. */
+    <div className={`${DRAWER_CARD} space-y-3 p-4`} data-testid={`update-form-${taskId}`}>
+      <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} data-testid={`update-text-${taskId}`}
+        placeholder="What did you find? e.g. Logistics can't commit to a date — supplier issue"
+        className={`${DRAWER_FIELD} resize-none leading-relaxed`} />
+      <div className={`flex gap-1 rounded-pill p-1 ${DRAWER_TRACK}`} role="group" aria-label="Kind of update">
+        {ACTIONS.map((a) => {
+          const on = action === a.key;
+          return (
+            <button key={a.key} type="button" onClick={() => setAction(a.key)} aria-pressed={on}
+              data-testid={`update-action-${a.key}-${taskId}`}
+              className={`flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-pill px-2 text-sm font-medium ${
+                on ? `${GLASS_PILL} text-slate-900` : "text-slate-500 hover:text-slate-800"
+              }`}>
+              <a.icon size={15} weight="bold" aria-hidden="true" /> <span className="truncate">{a.label}</span>
+            </button>
+          );
+        })}
       </div>
       {action === "handoff" && (
         <div className="space-y-2">
-          <select className={inp} value={toId} onChange={(e) => setToId(e.target.value)} data-testid={`update-member-${taskId}`}>
-            <option value="">— Hand off to a team member —</option>
-            {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
-          </select>
-          <select className={inp} value={toRole} onChange={(e) => setToRole(e.target.value)} disabled={!!toId}>
-            <option value="">…or to a whole team {toId ? "(member selected)" : ""}</option>
-            {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
-          </select>
+          <label className={`relative flex items-center rounded-pill ${GLASS_PILL}`}>
+            <select className={DRAWER_SELECT} value={toId} onChange={(e) => setToId(e.target.value)}
+              data-testid={`update-member-${taskId}`} aria-label="Hand off to a team member">
+              <option value="">Hand off to a team member</option>
+              {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
+            </select>
+            <CaretDown size={16} weight="bold" aria-hidden="true" className="pointer-events-none absolute right-4 text-slate-500" />
+          </label>
+          <label className={`relative flex items-center rounded-pill ${GLASS_PILL}`}>
+            <select className={DRAWER_SELECT} value={toRole} onChange={(e) => setToRole(e.target.value)}
+              disabled={!!toId} aria-label="Or hand off to a whole team">
+              <option value="">…or to a whole team {toId ? "(member selected)" : ""}</option>
+              {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+            </select>
+            <CaretDown size={16} weight="bold" aria-hidden="true" className="pointer-events-none absolute right-4 text-slate-500" />
+          </label>
         </div>
       )}
-      {action === "escalate" && <p className="text-xs text-muted-foreground">This will alert the owner and create a follow-up for them.</p>}
+      {action === "escalate" && (
+        <p className="px-1 text-sm text-slate-500">This will alert the owner and create a follow-up for them.</p>
+      )}
       <div className="flex gap-2">
-        <button onClick={submit} disabled={busy} data-testid={`update-submit-${taskId}`}
-          className="kr-lift flex-1 rounded-pill bg-kr-ink py-2 text-xs font-medium text-white transition-all disabled:opacity-50">
+        <button type="button" onClick={submit} disabled={busy} data-testid={`update-submit-${taskId}`}
+          className={`flex h-11 flex-1 items-center justify-center rounded-pill text-sm font-medium disabled:opacity-50 ${INK_PILL}`}>
           {busy ? "Posting…" : "Post"}
         </button>
-        <button onClick={onCancel} className="px-3 py-1.5 text-xs font-medium nm-btn hover:bg-accent">Cancel</button>
+        <button type="button" onClick={onCancel}
+          className={`flex h-11 items-center rounded-pill px-5 text-sm font-medium text-slate-700 transition-colors hover:bg-white ${GLASS_PILL}`}>
+          Cancel
+        </button>
       </div>
     </div>
   );
 }
 
-const UPDATE_ICON = { note: ChatText, handoff: ArrowBendUpRight, escalate: WarningCircle };
+// ASK-29 — how each kind of event draws on the Activity timeline: its glyph,
+// the dot on the line, and the glyph's tone. Unknown kinds get the default.
+const TIMELINE_KIND = {
+  // ASK-30 — grayscale: the kinds are told apart by glyph, and the ones that
+  // change where a task stands (status, done, escalate, rejected) get the
+  // darkest dot.
+  task_created:    { icon: Plus, dot: "bg-neutral-400", tone: "text-neutral-500" },
+  task_status:     { icon: Clock, dot: "bg-neutral-900", tone: "text-neutral-900" },
+  task_progress:   { icon: ChartBar, dot: "bg-neutral-500", tone: "text-neutral-600" },
+  task_people:     { icon: UserPlus, dot: "bg-neutral-600", tone: "text-neutral-700" },
+  task_assigned:   { icon: UserPlus, dot: "bg-neutral-600", tone: "text-neutral-700" },
+  task_note:       { icon: ChatText, dot: "bg-neutral-400", tone: "text-neutral-600" },
+  task_reply:      { icon: ChatText, dot: "bg-neutral-400", tone: "text-neutral-600" },
+  task_handoff:    { icon: ArrowBendUpRight, dot: "bg-neutral-600", tone: "text-neutral-700" },
+  task_escalate:   { icon: WarningCircle, dot: "bg-neutral-900", tone: "text-neutral-900" },
+  task_approved:   { icon: ShieldCheck, dot: "bg-neutral-600", tone: "text-neutral-700" },
+  task_rejected:   { icon: XCircle, dot: "bg-neutral-900", tone: "text-neutral-900" },
+  task_clarify:    { icon: ChatText, dot: "bg-neutral-500", tone: "text-neutral-600" },
+  task_plan:       { icon: ListChecks, dot: "bg-neutral-600", tone: "text-neutral-700" },
+  task_step:       { icon: CheckCircle, dot: "bg-neutral-500", tone: "text-neutral-700" },
+  task_attachment: { icon: Paperclip, dot: "bg-neutral-400", tone: "text-neutral-500" },
+  task_done:       { icon: CheckCircle, dot: "bg-neutral-900", tone: "text-neutral-900", strong: true },
+  default:         { icon: Clock, dot: "bg-neutral-400", tone: "text-neutral-500" },
+};
+
+/* ASK-27 — the task drawer's material, on the founder's reference: a pale
+   frosted sheet, content grouped on soft raised glass, small-caps section
+   labels, and one navy ink for the two actions that move a task on (Complete,
+   Log update or hand off). Strings beside the drawer rather than new CSS, so
+   every surface in it reads from one place. */
+const DRAWER_LABEL = "mb-2.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500";
+const DRAWER_CARD = "rounded-[1.4rem] bg-white/60 ring-1 ring-inset ring-white/80 shadow-[0_10px_30px_-14px_hsl(0_0%_10%/0.22)] backdrop-blur-xl";
+const GLASS_PILL = "bg-white/75 ring-1 ring-inset ring-slate-900/[0.05] shadow-[0_6px_16px_-8px_hsl(216_30%_25%/0.35),inset_0_1px_0_hsl(0_0%_100%/0.9)]";
+const GLASS_ICON_BTN = `grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-700 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`;
+// ASK-30 — black and gray, not navy: the founder's palette for the drawer. The
+// filled pills are a black gradient; the sheet is a light neutral gray so the
+// white pills stand off it; the only colour left is the maroon Delete.
+const INK_PILL = "bg-[linear-gradient(180deg,hsl(0_0%_24%),hsl(0_0%_6%))] text-white shadow-[0_12px_26px_-12px_hsl(0_0%_0%/0.7),inset_0_1px_0_hsl(0_0%_100%/0.16)] transition-[filter] hover:brightness-125";
+// ASK-29 — the same pill as INK_PILL, in maroon: the one destructive action.
+const MAROON_PILL = "bg-[linear-gradient(180deg,hsl(350_52%_40%),hsl(349_62%_27%))] text-white shadow-[0_12px_26px_-12px_hsl(349_62%_22%/0.7),inset_0_1px_0_hsl(0_0%_100%/0.18)] transition-[filter] hover:brightness-110";
+// ASK-28 — fields and segmented tracks for forms that open inside the drawer.
+const DRAWER_FIELD = "w-full rounded-2xl bg-white/80 px-4 py-3 text-[15px] text-slate-800 placeholder:text-slate-400 ring-1 ring-inset ring-slate-900/[0.06] shadow-[inset_0_1px_2px_hsl(216_30%_25%/0.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25";
+const DRAWER_TRACK = "bg-slate-500/[0.08] ring-1 ring-inset ring-slate-900/[0.04]";
+const DRAWER_SELECT = "h-12 w-full cursor-pointer appearance-none rounded-pill bg-transparent pl-5 pr-10 text-[15px] text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 disabled:cursor-not-allowed disabled:opacity-50";
+
+/* ASK-27 — "Set % manually" with no toggle in front of it: the bar IS the
+   control. It used to be a <select> hidden behind a disclosure; the founder
+   took the toggle out, so the value is dragged (or arrow-keyed) along the bar
+   in 5% steps and saved once, when the hand lets go — not on every step. */
+/* ASK-28 — and it is only adjustable when the task has NO checklist. With an
+   Execution Guide, progress is the share of its steps ticked: the bar shows
+   that number, the thumb goes away, and the label says where it comes from.
+   The server holds the same rule (PATCH ignores a manual value on a task
+   with steps), so the number cannot drift from the list. */
+function ProgressControl({ value, onCommit, testid, valueTestid, checklist }) {
+  const [pct, setPct] = useState(value);
+  const locked = !!checklist;
+  // The release handler reads the LATEST value from a ref, not from the render
+  // it was bound in: a release that lands before React re-renders would
+  // otherwise compare the old value with itself and skip the save (measured:
+  // bar at 70%, no PATCH sent).
+  const latest = useRef(value);
+  const committed = useRef(value);
+  useEffect(() => { setPct(value); latest.current = value; committed.current = value; }, [value]);
+  const commit = () => {
+    if (latest.current === committed.current) return;
+    committed.current = latest.current;
+    onCommit(latest.current);
+  };
+  const shown = locked ? value : pct;
+  return (
+    <div className="min-w-0 flex-1" data-progress-source={locked ? "checklist" : "manual"}>
+      <div className="mb-2 flex items-center gap-2.5 text-sm text-slate-600">
+        <span className={`grid h-8 w-8 place-items-center rounded-full text-neutral-800 ${GLASS_PILL}`}>
+          <ChartBar size={16} weight="bold" aria-hidden="true" />
+        </span>
+        {locked
+          ? <span>From checklist · {checklist.done} of {checklist.total} steps</span>
+          : "Set % manually"}
+      </div>
+      <div className="flex items-center gap-3">
+        <input type="range" min={0} max={100} step={5} value={shown}
+          disabled={locked}
+          onChange={(e) => { if (locked) return; latest.current = Number(e.target.value); setPct(latest.current); }}
+          onPointerUp={locked ? undefined : commit} onKeyUp={locked ? undefined : commit} onBlur={locked ? undefined : commit}
+          aria-label={locked ? "Progress, from the Execution Guide" : "Progress"} aria-valuetext={`${shown}%`}
+          title={locked ? "Progress follows the Execution Guide — tick its steps to move it" : undefined}
+          data-testid={testid}
+          className={`kr-progress-range min-w-0 flex-1 ${locked ? "cursor-default" : "cursor-pointer"}`}
+          style={{ "--pct": `${shown}%` }} />
+        <span className="w-10 shrink-0 text-right text-sm tabular-nums text-slate-600" data-testid={valueTestid}>{shown}%</span>
+      </div>
+    </div>
+  );
+}
 
 function TaskTrail({ t, members, roleOptions, onChange, openTrigger = 0 }) {
   const [open, setOpen] = useState(false);
@@ -225,76 +336,89 @@ function TaskTrail({ t, members, roleOptions, onChange, openTrigger = 0 }) {
     if (openTrigger > 0) setOpen(true);
   }, [openTrigger]);
   const updates = t.updates || [];
-  const hasUpdates = updates.length > 0;
+  /* ASK-29 — the timeline is the task's whole activity log (status, progress,
+     people, approvals, checklist, attachments, completion) merged with the
+     notes and hand-offs on its trail, newest first, from
+     GET /tasks/{id}/activity. The founder found status moves printed under
+     the drawer's title instead; they belong here. Keyed on updated_at and the
+     trail length — every change to a task moves updated_at — so any edit
+     refetches it. Until it answers, or if it fails, the trail still shows. */
+  const activityQ = useQuery({
+    queryKey: ["task-activity", t.id, t.updated_at, updates.length],
+    queryFn: () => api.get(`/tasks/${t.id}/activity`).then((r) => r.data),
+    staleTime: 15000,
+  });
+  const fallback = [...updates].reverse().map((u) => ({
+    id: u.id, kind: `task_${u.kind}`, text: u.text, actor_name: u.author_name,
+    to_name: u.to_name, step_text: u.step_text, created_at: u.created_at,
+  }));
+  const entries = Array.isArray(activityQ.data) ? activityQ.data : fallback;
+  const hasUpdates = entries.length > 0;
   // U7-05.EXP: when there is no activity, the heavy "ACTIVITY &
   // HANDOFFS" header + right-aligned button read as an empty section
   // to fill. Softer treatment when empty: single line with the action
   // inline. Full section header only when there's actual activity to
   // frame.
   return (
-    <div className="mt-4 border-t border-nm-edge/40 pt-4" data-testid={`task-trail-${t.id}`}>
-      {/* ASK-9 (2026-09-12): the trigger for logging an update / handing
-          off used to render three different ways -- a hover-underline
-          text link on the empty state, a small nm-btn "Update /
-          Escalate" tile once the trail had entries, and a text-muted
-          summary link on mobile. The founder pointed at all three: the
-          one action that records what happened on a task and hands it
-          to someone else was quieter than every other affordance on the
-          card, so Complete looked like the important thing and this
-          looked like a footnote.
-
-          Both desktop treatments now carry the same primary weight -- a
-          full-width kr-lift ink pill, same grammar the Complete button
-          uses -- with the founder's exact label "Log update or hand off"
-          on both. The "Update / Escalate" variant is retired; the form
-          itself surfaces Note / Handoff / Escalate as its tabs, so
-          repeating any of those words on the trigger was redundant.
-          Header/empty-state message stays above the button so the
-          reader still sees "Activity & Handoffs" or "No activity yet"
-          for context. */}
-      {hasUpdates && (
-        <div className="flex items-center gap-2 mb-3 font-heading font-medium tracking-tight text-sm">
-          <ChatCircleText size={16} weight="bold" aria-hidden="true" className="text-muted-foreground" /> Activity &amp; Handoffs
-        </div>
-      )}
+    /* ASK-27 — the reference's order: an ACTIVITY label with its clock, the
+       trail (or a quiet "No activity yet"), a rule, then "Log update or hand
+       off" alone across the full width. It used to sit ABOVE the trail and
+       share its row with "View details", which is now in the ⋯ menu. The
+       ASK-9 weight holds: this is still the primary action, in the same navy
+       as Complete. */
+    <div className="border-t border-slate-900/[0.07] pt-5" data-testid={`task-trail-${t.id}`}>
+      <p className={`${DRAWER_LABEL} flex items-center gap-2`}>
+        <Clock size={16} weight="regular" aria-hidden="true" className="text-slate-500" /> Activity
+      </p>
       {!hasUpdates && !open && (
-        <p className="label-mono text-muted-foreground flex items-center gap-1.5 mb-3">
-          <ChatCircleText size={12} weight="bold" /> No activity yet
-        </p>
+        <p className="pl-6 text-sm text-slate-500">{activityQ.isLoading ? "Loading activity…" : "No activity yet"}</p>
       )}
-      {!open && (
-        <button
-          onClick={() => setOpen(true)}
-          data-testid={`add-update-${t.id}`}
-          className="kr-lift flex w-full items-center justify-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all hover:opacity-95"
-        >
-          <Plus size={14} weight="bold" aria-hidden="true" /> Log update or hand off
-        </button>
-      )}
-      {updates.length > 0 && (
-        <ul className="space-y-2 mb-2" data-testid={`trail-list-${t.id}`}>
-          {updates.map((u) => {
-            const Icon = UPDATE_ICON[u.kind] || ChatText;
+      {hasUpdates && (
+        /* A single line down the left (the ::before), a dot on it per event
+           coloured by kind, and beside each dot the glyph, the line of text,
+           and who did it, when. Newest at the top. */
+        <ol className="relative ml-1.5 space-y-4 pl-7 before:absolute before:bottom-2 before:left-[5px] before:top-2 before:w-px before:bg-slate-900/[0.12] before:content-['']"
+          data-testid={`trail-list-${t.id}`}>
+          {entries.map((e, i) => {
+            const meta = TIMELINE_KIND[e.kind] || TIMELINE_KIND.default;
+            const Icon = meta.icon;
             return (
-              <li key={u.id} className="flex items-start gap-2 nm-tile p-2.5">
-                <Icon size={15} weight="bold" className={`mt-0.5 shrink-0 ${u.kind === "escalate" ? "text-kr-accent" : "text-muted-foreground"}`} />
-                <div className="min-w-0 flex-1">
-                  {u.step_text && <p className="label-mono text-muted-foreground">On: {u.step_text}</p>}
-                  <p className="text-sm">{u.text}</p>
-                  <p className="label-mono text-muted-foreground mt-1">
-                    {u.author_name}
-                    {u.to_name && <> <ArrowRight size={10} weight="bold" className="inline" /> {u.to_name}</>}
-                    {" · "}{new Date(u.created_at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                  </p>
+              <li key={e.id || `${e.kind}-${i}`} className="relative" data-kind={e.kind}>
+                <span aria-hidden="true"
+                  className={`absolute -left-7 top-1.5 h-[11px] w-[11px] rounded-full ring-4 ring-[hsl(0_0%_93%)] ${meta.dot}`} />
+                <div className="flex items-start gap-2">
+                  <Icon size={15} weight="bold" aria-hidden="true" className={`mt-0.5 shrink-0 ${meta.tone}`} />
+                  <div className="min-w-0 flex-1">
+                    {e.step_text && <p className="truncate text-xs text-slate-500">On: {e.step_text}</p>}
+                    <p className={`break-words text-sm leading-snug ${meta.strong ? "font-medium text-slate-900" : "text-slate-700"}`}>{e.text}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {e.actor_name || "Someone"}
+                      {e.to_name && <> <ArrowRight size={10} weight="bold" className="inline" aria-hidden="true" /> {e.to_name}</>}
+                      {e.created_at && <> · <time dateTime={e.created_at} title={fullTime(e.created_at)}>{timeAgo(e.created_at)}</time></>}
+                    </p>
+                  </div>
                 </div>
               </li>
             );
           })}
-        </ul>
+        </ol>
       )}
       {open && (
-        <UpdateForm taskId={t.id} stepId={null} members={members} roleOptions={roleOptions}
-          onDone={() => { setOpen(false); onChange(); }} onCancel={() => setOpen(false)} />
+        <div className="mt-3">
+          <UpdateForm taskId={t.id} stepId={null} members={members} roleOptions={roleOptions}
+            onDone={() => { setOpen(false); onChange(); }} onCancel={() => setOpen(false)} />
+        </div>
+      )}
+      {!open && (
+        <div className="mt-5 border-t border-slate-900/[0.07] pt-5">
+          <button
+            onClick={() => setOpen(true)}
+            data-testid={`add-update-${t.id}`}
+            className={`flex h-14 w-full items-center justify-center gap-2.5 rounded-pill text-base font-medium ${INK_PILL}`}
+          >
+            <Plus size={18} weight="bold" aria-hidden="true" /> Log update or hand off
+          </button>
+        </div>
       )}
     </div>
   );
@@ -320,7 +444,7 @@ function TaskTrail({ t, members, roleOptions, onChange, openTrigger = 0 }) {
    comfortably tappable because they are the only things in that column. */
 function StepRow({
   step, index, count, editing, inpClass,
-  onEdit, onRemove, onMove,
+  onEdit, onRemove, onMove, highlight = false,
 }) {
   const rowRef = useRef(null);
   const start = useRef(null);
@@ -367,7 +491,17 @@ function StepRow({
   const killPct = Math.min(1, Math.abs(dx) / ((rowRef.current?.offsetWidth || 300) / 3));
 
   return (
-    <div ref={rowRef} className="relative" data-testid={`exec-step-row-${index}`}>
+    /* ASK-29 — `highlight` is the step that was just moved: a blue glow that
+       fades out over ~0.7s once it is released, so the eye can follow it to
+       its new place. Both states are two-layer shadows, so the change
+       interpolates instead of snapping. */
+    <div ref={rowRef}
+      className={`relative rounded-[1.1rem] transition-shadow duration-700 ${
+        highlight
+          ? "shadow-[0_0_0_2.5px_hsl(0_0%_8%/0.7),0_0_28px_4px_hsl(0_0%_0%/0.22)]"
+          : "shadow-[0_0_0_0_hsl(0_0%_8%/0),0_0_0_0_hsl(0_0%_0%/0)]"
+      }`}
+      data-testid={`exec-step-row-${index}`} data-highlight={highlight ? "true" : "false"}>
       {/* The delete ground, revealed BY the swipe rather than drawn over it. */}
       {dx !== 0 && (
         <div aria-hidden="true"
@@ -390,6 +524,13 @@ function StepRow({
           touchAction: "pan-y",
         }}
       >
+        {/* ASK-29 — delete this one step: a red-tinted circle on the left. The
+            sideways swipe still works; this is the way you can see. */}
+        <button type="button" onClick={() => onRemove(index)}
+          data-testid={`exec-remove-${index}`} aria-label={`Delete step ${index + 1}`} title="Delete step"
+          className="grid h-9 w-9 shrink-0 place-items-center self-center rounded-full bg-red-50/90 text-red-600 ring-1 ring-inset ring-red-200/80 transition-colors hover:bg-red-100">
+          <Trash size={14} weight="bold" aria-hidden="true" />
+        </button>
         <textarea
           value={step.text}
           onChange={(e) => onEdit(index, e.target.value)}
@@ -426,15 +567,19 @@ function StepRow({
   );
 }
 
-function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
+function ExecutionPlan({ t, onChange, onPatched, members = [], roleOptions = [] }) {
   const plan = t.execution_plan;
   const [steps, setSteps] = useState(plan?.steps || []);
   const [editing, setEditing] = useState(!plan || plan.status === "draft");
   const [busy, setBusy] = useState(false);
   const [newStep, setNewStep] = useState("");
-  const [ask, setAsk] = useState({});
   const [updStep, setUpdStep] = useState(null);
   const [viewStep, setViewStep] = useState(null);
+  // ASK-29 — the step last moved glows for a moment; see StepRow.
+  const [movedId, setMovedId] = useState(null);
+  const glowTimer = useRef(null);
+  useEffect(() => () => clearTimeout(glowTimer.current), []);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     setSteps(t.execution_plan?.steps || []);
@@ -445,12 +590,18 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
   const done = steps.filter((s) => s.done).length;
   const progress = total ? Math.round((done / total) * 100) : 0;
 
+  /* ASK-28 — the AI draft is BACK. ASK-27 took out the whole AI side of the
+     guide; the founder had only asked for the per-step star (Ask AI on one
+     step) to go. Ask Dex and Regenerate return as they were. `onPatched`
+     writes the returned task into the cache at once, so the drawer's
+     progress bar follows the checklist without waiting for a refetch. */
   const generate = async () => {
     setBusy(true);
     try {
       const { data } = await api.post(`/tasks/${t.id}/execution-plan/generate`);
       setSteps(data.execution_plan.steps);
       setEditing(true);
+      onPatched?.(data);
       toast.success("AI drafted an execution plan — review & customize");
       onChange();
     } catch (e) { toast.error(e.response?.data?.detail || "Could not generate plan"); }
@@ -462,7 +613,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
     setEditing(true);
   };
 
-  const cancelAIPlan = async () => {
+  const clearPlan = async () => {
     setBusy(true);
     try {
       await api.delete(`/tasks/${t.id}/execution-plan`);
@@ -479,6 +630,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
       steps: nextSteps.map((s) => ({ id: s.id, text: s.text, done: !!s.done })), status,
     });
     setSteps(data.execution_plan.steps);
+    onPatched?.(data);
     onChange();
     return data;
   };
@@ -510,6 +662,9 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
     const ns = [...steps];
     [ns[i], ns[j]] = [ns[j], ns[i]];
     setSteps(ns);
+    setMovedId(steps[i].id);
+    clearTimeout(glowTimer.current);
+    glowTimer.current = setTimeout(() => setMovedId(null), 1400);
   };
 
   const addStep = () => {
@@ -518,53 +673,54 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
     setNewStep("");
   };
 
-  const askAI = async (s) => {
-    setAsk((a) => ({ ...a, [s.id]: { loading: true } }));
-    try {
-      const { data } = await api.post(`/tasks/${t.id}/steps/ask`, { step_text: s.text });
-      setAsk((a) => ({ ...a, [s.id]: { data } }));
-    } catch { setAsk((a) => ({ ...a, [s.id]: { error: true } })); }
-  };
-
-  const inp = "flex-1 nm-field px-2.5 py-2 text-sm";
+  // ASK-28 — the step editor's fields in the drawer's glass, not nm-field.
+  const inp = "flex-1 rounded-2xl bg-white/80 px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 ring-1 ring-inset ring-slate-900/[0.06] shadow-[inset_0_1px_2px_hsl(216_30%_25%/0.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25";
 
   if (!plan && !steps.length) {
-    /* KM-5 — the two plan-building options SIDE BY SIDE with the "or" between
-       them, in the app's neumorphic material. The "Break this into steps?"
-       prompt is gone on the founder's call: two buttons labelled "Add
-       manually" and "Ask Dex" already state the question, and a line of prose
-       above them asked it twice. Equal width, same weight — they are two
-       routes to the same place, not a primary and a fallback. */
+    /* ASK-28 — the two routes in are back (KM-5's shape: side by side, equal
+       weight, "or" between), on the drawer's glass under the guide's name. */
     return (
-      <div className="mt-4 flex items-center gap-3" data-testid={`exec-plan-empty-${t.id}`}>
-        <button onClick={startManual} disabled={busy} data-testid={`manual-plan-${t.id}`}
-          className="kr-pop flex h-11 flex-1 items-center justify-center gap-1.5 rounded-pill px-3 text-xs font-medium text-foreground disabled:opacity-50">
-          <PencilSimple size={13} weight="bold" aria-hidden="true" /> Add manually
-        </button>
-        <span className="shrink-0 text-xs text-muted-foreground">or</span>
-        <button onClick={generate} disabled={busy} data-testid={`generate-plan-${t.id}`}
-          className="kr-pop flex h-11 flex-1 items-center justify-center gap-1.5 rounded-pill px-3 text-xs font-semibold text-foreground disabled:opacity-50">
-          <Sparkle size={13} weight="bold" aria-hidden="true" /> {busy ? "Thinking…" : "Ask Dex"}
-        </button>
+      <div className={`${DRAWER_CARD} p-4`} data-testid={`exec-plan-empty-${t.id}`}>
+        <span className="mb-3 flex items-center gap-2.5 px-1 text-[15px] font-semibold text-slate-800">
+          <ListChecks size={20} weight="regular" aria-hidden="true" className="text-slate-600" /> AI Execution Guide
+        </span>
+        <div className="flex items-center gap-3">
+          <button onClick={startManual} disabled={busy} data-testid={`manual-plan-${t.id}`}
+            className={`flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-pill px-3 text-sm font-medium text-slate-800 transition-colors hover:bg-white disabled:opacity-50 ${GLASS_PILL}`}>
+            <PencilSimple size={15} weight="bold" aria-hidden="true" /> Add manually
+          </button>
+          <span className="shrink-0 text-sm text-slate-500">or</span>
+          <button onClick={generate} disabled={busy} data-testid={`generate-plan-${t.id}`}
+            className={`flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-pill px-3 text-sm font-semibold text-slate-800 transition-colors hover:bg-white disabled:opacity-50 ${GLASS_PILL}`}>
+            <Sparkle size={15} weight="bold" aria-hidden="true" className="text-neutral-900" /> {busy ? "Thinking…" : "Ask Dex"}
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="mt-4 border-t border-nm-edge/40 pt-4" data-testid={`exec-plan-${t.id}`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm">
-          <ListChecks size={16} weight="bold" aria-hidden="true" className="text-muted-foreground" /> AI Execution Guide
+    /* ASK-27 — the guide is its own glass card: the list glyph and name on the
+       left, "N% complete" on the right, and no second progress bar — the
+       drawer's Status section already carries one (ASK-28: and takes its
+       number from this list). */
+    <div className={`${DRAWER_CARD} p-4`} data-testid={`exec-plan-${t.id}`}>
+      <div className="mb-3 flex items-center justify-between px-1">
+        <span className="flex items-center gap-2.5 text-[15px] font-semibold text-slate-800">
+          <ListChecks size={20} weight="regular" aria-hidden="true" className="text-slate-600" /> AI Execution Guide
         </span>
-        <span className="label-mono" data-testid={`exec-progress-${t.id}`}>{progress}%</span>
-      </div>
-      <div className="h-2 overflow-hidden rounded-pill nm-inset mb-3">
-        <div className="h-full rounded-pill bg-foreground/70 transition-all" style={{ width: `${progress}%` }} />
+        <span className="text-sm text-slate-500"><span data-testid={`exec-progress-${t.id}`}>{progress}%</span> complete</span>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         {steps.map((s, i) => (
-          <div key={s.id} data-testid={`exec-step-${t.id}-${i}`}>
+          /* ASK-29 — `layout` makes a reorder travel: when a step and its
+             neighbour swap, framer-motion animates each from its old place to
+             its new one (keyed on the step's id, so it knows which is which).
+             Off under prefers-reduced-motion. */
+          <motion.div key={s.id} data-testid={`exec-step-${t.id}-${i}`}
+            layout={reduceMotion ? false : "position"}
+            transition={{ type: "spring", stiffness: 520, damping: 42, mass: 0.8 }}>
             {editing ? (
               /* KM-5 — the four buttons are gone; the row IS the control.
                  Tap to expand and edit, long-press to drag-reorder with live
@@ -578,6 +734,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                 onEdit={editStep}
                 onRemove={removeStep}
                 onMove={moveStep}
+                highlight={movedId === s.id}
               />
             ) : (
               /* KM-5 · ACCEPTED PLAN ROW — rebuilt.
@@ -601,37 +758,35 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                  TARGETS while the drawn glyph inside each is small — the
                  founder's "shrink the icons" without shrinking what a thumb
                  has to hit. */
-              <div className="kr-pop flex h-12 items-center gap-1 rounded-control pl-2 pr-1">
+              /* ASK-27 — the reference's row: an open ring to tick, the step on
+                 one line, and a ⋮ on the right that opens the update / hand-off
+                 form for that step. The star (Ask AI) is gone. */
+              <div className={`flex h-14 items-center gap-1 rounded-2xl pl-2 pr-1 ${GLASS_PILL}`}>
                 <button onClick={() => toggle(i)} data-testid={`exec-toggle-${t.id}-${i}`}
                   aria-pressed={s.done}
                   aria-label={s.done ? "Mark step not done" : "Mark step done"}
-                  className="grid h-11 w-8 shrink-0 place-items-center">
-                  <span className={`grid h-5 w-5 place-items-center rounded-full ${
-                    s.done ? "bg-kr-ink text-white" : "border border-kr-ink/35 text-transparent"
+                  className="grid h-11 w-10 shrink-0 place-items-center">
+                  <span className={`grid h-6 w-6 place-items-center rounded-full transition-colors ${
+                    s.done ? "bg-[linear-gradient(180deg,hsl(0_0%_24%),hsl(0_0%_6%))] text-white" : "border-[1.5px] border-neutral-400/80 text-transparent"
                   }`}>
-                    <CheckCircle size={12} weight="bold" aria-hidden="true" />
+                    <Check size={13} weight="bold" aria-hidden="true" />
                   </span>
                 </button>
 
                 <button onClick={() => setViewStep(s)} data-testid={`exec-view-${t.id}-${i}`}
-                  className={`min-w-0 flex-1 truncate text-left text-sm ${
-                    s.done ? "text-muted-foreground line-through" : ""
+                  className={`min-w-0 flex-1 truncate text-left text-[15px] ${
+                    s.done ? "text-slate-400 line-through" : "text-slate-700"
                   }`}>
                   {s.text}
                 </button>
 
-                <button onClick={() => askAI(s)} data-testid={`exec-ask-${t.id}-${i}`}
-                  aria-label="Ask AI about this step" title="Ask AI"
-                  className="grid h-11 w-8 shrink-0 place-items-center text-foreground/70">
-                  <Sparkle size={14} weight="bold" aria-hidden="true" />
-                </button>
                 <button onClick={() => setUpdStep(updStep === s.id ? null : s.id)} data-testid={`exec-update-${t.id}-${i}`}
-                  aria-label="Log an update or hand off" title="Update"
+                  aria-label="Log an update or hand off on this step" title="Update or hand off"
                   aria-expanded={updStep === s.id}
-                  className={`grid h-11 w-8 shrink-0 place-items-center ${
-                    updStep === s.id ? "text-foreground" : "text-foreground/70"
+                  className={`grid h-11 w-10 shrink-0 place-items-center rounded-full hover:text-slate-900 ${
+                    updStep === s.id ? "text-slate-900" : "text-slate-500"
                   }`}>
-                  <ArrowBendUpRight size={14} weight="bold" aria-hidden="true" />
+                  <DotsThreeVertical size={18} weight="bold" aria-hidden="true" />
                 </button>
               </div>
             )}
@@ -641,27 +796,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                   onDone={() => { setUpdStep(null); onChange(); }} onCancel={() => setUpdStep(null)} />
               </div>
             )}
-            {ask[s.id] && (
-              <div className="ml-7 mt-1.5 mb-2 nm-tile bg-nm-sunken p-2.5 text-xs" data-testid={`exec-ask-result-${t.id}-${i}`}>
-                {ask[s.id].loading ? <p className="font-mono">AI is thinking…</p>
-                  : ask[s.id].error ? <p className="text-kr-accent">Couldn't fetch a suggestion.</p>
-                  : (
-                    <>
-                      <p className="flex items-start gap-1.5"><Robot size={13} weight="bold" className="text-brand-blue mt-0.5 shrink-0" /><span>{ask[s.id].data.suggestion}</span></p>
-                      {(ask[s.id].data.objections || []).length > 0 && (
-                        <div className="mt-2 space-y-1.5">
-                          <p className="label-mono text-muted-foreground">If they push back:</p>
-                          {ask[s.id].data.objections.map((o, k) => (
-                            <p key={`${o.objection}-${k}`}><span className="font-semibold">“{o.objection}”</span> — {o.response}</p>
-                          ))}
-                        </div>
-                      )}
-                      <button onClick={() => setAsk((a) => ({ ...a, [s.id]: undefined }))} className="mt-2 label-mono underline">dismiss</button>
-                    </>
-                  )}
-              </div>
-            )}
-          </div>
+          </motion.div>
         ))}
       </div>
 
@@ -672,7 +807,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
         <div className="mt-3 flex items-center gap-2">
           <input value={newStep} onChange={(e) => setNewStep(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addStep()}
             placeholder="Add your own step…" data-testid={`exec-newstep-${t.id}`}
-            className="nm-field h-11 min-w-0 flex-1 rounded-pill px-4 text-sm" />
+            className="h-11 min-w-0 flex-1 rounded-pill bg-white/80 px-4 text-sm text-slate-800 placeholder:text-slate-400 ring-1 ring-inset ring-slate-900/[0.06] shadow-[inset_0_1px_2px_hsl(216_30%_25%/0.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25" />
           <button onClick={addStep} data-testid={`exec-add-${t.id}`} aria-label="Add step"
             className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground">
             <Plus size={15} weight="bold" aria-hidden="true" />
@@ -689,17 +824,19 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                 343px. Its icon is translucent red — present enough to read as
                 the destructive one, quiet enough not to compete with the two
                 controls you actually came here to press. */}
+            {/* ASK-28 — Accept, Regenerate (AI, back) and the clear-plan circle,
+                as KM-7 laid them out, in the drawer's material. */}
             <button onClick={() => save("accepted")} disabled={busy} data-testid={`exec-accept-${t.id}`}
-              className="kr-lift flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-pill bg-kr-ink px-3 text-xs font-medium text-white disabled:opacity-50">
-              <CheckCircle size={14} weight="bold" aria-hidden="true" /> Accept plan
+              className={`flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-pill px-3 text-sm font-medium disabled:opacity-50 ${INK_PILL}`}>
+              <CheckCircle size={15} weight="bold" aria-hidden="true" /> Accept plan
             </button>
             <button onClick={generate} disabled={busy} data-testid={`exec-regenerate-${t.id}`}
-              className="kr-pop flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-pill px-3 text-xs font-medium text-foreground disabled:opacity-50">
-              <ArrowClockwise size={14} weight="bold" aria-hidden="true" /> Regenerate
+              className={`flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-pill px-3 text-sm font-medium text-slate-800 transition-colors hover:bg-white disabled:opacity-50 ${GLASS_PILL}`}>
+              <ArrowClockwise size={15} weight="bold" aria-hidden="true" /> {busy ? "Thinking…" : "Regenerate"}
             </button>
-            <button onClick={cancelAIPlan} disabled={busy} data-testid={`exec-cancel-plan-${t.id}`}
-              aria-label="Cancel plan" title="Cancel plan"
-              className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-danger-600/60 disabled:opacity-50">
+            <button onClick={clearPlan} disabled={busy} data-testid={`exec-cancel-plan-${t.id}`}
+              aria-label="Clear plan" title="Clear plan"
+              className={`${GLASS_ICON_BTN} text-danger-600/70`}>
               <XCircle size={16} weight="bold" aria-hidden="true" />
             </button>
           </>
@@ -710,8 +847,8 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                the redesign replaced, and py-2 left it sitting a few pixels
                short of its neighbours. */
             <button onClick={() => setEditing(true)} data-testid={`exec-edit-${t.id}`}
-              className="kr-pop flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-foreground">
-              <PencilSimple size={15} weight="bold" aria-hidden="true" /> Customize steps
+              className={`flex h-11 items-center gap-2 rounded-pill px-5 text-sm font-medium text-slate-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
+              <PencilSimple size={16} weight="bold" aria-hidden="true" /> Customize steps
             </button>
           )
         )}
@@ -1116,8 +1253,8 @@ function cardPeople(t, members, roleOptions) {
    approvals, hand-offs and Reassign all act on assignee_id — so the lead is
    shown, not removable here; everyone else can be added or taken off. The
    server re-checks who may do this (owner, team_manage, the creator, the
-   lead). Static names carry no fill; a name you can tap to remove is a pill
-   with an ×, so the two never look alike (the KM-65 rule). */
+   lead). ASK-27: every person is a raised glass pill, as in the founder's
+   reference; the ones you can take off carry an ×. */
 function AssigneesEditor({ t, members, roleOptions, canEdit, onPatched }) {
   const [busy, setBusy] = useState(false);
   const people = cardPeople(t, members, roleOptions);
@@ -1135,49 +1272,60 @@ function AssigneesEditor({ t, members, roleOptions, canEdit, onPatched }) {
       setBusy(false);
     }
   };
+  const showAdd = canEdit && !!t.assignee_id && addable.length > 0;
   return (
     <section data-testid={`task-people-${t.id}`}>
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Assigned</p>
-      <div className="flex flex-wrap items-center gap-1.5">
-        {people.length === 0 && <span className="text-sm text-muted-foreground">Nobody yet</span>}
-        {people.map((p) => {
-          const lead = !!t.assignee_id && p.id === t.assignee_id;
-          const removable = canEdit && !lead && p.kind !== "team";
-          const body = (
-            <>
-              {p.kind === "team"
-                ? <AvatarStack people={[p]} size={22} />
-                : <PersonAvatar name={p.name} src={p.avatar_url} size={22} ring={false} />}
-              <span className="truncate">{p.name}</span>
-              {lead && co.length > 0 && <span className="text-[11px] text-muted-foreground">· lead</span>}
-              {removable && <X size={11} weight="bold" aria-hidden="true" className="text-muted-foreground" />}
-            </>
-          );
-          return removable ? (
-            <button key={p.id} type="button" disabled={busy}
-              onClick={() => save(co.filter((x) => x !== p.id), `Removed ${p.name}`)}
-              aria-label={`Remove ${p.name} from this task`}
-              data-testid={`task-people-remove-${p.id}`}
-              className="inline-flex max-w-full items-center gap-1.5 rounded-pill bg-slate-500/[0.07] py-1 pl-1 pr-2.5 text-sm ring-1 ring-inset ring-slate-500/10 transition-colors hover:bg-slate-500/[0.13] disabled:opacity-50">
-              {body}
-            </button>
-          ) : (
-            <span key={p.id} className="inline-flex max-w-full items-center gap-1.5 py-1 pl-1 pr-2.5 text-sm">{body}</span>
-          );
-        })}
+      <p className={DRAWER_LABEL}>Assigned to</p>
+      {/* People on the left, "Add a person" beside them on desktop — the
+          reference's two columns. Below lg the drawer is too narrow for that,
+          so the picker drops under the people. */}
+      <div className={`grid gap-3 ${showAdd ? "lg:grid-cols-2" : ""}`}>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {people.length === 0 && <span className="text-sm text-slate-500">Nobody yet</span>}
+          {people.map((p) => {
+            const lead = !!t.assignee_id && p.id === t.assignee_id;
+            const removable = canEdit && !lead && p.kind !== "team";
+            const pill = `inline-flex h-12 max-w-full items-center gap-2.5 rounded-pill pl-1.5 pr-4 ${GLASS_PILL}`;
+            const body = (
+              <>
+                {p.kind === "team"
+                  ? <AvatarStack people={[p]} size={34} />
+                  : <PersonAvatar name={p.name} src={p.avatar_url} size={34} ring={false} />}
+                <span className="truncate text-[15px] font-medium text-slate-800">{p.name}</span>
+                {lead && co.length > 0 && <span className="text-xs text-slate-500">lead</span>}
+                {removable && <X size={13} weight="bold" aria-hidden="true" className="text-slate-400" />}
+              </>
+            );
+            return removable ? (
+              <button key={p.id} type="button" disabled={busy}
+                onClick={() => save(co.filter((x) => x !== p.id), `Removed ${p.name}`)}
+                aria-label={`Remove ${p.name} from this task`}
+                data-testid={`task-people-remove-${p.id}`}
+                className={`${pill} transition-colors hover:bg-white disabled:opacity-50`}>
+                {body}
+              </button>
+            ) : (
+              <span key={p.id} className={pill}>{body}</span>
+            );
+          })}
+        </div>
+        {showAdd && (
+          <label className={`relative flex h-12 min-w-0 items-center rounded-pill ${GLASS_PILL}`}>
+            <UserPlus size={20} weight="regular" aria-hidden="true" className="pointer-events-none absolute left-4 text-slate-500" />
+            <select value="" disabled={busy} aria-label="Add a person to this task"
+              data-testid={`task-people-add-${t.id}`}
+              onChange={(e) => {
+                const id = e.target.value;
+                if (id) save([...co, id], `Added ${members.find((m) => m.id === id)?.name || "a member"}`);
+              }}
+              className="h-full w-full min-w-0 cursor-pointer appearance-none rounded-pill bg-transparent pl-12 pr-10 text-[15px] text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 disabled:opacity-50">
+              <option value="">Add a person</option>
+              {addable.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
+            </select>
+            <CaretDown size={16} weight="bold" aria-hidden="true" className="pointer-events-none absolute right-4 text-slate-500" />
+          </label>
+        )}
       </div>
-      {canEdit && t.assignee_id && addable.length > 0 && (
-        <select value="" disabled={busy} aria-label="Add a person to this task"
-          data-testid={`task-people-add-${t.id}`}
-          onChange={(e) => {
-            const id = e.target.value;
-            if (id) save([...co, id], `Added ${members.find((m) => m.id === id)?.name || "a member"}`);
-          }}
-          className="nm-field mt-2 w-full px-3 py-2 text-sm disabled:opacity-50">
-          <option value="">+ Add a person</option>
-          {addable.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
-        </select>
-      )}
     </section>
   );
 }
@@ -1217,11 +1365,6 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
   // cache first means the card shows the new status immediately; the
   // subsequent invalidate + refetch just confirms it.
   const qc = useQueryClient();
-  // MW-09 fix: a counter TaskTrail watches. Every tick opens the
-  // UpdateForm inside the trail. Wired to the mobile "Log update or
-  // hand off" button below, whose desktop counterpart already lives
-  // inside TaskTrail (line ~219) and sets its own local open state.
-  const [trailOpenTrigger, setTrailOpenTrigger] = useState(0);
   const applyPatched = (patched) => {
     if (!patched?.id) return;
     // The tasks list query is keyed by `mine` (boolean). We update both
@@ -1283,6 +1426,34 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
   const canEditPeople = user?.role === "owner" || userPerms(user).includes("team_manage")
     || t.created_by === user?.id || t.assignee_id === user?.id;
   const onPeoplePatched = (data) => { applyPatched(data); onChange(); };
+  // ASK-28 — progress comes from the checklist whenever the task has one.
+  const planSteps = t.execution_plan?.steps || [];
+  const planDone = planSteps.filter((s) => s.done).length;
+  const checklist = planSteps.length
+    ? { done: planDone, total: planSteps.length, pct: Math.round((planDone / planSteps.length) * 100) }
+    : null;
+  // ASK-28 — delete, from the bottom of the drawer, behind a confirmation.
+  // Owner-only, because DELETE /tasks/{id} is (require_role("owner")).
+  const canDelete = user?.role === "owner";
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const deleteTask = async () => {
+    setDeleting(true);
+    try {
+      await api.delete(`/tasks/${t.id}`);
+      for (const mineFlag of [true, false]) {
+        qc.setQueryData(["tasks", mineFlag], (rows) => (Array.isArray(rows) ? rows.filter((r) => r.id !== t.id) : rows));
+      }
+      setConfirmDelete(false);
+      if (expanded) setExpanded();
+      toast.success("Task deleted");
+      onChange();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not delete the task");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const approveTask = async () => {
     try { await api.post(`/tasks/${t.id}/approve`); toast.success("Task approved"); onChange(); }
@@ -1414,7 +1585,6 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
   };
 
   const isOp = t.task_type === "operational" || !!t.op_category;
-  const selCls = "nm-field px-2 py-1 text-xs font-mono";
 
   return (
     /* KR-11.2 — the red left stripe is GONE on the founder's call ("don't
@@ -1579,33 +1749,45 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
              first. An 8% strip costs nothing and restores it, so the drawer
              now has three ways out on a phone: the close, the scrim, and
              Escape for anyone on a keyboard. */
-          className="w-[92%] sm:w-full sm:max-w-2xl p-0 overflow-visible"
+          /* ASK-27 — the founder's frosted sheet, with a rounded leading edge
+             and a long soft shadow onto the page. ASK-30: its wash is a light
+             neutral gray now, not blue-white — just dark enough that the
+             white pills sit visibly on top of it. */
+          className="w-[92%] overflow-hidden border-l-0 p-0 sm:w-full sm:max-w-2xl sm:rounded-l-[2rem] bg-[linear-gradient(165deg,hsl(0_0%_95%),hsl(0_0%_90.5%))] shadow-[-30px_0_80px_-30px_hsl(0_0%_0%/0.45)]"
           data-testid={`task-drawer-${t.id}`}
           /* MW-17 — the drawer supplies its own close, so send focus there on
-             open. Without this Radix focuses the stock close, which the sticky
-             header covers: focus started on something invisible. */
+             open. Without this Radix focuses the stock close. */
           onOpenAutoFocus={(e) => { e.preventDefault(); closeRef.current?.focus(); }}>
-          {/* MW-15 — ONE close, reachable at every width, because the
-              protruding tab only works while there is scrim to protrude into.
-              The drawer is w-full below sm, so the scrim is 0px and the tab
-              sat at x=-43: entirely off-screen, with no Escape key on a phone
-              and Back leaving the route instead. So below sm the close sits
-              INSIDE the header at the right (44px, the touch floor); from sm
-              up it becomes the attached tab on the left edge as before. */}
-          <SheetClose
-            ref={closeRef}
-            data-testid={`task-drawer-close-${t.id}`}
-            aria-label="Close task"
-            className="absolute right-3 top-3 z-20 grid h-11 w-11 place-items-center rounded-full bg-background text-foreground border border-nm-edge/60 shadow-[0_2px_8px_-3px_hsl(216_28%_18%/0.30)] focus:outline-none focus:ring-2 focus:ring-ring
-                       sm:left-0 sm:right-auto sm:top-5 sm:h-10 sm:w-10 sm:-translate-x-full sm:rounded-l-lg sm:rounded-r-none sm:border-r-0 sm:shadow-[-4px_2px_10px_-4px_hsl(216_28%_18%/0.30)] sm:transition-transform sm:hover:-translate-x-[calc(100%+2px)]">
-            <X size={16} weight="bold" aria-hidden="true" />
-          </SheetClose>
           <div className="h-full overflow-y-auto">
-          {/* MW-15 — pr-16 below sm keeps the title clear of the in-header
-              close; from sm the close moves outside the panel so the title
-              gets its width back. */}
-          <SheetHeader className="sticky top-0 z-10 border-b border-nm-edge/40 bg-background px-5 py-4 pr-16 sm:pr-5">
-            <SheetTitle className="font-display text-xl leading-tight">{t.title}</SheetTitle>
+          {/* ASK-27 — the close is INSIDE the sheet now, at every width. It
+              was a tab hanging off the left edge, which the founder read as
+              detached from the card. It sits at the header's right as a
+              glass button with a soft blue halo, so it is the easiest thing
+              in the drawer to find; MW-15's rule (one close, reachable at
+              every width) holds without the tab. ASK-28: the ⋯ beside it is
+              gone on the founder's call — Delete now sits at the bottom of
+              the drawer and attachments already show in its body. */}
+          <SheetHeader className="sticky top-0 z-10 flex-row items-start gap-3 space-y-0 bg-[hsl(0_0%_95%/0.85)] px-5 pb-4 pt-5 text-left backdrop-blur-xl lg:px-7 lg:pt-6">
+            <div className="min-w-0 flex-1 pt-1.5">
+              <SheetTitle className="text-left text-[22px] font-semibold leading-tight tracking-tight text-slate-900">{t.title}</SheetTitle>
+              {/* The due date sits under the title on desktop (the phone body
+                  has its own info card for it). ASK-29: the "Status → waiting
+                  2 min ago" line that used to share this row is gone — every
+                  change is on the Activity timeline at the bottom instead. */}
+              {t.due_date && (
+                <p className="mt-1.5 hidden items-center gap-1 text-[13px] text-slate-500 lg:flex" data-testid={`task-meta-${t.id}`}>
+                  <CalendarBlank size={13} weight="bold" aria-hidden="true" /> Due {dueLabel(t.due_date)}
+                </p>
+              )}
+            </div>
+            <SheetClose
+              ref={closeRef}
+              data-testid={`task-drawer-close-${t.id}`}
+              aria-label="Close task"
+              title="Close"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/90 text-slate-900 ring-1 ring-inset ring-white shadow-[0_8px_22px_-8px_hsl(0_0%_0%/0.45),0_0_0_4px_hsl(0_0%_0%/0.07)] backdrop-blur-md transition-shadow hover:bg-white hover:shadow-[0_10px_26px_-8px_hsl(0_0%_0%/0.5),0_0_0_4px_hsl(0_0%_0%/0.13)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40">
+              <X size={18} weight="bold" aria-hidden="true" />
+            </SheetClose>
           </SheetHeader>
       {/* KR-14.22 · MOBILE EXPANDED BODY — reference-driven layout for the
           task expanded view on phones. Uses the same handlers/state as the
@@ -1728,19 +1910,10 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
           </div>
         )}
 
-        {/* KM-3 — THE REAL COMPONENT, not a lookalike. The two buttons that
-            used to sit here ("Add manually" / "Ask Dex") were rebuilt as
-            plain markup during the mobile pass and shipped with NO onClick at
-            all, so both were inert: Dex never drafted anything and manual
-            never opened a field. ExecutionPlan already owns that whole
-            behaviour — generate() posts to /execution-plan/generate,
-            startManual() seeds one empty step, and the editor below it adds,
-            edits, reorders, removes and persists. Rendering it restores the
-            AI draft, the manual path, and "add another step" in one move,
-            with no second copy of the logic to drift. */}
-        {!awaitingApproval && (
-          <ExecutionPlan t={t} onChange={onChange} members={members} roleOptions={roleOptions} />
-        )}
+        {/* ASK-27 — the Execution Guide is NOT rendered here any more. MW-16
+            already renders it (and the trail) once, below both bodies, for
+            every width — this second copy put the guide and its buttons on
+            the phone twice. */}
 
         {/* Actions row — Complete + attach controls, now below the two
             plan-building buttons above. */}
@@ -1807,44 +1980,24 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
           </div>
         )}
 
-        {/* Footer */}
-        <div className="flex items-center justify-between border-t border-nm-edge/40 pt-3">
-          <span className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-nm-sunken">
-              <XCircle size={12} weight="regular" />
-            </span>
-            No activity yet
-          </span>
-          <button
-            type="button"
-            /* MW-09 fix: the button used to render with no onClick at
-               all -- inert on tap. Now it opens the same UpdateForm the
-               desktop button opens: if the card is collapsed we expand
-               it first (so TaskTrail actually mounts), then nudge
-               trailOpenTrigger to open the form inside TaskTrail. */
-            onClick={() => {
-              if (!open && onToggleOpen) onToggleOpen();
-              setTrailOpenTrigger((n) => n + 1);
-            }}
-            data-testid={`log-update-m-${t.id}`}
-            /* ASK-9: bump the mobile trigger to primary weight. The
-               orange-circle mark stays -- it's a nice glyph anchor --
-               but the label moves from text-muted-foreground to
-               text-foreground and the whole button gets kr-lift so it
-               reads as an action rather than a summary line. */
-            className="kr-lift inline-flex items-center gap-2 rounded-pill px-2.5 py-1.5 text-sm font-medium text-foreground"
-          >
-            <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-orange-50 text-kr-accent">
-              <Plus size={12} weight="bold" />
-            </span>
-            Log update or hand off
-          </button>
-        </div>
+        {/* ASK-27 — the phone footer ("No activity yet" + its own "Log update
+            or hand off") is gone: TaskTrail below renders both, full width, at
+            every size, so the phone drawer showed each of them twice. */}
       </div>
 
-      {/* EXPANDED BODY (desktop) — same content as before, now inside the Sheet. */}
-      <div id={`task-card-body-${t.id}`} className="hidden px-5 pb-6 space-y-3 pt-4 lg:block">
-      {t.description && <p className="text-sm text-muted-foreground">{t.description}</p>}
+      {/* EXPANDED BODY (desktop) — ASK-27 layout, top to bottom as in the
+          founder's reference: the context card, Assigned to, Status with the
+          % control beside it, then Complete and Attach. The Execution Guide
+          and Activity follow below both bodies (MW-16). */}
+      <div id={`task-card-body-${t.id}`} className="hidden space-y-6 px-7 pb-6 pt-2 lg:block">
+      {t.description && (
+        <div className={`${DRAWER_CARD} flex items-start gap-4 p-4`} data-testid={`task-context-${t.id}`}>
+          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[linear-gradient(160deg,hsl(0_0%_100%),hsl(0_0%_88%))] text-neutral-800 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.9)]">
+            <File size={24} weight="duotone" aria-hidden="true" />
+          </span>
+          <p className="min-w-0 whitespace-pre-line pt-1 text-[15px] leading-relaxed text-slate-600">{t.description}</p>
+        </div>
+      )}
       {/* ASK-26 — replaces the owner-only one-name assignee line: everyone on
           the task, for everyone who opens it. */}
       <AssigneesEditor t={t} members={members} roleOptions={roleOptions}
@@ -1893,60 +2046,28 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
         </div>
       )}
 
-      {/* U7-05.EXP polish (2026-08-17): one combined meta line
-          replacing separate "Due X" and "Updated Y" rows. Also killed
-          the "Full details" button -- opened a Dialog that duplicated
-          this expanded body (dialog was needed BEFORE the collapse
-          existed; not now). Owner delete moves to a small more-menu
-          in the actions row below. */}
-      {(t.due_date || t.updated_at) && (
-        <p className="label-mono text-muted-foreground flex items-center gap-2 flex-wrap" data-testid={`task-meta-${t.id}`}>
-          {t.due_date && (
-            <span className="flex items-center gap-1">
-              <ClockCounterClockwise size={12} weight="bold" />
-              Due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}
-            </span>
-          )}
-          {t.due_date && t.updated_at && <span className="text-muted-foreground/50">·</span>}
-          {t.updated_at && (
-            <span
-              className="flex items-center gap-1"
-              data-testid={`task-updated-${t.id}`}
-              title={fullTime(t.updated_at)}
-            >
-              {t.last_action || "Updated"} {timeAgo(t.updated_at)}
-            </span>
-          )}
-        </p>
-      )}
-
-      {/* U7-05.EXP: progress bar without the redundant "0%" label +
-          "Progress" caption. Bar visually conveys the value; a numeric
-          label was pure noise. Status change drives progress, so the
-          separate "Set progress" dropdown is gone too. */}
+      {/* ASK-27 — STATUS: the status pill on the left, a rule, and the %
+          control on the right. "Set % manually" is no longer behind a
+          disclosure toggle — the bar beside it is the control. */}
       {!terminal && !awaitingApproval && (
-        <div className="space-y-2">
-          <div className="h-2 overflow-hidden rounded-pill nm-inset" title={`${t.progress || 0}% complete`} aria-label={`Progress: ${t.progress || 0}%`}>
-            <div className="h-full rounded-pill bg-foreground/70 transition-all" style={{ width: `${t.progress || 0}%` }} data-testid={`progress-bar-${t.id}`} />
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="label-mono text-muted-foreground">Status</label>
-            <select data-testid={`status-select-${t.id}`} value={t.status === "blocked" ? "todo" : t.status} onChange={(e) => setStatus(e.target.value)} className={selCls}>
-              {STATUS_OPTIONS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-            </select>
-            {/* U7-05.EXP: "Set progress" tucked behind a small toggle for
-                the rare team that manages progress separately from status.
-                Default hidden -- one less dropdown for the 95% of users. */}
-            <details className="ml-1">
-              <summary className="label-mono text-muted-foreground cursor-pointer hover:text-foreground">
-                Set % manually
-              </summary>
-              <select data-testid={`progress-select-${t.id}`} value={PROGRESS_OPTIONS.includes(t.progress) ? t.progress : 0} onChange={(e) => setProgress(e.target.value)} className={`${selCls} mt-1`}>
-                {PROGRESS_OPTIONS.map((p) => <option key={p} value={p}>{p}%</option>)}
+        <section data-testid={`task-status-${t.id}`}>
+          <p className={DRAWER_LABEL}>Status</p>
+          <div className="flex items-stretch gap-5">
+            <label className={`relative flex h-12 w-56 shrink-0 items-center rounded-pill ${GLASS_PILL}`}>
+              <Clock size={20} weight="regular" aria-hidden="true" className="pointer-events-none absolute left-4 text-neutral-800" />
+              <select data-testid={`status-select-${t.id}`} aria-label="Task status"
+                value={t.status === "blocked" ? "todo" : t.status} onChange={(e) => setStatus(e.target.value)}
+                className="h-full w-full cursor-pointer appearance-none rounded-pill bg-transparent pl-12 pr-10 text-[15px] font-medium text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25">
+                {STATUS_OPTIONS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
               </select>
-            </details>
+              <CaretDown size={16} weight="bold" aria-hidden="true" className="pointer-events-none absolute right-4 text-slate-500" />
+            </label>
+            <span aria-hidden="true" className="w-px shrink-0 bg-slate-900/10" />
+            <ProgressControl value={checklist ? checklist.pct : (t.progress || 0)} onCommit={setProgress}
+              checklist={checklist}
+              testid={`progress-select-${t.id}`} valueTestid={`progress-bar-${t.id}`} />
           </div>
-        </div>
+        </section>
       )}
 
       {(() => {
@@ -2048,67 +2169,60 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
       )}
 
       {!isTerminal(t) && !awaitingApproval && (
-        <div className="flex flex-wrap items-center gap-2 mt-4">
+        <div className="flex items-center gap-4">
           {/* FUP-49: don't disable -- always click-through, handler shows
               a clear toast if evidence is missing. Silent-disabled
               buttons were the original bug. */}
           <button onClick={complete} data-testid={`complete-${t.id}`}
-            title={t.evidence_required && !hasEvidence ? "Add a photo, voice note, or file first" : "Mark as complete"}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium nm-btn transition-all ${t.evidence_required && !hasEvidence ? "bg-nm-sunken text-muted-foreground" : "bg-kr-ink text-white"}`}>
-            <CheckCircle size={16} weight="bold" /> Complete
+            title={t.evidence_required && !hasEvidence ? "Add a voice note or file first" : "Mark as complete"}
+            className={`flex h-14 shrink-0 items-center gap-2.5 rounded-pill px-7 text-base font-medium ${t.evidence_required && !hasEvidence ? `${GLASS_PILL} text-slate-500` : INK_PILL}`}>
+            <CheckCircle size={22} weight="fill" aria-hidden="true" /> Complete
           </button>
 
-          {/* U7-05.EXP: attach affordances grouped into one compact strip.
-              Was 3 separate chunky buttons ("PHOTO / UPLOAD FILE / VOICE
-              REPLY") each equal-weight to Complete -- density noise. Now
-              they share a single caption + icon-only compact buttons so
-              Complete stays visually primary and the attach set reads as
-              one concept. */}
-          <div className="flex items-center gap-1 border-l border-nm-edge/40 pl-3 ml-1">
-            <span className="label-mono text-muted-foreground mr-1 hidden sm:inline">Attach:</span>
-            <button
-              onClick={() => fileRef.current?.click()}
-              disabled={uploading}
-              data-testid={`photo-${t.id}`}
-              title="Attach a photo"
-              className="w-9 h-9 flex items-center justify-center nm-tile hover:bg-accent disabled:opacity-40"
-              aria-label="Attach a photo"
-            >
-              <Camera size={16} weight="bold" />
-            </button>
-            <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhoto} />
+          <span aria-hidden="true" className="h-8 w-px shrink-0 bg-slate-900/10" />
+          <span className="text-[15px] text-slate-500">Attach:</span>
+          {/* ASK-27 — no camera button on desktop (the founder: a desktop is
+              not where anyone attaches with a camera). Its input stays: the
+              phone body's camera button opens it. */}
+          <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhoto} />
+          <input ref={evidenceRef} type="file" className="hidden" onChange={onEvidence} />
+          {/* ASK-28 — the two circles become two labelled pills, Document and
+              Voice, sharing the rest of the row equally (flex-1 basis-0). */}
+          <div className="flex min-w-0 flex-1 items-center gap-3">
             <button
               onClick={() => evidenceRef.current?.click()}
               disabled={uploading}
               data-testid={`upload-file-${t.id}`}
-              title="Upload a file"
-              className="w-9 h-9 flex items-center justify-center nm-tile hover:bg-accent disabled:opacity-40"
-              aria-label="Upload a file"
+              title="Upload a document"
+              className={`flex h-12 min-w-0 flex-1 basis-0 items-center justify-center gap-2 rounded-pill text-[15px] font-medium text-slate-700 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}
             >
-              <FileArrowUp size={16} weight="bold" />
+              <File size={19} weight="regular" aria-hidden="true" /> Document
             </button>
-            <input ref={evidenceRef} type="file" className="hidden" onChange={onEvidence} />
             <button
               onClick={toggleVoice}
               data-testid={`voice-${t.id}`}
               title={recording ? "Stop and send voice reply" : "Record a voice reply"}
-              className={`w-9 h-9 flex items-center justify-center nm-tile transition-colors ${recording ? "bg-kr-accent text-white" : "hover:bg-accent"}`}
-              aria-label={recording ? "Stop recording" : "Record voice reply"}
+              aria-label={recording ? "Stop recording and send" : undefined}
+              className={`flex h-12 min-w-0 flex-1 basis-0 items-center justify-center gap-2 rounded-pill text-[15px] font-medium transition-colors ${
+                recording ? "bg-kr-accent text-white" : `text-slate-700 hover:bg-white ${GLASS_PILL}`
+              }`}
             >
-              {recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="bold" />}
+              {recording
+                ? <><Stop size={17} weight="fill" aria-hidden="true" /> Stop</>
+                : <><Microphone size={19} weight="regular" aria-hidden="true" /> Voice</>}
             </button>
-            {recording && (
-              <button
-                onClick={cancelVoice}
-                data-testid={`voice-cancel-${t.id}`}
-                title="Discard recording"
-                className="w-9 h-9 flex items-center justify-center nm-tile hover:bg-accent"
-                aria-label="Discard recording"
-              >
-                <X size={16} weight="bold" />
-              </button>
-            )}
           </div>
+          {recording && (
+            <button
+              onClick={cancelVoice}
+              data-testid={`voice-cancel-${t.id}`}
+              title="Discard recording"
+              aria-label="Discard recording"
+              className={GLASS_ICON_BTN}
+            >
+              <X size={18} weight="bold" aria-hidden="true" />
+            </button>
+          )}
         </div>
       )}
 
@@ -2131,27 +2245,53 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
           rendered inside a display:none subtree — MW-09 all over again, the
           one control that records what happened inert on phones. Shared here,
           both triggers open the same visible form. */}
-      <div className="px-4 pb-5 space-y-3 lg:px-5 lg:pb-6">
-        {!awaitingApproval && <ExecutionPlan t={t} onChange={onChange} members={members} roleOptions={roleOptions} />}
-        <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} openTrigger={trailOpenTrigger} />
+      <div className="space-y-6 px-4 pb-6 lg:px-7 lg:pb-8">
+        {!awaitingApproval && (
+          <ExecutionPlan t={t} onChange={onChange} onPatched={applyPatched} members={members} roleOptions={roleOptions} />
+        )}
+        <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} />
 
-        {/* MW-21 / MW-02 — the way back into the detail dialog. Removing the
-            card's ••• menu took Delete with it: the dialog still holds it,
-            plus the proof gallery, source references and AI insight panels,
-            but nothing opened the dialog any more, so all of it was dead UI
-            for the second time. One entry point restores the lot.
-            It CLOSES the drawer before opening the dialog — two stacked Radix
-            overlays fight over focus (the same duelling FocusScopes that made
-            New Task untypable), so only one is ever open. */}
-        <div className="border-t border-nm-edge/40 pt-3">
-          <button
-            type="button"
-            data-testid={`open-task-details-${t.id}`}
-            onClick={() => { if (expanded) setExpanded(); setDetailOpen(true); }}
-            className="nm-btn flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium">
-            <Eye size={13} weight="bold" aria-hidden="true" /> View details
-          </button>
-        </div>
+        {/* ASK-28 — Delete sits under "Log update or hand off", full width like
+            it, and asks first in the drawer's own glass. ASK-29: the same
+            gradient pill as the navy one, in maroon with white type. */}
+        {canDelete && (
+          <>
+            <button type="button" onClick={() => setConfirmDelete(true)}
+              data-testid={`drawer-delete-task-${t.id}`}
+              className={`-mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-pill text-[15px] font-medium ${MAROON_PILL}`}>
+              <Trash size={17} weight="bold" aria-hidden="true" /> Delete task
+            </button>
+            <AlertDialog open={confirmDelete} onOpenChange={(o) => { if (!deleting) setConfirmDelete(o); }}>
+              <AlertDialogContent data-testid={`drawer-delete-dialog-${t.id}`}
+                className="max-w-md gap-5 rounded-[1.75rem] border-0 bg-[linear-gradient(165deg,hsl(0_0%_96%),hsl(0_0%_91%))] p-6 shadow-[0_30px_80px_-20px_hsl(0_0%_0%/0.45)] sm:rounded-[1.75rem]">
+                <div className="flex items-start gap-4">
+                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-red-50 text-red-600 ring-1 ring-inset ring-red-100">
+                    <Trash size={22} weight="duotone" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0 pt-0.5">
+                    <AlertDialogTitle className="text-lg font-semibold text-slate-900">Delete this task?</AlertDialogTitle>
+                    <AlertDialogDescription className="mt-1.5 text-sm leading-relaxed text-slate-600">
+                      “{t.title}” will be deleted permanently. It can no longer be opened or accessed by anyone, and this cannot be undone.
+                    </AlertDialogDescription>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <AlertDialogCancel disabled={deleting} data-testid={`drawer-delete-cancel-${t.id}`}
+                    className={`mt-0 h-11 rounded-pill border-0 px-5 text-sm font-medium text-slate-700 hover:bg-white ${GLASS_PILL}`}>
+                    Cancel
+                  </AlertDialogCancel>
+                  <AlertDialogAction disabled={deleting} data-testid={`drawer-delete-confirm-${t.id}`}
+                    /* preventDefault keeps the dialog open while the request
+                       runs; deleteTask closes it once the server agrees. */
+                    onClick={(e) => { e.preventDefault(); deleteTask(); }}
+                    className={`h-11 rounded-pill px-5 text-sm font-medium disabled:opacity-60 ${MAROON_PILL}`}>
+                    {deleting ? "Deleting…" : "Yes, delete task"}
+                  </AlertDialogAction>
+                </div>
+              </AlertDialogContent>
+            </AlertDialog>
+          </>
+        )}
       </div>
           </div>
         </SheetContent>

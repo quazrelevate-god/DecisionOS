@@ -847,6 +847,8 @@ async def _bootstrap():
         await db.files.create_index([("tenant_id", 1), ("task_id", 1)])
         # High-volume collections — these were doing full scans pre-1.0.
         await db.activity.create_index([("tenant_id", 1), ("created_at", -1)])
+        # ASK-29: a task's own timeline (GET /tasks/{id}/activity).
+        await db.activity.create_index([("tenant_id", 1), ("entity_id", 1), ("created_at", -1)])
         await db.notifications.create_index([("tenant_id", 1), ("user_id", 1), ("read", 1), ("created_at", -1)])
         await db.inbox.create_index([("tenant_id", 1), ("status", 1), ("created_at", -1)])
         await db.inbox.create_index([("tenant_id", 1), ("classification", 1)])

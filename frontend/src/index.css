@@ -1398,6 +1398,17 @@ html[data-page="inbox"] {
 
 html[data-page="my-work"] {
     --sky-art: url("/sky/my-work.webp");
+    /* The founder's desktop plate, same arrangement as /inbox (KM-49): the
+       phone keeps its portrait WebP, >= 1024px loads the landscape file, and
+       neither viewport fetches the other's picture. */
+    --sky-art-lg: url("/sky/my-work-lg.webp");
+}
+/* ASK-31 — My Work's picture in grayscale, on the founder's call, to sit with
+   the black-and-gray task drawer. A filter on the art layer rather than a
+   re-exported file: the originals in public/sky stay untouched and this is
+   one rule to undo. Phone and desktop plates both take it. */
+html[data-page="my-work"] .app-sky__art {
+    filter: grayscale(1);
 }
 
 /* The file is named for the UI label, "Ops"; the route is /operating-score. */
@@ -2581,6 +2592,60 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
        jumps off" the founder has now reported twice.
        Excluding the dialog roles fixes every current and future call site
        without each one having to remember an opt-out class. */
+    /* ASK-27 · .kr-progress-range — the task drawer's "Set % manually" bar is
+       a range input drawn as the reference's progress bar: a soft grey track,
+       the filled part in blue up to --pct (set inline), and a small white
+       thumb so it reads as something you can drag. Firefox paints the fill
+       itself via ::-moz-range-progress; WebKit needs the gradient. */
+    .kr-progress-range {
+        -webkit-appearance: none;
+        appearance: none;
+        height: 18px;
+        background: transparent;
+    }
+    .kr-progress-range::-webkit-slider-runnable-track {
+        height: 10px;
+        border-radius: 9999px;
+        /* ASK-30 — black on gray: the filled part runs a dark gradient. */
+        background: linear-gradient(90deg, hsl(0 0% 34%) 0%, hsl(0 0% 8%) var(--pct, 0%), hsl(0 0% 83%) var(--pct, 0%) 100%);
+        box-shadow: inset 0 1px 2px hsl(0 0% 0% / .16);
+    }
+    .kr-progress-range::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 18px;
+        height: 18px;
+        margin-top: -4px;
+        border-radius: 9999px;
+        background: #fff;
+        border: 2px solid hsl(0 0% 10%);
+        box-shadow: 0 2px 6px hsl(0 0% 0% / .28);
+    }
+    .kr-progress-range::-moz-range-track {
+        height: 10px;
+        border-radius: 9999px;
+        background: hsl(0 0% 83%);
+    }
+    .kr-progress-range::-moz-range-progress {
+        height: 10px;
+        border-radius: 9999px;
+        background: linear-gradient(90deg, hsl(0 0% 34%), hsl(0 0% 8%));
+    }
+    .kr-progress-range::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
+        border-radius: 9999px;
+        background: #fff;
+        border: 2px solid hsl(0 0% 10%);
+    }
+    /* ASK-28 — locked to the checklist: no thumb, so it reads as a bar. */
+    .kr-progress-range:disabled::-webkit-slider-thumb { opacity: 0; }
+    .kr-progress-range:disabled::-moz-range-thumb { opacity: 0; }
+    .kr-progress-range:focus-visible {
+        outline: 2px solid hsl(0 0% 10% / .4);
+        outline-offset: 4px;
+        border-radius: 9999px;
+    }
+
     .kr-bento:not([role="dialog"]):not([role="alertdialog"]):hover {
         transform: translateY(-3px);
         box-shadow:

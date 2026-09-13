@@ -56,6 +56,7 @@ const resources = {
       // Epic 2 Sprint A — E2-02 CRM shell strings
       crm: {
         title: "CRM", eyebrow: "Your relationships — {{customers}} & {{suppliers}}",
+        subtitle: "Manage your {{customers}} and {{suppliers}} in one place.",
         all: "All", mine: "Mine",
         search_ph: "Search name, company, phone, email…",
         all_statuses: "All statuses",

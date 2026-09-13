@@ -17,6 +17,7 @@ class UserCreateInput(BaseModel):
     password: Optional[str] = None            # empty ⇒ passwordless (mobile-OTP only) member
     permissions: Optional[List[str]] = None
     reporting_manager_id: Optional[str] = None
+    title: Optional[str] = None               # job title on the Team tree, e.g. "Sales Lead"
 
 
 class UserUpdateInput(BaseModel):
@@ -24,6 +25,7 @@ class UserUpdateInput(BaseModel):
     permissions: Optional[List[str]] = None
     phone: Optional[str] = None
     reporting_manager_id: Optional[str] = None
+    title: Optional[str] = None               # "" clears it
 
 
 class AttendanceInput(BaseModel):

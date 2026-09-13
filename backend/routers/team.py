@@ -300,6 +300,9 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
         )
         if mgr:
             doc["reporting_manager_id"] = inp.reporting_manager_id
+    # 2026-09-14 — the job title the Team tree shows under a member's name.
+    if inp.title and inp.title.strip():
+        doc["title"] = inp.title.strip()[:80]
     if len(_norm_phone(phone)) >= 10:
         invite_token = new_id()
         doc["invite_token"] = invite_token
@@ -398,6 +401,9 @@ async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(r
             updates["reporting_manager_id"] = rm if mgr else None
         else:
             updates["reporting_manager_id"] = None
+    if inp.title is not None:
+        # 2026-09-14 — the job title on the Team tree; an empty string clears it.
+        updates["title"] = inp.title.strip()[:80] or None
     if updates:
         # E2-57: tenant scope on the write (defense-in-depth; target was
         # already loaded from this tenant above).

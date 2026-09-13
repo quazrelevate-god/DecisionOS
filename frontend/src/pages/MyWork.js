@@ -1427,15 +1427,16 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
         <SheetContent side="right"
           className="w-full sm:max-w-2xl p-0 overflow-visible"
           data-testid={`task-drawer-${t.id}`}>
-          {/* ASK-17 (2026-09-13): the close X sits FULLY to the left of the
-              drawer, in the overlay space — a separate handle you tap to
-              close, not a control inside the drawer's header.
-              SheetContent stays overflow-visible so the button isn't clipped;
+          {/* ASK-17 (2026-09-13): a square close TAB attached to the drawer's
+              left edge. -translate-x-full places its right edge flush against
+              the drawer border; rounded-l-lg + border-r-0 makes it read as an
+              appendage protruding from the drawer, not a separate control.
+              SheetContent stays overflow-visible so the tab isn't clipped;
               the scroll moves down onto the inner wrapper below. */}
           <SheetClose
             data-testid={`task-drawer-close-${t.id}`}
             aria-label="Close task"
-            className="absolute left-0 top-5 z-20 -translate-x-full -ml-3 grid h-10 w-10 place-items-center rounded-full bg-background text-foreground shadow-[0_1px_2px_hsl(216_28%_18%/0.15),0_6px_14px_-6px_hsl(216_28%_18%/0.30)] ring-1 ring-nm-edge/50 transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+            className="absolute left-0 top-5 z-20 -translate-x-full grid h-10 w-10 place-items-center rounded-l-lg bg-background text-foreground border border-r-0 border-nm-edge/60 shadow-[-4px_2px_10px_-4px_hsl(216_28%_18%/0.30)] transition-transform hover:-translate-x-[calc(100%+2px)] focus:outline-none focus:ring-2 focus:ring-ring">
             <X size={16} weight="bold" aria-hidden="true" />
           </SheetClose>
           <div className="h-full overflow-y-auto">

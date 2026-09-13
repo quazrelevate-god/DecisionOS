@@ -1226,6 +1226,112 @@ FINDINGS = [
         found="2026-09-13",
     ),
     dict(
+        id="CR-10", section="CRM", screen="Contact list when loading fails",
+        viewport="Mobile + Desktop", persona="Owner", severity="High", status="Open",
+        area="Error handling / dead end",
+        tested="Made the contact list request fail (network abort on GET /api/contacts) "
+               "and watched /crm for 7 seconds at 1440 and 390.",
+        expected="The page says the contacts could not be loaded and offers a retry.",
+        actual="The loading skeleton stays forever. On desktop the chips read 'Buyers 0' "
+               "and 'Suppliers 0' above six blank placeholder cards, so an owner with a "
+               "flaky connection sees what looks like a CRM with no customers, still "
+               "loading. On mobile it is the same skeleton with nothing else. No toast, "
+               "no message, no retry. The same fault as OP-10 on Ops.",
+        evidence="After 7s: 0 cards, 18 animate-pulse placeholders, no error or empty "
+                 "wording, no toast, on both viewports. Screenshots "
+                 "crm_0913/desk1440_list_failed.png, mob390_list_failed.png.",
+        cause="CRM reads only { data, isLoading } from the contacts query; a failed query "
+              "has no data, so the skeleton branch never ends and the scope counts "
+              "compute from an empty list.",
+        fix="Read isError from the query and render 'Couldn't load your contacts' with a "
+            "Retry that calls refetch(). Show '-' rather than 0 in the scope chips while "
+            "loading or failed. Same fix pattern as OP-10 - worth one shared "
+            "<QueryError> component.",
+        code="pages/CRM.js:524-527 (contacts useQuery), scope-count chips :819-835",
+        found="2026-09-13",
+    ),
+    dict(
+        id="CR-11", section="CRM", screen="Contact profile when loading fails",
+        viewport="Mobile + Desktop", persona="Owner", severity="Medium", status="Open",
+        area="Copy / misleading error",
+        tested="Made the profile request fail (network abort on GET "
+               "/api/contacts/<id>/profile) for a contact that exists.",
+        expected="A connection failure is reported as a connection failure.",
+        actual="The page says 'That contact isn't here. It may have been merged or "
+               "removed.' The customer exists; only the request failed. An owner reading "
+               "this on a weak phone signal is told a real customer has been deleted or "
+               "merged.",
+        evidence="Aborted profile request -> 'That contact isn't here. It may have been "
+                 "merged or removed. Everyone else is still in People.' on 1440 and 390; "
+                 "the same text a genuinely missing id produces.",
+        cause="Both profile pages send error and '!data?.contact' down one branch. The "
+              "comment at ContactProfile.js:145-150 explains why the empty-body case was "
+              "added, but a network error and a missing contact now share its copy.",
+        fix="Split the branch: if error has no response (network) or a 5xx, say 'Couldn't "
+            "load this contact' with Retry; keep the 'isn't here' copy for a 404 or an "
+            "empty body.",
+        code="pages/ContactProfile.js:151-160; pages/mobile/ContactProfileMobile.jsx:85-99",
+        found="2026-09-13",
+    ),
+    dict(
+        id="CR-12", section="CRM", screen="GET /api/crm/outstanding",
+        viewport="n/a (API)", persona="Sales / Production / Finance", severity="Medium",
+        status="Open", area="Permissions / data exposure",
+        tested="Called the endpoints the CRM page uses while signed in as Sales, who holds "
+               "neither the People nor the Finance permission.",
+        expected="Per-customer money figures follow the same permission as the contact "
+                 "list and the finance profile.",
+        actual="GET /api/contacts and GET /api/contacts/<id>/profile correctly refuse "
+               "Sales with 403 - but GET /api/crm/outstanding answers 200 with every "
+               "customer's receivables, payables, invoice count and days overdue. The "
+               "keys are contact ids rather than names, so it is not a full leak on its "
+               "own, but it hands money data to roles the rest of the app deliberately "
+               "keeps out of finance.",
+        evidence="As Sales: /contacts 403, /contacts/<id>/profile 403, /crm/outstanding "
+                 "200 {<contact_id>: {receivables: 400000, payables: 0, invoice_count: 1, "
+                 "oldest_days: 61}, ...}.",
+        cause="outstanding_by_contact depends only on get_current_user - no require_perm.",
+        fix="Gate it with require_perm('people') (it only feeds the CRM grid) or "
+            "require_perm('finance') to match the profile endpoint.",
+        code="routers/crm.py:37-38 (outstanding_by_contact, Depends(get_current_user))",
+        found="2026-09-13",
+    ),
+    dict(
+        id="CR-13", section="CRM", screen="Decision Desk 'Complaints' tile -> /crm",
+        viewport="Mobile + Desktop", persona="Sales / Production / Finance", severity="Low",
+        status="Open", area="Navigation / dead end",
+        tested="Signed in as each non-owner role and listed every visible link that leads "
+               "into CRM.",
+        expected="Roles that cannot open CRM are not offered links into it.",
+        actual="CRM itself is correctly hidden and a direct visit shows Access Denied - "
+               "but the 'Complaints' KPI tile on Decision Desk links to /crm for all "
+               "three roles, on desktop and mobile. Tapping the number lands on 'ACCESS "
+               "DENIED'. It is the most prominent link on their home screen to a page "
+               "they are not allowed to see.",
+        evidence="Sales, Production and Finance: /inbox has one link into CRM - "
+                 "kpi-complaints (desktop) / kpi-complaints-m (mobile), href /crm.",
+        cause="The Desk KPI tiles hard-code to=\"/crm\" without checking the People "
+              "permission that the nav already checks.",
+        fix="Only set the link when hasPerm(user, 'people'); otherwise render the tile as "
+            "plain (non-link) or point it at a view the role can open.",
+        code="pages/Desk.js:569-572 (mobile tile), :614-617 (desktop tile)",
+        found="2026-09-13",
+    ),
+    dict(
+        id="CR-14", section="CRM", screen="Contact profile - 'Back to CRM' (desktop)",
+        viewport="Desktop", persona="Owner", severity="Low", status="Open",
+        area="Accessibility / tap target",
+        tested="Measured the interactive elements on the desktop contact profile.",
+        expected="Controls are at least 24px tall.",
+        actual="'Back to CRM' is 103x20 - the only other interactive element under 24px "
+               "on the page. The mobile 'Back to people' is fine.",
+        evidence="Under-24px list on the desktop profile: ['Back to CRM', 103, 20].",
+        cause="Text link with no vertical padding.",
+        fix="py-1 or min-h-6 on the back link.",
+        code="pages/ContactProfile.js:205 (profile-back)",
+        found="2026-09-13",
+    ),
+    dict(
         id="FN-01", section="Finance", screen="Every money figure",
         viewport="Mobile + Desktop", persona="All", severity="High", status="Open",
         area="Localisation",
@@ -2022,6 +2128,56 @@ COVERAGE = [
      "Information design", "FAIL",
      "Two entity types share identical styling; titles repeat as bare 'sale'; a "
      "'Delivered' row sits under 'In progress'; no row is tappable", "ASK-18"),
+
+    # --- CRM pass, 2026-09-13 (Owner + Sales/Production/Finance, 1440 + 390, writes blocked) ---
+    ("T-329", "CRM", "Cards -> profile -> back", "Both", "Owner",
+     "Every contact card opens its profile and Back returns to the list", "Routing",
+     "PASS", "11 of 11 open and 11 of 11 return, on both viewports", ""),
+    ("T-330", "CRM", "Profile sections + actions (mobile)", "Mobile 390x844", "Owner",
+     "Every section expands and collapses; Call and Email are real links", "Functional",
+     "PASS", "7 of 7 sections toggle aria-expanded; tel:+919820044558, "
+     "mailto:deepak@anandfabrics.in", ""),
+    ("T-331", "CRM", "Log activity", "Desktop 1440x900", "Owner",
+     "Empty activity is refused; a failed save says so and keeps the text", "Functional",
+     "PASS", "Save disabled when empty; 6 kinds; blocked POST -> 'Could not save', text "
+     "kept", ""),
+    ("T-332", "CRM", "Missing contact", "Both", "Owner",
+     "An unknown contact id explains itself with a way back", "Error handling", "PASS",
+     "'That contact isn't here...' + 'Back to People' -> /crm", ""),
+    ("T-333", "CRM", "List scrolling + slow load", "Both", "Owner",
+     "The last card is reachable; a slow list shows loading, not 'empty'", "Responsive",
+     "PASS", "Last card within the viewport after scrolling; 18 skeleton placeholders "
+     "during a 5s delay", ""),
+    ("T-334", "CRM", "Contact list fails", "Both", "Owner",
+     "A failed contact list says so", "Error handling", "FAIL",
+     "Skeleton forever with 'Buyers 0 / Suppliers 0'; no message, no retry", "CR-10"),
+    ("T-335", "CRM", "Profile fails", "Both", "Owner",
+     "A failed profile request is reported as a failure", "Error handling", "FAIL",
+     "Says the contact 'may have been merged or removed'", "CR-11"),
+    ("T-336", "CRM", "Roles - navigation", "Both", "Sales / Production / Finance",
+     "CRM is hidden from roles without the People permission", "Permissions", "PASS",
+     "No nav-crm on desktop; no /crm in the mobile More panel", ""),
+    ("T-337", "CRM", "Roles - direct links", "Both", "Sales / Production / Finance",
+     "/crm and /contacts/<id> refuse clearly with a way out", "Permissions", "PASS",
+     "Access Denied on both; 'Go to My Work' leaves the page", ""),
+    ("T-338", "CRM", "Roles - server", "n/a", "Sales / Finance",
+     "The API refuses contact data to roles without the permission", "Permissions",
+     "PASS", "GET /contacts 403 for both; /contacts/<id>/profile 403 for Sales (200 for "
+     "Finance, which holds the finance permission, though the page itself is refused)", ""),
+    ("T-339", "CRM", "Roles - outstanding totals", "n/a", "Sales / Production / Finance",
+     "Per-customer money figures are permission-gated", "Permissions", "FAIL",
+     "GET /crm/outstanding returns receivables/payables per contact to any signed-in user",
+     "CR-12"),
+    ("T-340", "CRM", "Roles - links from elsewhere", "Both", "Sales / Production / Finance",
+     "No link offers these roles a page they cannot open", "Navigation", "FAIL",
+     "Decision Desk 'Complaints' tile links to /crm -> Access Denied", "CR-13"),
+    ("T-341", "CRM", "Profile - link size", "Desktop 1440x900", "Owner",
+     "Controls are at least 24px tall", "Accessibility", "FAIL",
+     "'Back to CRM' is 103x20", "CR-14"),
+    ("T-342", "CRM", "CR-08 re-check", "Mobile 375x812", "Owner",
+     "Pending deliveries without a due date do not print 'undefined'", "Data leak to UI",
+     "FAIL", "Browser preview 2026-09-13: 'Due undefined - Rs 1' and 'Due undefined - "
+     "Rs 6,00,000' still shown under In progress", "CR-08"),
 
     # --- OPS ---
     ("T-400", "Ops", "Page load", "Desktop 1440x900", "Owner",

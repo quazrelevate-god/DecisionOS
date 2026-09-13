@@ -500,10 +500,11 @@ export default function Workflows({ embedded = false }) {
           full-width section, cards flow beneath in one column. Drag-to-move
           still works within a section. From lg the original horizontal
           kanban with fixed 300px columns returns unchanged. */}
-      {/* ASK-16 (2026-09-13): the well is gone on desktop too. The columns
-          hold the ground on their own — a tray around them read as a box
-          around boxes on a page whose only other frames are card corners. */}
-      <div className="flex flex-col gap-3 lg:gap-0 lg:overflow-x-auto" data-testid="workflow-board">
+      {/* ASK-18 (2026-09-13): the well is back on desktop — the founder
+          wanted the sunken tray look for the whole board, just not the
+          per-column white cards. Columns clear their own background below
+          (bg-none) so only the outer well reads as a container. */}
+      <div className="flex flex-col gap-3 lg:kr-glass-well lg:gap-0 lg:p-4 lg:overflow-x-auto" data-testid="workflow-board">
         <div className="flex flex-col gap-4 lg:min-w-max lg:flex-row lg:items-stretch">
           {stages.map((stg) => {
             const cards = (data || []).filter((w) => w.stage === stg.key);
@@ -543,7 +544,7 @@ export default function Workflows({ embedded = false }) {
                    sitting on the sky like a sticker. It is .kr-frost now — the
                    same light glass the Desk's "today's read" wears — so the
                    bloom reads through it. Desktop keeps the transparent column. */
-                className={`flex w-full flex-col rounded-tile transition-all kr-frost p-2 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:w-[300px] lg:shrink-0 ${
+                className={`flex w-full flex-col rounded-tile transition-all kr-frost p-2 lg:border-0 lg:bg-transparent lg:bg-none lg:p-0 lg:shadow-none lg:w-[300px] lg:shrink-0 ${
                   isTarget ? "bg-kr-accent/10 ring-2 ring-kr-accent/60"
                   : dropOk ? "ring-1 ring-dashed ring-foreground/30"
                   : dragId && !isSource ? "opacity-40"

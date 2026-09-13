@@ -188,6 +188,20 @@ let webpackConfig = {
 };
 
 webpackConfig.devServer = (devServerConfig) => {
+  // 2026-09-14 — "ResizeObserver loop completed with undelivered notifications"
+  // is a benign browser notice: Radix's popper re-measures a dropdown while it
+  // animates open (GlassSelect, menus). The dev overlay reports it as a crash
+  // and covers the page; production never shows it. Every other runtime error
+  // still reaches the overlay.
+  const overlay = devServerConfig.client && devServerConfig.client.overlay;
+  devServerConfig.client = {
+    ...(devServerConfig.client || {}),
+    overlay: {
+      ...(overlay && typeof overlay === "object" ? overlay : { errors: true, warnings: false }),
+      runtimeErrors: (error) => !/ResizeObserver loop/.test((error && error.message) || ""),
+    },
+  };
+
   // Add health check endpoints if enabled
   if (config.enableHealthCheck && setupHealthEndpoints && healthPluginInstance) {
     const originalSetupMiddlewares = devServerConfig.setupMiddlewares;

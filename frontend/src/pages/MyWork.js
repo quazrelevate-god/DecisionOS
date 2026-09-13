@@ -46,6 +46,15 @@ import {
 import { AvatarStack, PersonAvatar } from "../components/karma/PersonAvatar";
 import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel, AlertDialogAction } from "../components/ui/alert-dialog";
 import { motion, useReducedMotion } from "framer-motion";
+import {
+  DRAWER_LABEL, DRAWER_CARD, GLASS_PILL, GLASS_ICON_BTN, INK_PILL, MAROON_PILL,
+  DRAWER_FIELD, DRAWER_TRACK, GLASS_SHEET,
+  CHIP as PILL, QUIET_CHIP as QUIET_PILL,
+  GLASS_MENU, GLASS_MENU_ITEM, GLASS_MENU_LABEL,
+} from "../components/karma/glass";
+// 2026-09-14, founder — every dropdown on this page is the app's own glass
+// list; none of them opens the operating system's picker.
+import { GlassSelect } from "../components/karma/GlassSelect";
 
 // RD-2 (2026-08-17): the toolbar control. Was uppercase + wide tracking +
 // hard black border — eight of these in a row read as a control panel. Now a
@@ -222,22 +231,18 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel, no
       </div>
       {action === "handoff" && (
         <div className="space-y-2">
-          <label className={`relative flex items-center rounded-pill ${GLASS_PILL}`}>
-            <select className={DRAWER_SELECT} value={toId} onChange={(e) => setToId(e.target.value)}
-              data-testid={`update-member-${taskId}`} aria-label="Hand off to a team member">
-              <option value="">Hand off to a team member</option>
-              {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
-            </select>
-            <CaretDown size={16} weight="bold" aria-hidden="true" className="pointer-events-none absolute right-4 text-slate-500" />
-          </label>
-          <label className={`relative flex items-center rounded-pill ${GLASS_PILL}`}>
-            <select className={DRAWER_SELECT} value={toRole} onChange={(e) => setToRole(e.target.value)}
-              disabled={!!toId} aria-label="Or hand off to a whole team">
-              <option value="">…or to a whole team {toId ? "(member selected)" : ""}</option>
-              {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
-            </select>
-            <CaretDown size={16} weight="bold" aria-hidden="true" className="pointer-events-none absolute right-4 text-slate-500" />
-          </label>
+          <GlassSelect value={toId} onChange={setToId} ariaLabel="Hand off to a team member"
+            testid={`update-member-${taskId}`}
+            options={[
+              { value: "", label: "Hand off to a team member" },
+              ...members.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` })),
+            ]} />
+          <GlassSelect value={toRole} onChange={setToRole} disabled={!!toId} ariaLabel="Or hand off to a whole team"
+            testid={`update-team-${taskId}`}
+            options={[
+              { value: "", label: `…or to a whole team${toId ? " (member selected)" : ""}` },
+              ...roleOptions.map((r) => ({ value: r.key, label: r.label })),
+            ]} />
         </div>
       )}
       {action === "escalate" && (
@@ -282,25 +287,9 @@ const TIMELINE_KIND = {
   default:         { icon: Clock, dot: "bg-neutral-400", tone: "text-neutral-500" },
 };
 
-/* ASK-27 — the task drawer's material, on the founder's reference: a pale
-   frosted sheet, content grouped on soft raised glass, small-caps section
-   labels, and one navy ink for the two actions that move a task on (Complete,
-   Log update or hand off). Strings beside the drawer rather than new CSS, so
-   every surface in it reads from one place. */
-const DRAWER_LABEL = "mb-2.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500";
-const DRAWER_CARD = "rounded-[1.4rem] bg-white/60 ring-1 ring-inset ring-white/80 shadow-[0_10px_30px_-14px_hsl(0_0%_10%/0.22)] backdrop-blur-xl";
-const GLASS_PILL = "bg-white/75 ring-1 ring-inset ring-slate-900/[0.05] shadow-[0_6px_16px_-8px_hsl(216_30%_25%/0.35),inset_0_1px_0_hsl(0_0%_100%/0.9)]";
-const GLASS_ICON_BTN = `grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-700 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`;
-// ASK-30 — black and gray, not navy: the founder's palette for the drawer. The
-// filled pills are a black gradient; the sheet is a light neutral gray so the
-// white pills stand off it; the only colour left is the maroon Delete.
-const INK_PILL = "bg-[linear-gradient(180deg,hsl(0_0%_24%),hsl(0_0%_6%))] text-white shadow-[0_12px_26px_-12px_hsl(0_0%_0%/0.7),inset_0_1px_0_hsl(0_0%_100%/0.16)] transition-[filter] hover:brightness-125";
-// ASK-29 — the same pill as INK_PILL, in maroon: the one destructive action.
-const MAROON_PILL = "bg-[linear-gradient(180deg,hsl(350_52%_40%),hsl(349_62%_27%))] text-white shadow-[0_12px_26px_-12px_hsl(349_62%_22%/0.7),inset_0_1px_0_hsl(0_0%_100%/0.18)] transition-[filter] hover:brightness-110";
-// ASK-28 — fields and segmented tracks for forms that open inside the drawer.
-const DRAWER_FIELD = "w-full rounded-2xl bg-white/80 px-4 py-3 text-[15px] text-slate-800 placeholder:text-slate-400 ring-1 ring-inset ring-slate-900/[0.06] shadow-[inset_0_1px_2px_hsl(216_30%_25%/0.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25";
-const DRAWER_TRACK = "bg-slate-500/[0.08] ring-1 ring-inset ring-slate-900/[0.04]";
-const DRAWER_SELECT = "h-12 w-full cursor-pointer appearance-none rounded-pill bg-transparent pl-5 pr-10 text-[15px] text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 disabled:cursor-not-allowed disabled:opacity-50";
+/* ASK-27 — the task drawer's material (DRAWER_LABEL, DRAWER_CARD, GLASS_PILL,
+   INK_PILL, MAROON_PILL, the drawer fields…) lives in components/karma/glass.js
+   now, shared with New Task, the selection bar and Reassign. */
 
 /* ASK-27 — "Set % manually" with no toggle in front of it: the bar IS the
    control. It used to be a <select> hidden behind a disclosure; the founder
@@ -1139,18 +1128,19 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
   const doneCount = tasks.filter(isTerminal).length;
   return (
     <div
-      /* KR-11 — the plan's call: a worklist has no hero moment, so My Work's
-         Karma-dark ingredient is this bar rather than a full band. Ink pill,
-         floating, only present while a selection exists. */
-      className="sticky top-2 z-20 mb-4 flex flex-wrap items-center gap-3 rounded-pill bg-kr-ink px-5 py-3 text-white shadow-none"
+      /* KR-11 made this bar My Work's one Karma-dark ingredient. 2026-09-14,
+         founder: it joins the drawer's material and turns WHITE — a white
+         glass strip, Complete as the black ink pill, Reassign as a glass
+         pill, Clear as a quiet text button. */
+      className="sticky top-2 z-20 mb-4 flex flex-wrap items-center gap-2.5 rounded-pill bg-white/90 py-2 pl-5 pr-2 text-neutral-900 ring-1 ring-inset ring-black/[0.05] shadow-[0_12px_32px_-14px_hsl(0_0%_0%/0.28)] backdrop-blur-xl"
       data-testid="bulk-action-bar"
     >
-      <div className="flex items-center gap-2 min-w-0 flex-1">
-        <ListChecks size={16} weight="bold" className="shrink-0" />
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <ListChecks size={17} weight="bold" aria-hidden="true" className="shrink-0 text-neutral-700" />
         <p className="text-sm font-semibold">
           {selectedIds.length} selected
           {openCount > 0 && doneCount > 0 && (
-            <span className="label-mono text-muted-foreground ml-2">
+            <span className="ml-2 text-xs font-normal text-neutral-500">
               · {openCount} open · {doneCount} done
             </span>
           )}
@@ -1160,46 +1150,34 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
         type="button"
         onClick={onComplete}
         disabled={busy || openCount === 0}
-        className="kr-lift inline-flex items-center gap-1.5 rounded-pill bg-white px-3.5 py-2 text-xs font-medium text-kr-ink disabled:opacity-40"
+        className={`inline-flex h-10 items-center gap-1.5 rounded-pill px-4 text-sm font-medium disabled:opacity-40 ${INK_PILL}`}
         data-testid="bulk-complete"
       >
-        <CheckCircle size={13} weight="bold" />
+        <CheckCircle size={15} weight="bold" aria-hidden="true" />
         Complete{openCount ? ` ${openCount}` : ""}
       </button>
-      {/* ASK-10 fix (2026-09-12): Reassign was styled for a light ground
-          (bg-nm on #E9EAEC) while inheriting the bar's white text, so
-          the label read at 1.2:1 -- functionally invisible on the near-
-          black bar. Re-themed as a proper outline/ghost secondary on
-          dark: transparent fill, white/45 hairline border, white text.
-          Contrast on the label is now ~19:1 against bg-kr-ink (the same
-          as any other white text on the bar), and the border stays
-          visible without competing with Complete's filled white pill.
-          Complete stays untouched -- it's already correctly themed and
-          reads as the primary action by virtue of being the filled
-          pill in a row of two outlines. */}
+      {/* Reassign: the secondary action, a white glass pill with dark text
+          (~15:1). ASK-10's contrast fix for the dark bar no longer applies
+          now the bar itself is white. */}
       <button
         type="button"
         onClick={openReassign}
         disabled={busy}
-        className="inline-flex items-center gap-1.5 rounded-pill border border-white/45 px-3.5 py-2 text-xs font-medium text-white transition-colors hover:bg-white/10 disabled:opacity-40"
+        className={`inline-flex h-10 items-center gap-1.5 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}
         data-testid="bulk-reassign"
       >
-        <ArrowBendUpRight size={13} weight="bold" />
+        <ArrowBendUpRight size={15} weight="bold" aria-hidden="true" />
         Reassign
       </button>
-      {/* ASK-10 fix: Clear was text-muted-foreground (#585551) on the
-          near-black bar -- 2.64:1, below the AA floor. And it was 45x16
-          pixels, under WCAG's 24x24 target-size minimum. Now white/80
-          (~12:1) on a proper h-9 px-3 pill so a shaky thumb still
-          lands on it. Hover deepens to full white for the affordance. */}
+      {/* Clear: quiet text on white (neutral-600, ~7:1), still a 40px target. */}
       <button
         type="button"
         onClick={onClear}
         disabled={busy}
-        className="inline-flex h-9 items-center gap-1 rounded-pill px-3 text-xs font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40"
+        className="inline-flex h-10 items-center gap-1 rounded-pill px-3.5 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-900/5 hover:text-neutral-900 disabled:opacity-40"
         data-testid="bulk-clear"
       >
-        <X size={12} weight="bold" /> Clear
+        <X size={13} weight="bold" aria-hidden="true" /> Clear
       </button>
     </div>
   );
@@ -1209,9 +1187,9 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
    One pill recipe for every chip, each meaning in its own soft tint: a light
    wash, a hairline ring in the same hue, and text dark enough to read on it
    (every pair below clears 4.5:1). Nothing bright — the stripe is the only
-   saturated colour on the card, and it is the priority. */
-const PILL = "inline-flex shrink-0 items-center gap-1 rounded-pill px-2 py-[3px] text-[11px] font-medium leading-none ring-1 ring-inset";
-const QUIET_PILL = "bg-slate-500/[0.07] text-slate-600 ring-slate-500/10";
+   saturated colour on the card, and it is the priority.
+   PILL and QUIET_PILL now live in components/karma/glass (as CHIP and
+   QUIET_CHIP) so the leave cards wear the same chip. */
 const PRIO_STRIPE = { high: "bg-red-500", medium: "bg-blue-500", low: "bg-neutral-500" };
 const PRIO_LABEL = { high: "High", medium: "Medium", low: "Low" };
 /* `arc` is how far through the flow a status sits — the ring's fill — and
@@ -1338,20 +1316,12 @@ function AssigneesEditor({ t, members, roleOptions, canEdit, onPatched }) {
           })}
         </div>
         {showAdd && (
-          <label className={`relative flex h-12 min-w-0 items-center rounded-pill ${GLASS_PILL}`}>
-            <UserPlus size={20} weight="regular" aria-hidden="true" className="pointer-events-none absolute left-4 text-slate-500" />
-            <select value="" disabled={busy} aria-label="Add a person to this task"
-              data-testid={`task-people-add-${t.id}`}
-              onChange={(e) => {
-                const id = e.target.value;
-                if (id) save([...co, id], `Added ${members.find((m) => m.id === id)?.name || "a member"}`);
-              }}
-              className="h-full w-full min-w-0 cursor-pointer appearance-none rounded-pill bg-transparent pl-12 pr-10 text-[15px] text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 disabled:opacity-50">
-              <option value="">Add a person</option>
-              {addable.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
-            </select>
-            <CaretDown size={16} weight="bold" aria-hidden="true" className="pointer-events-none absolute right-4 text-slate-500" />
-          </label>
+          <GlassSelect value="" placeholder="Add a person" icon={UserPlus} disabled={busy}
+            ariaLabel="Add a person to this task" testid={`task-people-add-${t.id}`}
+            onChange={(id) => {
+              if (id) save([...co, id], `Added ${members.find((m) => m.id === id)?.name || "a member"}`);
+            }}
+            options={addable.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` }))} />
         )}
       </div>
     </section>
@@ -2072,11 +2042,19 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
 
       {isOp && (
         <div className="flex flex-wrap items-center gap-2" data-testid={`op-meta-${t.id}`}>
-          {t.op_category && <span className="inline-flex items-center gap-1 nm-tile px-2 py-0.5 text-xs font-medium"><Tag size={11} weight="bold" /> {t.op_category}</span>}
+          {t.op_category && <span className={`${PILL} ${QUIET_PILL}`}><Tag size={11} weight="bold" /> {t.op_category}</span>}
           {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
           {t.support_name && <span className="text-xs text-muted-foreground">+ {t.support_name}</span>}
           {t.approval_required && (
-            <span data-testid={`op-approval-${t.id}`} className={`inline-flex items-center gap-1 nm-tile px-2 py-0.5 text-xs font-medium ${t.approval_status === "approved" ? "bg-kr-ink text-white" : t.approval_status === "rejected" ? "bg-kr-accent text-white" : "bg-nm-sunken"}`}>
+            /* 2026-09-14 — the card-face chip, in the leave card's tones:
+               amber while it waits, emerald once approved, rose for changes.
+               The words are ASK-28 TK-05's, which name the moment (start or
+               close). */
+            <span data-testid={`op-approval-${t.id}`} className={`${PILL} ${
+              t.approval_status === "approved" ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
+              : t.approval_status === "rejected" ? "bg-rose-50 text-rose-700 ring-rose-100"
+              : t.approval_status === "pending" ? "bg-amber-50 text-amber-800 ring-amber-100"
+              : QUIET_PILL}`}>
               <ShieldCheck size={11} weight="bold" /> {t.approval_status === "approved" ? "Approved" : t.approval_status === "pending" ? (apprStage === "close" ? "Waiting for approval to close" : "Pending approval") : t.approval_status === "rejected" ? "Changes requested" : `${t.approver_name || "Approval"} required${apprStage === "close" ? " to close" : ""}`}
             </span>
           )}
@@ -2123,15 +2101,10 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
         <section data-testid={`task-status-${t.id}`}>
           <p className={DRAWER_LABEL}>Status</p>
           <div className="flex items-stretch gap-5">
-            <label className={`relative flex h-12 w-56 shrink-0 items-center rounded-pill ${GLASS_PILL}`}>
-              <Clock size={20} weight="regular" aria-hidden="true" className="pointer-events-none absolute left-4 text-neutral-800" />
-              <select data-testid={`status-select-${t.id}`} aria-label="Task status"
-                value={t.status === "blocked" ? "todo" : t.status} onChange={(e) => setStatus(e.target.value)}
-                className="h-full w-full cursor-pointer appearance-none rounded-pill bg-transparent pl-12 pr-10 text-[15px] font-medium text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25">
-                {STATUS_OPTIONS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-              </select>
-              <CaretDown size={16} weight="bold" aria-hidden="true" className="pointer-events-none absolute right-4 text-slate-500" />
-            </label>
+            <GlassSelect testid={`status-select-${t.id}`} ariaLabel="Task status" icon={Clock}
+              value={t.status === "blocked" ? "todo" : t.status} onChange={setStatus}
+              options={STATUS_OPTIONS.map((s) => ({ value: s.key, label: s.label }))}
+              triggerClassName="w-56 shrink-0 font-medium text-slate-800" />
             <span aria-hidden="true" className="w-px shrink-0 bg-slate-900/10" />
             <ProgressControl value={checklist ? checklist.pct : (t.progress || 0)} onCommit={setProgress}
               checklist={checklist}
@@ -2203,51 +2176,71 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
         </DialogContent>
       </Dialog>
 
+      {/* 2026-09-14, founder — the approval step joins the drawer's glass: a
+          DRAWER_CARD holding the ink Approve pill, with white glass pills for
+          the two ways to push back. ASK-28 TK-05 decides when it shows
+          (before work starts, or once the work is marked done) and what it
+          says for each. */}
       {needsMyApproval && (
-        <div className="flex flex-wrap gap-2 mt-4 nm-tile bg-caution-50/40 p-3" data-testid={`approval-actions-${t.id}`} data-stage={apprStage}>
-          <span className="w-full label-mono text-muted-foreground">{apprStage === "close"
+        <div className={`mt-4 p-4 ${DRAWER_CARD}`} data-testid={`approval-actions-${t.id}`} data-stage={apprStage}>
+          <p className={DRAWER_LABEL}>Needs your approval</p>
+          <p className="text-sm text-slate-700">{apprStage === "close"
             ? `${t.assignee_name || "The assignee"} marked this task complete. Check the work — approving closes it.`
-            : `This task needs your approval before ${t.assignee_name || "the assignee"} can start work.`}</span>
-          {t.approval_status === "rejected" && t.rejection_reason && <span className="w-full text-xs text-muted-foreground">Previously requested: {t.rejection_reason}</span>}
-          <button onClick={approveTask} data-testid={`approve-${t.id}`} className="kr-lift flex items-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all">
-            <CheckCircle size={16} weight="bold" /> Approve
-          </button>
-          <button onClick={rejectTask} data-testid={`reject-${t.id}`} className="flex items-center gap-2 rounded-pill border border-kr-accent px-4 py-2.5 text-sm font-medium text-kr-accent transition-colors hover:bg-kr-accent/10">
-            <WarningCircle size={16} weight="bold" /> Request changes
-          </button>
-          <button onClick={clarifyTask} data-testid={`clarify-${t.id}`} className="nm-btn flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all">
-            <ChatText size={16} weight="bold" /> Ask clarification
-          </button>
+            : `This task needs your approval before ${t.assignee_name || "the assignee"} can start work.`}</p>
+          {t.approval_status === "rejected" && t.rejection_reason && <p className="mt-1.5 text-xs text-slate-500">Previously requested: {t.rejection_reason}</p>}
+          <div className="mt-3.5 flex flex-wrap gap-2">
+            <button onClick={approveTask} data-testid={`approve-${t.id}`}
+              className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-pill px-5 text-sm font-medium ${INK_PILL}`}>
+              <CheckCircle size={16} weight="bold" aria-hidden="true" /> Approve
+            </button>
+            <button onClick={rejectTask} data-testid={`reject-${t.id}`}
+              className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
+              <WarningCircle size={16} weight="bold" aria-hidden="true" /> Request changes
+            </button>
+            <button onClick={clarifyTask} data-testid={`clarify-${t.id}`}
+              className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
+              <ChatText size={16} weight="bold" aria-hidden="true" /> Ask clarification
+            </button>
+          </div>
         </div>
       )}
 
       {lockedForAssignee && (
-        <div className="flex items-start gap-2 mt-4 nm-tile bg-nm-sunken p-3" data-testid={`approval-locked-${t.id}`}>
-          <LockKey size={18} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0 text-muted-foreground" />
+        <div className={`mt-4 flex items-start gap-3 p-4 ${DRAWER_CARD}`} data-testid={`approval-locked-${t.id}`}>
+          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-600 ${GLASS_PILL}`}>
+            <LockKey size={16} weight="bold" aria-hidden="true" />
+          </span>
           <div>
-            <p className="text-sm font-bold uppercase tracking-tight">{t.approval_status === "rejected" ? "Changes requested" : "Awaiting approval"}</p>
-            <p className="text-xs text-muted-foreground">You can start once {t.approver_name || "the approver"} approves this task. Status, progress and the execution plan are locked until then.</p>
-            {t.approval_status === "rejected" && t.rejection_reason && <p className="mt-1 text-xs text-muted-foreground">Note: {t.rejection_reason}</p>}
+            <p className="text-sm font-semibold text-neutral-900">{t.approval_status === "rejected" ? "Changes requested" : "Awaiting approval"}</p>
+            <p className="mt-0.5 text-xs text-slate-600">You can start once {t.approver_name || "the approver"} approves this task. Status, progress and the execution plan are locked until then.</p>
+            {t.approval_status === "rejected" && t.rejection_reason && <p className="mt-1.5 text-xs text-slate-500">Note: {t.rejection_reason}</p>}
           </div>
         </div>
       )}
 
-      {/* ASK-28 TK-05 — approval before closing, seen by everyone but the approver. */}
+      {/* ASK-28 TK-05 — approval before closing, seen by everyone but the approver.
+          2026-09-14 — both banners wear the same glass card as "Awaiting
+          approval" above; the sent-back one carries the rose of the
+          "Changes requested" chip. */}
       {signoffPending && !canApprove && (
-        <div className="flex items-start gap-2 mt-4 nm-tile bg-nm-sunken p-3" data-testid={`approval-signoff-${t.id}`}>
-          <ShieldCheck size={18} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0 text-muted-foreground" />
+        <div className={`mt-4 flex items-start gap-3 p-4 ${DRAWER_CARD}`} data-testid={`approval-signoff-${t.id}`}>
+          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-600 ${GLASS_PILL}`}>
+            <ShieldCheck size={16} weight="bold" aria-hidden="true" />
+          </span>
           <div>
-            <p className="text-sm font-bold uppercase tracking-tight">Waiting for approval</p>
-            <p className="text-xs text-muted-foreground">Marked complete. {t.approver_name || "The approver"} will check the work and close it. Moving the status back takes the request away.</p>
+            <p className="text-sm font-semibold text-neutral-900">Waiting for approval</p>
+            <p className="mt-0.5 text-xs text-slate-600">Marked complete. {t.approver_name || "The approver"} will check the work and close it. Moving the status back takes the request away.</p>
           </div>
         </div>
       )}
       {signoffSentBack && (
-        <div className="flex items-start gap-2 mt-4 nm-tile bg-kr-accent/8 p-3" data-testid={`approval-changes-${t.id}`}>
-          <WarningCircle size={18} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0 text-kr-accent" />
+        <div className={`mt-4 flex items-start gap-3 p-4 ${DRAWER_CARD}`} data-testid={`approval-changes-${t.id}`}>
+          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-rose-700 ${GLASS_PILL}`}>
+            <WarningCircle size={16} weight="bold" aria-hidden="true" />
+          </span>
           <div>
-            <p className="text-sm font-bold uppercase tracking-tight">Changes requested</p>
-            <p className="text-xs text-muted-foreground">{t.rejection_reason ? `${t.approver_name || "The approver"}: ${t.rejection_reason}` : `${t.approver_name || "The approver"} sent this back.`} Complete it again when it's fixed — it goes back for approval.</p>
+            <p className="text-sm font-semibold text-neutral-900">Changes requested</p>
+            <p className="mt-0.5 text-xs text-slate-600">{t.rejection_reason ? `${t.approver_name || "The approver"}: ${t.rejection_reason}` : `${t.approver_name || "The approver"} sent this back.`} Complete it again when it's fixed — it goes back for approval.</p>
           </div>
         </div>
       )}
@@ -2401,39 +2394,51 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
         </SheetContent>
       </Sheet>
 
-      {/* U7-05 dialog: reject / clarify reason (replaced window.prompt). */}
+      {/* U7-05 dialog: reject / clarify reason (replaced window.prompt).
+          2026-09-14, founder — on the gray glass sheet the Reassign window
+          uses: a round glass close, the glass field, a white glass Cancel and
+          the ink pill to send. */}
       <Dialog open={!!reasonDialog} onOpenChange={(o) => !o && !reasonBusy && setReasonDialog(null)}>
-        <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-md" data-testid={`reason-dialog-${t.id}`}>
-          <DialogHeader>
-            <DialogTitle className="font-heading tracking-tight">
-              {reasonDialog?.kind === "reject" ? "Request changes" : "Ask for clarification"}
-            </DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground -mt-2">
-            {reasonDialog?.kind === "reject"
-              ? "Tell the assignee what needs to change before you can approve (optional)."
-              : "What do you need clarified before starting?"}
-          </p>
+        <DialogContent className={`max-w-md gap-5 rounded-[1.75rem] p-6 sm:rounded-[1.75rem] [&>button.absolute]:hidden ${GLASS_SHEET}`} data-testid={`reason-dialog-${t.id}`}>
+          <div className="flex items-start justify-between gap-4">
+            <DialogHeader className="space-y-1.5 text-left">
+              <DialogTitle className="font-display text-xl text-neutral-900">
+                {reasonDialog?.kind === "reject" ? "Request changes" : "Ask for clarification"}
+              </DialogTitle>
+              <p className="text-sm text-neutral-600">
+                {reasonDialog?.kind === "reject"
+                  ? "Tell the assignee what needs to change before you can approve (optional)."
+                  : "What do you need clarified before starting?"}
+              </p>
+            </DialogHeader>
+            <button type="button" onClick={() => setReasonDialog(null)} disabled={reasonBusy}
+              aria-label="Close" data-testid={`reason-close-${t.id}`} className={GLASS_ICON_BTN}>
+              <X size={16} weight="bold" aria-hidden="true" />
+            </button>
+          </div>
           <textarea
             rows={4}
             value={reasonText}
             onChange={(e) => setReasonText(e.target.value)}
+            aria-label={reasonDialog?.kind === "reject" ? "What needs to change" : "Your question"}
             placeholder={reasonDialog?.kind === "reject" ? "e.g. Please add unit prices per line item." : "e.g. Which supplier's rate card do I use?"}
-            className="w-full nm-tile px-3 py-2 text-sm focus:outline-none"
+            className={`${DRAWER_FIELD} resize-none`}
             autoFocus
           />
-          <div className="flex gap-2 justify-end">
+          <div className="flex justify-end gap-2">
             <button
               type="button"
               onClick={() => setReasonDialog(null)}
               disabled={reasonBusy}
-              className="nm-tile px-4 py-2 text-sm font-medium hover:bg-accent disabled:opacity-40"
+              data-testid={`reason-cancel-${t.id}`}
+              className={`h-11 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}
             >Cancel</button>
             <button
               type="button"
               onClick={submitReason}
               disabled={reasonBusy || (reasonDialog?.kind === "clarify" && !reasonText.trim())}
-              className="kr-lift rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40"
+              data-testid={`reason-submit-${t.id}`}
+              className={`h-11 rounded-pill px-5 text-sm font-medium disabled:opacity-40 ${INK_PILL}`}
             >
               {reasonBusy ? "Sending..." : reasonDialog?.kind === "reject" ? "Request changes" : "Send question"}
             </button>
@@ -2505,31 +2510,34 @@ function FilterDropdown({ testid, label, value, options, counts, onSelect, loadi
           <CaretDown size={11} weight="bold" aria-hidden="true" className="opacity-60" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className={`max-h-[60vh] overflow-y-auto ${searchable ? "w-64" : "w-56"}`}>
+      {/* 2026-09-14, founder — the list wears the app's glass menu, the same
+          panel GlassSelect draws, instead of the stock popover. */}
+      <DropdownMenuContent align="start" sideOffset={6}
+        className={`${GLASS_MENU} max-h-[60vh] overflow-y-auto p-1.5 ${searchable ? "w-64" : "w-56"}`}>
         {searchable && (
-          <div className="sticky top-0 z-10 bg-popover p-1">
+          <div className="sticky -top-1.5 z-10 -mx-1.5 -mt-1.5 mb-1 bg-white/95 p-1.5">
             {/* stopPropagation: Radix menus run typeahead on keydown, which
                 would steal every letter typed here to jump between items. */}
             <input value={query} onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.stopPropagation()}
               placeholder={`Search ${label.toLowerCase()}`} aria-label={`Search ${label.toLowerCase()}`}
               data-testid={`${testid}-search`}
-              className="w-full nm-field px-2.5 py-1.5 text-xs" />
+              className="w-full rounded-xl bg-white/80 px-3 py-2 text-xs text-slate-800 ring-1 ring-inset ring-slate-900/[0.06] placeholder:text-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25" />
           </div>
         )}
         {shown.map((o, i) => (
           <Fragment key={o.key || "__all__"}>
             {o.group && o.group !== shown[i - 1]?.group && (
-              <DropdownMenuLabel className="pt-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+              <DropdownMenuLabel className={GLASS_MENU_LABEL}>
                 {o.group}
               </DropdownMenuLabel>
             )}
             <DropdownMenuItem onSelect={() => onSelect(o.key)}
               data-testid={`${testid}-${o.key || "all"}`}
-              className="flex items-center justify-between gap-3">
+              className={`${GLASS_MENU_ITEM} justify-between gap-3`}>
               <span className="min-w-0">
-                <span className={`block truncate ${value === o.key ? "font-semibold" : ""}`}>{o.label}</span>
-                {o.sub && <span className="block truncate text-[11px] text-muted-foreground">{o.sub}</span>}
+                <span className={`block truncate ${value === o.key ? "font-semibold text-slate-900" : ""}`}>{o.label}</span>
+                {o.sub && <span className="block truncate text-[11px] text-slate-500">{o.sub}</span>}
               </span>
               {counts && (
                 <span className="shrink-0 tabular-nums text-xs opacity-55">
@@ -3388,9 +3396,15 @@ export default function MyWork() {
               the body is entirely leave requests or delivery pipelines.
               The toggle pill below is small; the page header needs to
               say what you are looking at above the fold. */}
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            {view === "workflows" ? t("mywork.view_workflows") : view === "approvals" ? t("mywork.view_approvals") : t("mywork.eyebrow")}
-          </p>
+          {/* 2026-09-14, founder — no eyebrow in Workflows view: it only
+              repeated the title ("WORKFLOWS" over "Workflows"). Approvals
+              (ASK-25) had the same echo, so it goes there too; the task
+              views keep "Your day, simplified". */}
+          {view !== "workflows" && view !== "approvals" && (
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              {t("mywork.eyebrow")}
+            </p>
+          )}
           <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">
             {view === "workflows" ? t("mywork.view_workflows") : view === "approvals" ? t("mywork.view_approvals") : t("mywork.title")}
           </h1>
@@ -3541,36 +3555,34 @@ export default function MyWork() {
             const sub = subs.some((s) => s.key === apprSub) ? apprSub : "tasks";
             return (
               <>
-                {/* ASK-25 — UNDERLINE tabs on a full-width rule (the founder's
-                    reference): icon + label + count, the chosen one in ink
-                    with a 2px ink underline that sits ON the rule (-mb-px),
-                    the rest quiet. The lens slider rides the same row on the
-                    right, above the rule. */}
-                {/* min-h pins the rule: the slider's track (44px + its 4px lift)
-                    is taller than the 44px tabs, so without it the whole row
-                    jumped when Leave (no slider) was chosen. 48 < the pinned
-                    49px content box, so the slider never sets the height. */}
-                <div className="mb-4 flex min-h-[50px] items-end gap-3 border-b border-kr-ink/[.12]" data-testid="approvals-controls">
-                  <div role="tablist" aria-label="Approvals" className="-mb-px flex items-end gap-1" data-testid="approvals-sub">
+                {/* ASK-25 — icon + label + count per sub-tab, with the All/My
+                    lens riding the same row on the right.
+                    2026-09-14, founder — both join the task drawer's material:
+                    the underline tabs on a rule are a gray glass track now, the
+                    chosen tab a white glass pill, and the lens is the same track
+                    (ScopeSlider variant="glass"). min-h pins the row so it does
+                    not jump when Leave (no lens) is chosen. */}
+                <div className="mb-5 flex min-h-[48px] flex-wrap items-center gap-3" data-testid="approvals-controls">
+                  <div role="tablist" aria-label="Approvals" className={`inline-flex items-center gap-1 rounded-pill p-1 ${DRAWER_TRACK}`} data-testid="approvals-sub">
                     {subs.map((s) => {
                       const on = sub === s.key;
                       const Icon = s.icon;
                       return (
                         <button key={s.key} type="button" role="tab" aria-selected={on}
                           onClick={() => setApprSub(s.key)} data-testid={`approvals-sub-${s.key}`}
-                          className={`flex h-11 items-center gap-2 border-b-2 px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60 ${
-                            on ? "border-kr-ink font-semibold text-foreground" : "border-transparent font-medium text-foreground/60 hover:text-foreground/85"
+                          className={`flex h-9 items-center gap-2 rounded-pill px-4 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 ${
+                            on ? `${GLASS_PILL} font-semibold text-neutral-900` : "font-medium text-neutral-600 hover:text-neutral-900"
                           }`}>
                           <Icon size={16} weight={on ? "bold" : "regular"} aria-hidden="true" />
                           {s.label}
-                          <span className={`font-mono text-xs tabular-nums ${on ? "opacity-70" : "opacity-55"}`}>{s.n ?? "–"}</span>
+                          <span className={`font-mono text-xs tabular-nums ${on ? "text-neutral-500" : "text-neutral-400"}`}>{s.n ?? "–"}</span>
                         </button>
                       );
                     })}
                   </div>
                   {sub === "tasks" && (
-                    <ScopeSlider options={APPR_SCOPES} value={apprScope} onChange={setApprScope}
-                      segWidth={128} label="Which approvals" testid="approvals-scope" className="mb-1 ml-auto" />
+                    <ScopeSlider variant="glass" options={APPR_SCOPES} value={apprScope} onChange={setApprScope}
+                      segWidth={128} label="Which approvals" testid="approvals-scope" className="ml-auto" />
                   )}
                 </div>
 
@@ -3581,7 +3593,7 @@ export default function MyWork() {
                         {[0, 1, 2].map((i) => <div key={i} className="ds-skeleton h-36 rounded-tile" />)}
                       </div>
                     ) : apprList.length === 0 ? (
-                      <div className="kr-frost-min p-6 text-sm text-muted-foreground" data-testid="approvals-tasks-empty">
+                      <div className={`p-6 text-sm text-neutral-600 ${DRAWER_CARD}`} data-testid="approvals-tasks-empty">
                         {apprScope === "mine" && apprAll.length > 0
                           ? "Nothing is routed to you by name — switch to All approvals to see what you can still sign off."
                           : "Tasks that need your sign-off will appear here."}
@@ -3606,7 +3618,7 @@ export default function MyWork() {
                         {[0, 1, 2].map((i) => <div key={i} className="ds-skeleton h-44 rounded-tile" />)}
                       </div>
                     ) : pendingLeaves.length === 0 ? (
-                      <div className="kr-frost-min p-6 text-sm text-muted-foreground" data-testid="approvals-leave-empty">
+                      <div className={`p-6 text-sm text-neutral-600 ${DRAWER_CARD}`} data-testid="approvals-leave-empty">
                         Leave requests routed to you will appear here.
                       </div>
                     ) : (
@@ -3662,7 +3674,7 @@ export default function MyWork() {
           <div className="mb-3 flex justify-end lg:hidden">
             <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members} defaultType={tab}
               onOpenChange={(o) => { if (o) setOpenId(null); }}
-              triggerClassName="kr-lift inline-flex items-center gap-1.5 rounded-pill bg-kr-ink px-3.5 py-2 text-xs font-medium text-white" />
+              triggerClassName={`inline-flex items-center gap-1.5 rounded-pill px-3.5 py-2 text-xs font-medium ${INK_PILL}`} />
           </div>
 
           {/* MW-06 fix: while the tasks query is loading, tabs render a
@@ -3730,7 +3742,9 @@ export default function MyWork() {
             </div>
             <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members} defaultType={tab}
               onOpenChange={(o) => { if (o) setOpenId(null); }}
-              triggerClassName={`${SECTION_BTN} kr-lift bg-kr-ink text-white`} />
+              /* 2026-09-14, founder — the same black ink pill as the drawer's
+                 Complete and Log update or hand off. */
+              triggerClassName={`${SECTION_BTN} ${INK_PILL}`} />
           </div>
           {/* ASK-20 (2026-09-13): THE ONLY SCROLLER on desktop. Everything
               above this — page header, lens slider, filter row — is a fixed
@@ -3832,40 +3846,52 @@ export default function MyWork() {
           })()}
           </div>
 
-          {/* U7-05.3 dialog: bulk-reassign target picker. */}
+          {/* U7-05.3 dialog: bulk-reassign target picker. 2026-09-14, founder —
+              on the drawer's material: the light gray sheet, a glass close in
+              the corner, glass select pills under small-caps labels, a glass
+              Cancel and the black ink Reassign. */}
           <Dialog open={bulkReassignOpen} onOpenChange={(o) => !o && !bulkBusy && setBulkReassignOpen(false)}>
-            <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-md" data-testid="bulk-reassign-dialog">
-              <DialogHeader>
-                <DialogTitle className="font-heading tracking-tight">
-                  Reassign {selected.size} {selected.size === 1 ? "task" : "tasks"}
-                </DialogTitle>
-              </DialogHeader>
-              <p className="text-sm text-muted-foreground -mt-2">
-                Pick a specific team member OR hand off to a whole team.
-              </p>
-              <select
-                value={bulkAssigneeId}
-                onChange={(e) => setBulkAssigneeId(e.target.value)}
-                className="w-full nm-tile px-3 py-2 text-sm focus:outline-none"
-              >
-                <option value="">— Reassign to a team member —</option>
-                {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
-              </select>
-              <select
-                value={bulkAssigneeRole}
-                onChange={(e) => setBulkAssigneeRole(e.target.value)}
-                disabled={!!bulkAssigneeId}
-                className="w-full nm-tile px-3 py-2 text-sm focus:outline-none disabled:opacity-40"
-              >
-                <option value="">...or to a whole team {bulkAssigneeId ? "(member selected)" : ""}</option>
-                {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
-              </select>
-              <div className="flex gap-2 justify-end">
+            <DialogContent data-testid="bulk-reassign-dialog"
+              className={`max-w-md gap-5 rounded-[1.75rem] p-6 sm:rounded-[1.75rem] [&>button.absolute]:hidden ${GLASS_SHEET}`}>
+              <div className="flex items-start gap-3">
+                <DialogHeader className="min-w-0 flex-1 space-y-1.5 text-left">
+                  <DialogTitle className="text-lg font-semibold text-neutral-900">
+                    Reassign {selected.size} {selected.size === 1 ? "task" : "tasks"}
+                  </DialogTitle>
+                  <p className="text-sm text-neutral-600">Pick a specific team member, or hand off to a whole team.</p>
+                </DialogHeader>
+                <button type="button" onClick={() => setBulkReassignOpen(false)} disabled={bulkBusy}
+                  aria-label="Close" data-testid="bulk-reassign-close" className={GLASS_ICON_BTN}>
+                  <X size={16} weight="bold" aria-hidden="true" />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <p className={DRAWER_LABEL}>A team member</p>
+                  <GlassSelect value={bulkAssigneeId} onChange={setBulkAssigneeId}
+                    ariaLabel="Reassign to a team member" testid="bulk-reassign-member"
+                    options={[
+                      { value: "", label: "Choose a person" },
+                      ...members.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` })),
+                    ]} />
+                </div>
+                <div>
+                  <p className={DRAWER_LABEL}>Or a whole team</p>
+                  <GlassSelect value={bulkAssigneeRole} onChange={setBulkAssigneeRole} disabled={!!bulkAssigneeId}
+                    ariaLabel="Or hand off to a whole team" testid="bulk-reassign-team"
+                    options={[
+                      { value: "", label: bulkAssigneeId ? "A person is chosen" : "Choose a team" },
+                      ...roleOptions.map((r) => ({ value: r.key, label: r.label })),
+                    ]} />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setBulkReassignOpen(false)}
                   disabled={bulkBusy}
-                  className="nm-tile px-4 py-2 text-sm font-medium hover:bg-accent disabled:opacity-40"
+                  data-testid="bulk-reassign-cancel"
+                  className={`h-11 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}
                 >Cancel</button>
                 <button
                   type="button"
@@ -3889,8 +3915,9 @@ export default function MyWork() {
                       toast.error(e.response?.data?.detail || "Bulk reassign failed");
                     } finally { setBulkBusy(false); }
                   }}
-                  className="kr-lift rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40"
-                >{bulkBusy ? "Reassigning..." : "Reassign"}</button>
+                  data-testid="bulk-reassign-submit"
+                  className={`h-11 rounded-pill px-5 text-sm font-medium disabled:opacity-40 ${INK_PILL}`}
+                >{bulkBusy ? "Reassigning…" : "Reassign"}</button>
               </div>
             </DialogContent>
           </Dialog>

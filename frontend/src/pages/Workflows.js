@@ -47,6 +47,7 @@ import {
   SlidersHorizontal,  // KR-14.6 · mobile pipeline filter
   CaretDown,  // KR-14.21 · mobile stage collapse
   ListBullets,  // KM-31 · the standalone page's pipeline picker
+  X,  // 2026-09-14 · the New card window's glass close
 } from "@phosphor-icons/react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter,
@@ -64,6 +65,10 @@ import {
 } from "../components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../components/ui/dropdown-menu";
 import { StickyHeader } from "../components/common";
+import {
+  DRAWER_FIELD, DRAWER_LABEL, GLASS_ICON_BTN, GLASS_MENU, GLASS_MENU_ITEM, GLASS_SHEET, INK_PILL,
+} from "../components/karma/glass";
+import { GlassSelect } from "../components/karma/GlassSelect";
 
 function _initials(name) {
   if (!name) return "?";
@@ -72,8 +77,11 @@ function _initials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-const FIELD = "w-full nm-field px-3 py-2 text-sm";
-
+/* 2026-09-14, founder — the New card window (New Distribution, New
+   Production…) joins My Work's material: the gray glass sheet with a round
+   glass close, soft glass fields, the buyer or supplier as a GlassSelect
+   (never the operating system's list) under a small-caps label, and the black
+   ink Create. */
 function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -86,8 +94,7 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
     queryFn: () => api.get(`/contacts?type=${contactType}`).then((r) => r.data),
     enabled: open,
   });
-  const pickContact = (e) => {
-    const id = e.target.value;
+  const pickContact = (id) => {
     const c = (contacts || []).find((x) => x.id === id);
     setForm({ ...form, contact_id: id, counterparty: c ? (c.company || c.name) : form.counterparty });
   };
@@ -116,32 +123,43 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
           <Plus size={16} weight="bold" aria-hidden="true" /> {t("workflows.new")}
         </button>
       </DialogTrigger>
-      <DialogContent className="rounded-cardlg border border-nm-edge/40">
-        <DialogHeader>
-          <DialogTitle className="font-display text-xl">{t("workflows.dlg_title", { type: typeLabel })}</DialogTitle>
-          <DialogDescription className="text-sm text-muted-foreground">
-            {t("workflows.dlg_desc", { type: typeLabel.toLowerCase() })}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3">
-          <input data-testid="wf-title-input" className={FIELD} placeholder={t("workflows.title_ph")} value={form.title} onChange={set("title")} />
-          <div>
-            <label className="text-xs text-muted-foreground">{contactLabel}</label>
-            <select data-testid="wf-contact-select" className={`${FIELD} mt-1`} value={form.contact_id} onChange={pickContact}>
-              <option value="">{t("workflows.select_contact", { label: contactLabel.toLowerCase() })}</option>
-              {(contacts || []).map((c) => <option key={c.id} value={c.id}>{c.company || c.name}</option>)}
-            </select>
-          </div>
-          <input data-testid="wf-counterparty-input" className={FIELD} placeholder={t("workflows.counterparty_ph")} value={form.counterparty} onChange={set("counterparty")} />
-          <input className={FIELD} type="number" placeholder={t("workflows.amount_ph")} value={form.amount} onChange={set("amount")} />
-          <textarea className={FIELD} rows={2} placeholder={t("workflows.detail_ph")} value={form.detail} onChange={set("detail")} />
+      <DialogContent data-testid="new-workflow-dialog"
+        className={`max-w-lg gap-5 rounded-[1.75rem] p-6 sm:rounded-[1.75rem] [&>button.absolute]:hidden ${GLASS_SHEET}`}>
+        <div className="flex items-start gap-3">
+          <DialogHeader className="min-w-0 flex-1 space-y-1.5 text-left">
+            <DialogTitle className="text-lg font-semibold text-neutral-900">{t("workflows.dlg_title", { type: typeLabel })}</DialogTitle>
+            <DialogDescription className="text-sm text-neutral-600">
+              {t("workflows.dlg_desc", { type: typeLabel.toLowerCase() })}
+            </DialogDescription>
+          </DialogHeader>
+          <button type="button" onClick={() => setOpen(false)} aria-label="Close" data-testid="wf-dialog-close" className={GLASS_ICON_BTN}>
+            <X size={16} weight="bold" aria-hidden="true" />
+          </button>
         </div>
-        <DialogFooter>
-          <button data-testid="wf-create-submit" onClick={create}
-            className="kr-lift rounded-pill bg-kr-ink px-5 py-2.5 text-sm font-medium text-white transition-all">
+        <div className="space-y-3">
+          <input data-testid="wf-title-input" className={DRAWER_FIELD} autoFocus aria-label={t("workflows.title_ph")}
+            placeholder={t("workflows.title_ph")} value={form.title} onChange={set("title")} />
+          <div className="pt-1">
+            <p className={DRAWER_LABEL}>{contactLabel}</p>
+            <GlassSelect testid="wf-contact-select" ariaLabel={contactLabel} value={form.contact_id} onChange={pickContact}
+              options={[
+                { value: "", label: t("workflows.select_contact", { label: contactLabel.toLowerCase() }) },
+                ...(contacts || []).map((c) => ({ value: c.id, label: c.company || c.name })),
+              ]} />
+          </div>
+          <input data-testid="wf-counterparty-input" className={DRAWER_FIELD} aria-label={t("workflows.counterparty_ph")}
+            placeholder={t("workflows.counterparty_ph")} value={form.counterparty} onChange={set("counterparty")} />
+          <input data-testid="wf-amount-input" className={DRAWER_FIELD} type="number" inputMode="decimal" aria-label={t("workflows.amount_ph")}
+            placeholder={t("workflows.amount_ph")} value={form.amount} onChange={set("amount")} />
+          <textarea data-testid="wf-detail-input" className={`${DRAWER_FIELD} resize-none`} rows={3} aria-label={t("workflows.detail_ph")}
+            placeholder={t("workflows.detail_ph")} value={form.detail} onChange={set("detail")} />
+        </div>
+        <div className="flex justify-end">
+          <button data-testid="wf-create-submit" onClick={create} disabled={!form.title.trim()}
+            className={`flex h-11 items-center justify-center rounded-pill px-6 text-sm font-medium disabled:opacity-50 ${INK_PILL}`}>
             {t("workflows.create")}
           </button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -182,9 +200,9 @@ function OverrideReasonDialog({ open, onOpenChange, wfTitle, blockedReason, targ
           <label className="text-xs text-muted-foreground">Reason for override</label>
           {/* ASK-1: font-mono removed. The user is typing prose ("Bill is
               delayed but the customer confirmed by phone"), which read
-              as code in mono. Same FIELD styling every other textarea
-              on the page uses. */}
-          <textarea data-testid="wf-override-reason" className={FIELD} rows={3}
+              as code in mono. 2026-09-14: the soft glass field every
+              other textarea on the page now uses. */}
+          <textarea data-testid="wf-override-reason" className={`${DRAWER_FIELD} resize-none`} rows={3}
             placeholder="e.g. Bill is delayed but the customer confirmed by phone, moving on"
             value={reason} onChange={(e) => setReason(e.target.value)} />
         </div>
@@ -238,13 +256,14 @@ function StandaloneHeader({ show, title, pipelines, activeKey, counts, onPick, n
               <CaretDown size={12} weight="bold" aria-hidden="true" className="shrink-0 opacity-60" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" sideOffset={8} className="min-w-[14rem]">
+          {/* 2026-09-14, founder — the app's glass list, not the stock popover. */}
+          <DropdownMenuContent align="start" sideOffset={8} className={`${GLASS_MENU} min-w-[14rem] p-1.5`}>
             {pipelines.map((pip) => (
               <DropdownMenuItem key={pip.key} onSelect={() => onPick(pip.key)}
                 data-testid={`workflows-pipeline-${pip.key}`}
-                className={`flex items-center justify-between gap-3 ${activeKey === pip.key ? "font-medium" : ""}`}>
+                className={`${GLASS_MENU_ITEM} justify-between gap-3 ${activeKey === pip.key ? "font-semibold text-slate-900" : ""}`}>
                 <span>{pip.label}</span>
-                <span className="tabular-nums text-xs text-muted-foreground">
+                <span className="tabular-nums text-xs text-slate-500">
                   {counts.filter((w) => w.type === pip.key).length}
                 </span>
               </DropdownMenuItem>
@@ -511,7 +530,11 @@ export default function Workflows({ embedded = false }) {
           per-column white cards. Columns clear their own background below
           (bg-none) so only the outer well reads as a container. */}
       <div className="flex flex-col gap-3 lg:kr-glass-well lg:min-h-0 lg:flex-1 lg:gap-0 lg:p-4 lg:overflow-x-auto" data-testid="workflow-board">
-        <div className="flex flex-col gap-4 lg:h-full lg:min-h-0 lg:min-w-max lg:flex-row lg:items-stretch">
+        {/* 2026-09-14 — lg:pb-6 is room for the lanes' drop shadow (.kr-lane).
+            The board scrolls, so it clips at its padding edge, and with ASK-25
+            stretching every lane to the board's floor that shadow would end
+            in a hard line along the bottom. */}
+        <div className="flex flex-col gap-4 lg:h-full lg:min-h-0 lg:min-w-max lg:flex-row lg:items-stretch lg:pb-6">
           {stages.map((stg) => {
             const cards = (data || []).filter((w) => w.stage === stg.key);
             const draggedWf = dragId ? (data || []).find((w) => w.id === dragId) : null;
@@ -539,18 +562,20 @@ export default function Workflows({ embedded = false }) {
                 }}
                 onDragLeave={() => setOverStage((s) => (s === stg.key ? null : s))}
                 onDrop={(e) => onDrop(e, stg.key)}
-                /* No fill at rest — the board's inset well is the ground, and
-                   a grey panel per column was a box inside a box. The column
-                   only paints while a drag is live, and then only to say
-                   "this one accepts" or "this one does not".
-                   KR-14.21 — mobile paints the stage as an nm-tile card so
-                   the collapsed rows read as stacked cards; desktop keeps
-                   the transparent column look. */
-                /* KM-31 — the mobile stage was .nm-tile: a solid white slab
+                /* While a drag is live the column also says "this one accepts"
+                   or "this one does not".
+                   KM-31 — the mobile stage was .nm-tile: a solid white slab
                    sitting on the sky like a sticker. It is .kr-frost now — the
                    same light glass the Desk's "today's read" wears — so the
-                   bloom reads through it. Desktop keeps the transparent column. */
-                className={`flex w-full flex-col rounded-tile transition-all kr-frost p-2 lg:border-0 lg:bg-transparent lg:bg-none lg:p-0 lg:shadow-none lg:w-[300px] lg:shrink-0 lg:min-h-0 ${
+                   bloom reads through it.
+                   2026-09-14, founder — desktop drops the transparent column
+                   it had kept since ASK-18: with only the blur left, the lane
+                   blended into the board and the cards into the lane. It wears
+                   .kr-lane (index.css), glass drawn by depth and a rim glow,
+                   padded so the cards sit inside it rather than on its edge.
+                   lg:min-h-0 is ASK-25's: the lane shrinks to the board so its
+                   card list scrolls inside it. */
+                className={`flex w-full flex-col rounded-tile transition-all kr-frost p-2 lg:kr-lane lg:p-2.5 lg:w-[300px] lg:shrink-0 lg:min-h-0 ${
                   isTarget ? "bg-kr-accent/10 ring-2 ring-kr-accent/60"
                   : dropOk ? "ring-1 ring-dashed ring-foreground/30"
                   : dragId && !isSource ? "opacity-40"

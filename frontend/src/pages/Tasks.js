@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -7,10 +7,12 @@ import { opModel } from "../lib/operatingModel";
 import { toast } from "sonner";
 import { timeAgo, fullTime } from "../lib/format";
 import { userPerms } from "../lib/perms";
-import { Plus, User, Paperclip, ClockCounterClockwise, X, CaretDown } from "@phosphor-icons/react";
+import { Plus, User, Paperclip, ClockCounterClockwise, X, Check } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
 import { PersonAvatar } from "../components/karma/PersonAvatar";
+import { GLASS_PILL, INK_PILL } from "../components/karma/glass";
+import { GlassSelect } from "../components/karma/GlassSelect";
 
 const COLUMNS = [
   { key: "blocked", label: "Pending Approval" },
@@ -73,6 +75,22 @@ const presetDate = (key) => {
   return ymdLocal(d);
 };
 
+/* The design system's checkbox (the one on My Work's task cards): a rounded
+   square that fills with the black ink and a white tick. Still a real
+   <input type="checkbox"> underneath, so keyboard, forms and tests behave. */
+function DesignCheckbox({ checked, onChange, testid, children }) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3 text-sm leading-snug text-foreground">
+      <span className="relative mt-px grid shrink-0 place-items-center">
+        <input type="checkbox" data-testid={testid} checked={checked} onChange={onChange}
+          className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border-[1.5px] border-neutral-400/80 bg-[#fff] transition-colors checked:border-transparent checked:bg-[linear-gradient(180deg,hsl(0_0%_24%),hsl(0_0%_6%))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30" />
+        <Check size={12} weight="bold" aria-hidden="true" className="pointer-events-none absolute hidden text-white peer-checked:block" />
+      </span>
+      <span>{children}</span>
+    </label>
+  );
+}
+
 /**
  * @param {string} [triggerClassName]   classes for the trigger button
  * @param {node}   [triggerChildren]    KM-2: overrides the default
@@ -91,10 +109,10 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
   const blank = () => ({ ...EMPTY_FORM, task_type: firstType() });
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(blank);
-  const [more, setMore] = useState(false);
   const [titleError, setTitleError] = useState("");
   const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
+  const fileRef = useRef(null);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const personId = form.assign.startsWith("u:") ? form.assign.slice(2) : "";
   const teamKey = form.assign.startsWith("r:") ? form.assign.slice(2) : "";
@@ -102,15 +120,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
   const roleLabel = (key) => roleOptions.find((r) => r.key === key)?.label || key;
   const teams = roleOptions.filter((r) => r.key !== "owner");
   const approvers = members.filter((m) => m.role === "owner" || userPerms(m).includes("approvals"));
-  // How much "More options" is holding, so the closed section still says so.
-  const moreSet = [
-    form.priority !== "medium", form.co_assignee_ids.length > 0, !!form.description.trim(),
-    !!(dueDate && form.due_time), !!form.expected_output.trim(),
-    form.approval !== "none", form.evidence_required, files.length > 0,
-  ].filter(Boolean).length;
-
-  const pickAssign = (e) => {
-    const v = e.target.value;
+  const pickAssign = (v) => {
     const pid = v.startsWith("u:") ? v.slice(2) : "";
     // Choosing someone already listed as a helper makes them the doer instead
     // of listing them twice; a team or nobody has no helpers.
@@ -149,7 +159,6 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
       toast.success("Task created");
       setForm(blank());
       setFiles([]);
-      setMore(false);
       setTitleError("");
       setOpen(false);
       onCreated();
@@ -242,20 +251,32 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
           Create button moved DOWN 31px, with scrollHeight pinned at 880 the
           whole time. As a flex column the header holds its size, the body
           scrolls, and nothing else moves. */}
+      {/* 2026-09-14, founder — the card opens FULL: every field shows at once,
+          with no "More options" row to open first. On desktop it is wide (2xl)
+          so the second half of the form sits in two columns; in one column the
+          whole form measured 969px, past a 900px screen, and in two it fits a
+          1366×768 laptop. It grows to hold its content rather than scrolling
+          inside a fixed height; max-h keeps it inside a very short screen,
+          where the card itself — not a region within it — scrolls. The phone
+          stays full-bleed with a scrolling body.
+          Clicking outside does not close it: a half-filled task was lost to a
+          stray click. Close with the X or Escape. */}
       <DialogContent
-        className="kr-bento flex flex-col border-0 [&>button.absolute]:hidden
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        className={`kr-bento flex flex-col border-0 [&>button.absolute]:hidden
                    left-0 top-0 h-full w-full max-w-none translate-x-0 translate-y-0
                    [border-radius:0]
                    [padding-top:max(1rem,env(safe-area-inset-top))]
                    [padding-bottom:max(1rem,env(safe-area-inset-bottom))]
-                   lg:left-[50%] lg:top-[50%] lg:h-[min(86vh,32rem)] lg:max-w-lg
+                   lg:left-[50%] lg:top-[50%] lg:h-auto lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto lg:max-w-2xl
                    lg:-translate-x-1/2 lg:-translate-y-1/2
                    lg:[border-radius:var(--radius-card)]
-                   lg:[padding-block:1.5rem]
+                   lg:[padding-block:1.25rem]
                    data-[state=open]:[--tw-enter-translate-x:0] data-[state=open]:[--tw-enter-translate-y:0]
                    data-[state=closed]:[--tw-exit-translate-x:0] data-[state=closed]:[--tw-exit-translate-y:0]
                    lg:data-[state=open]:[--tw-enter-translate-x:-50%] lg:data-[state=open]:[--tw-enter-translate-y:-48%]
-                   lg:data-[state=closed]:[--tw-exit-translate-x:-50%] lg:data-[state=closed]:[--tw-exit-translate-y:-48%]"
+                   lg:data-[state=closed]:[--tw-exit-translate-x:-50%] lg:data-[state=closed]:[--tw-exit-translate-y:-48%]`}
       >
         <DialogHeader className="shrink-0 pr-11">
           <DialogPrimitiveClose
@@ -267,12 +288,13 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
           <DialogTitle className="font-display text-xl">New Task</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">What, who and when. The rest is optional.</DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-0.5">
-          {/* ASK-29 (2026-09-14): the quick part is what, which department, who
-              and when; everything else waits under "More options". Removed:
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-0.5 lg:flex-none lg:overflow-visible lg:pr-0">
+          {/* ASK-29 (2026-09-14): what, which department, who and when come
+              first; the rest of the task follows below (it waited under "More
+              options" until the founder asked for the full card). Removed:
               Operational category (stored, never read anywhere) and Supporting
-              employee (never shown to or told anything) — a helper under More
-              is the same idea, and helpers see the task and its updates. */}
+              employee (never shown to or told anything) — a helper is the same
+              idea, and helpers see the task and its updates. */}
           <div>
             <label className="sr-only" htmlFor="task-title">Task title</label>
             <input id="task-title" data-testid="task-title-input" autoFocus className={inp}
@@ -290,28 +312,28 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
             <div>
               {/* The task's own department, not the doer's: a sales task can be
                   handed to anyone in a small company and still count as Sales. */}
+              {/* 2026-09-14, founder — every dropdown here is GlassSelect: the
+                  field keeps this form's look, the list is the app's glass,
+                  never the operating system's. */}
               <label className={lbl} htmlFor="task-department">Department</label>
-              <select id="task-department" data-testid="task-type-select" className={`${inp} mt-1`} value={form.task_type} onChange={set("task_type")}>
-                {cats.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-              </select>
+              <GlassSelect id="task-department" testid="task-type-select" variant="field" triggerClassName={`${inp} mt-1`}
+                value={form.task_type} onChange={(v) => setForm({ ...form, task_type: v })}
+                options={cats.map((c) => ({ value: c.key, label: c.label }))} />
             </div>
             <div>
               <label className={lbl} htmlFor="task-assign">Assign to</label>
-              <select id="task-assign" data-testid="task-assign-select" className={`${inp} mt-1`} value={form.assign} onChange={pickAssign}>
-                <option value="">Nobody yet</option>
-                <optgroup label="People">
-                  {members.map((m) => (
-                    <option key={m.id} value={`u:${m.id}`}>
-                      {m.id === user?.id ? `Me · ${m.name}` : `${m.name} · ${roleLabel(m.role)}`}
-                    </option>
-                  ))}
-                </optgroup>
-                {teams.length > 0 && (
-                  <optgroup label="A team (least busy person)">
-                    {teams.map((r) => <option key={r.key} value={`r:${r.key}`}>{r.label} team</option>)}
-                  </optgroup>
-                )}
-              </select>
+              <GlassSelect id="task-assign" testid="task-assign-select" variant="field" triggerClassName={`${inp} mt-1`}
+                value={form.assign} onChange={pickAssign}
+                options={[
+                  { value: "", label: "Nobody yet" },
+                  { label: "People", options: members.map((m) => ({
+                    value: `u:${m.id}`,
+                    label: m.id === user?.id ? `Me · ${m.name}` : `${m.name} · ${roleLabel(m.role)}`,
+                  })) },
+                  ...(teams.length > 0
+                    ? [{ label: "A team (least busy person)", options: teams.map((r) => ({ value: `r:${r.key}`, label: `${r.label} team` })) }]
+                    : []),
+                ]} />
             </div>
           </div>
           {teamKey && (
@@ -346,18 +368,12 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
             )}
           </div>
 
-          <button type="button" onClick={() => setMore((v) => !v)} aria-expanded={more} aria-controls="task-more"
-            data-testid="task-more-toggle"
-            className="flex w-full items-center justify-between border-t border-nm-edge/40 pt-3 text-sm font-medium text-foreground">
-            <span>
-              More options
-              {moreSet > 0 && <span className="ml-2 text-xs font-normal text-muted-foreground" data-testid="task-more-count">{moreSet} set</span>}
-            </span>
-            <CaretDown size={14} weight="bold" aria-hidden="true" className={more ? "rotate-180" : ""} />
-          </button>
-
-          {more && (
-            <div id="task-more" data-testid="task-more" className="space-y-4">
+          {/* 2026-09-14, founder — no "More options" row: the rest of the task
+              is always open. Desktop sets it in two columns (the card is wide
+              enough to hold them); the phone keeps one column, in the same
+              order. */}
+          <div data-testid="task-details" className="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-x-6 lg:gap-y-4 lg:space-y-0">
+            <div className="space-y-4">
               <div>
                 <span className={lbl} id="task-priority-label">Priority</span>
                 <div className="mt-1.5 flex gap-1.5" role="group" aria-labelledby="task-priority-label">
@@ -398,12 +414,11 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                       })}
                     </div>
                   )}
-                  <select id="task-helper-add" data-testid="task-co-assignee-select" className={`${inp} mt-1.5`} value=""
-                    onChange={(e) => e.target.value && setForm({ ...form, co_assignee_ids: [...form.co_assignee_ids, e.target.value] })}>
-                    <option value="">+ Add a helper</option>
-                    {members.filter((m) => m.id !== personId && !form.co_assignee_ids.includes(m.id))
-                      .map((m) => <option key={m.id} value={m.id}>{m.name} · {roleLabel(m.role)}</option>)}
-                  </select>
+                  <GlassSelect id="task-helper-add" testid="task-co-assignee-select" variant="field" triggerClassName={`${inp} mt-1.5`}
+                    value="" placeholder="+ Add a helper"
+                    onChange={(id) => id && setForm({ ...form, co_assignee_ids: [...form.co_assignee_ids, id] })}
+                    options={members.filter((m) => m.id !== personId && !form.co_assignee_ids.includes(m.id))
+                      .map((m) => ({ value: m.id, label: `${m.name} · ${roleLabel(m.role)}` }))} />
                   <p className="mt-1 text-xs text-muted-foreground">Helpers see the task in My Tasks and get its updates.</p>
                 </div>
               )}
@@ -413,7 +428,9 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                 <textarea id="task-description" data-testid="task-description-input" className={`${inp} mt-1`} rows={3}
                   placeholder="Anything they need to know" value={form.description} onChange={set("description")} />
               </div>
+            </div>
 
+            <div className="space-y-4">
               {dueDate && (
                 <div>
                   <label className={lbl} htmlFor="task-due-time">Due time</label>
@@ -451,43 +468,73 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                 {form.approval !== "none" && (
                   <div data-testid="task-approver-wrap">
                     <label className={lbl} htmlFor="task-approver">Approver</label>
-                    <select id="task-approver" data-testid="task-approver-select" className={`${inp} mt-1`} value={form.approver_id} onChange={set("approver_id")}>
-                      <option value="">Anyone with approval access</option>
-                      {approvers.map((m) => <option key={m.id} value={m.id}>{m.name} · {roleLabel(m.role)}</option>)}
-                    </select>
+                    <GlassSelect id="task-approver" testid="task-approver-select" variant="field" triggerClassName={`${inp} mt-1`}
+                      value={form.approver_id} onChange={(v) => setForm({ ...form, approver_id: v })}
+                      options={[
+                        { value: "", label: "Anyone with approval access" },
+                        ...approvers.map((m) => ({ value: m.id, label: `${m.name} · ${roleLabel(m.role)}` })),
+                      ]} />
                   </div>
                 )}
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input data-testid="task-evidence-required" type="checkbox" className="h-4 w-4 accent-kr-ink" checked={form.evidence_required} onChange={(e) => setForm({ ...form, evidence_required: e.target.checked })} />
+                <DesignCheckbox testid="task-evidence-required" checked={form.evidence_required}
+                  onChange={(e) => setForm({ ...form, evidence_required: e.target.checked })}>
                   Needs proof (photo, voice note or file) before it can be completed
-                </label>
-              </div>
-
-              <div>
-                <label className={`${lbl} flex items-center gap-1`} htmlFor="task-files"><Paperclip size={12} weight="bold" aria-hidden="true" /> Reference files</label>
-                <input id="task-files" data-testid="task-attachment-input" type="file" multiple className={`${inp} mt-1`} onChange={(e) => setFiles(Array.from(e.target.files || []))} />
-                <p className="mt-1 text-xs text-muted-foreground">Images, PDFs or documents for context. AI reads them and summarises what to do.</p>
-                {files.length > 0 && (
-                  <ul className="mt-2 space-y-1" data-testid="task-attachment-list">
-                    {files.map((f, i) => (
-                      <li key={`${f.name}-${f.size}-${f.lastModified}`} className="flex items-center justify-between gap-2 rounded-control bg-slate-500/[0.07] px-2.5 py-1.5 text-xs">
-                        <span className="truncate">{f.name}</span>
-                        <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} className="shrink-0 font-medium text-kr-accent">Remove</button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                </DesignCheckbox>
               </div>
             </div>
-          )}
 
-          <p className={lbl}>Created by {user?.name}</p>
+            <div className="lg:col-span-2">
+              {/* 2026-09-14, founder — the browser's own "Choose file" control
+                  is replaced by a glass pill. The real <input> stays (hidden)
+                  and the pill opens it. Picking again ADDS to the list, and
+                  each chosen file is a glass chip with its own remove. */}
+              <span className={`${lbl} flex items-center gap-1`} id="task-files-label"><Paperclip size={12} weight="bold" aria-hidden="true" /> Reference files</span>
+              <input ref={fileRef} id="task-files" data-testid="task-attachment-input" type="file" multiple className="hidden"
+                aria-labelledby="task-files-label"
+                onChange={(e) => {
+                  const picked = Array.from(e.target.files || []);
+                  const key = (f) => `${f.name}-${f.size}-${f.lastModified}`;
+                  setFiles((prev) => [...prev, ...picked.filter((f) => !prev.some((p) => key(p) === key(f)))]);
+                  e.target.value = "";
+                }} />
+              {/* Desktop sets the hint beside the pill: one row instead of two. */}
+              <div className="mt-1.5 lg:flex lg:items-center lg:gap-4">
+                <button type="button" onClick={() => fileRef.current?.click()} data-testid="task-attachment-add"
+                  aria-describedby="task-files-hint"
+                  className={`inline-flex h-11 shrink-0 items-center gap-2 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
+                  <Paperclip size={16} weight="bold" aria-hidden="true" /> {files.length ? "Add more files" : "Add files"}
+                </button>
+                <p id="task-files-hint" className="mt-1.5 text-xs text-muted-foreground lg:mt-0">Images, PDFs or documents for context. AI reads them and summarises what to do.</p>
+              </div>
+              {files.length > 0 && (
+                <ul className="mt-2 flex flex-wrap gap-1.5" data-testid="task-attachment-list">
+                  {files.map((f, i) => (
+                    <li key={`${f.name}-${f.size}-${f.lastModified}`}
+                      className={`inline-flex max-w-full items-center gap-1.5 rounded-pill py-1 pl-3 pr-1 text-xs text-neutral-800 ${GLASS_PILL}`}>
+                      <Paperclip size={12} weight="bold" aria-hidden="true" className="shrink-0 text-neutral-500" />
+                      <span className="max-w-[13rem] truncate">{f.name}</span>
+                      <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))}
+                        aria-label={`Remove ${f.name}`} data-testid={`task-attachment-remove-${i}`}
+                        className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-900/5 hover:text-neutral-900">
+                        <X size={12} weight="bold" aria-hidden="true" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          <p className={`${lbl} lg:hidden`}>Created by {user?.name}</p>
         </div>
-        <DialogFooter>
+        {/* Desktop: "Created by" shares the footer row with the button, which
+            gives the open form back a line of height. */}
+        <DialogFooter className="lg:items-center lg:justify-between">
+          <p className="hidden text-xs font-medium text-muted-foreground lg:block">Created by {user?.name}</p>
           {/* KM-10 — ink, not brand-600 (the retired indigo), and a pill at
               the app's control height. */}
           <button data-testid="task-create-submit" onClick={create} disabled={busy}
-            className="kr-lift flex h-11 w-full items-center justify-center rounded-pill bg-kr-ink px-5 text-sm font-medium text-white disabled:opacity-50 sm:w-auto">
+            className={`flex h-11 w-full items-center justify-center rounded-pill px-6 text-sm font-medium disabled:opacity-50 sm:w-auto ${INK_PILL}`}>
             {busy ? "Creating…" : "Create task"}
           </button>
         </DialogFooter>

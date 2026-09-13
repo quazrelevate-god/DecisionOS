@@ -4,11 +4,12 @@ import { useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
-import { PageHeader, StickyHeader, Chip, EmptyState } from "../components/common";
+import { PageHeader, StickyHeader, EmptyState } from "../components/common";
 import { timeAgo } from "../lib/format";
 import { toast } from "sonner";
 import {
   AirplaneTakeoff, Plus, WarningOctagon, CheckCircle, XCircle, ChatCircleText, Gear, GearSix, Clock,
+  CalendarBlank,
   // ASK-4 (2026-09-12): AI Impact Analysis retired at the leave-card level.
   // Sparkle / ArrowsClockwise / CalendarPlus / Eye / CircleNotch were the
   // ImpactDialog's private icon vocabulary and left with it.
@@ -16,6 +17,9 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter,
 } from "../components/ui/dialog";
+import {
+  CHIP, QUIET_CHIP, DRAWER_FIELD, DRAWER_TRACK, GLASS_PILL, INK_PILL, MAROON_PILL,
+} from "../components/karma/glass";
 
 const LEAVE_TYPES = [
   { key: "casual", label: "Casual" },
@@ -31,12 +35,18 @@ const ABSENCE_REASONS = [
   { key: "personal", label: "Personal" },
   { key: "other", label: "Other" },
 ];
+/* 2026-09-14, founder — the leave card joins the task cards' vocabulary: every
+   chip is the ASK-25 recipe (soft tint, hairline ring in the same hue) with an
+   icon, and its actions are the task drawer's pills (components/karma/glass).
+   Waiting on a decision is amber, as a waiting task is; a question back to the
+   requester is violet, so the two open states never read alike. */
 const STATUS_META = {
-  pending: { label: "Pending", cls: "border-[0.5px] border-kr-ink text-foreground" },
-  approved: { label: "Approved", cls: "bg-kr-ink text-white" },
-  rejected: { label: "Rejected", cls: "bg-kr-accent text-white" },
-  info_requested: { label: "Info Requested", cls: "border-[0.5px] border-kr-accent text-kr-accent" },
+  pending: { label: "Pending", tone: "bg-amber-50 text-amber-800 ring-amber-100", icon: Clock },
+  approved: { label: "Approved", tone: "bg-emerald-50 text-emerald-700 ring-emerald-100", icon: CheckCircle },
+  rejected: { label: "Rejected", tone: "bg-rose-50 text-rose-700 ring-rose-100", icon: XCircle },
+  info_requested: { label: "Info Requested", tone: "bg-violet-50 text-violet-700 ring-violet-100", icon: ChatCircleText },
 };
+const LEAVE_SECONDARY = `flex h-11 items-center gap-1.5 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`;
 const inp = "w-full nm-field px-3 py-2 text-sm";
 const typeLabel = (k) => LEAVE_TYPES.find((t) => t.key === k)?.label || k;
 const fmtRange = (lv) => lv.from_date === lv.to_date ? lv.from_date : `${lv.from_date} → ${lv.to_date}`;
@@ -190,23 +200,33 @@ export function LeaveCard({ lv, canAct, onRefresh, highlight }) {
     } catch (e) { toast.error(e.response?.data?.detail || "Action failed"); }
   };
 
+  const StatusIcon = st.icon;
   return (
-    <div data-testid={`leave-card-${lv.id}`} className={`kr-bento p-4 ${highlight ? "ring-2 ring-kr-ink ring-offset-2" : ""}`}>
-      <div className="flex items-center gap-1.5 flex-wrap mb-2">
-        <Chip value={st.label} className={st.cls} data-testid={`leave-status-${lv.id}`} />
-        <Chip value={typeLabel(lv.leave_type)} className="bg-kr-ink text-white" />
-        {lv.day_portion === "half" && <Chip value="Half day" className="bg-white" />}
-        {lv.is_emergency && <Chip value="Emergency" className="bg-black text-white" />}
+    <div data-testid={`leave-card-${lv.id}`} className={`kr-bento p-5 ${highlight ? "ring-2 ring-neutral-900/70 ring-offset-2" : ""}`}>
+      <div className="mb-3 flex flex-wrap items-center gap-1.5">
+        <span className={`${CHIP} ${st.tone}`} data-testid={`leave-status-${lv.id}`}>
+          <StatusIcon size={11} weight="bold" aria-hidden="true" /> {st.label}
+        </span>
+        <span className={`${CHIP} ${QUIET_CHIP}`} data-testid={`leave-type-${lv.id}`}>
+          <CalendarBlank size={11} weight="bold" aria-hidden="true" /> {typeLabel(lv.leave_type)}
+        </span>
+        {lv.day_portion === "half" && <span className={`${CHIP} ${QUIET_CHIP}`}>Half day</span>}
+        {lv.is_emergency && (
+          <span className={`${CHIP} bg-rose-50 text-rose-700 ring-rose-100`}>
+            <WarningOctagon size={11} weight="bold" aria-hidden="true" /> Emergency
+          </span>
+        )}
       </div>
-      <p className="font-medium text-base leading-tight">{lv.user_name}</p>
-      <p className="text-sm mt-1" data-testid={`leave-range-${lv.id}`}>{fmtRange(lv)}</p>
-      {lv.reason && <p className="text-sm text-muted-foreground mt-1">{lv.reason}</p>}
-      <p className="label-mono text-muted-foreground mt-2 flex items-center gap-1">
-        <Clock size={11} weight="bold" /> {timeAgo(lv.created_at)}{lv.approver_name ? ` · Approver: ${lv.approver_name}` : ""}
+      <p className="text-base font-semibold leading-tight text-neutral-900">{lv.user_name}</p>
+      <p className="mt-1 text-sm tabular-nums text-neutral-800" data-testid={`leave-range-${lv.id}`}>{fmtRange(lv)}</p>
+      {lv.reason && <p className="mt-1 text-sm text-neutral-500">{lv.reason}</p>}
+      <p className="mt-2.5 flex items-center gap-1.5 text-xs text-neutral-500">
+        <Clock size={12} weight="bold" aria-hidden="true" /> {timeAgo(lv.created_at)}{lv.approver_name ? ` · Approver: ${lv.approver_name}` : ""}
       </p>
       {lv.status === "info_requested" && lv.info_note && (
-        <div className="mt-2 rounded-control border-l-[3px] border-kr-accent bg-kr-accent/8 p-2.5 text-xs" data-testid={`leave-info-note-${lv.id}`}>
-          <span className="font-semibold">Info requested:</span> {lv.info_note}
+        <div className="mt-3 flex items-start gap-2 rounded-2xl bg-violet-50/80 px-3 py-2.5 text-xs text-violet-950 ring-1 ring-inset ring-violet-100" data-testid={`leave-info-note-${lv.id}`}>
+          <ChatCircleText size={14} weight="bold" aria-hidden="true" className="mt-px shrink-0 text-violet-700" />
+          <p><span className="font-semibold">Info requested:</span> {lv.info_note}</p>
         </div>
       )}
 
@@ -218,33 +238,36 @@ export function LeaveCard({ lv, canAct, onRefresh, highlight }) {
           ASK-5 (Low priority, parked). */}
 
       {canAct && lv.status !== "approved" && lv.status !== "rejected" && (
-        <div className="mt-3">
+        <div className="mt-4">
           {!action ? (
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex flex-wrap gap-2">
               <button onClick={() => decide("approve")} data-testid={`leave-approve-${lv.id}`}
-                className="kr-lift flex flex-1 items-center justify-center gap-1 rounded-pill bg-kr-ink py-2 text-xs font-medium text-white transition-all">
-                <CheckCircle size={14} weight="bold" /> Approve
+                className={`flex h-11 flex-1 items-center justify-center gap-1.5 rounded-pill px-5 text-sm font-medium ${INK_PILL}`}>
+                <CheckCircle size={16} weight="bold" aria-hidden="true" /> Approve
               </button>
-              <button onClick={() => setAction("reject")} data-testid={`leave-reject-${lv.id}`}
-                className="nm-btn flex items-center gap-1 px-3 py-2 text-xs font-medium">
-                <XCircle size={14} weight="bold" /> Reject
+              <button onClick={() => setAction("reject")} data-testid={`leave-reject-${lv.id}`} className={LEAVE_SECONDARY}>
+                <XCircle size={16} weight="bold" aria-hidden="true" /> Reject
               </button>
-              <button onClick={() => setAction("info")} data-testid={`leave-info-${lv.id}`}
-                className="flex items-center gap-1 rounded-pill border border-kr-accent px-3 py-2 text-xs font-medium text-kr-accent transition-colors hover:bg-kr-accent/10">
-                <ChatCircleText size={14} weight="bold" /> Info
+              <button onClick={() => setAction("info")} data-testid={`leave-info-${lv.id}`} className={LEAVE_SECONDARY}>
+                <ChatCircleText size={16} weight="bold" aria-hidden="true" /> Info
               </button>
             </div>
           ) : (
-            <div className="nm-inset space-y-2 p-2.5">
-              <textarea data-testid={`leave-note-${lv.id}`} className={`${inp} text-xs`} rows={2}
+            /* Reject or ask for info, inline: a gray track holding the glass
+               field. Rejecting is the one final "no", so it commits in maroon;
+               a question goes out in ink. */
+            <div className={`space-y-2.5 rounded-[1.25rem] p-3 ${DRAWER_TRACK}`}>
+              <textarea data-testid={`leave-note-${lv.id}`} className={`${DRAWER_FIELD} resize-none text-sm`} rows={2} autoFocus
+                aria-label={action === "reject" ? "Reason for rejection" : "What info do you need?"}
                 placeholder={action === "reject" ? "Reason for rejection (optional)" : "What info do you need?"}
                 value={note} onChange={(e) => setNote(e.target.value)} />
               <div className="flex gap-2">
                 <button onClick={() => decide(action === "reject" ? "reject" : "request-info")} data-testid={`leave-confirm-${lv.id}`}
-                  className="kr-lift flex-1 rounded-pill bg-kr-ink py-2 text-xs font-medium text-white transition-colors">
-                  {action === "reject" ? "Confirm Reject" : "Send Request"}
+                  className={`flex h-10 flex-1 items-center justify-center rounded-pill px-4 text-sm font-medium ${action === "reject" ? MAROON_PILL : INK_PILL}`}>
+                  {action === "reject" ? "Confirm reject" : "Send request"}
                 </button>
-                <button onClick={() => { setAction(null); setNote(""); }} className="nm-btn px-3 py-2 text-xs font-medium">Cancel</button>
+                <button onClick={() => { setAction(null); setNote(""); }} data-testid={`leave-cancel-${lv.id}`}
+                  className={`h-10 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>Cancel</button>
               </div>
             </div>
           )}

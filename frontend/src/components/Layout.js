@@ -12,6 +12,7 @@ import { timeAgo } from "../lib/format";
 import { notifMeta, notifLink } from "../lib/notif";
 import { Chip } from "./common";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { GLASS_MENU } from "./karma/glass";
 import {
   Brain as BrainIcon,
   AddressBook,
@@ -394,33 +395,35 @@ export default function Layout({ children }) {
             )}
           </button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-80 p-0 border border-border shadow-md" data-testid="notif-dropdown">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-            <p className="text-sm font-bold uppercase tracking-tight">{t("header.notifications")}</p>
-            {unread > 0 && <span className="label-mono text-brand-600">{unread} {t("header.new")}</span>}
+        {/* 2026-09-14, founder — the top bar's dropdowns wear the app's glass
+            list: the white glass panel, hairline rules, rounded rows. */}
+        <PopoverContent align="end" className={`${GLASS_MENU} w-80 p-0`} data-testid="notif-dropdown">
+          <div className="flex items-center justify-between border-b border-slate-900/[0.06] px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{t("header.notifications")}</p>
+            {unread > 0 && <span className="text-xs font-medium text-slate-700">{unread} {t("header.new")}</span>}
           </div>
-          <div className="max-h-96 overflow-y-auto divide-y divide-black/10">
-            {items.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">{t("header.all_caught_up")}</p>}
+          <div className="max-h-96 space-y-0.5 overflow-y-auto p-1.5">
+            {items.length === 0 && <p className="p-6 text-center text-sm text-slate-500">{t("header.all_caught_up")}</p>}
             {items.map((n) => {
               const meta = notifMeta(n);
               return (
                 <button key={n.id} data-testid={`notif-item-${n.id}`} onClick={() => openNotif(n)}
-                  className={`w-full text-left px-4 py-3 flex items-start gap-2 hover:bg-black/[0.03] transition-colors ${n.read ? "opacity-60" : ""}`}>
-                  {!n.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-brand-600 shrink-0" />}
+                  className={`flex w-full items-start gap-2 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-slate-900/[0.05] ${n.read ? "opacity-60" : ""}`}>
+                  {!n.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-neutral-900" />}
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Chip value={meta.label} className={`${meta.cls} text-[9px]`} />
-                      <span className="label-mono text-muted-foreground">{timeAgo(n.created_at)}</span>
+                      <span className="text-[11px] text-slate-500">{timeAgo(n.created_at)}</span>
                     </div>
-                    <p className="text-sm font-semibold mt-1 truncate">{n.work_title || n.message}</p>
-                    {n.sender_name && <p className="label-mono text-muted-foreground truncate">{n.sender_name}</p>}
+                    <p className="mt-1 truncate text-sm font-semibold text-slate-900">{n.work_title || n.message}</p>
+                    {n.sender_name && <p className="truncate text-[11px] text-slate-500">{n.sender_name}</p>}
                   </div>
                 </button>
               );
             })}
           </div>
           <button onClick={() => navigate("/notifications")} data-testid="notif-view-all"
-            className="w-full px-4 py-3 border-t border-border text-sm font-medium hover:bg-accent transition-colors">
+            className="w-full border-t border-slate-900/[0.06] px-4 py-3 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-900/[0.04]">
             {t("header.view_all")}
           </button>
         </PopoverContent>
@@ -562,16 +565,17 @@ export default function Layout({ children }) {
                 </span>
               </button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-64 p-0">
-              <div className="px-3 py-3 border-b border-border" data-testid="current-user">
-                <p className="text-sm font-semibold truncate">{user?.name}</p>
-                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+            {/* 2026-09-14, founder — the glass list, like every other dropdown. */}
+            <PopoverContent align="end" className={`${GLASS_MENU} w-64 p-0`}>
+              <div className="border-b border-slate-900/[0.06] px-4 py-3" data-testid="current-user">
+                <p className="truncate text-sm font-semibold text-slate-900">{user?.name}</p>
+                <p className="truncate text-xs text-slate-500">{user?.email}</p>
               </div>
-              <div className="px-3 py-2.5 border-b border-border">
-                <p className="text-xs text-muted-foreground">Workspace</p>
-                <p data-testid="tenant-name" className="text-sm font-medium truncate">{tenant?.name}</p>
+              <div className="border-b border-slate-900/[0.06] px-4 py-2.5">
+                <p className="text-xs text-slate-500">Workspace</p>
+                <p data-testid="tenant-name" className="truncate text-sm font-medium text-slate-800">{tenant?.name}</p>
                 {tenant?.industry && (
-                  <p className="text-xs text-muted-foreground truncate">{tenant.industry}</p>
+                  <p className="truncate text-xs text-slate-500">{tenant.industry}</p>
                 )}
               </div>
               <div className="p-1.5">
@@ -579,7 +583,7 @@ export default function Layout({ children }) {
                   <button
                     onClick={() => navigate("/settings")}
                     data-testid="nav-settings"
-                    className="w-full flex items-center gap-2 px-2.5 py-2 text-sm rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                    className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-900/[0.06] hover:text-slate-900"
                   >
                     <GearSix size={15} /> {t("nav.settings", "Settings")}
                   </button>
@@ -587,7 +591,7 @@ export default function Layout({ children }) {
                 <button
                   onClick={doLogout}
                   data-testid="logout-button"
-                  className="w-full flex items-center gap-2 px-2.5 py-2 text-sm rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-900/[0.06] hover:text-slate-900"
                 >
                   <SignOut size={15} /> {t("header.sign_out")}
                 </button>

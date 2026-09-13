@@ -23,7 +23,10 @@ class TaskCreateInput(BaseModel):
     # Operational-task fields (all optional; used by the My Work "New Task" form)
     task_type: Optional[str] = None
     op_category: Optional[str] = None
-    support_id: Optional[str] = None
+    # ASK-28 TK-06: "supporting employee" (support_id) is gone — helpers
+    # (co_assignee_ids) are the one way to put more people on a task. Older
+    # app builds that still send support_id are not refused: unknown fields
+    # are ignored.
     due_date: Optional[str] = None   # ISO date e.g. "2026-06-15"
     due_time: Optional[str] = None   # "HH:MM"
     expected_output: Optional[str] = None

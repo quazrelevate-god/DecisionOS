@@ -52,7 +52,8 @@ async def run_followup(tenant_id: str):
         if target <= t.get("escalation_level", 0):
             continue
         if t.get("assignee_id"):
-            recipients = [t["assignee_id"]]
+            # ASK-28 TK-06: the overdue reminder reaches helpers too, not only the lead.
+            recipients = [i for i in dict.fromkeys([t["assignee_id"], *(t.get("co_assignee_ids") or [])]) if i]
         elif t.get("assignee_role"):
             recipients = [u["id"] for u in await db.users.find({"tenant_id": tenant_id, "role": t["assignee_role"]}, {"_id": 0, "id": 1}).to_list(50)]
         else:

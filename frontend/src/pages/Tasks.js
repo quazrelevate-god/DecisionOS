@@ -156,7 +156,14 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
           catch { toast.error(`Task created, but "${f.name}" failed to upload`); }
         }
       }
-      toast.success("Task created");
+      // ASK-28 TK-06 — a team task says where it went, instead of a silent pick.
+      if (teamKey && task?.auto_assigned && task?.assignee_name) {
+        toast.success(`Task created. Assigned to ${task.assignee_name}: fewest open tasks in ${roleLabel(teamKey)}.`);
+      } else if (teamKey && !task?.assignee_id) {
+        toast.success(`Task created for the ${roleLabel(teamKey)} team. Nobody in it can take it yet.`);
+      } else {
+        toast.success("Task created");
+      }
       setForm(blank());
       setFiles([]);
       setTitleError("");

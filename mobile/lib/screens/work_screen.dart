@@ -1392,7 +1392,6 @@ class _NewTaskSheetState extends State<_NewTaskSheet> {
   String _taskType = 'operational';
   String _opCategory = 'Presentation';
   String? _assigneeId;
-  String? _supportId;
   String? _assigneeRole;
   String _priority = 'medium';
   DateTime? _due;
@@ -1464,7 +1463,6 @@ class _NewTaskSheetState extends State<_NewTaskSheet> {
         'op_category': isOp ? _opCategory : null,
         'assignee_id': _assigneeId,
         'assignee_role': _assigneeId == null ? _assigneeRole : null,
-        'support_id': _supportId,
         'priority': _priority,
         'due_date': isoDate,
         'due_time': isoTime,
@@ -1677,18 +1675,6 @@ class _NewTaskSheetState extends State<_NewTaskSheet> {
                           value: u.id,
                           child: Text(
                               '${u.name}${u.role != null ? " · ${u.role}" : ""}')),
-                  ],
-                ),
-
-                _label('Supporting employee (optional)'),
-                _dropdown<String>(
-                  value: _supportId,
-                  hint: '— None —',
-                  onChanged: (v) => setState(() => _supportId = v),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('— None —')),
-                    for (final u in users)
-                      DropdownMenuItem(value: u.id, child: Text(u.name)),
                   ],
                 ),
 

@@ -221,6 +221,75 @@ def test_named_approver_without_approval_access_is_refused(with_test_db):
 
 
 # ---------------------------------------------------------------------------
+# TK-06 — who is on a task
+# ---------------------------------------------------------------------------
+def test_supporting_employee_is_gone_and_old_apps_still_create(with_test_db):
+    async def scenario(db):
+        await _seed(db)
+        with e2e_env(db, stubs=STUBS, keep=KEEP):
+            # An older app build still sends support_id: the task is created, the field is not kept.
+            t = await tasks.create_task(TaskCreateInput.model_validate(
+                {"title": "Pack the sample", "assignee_id": "u-ops", "support_id": "u-prod"}), BackgroundTasks(), user=SALES)
+            saved = await db.tasks.find_one({"id": t["id"]}, {"_id": 0})
+            assert "support_id" not in saved and "support_name" not in t
+            # ...and it grants nothing: the would-be supporter cannot open the task.
+            await _refused(tasks.get_task(t["id"], user=PROD))
+            return True
+    assert with_test_db(scenario) is True
+
+
+def test_team_task_says_who_it_went_to_until_someone_reassigns(with_test_db):
+    async def scenario(db):
+        await _seed(db)
+        with e2e_env(db, stubs=STUBS, keep=KEEP):
+            t = await _create(SALES, title="Count the yarn cones", assignee_role="operations")
+            assert (t["assignee_id"], t["auto_assigned"]) == ("u-ops", {"role": "operations", "rule": "fewest_open_tasks"})
+            assert t["created_by_name"] == SALES["name"]
+            # A person chooses the doer now -> the automatic note no longer holds.
+            out = await tasks.update_task(t["id"], TaskUpdateInput(assignee_id="u-fin"), user=OWNER)
+            assert out["assignee_id"] == "u-fin" and out.get("auto_assigned") is None
+            # A task given to a named person was never picked automatically.
+            named = await _create(SALES, title="Call the dyer", assignee_id="u-ops")
+            assert named["auto_assigned"] is None
+            return True
+    assert with_test_db(scenario) is True
+
+
+def test_helpers_hear_status_changes_and_overdue_reminders(with_test_db):
+    async def scenario(db):
+        await _seed(db)
+
+        async def _zero(*a, **k):
+            return 0
+        stubs = {**STUBS, "services.finance_signals.db": db,
+                 "routers.access.sweep_expired_temp_grants": _zero,
+                 "services.finance_signals.run_finance_actions": _zero,
+                 "services.finance_signals.dispatch_owner_alert": _zero}
+        with e2e_env(db, stubs=stubs, keep=KEEP):
+            import services.finance_signals as fs
+            t = await _create(SALES, title="Dispatch the Kapoor order", assignee_id="u-ops", co_assignee_ids=["u-fin"])
+            await db.notifications.delete_many({})
+
+            # The lead moves it: the helper and the person who asked both hear.
+            await tasks.update_task(t["id"], TaskUpdateInput(status="in_progress"), user=OPS)
+            heard = {n["user_id"] async for n in db.notifications.find({"entity_id": t["id"]}, {"_id": 0, "user_id": 1})}
+            assert {"u-fin", "u-sales"} <= heard and "u-ops" not in heard, heard
+
+            # Overdue by half a day: the first reminder (days 0-1 go to the people
+            # on the task; later levels alert the owner) reaches the helper too.
+            from datetime import datetime, timedelta, timezone
+            await db.notifications.delete_many({})
+            half_day_ago = (datetime.now(timezone.utc) - timedelta(hours=12)).isoformat()
+            await db.tasks.update_one({"id": t["id"]}, {"$set": {"due_date": half_day_ago, "escalation_level": 0}})
+            fs._followup_last_run.pop(T, None)
+            await fs.run_followup(T)
+            reminded = {n["user_id"] async for n in db.notifications.find({"entity_id": t["id"]}, {"_id": 0, "user_id": 1})}
+            assert {"u-ops", "u-fin"} <= reminded, reminded
+            return True
+    assert with_test_db(scenario) is True
+
+
+# ---------------------------------------------------------------------------
 # TK-03 — My team
 # ---------------------------------------------------------------------------
 def test_my_team_manager_sees_opens_and_notes_on_reports_work(with_test_db):

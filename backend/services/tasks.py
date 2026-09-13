@@ -4,7 +4,7 @@ Scope of THIS pass (safe, no inline call-graph fanout):
   • `TASK_STATUSES`                — canonical status vocabulary
   • `_derive_task_type(t)`         — task_type ← stored key / role / 'other'
   • `_task_activity(t)`            — (updated_at, last_action) fallback derivation
-  • `enrich_task(t)` / `enrich_tasks(list)` — hydrate assignee/support/approver names
+  • `enrich_task(t)` / `enrich_tasks(list)` — hydrate assignee/helper/approver/creator names
   • `_can_work_task(user, t)`      — permission gate used by task-owning endpoints
   • `clean_co_assignees` / `assignee_ids_of` — ASK-26 multiple assignees
   • `_plan_progress(steps)`        — execution-plan progress %
@@ -89,7 +89,7 @@ async def _fetch_workflow_summaries(tenant_id: str, wf_ids: set) -> dict:
 async def enrich_task(t: Optional[dict]) -> Optional[dict]:
     if not t:
         return t
-    ids = list({t.get(k) for k in ("assignee_id", "support_id", "approver_id", "created_by") if t.get(k)}
+    ids = list({t.get(k) for k in ("assignee_id", "approver_id", "created_by") if t.get(k)}
                | set(t.get("co_assignee_ids") or []))
     umap = {}
     if ids:
@@ -97,7 +97,6 @@ async def enrich_task(t: Optional[dict]) -> Optional[dict]:
             umap[u["id"]] = u["name"]
     t["assignee_name"] = umap.get(t.get("assignee_id"))
     t["co_assignees"] = [{"id": i, "name": umap.get(i)} for i in (t.get("co_assignee_ids") or [])]
-    t["support_name"] = umap.get(t.get("support_id"))
     t["approver_name"] = umap.get(t.get("approver_id"))
     t["created_by_name"] = umap.get(t.get("created_by"))
     t["attachment_count"] = len(t.get("attachments") or [])
@@ -120,7 +119,7 @@ async def enrich_tasks(tasks: List[dict]) -> List[dict]:
     wf_ids = set()
     tenant_id = None
     for t in tasks:
-        for k in ("assignee_id", "support_id", "approver_id", "created_by"):
+        for k in ("assignee_id", "approver_id", "created_by"):
             if t.get(k):
                 ids.add(t[k])
         ids.update(t.get("co_assignee_ids") or [])
@@ -138,7 +137,6 @@ async def enrich_tasks(tasks: List[dict]) -> List[dict]:
     for t in tasks:
         t["assignee_name"] = umap.get(t.get("assignee_id"))
         t["co_assignees"] = [{"id": i, "name": umap.get(i)} for i in (t.get("co_assignee_ids") or [])]
-        t["support_name"] = umap.get(t.get("support_id"))
         t["approver_name"] = umap.get(t.get("approver_id"))
         t["created_by_name"] = umap.get(t.get("created_by"))
         t["attachment_count"] = len(t.get("attachments") or [])

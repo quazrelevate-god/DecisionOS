@@ -1260,7 +1260,11 @@ function cardPeople(t, members, roleOptions) {
    lead). ASK-27: every person is a raised glass pill, as in the founder's
    reference; the ones you can take off carry an ×. */
 function AssigneesEditor({ t, members, roleOptions, canEdit, onPatched }) {
+  const { user } = useAuth();
   const [busy, setBusy] = useState(false);
+  // ASK-28 TK-06 — the rest of who is on a task, in words: who asked for it,
+  // who approves it and when, and how a team task found its doer.
+  const teamLabel = (key) => roleOptions.find((r) => r.key === key)?.label || key;
   const people = cardPeople(t, members, roleOptions);
   const co = (t.co_assignee_ids || []).filter((id) => id && id !== t.assignee_id);
   const addable = members.filter((m) => m.id !== t.assignee_id && !co.includes(m.id));
@@ -1322,6 +1326,29 @@ function AssigneesEditor({ t, members, roleOptions, canEdit, onPatched }) {
             options={addable.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` }))} />
         )}
       </div>
+      {(t.auto_assigned?.role && t.assignee_id) || t.created_by_name || t.approval_required ? (
+        <div className="mt-3 flex flex-col gap-1.5 text-sm" data-testid={`task-roles-${t.id}`}>
+          {t.auto_assigned?.role && t.assignee_id && (
+            <p className="text-slate-500" data-testid={`task-auto-assigned-${t.id}`}>
+              Picked automatically: fewest open tasks in {teamLabel(t.auto_assigned.role)}
+            </p>
+          )}
+          {t.created_by_name && (
+            <p data-testid={`task-asked-by-${t.id}`}>
+              <span className="text-slate-500">Asked by </span>
+              <span className="font-medium text-slate-800">{t.created_by === user?.id ? "You" : t.created_by_name}</span>
+            </p>
+          )}
+          {t.approval_required && (
+            <p data-testid={`task-approver-${t.id}`}>
+              <span className="text-slate-500">{t.approval_stage === "close" ? "Approval before it's marked done: " : "Approval before work starts: "}</span>
+              <span className="font-medium text-slate-800">
+                {t.approver_id ? (t.approver_id === user?.id ? "You" : (t.approver_name || "the approver")) : "anyone with approval access"}
+              </span>
+            </p>
+          )}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -2042,7 +2069,6 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
         <div className="flex flex-wrap items-center gap-2" data-testid={`op-meta-${t.id}`}>
           {t.op_category && <span className={`${PILL} ${QUIET_PILL}`}><Tag size={11} weight="bold" /> {t.op_category}</span>}
           {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
-          {t.support_name && <span className="text-xs text-muted-foreground">+ {t.support_name}</span>}
           {t.approval_required && (
             /* 2026-09-14 — the card-face chip, in the leave card's tones:
                amber while it waits, emerald once approved, rose for changes.

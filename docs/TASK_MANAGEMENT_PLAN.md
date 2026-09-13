@@ -43,7 +43,7 @@ is assigned.
 - [ ] **D1 · Assigning outside your team** — Default: staff assign to themselves and their own team/role; owner and managers assign to anyone. *(Phase 6)*
 - [x] **D2 · Approval moment** — Creator chooses *before work starts* or *before it's marked done* per task. *(founder call 2026-09-14, built as ASK-28 TK-05)*
 - [x] **D3 · Managers see their team** — Yes, through the existing Reporting Manager field: the owner keeps All Tasks, a manager gets My team. *(founder call 2026-09-14, built as TK-03)*
-- [x] **D4 · Supporting employee** — Removed from the form; helpers cover it. *(decided 2026-09-14)*
+- [x] **D4 · Supporting employee** — Removed everywhere (form, server, drawer, phone app); helpers cover it. *(decided 2026-09-14, done in Phase 2)*
 - [x] **D5 · Expected output** — Kept, as "Expected result" under More options. *(2026-09-14)*
 - [x] **D8 · Department on a task** — Kept as the task's own field, not the doer's department: in a small company anyone can be given a Sales task and it still counts as Sales. Drives the Department filter. *(founder call 2026-09-14)*
 - [ ] **D6 · Statuses** — Default: change labels and flags in the UI first, keep stored statuses as they are; migrate data only later if needed. *(Phase 3)*
@@ -84,11 +84,13 @@ is assigned.
 
 ## Phase 2 — Who is on a task (P1)
 
-- [ ] **2.1 Merge Supporting employee into Helpers** *(needs D4)* — copy `support_id` into `co_assignee_ids`, remove the field from the form, keep reading old data.
-- [ ] **2.2 Show "Asked by"** on the card drawer (the creator is already stored).
-- [ ] **2.3 Show the approver** in the drawer's people section.
-- [ ] **2.4 Say where team tasks went** — "Auto-assigned to Priya (least busy in Sales)" instead of a silent pick.
-- [ ] **2.5 Helpers get the same notifications** as the doer (check create, approve, reject, comment, overdue).
+A task has four kinds of people: **Doer** (one), **Helpers** (optional), **Asked by** (automatic), **Approver** (optional). *(founder call 2026-09-14, built as ASK-28 TK-06)*
+
+- [x] **2.1 Supporting employee removed** — no stored task used it (0 of 185, read-only check), so nothing to copy. The server no longer saves it or lets it open a task; older app builds that still send it are not refused (the field is ignored); gone from the web drawer and the Flutter New Task form. Helpers are the one way to add people.
+- [x] **2.2 "Asked by"** in the drawer's people section ("You" when it was you).
+- [x] **2.3 The approver** in the drawer, with the moment: "Approval before work starts / before it's marked done: Sunita" (or "anyone with approval access").
+- [x] **2.4 Say where team tasks went** — the server records `auto_assigned` when a team task is routed to the member with the fewest open tasks; New Task says "Assigned to Priya: fewest open tasks in Sales"; the drawer says "Picked automatically: fewest open tasks in Sales"; any later reassign clears it.
+- [x] **2.5 Helpers get the same notifications** — create, approved, changes requested, clarification and comments already did; status changes and overdue reminders now reach everyone on the task too (real-save tested).
 
 ## Phase 3 — Stages and flags (P1)
 

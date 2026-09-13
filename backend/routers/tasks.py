@@ -281,7 +281,6 @@ async def get_task(task_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Task not found")
     allowed = (user.get("role") == "owner" or _can_work_task(user, t)
                or t.get("approver_id") == user["id"] or t.get("created_by") == user["id"]
-               or t.get("support_id") == user["id"]
                or manages_task(t, await _team_ids(user)))  # ASK-28 TK-03: their manager
     if not allowed:
         raise HTTPException(status_code=403, detail="You don't have access to this work")
@@ -343,7 +342,6 @@ async def task_activity(task_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Task not found")
     allowed = (user.get("role") == "owner" or _can_work_task(user, t)
                or t.get("approver_id") == user["id"] or t.get("created_by") == user["id"]
-               or t.get("support_id") == user["id"]
                or manages_task(t, await _team_ids(user)))  # ASK-28 TK-03: their manager
     if not allowed:
         raise HTTPException(status_code=403, detail="You don't have access to this work")
@@ -421,9 +419,13 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
             assignee_id = None
         elif not role:
             role = member["role"]
+    auto_assigned = None
     if not assignee_id and role:
         # Smart assignment: route a role-level task to the least-loaded member of that role.
         assignee_id = await pick_least_loaded_member(user["tenant_id"], role)
+        # ASK-28 TK-06: say where it went and why, instead of a silent pick.
+        if assignee_id:
+            auto_assigned = {"role": role, "rule": "fewest_open_tasks"}
     # ASK-26: the people alongside the lead. With neither a lead nor a role to
     # route by, the first of them becomes the lead, so a task with people on
     # it always has someone accountable for it.
@@ -433,7 +435,6 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
         lead = await db.users.find_one({"id": assignee_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "role": 1})
         role = (lead or {}).get("role")
     task_type = (inp.task_type or "").strip() or None
-    support_id = inp.support_id if inp.support_id and await db.users.find_one({"id": inp.support_id, "tenant_id": user["tenant_id"]}, {"_id": 0}) else None
     # Plan 4.3: a named approver must be able to approve. Someone outside the
     # company is still dropped (anyone with approval access approves instead).
     approver_id = None
@@ -455,10 +456,10 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
     await db.tasks.insert_one({
         "id": tid, "tenant_id": user["tenant_id"], "title": inp.title, "description": inp.description or "",
         "assignee_role": role, "assignee_id": assignee_id, "priority": inp.priority or "medium",
-        "co_assignee_ids": co_ids,
+        "co_assignee_ids": co_ids, "auto_assigned": auto_assigned,
         "status": "blocked" if lock_now else "todo", "due_date": due, "decision_id": None,
         "source": "manual", "created_at": now_iso(),
-        "task_type": task_type, "op_category": inp.op_category or None, "support_id": support_id,
+        "task_type": task_type, "op_category": inp.op_category or None,
         "expected_output": inp.expected_output or None, "approval_required": needs_approval,
         "approval_status": "pending" if lock_now else None, "approval_stage": stage,
         "approver_id": approver_id, "progress": progress, "created_by": user["id"],
@@ -558,6 +559,9 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             updates.pop("assignee_id")
         else:
             updates["assignee_role"] = member["role"]
+            # ASK-28 TK-06: a person chose the doer now, so "picked automatically" no longer holds.
+            if updates["assignee_id"] != t.get("assignee_id"):
+                updates["auto_assigned"] = None
     # ASK-26: who is on the task. Changing it is an assignment decision, so it
     # is held to the people who make those: the owner, a team manager, the
     # task's creator, or its lead. The list replaces the stored one.
@@ -623,7 +627,11 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             await _log_task_event(user, task_id, "task_signoff", f"Sent '{t['title']}' for approval",
                                   "Marked complete — sent for approval")
         elif updates.get("status") and updates["status"] != t.get("status"):
-            watchers = [w for w in ([t.get("created_by")] + await _owner_ids(user["tenant_id"])) if w and w != user["id"]]
+            # ASK-28 TK-06: everyone on the task hears a status change too (a
+            # helper finishing tells the lead, and the other way round).
+            watchers = [w for w in dict.fromkeys([t.get("created_by"), *assignee_ids_of(t),
+                                                  *await _owner_ids(user["tenant_id"])])
+                        if w and w != user["id"]]
             await push_notification(user["tenant_id"], watchers, 1,
                                     f"Status update on '{t['title']}': {updates['status'].replace('_', ' ')}", "task", task_id,
                                     ntype="status", title=t["title"], sender=user["name"])
@@ -724,7 +732,8 @@ async def reassign_task(task_id: str, inp: TaskReassignInput, user: dict = Depen
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]})
     if not t:
         raise HTTPException(status_code=404, detail="Not found")
-    updates = {"updated_at": now_iso(), "last_action": "Reassigned"}
+    # ASK-28 TK-06: a person chose where it goes now, not the least-busy rule.
+    updates = {"updated_at": now_iso(), "last_action": "Reassigned", "auto_assigned": None}
     new_assignee_id = None
     who: str
     if inp.assignee_id:

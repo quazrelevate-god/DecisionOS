@@ -500,12 +500,10 @@ export default function Workflows({ embedded = false }) {
           full-width section, cards flow beneath in one column. Drag-to-move
           still works within a section. From lg the original horizontal
           kanban with fixed 300px columns returns unchanged. */}
-      {/* KM-31 — the well is DESKTOP-ONLY now. It is what drew the square
-          outline the founder saw around the stage cards: on desktop the columns
-          are transparent and need a ground to sit in, but on mobile each stage
-          is now its own glass card, so the well was a box drawn around boxes.
-          The stages stack straight onto the sky instead. */}
-      <div className="flex flex-col gap-3 lg:kr-glass-well lg:gap-0 lg:p-4 lg:overflow-x-auto" data-testid="workflow-board">
+      {/* ASK-16 (2026-09-13): the well is gone on desktop too. The columns
+          hold the ground on their own — a tray around them read as a box
+          around boxes on a page whose only other frames are card corners. */}
+      <div className="flex flex-col gap-3 lg:gap-0 lg:overflow-x-auto" data-testid="workflow-board">
         <div className="flex flex-col gap-4 lg:min-w-max lg:flex-row lg:items-stretch">
           {stages.map((stg) => {
             const cards = (data || []).filter((w) => w.stage === stg.key);
@@ -553,24 +551,27 @@ export default function Workflows({ embedded = false }) {
                 }`}
               >
                 {/* Header row — clickable on mobile to toggle collapse. On
-                    desktop it stays a plain non-interactive label. */}
+                    desktop it stays a plain non-interactive label.
+                    ASK-16 (2026-09-13): desktop centres the label + count
+                    over the column width; mobile keeps the caret on the
+                    right where the tap target sits. */}
                 <button
                   type="button"
                   onClick={() => toggleStage(stg.key)}
                   data-testid={`stage-toggle-${stg.key}`}
                   aria-expanded={isOpen}
-                  className="flex items-center justify-between gap-2 px-1.5 pb-1 pt-1 text-left lg:pointer-events-none"
+                  className="flex items-center justify-between gap-2 px-1.5 pb-2 pt-1 text-left lg:justify-center lg:pointer-events-none"
                 >
-                  <p className="truncate text-sm font-semibold">{stg.label}</p>
-                  <span className="flex items-center gap-2">
+                  <span className="inline-flex items-baseline gap-2">
+                    <span className="truncate text-sm font-semibold">{stg.label}</span>
                     <span className="font-mono text-sm tabular-nums opacity-50">{cards.length}</span>
-                    <CaretDown
-                      size={13}
-                      weight="bold"
-                      aria-hidden="true"
-                      className={`text-muted-foreground transition-transform lg:hidden ${isOpen ? "rotate-180" : ""}`}
-                    />
                   </span>
+                  <CaretDown
+                    size={13}
+                    weight="bold"
+                    aria-hidden="true"
+                    className={`text-muted-foreground transition-transform lg:hidden ${isOpen ? "rotate-180" : ""}`}
+                  />
                 </button>
 
                 {/* KR-14.21 · MOBILE — when expanded, cards render as a

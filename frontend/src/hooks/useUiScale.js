@@ -14,11 +14,11 @@
 // 4-column grid stays 4 columns of bigger cards, scroll areas keep working,
 // hit targets grow with the type. A transform only paints bigger.
 //
-// Clamped to [0.9, 1.5]: below 1024 the phone tree renders and the scale is
-// 1 (it has its own breakpoints); a 1280 laptop gets 0.9 so the desktop
-// composition still fits; a 2560 monitor stops at 1.5 rather than becoming a
-// kiosk. The reference width is a single constant so the design's frame and
-// this hook can never drift apart.
+// The scale is a TABLE, not a ratio — the founder's numbers, one step per
+// screen class: a 1280 laptop 0.9, the 1440 reference 1.0, 1872 1.1, a 1920
+// monitor 1.2, 2560 and up 1.3. Below 1024 the phone tree renders and the
+// scale is 1 (it has its own breakpoints). Edit STEPS to retune; the widths
+// are the smallest viewport that gets that step.
 //
 // Scoped to a page on purpose for now (My Work is the pilot). Moving the
 // `ui-scale` class from a page root to <body> is the whole change needed to
@@ -26,13 +26,22 @@
 import { useEffect } from "react";
 
 export const UI_SCALE_REFERENCE_WIDTH = 1440;
-const MIN = 0.9;
-const MAX = 1.5;
 const LG = 1024; // Tailwind's lg breakpoint — the desktop tree starts here
+
+// [minimum viewport width, scale] — widest first. A viewport takes the
+// first row whose width it reaches.
+export const UI_SCALE_STEPS = [
+  [2560, 1.3],
+  [1920, 1.2],
+  [1872, 1.1],
+  [1440, 1.0],
+  [LG, 0.9],
+];
 
 export function computeUiScale(width) {
   if (width < LG) return 1;
-  return Math.min(MAX, Math.max(MIN, width / UI_SCALE_REFERENCE_WIDTH));
+  const row = UI_SCALE_STEPS.find(([min]) => width >= min);
+  return row ? row[1] : 1;
 }
 
 export function useUiScale() {
@@ -41,9 +50,7 @@ export function useUiScale() {
     let raf = 0;
     const apply = () => {
       raf = 0;
-      // Three decimals: enough that a 1px viewport change never re-lays the
-      // page out for a scale change the eye cannot see.
-      root.style.setProperty("--ui-scale", computeUiScale(window.innerWidth).toFixed(3));
+      root.style.setProperty("--ui-scale", computeUiScale(window.innerWidth).toFixed(1));
     };
     const onResize = () => { if (!raf) raf = requestAnimationFrame(apply); };
     apply();

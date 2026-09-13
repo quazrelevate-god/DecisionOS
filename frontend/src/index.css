@@ -2569,7 +2569,19 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         transition: box-shadow 220ms cubic-bezier(.22,1,.36,1),
                     transform 220ms cubic-bezier(.22,1,.36,1);
     }
-    .kr-bento:hover {
+    /* ASK-21 — THE LIFT IS FOR TILES, NEVER FOR A DIALOG SURFACE, and the
+       exclusion is load-bearing rather than tidy. This rule sets `transform`
+       outright, so on any element whose position depends on a transform it
+       does not add a 3px lift — it REPLACES the positioning. Four dialogs
+       wear .kr-bento over Radix's centred panel (translate(-50%,-50%)), and
+       `.kr-bento:hover` at specificity (0,2,0) beats Tailwind's
+       `-translate-x-1/2` at (0,1,0) — media queries add none, so `lg:` does
+       not rescue it either. Measured on the New Task panel: moving the cursor
+       onto it threw the box 256px right and 437px down, which is the "it
+       jumps off" the founder has now reported twice.
+       Excluding the dialog roles fixes every current and future call site
+       without each one having to remember an opt-out class. */
+    .kr-bento:not([role="dialog"]):not([role="alertdialog"]):hover {
         transform: translateY(-3px);
         box-shadow:
             inset 0 1px 0 hsl(0 0% 100% / .90),

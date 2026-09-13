@@ -171,8 +171,15 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
           arbitrary `-[48%]` wins on source order. Measured: the override
           class was present and --tw-enter-translate-y was still -48%. Setting
           the custom property has no such contest. */}
+      {/* ASK-21 — `flex flex-col`, overriding Radix's base `grid`. A grid with
+          a FIXED height sizes its auto rows to fill that height, so showing
+          the approver select did not scroll the body, it redistributed the
+          whole panel: measured the Priority row moving UP 30px while the
+          Create button moved DOWN 31px, with scrollHeight pinned at 880 the
+          whole time. As a flex column the header holds its size, the body
+          scrolls, and nothing else moves. */}
       <DialogContent
-        className="kr-bento overflow-y-auto border-0 [&>button.absolute]:hidden
+        className="kr-bento flex flex-col border-0 [&>button.absolute]:hidden
                    left-0 top-0 h-full w-full max-w-none translate-x-0 translate-y-0
                    [border-radius:0]
                    [padding-top:max(1rem,env(safe-area-inset-top))]
@@ -186,7 +193,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                    lg:data-[state=open]:[--tw-enter-translate-x:-50%] lg:data-[state=open]:[--tw-enter-translate-y:-48%]
                    lg:data-[state=closed]:[--tw-exit-translate-x:-50%] lg:data-[state=closed]:[--tw-exit-translate-y:-48%]"
       >
-        <DialogHeader className="pr-11">
+        <DialogHeader className="shrink-0 pr-11">
           <DialogPrimitiveClose
             data-testid="task-dialog-close"
             aria-label="Close"
@@ -196,7 +203,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
           <DialogTitle className="font-display text-xl">New Task</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">Capture any company task — operational or department work.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-0.5">
           <input data-testid="task-title-input" className={inp} placeholder="Task title" value={form.title} onChange={set("title")} />
           <textarea data-testid="task-description-input" className={inp} rows={2} placeholder="Description" value={form.description} onChange={set("description")} />
           <div className="kr-form-row">

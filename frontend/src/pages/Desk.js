@@ -277,17 +277,25 @@ export default function Desk() {
   const cardsOf = (i) => boardQs[i]?.data?.cards || [];
   const [decisionCards, fireCards, todayCards] = [cardsOf(0), cardsOf(1), cardsOf(2)];
 
-  // ASK-25 · Task approvals, client-side off the /tasks the metrics hook
-  // already holds: every task waiting for sign-off that THIS person may
-  // approve — the same rule as tasks.py's _can_approve_task, mirrored so
-  // the count on the Desk and the list on /approvals can never disagree.
+  // ASK-25 · Task approvals: every task waiting for sign-off that THIS person
+  // may approve. ASK-28 TK-02 — read from GET /tasks?view=approvals, which the
+  // server limits with tasks.py's _can_approve_task rule. The metrics hook's
+  // /tasks (mine=false) is a non-owner's own lane only, so a named approver
+  // outside it saw 0 here. Same query key as My Work's Approvals view, so the
+  // count and the list never disagree; the client check stays as a guard.
   const canApproveTask = (t) =>
     user?.role === "owner" || (t.approver_id ? user?.id === t.approver_id : hasPerm(user, "approvals"));
+  const approvalsQ = useQuery({
+    queryKey: ["tasks", "approvals"],
+    queryFn: () => api.get("/tasks?view=approvals").then((r) => r.data),
+    refetchInterval: 60000,
+  });
   const approvals = useMemo(
-    () => (m.tasks || []).filter((t) =>
+    () => (approvalsQ.data || []).filter((t) =>
       t.approval_required && t.approval_status === "pending"
-      && t.status !== "done" && t.status !== "cancelled" && canApproveTask(t)),
-    [m.tasks, user] // eslint-disable-line react-hooks/exhaustive-deps
+      && t.status !== "done" && t.status !== "cancelled" && canApproveTask(t))
+      .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || ""))),
+    [approvalsQ.data, user] // eslint-disable-line react-hooks/exhaustive-deps
   );
   const showApprovals = user?.role === "owner" || hasPerm(user, "approvals") || approvals.length > 0;
 
@@ -570,7 +578,7 @@ export default function Desk() {
             <DeskCard
               tone="flag"
               title="Task approvals"
-              count={m.tasks ? approvals.length : null}
+              count={approvalsQ.data ? approvals.length : null}
               loading={!m.tasks}
               empty="Nothing waiting for your sign-off"
               rows={approvals.slice(0, 12).map((t) => ({

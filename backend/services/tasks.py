@@ -165,8 +165,17 @@ def can_note_task(user: dict, t: dict) -> bool:
 
 
 def task_list_query(user: dict, mine: bool = False, view: Optional[str] = None,
-                    status: Optional[str] = None) -> dict:
+                    status: Optional[str] = None, can_approve_any: bool = False) -> dict:
     """The Mongo filter behind GET /tasks.
+
+    view="approvals" (ASK-28 TK-02, "Waiting for my approval"): tasks that need
+    approval, are not approved yet (a "changes requested" task still waits on
+    the approver) and are not finished — limited to the ones I may approve,
+    the same rule as routers.tasks._can_approve_task:
+      owner                      every one of them
+      named approver             tasks that name me
+      `approvals` access holder  tasks that name me + tasks that name nobody
+    `can_approve_any` is whether the user holds the `approvals` permission.
 
     view="asked" (ASK-28 TK-01, "Asked by me"): tasks I created that are not
     mine to do — I am neither the doer nor a helper. `mine` is ignored there.
@@ -179,6 +188,17 @@ def task_list_query(user: dict, mine: bool = False, view: Optional[str] = None,
     q: dict = {"tenant_id": user["tenant_id"]}
     if status:
         q["status"] = status
+    if view == "approvals":
+        q["approval_required"] = True
+        q["approval_status"] = {"$ne": "approved"}
+        if not status:
+            q["status"] = {"$nin": ["done", "cancelled"]}
+        if user.get("role") != "owner":
+            if can_approve_any:
+                q["$or"] = [{"approver_id": uid}, {"approver_id": None}, {"approver_id": ""}]
+            else:
+                q["approver_id"] = uid
+        return q
     if view == "asked":
         q["created_by"] = uid
         # $ne also matches a task with no doer, and on an array it means

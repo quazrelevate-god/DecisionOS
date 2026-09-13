@@ -239,7 +239,9 @@ async def list_tasks(
     # Non-owner team board (mine=false): the whole role lane (any member of my role + role-level tasks).
     # Owner (mine=false): everything.
     # ASK-28 TK-01: ?view=asked — tasks I created for other people ("Asked by me").
-    q = task_list_query(user, mine=bool(mine), view=view, status=status)
+    # ASK-28 TK-02: ?view=approvals — tasks waiting for MY approval.
+    q = task_list_query(user, mine=bool(mine), view=view, status=status,
+                        can_approve_any="approvals" in user_perms(user))
     tasks = await db.tasks.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     return await enrich_tasks(tasks)
 

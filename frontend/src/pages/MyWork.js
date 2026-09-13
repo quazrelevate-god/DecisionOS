@@ -2618,6 +2618,9 @@ const STATUS_FILTER_OPTIONS = [
 ];
 // Overdue, Due today and Completed are LENSES, not t.status values.
 const STATUS_LENSES = new Set(["overdue", "due_today", "completed"]);
+// ASK-28 TK-01 — My Work task lenses you reach by link (?view=…) and never
+// save as the default. Approvals is its own view (ASK-25), not a lens here.
+const URL_SCOPES = ["asked"];
 // ASK-24 — a Priority filter shipped briefly and was removed on a founder
 // call (2026-09-13): the AI-priority view already splits by High/Medium/Low.
 
@@ -2667,7 +2670,10 @@ export default function MyWork() {
     // ASK-25 — ?view=approvals is where the Desk's Approvals pill and leave chip land.
     : rawView === "approvals" ? "approvals"
     : "mywork";
-  const [view, setView] = useState(focusTaskId ? "mywork" : initialView);
+  // ASK-28 TK-02 — ?view=approvals&task=<id> (the approval-requested
+  // notification) opens the task INSIDE Approvals, where it is guaranteed to
+  // be; any other ?task= link still lands on the task list.
+  const [view, setView] = useState(focusTaskId && initialView !== "approvals" ? "mywork" : initialView);
   // KR-11.2 — which tile is expanded. Lifted out of TaskCard so the grid can
   // give it the whole row; see TaskBento. Seeded from ?task= so a deep link
   // still lands on an opened card.
@@ -2683,15 +2689,20 @@ export default function MyWork() {
   const canApproveLeave = isOwner || userPerms(user).includes("leave_approve");
   // ASK-25 — the Approvals view's own state and feeds. Sub-tab Tasks | Leave
   // (?sub=leave is where the Desk's leave chip lands), the All/My lens on
-  // tasks, and the two feeds. Tasks come from the UNSCOPED list so an
-  // approver sees every task routed to them, not only their own lane; the
-  // key is shared with the Desk's card so the two never disagree.
+  // tasks, and the two feeds.
+  // ASK-28 TK-02 — tasks come from GET /tasks?view=approvals, which the
+  // SERVER limits to what this person may approve (owner: all; named
+  // approver: theirs; Approve Tasks access: theirs + unnamed). The old feed,
+  // /tasks?mine=false, is only the owner's everything or a non-owner's own
+  // lane, so a named approver outside that lane never saw the task. Fetched
+  // on every view: the switcher carries its count. The key is shared with the
+  // Desk's Task approvals card so the two never disagree.
   const [apprSub, setApprSub] = useState(params.get("sub") === "leave" ? "leave" : "tasks");
   const [apprScope, setApprScope] = useState("all");
   const apprTasksQ = useQuery({
-    queryKey: ["tasks", false],
-    queryFn: () => api.get("/tasks?mine=false").then((r) => r.data),
-    enabled: view === "approvals",
+    queryKey: ["tasks", "approvals"],
+    queryFn: () => api.get("/tasks?view=approvals").then((r) => r.data),
+    refetchInterval: 60000,
   });
   const leavesQ = useQuery({
     queryKey: ["leaves", "approvals"],
@@ -2711,8 +2722,9 @@ export default function MyWork() {
   /* ASK-28 TK-01 — scope "asked" is "Asked by me": tasks I created for other
      people. It comes from the URL (?view=asked), never from saved prefs, so a
      reload of plain /my-work still opens where the person normally works. */
-  const savedScope = loadedPrefs.scope && loadedPrefs.scope !== "asked" ? loadedPrefs.scope : "mine";
-  const [scope, setScope] = useState(rawView === "asked" ? "asked" : savedScope);
+  // URL_SCOPES (module level) lists the lenses that behave this way.
+  const savedScope = loadedPrefs.scope && !URL_SCOPES.includes(loadedPrefs.scope) ? loadedPrefs.scope : "mine";
+  const [scope, setScope] = useState(URL_SCOPES.includes(rawView) ? rawView : savedScope);
   const [tab, setTab] = useState(loadedPrefs.tab || "all");
   const [aiPriority, setAiPriority] = useState(Boolean(loadedPrefs.aiPriority));
   /* KM-30 — ONE progress lens, and no priority lens at all.
@@ -2769,7 +2781,7 @@ export default function MyWork() {
     if (!prefsKey) return;
     try {
       // "asked" is a URL view, not a default to come back to (ASK-28 TK-01).
-      localStorage.setItem(prefsKey, JSON.stringify({ scope: scope === "asked" ? savedScope : scope, tab, aiPriority }));
+      localStorage.setItem(prefsKey, JSON.stringify({ scope: URL_SCOPES.includes(scope) ? savedScope : scope, tab, aiPriority }));
     } catch { /* quota; ignore */ }
   }, [prefsKey, scope, tab, aiPriority, savedScope]);
 
@@ -2799,6 +2811,11 @@ export default function MyWork() {
     queryKey: ["tasks", asked ? "asked" : mine],
     queryFn: () => api.get(asked ? "/tasks?view=asked" : `/tasks?mine=${mine}`).then((r) => r.data),
   });
+  // ASK-28 TK-02 — how many task approvals wait on me (the server already
+  // limits the feed to what I may approve), for the switcher's count. A named
+  // approver who holds no approval access still gets the view.
+  const waitingOnMe = (apprTasksQ.data || []).filter(isPendingApproval).length;
+  const showApprovalsView = canApprove || waitingOnMe > 0;
   const focusQ = useQuery({
     queryKey: ["task", focusTaskId],
     queryFn: () => api.get(`/tasks/${focusTaskId}`).then((r) => r.data),
@@ -2818,8 +2835,17 @@ export default function MyWork() {
   useEffect(() => {
     if (!focusTaskId || !focusQ.data) return;
     const ft = focusQ.data;
+    // ASK-28 TK-02 — opened from Approvals: stay there, just bring it into view.
+    if (view === "approvals") {
+      const t0 = setTimeout(() => {
+        document.getElementById(`task-card-${focusTaskId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 400);
+      return () => clearTimeout(t0);
+    }
     setView("mywork");
-    if (isOwner && ft.assignee_id !== user?.id && !(ft.co_assignee_ids || []).includes(user?.id) && scope !== "all") { setScope("all"); return; }
+    // ASK-28 TK-01/02 — a task opened from Asked by me or Approvals is in that
+    // list already; only My Tasks needs to widen to All Tasks for the owner.
+    if (isOwner && !URL_SCOPES.includes(scope) && ft.assignee_id !== user?.id && !(ft.co_assignee_ids || []).includes(user?.id) && scope !== "all") { setScope("all"); return; }
     // ASK-24 — a deep-linked task must be visible, so drop any filter that
     // could hide it; a finished task opens under Status: Completed.
     setTab("all");
@@ -3314,7 +3340,8 @@ export default function MyWork() {
             const go = (nextScope, nextView = "mywork") => {
               if (nextScope) setScope(nextScope);
               setView(nextView);
-              setFilterParams({ view: nextScope === "asked" ? "asked" : "" });
+              // ASK-28 TK-02 — Approvals is linkable too (?view=approvals).
+              setFilterParams({ view: URL_SCOPES.includes(nextScope) ? nextScope : nextView === "approvals" ? "approvals" : "" });
             };
             const askedSegment = {
               key: "asked", label: t("mywork.asked_by_me", "Asked by me"), testid: "work-scope-asked",
@@ -3336,18 +3363,21 @@ export default function MyWork() {
             } else {
               segments.push({
                 key: "tasks", label: t("mywork.view_mywork"), testid: "work-view-mywork",
-                active: view === "mywork" && scope !== "asked",
+                active: view === "mywork" && !URL_SCOPES.includes(scope),
                 onClick: () => go("mine"),
               });
               segments.push(askedSegment);
             }
             // ASK-25 — Approvals sits between the task lenses and Workflows:
             // it is about tasks (and leave), not pipelines.
-            if (canApprove) {
+            // ASK-28 TK-02 — also for a named approver without approval
+            // access, and it carries how many task approvals wait on you.
+            if (showApprovalsView) {
               segments.push({
                 key: "approvals", label: t("mywork.view_approvals"), testid: "work-view-approvals",
+                count: waitingOnMe,
                 active: view === "approvals",
-                onClick: () => setView("approvals"),
+                onClick: () => go(null, "approvals"),
               });
             }
             if (canSeeWorkflows) {
@@ -3381,6 +3411,13 @@ export default function MyWork() {
                             aria-pressed={seg.active}
                             className={`${SEG} ${first ? "rounded-l-pill" : ""} ${last ? "rounded-r-pill" : ""} ${seg.active ? SEG_ON : SEG_OFF}`}>
                             {seg.label}
+                            {/* ASK-28 TK-02 — how many are waiting on you. */}
+                            {seg.count > 0 && (
+                              <span data-testid={`${seg.testid}-count`}
+                                className="ml-1.5 inline-grid h-5 min-w-5 place-items-center rounded-full bg-kr-ink px-1.5 text-[11px] font-semibold tabular-nums leading-none text-white">
+                                {seg.count}
+                              </span>
+                            )}
                           </button>
                         </Fragment>
                       );
@@ -3403,7 +3440,7 @@ export default function MyWork() {
         </div>
       )}
 
-      {view === "approvals" && canApprove ? (
+      {view === "approvals" && showApprovalsView ? (
         // ASK-25 — the approvals that are not decisions. Two sub-tabs: Tasks
         // (the All/My lens, cards in the task grid) and Leave (the register's
         // cards). Decisions stay on the Desk and /decisions/:id.
@@ -3413,8 +3450,11 @@ export default function MyWork() {
             // Desk's count, this list and the card's buttons all agree.
             const canApproveTask = (t) =>
               isOwner || (t.approver_id ? user?.id === t.approver_id : userPerms(user).includes("approvals"));
+            // ASK-28 TK-02 — oldest request first: whoever has waited longest
+            // to start is the one to unblock next.
             const apprAll = (Array.isArray(apprTasksQ.data) ? apprTasksQ.data : [])
-              .filter((t) => isPendingApproval(t) && canApproveTask(t));
+              .filter((t) => isPendingApproval(t) && canApproveTask(t))
+              .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
             const apprList = apprScope === "mine" ? apprAll.filter((t) => t.approver_id === user?.id) : apprAll;
             const pendingLeaves = (leavesQ.data || []).filter((l) => l.status === "pending" || l.status === "info_requested");
             const subs = [

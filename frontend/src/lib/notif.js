@@ -16,6 +16,9 @@ export function notifMeta(n) {
 
 // Where does clicking a notification take the user?
 export function notifLink(n) {
+  // ASK-28 TK-02: an approval request opens the approver's own list, where
+  // the task is guaranteed to be — My Tasks only holds tasks you do.
+  if (n?.entity_type === "task" && n?.entity_id && n?.type === "approval") return `/my-work?view=approvals&task=${n.entity_id}`;
   if (n?.entity_type === "task" && n?.entity_id) return `/my-work?task=${n.entity_id}`;
   if (n?.entity_type === "decision" && n?.entity_id) return `/?decision=${n.entity_id}`;
   // ASK-6 (2026-09-12): leave notifications now land on the Decision Desk,

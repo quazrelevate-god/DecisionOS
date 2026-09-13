@@ -68,10 +68,11 @@ is assigned.
   - [x] My Work: Asked by me in the desktop switcher, kept in the URL, not saved as default; Department, Person and Status filters work on it; AI priority off; own empty state. Phone link lands on the list (the phone switcher comes with the mobile pass).
   - [x] The person who asked can leave a note (not hand off or escalate) — server and form.
   - [ ] Acceptance: a non-owner creates a task for someone else and still sees it — **waits on a test database** (checked read-only: owner 53/53 vs API, sales empty state, note-only form mocked).
-- [ ] **1.2 "Waiting for my approval" view**
-  - [ ] Backend: `GET /tasks?view=approvals` — approval required, not yet approved, and I may approve (named approver, or anyone with `approvals` when none is named, or owner).
-  - [ ] My Work: view with a count; Approve / Request changes / Ask clarification reachable.
-  - [ ] Acceptance: a non-owner named approver approves from the app.
+- [x] **1.2 "Waiting for my approval" view** *(TK-02, desktop, 2026-09-14)*
+  - [x] Backend: `GET /tasks?view=approvals` — approval required, not yet approved (changes requested still counts), not finished, and I may approve: owner all; named approver their own; `approvals` holder also the unnamed ones. Unit-tested against the `_can_approve_task` rule.
+  - [x] My Work: merged into the Approvals view from 3c23e49 (Tasks | Leave tabs, All / My approvals). Its Tasks tab and the Desk's Task approvals card now read the server rule instead of `/tasks?mine=false`; the Approvals button carries the pending count and shows for a named approver without approval access; oldest first; Approve / Request changes / Ask clarification reachable.
+  - [x] Approval-requested notification opens `/my-work?view=approvals&task=<id>`.
+  - [ ] Acceptance: a non-owner named approver approves a real task — **waits on a test database** (checked: owner 7/7 vs API, no-access user, named approver with a mocked list, Approve click path).
 - [ ] **1.3 "My team" view** *(needs D3)*
   - [ ] Backend: `GET /tasks?view=team` — tasks where the doer or a helper reports to me.
   - [ ] My Work: view shown only to people with direct reports; Person filter lists the team.

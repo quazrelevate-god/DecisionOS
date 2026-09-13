@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { NewTaskDialog } from "./Tasks";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "../components/ui/sheet";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel } from "../components/ui/dropdown-menu";
 import Workflows from "./Workflows";
 // ASK-6 (2026-09-12): Leave no longer embedded here. Register lives on
 // Team, approvals live on Desk, config lives on Settings > Operations.
@@ -2039,15 +2039,26 @@ const TIER_OF = (t) => (t?.priority === "high" || t?.priority === "low") ? t.pri
 /* ASK-13 (2026-09-13): one dropdown shape for Department / Priority / Status.
    Reads a value + options list + optional counts fn and renders a labelled
    pill trigger + menu. counts.optional: if provided, each row gets a count. */
-function FilterDropdown({ testid, label, value, options, counts, onSelect, loading }) {
+/* ASK-24 (2026-09-13): a filter that is NOT on its first option ("All …")
+   renders pressed, so a narrowed list is visible from the row itself.
+   Options may carry `group` (a section label is drawn where it changes) and
+   `sub` (a second line, e.g. the person's role). `searchable` adds a
+   type-to-search box — the Person list outgrows a scan past ~8 names. */
+function FilterDropdown({ testid, label, value, options, counts, onSelect, loading, searchable = false }) {
+  const [query, setQuery] = useState("");
   const active = options.find((o) => o.key === value) || options[0];
+  const narrowed = value !== options[0].key;
+  const q = query.trim().toLowerCase();
+  const shown = q
+    ? options.filter((o) => !o.key || `${o.label} ${o.sub || ""}`.toLowerCase().includes(q))
+    : options;
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={(o) => { if (!o) setQuery(""); }}>
       <DropdownMenuTrigger asChild>
-        <button type="button" data-testid={testid}
-          className="kr-pop flex h-9 items-center gap-2 rounded-pill pl-3.5 pr-3 text-xs font-medium text-foreground">
+        <button type="button" data-testid={testid} aria-pressed={narrowed}
+          className={`${narrowed ? "kr-pressed" : "kr-pop"} flex h-9 items-center gap-2 rounded-pill pl-3.5 pr-3 text-xs font-medium text-foreground`}>
           <span className="text-muted-foreground">{label}:</span>
-          <span>{active.label}</span>
+          <span className={`max-w-[140px] truncate ${narrowed ? "font-semibold" : ""}`}>{active.label}</span>
           {counts && (
             <span className="tabular-nums opacity-55">
               {loading ? "—" : counts(active.key)}
@@ -2056,21 +2067,79 @@ function FilterDropdown({ testid, label, value, options, counts, onSelect, loadi
           <CaretDown size={11} weight="bold" aria-hidden="true" className="opacity-60" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="max-h-[60vh] w-52 overflow-y-auto">
-        {options.map((o) => (
-          <DropdownMenuItem key={o.key || "__all__"} onSelect={() => onSelect(o.key)}
-            data-testid={`${testid}-${o.key || "all"}`}
-            className="flex items-center justify-between gap-3">
-            <span className={value === o.key ? "font-semibold" : ""}>{o.label}</span>
-            {counts && (
-              <span className="tabular-nums text-xs opacity-55">
-                {loading ? "—" : counts(o.key)}
-              </span>
+      <DropdownMenuContent align="start" className={`max-h-[60vh] overflow-y-auto ${searchable ? "w-64" : "w-56"}`}>
+        {searchable && (
+          <div className="sticky top-0 z-10 bg-popover p-1">
+            {/* stopPropagation: Radix menus run typeahead on keydown, which
+                would steal every letter typed here to jump between items. */}
+            <input value={query} onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.stopPropagation()}
+              placeholder={`Search ${label.toLowerCase()}`} aria-label={`Search ${label.toLowerCase()}`}
+              data-testid={`${testid}-search`}
+              className="w-full nm-field px-2.5 py-1.5 text-xs" />
+          </div>
+        )}
+        {shown.map((o, i) => (
+          <Fragment key={o.key || "__all__"}>
+            {o.group && o.group !== shown[i - 1]?.group && (
+              <DropdownMenuLabel className="pt-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                {o.group}
+              </DropdownMenuLabel>
             )}
-          </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onSelect(o.key)}
+              data-testid={`${testid}-${o.key || "all"}`}
+              className="flex items-center justify-between gap-3">
+              <span className="min-w-0">
+                <span className={`block truncate ${value === o.key ? "font-semibold" : ""}`}>{o.label}</span>
+                {o.sub && <span className="block truncate text-[11px] text-muted-foreground">{o.sub}</span>}
+              </span>
+              {counts && (
+                <span className="shrink-0 tabular-nums text-xs opacity-55">
+                  {loading ? "—" : counts(o.key)}
+                </span>
+              )}
+            </DropdownMenuItem>
+          </Fragment>
         ))}
+        {q && shown.length <= 1 && (
+          <p className="px-2 py-3 text-center text-xs text-muted-foreground">No match for “{query.trim()}”</p>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/* ASK-24 — the phone's version of FilterDropdown: the same options as a
+   labelled wrap of chips, for the bottom filter sheet. */
+function FilterChipGroup({ testid, label, value, options, counts, onSelect, loading, searchable = false }) {
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const shown = q
+    ? options.filter((o) => !o.key || `${o.label} ${o.sub || ""}`.toLowerCase().includes(q))
+    : options;
+  return (
+    <section className="flex flex-col gap-2" data-testid={testid}>
+      <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-foreground/70">{label}</p>
+      {searchable && (
+        <input value={query} onChange={(e) => setQuery(e.target.value)}
+          placeholder={`Search ${label.toLowerCase()}`} aria-label={`Search ${label.toLowerCase()}`}
+          data-testid={`${testid}-search`}
+          className="w-full nm-field px-3 py-2 text-sm" />
+      )}
+      <div className="flex flex-wrap gap-2">
+        {shown.map((o) => {
+          const on = value === o.key;
+          return (
+            <button key={o.key || "__all__"} type="button" aria-pressed={on}
+              onClick={() => onSelect(o.key)} data-testid={`${testid}-${o.key || "all"}`}
+              className={`flex min-h-9 items-center gap-1.5 rounded-pill px-3 text-[12px] ${on ? "kr-pressed font-semibold text-foreground" : "kr-pop text-foreground/75"}`}>
+              <span className="max-w-[270px] truncate">{o.label}</span>
+              {counts && <span className="tabular-nums opacity-55">{loading ? "—" : counts(o.key)}</span>}
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -2152,9 +2221,39 @@ const STATUS_FILTER_OPTIONS = [
   { key: "todo", label: "Not Started" },
   { key: "in_progress", label: "In Progress" },
   { key: "waiting", label: "Waiting" },
+  // ASK-24 — the two chips on nearly every card, neither filterable before.
+  { key: "blocked", label: "Pending Approval" },
   { key: "review", label: "Under Review" },
+  { key: "overdue", label: "Overdue" },
   { key: "completed", label: "Completed" },
 ];
+// Overdue and Completed are LENSES, not t.status values.
+const STATUS_LENSES = new Set(["overdue", "completed"]);
+
+const PRIORITY_FILTER_OPTIONS = [
+  { key: "", label: "All priorities" },
+  { key: "high", label: "High" },
+  { key: "medium", label: "Medium" },
+  { key: "low", label: "Low" },
+];
+
+/* ASK-24 — ONE predicate for every filter, so the list and every count in
+   every menu agree. A menu's counts are this with that menu's own dimension
+   swapped for the option being counted, and the others held as they are.
+   person: "" | a user id | "unassigned" | "role:<key>" (a team queue — a task
+   given to a role with no named person). */
+function matchesFilters(t, { tab, person, priority, status }) {
+  const completedLens = tab === "completed" || status === "completed";
+  if (completedLens !== isTerminal(t)) return false;
+  if (tab !== "all" && tab !== "completed" && t.task_type !== tab) return false;
+  if (status === "overdue" && !isOverdue(t)) return false;
+  if (status && !STATUS_LENSES.has(status) && t.status !== status) return false;
+  if (priority && TIER_OF(t) !== priority) return false;
+  if (person === "unassigned") return !t.assignee_id && !t.assignee_role;
+  if (person && person.startsWith("role:")) return !t.assignee_id && t.assignee_role === person.slice(5);
+  if (person) return t.assignee_id === person;
+  return true;
+}
 
 export default function MyWork() {
   // MPWA-08: rebuilt below lg (§8). Above lg the original tree renders
@@ -2213,16 +2312,44 @@ export default function MyWork() {
      It lives in component state rather than the URL because it is a reading
      posture, not a destination — you flick through it while scanning and you
      do not want twenty history entries for it. */
-  const [statusFilter, setStatusFilter] = useState("");
+  /* ASK-24 (2026-09-13): Status, Priority and Person now live in the URL
+     (?status=&priority=&person=) so a refresh keeps them and a link can open
+     one person's tasks. `replace` keeps the reading-posture point above: no
+     history entry per tap. Department stays in the saved prefs, where it
+     already persisted. Unknown values from a hand-typed URL read as "All". */
+  const setFilterParams = (changes) => setParams((prev) => {
+    const next = new URLSearchParams(prev);
+    Object.entries(changes).forEach(([k, v]) => { if (v) next.set(k, v); else next.delete(k); });
+    return next;
+  }, { replace: true });
+  const rawStatus = params.get("status") || "";
+  const statusFilter = STATUS_FILTER_OPTIONS.some((o) => o.key === rawStatus) ? rawStatus : "";
+  const setStatusFilter = (v) => setFilterParams({ status: typeof v === "function" ? v(statusFilter) : v });
+  const rawPriority = params.get("priority") || "";
+  const priorityFilter = PRIORITY_FILTER_OPTIONS.some((o) => o.key === rawPriority) ? rawPriority : "";
+  const setPriorityFilter = (v) => setFilterParams({ priority: v });
+  // Person only means something on All Tasks — on My Tasks every card is yours.
+  const personFilter = isOwner && scope === "all" ? (params.get("person") || "") : "";
+  const setPersonFilter = (v) => setFilterParams({ person: v });
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   /* Priority band picker for the AI-priority kanban view. Owned by the page so
      the mobile band bar can sit in the fixed header while the columns render
      in the body; desktop shows all three columns and ignores it. */
   const [band, setBand] = useState("high");
-  // Dismissing AI priority clears both filters so the list can never stay
-  // filtered by a control that is no longer on screen.
+  // Dismissing AI priority resets the band. It no longer clears Status: that
+  // was so the list could never stay filtered by a control no longer on
+  // screen, and since ASK-24 Status is always on screen — the desktop row and
+  // the phone's filter sheet both carry it.
   useEffect(() => {
-    if (!aiPriority) { setStatusFilter(""); setBand("high"); }
+    if (!aiPriority) setBand("high");
   }, [aiPriority]);
+  // MW-19 / ASK-24 — "Completed" is a Status now. A tab of "completed" can
+  // only arrive from saved prefs written before that; move it across once.
+  useEffect(() => {
+    if (tab !== "completed") return;
+    setTab("all");
+    setStatusFilter("completed");
+  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Persist on any change. Guard on prefsKey so pre-login / test envs stay
   // no-op.
@@ -2237,7 +2364,7 @@ export default function MyWork() {
   // list. Cleared when the tab / scope / view changes so a stale selection
   // can't apply to a different filter's tasks.
   const [selected, setSelected] = useState(() => new Set());
-  useEffect(() => { setSelected(new Set()); }, [scope, tab, view]);
+  useEffect(() => { setSelected(new Set()); }, [scope, tab, view, personFilter, priorityFilter, statusFilter]);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkReassignOpen, setBulkReassignOpen] = useState(false);
   const [bulkAssigneeId, setBulkAssigneeId] = useState("");
@@ -2249,7 +2376,8 @@ export default function MyWork() {
   });
   const clearSelection = () => setSelected(new Set());
   const mine = !(isOwner && scope === "all");
-  const showAssignee = isOwner && scope === "all";
+  // ASK-24 — with Person set, every card would repeat the same name.
+  const showAssignee = isOwner && scope === "all" && !personFilter;
   const tasksQ = useQuery({ queryKey: ["tasks", mine], queryFn: () => api.get(`/tasks?mine=${mine}`).then((r) => r.data) });
   const focusQ = useQuery({
     queryKey: ["task", focusTaskId],
@@ -2272,12 +2400,15 @@ export default function MyWork() {
     const ft = focusQ.data;
     setView("mywork");
     if (isOwner && ft.assignee_id !== user?.id && scope !== "all") { setScope("all"); return; }
-    setTab(isTerminal(ft) ? "completed" : "all");
+    // ASK-24 — a deep-linked task must be visible, so drop any filter that
+    // could hide it; a finished task opens under Status: Completed.
+    setTab("all");
+    setFilterParams({ person: "", priority: "", status: isTerminal(ft) ? "completed" : "" });
     const timer = setTimeout(() => {
       document.getElementById(`task-card-${focusTaskId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 400);
     return () => clearTimeout(timer);
-  }, [focusTaskId, focusQ.data, scope]);
+  }, [focusTaskId, focusQ.data, scope]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Epic 2 Sprint 6.5 (E2-51): When Desk Trends deep-links here with
   // ?filter=overdue|completed, an owner should see ALL tenant tasks
@@ -2286,7 +2417,12 @@ export default function MyWork() {
   useEffect(() => {
     const f = params.get("filter");
     if (f && isOwner && scope !== "all") setScope("all");
-    if (f === "completed") setTab("completed");
+    // ASK-24 — the Desk's ?filter= link becomes the visible Status filter, so
+    // the reader can see why the list is narrowed and clear it.
+    if (f === "completed" || f === "overdue") {
+      setTab("all");
+      setFilterParams({ filter: "", status: f });
+    }
   }, [params, isOwner]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // U7-05.9: if the currently-selected tab has no items, snap back to
@@ -2321,25 +2457,18 @@ export default function MyWork() {
   // or from the tab (mobile chip strip / deep link); both mean the same lens.
   const showingCompleted = urlFilter === "completed" || tab === "completed" || statusFilter === "completed";
 
-  let list;
-  if (urlFilter === "overdue") {
-    list = all.filter((t) => !isTerminal(t) && isOverdue(t));
-  } else if (showingCompleted) {
-    list = all.filter(isTerminal);
-    if (tab !== "all" && tab !== "completed") list = list.filter((t) => t.task_type === tab);
-  } else if (tab === "all") {
-    list = all.filter((t) => !isTerminal(t));
-  } else {
-    list = all.filter((t) => !isTerminal(t) && t.task_type === tab);
-  }
-  // "completed" is a LENS, already applied above — it is not a t.status value,
-  // so matching it here would filter the completed list down to nothing.
-  const statusMatch = statusFilter && statusFilter !== "completed" ? statusFilter : null;
+  // ASK-24 — Department x Person x Priority x Status, all through one
+  // predicate. countWith() swaps one dimension for the option being counted,
+  // so every menu's numbers reflect the filters set in the others.
+  const filters = {
+    tab: urlFilter === "completed" ? "completed" : tab,
+    person: personFilter, priority: priorityFilter,
+    status: statusFilter || (urlFilter === "overdue" ? "overdue" : ""),
+  };
+  const countWith = (over) => all.filter((tk) => matchesFilters(tk, { ...filters, ...over })).length;
+  let list = all.filter((tk) => matchesFilters(tk, filters));
   if (aiPriority && !showingCompleted) {
-    if (statusMatch) list = list.filter((t) => t.status === statusMatch);
     list = [...list].sort((a, b) => (scoreMap[b.id]?.priority_score || 0) - (scoreMap[a.id]?.priority_score || 0));
-  } else if (statusMatch) {
-    list = list.filter((t) => t.status === statusMatch);
   }
 
   // KR-14.6 · MOBILE HEADER — reference-driven layout for MyWork on phones:
@@ -2406,8 +2535,75 @@ export default function MyWork() {
   const departmentOptions = WORK_TABS.filter(
     (tb) => tb.key !== "completed" && (tb.key === "all" || countFor(tb.key) > 0)
   );
-  const mobileFilterTabs = WORK_TABS;
-  const activeTabLabel = (WORK_TABS.find((tb) => tb.key === tab) || WORK_TABS[0]).label;
+  // KM-49 still holds for the phone sheet: every category, counts showing.
+  // Completed is a Status there too (MW-19).
+  const mobileFilterTabs = WORK_TABS.filter((tb) => tb.key !== "completed");
+
+  /* ASK-24 — PERSON options, built from the tasks on All Tasks:
+       All people · Me · everyone holding work, busiest first, role underneath
+       · Unassigned · then Teams — tasks given to a role with no named person
+       (the cards' "Sales team" line).
+     Names come from /users (members) with the task's own assignee_name as the
+     fallback for someone no longer in the list. */
+  const roleLabel = (key) => roleOptions.find((r) => r.key === key)?.label
+    || String(key || "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+  const personOptions = (() => {
+    if (!(isOwner && scope === "all")) return [];
+    const openBy = new Map();
+    const teams = new Set();
+    let unassigned = 0;
+    all.forEach((tk) => {
+      if (tk.assignee_id) openBy.set(tk.assignee_id, (openBy.get(tk.assignee_id) || 0) + (isTerminal(tk) ? 0 : 1));
+      else if (tk.assignee_role) teams.add(tk.assignee_role);
+      else unassigned += 1;
+    });
+    const memberOf = (id) => members.find((m) => m.id === id);
+    const nameOf = (id) => memberOf(id)?.name || all.find((tk) => tk.assignee_id === id)?.assignee_name || "Unknown";
+    const special = personFilter === "unassigned" || personFilter.startsWith("role:");
+    if (personFilter && !special && !openBy.has(personFilter) && memberOf(personFilter)) openBy.set(personFilter, 0);
+    if (personFilter.startsWith("role:")) teams.add(personFilter.slice(5));
+    // Two accounts can share a display name; the menu and the phone chips
+    // must still tell them apart, so a repeated name carries its email handle.
+    const nameCount = {};
+    openBy.forEach((_, id) => { nameCount[nameOf(id)] = (nameCount[nameOf(id)] || 0) + 1; });
+    const people = [...openBy.entries()]
+      .filter(([id]) => id !== user?.id)
+      .sort((a, b) => b[1] - a[1] || nameOf(a[0]).localeCompare(nameOf(b[0])))
+      .map(([id]) => {
+        const m = memberOf(id);
+        const handle = (m?.email || "").split("@")[0] || id.slice(0, 6);
+        return {
+          key: id, group: "People",
+          label: nameCount[nameOf(id)] > 1 ? `${nameOf(id)} (${handle})` : nameOf(id),
+          sub: m?.role ? roleLabel(m.role) : "",
+        };
+      });
+    return [
+      { key: "", label: "All people" },
+      ...(user?.id ? [{ key: user.id, label: "Me", group: "People" }] : []),
+      ...people,
+      ...(unassigned > 0 || personFilter === "unassigned" ? [{ key: "unassigned", label: "Unassigned", group: "People" }] : []),
+      ...[...teams].sort().map((r) => ({ key: `role:${r}`, label: `${roleLabel(r)} team`, group: "Teams" })),
+    ];
+  })();
+  const peopleSearchable = personOptions.filter((o) => o.group === "People").length > 8;
+
+  // What is narrowing the list, in words — the phone caption and the
+  // no-match empty state both say it.
+  const labelIn = (opts, key) => opts.find((o) => o.key === key)?.label;
+  const filterParts = [
+    tab !== "all" && tab !== "completed" ? labelIn(WORK_TABS, tab) : null,
+    personFilter ? (labelIn(personOptions, personFilter) || "One person") : null,
+    priorityFilter ? `${labelIn(PRIORITY_FILTER_OPTIONS, priorityFilter)} priority` : null,
+    filters.status ? labelIn(STATUS_FILTER_OPTIONS, filters.status) : null,
+  ].filter(Boolean);
+  const filtersActive = filterParts.length > 0;
+  const filterSummary = filterParts.join(" · ");
+  const clearFilters = () => {
+    setTab("all");
+    setFilterParams({ person: "", priority: "", status: "", filter: "" });
+  };
+  const tasksLoading = tasksQ.isLoading && !tasksQ.data;
 
   return (
     /* ASK-20 (2026-09-13): on desktop the page owns its own height and only
@@ -2511,28 +2707,20 @@ export default function MyWork() {
                 selection — "All", "Finance", "Completed" — it names itself, and
                 it also absorbs the caption row that used to sit underneath
                 doing the same job with none of the control. */}
-            {inSegmentView && mobileFilterTabs.length > 1 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button type="button" data-testid="work-mobile-category"
-                    aria-label={`Filter: ${activeTabLabel}`}
-                    className="kr-pop flex h-11 min-w-0 shrink items-center gap-1 rounded-pill pl-3.5 pr-2.5 text-[12px] font-medium">
-                    <span className="max-w-[92px] truncate">{activeTabLabel}</span>
-                    <span className="tabular-nums opacity-55">{countFor(tab)}</span>
-                    <CaretDown size={11} weight="bold" aria-hidden="true" className="opacity-60" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="max-h-[60vh] w-52 overflow-y-auto">
-                  {mobileFilterTabs.map((tb) => (
-                    <DropdownMenuItem key={tb.key} onSelect={() => setTab(tb.key)}
-                      data-testid={`work-mobile-category-${tb.key}`}
-                      className="flex items-center justify-between gap-3">
-                      <span className={tab === tb.key ? "font-semibold" : ""}>{tb.label}</span>
-                      <span className="tabular-nums text-xs opacity-55">{countFor(tb.key)}</span>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+            {/* ASK-24 — the pill now opens a bottom sheet holding all four
+                filters (Department, Person, Priority, Status); what is set is
+                named in the caption row underneath, not squeezed into this
+                pill, which Row 2 has no width for. */}
+            {inSegmentView && (
+              <button type="button" data-testid="work-mobile-category"
+                onClick={() => setFilterSheetOpen(true)}
+                aria-label={filtersActive ? `Filters: ${filterSummary}` : "Filters"}
+                aria-haspopup="dialog"
+                className={`${filtersActive ? "kr-pressed" : "kr-pop"} flex h-11 min-w-0 shrink items-center gap-1.5 rounded-pill pl-3 pr-3 text-[12px] font-medium`}>
+                <SlidersHorizontal size={14} weight="bold" aria-hidden="true" />
+                <span>Filter</span>
+                <span className="tabular-nums opacity-55">{tasksLoading ? "—" : list.length}</span>
+              </button>
             )}
             {/* ASK-6: leave spacer retired -- the view branch is gone. */}
           </div>
@@ -2553,6 +2741,65 @@ export default function MyWork() {
             In Progress / Waiting / Review" are not self-evidently two
             DIFFERENT axes when stacked — without the labels they read as one
             long filter that wrapped. */}
+        {/* ASK-24 · the active filters, in words, with a one-tap Clear. */}
+        {inSegmentView && filtersActive && (
+          <div className="flex items-center gap-2 px-1" data-testid="work-mobile-filter-caption">
+            <p className="min-w-0 flex-1 truncate text-[12px] text-foreground/75">
+              <span className="text-muted-foreground">Showing </span>
+              <span className="font-semibold text-foreground">{filterSummary}</span>
+            </p>
+            <button type="button" onClick={clearFilters} data-testid="work-mobile-filter-clear"
+              className="shrink-0 text-[12px] font-medium text-foreground/70 underline underline-offset-4">
+              Clear
+            </button>
+          </div>
+        )}
+
+        <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
+          <SheetContent side="bottom" hideClose data-testid="work-mobile-filter-sheet"
+            className="flex max-h-[85vh] flex-col gap-0 rounded-t-cardlg p-0 lg:hidden">
+            <SheetHeader className="flex-row items-center justify-between space-y-0 px-5 pb-3 pt-5 text-left">
+              <SheetTitle className="text-base">Filter tasks</SheetTitle>
+              <SheetClose asChild>
+                <button type="button" aria-label="Close filters" data-testid="work-mobile-filter-close"
+                  className="kr-pop grid h-9 w-9 place-items-center rounded-full">
+                  <X size={14} weight="bold" aria-hidden="true" />
+                </button>
+              </SheetClose>
+            </SheetHeader>
+            <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 pb-4">
+              <FilterChipGroup testid="work-sheet-department" label="Department"
+                value={tab === "completed" ? "all" : tab} options={mobileFilterTabs}
+                counts={(k) => countWith({ tab: k })} onSelect={setTab} loading={tasksLoading} />
+              {personOptions.length > 0 && (
+                <FilterChipGroup testid="work-sheet-person" label="Person"
+                  value={personFilter} options={personOptions}
+                  counts={(k) => countWith({ person: k })} onSelect={setPersonFilter}
+                  loading={tasksLoading} searchable={peopleSearchable} />
+              )}
+              <FilterChipGroup testid="work-sheet-priority" label="Priority"
+                value={priorityFilter} options={PRIORITY_FILTER_OPTIONS}
+                counts={(k) => countWith({ priority: k })} onSelect={setPriorityFilter} loading={tasksLoading} />
+              <FilterChipGroup testid="work-sheet-status" label="Status"
+                value={filters.status} options={STATUS_FILTER_OPTIONS}
+                counts={(k) => countWith({ status: k })} onSelect={setStatusFilter} loading={tasksLoading} />
+            </div>
+            <div className="flex items-center gap-2 border-t border-nm-edge/40 px-5 pb-6 pt-3">
+              <button type="button" onClick={clearFilters} disabled={!filtersActive}
+                data-testid="work-sheet-clear"
+                className="kr-pop h-11 flex-1 rounded-pill text-[13px] font-medium disabled:opacity-40">
+                Clear filters
+              </button>
+              <SheetClose asChild>
+                <button type="button" data-testid="work-sheet-done"
+                  className="kr-lift h-11 flex-1 rounded-pill bg-kr-ink text-[13px] font-medium text-white">
+                  Show {tasksLoading ? "" : list.length} {list.length === 1 ? "task" : "tasks"}
+                </button>
+              </SheetClose>
+            </div>
+          </SheetContent>
+        </Sheet>
+
         {inSegmentView && aiPriority && (
           <div className="flex flex-col gap-2" data-testid="work-mobile-lenses">
             <div>
@@ -2767,17 +3014,47 @@ export default function MyWork() {
                 label="Department"
                 value={tab}
                 options={departmentOptions}
-                counts={countFor}
+                counts={(k) => countWith({ tab: k })}
                 onSelect={setTab}
-                loading={tasksQ.isLoading && !tasksQ.data}
+                loading={tasksLoading}
+              />
+              {/* ASK-24 — Person, on All Tasks only. */}
+              {personOptions.length > 0 && (
+                <FilterDropdown
+                  testid="work-filter-person"
+                  label="Person"
+                  value={personFilter}
+                  options={personOptions}
+                  counts={(k) => countWith({ person: k })}
+                  onSelect={setPersonFilter}
+                  loading={tasksLoading}
+                  searchable={peopleSearchable}
+                />
+              )}
+              <FilterDropdown
+                testid="work-filter-priority"
+                label="Priority"
+                value={priorityFilter}
+                options={PRIORITY_FILTER_OPTIONS}
+                counts={(k) => countWith({ priority: k })}
+                onSelect={setPriorityFilter}
+                loading={tasksLoading}
               />
               <FilterDropdown
                 testid="work-filter-status"
                 label="Status"
-                value={statusFilter}
+                value={filters.status}
                 options={STATUS_FILTER_OPTIONS}
+                counts={(k) => countWith({ status: k })}
                 onSelect={setStatusFilter}
+                loading={tasksLoading}
               />
+              {filtersActive && (
+                <button type="button" onClick={clearFilters} data-testid="work-filters-clear"
+                  className="h-9 rounded-pill px-2 text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+                  Clear filters
+                </button>
+              )}
             </div>
             <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
               onOpenChange={(o) => { if (o) setOpenId(null); }}
@@ -2799,14 +3076,26 @@ export default function MyWork() {
           )}
           {/* E2-13: empty state with a CTA. Sends the founder to Desk
               (where decisions become tasks) rather than a dead screen. */}
-          {!tasksQ.isLoading && list.length === 0 && (
+          {/* ASK-24 — the filters emptied the list, not the workspace: say
+              so, and offer the way back, instead of "tasks appear once
+              decisions are approved". */}
+          {!tasksQ.isLoading && list.length === 0 && filtersActive && all.length > 0 && (
+            <EmptyState
+              testid="mywork-empty-filtered"
+              title="No tasks match these filters"
+              hint={filterSummary}
+              ctaLabel="Clear filters"
+              onCta={clearFilters}
+            />
+          )}
+          {!tasksQ.isLoading && list.length === 0 && !(filtersActive && all.length > 0) && (
             <EmptyState
               testid="mywork-empty"
-              title={tab === "completed" ? t("mywork.empty_completed_title") : t("mywork.empty_title")}
+              title={showingCompleted ? t("mywork.empty_completed_title") : t("mywork.empty_title")}
               hint={tab === "all" ? t("mywork.empty_all_hint") : t("mywork.empty_cat_hint")}
-              ctaLabel={tab === "completed" ? null : "+ Open Decision Desk"}
-              ctaTo={tab === "completed" ? null : "/inbox"}
-              secondary={tab === "completed" ? null : "Tasks appear here once decisions are approved"}
+              ctaLabel={showingCompleted ? null : "+ Open Decision Desk"}
+              ctaTo={showingCompleted ? null : "/inbox"}
+              secondary={showingCompleted ? null : "Tasks appear here once decisions are approved"}
             />
           )}
           {/* U7-05.3: bulk-action bar. Sticky at top of the list so it
@@ -2844,16 +3133,17 @@ export default function MyWork() {
               roleOptions,
               showAssignee,
               highlight: t.id === focusTaskId,
-              scores: aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined,
+              scores: aiPriority && !showingCompleted ? scoreMap[t.id] : undefined,
               // KM-30 — the card drops the status chip when the lens already
               // says it. Priority is handled by TaskPriorityColumns when AI
               // Priority is on (each column already names the band).
-              hideStatus: Boolean(statusFilter),
+              // ASK-24: Overdue is not a status, so the chip still has news.
+              hideStatus: Boolean(statusFilter) && statusFilter !== "overdue",
               selected: selected.has(t.id),
               onToggleSelect: () => toggleSelected(t.id),
             });
             const shared = { list, openId, setOpenId, cardProps };
-            return aiPriority && tab !== "completed"
+            return aiPriority && !showingCompleted
               ? <TaskPriorityColumns {...shared} band={band} />
               : <TaskGrid {...shared} />;
           })()}

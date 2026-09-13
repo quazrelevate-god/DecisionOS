@@ -32,6 +32,7 @@ STATUS_FILL = {
     "To do": "FDE7E7",
     "Awaiting decision": "FFF4E5",
     "Parked - needs design": "F3F4F6",
+    "Assigned - Yokesh": "E6EEFB",
     "Not a defect": "E8F3EC",
     "By design": "E8F3EC",
     "Fixed": "E8F3EC",
@@ -1748,7 +1749,7 @@ FINDINGS = [
         viewport='Mobile + Desktop',
         persona='Owner',
         severity='High',
-        status='Open',
+        status='Assigned - Yokesh',
         area='Wrong answer (live AI)',
         tested="LIVE run (founder-approved): asked Dex 'How much do customers owe us in total, and who owes the most?' as the owner, and compared with the ledger API. Read the saved query plan (brain_query_cache) to find why.",
         expected='Rs 7,49,000 outstanding, Krishna Garments owing the most (Rs 4,00,000).',
@@ -1756,6 +1757,7 @@ FINDINGS = [
         evidence="Plan: primary_entity invoices, status unpaid, group_by contact, date_preset all - correct - but keywords ['outstanding','owe','customers','receivable']. 'outstanding' and 'customers' are stop-words; 'owe' and 'receivable' are not, so retrieval ran {number|contact_name ~ /owe|receivable/i} and matched 0 invoices. 17.0s. Screenshot ai_live_0913/dex_receivables_desk.png.",
         cause="_retrieve turns the planner's keywords into a record filter on invoice number and customer name. The keywords are words from the QUESTION, not names of records, and the _KW_STOP list only catches some of them. Numbers are computed deterministically (good), but from an empty set, so the LLM then narrates zeros.",
         fix="Only apply keywords as a record filter when they look like an entity reference (a customer, vendor or invoice number that exists in the tenant); otherwise ignore them for aggregation intents. At minimum add owe/owes/owed/receivable(s)/payable(s)/dues to _KW_STOP. And when an aggregation over a finance entity returns 0 rows while the collection is non-empty, re-run without keywords rather than answer 'zero'.",
+        verified='OWNER: Yokesh (founder call, 2026-09-13) - all Dex issues are his; not to be worked on elsewhere.',
         code='routers/brain.py:172-187 (_KW_STOP, _rx), :294-299 (invoices retrieval), :836-843',
         found='2026-09-13',
     ),
@@ -1766,7 +1768,7 @@ FINDINGS = [
         viewport='Mobile + Desktop',
         persona='Owner',
         severity='High',
-        status='Open',
+        status='Assigned - Yokesh',
         area='Wrong answer (live AI)',
         tested="LIVE run: asked Dex its own first suggested question, 'What needs my attention today?', as the owner; then asked 'Which tasks are overdue?' and compared.",
         expected='The overdue work, decisions waiting and money at risk - the owner has 24 open and 6 overdue tasks, 53 decisions waiting and 58 items on fire.',
@@ -1774,6 +1776,7 @@ FINDINGS = [
         evidence="Plan: entity tasks, status todo, date_preset today, group_by priority. _compute_tasks keeps only tasks created or due TODAY with status exactly 'todo' (in_progress excluded), so overdue work from earlier days is filtered out. 24.1s. Second question plan: status overdue, no date -> 34 rows.",
         cause="'Needs my attention today' is read literally as a date filter, and 'todo' as a status match. Decisions, overdue items and money are never considered, because the planner picks ONE primary entity.",
         fix="Treat 'what needs my attention' as a composite intent served from the Desk's own counters (needs_decision, on_fire, overdue, receivables) rather than a single-entity list; or map it to status overdue|in_progress|todo with no date window. Add it to the planner guardrails in _refine_plan, since it is Dex's first suggested question.",
+        verified='OWNER: Yokesh (founder call, 2026-09-13) - all Dex issues are his; not to be worked on elsewhere.',
         code='routers/brain.py:127-141 (_plan), :144+ (_refine_plan), :463-478 (_compute_tasks filters); pages/Brain.js suggestions',
         found='2026-09-13',
     ),
@@ -1972,9 +1975,10 @@ FINDINGS = [
         evidence='Toast text on both viewports; no recording state, no permission prompt.',
         cause='onClick is a placeholder toast.',
         fix='Wire it to the same capture Dex uses, or remove the mic and its helper line until it is.',
+        verified='OWNER: Yokesh (founder call, 2026-09-13) - all Dex issues are his; not to be worked on elsewhere.',
         code='components/DecisionDialog.js:421-445',
         found='2026-09-13',
-        status='Open',
+        status='Assigned - Yokesh',
     ),
     dict(
         id='CL-01',
@@ -3476,6 +3480,18 @@ ASKS = [
         dep='FN-08, CR-04, CR-05, CR-09, DD-04, GL-02, MW-22',
         status='To do',
     ),
+    dict(
+        id='ASK-23',
+        section='Dex',
+        item='Dex answers what it is asked - taken over by Yokesh',
+        type='Change request',
+        prio='High',
+        what="OWNER: YOKESH - all Dex issues are taken over by him (founder call, 2026-09-13); do not action them outside his work. SCOPE, from the live AI runs: (1) DX-01 - money questions answered with zeros: the planner's question words ('owe', 'receivable') are applied as an invoice-name filter, so 'How much do customers owe us?' returns Rs 0 against a real Rs 7,49,000. Only filter by keywords that match real records, extend the stop-word list, and never answer 'zero' from an empty filtered set when the collection has rows. (2) DX-02 - 'What needs my attention today?' (Dex's own first suggestion) reads 'today' as a created/due-today filter and 'todo' as an exact status, so it tells the owner nothing is open or overdue while 24 are open and 6 overdue. Serve it from the Desk's counters (decisions, on fire, overdue, receivables). (3) DD-05 - the decision-note mic only toasts 'Voice capture is available from the Dex panel'; wire it to Dex capture or remove it. ACCEPTANCE: re-run backend/scripts/ux_ai_live_0913.py - both questions must match the ledger / task counts, and the Sales refusal must still hold.",
+        why="Dex is the product's answer surface; an owner who asks it the two most basic questions gets confident, wrong answers with KPI tiles reading Rs 0. What already works and must survive: numbers are computed in code, not by the model; Sales is refused money questions; mobile answers render; global search hands off. Finance AI (analysis + ask), coach, rescore and extraction were checked separately and are NOT in this ask.",
+        code='routers/brain.py:127-187 (_plan, _refine_plan, _KW_STOP, _rx), :241-309 (_retrieve), :463-478 (_compute_tasks), :836-843; components/DecisionDialog.js:421-445 (note mic)',
+        dep='DX-01, DX-02, DD-05',
+        status='Assigned - Yokesh',
+    ),
 ]
 
 # ---------------------------------------------------------------------------
@@ -3501,6 +3517,10 @@ NOTES = [
            "close five Team items."),
     ("Suggest", "Use this workbook as the one numbering source, or prefix the other "
                 "list (e.g. FA-13) so the two cannot collide."),
+    ("Dex owner", "Founder call 2026-09-13: every Dex issue (DX-01, DX-02, DD-05 and anything "
+                  "found later in Dex) is taken over by Yokesh - tracked as ASK-23 with status "
+                  "'Assigned - Yokesh'. Do not work on them outside his work; Finance AI, coach, "
+                  "rescore and extraction are not part of that hand-over."),
     ("Update", "Still happening. Later commits label ASK-18 (Workflows well), ASK-19 (card "
                "summary), ASK-20 (My Work scroll) and ASK-21 (New Task dialog) from the other "
                "list. In this workbook ASK-18 is the CRM In-progress list, ASK-19 the operating "

@@ -75,6 +75,7 @@ from services.tasks import (
     clean_co_assignees,
     completion_updates,
     is_start_locked,
+    manages_task,
     reopen_updates,
     task_list_query,
     _attach_reference_ids,
@@ -172,6 +173,13 @@ def _can_approve_task(user: dict, t: dict) -> bool:
     return "approvals" in user_perms(user)
 
 
+async def _team_ids(user: dict) -> list:
+    """ASK-28 TK-03 — my direct reports: people whose Reporting Manager is me."""
+    rows = await db.users.find({"tenant_id": user["tenant_id"], "reporting_manager_id": user["id"]},
+                               {"_id": 0, "id": 1}).to_list(500)
+    return [r["id"] for r in rows]
+
+
 async def _tenant_industry(tenant_id: str) -> str:
     t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "industry": 1})
     return (t or {}).get("industry") or "general"
@@ -245,8 +253,10 @@ async def list_tasks(
     # Owner (mine=false): everything.
     # ASK-28 TK-01: ?view=asked — tasks I created for other people ("Asked by me").
     # ASK-28 TK-02: ?view=approvals — tasks waiting for MY approval.
+    # ASK-28 TK-03: ?view=team — work my direct reports are doing or helping on.
     q = task_list_query(user, mine=bool(mine), view=view, status=status,
-                        can_approve_any="approvals" in user_perms(user))
+                        can_approve_any="approvals" in user_perms(user),
+                        team_ids=await _team_ids(user) if view == "team" else None)
     tasks = await db.tasks.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     return await enrich_tasks(tasks)
 
@@ -258,7 +268,8 @@ async def get_task(task_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Task not found")
     allowed = (user.get("role") == "owner" or _can_work_task(user, t)
                or t.get("approver_id") == user["id"] or t.get("created_by") == user["id"]
-               or t.get("support_id") == user["id"])
+               or t.get("support_id") == user["id"]
+               or manages_task(t, await _team_ids(user)))  # ASK-28 TK-03: their manager
     if not allowed:
         raise HTTPException(status_code=403, detail="You don't have access to this work")
     return await enrich_task(t)
@@ -319,7 +330,8 @@ async def task_activity(task_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Task not found")
     allowed = (user.get("role") == "owner" or _can_work_task(user, t)
                or t.get("approver_id") == user["id"] or t.get("created_by") == user["id"]
-               or t.get("support_id") == user["id"])
+               or t.get("support_id") == user["id"]
+               or manages_task(t, await _team_ids(user)))  # ASK-28 TK-03: their manager
     if not allowed:
         raise HTTPException(status_code=403, detail="You don't have access to this work")
     rows = await db.activity.find(
@@ -1001,7 +1013,9 @@ async def add_task_update(task_id: str, inp: TaskUpdateNoteInput, user: dict = D
     # ASK-28 TK-01: the person who asked for the task may leave a note on it;
     # hand-off and escalate stay with the people doing the work.
     requested = inp.action if inp.action in ("note", "handoff", "escalate") else "note"
-    if not (_can_work_task(user, t) or (requested == "note" and can_note_task(user, t))):
+    # ASK-28 TK-03: the manager of someone on the task may note too.
+    if not (_can_work_task(user, t) or (requested == "note" and (
+            can_note_task(user, t) or manages_task(t, await _team_ids(user))))):
         raise HTTPException(status_code=403, detail="Only the assignee or owner can post updates")
     text = (inp.text or "").strip()
     if not text:

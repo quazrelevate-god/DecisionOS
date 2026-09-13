@@ -157,11 +157,20 @@ def _can_work_task(user: dict, t: dict) -> bool:
             or (t.get("assignee_role") and t.get("assignee_role") == user.get("role")))
 
 
-def can_note_task(user: dict, t: dict) -> bool:
+def can_note_task(user: dict, t: dict, manages: bool = False) -> bool:
     """ASK-28 TK-01 — who may leave a NOTE on a task: everyone who can work it,
-    plus the person who asked for it. Hand-off and escalate stay with the
-    people doing the work (`_can_work_task`)."""
-    return bool(_can_work_task(user, t) or t.get("created_by") == user["id"])
+    plus the person who asked for it, plus (TK-03) the manager of someone on
+    it. Hand-off and escalate stay with the people doing the work
+    (`_can_work_task`)."""
+    return bool(_can_work_task(user, t) or t.get("created_by") == user["id"] or manages)
+
+
+def manages_task(t: dict, team_ids) -> bool:
+    """ASK-28 TK-03 — the doer or a helper on this task reports to me.
+    `team_ids` are the ids of my direct reports (users whose
+    reporting_manager_id is me)."""
+    team = {i for i in (team_ids or []) if i}
+    return bool(team and team.intersection(assignee_ids_of(t)))
 
 
 # ASK-28 TK-05 — the approval moment. The creator picks it per task:
@@ -207,8 +216,12 @@ def reopen_updates(t: dict, new_status: str) -> dict:
 
 
 def task_list_query(user: dict, mine: bool = False, view: Optional[str] = None,
-                    status: Optional[str] = None, can_approve_any: bool = False) -> dict:
+                    status: Optional[str] = None, can_approve_any: bool = False,
+                    team_ids: Optional[List[str]] = None) -> dict:
     """The Mongo filter behind GET /tasks.
+
+    view="team" (ASK-28 TK-03, "My team"): tasks whose doer or a helper is one
+    of my direct reports. `team_ids` are their ids; with none, nothing matches.
 
     view="approvals" (ASK-28 TK-02, "Waiting for my approval"): tasks that need
     approval, are not approved yet (a "changes requested" task still waits on
@@ -246,6 +259,12 @@ def task_list_query(user: dict, mine: bool = False, view: Optional[str] = None,
                 q["$or"] = [{"approver_id": uid}, {"approver_id": None}, {"approver_id": ""}]
             else:
                 q["approver_id"] = uid
+        return q
+    if view == "team":
+        ids = [i for i in (team_ids or []) if i]
+        # $in on an array field matches when any helper is in the team; an
+        # empty list matches nothing, so someone with no reports sees none.
+        q["$or"] = [{"assignee_id": {"$in": ids}}, {"co_assignee_ids": {"$in": ids}}]
         return q
     if view == "asked":
         q["created_by"] = uid

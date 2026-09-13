@@ -42,7 +42,7 @@ is assigned.
 
 - [ ] **D1 · Assigning outside your team** — Default: staff assign to themselves and their own team/role; owner and managers assign to anyone. *(Phase 6)*
 - [x] **D2 · Approval moment** — Creator chooses *before work starts* or *before it's marked done* per task. *(founder call 2026-09-14, built as ASK-28 TK-05)*
-- [ ] **D3 · Managers see their team** — Default: yes, through the existing Reporting Manager field. *(Phase 1)*
+- [x] **D3 · Managers see their team** — Yes, through the existing Reporting Manager field: the owner keeps All Tasks, a manager gets My team. *(founder call 2026-09-14, built as TK-03)*
 - [x] **D4 · Supporting employee** — Removed from the form; helpers cover it. *(decided 2026-09-14)*
 - [x] **D5 · Expected output** — Kept, as "Expected result" under More options. *(2026-09-14)*
 - [x] **D8 · Department on a task** — Kept as the task's own field, not the doer's department: in a small company anyone can be given a Sales task and it still counts as Sales. Drives the Department filter. *(founder call 2026-09-14)*
@@ -73,10 +73,11 @@ is assigned.
   - [x] My Work: merged into the Approvals view from 3c23e49 (Tasks | Leave tabs, All / My approvals). Its Tasks tab and the Desk's Task approvals card now read the server rule instead of `/tasks?mine=false`; the Approvals button carries the pending count and shows for a named approver without approval access; oldest first; Approve / Request changes / Ask clarification reachable.
   - [x] Approval-requested notification opens `/my-work?view=approvals&task=<id>`.
   - [ ] Acceptance: a non-owner named approver approves a real task — **waits on a test database** (checked: owner 7/7 vs API, no-access user, named approver with a mocked list, Approve click path).
-- [ ] **1.3 "My team" view** *(needs D3)*
-  - [ ] Backend: `GET /tasks?view=team` — tasks where the doer or a helper reports to me.
-  - [ ] My Work: view shown only to people with direct reports; Person filter lists the team.
-  - [ ] Acceptance: a manager sees their reports' tasks and no one else's.
+- [x] **1.3 "My team" view** *(TK-03, desktop, 2026-09-14)*
+  - [x] Backend: `GET /tasks?view=team` — tasks where the doer or a helper reports to me (direct reports only). Unit-tested.
+  - [x] My Work: shown only to a non-owner with direct reports (the owner keeps All Tasks); in the URL, not saved as default; Person filter lists the team; AI priority off; own empty state; a link opened without reports lands on My Tasks.
+  - [x] The manager can open a report's task and activity and leave a note; outside their own department the drawer is note-only, inside it the department rule still gives full controls.
+  - [x] Acceptance: a manager sees their reports' tasks and no one else's — **real data** (Sunita Rao → sai, 16 tasks), 21/21, writes blocked.
 - [ ] **1.4 Opening a task by link always works.** `/my-work?task=<id>` opens the drawer even when the task isn't in the current view (today the notification link lands on a list without it).
 - [ ] **1.5 Desk hook.** The Decision Desk "Task approvals" card (ASK-27) reads from 1.2.
 - [ ] Tracker rows + coverage; full backend tests; API parity baseline regenerated (routes change).

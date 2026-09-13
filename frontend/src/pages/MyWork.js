@@ -1463,7 +1463,11 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
   const onThisTask = user?.role === "owner" || t.assignee_id === user?.id
     || (t.co_assignee_ids || []).includes(user?.id)
     || (!!t.assignee_role && t.assignee_role === user?.role);
-  const noteOnly = !onThisTask && t.created_by === user?.id;
+  // ASK-28 TK-03 — the manager of someone on the task gets the same: they
+  // follow the work and can note on it; the people doing it drive it.
+  const managesThis = !!user?.id && [t.assignee_id, ...(t.co_assignee_ids || [])]
+    .some((id) => id && members.find((m) => m.id === id)?.reporting_manager_id === user.id);
+  const noteOnly = !onThisTask && (t.created_by === user?.id || managesThis);
   const canEditPeople = user?.role === "owner" || userPerms(user).includes("team_manage")
     || t.created_by === user?.id || t.assignee_id === user?.id;
   const onPeoplePatched = (data) => { applyPatched(data); onChange(); };
@@ -2344,7 +2348,9 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
             do here instead of showing controls. */}
         {noteOnly && (
           <p className="text-sm text-slate-500" data-testid={`requester-hint-${t.id}`}>
-            You asked for this task, so {t.assignee_name || "the team"} does the work. Leave a note below to follow up.
+            {t.created_by === user?.id
+              ? `You asked for this task, so ${t.assignee_name || "the team"} does the work.`
+              : `${t.assignee_name || "Your team"} is doing this task.`} Leave a note below to follow up.
           </p>
         )}
         <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} noteOnly={noteOnly} />
@@ -2664,7 +2670,7 @@ const STATUS_FILTER_OPTIONS = [
 const STATUS_LENSES = new Set(["overdue", "due_today", "completed"]);
 // ASK-28 TK-01 — My Work task lenses you reach by link (?view=…) and never
 // save as the default. Approvals is its own view (ASK-25), not a lens here.
-const URL_SCOPES = ["asked"];
+const URL_SCOPES = ["asked", "team"];
 // ASK-24 — a Priority filter shipped briefly and was removed on a founder
 // call (2026-09-13): the AI-priority view already splits by High/Medium/Low.
 
@@ -2797,7 +2803,7 @@ export default function MyWork() {
   const setStatusFilter = (v) => setFilterParams({ status: typeof v === "function" ? v(statusFilter) : v });
   // Person only means something on All Tasks and Asked by me — on My Tasks
   // every card is yours.
-  const personFilter = (isOwner && scope === "all") || scope === "asked" ? (params.get("person") || "") : "";
+  const personFilter = (isOwner && scope === "all") || scope === "asked" || scope === "team" ? (params.get("person") || "") : "";
   const setPersonFilter = (v) => setFilterParams({ person: v });
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   /* Priority band picker for the AI-priority kanban view. Owned by the page so
@@ -2845,15 +2851,19 @@ export default function MyWork() {
   });
   const clearSelection = () => setSelected(new Set());
   const asked = scope === "asked";
+  // ASK-28 TK-03 — "My team": the work of the people who report to me. The
+  // owner keeps All Tasks; a manager (anyone named as someone's Reporting
+  // Manager) gets this instead.
+  const team = scope === "team";
   const mine = !(isOwner && scope === "all");
-  // AI priority ranks the work YOU have to do; Asked by me is other people's
-  // work, so the ranking and its columns are off there.
-  const aiOn = aiPriority && !asked;
+  // AI priority ranks the work YOU have to do; Asked by me and My team are
+  // other people's work, so the ranking and its columns are off there.
+  const aiOn = aiPriority && !asked && !team;
   // ASK-24 — with Person set, every card would repeat the same name.
-  const showAssignee = isOwner && scope === "all" && !personFilter;
+  const showAssignee = ((isOwner && scope === "all") || team) && !personFilter;
   const tasksQ = useQuery({
-    queryKey: ["tasks", asked ? "asked" : mine],
-    queryFn: () => api.get(asked ? "/tasks?view=asked" : `/tasks?mine=${mine}`).then((r) => r.data),
+    queryKey: ["tasks", asked ? "asked" : team ? "team" : mine],
+    queryFn: () => api.get(asked ? "/tasks?view=asked" : team ? "/tasks?view=team" : `/tasks?mine=${mine}`).then((r) => r.data),
   });
   // ASK-28 TK-02 — how many task approvals wait on me (the server already
   // limits the feed to what I may approve), for the switcher's count. A named
@@ -2869,6 +2879,17 @@ export default function MyWork() {
   const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
   const prioritiesQ = useQuery({ queryKey: ["priorities"], queryFn: () => api.post("/tasks/prioritize").then((r) => r.data), enabled: aiOn });
   const members = usersQ.data || [];
+  // ASK-28 TK-03 — My team is offered to anyone who is someone's Reporting
+  // Manager. A My team link opened by someone without reports lands on My Tasks
+  // — at once for the owner (who has All Tasks instead), once the member list
+  // has loaded for anyone else.
+  const hasReports = !isOwner && !!user?.id && members.some((m) => m.reporting_manager_id === user.id);
+  useEffect(() => {
+    if (team && (isOwner || (usersQ.isSuccess && !hasReports))) {
+      setScope("mine");
+      setFilterParams({ view: "", person: "" });
+    }
+  }, [team, usersQ.isSuccess, hasReports]); // eslint-disable-line react-hooks/exhaustive-deps
   const roleOptions = [{ key: "owner", label: "Owner" }, ...(tenant?.roles || [])];
 
   const refresh = () => {
@@ -3012,9 +3033,11 @@ export default function MyWork() {
     // the My Tasks pill doesn't claim a list that isn't yours. The phone's
     // own switcher for it comes with the mobile pass.
     if (scope === "asked") return "asked";
+    // ASK-28 TK-03 — My team by link on a phone, same as Asked by me.
+    if (scope === "team") return "team";
     return "mine";
   })();
-  const inSegmentView = mobileView === "mine" || mobileView === "all" || mobileView === "asked";
+  const inSegmentView = mobileView === "mine" || mobileView === "all" || mobileView === "asked" || mobileView === "team";
   // The filter dropdown lists only tabs that have items — same rule the old
   // chip strip used. "Completed" appears when any completed task exists.
   /* KM-49 — EVERY category, not just the ones with work in them. The `> 0`
@@ -3045,7 +3068,7 @@ export default function MyWork() {
   const roleLabel = (key) => roleOptions.find((r) => r.key === key)?.label
     || String(key || "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
   const personOptions = (() => {
-    if (!((isOwner && scope === "all") || asked)) return [];
+    if (!((isOwner && scope === "all") || asked || team)) return [];
     const openBy = new Map();
     const teams = new Set();
     let unassigned = 0;
@@ -3081,8 +3104,9 @@ export default function MyWork() {
       });
     return [
       { key: "", label: "All people" },
-      // Asked by me never holds my own tasks, so "Me" would always read 0.
-      ...(user?.id && !asked ? [{ key: user.id, label: "Me", group: "People" }] : []),
+      // Asked by me never holds my own tasks, so "Me" would always read 0;
+      // My team is my reports' work, not mine.
+      ...(user?.id && !asked && !team ? [{ key: user.id, label: "Me", group: "People" }] : []),
       ...people,
       ...(unassigned > 0 || personFilter === "unassigned" ? [{ key: "unassigned", label: "Unassigned", group: "People" }] : []),
       ...[...teams].sort().map((r) => ({ key: `role:${r}`, label: `${roleLabel(r)} team`, group: "Teams" })),
@@ -3411,6 +3435,15 @@ export default function MyWork() {
                 onClick: () => go("mine"),
               });
               segments.push(askedSegment);
+              // ASK-28 TK-03 — a manager's lens on their reports' work. The
+              // owner has All Tasks, which already covers it.
+              if (hasReports) {
+                segments.push({
+                  key: "team", label: t("mywork.my_team", "My team"), testid: "work-scope-team",
+                  active: view === "mywork" && scope === "team",
+                  onClick: () => go("team"),
+                });
+              }
             }
             // ASK-25 — Approvals sits between the task lenses and Workflows:
             // it is about tasks (and leave), not pipelines.
@@ -3433,7 +3466,7 @@ export default function MyWork() {
             }
             return (
               <div className="flex flex-wrap items-center gap-2.5" data-testid="mywork-lens-group">
-                {view === "mywork" && !asked && (
+                {view === "mywork" && !asked && !team && (
                   <button onClick={() => setAiPriority((v) => !v)} data-testid="ai-priority-toggle"
                     aria-pressed={aiPriority}
                     aria-label={aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
@@ -3732,13 +3765,17 @@ export default function MyWork() {
               testid="mywork-empty"
               title={asked
                 ? (showingCompleted ? "Nothing you asked for is finished yet" : "Nothing you've asked for is open")
+                : team
+                ? (showingCompleted ? "Your team hasn't finished anything yet" : "Your team has nothing open")
                 : (showingCompleted ? t("mywork.empty_completed_title") : t("mywork.empty_title"))}
               hint={asked
                 ? "Tasks you create for other people show up here, with their live status."
+                : team
+                ? "Work given to the people who report to you shows up here, with its live status."
                 : (tab === "all" ? t("mywork.empty_all_hint") : t("mywork.empty_cat_hint"))}
-              ctaLabel={showingCompleted || asked ? null : "+ Open Decision Desk"}
-              ctaTo={showingCompleted || asked ? null : "/inbox"}
-              secondary={showingCompleted || asked ? null : "Tasks appear here once decisions are approved"}
+              ctaLabel={showingCompleted || asked || team ? null : "+ Open Decision Desk"}
+              ctaTo={showingCompleted || asked || team ? null : "/inbox"}
+              secondary={showingCompleted || asked || team ? null : "Tasks appear here once decisions are approved"}
             />
           )}
           {/* U7-05.3: bulk-action bar. Sticky at top of the list so it

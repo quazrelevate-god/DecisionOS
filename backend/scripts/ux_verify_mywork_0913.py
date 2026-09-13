@@ -5,6 +5,10 @@ da83b34 / 3d59e41 uniform 4-col grid, Department/Status dropdowns, 1400px cap re
 f69a900 one segmented slider (My Tasks | All Tasks | Workflows), AI toggle to its left
 ff3139f task opens in a right-side drawer, tighter card radius
 c413f32 Workflows board loses its outer well, stage labels centred
+        -- SUPERSEDED by 21142be: the founder asked for the sunken tray back
+           ("i need the background pressed state ui, but not the white long
+           cards for every state"), so the well is expected and the per-column
+           gradients are what must be gone. Test Coverage T-113 records this.
 c70508b / e5c9151 / 2a17592 drawer close tab on the drawer's LEFT edge
 
 Read-only: every POST/PATCH/PUT/DELETE is aborted after sign-in.
@@ -146,13 +150,28 @@ def audit_mywork(p, vp, desktop, shots):
                 return {k: btn.getAttribute('data-testid').replace('stage-toggle-',''),
                         off: Math.round((lr.left+lr.width/2) - (br.left+br.width/2))};
               });
-              const col = b.firstElementChild;
+              // Per-column frames: the half of 21142be that actually matters.
+              // .kr-frost sets `background` shorthand, so lg:bg-transparent
+              // cleared only the colour and left the gradient IMAGE painting a
+              // white card behind every stage. lg:bg-none clears the image too.
+              const cols = [...document.querySelectorAll('[data-testid^="stage-column-"]')]
+                .filter(e => e.getBoundingClientRect().width > 0)
+                .map(e => getComputedStyle(e).backgroundImage);
               return {well: b.className.includes('kr-glass-well'),
                       bg: getComputedStyle(b).backgroundImage.slice(0,40) + '|' + getComputedStyle(b).backgroundColor,
+                      colBgs: cols, colsPainted: cols.filter(v => v && v !== 'none').length,
                       heads, scroll: [b.scrollWidth, b.clientWidth]};
             }""")
             if board:
-                rec("board has no outer well", vp, not board["well"], f"class well={board['well']} bg={board['bg']}")
+                # The founder asked for the sunken tray BACK (21142be) after
+                # c413f32 removed it -- "i need the background pressed state ui,
+                # but not the white long cards for every state". So the well is
+                # expected, and what must be absent is the per-column card.
+                # See Test Coverage T-113, which records this as by design.
+                rec("board keeps its outer well (founder call, 21142be)", vp, board["well"],
+                    f"class well={board['well']} bg={board['bg']}")
+                rec("stage columns paint no card of their own", vp, board["colsPainted"] == 0,
+                    f"{board['colsPainted']} of {len(board['colBgs'])} columns painted: {board['colBgs']}")
                 offs = [h["off"] for h in board["heads"]]
                 rec("stage labels centred over column", vp, bool(offs) and all(abs(o) <= 2 for o in offs),
                     f"label-centre offsets px: {board['heads']}")

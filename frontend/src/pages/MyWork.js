@@ -40,6 +40,7 @@ import {
   DotsThreeVertical, // MW-02 · overflow menu on the summary row
   Check, Clock, ArrowFatLinesUp, // ASK-25 · card checkbox, Overdue + Escalation pills
   ChartBar, UserPlus, // ASK-27 · % control, add a person
+  Hourglass, // ASK-28 TK-07 · Waiting on
 } from "@phosphor-icons/react";
 import { AvatarStack, PersonAvatar } from "../components/karma/PersonAvatar";
 import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel, AlertDialogAction } from "../components/ui/alert-dialog";
@@ -115,16 +116,28 @@ const SECTION_BTN = "flex h-10 items-center justify-center gap-1.5 rounded-pill 
    container, and there is no evidence check on the way. STATUS_LABEL
    below keeps "Completed" and "Cancelled" -- those are still needed
    for read-only rendering of a task already in either state. */
+/* ASK-28 TK-07 (plan Phase 3, D6) — three STAGES on screen over the statuses
+   that stay stored: To do (todo, blocked) → Doing (in_progress, waiting,
+   review) → Done, or Cancelled. "Waiting on someone" and "Needs approval" are
+   FLAGS drawn beside the stage (the waiting and approval pills), so the
+   picker offers only the two stages a person moves a task between; waiting is
+   set from its own control, approval from the approval flow. */
 const STATUS_OPTIONS = [
-  { key: "todo", label: "Not Started" },
-  { key: "in_progress", label: "In Progress" },
-  { key: "waiting", label: "Waiting" },
-  { key: "review", label: "Under Review" },
+  { key: "todo", label: "To do" },
+  { key: "in_progress", label: "Doing" },
 ];
 const STATUS_LABEL = {
-  todo: "Not Started", in_progress: "In Progress", waiting: "Waiting",
-  review: "Under Review", done: "Completed", cancelled: "Cancelled", blocked: "Pending Approval",
+  todo: "To do", blocked: "To do", in_progress: "Doing", waiting: "Doing",
+  review: "Doing", done: "Done", cancelled: "Cancelled",
 };
+const STAGE_OF = { todo: "todo", blocked: "todo", in_progress: "in_progress", waiting: "in_progress", review: "in_progress", done: "done", cancelled: "cancelled" };
+const stageOf = (status) => STAGE_OF[status] || "todo";
+// Whole days a task has been waiting (0 on the day it started), or null.
+const waitDays = (t) => {
+  const since = t.waiting_on?.since ? new Date(t.waiting_on.since).getTime() : NaN;
+  return Number.isNaN(since) ? null : Math.max(0, Math.floor((Date.now() - since) / 86400000));
+};
+const waitAgo = (d) => (d === null ? "" : d === 0 ? "today" : d === 1 ? "1 day" : `${d} days`);
 
 /* KM-6 — the bar is a PROGRESS track now, not a status dropdown in disguise.
    Completed and Cancelled are gone from it, and that was a correctness fix
@@ -135,11 +148,11 @@ const STATUS_LABEL = {
    What remains is the four states a task actually passes THROUGH, in order,
    each carrying its own colour: yellow at rest, warming through orange as the
    work heats up, lime when it is out for review. */
+// ASK-28 TK-07 — the phone's segmented bar holds the two stages; Waiting on
+// has its own control below it, and review is reached through approval.
 const M_STATUS_PILLS = [
-  { key: "todo",        label: "Not Started", on: "bg-yellow-200 text-yellow-900" },
-  { key: "in_progress", label: "In Progress", on: "bg-orange-500 text-white" },
-  { key: "waiting",     label: "Waiting",     on: "bg-orange-300 text-orange-950" },
-  { key: "review",      label: "Review",      on: "bg-lime-600 text-white" },
+  { key: "todo",        label: "To do", on: "bg-yellow-200 text-yellow-900" },
+  { key: "in_progress", label: "Doing", on: "bg-orange-500 text-white" },
 ];
 const isTerminal = (t) => t.status === "done" || t.status === "cancelled";
 /* ASK-29 — a due date with no time ("2026-09-14") is due for that whole day.
@@ -1196,10 +1209,12 @@ const PRIO_LABEL = { high: "High", medium: "Medium", low: "Low" };
    in the flow; its amber is what says it has paused. */
 const STATUS_TONE = {
   todo:        { pill: QUIET_PILL, ring: "#64748b", arc: 0 },
-  blocked:     { pill: "bg-teal-50 text-teal-700 ring-teal-100", ring: "#0d9488", arc: 0.2 },
+  // ASK-28 TK-07 — the chip shows the STAGE, so each stored status wears its
+  // stage's tone; waiting and approval speak through their own pills.
+  blocked:     { pill: QUIET_PILL, ring: "#64748b", arc: 0 },
   in_progress: { pill: "bg-blue-50 text-blue-700 ring-blue-100", ring: "#3b82f6", arc: 0.72 },
-  waiting:     { pill: "bg-amber-50 text-amber-800 ring-amber-100", ring: "#d97706", arc: 0.72 },
-  review:      { pill: "bg-violet-50 text-violet-700 ring-violet-100", ring: "#7c3aed", arc: 0.88 },
+  waiting:     { pill: "bg-blue-50 text-blue-700 ring-blue-100", ring: "#3b82f6", arc: 0.72 },
+  review:      { pill: "bg-blue-50 text-blue-700 ring-blue-100", ring: "#3b82f6", arc: 0.72 },
   done:        { pill: "bg-emerald-50 text-emerald-700 ring-emerald-100", ring: "#059669", arc: 1 },
   cancelled:   { pill: "bg-stone-100 text-stone-600 ring-stone-200/70", ring: "#78716c", arc: 0 },
 };
@@ -1353,6 +1368,91 @@ function AssigneesEditor({ t, members, roleOptions, canEdit, onPatched }) {
   );
 }
 
+/* ASK-28 TK-07 — "Waiting on": the flag that replaced the Waiting status. Pick
+   a colleague (they are told, and can open the task and answer with a note) or
+   type a name — a supplier, a customer — and it records since when. While
+   waiting, the box says who and how long, with Stop waiting; moving the task
+   to To do or Doing ends the wait too. `readOnly` shows the box without the
+   controls (the person who asked, a manager, the colleague waited on). */
+function WaitingOn({ t, members = [], onPatched, readOnly = false }) {
+  const { user } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [who, setWho] = useState("");
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const w = t.waiting_on;
+  const save = async (payload, done) => {
+    setBusy(true);
+    try {
+      const { data } = await api.patch(`/tasks/${t.id}`, { waiting_on: payload });
+      onPatched?.(data);
+      toast.success(done);
+      setOpen(false);
+      setWho("");
+      setName("");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not change what this task is waiting on");
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (t.status === "waiting") {
+    const d = waitDays(t);
+    return (
+      <div data-testid={`task-waiting-${t.id}`}
+        className="flex flex-wrap items-center gap-3 rounded-2xl bg-amber-50 px-4 py-3 ring-1 ring-amber-100">
+        <Hourglass size={18} weight="bold" aria-hidden="true" className="shrink-0 text-amber-700" />
+        <p className="min-w-0 flex-1 text-sm text-amber-900">
+          <span className="font-semibold">Waiting on {w?.user_id === user?.id ? "you" : (w?.name || "someone")}</span>
+          {w?.since && <span className="text-amber-800/80"> · since {dueLabel(w.since)} ({waitAgo(d)})</span>}
+        </p>
+        {!readOnly && (
+          <button type="button" disabled={busy} onClick={() => save({}, "No longer waiting — back to Doing")}
+            data-testid={`task-waiting-stop-${t.id}`}
+            className={`h-10 shrink-0 rounded-pill px-4 text-sm font-medium text-slate-800 transition-colors hover:bg-white disabled:opacity-50 ${GLASS_PILL}`}>
+            Stop waiting
+          </button>
+        )}
+      </div>
+    );
+  }
+  if (readOnly) return null;
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} data-testid={`task-waiting-start-${t.id}`}
+        className={`inline-flex h-10 items-center gap-2 rounded-pill px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-white ${GLASS_PILL}`}>
+        <Hourglass size={16} weight="regular" aria-hidden="true" /> Waiting on someone…
+      </button>
+    );
+  }
+  const people = members.filter((m) => m.id !== user?.id);
+  const canSave = !busy && (!!who || !!name.trim());
+  return (
+    <div data-testid={`task-waiting-form-${t.id}`} className="space-y-3 rounded-2xl p-4 ring-1 ring-slate-900/10">
+      <p className={DRAWER_LABEL}>Waiting on</p>
+      <GlassSelect value={who} onChange={(v) => { setWho(v); if (v) setName(""); }} ariaLabel="A colleague"
+        testid={`task-waiting-person-${t.id}`}
+        options={[{ value: "", label: "A colleague" }, ...people.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` }))]} />
+      <input value={name} maxLength={80} data-testid={`task-waiting-name-${t.id}`} aria-label="Or type a name"
+        onChange={(e) => { setName(e.target.value); if (e.target.value) setWho(""); }}
+        placeholder="Or type a name, e.g. Kumar Fabrics (supplier)"
+        className={`h-12 w-full rounded-pill px-5 text-[15px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 ${GLASS_PILL}`} />
+      <div className="flex gap-2">
+        <button type="button" disabled={!canSave} data-testid={`task-waiting-save-${t.id}`}
+          onClick={() => save(who ? { user_id: who } : { name: name.trim() }, "Marked as waiting")}
+          className={`h-11 rounded-pill px-5 text-sm font-medium disabled:opacity-40 ${INK_PILL}`}>
+          Save
+        </button>
+        <button type="button" onClick={() => { setOpen(false); setWho(""); setName(""); }}
+          data-testid={`task-waiting-cancel-${t.id}`}
+          className={`h-11 rounded-pill px-5 text-sm font-medium text-slate-700 hover:bg-white ${GLASS_PILL}`}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // "Mon, 29 Sep" — the reference's form; the year only when it is not this one.
 function dueLabel(iso) {
   const d = new Date(iso);
@@ -1462,7 +1562,10 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
   // follow the work and can note on it; the people doing it drive it.
   const managesThis = !!user?.id && [t.assignee_id, ...(t.co_assignee_ids || [])]
     .some((id) => id && members.find((m) => m.id === id)?.reporting_manager_id === user.id);
-  const noteOnly = !onThisTask && (t.created_by === user?.id || managesThis);
+  // ASK-28 TK-07 — and the colleague this task is waiting on: they answer with
+  // a note, they don't drive the task.
+  const waitedOnMe = !!user?.id && t.waiting_on?.user_id === user.id;
+  const noteOnly = !onThisTask && (t.created_by === user?.id || managesThis || waitedOnMe);
   const canEditPeople = user?.role === "owner" || userPerms(user).includes("team_manage")
     || t.created_by === user?.id || t.assignee_id === user?.id;
   const onPeoplePatched = (data) => { applyPatched(data); onChange(); };
@@ -1739,6 +1842,17 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
                 <Clock size={12} weight="bold" aria-hidden="true" /> Overdue
               </span>
             )}
+            {/* ASK-28 TK-07 — the Waiting on flag: who or what, and for how long. */}
+            {t.status === "waiting" && !terminal && (
+              <span data-testid={`waiting-pill-${t.id}`} className={`${PILL} bg-amber-50 text-amber-800 ring-amber-100`}
+                title={t.waiting_on?.name ? `Waiting on ${t.waiting_on.name}${waitDays(t) !== null ? ` for ${waitAgo(waitDays(t))}` : ""}` : "Waiting"}>
+                <Hourglass size={12} weight="bold" aria-hidden="true" />
+                <span className="max-w-[9rem] truncate">{t.waiting_on?.name ? `Waiting on ${t.waiting_on.name}` : "Waiting"}</span>
+                {waitDays(t) !== null && (
+                  <span className="tabular-nums opacity-75">· {waitDays(t) === 0 ? "today" : `${waitDays(t)}d`}</span>
+                )}
+              </span>
+            )}
             {/* ASK-28 TK-05 — which approval this task carries. Amber while it
                 waits on an approver; quiet while a close-stage task is still
                 being worked, so the doer knows Complete will ask first. */}
@@ -1938,7 +2052,7 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
           <div className="kr-pressed flex items-center gap-1 rounded-pill p-1" role="group"
                aria-label="Task status" data-testid={`status-pills-m-${t.id}`}>
             {M_STATUS_PILLS.map((sp) => {
-              const on = t.status === sp.key;
+              const on = stageOf(t.status) === sp.key;
               return (
                 <button
                   key={sp.key}
@@ -1963,6 +2077,10 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
               );
             })}
           </div>
+        )}
+        {/* ASK-28 TK-07 — Waiting on, under the two stages. */}
+        {!terminal && !awaitingApproval && (
+          <WaitingOn t={t} members={members} onPatched={onPeoplePatched} readOnly={noteOnly} />
         )}
 
         {/* ASK-27 — the Execution Guide is NOT rendered here any more. MW-16
@@ -2120,19 +2238,23 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
             <p className="text-[15px] font-medium text-slate-800" data-testid={`requester-status-${t.id}`}>
               {STATUS_LABEL[t.status] || t.status} · {checklist ? checklist.pct : (t.progress || 0)}% done
             </p>
+            {t.status === "waiting" && <div className="mt-3"><WaitingOn t={t} readOnly /></div>}
           </section>
         ) : (
         <section data-testid={`task-status-${t.id}`}>
           <p className={DRAWER_LABEL}>Status</p>
           <div className="flex items-stretch gap-5">
             <GlassSelect testid={`status-select-${t.id}`} ariaLabel="Task status" icon={Clock}
-              value={t.status === "blocked" ? "todo" : t.status} onChange={setStatus}
+              value={stageOf(t.status)} onChange={setStatus}
               options={STATUS_OPTIONS.map((s) => ({ value: s.key, label: s.label }))}
               triggerClassName="w-56 shrink-0 font-medium text-slate-800" />
             <span aria-hidden="true" className="w-px shrink-0 bg-slate-900/10" />
             <ProgressControl value={checklist ? checklist.pct : (t.progress || 0)} onCommit={setProgress}
               checklist={checklist}
               testid={`progress-select-${t.id}`} valueTestid={`progress-bar-${t.id}`} />
+          </div>
+          <div className="mt-3">
+            <WaitingOn t={t} members={members} onPatched={onPeoplePatched} />
           </div>
         </section>
         )
@@ -2366,8 +2488,10 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
         {noteOnly && (
           <p className="text-sm text-slate-500" data-testid={`requester-hint-${t.id}`}>
             {t.created_by === user?.id
-              ? `You asked for this task, so ${t.assignee_name || "the team"} does the work.`
-              : `${t.assignee_name || "Your team"} is doing this task.`} Leave a note below to follow up.
+              ? `You asked for this task, so ${t.assignee_name || "the team"} does the work. Leave a note below to follow up.`
+              : waitedOnMe
+              ? `${t.assignee_name || "The team"} is waiting on you for this task. Leave a note below with what they need.`
+              : `${t.assignee_name || "Your team"} is doing this task. Leave a note below to follow up.`}
           </p>
         )}
         <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} noteOnly={noteOnly} />
@@ -2685,21 +2809,30 @@ function TaskPriorityColumns({ list, openId, setOpenId, cardProps, band = "high"
 /* MW-19 — Completed lives HERE, not in Department. It is a state, and the
    Department dropdown beside it lists departments; "Completed" sitting among
    Sales and Logistics asked the reader to hold two meanings in one control. */
+/* ASK-28 TK-07 — the two stages, the two flags, then the lenses. */
 const STATUS_FILTER_OPTIONS = [
   { key: "", label: "All statuses" },
-  { key: "todo", label: "Not Started" },
-  { key: "in_progress", label: "In Progress" },
-  { key: "waiting", label: "Waiting" },
-  // ASK-24 — the two chips on nearly every card, neither filterable before.
-  { key: "blocked", label: "Pending Approval" },
-  { key: "review", label: "Under Review" },
+  { key: "todo", label: "To do" },
+  { key: "in_progress", label: "Doing" },
+  { key: "waiting", label: "Waiting on someone" },
+  { key: "approval", label: "Needs approval" },
   { key: "overdue", label: "Overdue" },
   // ASK-25 F4 — the Desk's "Due today" card needs somewhere to land.
   { key: "due_today", label: "Due today" },
-  { key: "completed", label: "Completed" },
+  { key: "completed", label: "Done" },
 ];
-// Overdue, Due today and Completed are LENSES, not t.status values.
-const STATUS_LENSES = new Set(["overdue", "due_today", "completed"]);
+// Links made before the stages keep working: Pending Approval and Under
+// Review are the Needs approval flag now.
+const STATUS_ALIASES = { blocked: "approval", review: "approval" };
+// Everything but a stage is a LENS or a FLAG: the card's stage chip still
+// says something under it, so it stays on the cards (see hideStatus).
+const STATUS_LENSES = new Set(["overdue", "due_today", "completed", "waiting", "approval"]);
+function statusMatches(t, status) {
+  if (status === "todo" || status === "in_progress") return stageOf(t.status) === status;
+  if (status === "waiting") return t.status === "waiting";
+  if (status === "approval") return t.status === "blocked" || (!!t.approval_required && t.approval_status === "pending");
+  return true; // overdue / due_today / completed are checked on their own
+}
 // ASK-28 TK-01 — My Work task lenses you reach by link (?view=…) and never
 // save as the default. Approvals is its own view (ASK-25), not a lens here.
 const URL_SCOPES = ["asked", "team"];
@@ -2717,7 +2850,7 @@ function matchesFilters(t, { tab, person, status }) {
   if (tab !== "all" && tab !== "completed" && t.task_type !== tab) return false;
   if (status === "overdue" && !isOverdue(t)) return false;
   if (status === "due_today" && !isDueToday(t)) return false;
-  if (status && !STATUS_LENSES.has(status) && t.status !== status) return false;
+  if (status && !statusMatches(t, status)) return false;
   if (person === "unassigned") return !t.assignee_id && !t.assignee_role;
   if (person && person.startsWith("role:")) return !t.assignee_id && t.assignee_role === person.slice(5);
   // ASK-26 — a person's filter holds every task they are on, lead or not.
@@ -2835,7 +2968,7 @@ export default function MyWork() {
     Object.entries(changes).forEach(([k, v]) => { if (v) next.set(k, v); else next.delete(k); });
     return next;
   }, { replace: true });
-  const rawStatus = params.get("status") || "";
+  const rawStatus = STATUS_ALIASES[params.get("status") || ""] || params.get("status") || "";
   const statusFilter = STATUS_FILTER_OPTIONS.some((o) => o.key === rawStatus) ? rawStatus : "";
   const setStatusFilter = (v) => setFilterParams({ status: typeof v === "function" ? v(statusFilter) : v });
   // Person only means something on All Tasks and Asked by me — on My Tasks

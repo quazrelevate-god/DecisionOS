@@ -31,8 +31,10 @@ async def dashboard(user: dict = Depends(get_current_user)):
         ).to_list(50)
     else:
         pending_purchases = []
-    overdue = await db.tasks.find({"tenant_id": tid, "status": {"$in": ["todo", "in_progress"]}, "due_date": {"$lt": now, "$ne": None}}, {"_id": 0}).to_list(50)
-    open_tasks = await db.tasks.count_documents({"tenant_id": tid, "status": {"$in": ["todo", "in_progress"]}})
+    # ASK-28 TK-07: waiting and under review are open work too.
+    working = ["todo", "in_progress", "waiting", "review"]
+    overdue = await db.tasks.find({"tenant_id": tid, "status": {"$in": working}, "due_date": {"$lt": now, "$ne": None}}, {"_id": 0}).to_list(50)
+    open_tasks = await db.tasks.count_documents({"tenant_id": tid, "status": {"$in": working}})
     done_tasks = await db.tasks.count_documents({"tenant_id": tid, "status": "done"})
     # FIX-001-F: exclude the tenant's actual terminal stages, not just the
     # textile ones. A salon's 'served' or a bakery's 'settled' now correctly

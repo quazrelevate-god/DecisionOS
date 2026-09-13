@@ -647,7 +647,7 @@ async def leave_impact(leave_id: str, user: dict = Depends(get_current_user)):
         {"_id": 0}).to_list(300)
     at_risk = [t for t in all_tasks
                if ((t.get("due_date") or "")[:10] and (t.get("due_date") or "")[:10] <= to_date)
-               or t.get("status") == "in_progress"]
+               or t.get("status") in ("in_progress", "waiting", "review")]  # ASK-28 TK-07: Doing
     # Available teammates: everyone except the person on leave and anyone else on approved overlapping leave.
     users = await db.users.find({"tenant_id": tid}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(500)
     overlapping = await db.leaves.find(

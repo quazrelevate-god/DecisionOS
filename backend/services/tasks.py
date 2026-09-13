@@ -22,6 +22,51 @@ from core import db
 
 TASK_STATUSES = {"blocked", "todo", "in_progress", "waiting", "review", "done", "cancelled"}
 
+# ASK-28 TK-07 (plan Phase 3, D6) — the STAGES people see, over the statuses
+# that stay stored (no migration; the phone app and Dex keep reading them):
+#   To do  = todo, blocked (waiting for approval before work starts)
+#   Doing  = in_progress, waiting (Waiting on someone), review (approval to close)
+#   Done / Cancelled
+# Waiting on and Needs approval are flags on top of the stage, not stages.
+OPEN_STATUSES = ("todo", "blocked", "in_progress", "waiting", "review")
+# Open work that can run late (a task still waiting for approval to START is
+# left out, as the delayed counts always did).
+WORKING_STATUSES = ("todo", "in_progress", "waiting", "review")
+STAGE_STATUSES = {"todo": ("todo", "blocked"), "in_progress": ("in_progress", "waiting", "review")}
+WAITING_NAME_MAX = 80
+
+
+def stage_of(status: Optional[str]) -> str:
+    if status in ("done", "cancelled"):
+        return status
+    return "in_progress" if status in STAGE_STATUSES["in_progress"] else "todo"
+
+
+def waiting_updates(spec: Optional[dict], member: Optional[dict], actor_id: str, now: str) -> dict:
+    """ASK-28 TK-07 — what "Waiting on" writes. `spec` is {"user_id"} (a
+    colleague, `member` is their user doc or None if not in the company),
+    {"name"} (free text, e.g. a supplier), or empty (stop waiting -> back to
+    Doing). Raises ValueError with a message for the person when it can't."""
+    if not spec:
+        return {"status": "in_progress", "waiting_on": None}
+    if spec.get("user_id"):
+        if not member:
+            raise ValueError("That person isn't in this company.")
+        return {"status": "waiting", "waiting_on": {
+            "user_id": member["id"], "name": member.get("name") or "a colleague", "since": now, "set_by": actor_id}}
+    name = str(spec.get("name") or "").strip()
+    if not name:
+        raise ValueError("Say who or what this task is waiting on.")
+    return {"status": "waiting", "waiting_on": {
+        "user_id": None, "name": name[:WAITING_NAME_MAX], "since": now, "set_by": actor_id}}
+
+
+def status_change_clears_waiting(t: dict, new_status: str) -> dict:
+    """Moving a waiting task to any other status ends the wait."""
+    if new_status != "waiting" and (t.get("waiting_on") or t.get("status") == "waiting"):
+        return {"waiting_on": None}
+    return {}
+
 
 def _derive_task_type(t: dict) -> str:
     # Any stored category key (dynamic per tenant) passes through; else fall back to role, else 'other'.
@@ -160,7 +205,9 @@ def can_note_task(user: dict, t: dict, manages: bool = False) -> bool:
     plus the person who asked for it, plus (TK-03) the manager of someone on
     it. Hand-off and escalate stay with the people doing the work
     (`_can_work_task`)."""
-    return bool(_can_work_task(user, t) or t.get("created_by") == user["id"] or manages)
+    # ASK-28 TK-07: the colleague a task is waiting on may answer with a note.
+    waited_on = (t.get("waiting_on") or {}).get("user_id") == user["id"]
+    return bool(_can_work_task(user, t) or t.get("created_by") == user["id"] or manages or waited_on)
 
 
 def manages_task(t: dict, team_ids) -> bool:

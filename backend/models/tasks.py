@@ -64,6 +64,9 @@ class TaskUpdateInput(BaseModel):
     priority: Optional[str] = None
     progress: Optional[int] = None
     evidence_required: Optional[bool] = None
+    # ASK-28 TK-07: "Waiting on" — {"user_id": ...} (a colleague) or
+    # {"name": "Kumar Fabrics"} (free text); {} stops waiting.
+    waiting_on: Optional[dict] = None
 
 
 class TaskReassignInput(BaseModel):

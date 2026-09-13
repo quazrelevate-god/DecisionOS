@@ -41,9 +41,8 @@ if os.environ.get("UX_ALLOW_WRITES") != "1":
 
 REPO = Path(__file__).resolve().parent.parent.parent
 
-STATUS_LABELS = {"todo": "Not Started", "in_progress": "In Progress", "waiting": "Waiting",
-                 "review": "Under Review", "done": "Completed", "cancelled": "Cancelled",
-                 "blocked": "Pending Approval"}
+# ASK-28 TK-07: the screen shows stages over the stored statuses.
+STATUS_LABELS = {"in_progress": "Doing", "todo": "To do", "done": "Done", "cancelled": "Cancelled"}
 
 
 def glass_options(page, testid):
@@ -242,7 +241,7 @@ def phase_transitions(page, cid):
         return
     rec(ph, "status control present on the expanded card", True)
 
-    for state in ("in_progress", "waiting", "review", "todo"):
+    for state in ("in_progress", "todo"):  # ASK-28 TK-07: To do / Doing (waiting is its own control)
         try:
             glass_choose(page, f"status-select-{cid}", state)
             page.wait_for_timeout(1400)
@@ -538,7 +537,7 @@ def phase_mobile(browser):
     p.wait_for_timeout(1000)
     pills = p.locator(f'[data-testid="status-pills-m-{cid}"]:visible')
     rec(ph, "mobile status pills render on the expanded card", pills.count() > 0)
-    for key in ("in_progress", "waiting", "review", "todo"):
+    for key in ("in_progress", "todo"):
         pill = p.locator(f'[data-testid="status-pill-m-{key}-{cid}"]:visible')
         if not pill.count():
             rec(ph, f"mobile pill {key} present", False)

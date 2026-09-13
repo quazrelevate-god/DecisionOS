@@ -290,6 +290,66 @@ def test_helpers_hear_status_changes_and_overdue_reminders(with_test_db):
 
 
 # ---------------------------------------------------------------------------
+# TK-07 — stages and the Waiting on flag
+# ---------------------------------------------------------------------------
+def test_waiting_on_a_colleague_or_a_supplier(with_test_db):
+    async def scenario(db):
+        await _seed(db)
+        with e2e_env(db, stubs=STUBS, keep=KEEP):
+            t = await _create(SALES, title="Finish the Kapoor quote", assignee_id="u-ops")
+            await tasks.update_task(t["id"], TaskUpdateInput(status="in_progress"), user=OPS)
+            await db.notifications.delete_many({})
+
+            # Waiting on a colleague: stored as waiting, with who and since when; they are told.
+            out = await tasks.update_task(t["id"], TaskUpdateInput(waiting_on={"user_id": "u-fin"}), user=OPS)
+            assert out["status"] == "waiting" and out["waiting_on"]["user_id"] == "u-fin"
+            assert out["waiting_on"]["name"] == FIN["name"] and out["waiting_on"]["since"]
+            assert await db.notifications.count_documents({"user_id": "u-fin", "entity_id": t["id"]}) == 1
+            # ...they can open it and answer with a note, but not hand it off.
+            assert (await tasks.get_task(t["id"], user=FIN))["id"] == t["id"]
+            await tasks.add_task_update(t["id"], TaskUpdateNoteInput(text="Rates attached"), user=FIN)
+            await _refused(tasks.add_task_update(
+                t["id"], TaskUpdateNoteInput(text="x", action="handoff", to_id="u-prod"), user=FIN))
+
+            # Switching to a supplier by name.
+            out = await tasks.update_task(t["id"], TaskUpdateInput(waiting_on={"name": "Kumar Fabrics"}), user=OPS)
+            assert out["status"] == "waiting" and out["waiting_on"]["name"] == "Kumar Fabrics" and out["waiting_on"]["user_id"] is None
+            # The colleague no longer waited on loses that access.
+            await _refused(tasks.get_task(t["id"], user=FIN))
+
+            # Moving it along ends the wait.
+            out = await tasks.update_task(t["id"], TaskUpdateInput(status="in_progress"), user=OPS)
+            assert out["status"] == "in_progress" and out.get("waiting_on") is None
+
+            # Stop waiting from the flag itself -> back to Doing.
+            await tasks.update_task(t["id"], TaskUpdateInput(waiting_on={"name": "Kumar Fabrics"}), user=OPS)
+            out = await tasks.update_task(t["id"], TaskUpdateInput(waiting_on={}), user=OPS)
+            assert out["status"] == "in_progress" and out.get("waiting_on") is None
+            kinds = [a["kind"] async for a in db.activity.find({"entity_id": t["id"]}, {"_id": 0, "kind": 1})]
+            assert kinds.count("task_waiting") >= 3, kinds
+
+            # Nobody to wait on, or a finished task: refused with a reason.
+            detail = await _refused(tasks.update_task(t["id"], TaskUpdateInput(waiting_on={"name": "  "}), user=OPS), status=400)
+            assert "waiting on" in detail
+            await tasks.update_task(t["id"], TaskUpdateInput(status="done"), user=OPS)
+            await _refused(tasks.update_task(t["id"], TaskUpdateInput(waiting_on={"name": "Kumar Fabrics"}), user=OPS), status=400)
+            return True
+    assert with_test_db(scenario) is True
+
+
+def test_waiting_on_respects_the_start_approval_lock(with_test_db):
+    async def scenario(db):
+        await _seed(db)
+        with e2e_env(db, stubs=STUBS, keep=KEEP):
+            t = await _create(SALES, title="Buy the dye", assignee_id="u-ops",
+                              approval_required=True, approval_stage="start", approver_id="u-fin")
+            await _refused(tasks.update_task(t["id"], TaskUpdateInput(waiting_on={"name": "Supplier"}), user=OPS))
+            assert (await db.tasks.find_one({"id": t["id"]}))["status"] == "blocked"
+            return True
+    assert with_test_db(scenario) is True
+
+
+# ---------------------------------------------------------------------------
 # TK-03 — My team
 # ---------------------------------------------------------------------------
 def test_my_team_manager_sees_opens_and_notes_on_reports_work(with_test_db):

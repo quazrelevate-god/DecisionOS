@@ -68,6 +68,7 @@ from services.ai import brain_context
 from services.tenancy import tenant_filter  # FIX-001-C
 from services.tasks import (
     APPROVAL_STAGES,
+    OPEN_STATUSES,
     TASK_STATUSES,
     approval_stage,
     assignee_ids_of,
@@ -77,7 +78,9 @@ from services.tasks import (
     is_start_locked,
     manages_task,
     reopen_updates,
+    status_change_clears_waiting,
     task_list_query,
+    waiting_updates,
     _attach_reference_ids,
     _can_work_task,
     _plan_progress,
@@ -281,6 +284,7 @@ async def get_task(task_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Task not found")
     allowed = (user.get("role") == "owner" or _can_work_task(user, t)
                or t.get("approver_id") == user["id"] or t.get("created_by") == user["id"]
+               or (t.get("waiting_on") or {}).get("user_id") == user["id"]  # ASK-28 TK-07: waited on
                or manages_task(t, await _team_ids(user)))  # ASK-28 TK-03: their manager
     if not allowed:
         raise HTTPException(status_code=403, detail="You don't have access to this work")
@@ -342,6 +346,7 @@ async def task_activity(task_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Task not found")
     allowed = (user.get("role") == "owner" or _can_work_task(user, t)
                or t.get("approver_id") == user["id"] or t.get("created_by") == user["id"]
+               or (t.get("waiting_on") or {}).get("user_id") == user["id"]  # ASK-28 TK-07: waited on
                or manages_task(t, await _team_ids(user)))  # ASK-28 TK-03: their manager
     if not allowed:
         raise HTTPException(status_code=403, detail="You don't have access to this work")
@@ -507,6 +512,25 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             status_code=400,
             detail=f"Invalid status '{updates['status']}'. Use one of: {sorted(TASK_STATUSES)}",
         )
+    # ASK-28 TK-07: "Waiting on" a colleague or a name, and since when. It sets
+    # the stored status to waiting; an empty waiting_on stops waiting (back to
+    # Doing). Any other status change ends the wait. Both then pass the same
+    # gates as a status change (the start-approval lock, approval to close).
+    if "waiting_on" in updates:
+        spec = updates.pop("waiting_on") or {}
+        if t.get("status") in ("done", "cancelled"):
+            raise HTTPException(status_code=400, detail="A finished task isn't waiting on anyone.")
+        member = None
+        if isinstance(spec, dict) and spec.get("user_id"):
+            member = await db.users.find_one({"id": spec["user_id"], "tenant_id": user["tenant_id"]},
+                                             {"_id": 0, "id": 1, "name": 1})
+        if spec or t.get("status") == "waiting" or t.get("waiting_on"):
+            try:
+                updates.update(waiting_updates(spec if isinstance(spec, dict) else {}, member, user["id"], now_iso()))
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+    elif "status" in updates:
+        updates.update(status_change_clears_waiting(t, updates["status"]))
     if "progress" in updates:
         updates["progress"] = max(0, min(100, int(updates["progress"])))
         # ASK-28: a task with a checklist takes its progress from the list —
@@ -581,6 +605,8 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
     if updates:
         if signoff_requested:
             updates["last_action"] = "Sent for approval"
+        elif updates.get("waiting_on"):
+            updates["last_action"] = f"Waiting on {updates['waiting_on']['name']}"
         elif "status" in updates:
             updates["last_action"] = f"Status → {updates['status'].replace('_', ' ')}"
         elif updates.get("assignee_id"):
@@ -640,8 +666,23 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
         # ASK-29: every status move lands on the task's timeline. It used to
         # show only as "last_action" under the drawer's title; "done" is its
         # own event just below, so it is not written twice.
+        # ASK-28 TK-07: the wait itself goes on the timeline, and a colleague
+        # being waited on is told (they can open the task and answer with a note).
+        if "waiting_on" in updates:
+            w = updates["waiting_on"]
+            if w:
+                await _log_task_event(user, task_id, "task_waiting", f"'{t['title']}' is waiting on {w['name']}",
+                                      f"Waiting on {w['name']}")
+                if w.get("user_id") and w["user_id"] != user["id"]:
+                    await push_notification(user["tenant_id"], [w["user_id"]], 2,
+                                            f"{user['name']} is waiting on you for '{t['title']}'", "task", task_id,
+                                            ntype="waiting", title=t["title"], sender=user["name"])
+            elif t.get("waiting_on") or t.get("status") == "waiting":
+                gone = (t.get("waiting_on") or {}).get("name") or "someone"
+                await _log_task_event(user, task_id, "task_waiting", f"'{t['title']}' is no longer waiting on {gone}",
+                                      f"No longer waiting on {gone}")
         if (updates.get("status") and updates["status"] != t.get("status") and updates["status"] != "done"
-                and not signoff_requested):
+                and not signoff_requested and "waiting_on" not in updates):
             word = _STATUS_WORDS.get(updates["status"], updates["status"])
             await _log_task_event(user, task_id, "task_status", f"'{t['title']}' status → {word}", f"Status → {word}")
         if "progress" in updates and "status" not in updates and updates["progress"] != t.get("progress"):
@@ -1166,7 +1207,7 @@ async def prioritize_tasks(force: bool = False, limit: int = 25, user: dict = De
     from services.ai.extraction import ai_score_tasks
     from services.ingestion import _tenant_currency
     tid = user["tenant_id"]
-    q = {"tenant_id": tid, "status": {"$in": ["todo", "in_progress", "blocked"]}}
+    q = {"tenant_id": tid, "status": {"$in": list(OPEN_STATUSES)}}  # ASK-28 TK-07: every open stage
     if user["role"] != "owner":
         q["$or"] = [{"assignee_id": user["id"]}, {"co_assignee_ids": user["id"]}, {"assignee_role": user["role"]}]
     open_tasks = await db.tasks.find(q, {"_id": 0}).sort("created_at", -1).to_list(limit)

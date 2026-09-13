@@ -136,7 +136,7 @@ def run_mobile(browser, outdir):
 
     # status lens: each band must produce a subset of what's loaded
     lens_ok, lens_detail = True, []
-    for st in ("todo", "in_progress", "waiting", "review"):
+    for st in ("todo", "in_progress"):  # ASK-28 TK-07: the phone lens holds the two stages
         tid = f"work-status-{st}"
         if not page.locator(f'[data-testid="{tid}"]').count():
             continue

@@ -69,8 +69,13 @@ TRUTH_JS = """async (api) => {
     term: term(t), od: !!(t.due_date && new Date(t.due_date) < now && !term(t)),
     tier: (t.priority === 'high' || t.priority === 'low') ? t.priority : 'medium',
     status: t.status, type: t.task_type,
+    ap: t.status === 'blocked' || (!!t.approval_required && t.approval_status === 'pending'),
   }));
 }"""
+
+# ASK-28 TK-07: the Status filter shows stages (To do / Doing) and flags
+# (Waiting on someone / Needs approval) over the stored statuses.
+STAGE = {"todo": ("todo", "blocked"), "in_progress": ("in_progress", "waiting", "review")}
 
 USERS_JS = """async (api) => (await (await fetch(api + '/users', {credentials:'include'})).json())
   .map(u => ({id: u.id, name: u.name, email: u.email, role: u.role}))"""
@@ -85,7 +90,11 @@ def expect(rows, person="", priority="", status="", tab="all"):
             continue
         if status == "overdue" and not t["od"]:
             continue
-        if status and status not in ("overdue", "completed") and t["status"] != status:
+        if status in STAGE and t["status"] not in STAGE[status]:
+            continue
+        if status == "waiting" and t["status"] != "waiting":
+            continue
+        if status == "approval" and not t["ap"]:
             continue
         if priority and t["tier"] != priority:
             continue
@@ -183,7 +192,7 @@ def owner_desktop(browser):
     rec("person-menu-distinct", VP, not dup, f"{len(items)} options; duplicates: {dup or 'none'}; first 8: {items[:8]}")
     status_items = menu_items(p, "status")
     rec("status-options-complete", VP,
-        all(any(s in i for i in status_items) for s in ("Pending Approval", "Overdue", "Completed", "Not Started")),
+        all(any(s in i for i in status_items) for s in ("To do", "Doing", "Waiting on someone", "Needs approval", "Overdue", "Done")),
         str(status_items))
     rec("no-priority-filter", VP, p.locator('[data-testid="work-filter-priority"]').count() == 0,
         "Priority dropdown removed (founder call 2026-09-13)")
@@ -259,7 +268,7 @@ def owner_desktop(browser):
         rec("team-queue", VP, None, "no role-only tasks in this workspace")
     pick(p, "person", "")
 
-    for key in ("blocked", "completed", "todo"):
+    for key in ("approval", "completed", "todo", "in_progress"):
         pick(p, "status", key)
         exp = expect(rows, status=key)
         rec(f"status-{key}", VP, cards(p) == exp == trig_count(p, "status"),
@@ -268,7 +277,7 @@ def owner_desktop(browser):
 
     zero = None
     for uid, n in open_by.items():
-        for st in ("review", "waiting", "in_progress", "blocked", "todo"):
+        for st in ("waiting", "approval", "in_progress", "todo"):
             if expect(rows, person=uid, status=st) == 0:
                 zero = (uid, st)
                 break

@@ -46,7 +46,7 @@ is assigned.
 - [x] **D4 · Supporting employee** — Removed everywhere (form, server, drawer, phone app); helpers cover it. *(decided 2026-09-14, done in Phase 2)*
 - [x] **D5 · Expected output** — Kept, as "Expected result" under More options. *(2026-09-14)*
 - [x] **D8 · Department on a task** — Kept as the task's own field, not the doer's department: in a small company anyone can be given a Sales task and it still counts as Sales. Drives the Department filter. *(founder call 2026-09-14)*
-- [ ] **D6 · Statuses** — Default: change labels and flags in the UI first, keep stored statuses as they are; migrate data only later if needed. *(Phase 3)*
+- [x] **D6 · Statuses** — Change labels and flags on screen, keep stored statuses; migrate data only later if ever needed. "Waiting on" takes a colleague or a typed name. *(founder go-ahead 2026-09-14, built as TK-07)*
 - [ ] **D7 · Overdue reminders for Waiting / Under review / Pending approval tasks** — Default: yes, remind the person they are waiting on or the approver. *(Phase 7)*
 
 ---
@@ -94,11 +94,27 @@ A task has four kinds of people: **Doer** (one), **Helpers** (optional), **Asked
 
 ## Phase 3 — Stages and flags (P1)
 
-- [ ] **3.1 Three stages in the UI** *(needs D6)*: To do (`todo`), Doing (`in_progress`), Done (`done`), Cancelled.
-- [ ] **3.2 "Waiting on" flag** — who or what (person or free text like a supplier) and since when; replaces the Waiting status.
-- [ ] **3.3 Approval as a 🔒 flag** on the card, not a status pill.
-- [ ] **3.4 Under review** folds into approval before closing (Phase 4).
-- [ ] **3.5 Update everything that reads status:** Status filter, card pills, phone progress bar, Desk counts, Brief, Operating Score. Dex's status handling belongs to Yokesh — hand him the mapping, don't change it here.
+*Built 2026-09-14 as ASK-28 TK-07, on D6's default: screens change, stored statuses stay (no migration).*
+
+| Stored status | Stage on screen | Flag |
+|---|---|---|
+| `todo` | To do | — |
+| `blocked` | To do | 🔒 Approval to start |
+| `in_progress` | Doing | — |
+| `waiting` | Doing | ⏳ Waiting on *who* · *days* |
+| `review` | Doing | 🔒 Approval to close |
+| `done` / `cancelled` | Done / Cancelled | — |
+
+- [x] **3.1 Three stages in the UI:** cards, drawer, requester line and toasts say To do / Doing / Done / Cancelled; the status picker (desktop) and the phone's segmented bar offer To do and Doing.
+- [x] **3.2 "Waiting on" flag** — "Waiting on someone…" in the drawer (desktop and phone): pick a colleague or type a name (e.g. a supplier); stored as `waiting_on {user_id|null, name, since, set_by}` with status `waiting`. The card shows "Waiting on Kumar Fabrics · 3d"; the drawer shows since when, with Stop waiting. A colleague waited on is notified and can open the task and answer with a note (not drive it). Moving the task to any other status ends the wait. Real-save tested.
+- [x] **3.3 Approval as a 🔒 flag** on the card (the approval pills from TK-05); the chip shows the stage.
+- [x] **3.4 Under review** folds into approval before closing (TK-05); it is no longer offered in the picker.
+- [x] **3.5 Everything that reads status:**
+  - My Work Status filter: To do · Doing · Waiting on someone · Needs approval · Overdue · Due today · Done (old `?status=blocked|review` links open Needs approval).
+  - Counts now treat waiting and under review as open work: Operating Score, calendar, dashboard, Brief delayed + its To do / Doing counters and drill-downs, task prioritisation, leave impact.
+  - **For Yokesh (Dex, not changed here):** `services/ai/agent_tools.py` (open = todo/blocked/in_progress) and `routers/brain.py` overdue counts (todo/in_progress) should add `waiting` and `review`; the mapping is the table above.
+  - **Phase 7:** overdue reminders (`finance_signals.run_followup`) still scan todo/in_progress only — waiting tasks are for D7.
+  - **Flutter app:** still shows the stored status words; it keeps working because nothing stored changed.
 
 ## Phase 4 — Approval as a step (P1)
 

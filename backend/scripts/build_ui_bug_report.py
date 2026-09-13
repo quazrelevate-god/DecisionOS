@@ -330,7 +330,7 @@ FINDINGS = [
     ),
     dict(
         id="MW-20", section="My Work", screen="Task drawer - every click inside closes it",
-        viewport="Mobile + Desktop", persona="All", severity="Critical", status="Open",
+        viewport="Mobile + Desktop", persona="All", severity="Critical", status="Fixed",
         area="Regression / broken flow",
         tested="On the newest code (after 78d01df), opened a task drawer at 1440x900 and "
                "390x844 and clicked five harmless targets inside it, reopening before "
@@ -364,13 +364,14 @@ FINDINGS = [
             "component tree. Also guard the root handler with "
             "e.currentTarget.contains(e.target) - that is a DOM check, which a portal "
             "click fails. Add the five-click test to the verify script.",
+        verified='VERIFIED FIXED 2026-09-13 (0a57743): clicking the title, empty space, status, Log update and Add manually leaves the drawer open - 5 of 5 at 1440 and 5 of 5 at 390.',
         code="pages/MyWork.js:1242-1255 (card root onClick / onKeyDown), the <Sheet> "
              "rendered inside the same component (~:1360)",
         found="2026-09-13",
     ),
     dict(
         id="MW-21", section="My Work", screen="Task - Delete",
-        viewport="Mobile + Desktop", persona="Owner", severity="High", status="Open",
+        viewport="Mobile + Desktop", persona="Owner", severity="High", status="Fixed",
         area="Regression / missing function",
         tested="Searched the list page and the open drawer for any Delete, View details "
                "or overflow control, and searched the code for what opens the task "
@@ -388,13 +389,14 @@ FINDINGS = [
         fix="Put 'Delete task' in the drawer - a quiet destructive button at the foot of "
             "the drawer, keeping the existing confirm step - or restore a 'View "
             "details' entry. Owner-only, as it was.",
+        verified="VERIFIED FIXED 2026-09-13 (0a57743): 'View details' at the foot of the drawer opens the detail dialog; Delete task is there and asks for confirmation before any DELETE is sent (1440 and 390).",
         code="pages/MyWork.js:782-940 (TaskDetailDialog + delete), :1074 and :1941 "
              "(detailOpen with no opener)",
         found="2026-09-13",
     ),
     dict(
         id="MW-15", section="My Work", screen="Task drawer - close (mobile)",
-        viewport="Mobile", persona="All", severity="High", status="Open",
+        viewport="Mobile", persona="All", severity="High", status="Fixed",
         area="Navigation / dead end",
         tested="Opened a task on a 390x844 phone viewport (script and browser preview), "
                "located every close control in the drawer and hit-tested its centre; then "
@@ -423,16 +425,13 @@ FINDINGS = [
             "sm:-translate-x-full'. Alternatively leave a strip of scrim on phones "
             "(w-[92%]) so tapping outside works. Either way, test on a phone width "
             "before shipping a change to the drawer frame.",
-        verified="RE-CHECKED 2026-09-13 on the newest code (78d01df): close tab still at "
-                 "x=-43 and stock close still under the title. Tapping inside the drawer "
-                 "now closes it, but only because of MW-20; once MW-20 is fixed this "
-                 "dead end returns, so fix both together.",
+        verified='VERIFIED FIXED 2026-09-13 (0a57743, 89ed015): at 390px the close sits in the drawer header, 44x44 and tappable; the drawer is 92% wide so tapping the strip beside it closes it; Escape still closes.',
         code="pages/MyWork.js:1427-1441 (SheetContent w-full + SheetClose -translate-x-full)",
         found="2026-09-13",
     ),
     dict(
         id="MW-16", section="My Work", screen="Task drawer - 'Log update or hand off' (mobile)",
-        viewport="Mobile", persona="All", severity="High", status="Open",
+        viewport="Mobile", persona="All", severity="High", status="Fixed",
         area="Regression",
         tested="In the drawer on a 390x844 viewport, tapped 'Log update or hand off' and "
                "looked for the update form it opens.",
@@ -455,14 +454,12 @@ FINDINGS = [
         code="pages/MyWork.js:1658-1662 (mobile trigger), :1679 (desktop body 'hidden "
              "lg:block'), :1960 (the only <TaskTrail>)",
         dep="MW-09, MW-20",
-        verified="RE-CHECKED 2026-09-13 on the newest code: tapping Log update now "
-                 "closes the drawer outright (MW-20) and no form mounts. The hidden-body "
-                 "cause below still applies once MW-20 is fixed.",
+        verified='VERIFIED FIXED 2026-09-13 (0a57743): on a phone, Log update opens a visible update form inside the drawer.',
         found="2026-09-13",
     ),
     dict(
         id="MW-17", section="My Work", screen="Task drawer - two close buttons, invisible focus",
-        viewport="Mobile + Desktop", persona="All", severity="Medium", status="Open",
+        viewport="Mobile + Desktop", persona="All", severity="Medium", status="Fixed",
         area="Accessibility",
         tested="Listed the close controls inside the open drawer, hit-tested each, and "
                "read document.activeElement straight after opening.",
@@ -480,12 +477,13 @@ FINDINGS = [
         fix="Give SheetContent a hideClose prop (default false, so other sheets are "
             "unchanged) and pass it here; set onOpenAutoFocus to focus the title or the "
             "close tab. That also resolves which close MW-15 should keep.",
+        verified="VERIFIED FIXED 2026-09-13 (0a57743): one close control ('Close task') at 1440 and 390, and focus lands on it when the drawer opens.",
         code="components/ui/sheet.jsx:46-58; pages/MyWork.js:1427-1445",
         found="2026-09-13",
     ),
     dict(
         id="MW-18", section="Global", screen="Application shell at wide widths",
-        viewport="Desktop 1920", persona="All", severity="Medium", status="Open",
+        viewport="Desktop 1920", persona="All", severity="Medium", status="Fixed",
         area="Layout / side effect",
         tested="Loaded Finance, CRM, Team, My Work and Decision Desk at 1920x1080 after "
                "da83b34 and screenshotted each once data had loaded.",
@@ -505,12 +503,13 @@ FINDINGS = [
             "own page-level wrapper (or a data-wide flag the shell reads). If wider is "
             "wanted everywhere, cap at ~1600px rather than none, and constrain the "
             "Finance tiles and AI brief rows internally.",
+        verified='VERIFIED FIXED 2026-09-13 (0a57743): at 1920 /finance and /team are capped at 1400px again; /my-work keeps the full 1920.',
         code="components/Layout.js:634 (app-shell className)",
         found="2026-09-13",
     ),
     dict(
         id="MW-19", section="My Work", screen="Department filter dropdown",
-        viewport="Desktop", persona="Owner", severity="Low", status="Open",
+        viewport="Desktop", persona="Owner", severity="Low", status="Fixed",
         area="Usability",
         tested="Opened the new Department dropdown, read every option, and picked one "
                "with a zero count.",
@@ -530,6 +529,7 @@ FINDINGS = [
               "back to 'all'.",
         fix="Filter options to count > 0 (keep All), or render zero-count ones disabled; "
             "move Completed into the Status dropdown.",
+        verified="VERIFIED FIXED 2026-09-13 (0a57743): Department lists only departments holding work ('All 25', 'Logistics 1'); Completed moved to the Status filter.",
         code="pages/MyWork.js:2042-2075 (FilterDropdown), :2735-2743 (Department "
              "options), :2288-2298 (snap-back effect)",
         found="2026-09-13",
@@ -2227,45 +2227,18 @@ COVERAGE = [
     ("T-115", "My Work", "Status filter", "Desktop 1440x900", "Owner",
      "Status dropdown filters the list", "Functional", "PASS",
      "Not Started: 26 -> 18 cards, trigger reads 'Status: Not Started'", ""),
-    ("T-116", "My Work", "Department filter", "Desktop 1440x900", "Owner",
-     "Department dropdown lists departments and filters", "Usability", "FAIL",
-     "Lists 'Completed' as a department and six 0-count options; picking one is "
-     "silently undone", "MW-19"),
-    ("T-117", "My Work", "Task drawer - open", "Desktop 1440 + 1920", "Owner",
-     "A task opens in a right-side drawer and stays open while used", "Functional", "FAIL",
-     "Opens (672px, whole card and Enter both work, checkbox does not open it) - but on "
-     "the newest code any click inside closes it", "MW-20"),
+    ("T-116", "My Work", "Department filter", "Desktop 1440x900", "Owner", "Department dropdown lists departments and filters", "Usability", "PASS", "Was: Completed listed as a department + six 0-count options (MW-19). Re-checked after 0a57743: All 25 / Logistics 1; Completed is under Status", "MW-19"),
+    ("T-117", "My Work", "Task drawer - open", "Desktop 1440 + 1920", "Owner", "A task opens in a right-side drawer and stays open while used", "Functional", "PASS", "Was: any click inside closed it (MW-20). Re-checked after 0a57743: stays open for all 5 inside clicks", "MW-20"),
     ("T-118", "My Work", "ASK-11 status dropdown", "Desktop 1440 + 1920", "Owner",
      "The status dropdown carries no terminal states", "Functional", "PASS",
      "Not Started / In Progress / Waiting / Under Review only", "ASK-11"),
-    ("T-119", "My Work", "Task drawer - log update", "Desktop 1440 + 1920", "Owner",
-     "MW-08 regression check: Log update opens the form without crashing",
-     "Regression", "FAIL",
-     "Passed on 2a17592 (form visible, no crash); after 78d01df the click closes the "
-     "drawer and no form appears", "MW-20"),
-    ("T-120", "My Work", "Task drawer - close", "Mobile 390x844", "Owner",
-     "A phone user can close the drawer", "Navigation", "FAIL",
-     "Close tab at x=-43 off-screen, stock close under the title, no scrim, Back leaves "
-     "the page", "MW-15"),
-    ("T-121", "My Work", "Task drawer - log update", "Mobile 390x844", "Owner",
-     "MW-09 regression check: Log update opens the form on a phone", "Regression",
-     "FAIL", "Form mounts inside the display:none desktop body", "MW-16"),
-    ("T-122", "My Work", "Task drawer - close controls", "Both", "Owner",
-     "One visible close; focus lands on something visible", "Accessibility", "FAIL",
-     "Two close buttons; initial focus on the stock one hidden under the title",
-     "MW-17"),
-    ("T-123", "Global", "Shell at 1920", "Desktop 1920x1080", "Owner",
-     "Pages keep a readable width after the My Work width change", "Layout", "FAIL",
-     "Cap removed in shared Layout; Finance tiles and Team cards stretch to ~610px",
-     "MW-18"),
-    ("T-124", "My Work", "Task drawer - clicks inside", "Both", "Owner",
-     "Clicking the title, body, status, Log update or Add manually keeps the drawer open",
-     "Functional", "FAIL",
-     "10 of 10 clicks closed the drawer across 1440 and 390", "MW-20"),
-    ("T-125", "My Work", "Task - Delete", "Both", "Owner",
-     "An owner can reach Delete task", "Functional", "FAIL",
-     "No Delete / View details control anywhere; the detail dialog has no opener",
-     "MW-21"),
+    ("T-119", "My Work", "Task drawer - log update", "Desktop 1440 + 1920", "Owner", "MW-08 regression check: Log update opens the form without crashing", "Regression", "PASS", "Re-checked after 0a57743: form visible, drawer stays open", "MW-20"),
+    ("T-120", "My Work", "Task drawer - close", "Mobile 390x844", "Owner", "A phone user can close the drawer", "Navigation", "PASS", "Was: no reachable close (MW-15). Re-checked after 0a57743 + 89ed015: 44px close in the header, scrim strip tap closes, Escape closes", "MW-15"),
+    ("T-121", "My Work", "Task drawer - log update", "Mobile 390x844", "Owner", "MW-09 regression check: Log update opens the form on a phone", "Regression", "PASS", "Was: form inside a hidden body (MW-16). Re-checked after 0a57743: form visible", "MW-16"),
+    ("T-122", "My Work", "Task drawer - close controls", "Both", "Owner", "One visible close; focus lands on something visible", "Accessibility", "PASS", "Was: two closes, focus hidden (MW-17). Re-checked after 0a57743: one close, focus on it", "MW-17"),
+    ("T-123", "Global", "Shell at 1920", "Desktop 1920x1080", "Owner", "Pages keep a readable width after the My Work width change", "Layout", "PASS", "Was: cap removed globally (MW-18). Re-checked after 0a57743: Finance and Team 1400px, My Work 1920px", "MW-18"),
+    ("T-124", "My Work", "Task drawer - clicks inside", "Both", "Owner", "Clicking the title, body, status, Log update or Add manually keeps the drawer open", "Functional", "PASS", "Was: 10 of 10 closed it (MW-20). Re-checked after 0a57743: 10 of 10 stay open", "MW-20"),
+    ("T-125", "My Work", "Task - Delete", "Both", "Owner", "An owner can reach Delete task", "Functional", "PASS", "Was: unreachable (MW-21). Re-checked after 0a57743: View details -> Delete task -> confirm step", "MW-21"),
 
     # --- TEAM ---
     ("T-200", "Team", "Page load", "Desktop 1440x900", "Owner",

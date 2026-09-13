@@ -42,22 +42,22 @@ anything that creates an account or messages a real person.
 
 ### To do — in this order
 
-- [ ] **A · App shell + routing** — header nav, global search, language, bell,
+- [x] **A · App shell + routing** — header nav, global search, language, bell,
       profile menu, mobile dock, More panel, Dex FAB; every redirect (`/brief`,
       `/leave`, `/review`, `/ingest`, `/tasks`, `/priorities`, `/meetings`,
       `/ledger`, `/ask`, `/contacts`, `*`); a **role × route matrix** for every
       protected route; dev routes (`/design-lab`, `/__mobile-kit`) exposure;
       signed-out access to protected routes
-- [ ] **B · Decision Desk** — `/inbox` (scopes, KPI tiles, decision cards,
+- [x] **B · Decision Desk** — `/inbox` (scopes, KPI tiles, decision cards,
       approve / reject / clarify, capture), `/decisions/:id`
-- [ ] **C · Dex / Company Brain** — `/brain`, documents, ask, voice entry points
-- [ ] **D · CEO Journal** — `/journal` (owner-only)
-- [ ] **E · Calendar + Notifications** — `/calendar`, `/notifications`
-- [ ] **F · Settings + People** — `/settings`, `/people`
-- [ ] **G · Sign-in, sign-up, onboarding** — `/login`, `/signup`, demo seats,
+- [x] **C · Dex / Company Brain** — `/brain`, documents, ask, voice entry points
+- [x] **D · CEO Journal** — `/journal` (owner-only)
+- [x] **E · Calendar + Notifications** — `/calendar`, `/notifications`
+- [x] **F · Settings + People** — `/settings`, `/people`
+- [x] **G · Sign-in, sign-up, onboarding** — `/login`, `/signup`, demo seats,
       invite link landing (`/login?invite=`) — validation and failure paths only,
       no account is created
-- [ ] **H · Admin portal** — `/admin/*`
+- [x] **H · Admin portal** — `/admin/*`
 - [ ] **I · My Work full re-sweep** — once MW-20 (drawer closes on any click) is
       fixed; if it is still open, sweep everything outside the drawer
 - [ ] **J · Cross-cutting report** — the error-state pattern across all pages,

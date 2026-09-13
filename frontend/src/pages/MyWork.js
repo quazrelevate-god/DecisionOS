@@ -2646,6 +2646,7 @@ export default function MyWork() {
               list branch of the view guard above. */}
           <div className="mb-3 flex justify-end lg:hidden">
             <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
+              onOpenChange={(o) => { if (o) setOpenId(null); }}
               triggerClassName="kr-lift inline-flex items-center gap-1.5 rounded-pill bg-kr-ink px-3.5 py-2 text-xs font-medium text-white" />
           </div>
 
@@ -2685,6 +2686,7 @@ export default function MyWork() {
               />
             </div>
             <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
+              onOpenChange={(o) => { if (o) setOpenId(null); }}
               triggerClassName={`${SECTION_BTN} kr-lift bg-kr-ink text-white`} />
           </div>
           {/* E2-14: skeleton on first load so the tab strip doesn't

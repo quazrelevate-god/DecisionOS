@@ -51,7 +51,7 @@ const EMPTY_FORM = {
  *   icon-only — the default trigger carries its own visible text, an icon
  *   one carries nothing.
  */
-export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, triggerClassName, triggerChildren, triggerAriaLabel }) {
+export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, defaultType, triggerClassName, triggerChildren, triggerAriaLabel }) {
   const { user, tenant } = useAuth();
   const cats = opModel(tenant).task_categories;
   const [open, setOpen] = useState(false);
@@ -114,7 +114,7 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
   const inp = "w-full kr-pressed rounded-control border-0 px-3.5 py-2.5 text-sm text-foreground placeholder:text-foreground/40";
   const lbl = "block text-xs font-medium text-muted-foreground";
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); onOpenChange?.(o); }}>
       <DialogTrigger asChild>
         <button data-testid="new-task-button"
           aria-label={triggerAriaLabel}

@@ -164,6 +164,48 @@ def can_note_task(user: dict, t: dict) -> bool:
     return bool(_can_work_task(user, t) or t.get("created_by") == user["id"])
 
 
+# ASK-28 TK-05 — the approval moment. The creator picks it per task:
+#   "start"  approve before work starts (the lock tasks always had; the default,
+#            and what every older approval task without a stage means)
+#   "close"  approve before it's marked done: the doer works freely, Complete
+#            sends it to the approver, Approve closes it, Request changes sends
+#            it back to In progress with the reason.
+APPROVAL_STAGES = ("start", "close")
+
+
+def approval_stage(t: dict) -> Optional[str]:
+    """None for a task without approval, else "start" or "close"."""
+    if not t.get("approval_required"):
+        return None
+    return "close" if t.get("approval_stage") == "close" else "start"
+
+
+def is_start_locked(t: dict) -> bool:
+    """Work (status, progress, the checklist) is locked until approved —
+    only for approval before work starts."""
+    return approval_stage(t) == "start" and t.get("approval_status") != "approved"
+
+
+def completion_updates(t: dict, can_approve: bool) -> dict:
+    """What "mark done" writes. Approval before closing turns it into a
+    request for sign-off, unless the person completing may approve it."""
+    if approval_stage(t) != "close":
+        return {"status": "done"}
+    if can_approve:
+        return {"status": "done", "approval_status": "approved"}
+    return {"status": "review", "approval_status": "pending"}
+
+
+def reopen_updates(t: dict, new_status: str) -> dict:
+    """Moving a close-stage task back into work withdraws a pending sign-off
+    request, and a reopened signed-off task needs signing off again. A
+    "changes requested" note stays so the doer can still read it."""
+    if (approval_stage(t) == "close" and new_status not in ("done", "review")
+            and t.get("approval_status") in ("pending", "approved")):
+        return {"approval_status": None}
+    return {}
+
+
 def task_list_query(user: dict, mine: bool = False, view: Optional[str] = None,
                     status: Optional[str] = None, can_approve_any: bool = False) -> dict:
     """The Mongo filter behind GET /tasks.
@@ -190,7 +232,13 @@ def task_list_query(user: dict, mine: bool = False, view: Optional[str] = None,
         q["status"] = status
     if view == "approvals":
         q["approval_required"] = True
-        q["approval_status"] = {"$ne": "approved"}
+        # ASK-28 TK-05: approval before work starts waits until approved (changes
+        # requested included); approval before closing waits only while the
+        # doer has sent it for sign-off — sent back, it is the doer's again.
+        q["$and"] = [{"$or": [
+            {"approval_stage": {"$ne": "close"}, "approval_status": {"$ne": "approved"}},
+            {"approval_stage": "close", "approval_status": "pending"},
+        ]}]
         if not status:
             q["status"] = {"$nin": ["done", "cancelled"]}
         if user.get("role") != "owner":

@@ -1442,7 +1442,14 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
   const proofAtts = (t.attachments || []).filter((a) => a.kind !== "reference");
   const hasEvidence = proofAtts.length > 0;
   const canApprove = t.approval_required && (user?.role === "owner" || user?.id === t.approver_id || (!t.approver_id && userPerms(user).includes("approvals")));
-  const awaitingApproval = t.approval_required && t.approval_status !== "approved";
+  // ASK-28 TK-05 — when the approval happens. Before work starts locks the work
+  // until approved; before it's marked done leaves the work open and waits
+  // only once the doer completes it (status Under review, approval pending).
+  const apprStage = t.approval_required ? (t.approval_stage === "close" ? "close" : "start") : null;
+  const awaitingApproval = apprStage === "start" && t.approval_status !== "approved";
+  const signoffPending = apprStage === "close" && t.approval_status === "pending" && !isTerminal(t);
+  const signoffSentBack = apprStage === "close" && t.approval_status === "rejected" && !isTerminal(t);
+  const needsMyApproval = canApprove && (awaitingApproval || signoffPending);
   const lockedForAssignee = awaitingApproval && !canApprove;
   const overdue = isOverdue(t);
   const terminal = isTerminal(t);
@@ -1490,7 +1497,7 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
   };
 
   const approveTask = async () => {
-    try { await api.post(`/tasks/${t.id}/approve`); toast.success("Task approved"); onChange(); }
+    try { await api.post(`/tasks/${t.id}/approve`); toast.success(apprStage === "close" ? "Approved — task closed" : "Task approved"); onChange(); }
     catch (e) { toast.error(e.response?.data?.detail || "Could not approve"); }
   };
 
@@ -1592,7 +1599,12 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
       // status/progress mutation below.
       const { data } = await api.patch(`/tasks/${t.id}`, { status: "done" });
       applyPatched(data);
-      toast.success("Task completed — reopen from the card if needed.");
+      // ASK-28 TK-05 — approval before closing: completing asks the approver.
+      if (data?.approval_status === "pending" && data?.status === "review") {
+        toast.success(`Sent for approval — ${t.approver_name || "the approver"} will close it.`);
+      } else {
+        toast.success("Task completed — reopen from the card if needed.");
+      }
       onChange();
     } catch (e) { toast.error(e.response?.data?.detail || "Could not complete task"); }
   };
@@ -1715,7 +1727,7 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             {!hideStatus && (
               <span data-testid={`status-chip-${t.id}`} className={`${PILL} ${tone.pill}`}
-                title={awaitingApproval ? "Waiting for approval before work can start" : undefined}>
+                title={awaitingApproval ? "Waiting for approval before work can start" : signoffPending ? "Waiting for approval to close" : undefined}>
                 <StatusRing status={t.status} tone={tone} />
                 {STATUS_LABEL[t.status] || t.status}
                 {awaitingApproval && t.status !== "blocked" && (
@@ -1726,6 +1738,16 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
             {overdue && !terminal && (
               <span data-testid={`overdue-${t.id}`} className={`${PILL} bg-red-50 text-red-700 ring-red-100`}>
                 <Clock size={12} weight="bold" aria-hidden="true" /> Overdue
+              </span>
+            )}
+            {/* ASK-28 TK-05 — which approval this task carries. Amber while it
+                waits on an approver; quiet while a close-stage task is still
+                being worked, so the doer knows Complete will ask first. */}
+            {apprStage && !terminal && t.approval_status !== "approved" && (
+              <span data-testid={`approval-pill-${t.id}`} data-stage={apprStage}
+                className={`${PILL} ${awaitingApproval || signoffPending ? "bg-amber-50 text-amber-800 ring-amber-100" : QUIET_PILL}`}>
+                <ShieldCheck size={12} weight="bold" aria-hidden="true" />
+                {apprStage === "start" ? "Approval to start" : signoffPending ? "Approval to close" : "Needs approval to close"}
               </span>
             )}
             {t.source === "escalation" && (
@@ -1951,7 +1973,7 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
 
         {/* Actions row — Complete + attach controls, now below the two
             plan-building buttons above. */}
-        {!isTerminal(t) && !awaitingApproval && !noteOnly && (
+        {!isTerminal(t) && !awaitingApproval && !signoffPending && !noteOnly && (
           /* KM-6 — flex-wrap. Cancel joining this row made five controls
              (Complete, Cancel, photo, file, voice) share 343px, and Complete
              was truncating to "Comp…". Wrapping lets the two endings hold the
@@ -2051,7 +2073,7 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
           {t.support_name && <span className="text-xs text-muted-foreground">+ {t.support_name}</span>}
           {t.approval_required && (
             <span data-testid={`op-approval-${t.id}`} className={`inline-flex items-center gap-1 nm-tile px-2 py-0.5 text-xs font-medium ${t.approval_status === "approved" ? "bg-kr-ink text-white" : t.approval_status === "rejected" ? "bg-kr-accent text-white" : "bg-nm-sunken"}`}>
-              <ShieldCheck size={11} weight="bold" /> {t.approval_status === "approved" ? "Approved" : t.approval_status === "pending" ? "Pending approval" : t.approval_status === "rejected" ? "Changes requested" : `${t.approver_name || "Approval"} required`}
+              <ShieldCheck size={11} weight="bold" /> {t.approval_status === "approved" ? "Approved" : t.approval_status === "pending" ? (apprStage === "close" ? "Waiting for approval to close" : "Pending approval") : t.approval_status === "rejected" ? "Changes requested" : `${t.approver_name || "Approval"} required${apprStage === "close" ? " to close" : ""}`}
             </span>
           )}
         </div>
@@ -2177,9 +2199,11 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
         </DialogContent>
       </Dialog>
 
-      {canApprove && awaitingApproval && (
-        <div className="flex flex-wrap gap-2 mt-4 nm-tile bg-caution-50/40 p-3" data-testid={`approval-actions-${t.id}`}>
-          <span className="w-full label-mono text-muted-foreground">This task needs your approval before {t.assignee_name || "the assignee"} can start work.</span>
+      {needsMyApproval && (
+        <div className="flex flex-wrap gap-2 mt-4 nm-tile bg-caution-50/40 p-3" data-testid={`approval-actions-${t.id}`} data-stage={apprStage}>
+          <span className="w-full label-mono text-muted-foreground">{apprStage === "close"
+            ? `${t.assignee_name || "The assignee"} marked this task complete. Check the work — approving closes it.`
+            : `This task needs your approval before ${t.assignee_name || "the assignee"} can start work.`}</span>
           {t.approval_status === "rejected" && t.rejection_reason && <span className="w-full text-xs text-muted-foreground">Previously requested: {t.rejection_reason}</span>}
           <button onClick={approveTask} data-testid={`approve-${t.id}`} className="kr-lift flex items-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all">
             <CheckCircle size={16} weight="bold" /> Approve
@@ -2204,6 +2228,26 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
         </div>
       )}
 
+      {/* ASK-28 TK-05 — approval before closing, seen by everyone but the approver. */}
+      {signoffPending && !canApprove && (
+        <div className="flex items-start gap-2 mt-4 nm-tile bg-nm-sunken p-3" data-testid={`approval-signoff-${t.id}`}>
+          <ShieldCheck size={18} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0 text-muted-foreground" />
+          <div>
+            <p className="text-sm font-bold uppercase tracking-tight">Waiting for approval</p>
+            <p className="text-xs text-muted-foreground">Marked complete. {t.approver_name || "The approver"} will check the work and close it. Moving the status back takes the request away.</p>
+          </div>
+        </div>
+      )}
+      {signoffSentBack && (
+        <div className="flex items-start gap-2 mt-4 nm-tile bg-kr-accent/8 p-3" data-testid={`approval-changes-${t.id}`}>
+          <WarningCircle size={18} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0 text-kr-accent" />
+          <div>
+            <p className="text-sm font-bold uppercase tracking-tight">Changes requested</p>
+            <p className="text-xs text-muted-foreground">{t.rejection_reason ? `${t.approver_name || "The approver"}: ${t.rejection_reason}` : `${t.approver_name || "The approver"} sent this back.`} Complete it again when it's fixed — it goes back for approval.</p>
+          </div>
+        </div>
+      )}
+
       {t.evidence_required && !isTerminal(t) && !awaitingApproval && (
         <div className={`mt-3 flex items-start gap-2 nm-tile p-2.5 ${hasEvidence ? "bg-nm-sunken" : "bg-kr-accent/8"}`} data-testid={`evidence-required-${t.id}`}>
           {hasEvidence ? <CheckCircle size={16} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0" /> : <Info size={16} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0 text-kr-accent" />}
@@ -2213,7 +2257,7 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
         </div>
       )}
 
-      {!isTerminal(t) && !awaitingApproval && !noteOnly && (
+      {!isTerminal(t) && !awaitingApproval && !signoffPending && !noteOnly && (
         <div className="flex items-center gap-4">
           {/* FUP-49: don't disable -- always click-through, handler shows
               a clear toast if evidence is missing. Silent-disabled

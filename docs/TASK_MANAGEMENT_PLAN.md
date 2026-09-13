@@ -41,7 +41,7 @@ is assigned.
 ## Decisions (defaults proposed — confirm before the phase that needs them)
 
 - [ ] **D1 · Assigning outside your team** — Default: staff assign to themselves and their own team/role; owner and managers assign to anyone. *(Phase 6)*
-- [ ] **D2 · Approval moment** — Default: creator chooses *before starting* or *before closing* per task. *(Phase 4)*
+- [x] **D2 · Approval moment** — Creator chooses *before work starts* or *before it's marked done* per task. *(founder call 2026-09-14, built as ASK-28 TK-05)*
 - [ ] **D3 · Managers see their team** — Default: yes, through the existing Reporting Manager field. *(Phase 1)*
 - [x] **D4 · Supporting employee** — Removed from the form; helpers cover it. *(decided 2026-09-14)*
 - [x] **D5 · Expected output** — Kept, as "Expected result" under More options. *(2026-09-14)*
@@ -99,10 +99,11 @@ is assigned.
 
 ## Phase 4 — Approval as a step (P1)
 
-- [ ] **4.1 Approval moment** *(needs D2)*: *before starting* (today's lock) or *before closing*.
-- [ ] **4.2 Before closing:** Complete sends it to the approver instead of Done; Approve → Done; Request changes → back to Doing with the reason.
+- [x] **4.1 Approval moment** *(D2 confirmed 2026-09-14)*: New Task → More options → Needs approval: No / Before work starts / Before it's marked done. Stored as `approval_stage` ("start" | "close"); older approval tasks read as "start". *(ASK-28 TK-05, desktop)*
+- [x] **4.2 Before closing:** work starts straight away; Complete (proof still required) moves it to Under review with approval pending and tells the approver; Approve → Done (workflow advance, Brain record and invoice draft run then); Request changes → back to In progress with the reason shown to the doer; moving the status back withdraws the request; a person who may approve closes it directly. Same through a checklist reaching 100%.
 - [ ] **4.3 Server checks the approver** actually has approval access (today it only checks they're in the company).
-- [ ] **4.4 Notifications and counts** for both moments feed the "Waiting for my approval" view and the Desk card.
+- [x] **4.4 Notifications and counts** for both moments feed the Approvals view and the Desk card: "Approval needed to close" notification opens Approvals; a before-done task counts only while it waits. Cards say "Approval to start" / "Approval to close" / "Needs approval to close".
+- [ ] Acceptance with real saves — **waits on a test database** (checked: 19/19 with made-up tasks and writes blocked, 17 unit tests, real approvals feed read-only).
 
 ## Phase 5 — The New Task form (P1)
 

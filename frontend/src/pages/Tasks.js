@@ -35,6 +35,15 @@ export const OP_CATEGORIES = [
   "Administration", "Compliance", "Marketing", "HR Activity", "Travel", "Event", "IT Support", "Other",
 ];
 
+// ASK-28 TK-05 — when a task's approval happens. Before work starts locks it
+// until approved; before it's marked done lets the work start straight away
+// and makes Complete a request the approver closes.
+const APPROVAL_CHOICES = [
+  { key: "none", label: "No", hint: "Spending money or committing the company? Approve before work starts. Checking the result? Approve before it's marked done." },
+  { key: "start", label: "Before work starts", hint: "The task stays locked until it is approved." },
+  { key: "close", label: "Before it's marked done", hint: "Work starts straight away. Complete sends it to the approver, who closes it." },
+];
+
 const EMPTY_FORM = {
   title: "", description: "", task_type: "",
   // ASK-29 — one "Assign to" control: "u:<userId>" for a person, "r:<roleKey>"
@@ -43,7 +52,7 @@ const EMPTY_FORM = {
   co_assignee_ids: [],   // ASK-26 — helpers alongside the person doing it
   priority: "medium",
   due_preset: "", due_date: "", due_time: "",
-  expected_output: "", approval_required: false, approver_id: "",
+  expected_output: "", approval: "none", approver_id: "",
   evidence_required: false,
 };
 
@@ -97,7 +106,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
   const moreSet = [
     form.priority !== "medium", form.co_assignee_ids.length > 0, !!form.description.trim(),
     !!(dueDate && form.due_time), !!form.expected_output.trim(),
-    form.approval_required, form.evidence_required, files.length > 0,
+    form.approval !== "none", form.evidence_required, files.length > 0,
   ].filter(Boolean).length;
 
   const pickAssign = (e) => {
@@ -123,8 +132,9 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
         due_date: dueDate || null,
         due_time: dueDate && form.due_time ? form.due_time : null,
         expected_output: form.expected_output.trim() || null,
-        approval_required: form.approval_required,
-        approver_id: form.approval_required ? (form.approver_id || null) : null,
+        approval_required: form.approval !== "none",
+        approval_stage: form.approval !== "none" ? form.approval : null,
+        approver_id: form.approval !== "none" ? (form.approver_id || null) : null,
         evidence_required: form.evidence_required,
       });
       if (files.length && task?.id) {
@@ -417,12 +427,28 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                   placeholder="e.g. Signed quote sent to the customer" value={form.expected_output} onChange={set("expected_output")} />
               </div>
 
+              {/* ASK-28 TK-05 — when the approval happens, chosen per task. */}
+              <div data-testid="task-approval">
+                <span className={lbl} id="task-approval-label">Needs approval</span>
+                <div className="mt-1.5 flex gap-1.5" role="group" aria-labelledby="task-approval-label">
+                  {APPROVAL_CHOICES.map((c) => {
+                    const on = form.approval === c.key;
+                    return (
+                      <button key={c.key} type="button" aria-pressed={on} data-testid={`task-approval-${c.key}`}
+                        onClick={() => setForm({ ...form, approval: c.key, approver_id: c.key === "none" ? "" : form.approver_id })}
+                        className={`h-9 flex-1 whitespace-nowrap rounded-pill px-2 text-xs ${on ? "kr-pressed font-semibold text-foreground" : "kr-pop text-foreground/75"}`}>
+                        {c.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1.5 text-xs text-muted-foreground" data-testid="task-approval-hint">
+                  {APPROVAL_CHOICES.find((c) => c.key === form.approval)?.hint}
+                </p>
+              </div>
+
               <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input data-testid="task-approval-required" type="checkbox" className="h-4 w-4 accent-kr-ink" checked={form.approval_required} onChange={(e) => setForm({ ...form, approval_required: e.target.checked })} />
-                  Needs approval before work starts
-                </label>
-                {form.approval_required && (
+                {form.approval !== "none" && (
                   <div data-testid="task-approver-wrap">
                     <label className={lbl} htmlFor="task-approver">Approver</label>
                     <select id="task-approver" data-testid="task-approver-select" className={`${inp} mt-1`} value={form.approver_id} onChange={set("approver_id")}>

@@ -22,6 +22,10 @@ def _matches(q, t):
             if not any(_matches(sub, t) for sub in v):
                 return False
             continue
+        if k == "$and":  # ASK-28 TK-05: the stage clause
+            if not all(_matches(sub, t) for sub in v):
+                return False
+            continue
         have = t.get(k)
         if isinstance(v, dict):
             if "$ne" in v and have == v["$ne"]:

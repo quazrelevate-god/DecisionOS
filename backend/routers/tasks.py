@@ -67,10 +67,15 @@ from models.tasks import (
 from services.ai import brain_context
 from services.tenancy import tenant_filter  # FIX-001-C
 from services.tasks import (
+    APPROVAL_STAGES,
     TASK_STATUSES,
+    approval_stage,
     assignee_ids_of,
     can_note_task,
     clean_co_assignees,
+    completion_updates,
+    is_start_locked,
+    reopen_updates,
     task_list_query,
     _attach_reference_ids,
     _can_work_task,
@@ -407,15 +412,19 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
     approver_id = inp.approver_id if inp.approver_id and await db.users.find_one({"id": inp.approver_id, "tenant_id": user["tenant_id"]}, {"_id": 0}) else None
     progress = max(0, min(100, inp.progress)) if isinstance(inp.progress, int) else 0
     needs_approval = bool(inp.approval_required)
+    # ASK-28 TK-05: approval before work starts locks the task now; approval
+    # before closing leaves it open to work and asks only when it is completed.
+    stage = (inp.approval_stage if inp.approval_stage in APPROVAL_STAGES else "start") if needs_approval else None
+    lock_now = stage == "start"
     await db.tasks.insert_one({
         "id": tid, "tenant_id": user["tenant_id"], "title": inp.title, "description": inp.description or "",
         "assignee_role": role, "assignee_id": assignee_id, "priority": inp.priority or "medium",
         "co_assignee_ids": co_ids,
-        "status": "blocked" if needs_approval else "todo", "due_date": due, "decision_id": None,
+        "status": "blocked" if lock_now else "todo", "due_date": due, "decision_id": None,
         "source": "manual", "created_at": now_iso(),
         "task_type": task_type, "op_category": inp.op_category or None, "support_id": support_id,
         "expected_output": inp.expected_output or None, "approval_required": needs_approval,
-        "approval_status": "pending" if needs_approval else None,
+        "approval_status": "pending" if lock_now else None, "approval_stage": stage,
         "approver_id": approver_id, "progress": progress, "created_by": user["id"],
         "evidence_required": bool(inp.evidence_required),
         # FUP-50: carry finance metadata forward so the FUP-50 auto-
@@ -430,7 +439,7 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
     })
     if inp.reference_file_ids:
         await _attach_reference_ids(user["tenant_id"], user["id"], tid, inp.reference_file_ids, background)
-    if needs_approval:
+    if lock_now:
         approvers = [approver_id] if approver_id else await _approver_ids(user["tenant_id"])
         await push_notification(user["tenant_id"], approvers, 2,
                                 f"Approval needed before work starts: '{inp.title}'", "task", tid,
@@ -479,11 +488,26 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
         if not has_ev:
             raise HTTPException(status_code=400,
                                 detail="This task requires completion evidence — attach at least one file before marking it done.")
-    # Pre-execution approval gate: a task requiring approval is locked (status "blocked")
-    # until the approver approves it. The assignee cannot change status/progress before then.
-    if t.get("approval_required") and t.get("approval_status") != "approved":
+    # Pre-execution approval gate: a task requiring approval before work starts is locked
+    # (status "blocked") until the approver approves it. The assignee cannot change
+    # status/progress before then. ASK-28 TK-05: approval before closing does not lock.
+    if is_start_locked(t):
         if any(k in updates for k in ("status", "progress")):
             raise HTTPException(status_code=403, detail="This task is awaiting approval before work can begin.")
+    # ASK-28 TK-05: approval before closing — "done" from someone who can't approve
+    # becomes a sign-off request (Under review, pending); from an approver it closes.
+    signoff_requested = False
+    if approval_stage(t) == "close" and "status" in updates:
+        if updates["status"] == "done":
+            if t.get("status") == "review" and t.get("approval_status") == "pending" and not _can_approve_task(user, t):
+                raise HTTPException(status_code=409, detail="Already sent for approval — the approver will close it.")
+            updates.update(completion_updates(t, _can_approve_task(user, t)))
+            if updates["status"] == "done":
+                updates.update({"approved_by": user["id"], "approved_at": now_iso()})
+            else:
+                signoff_requested = True
+        else:
+            updates.update(reopen_updates(t, updates["status"]))
     # E2-59: reject invalid role too instead of silent .pop().
     if "assignee_role" in updates:
         role_keys = await tenant_role_keys(user["tenant_id"])
@@ -515,7 +539,9 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
         # A co-assignee promoted to lead is not also listed beside themselves.
         updates["co_assignee_ids"] = [i for i in old_co if i != updates["assignee_id"]]
     if updates:
-        if "status" in updates:
+        if signoff_requested:
+            updates["last_action"] = "Sent for approval"
+        elif "status" in updates:
             updates["last_action"] = f"Status → {updates['status'].replace('_', ' ')}"
         elif updates.get("assignee_id"):
             updates["last_action"] = "Reassigned"
@@ -550,7 +576,17 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
                 parts.append("Removed " + ", ".join(who.get(i, "a member") for i in removed_co))
             await _log_task_event(user, task_id, "task_people", f"Updated who is on '{t['title']}'",
                                   " · ".join(parts) or "Updated who is on the task")
-        if updates.get("status") and updates["status"] != t.get("status"):
+        if signoff_requested:
+            from services.notifications import _approver_ids
+            approvers = [t["approver_id"]] if t.get("approver_id") else await _approver_ids(user["tenant_id"])
+            approvers = [a for a in approvers if a and a != user["id"]]
+            if approvers:
+                await push_notification(user["tenant_id"], approvers, 2,
+                                        f"Approval needed to close: '{t['title']}'", "task", task_id,
+                                        ntype="approval", title=t["title"], sender=user["name"])
+            await _log_task_event(user, task_id, "task_signoff", f"Sent '{t['title']}' for approval",
+                                  "Marked complete — sent for approval")
+        elif updates.get("status") and updates["status"] != t.get("status"):
             watchers = [w for w in ([t.get("created_by")] + await _owner_ids(user["tenant_id"])) if w and w != user["id"]]
             await push_notification(user["tenant_id"], watchers, 1,
                                     f"Status update on '{t['title']}': {updates['status'].replace('_', ' ')}", "task", task_id,
@@ -560,69 +596,78 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
         # ASK-29: every status move lands on the task's timeline. It used to
         # show only as "last_action" under the drawer's title; "done" is its
         # own event just below, so it is not written twice.
-        if updates.get("status") and updates["status"] != t.get("status") and updates["status"] != "done":
+        if (updates.get("status") and updates["status"] != t.get("status") and updates["status"] != "done"
+                and not signoff_requested):
             word = _STATUS_WORDS.get(updates["status"], updates["status"])
             await _log_task_event(user, task_id, "task_status", f"'{t['title']}' status → {word}", f"Status → {word}")
         if "progress" in updates and "status" not in updates and updates["progress"] != t.get("progress"):
             await _log_task_event(user, task_id, "task_progress", f"'{t['title']}' progress {updates['progress']}%",
                                   f"Progress set to {updates['progress']}%")
         if updates.get("status") == "done":
-            await _log_task_event(user, task_id, "task_done", f"Completed task '{t['title']}'", "Marked complete")
-            # WE-06.5 (2026-08-16, live-test surfaced): task-close hook.
-            # If the task was linked to a workflow (WE-01 fields set) and
-            # its stage_key matches the workflow's current stage, ask
-            # the engine to try advancing. Engine's check_stage_ready
-            # handles the "other tasks still open" case gracefully --
-            # returns not_ready and we swallow. Never blocks the task
-            # close itself; the advance is fire-and-forget best-effort.
-            if t.get("workflow_id") and t.get("stage_key"):
-                try:
-                    from services.workflow_engine import advance as _engine_advance
-                    from services.workflow_engine import WorkflowAdvanceError
-                    _wf_check = await db.workflows.find_one(
-                        {"id": t["workflow_id"], "tenant_id": user["tenant_id"]},
-                        {"_id": 0, "stage": 1})
-                    if _wf_check and _wf_check.get("stage") == t.get("stage_key"):
-                        try:
-                            await _engine_advance(
-                                user["tenant_id"], t["workflow_id"],
-                                user["id"], user.get("name") or "",
-                                user.get("role") or "",
-                            )
-                        except WorkflowAdvanceError:
-                            # Common: stage still has other open tasks.
-                            # Not an error -- card just waits.
-                            pass
-                except Exception as e:
-                    # Fail-open: never let engine issue break the task close.
-                    from core import logger as _lg
-                    _lg.warning(f"[WE-06.5] task-close engine hook skipped for {task_id}: {e}")
-            # FIX-007-B (S4-02): thread decision_id through so the
-            # decision → task → outcome chain is reconstructable.
-            await brain_context.record_context(
-                tenant_id=user["tenant_id"], kind="task_done", title=t.get("title") or "Task completed",
-                outcome="done", why=t.get("description") or "",
-                tags=[t.get("category")] if t.get("category") else [],
-                source_type="task", source_id=task_id,
-                decision_id=t.get("decision_id"),
-                actor_id=user["id"], actor_name=user.get("name") or "",
-                department=user.get("role") or "", visibility="dept",
-            )
-            # FUP-50 (2026-08-15): if this task looks like an invoice-
-            # raise action, create a PENDING sales invoice so the
-            # finance page stops showing INVOICES=0 while the Brain
-            # narrates 'this is a data gap'. Detection is deliberately
-            # narrow -- title contains 'invoice' AND task has a
-            # contact link OR an amount. Full AI extraction of HSN /
-            # GST rate / advance-adjustment lives with the Workflow
-            # Engine side-effects framework (WE-06) -- this MVP
-            # unblocks the cash-flow blind spot without waiting.
-            await _maybe_auto_invoice(user["tenant_id"], user["id"], t, task_id)
+            await _log_task_event(user, task_id, "task_done", f"Completed task '{t['title']}'",
+                                  "Marked complete and approved" if updates.get("approval_status") == "approved" else "Marked complete")
+            await _after_task_done(user, t, task_id)
         elif updates.get("assignee_id"):
             member = await db.users.find_one({"id": updates["assignee_id"]}, {"_id": 0, "name": 1})
             who_name = (member or {}).get("name", "a member")
             await _log_task_event(user, task_id, "task_assigned", f"Assigned '{t['title']}' to {who_name}", f"Assigned to {who_name}")
     return await enrich_task(await db.tasks.find_one(tenant_filter(task_id, user["tenant_id"]), {"_id": 0}))  # FIX-001-C
+
+
+async def _after_task_done(user: dict, t: dict, task_id: str) -> None:
+    """What closing a task sets off: the workflow advance, the Brain record and
+    the auto-drafted invoice. ASK-28 TK-05 moved it out of update_task so an
+    approval that closes a task (approval before closing) sets off the same."""
+    # WE-06.5 (2026-08-16, live-test surfaced): task-close hook.
+    # If the task was linked to a workflow (WE-01 fields set) and
+    # its stage_key matches the workflow's current stage, ask
+    # the engine to try advancing. Engine's check_stage_ready
+    # handles the "other tasks still open" case gracefully --
+    # returns not_ready and we swallow. Never blocks the task
+    # close itself; the advance is fire-and-forget best-effort.
+    if t.get("workflow_id") and t.get("stage_key"):
+        try:
+            from services.workflow_engine import advance as _engine_advance
+            from services.workflow_engine import WorkflowAdvanceError
+            _wf_check = await db.workflows.find_one(
+                {"id": t["workflow_id"], "tenant_id": user["tenant_id"]},
+                {"_id": 0, "stage": 1})
+            if _wf_check and _wf_check.get("stage") == t.get("stage_key"):
+                try:
+                    await _engine_advance(
+                        user["tenant_id"], t["workflow_id"],
+                        user["id"], user.get("name") or "",
+                        user.get("role") or "",
+                    )
+                except WorkflowAdvanceError:
+                    # Common: stage still has other open tasks.
+                    # Not an error -- card just waits.
+                    pass
+        except Exception as e:
+            # Fail-open: never let engine issue break the task close.
+            from core import logger as _lg
+            _lg.warning(f"[WE-06.5] task-close engine hook skipped for {task_id}: {e}")
+    # FIX-007-B (S4-02): thread decision_id through so the
+    # decision → task → outcome chain is reconstructable.
+    await brain_context.record_context(
+        tenant_id=user["tenant_id"], kind="task_done", title=t.get("title") or "Task completed",
+        outcome="done", why=t.get("description") or "",
+        tags=[t.get("category")] if t.get("category") else [],
+        source_type="task", source_id=task_id,
+        decision_id=t.get("decision_id"),
+        actor_id=user["id"], actor_name=user.get("name") or "",
+        department=user.get("role") or "", visibility="dept",
+    )
+    # FUP-50 (2026-08-15): if this task looks like an invoice-
+    # raise action, create a PENDING sales invoice so the
+    # finance page stops showing INVOICES=0 while the Brain
+    # narrates 'this is a data gap'. Detection is deliberately
+    # narrow -- title contains 'invoice' AND task has a
+    # contact link OR an amount. Full AI extraction of HSN /
+    # GST rate / advance-adjustment lives with the Workflow
+    # Engine side-effects framework (WE-06) -- this MVP
+    # unblocks the cash-flow blind spot without waiting.
+    await _maybe_auto_invoice(user["tenant_id"], user["id"], t, task_id)
 
 
 # ---------------------------------------------------------------------------
@@ -689,17 +734,34 @@ async def approve_task(task_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="This task doesn't require approval")
     if not _can_approve_task(user, t):
         raise HTTPException(status_code=403, detail="Only the assigned approver or an owner can approve this task")
-    # Pre-execution approval: unlock the task so the assignee can start working on it.
-    new_status = "todo" if t.get("status") == "blocked" else t.get("status")
+    closing = approval_stage(t) == "close"
+    if closing and t.get("approval_status") != "pending":
+        raise HTTPException(status_code=400, detail="Nothing to approve yet — this task has not been marked complete.")
+    if closing:
+        # ASK-28 TK-05: approval before closing — the doer finished; approving closes it.
+        set_doc = {"status": "done", "progress": 100}
+        said = "Approved — task closed"
+        notify_msg = f"Approved and closed: '{t['title']}'"
+    else:
+        # Pre-execution approval: unlock the task so the assignee can start working on it.
+        set_doc = {"status": "todo" if t.get("status") == "blocked" else t.get("status")}
+        said = "Approved — work can start"
+        notify_msg = f"Approved: you can start '{t['title']}'"
     await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$set": {  # FIX-001-C
-        "status": new_status, "approval_status": "approved",
+        **set_doc, "approval_status": "approved",
         "approved_by": user["id"], "approved_at": now_iso(),
-        "updated_at": now_iso(), "last_action": "Approved — work can start",
+        "updated_at": now_iso(), "last_action": said,
     }})
-    if assignee_ids_of(t):  # ASK-26: everyone on the task can start
-        await push_notification(user["tenant_id"], assignee_ids_of(t), 1, f"Approved: you can start '{t['title']}'", "task", task_id,
+    to_notify = [i for i in assignee_ids_of(t) if i != user["id"]]
+    if to_notify:  # ASK-26: everyone on the task hears it
+        await push_notification(user["tenant_id"], to_notify, 1, notify_msg, "task", task_id,
                                 ntype="approved", title=t["title"], sender=user["name"])
-    await _log_task_event(user, task_id, "task_approved", f"Approved '{t['title']}'", "Approved — work can start")
+    await _log_task_event(user, task_id, "task_approved", f"Approved '{t['title']}'", said)
+    if closing:
+        await _log_task_event(user, task_id, "task_done", f"Completed task '{t['title']}'", "Closed on approval")
+        if t.get("decision_id"):
+            await add_decision_event(t["decision_id"], f"{t['title']} → done", user["name"], "task")
+        await _after_task_done(user, t, task_id)
     # FIX-007-B (S4-02): pass decision_id when set.
     await brain_context.record_context(
         tenant_id=user["tenant_id"], kind="approval", title=t.get("title") or "Task approved",
@@ -724,9 +786,13 @@ async def reject_task(task_id: str, inp: TaskRejectInput, user: dict = Depends(g
     if not _can_approve_task(user, t):
         raise HTTPException(status_code=403, detail="Only the assigned approver or an owner can reject this task")
     reason = (inp.reason or "").strip()
-    # Keep the task locked (blocked) so work still cannot start until it's approved.
+    closing = approval_stage(t) == "close"
+    if closing and t.get("approval_status") != "pending":
+        raise HTTPException(status_code=400, detail="Nothing to review yet — this task has not been marked complete.")
+    # Approval before work starts: keep the task locked (blocked) until it's approved.
+    # ASK-28 TK-05, approval before closing: back to In progress with the reason.
     await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$set": {  # FIX-001-C
-        "status": "blocked", "approval_status": "rejected",
+        "status": "in_progress" if closing else "blocked", "approval_status": "rejected",
         "rejected_by": user["id"], "rejected_at": now_iso(), "rejection_reason": reason,
         "updated_at": now_iso(), "last_action": "Changes requested",
     }})
@@ -789,7 +855,7 @@ async def generate_execution_plan(task_id: str, user: dict = Depends(get_current
         raise HTTPException(status_code=404, detail="Not found")
     if not _can_work_task(user, t):
         raise HTTPException(status_code=403, detail="Only the assignee or owner can plan this task")
-    if t.get("approval_required") and t.get("approval_status") != "approved":
+    if is_start_locked(t):
         raise HTTPException(status_code=403, detail="This task must be approved before you can plan it.")
     industry = await _tenant_industry(user["tenant_id"])
     currency = await _tenant_currency(user["tenant_id"])
@@ -812,7 +878,7 @@ async def save_execution_plan(task_id: str, inp: ExecPlanInput, user: dict = Dep
         raise HTTPException(status_code=404, detail="Not found")
     if not _can_work_task(user, t):
         raise HTTPException(status_code=403, detail="Only the assignee or owner can edit this plan")
-    if t.get("approval_required") and t.get("approval_status") != "approved":
+    if is_start_locked(t):
         raise HTTPException(status_code=403, detail="This task must be approved before you can plan it.")
     steps = [{"id": s.id or new_id(), "text": s.text.strip(), "done": bool(s.done)}
              for s in inp.steps if s.text.strip()]
@@ -830,8 +896,14 @@ async def save_execution_plan(task_id: str, inp: ExecPlanInput, user: dict = Dep
         updates["progress"] = plan["progress"]
     # Keep the task board in sync: starting work moves a todo task into progress; finishing all steps can complete it.
     if plan["status"] == "accepted" and steps:
-        if plan["progress"] == 100 and t.get("status") not in ("done", "blocked"):
-            updates["status"] = "done"
+        if plan["progress"] == 100 and t.get("status") not in ("done", "blocked") and not (
+                approval_stage(t) == "close" and t.get("approval_status") == "pending"):
+            # ASK-28 TK-05: approval before closing turns this into a sign-off request.
+            updates.update(completion_updates(t, _can_approve_task(user, t)))
+            if updates.get("approval_status") == "pending":
+                updates["last_action"] = "Sent for approval"
+            elif updates.get("approval_status") == "approved":
+                updates.update({"approved_by": user["id"], "approved_at": now_iso()})
         elif plan["progress"] > 0 and t.get("status") == "todo":
             updates["status"] = "in_progress"
     await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$set": updates})  # FIX-001-C
@@ -852,6 +924,16 @@ async def save_execution_plan(task_id: str, inp: ExecPlanInput, user: dict = Dep
     elif shape_changed:
         await _log_task_event(user, task_id, "task_plan", f"Edited the checklist on '{t['title']}'",
                               f"Edited the checklist ({len(steps)} steps)")
+    if updates.get("approval_status") == "pending":
+        from services.notifications import _approver_ids, push_notification
+        approvers = [t["approver_id"]] if t.get("approver_id") else await _approver_ids(user["tenant_id"])
+        approvers = [a for a in approvers if a and a != user["id"]]
+        if approvers:
+            await push_notification(user["tenant_id"], approvers, 2,
+                                    f"Approval needed to close: '{t['title']}'", "task", task_id,
+                                    ntype="approval", title=t["title"], sender=user["name"])
+        await _log_task_event(user, task_id, "task_signoff", f"Sent '{t['title']}' for approval",
+                              "Every checklist step is done — sent for approval")
     if updates.get("status") == "done":
         await _log_task_event(user, task_id, "task_done", f"Completed task '{t['title']}'",
                               "Completed — every checklist step is done")

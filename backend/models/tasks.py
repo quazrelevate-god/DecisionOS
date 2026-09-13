@@ -29,6 +29,9 @@ class TaskCreateInput(BaseModel):
     expected_output: Optional[str] = None
     approval_required: Optional[bool] = False
     approver_id: Optional[str] = None
+    # ASK-28 TK-05: when the approval happens — "start" (before work starts, the
+    # default) or "close" (before it's marked done). Ignored without approval.
+    approval_stage: Optional[str] = None
     progress: Optional[int] = None
     evidence_required: Optional[bool] = False
     reference_file_ids: Optional[List[str]] = None

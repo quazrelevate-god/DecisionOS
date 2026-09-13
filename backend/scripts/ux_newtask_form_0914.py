@@ -104,7 +104,7 @@ with sync_playwright() as pw:
     helper = next(o for o in people if o["v"] != doer["v"])
     dlg.locator('[data-testid="task-co-assignee-select"]').select_option(helper["v"][2:])
     dlg.locator('[data-testid="task-due-time"]').fill("16:30")
-    dlg.locator('[data-testid="task-approval-required"]').check()
+    dlg.locator('[data-testid="task-approval-close"]').click()
     approver_opts = dlg.locator('[data-testid="task-approver-select"] option').count()
     dlg.locator('[data-testid="task-evidence-required"]').check()
     p.screenshot(path=str(OUT / "form_more.png"))
@@ -122,7 +122,7 @@ with sync_playwright() as pw:
         "title": "ASK-29 check: call Krishna Garments", "task_type": sales,
         "assignee_id": doer["v"][2:], "assignee_role": None, "co_assignee_ids": [helper["v"][2:]],
         "priority": "high", "due_date": tomorrow, "due_time": "16:30",
-        "approval_required": True, "approver_id": None, "evidence_required": True,
+        "approval_required": True, "approval_stage": "close", "approver_id": None, "evidence_required": True,
     }
     diff = {k: (body.get(k), v) for k, v in expect.items() if body.get(k) != v}
     rec("payload", bool(body) and not diff, f"mismatches: {diff or 'none'}; approver options: {approver_opts}")

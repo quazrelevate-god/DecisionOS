@@ -1246,177 +1246,116 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
       <div className="flex flex-1 min-h-0">
         <div className="flex-1 min-w-0 flex flex-col">
 
-      {/* U7-05.2: SUMMARY ROW -- the only thing shown when card is collapsed.
-          Click-target on the whole row toggles expand. Right-side quick actions
-          stopPropagation so they don't collapse when clicked. */}
-      <div className={`group flex w-full flex-1 items-stretch transition-colors ${selected ? "bg-kr-ink/[0.05]" : ""}`}>
-        {/* U7-05.3: bulk-select checkbox. Sits outside the expand button
-            so clicking it doesn't toggle the card. Only rendered when
-            onToggleSelect is passed (skip in TaskDetailDialog and other
-            contexts where bulk doesn't apply). */}
-        {onToggleSelect && (
-          <label
-            className="flex items-center px-3 pl-4 cursor-pointer shrink-0"
-            onClick={(e) => e.stopPropagation()}
-            title={selected ? "Deselect" : "Select for bulk action"}
+      {/* ASK-19 (2026-09-13): summary row redesigned.
+          - Checkbox pins to the TOP-LEFT corner
+          - Title fills the middle
+          - Every chip (priority, status, escalation, overdue, meta) sits in
+            ONE row at the BOTTOM via mt-auto
+          - Three-dot overflow menu removed; the drawer already exposes every
+            detail action, so the extra affordance was noise. */}
+      <div className={`group flex w-full flex-1 flex-col p-4 transition-colors ${selected ? "bg-kr-ink/[0.05]" : ""}`}>
+        {/* TOP ROW — checkbox (top-left) + expand caret + title */}
+        <div className="flex items-start gap-3 min-w-0">
+          {onToggleSelect && (
+            <label
+              className="mt-0.5 cursor-pointer shrink-0"
+              onClick={(e) => e.stopPropagation()}
+              title={selected ? "Deselect" : "Select for bulk action"}
+            >
+              <input
+                type="checkbox"
+                checked={selected}
+                onChange={onToggleSelect}
+                data-testid={`bulk-select-${t.id}`}
+                className="w-4 h-4 rounded border-nm-edge/40 accent-kr-ink cursor-pointer"
+                aria-label={`Select task ${t.title}`}
+              />
+            </label>
+          )}
+          <button
+            type="button"
+            onClick={() => (controlled ? onToggleOpen?.() : setSelfExpanded((v) => !v))}
+            className="flex-1 min-w-0 flex items-start gap-2 text-left"
+            aria-expanded={expanded}
+            aria-controls={`task-card-body-${t.id}`}
+            data-testid={`task-summary-${t.id}`}
           >
-            <input
-              type="checkbox"
-              checked={selected}
-              onChange={onToggleSelect}
-              data-testid={`bulk-select-${t.id}`}
-              className="w-4 h-4 rounded border-nm-edge/40 accent-kr-ink cursor-pointer"
-              aria-label={`Select task ${t.title}`}
+            <CaretDown
+              size={14}
+              weight="bold"
+              className={`text-muted-foreground shrink-0 mt-1 transition-transform ${expanded ? "" : "-rotate-90"}`}
+              aria-hidden="true"
             />
-          </label>
-        )}
-      <button
-        type="button"
-        onClick={() => (controlled ? onToggleOpen?.() : setSelfExpanded((v) => !v))}
-        /* MW-05 fix: pin the title / caret / meta cluster to the top of
-           the summary button. The button is a flex ROW parent up above
-           (line 1211), but a bento cell can be taller than any single
-           card in it -- when it is, a short title sinks toward the
-           middle. flex-col + justify-start makes the cell a column
-           container with its content anchored to the top edge, so every
-           title in a row starts at the same y. Verified against the
-           audit's 39/17/11/17 px spread. */
-        className="w-full flex-1 min-w-0 flex flex-col justify-start p-4 text-left"
-        aria-expanded={expanded}
-        aria-controls={`task-card-body-${t.id}`}
-        data-testid={`task-summary-${t.id}`}
-      >
-        <div className="flex items-start gap-3">
-          <CaretDown
-            size={14}
-            weight="bold"
-            className={`text-muted-foreground shrink-0 mt-1 transition-transform ${expanded ? "" : "-rotate-90"}`}
-            aria-hidden="true"
-          />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start gap-2 flex-wrap">
-              {/* KM-28 — one size, normal weight, on the founder's call. The
-                  title used to be set by priority (lg / base / sm, all bold),
-                  which turned the LIST into a chart: three type sizes and three
-                  box heights competing down the column, so scanning it meant
-                  reading shape before words. Priority is still on the card — it
-                  is the chip right beside this line — and a chip is a better
-                  place for it than the size of everything else. */}
-              <p className="min-w-[180px] flex-1 text-base font-normal leading-snug">
-                {t.title}
-              </p>
-              {/* KR-11.2 — the priority chip goes monochrome. The tile's
-                  SIZE now says high/medium/low, so a red "High" beside it was
-                  the same signal twice, and the louder of the two. It stays
-                  as a word because size is a relative cue and a lone card in
-                  a filtered view has nothing to be relative to. */}
-              {/* KM-29 — dropped when the list is already filtered to it.
-                  Under "Medium" every card says Medium: a column of the same
-                  word telling you nothing you did not just ask for, and it is
-                  exactly the space the founder wanted back. */}
-              {!hidePrio && (
-                <span data-testid={`priority-chip-${t.id}`}
-                  className="shrink-0 rounded-pill border-[0.5px] border-kr-ink/55 px-2 py-0.5 text-[11px] font-medium capitalize text-foreground/70">
-                  {t.priority || "medium"}
-                </span>
-              )}
-              {/* KM-29 — the status pill JOINS this row instead of opening a
-                  second one under it. Priority, progress and lateness are three
-                  statements of the same kind about one task; splitting them
-                  across two rows made every card a line taller for no reading
-                  benefit, which is the height the founder asked to reclaim. */}
-              {!hideStatus && (
-                <span data-testid={`status-chip-${t.id}`}
-                  className={`shrink-0 rounded-pill px-2 py-0.5 text-[11px] font-medium ${
-                    terminal ? "bg-kr-ink text-white"
-                    : awaitingApproval ? "border-[0.5px] border-kr-ink text-foreground"
-                    : "bg-nm-sunken text-muted-foreground"
-                  } ${expanded ? "hidden lg:inline-block" : ""}`}>
-                  {STATUS_LABEL[t.status] || t.status}
-                </span>
-              )}
-              {t.source === "escalation" && (
-                <span className="shrink-0 rounded-pill bg-kr-accent px-2 py-0.5 text-[11px] font-medium text-white">
-                  Escalation
-                </span>
-              )}
-              {/* KM-7 — Overdue rides WITH the priority chip, not on the meta
-                  line below it. They are the same kind of statement about the
-                  task — how urgent, how late — and splitting them across two
-                  rows made a late task three lines tall for two short words. */}
-              {overdue && !terminal && (
-                <span data-testid={`overdue-${t.id}`}
-                  className="shrink-0 rounded-pill bg-kr-accent px-2 py-0.5 text-[11px] font-medium text-white">
-                  Overdue
-                </span>
-              )}
-            </div>
-            <div className="flex items-center flex-wrap gap-2 mt-1.5 text-xs">
-              {t.due_date && !overdue && (
-                <span className="text-muted-foreground">
-                  due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short" })}
-                </span>
-              )}
-              {/* U7-05.1: stage chip becomes tiny inline pill in summary row.
-                  Icon-first, no bg fight with the title. Click still works. */}
-              {t.workflow_summary?.id && (
-                <a
-                  href={`/my-work?view=workflows&type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
-                  onClick={(e) => e.stopPropagation()}
-                  data-testid={`wf-chip-${t.id}`}
-                  className="inline-flex items-center gap-1 hover:underline"
-                  title={`Open workflow: ${t.workflow_summary.title}`}
-                >
-                  <FlowArrow size={11} weight="bold" />
-                  <span className=" text-[10px]">
-                    {(t.workflow_summary.stage || "").replace(/_/g, " ")}
-                  </span>
-                </a>
-              )}
-              {showAssignee && t.assignee_name && (
-                <span className="inline-flex items-center gap-1 text-muted-foreground">
-                  <UserCircle size={11} weight="bold" /> {t.assignee_name}
-                </span>
-              )}
-              {(t.attachment_count || 0) > 0 && (
-                <span className="inline-flex items-center gap-1 text-muted-foreground">
-                  <Paperclip size={11} weight="bold" /> {t.attachment_count}
-                </span>
-              )}
-              {t.source === "handoff" && <span className="rounded-pill border-[0.5px] border-kr-ink/55 px-1.5 py-0.5 text-[10px] font-medium">Handoff</span>}
-            </div>
-          </div>
+            <p className="flex-1 min-w-0 text-base font-normal leading-snug">
+              {t.title}
+            </p>
+          </button>
         </div>
-      </button>
-      {/* MW-02 fix: overflow menu on the summary row. Before, the task
-          detail dialog was unreachable from anywhere in My Work -- the
-          component and its Delete action existed but had no way in, so
-          proof gallery / source-reference / AI insight panels + delete
-          were all dead UI. This "•••" opens the detail dialog directly.
-          stopPropagation on click so opening the menu does not also
-          toggle the card expand-collapse. */}
-      <div className="flex items-center pr-2" onClick={(e) => e.stopPropagation()}>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              aria-label="Task actions"
-              data-testid={`task-overflow-${t.id}`}
-              className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-nm-sunken/50 hover:text-foreground"
+
+        {/* BOTTOM ROW — every chip in a single flex-wrap row, pinned to the
+            card's bottom edge by mt-auto so short titles still see the chips
+            sitting where the eye expects them. */}
+        <div className="mt-auto pt-3 flex flex-wrap items-center gap-2">
+          {!hidePrio && (
+            <span data-testid={`priority-chip-${t.id}`}
+              className="shrink-0 rounded-pill border-[0.5px] border-kr-ink/55 px-2 py-0.5 text-[11px] font-medium capitalize text-foreground/70">
+              {t.priority || "medium"}
+            </span>
+          )}
+          {!hideStatus && (
+            <span data-testid={`status-chip-${t.id}`}
+              className={`shrink-0 rounded-pill px-2 py-0.5 text-[11px] font-medium ${
+                terminal ? "bg-kr-ink text-white"
+                : awaitingApproval ? "border-[0.5px] border-kr-ink text-foreground"
+                : "bg-nm-sunken text-muted-foreground"
+              } ${expanded ? "hidden lg:inline-block" : ""}`}>
+              {STATUS_LABEL[t.status] || t.status}
+            </span>
+          )}
+          {t.source === "escalation" && (
+            <span className="shrink-0 rounded-pill bg-kr-accent px-2 py-0.5 text-[11px] font-medium text-white">
+              Escalation
+            </span>
+          )}
+          {overdue && !terminal && (
+            <span data-testid={`overdue-${t.id}`}
+              className="shrink-0 rounded-pill bg-kr-accent px-2 py-0.5 text-[11px] font-medium text-white">
+              Overdue
+            </span>
+          )}
+          {t.source === "handoff" && (
+            <span className="shrink-0 rounded-pill border-[0.5px] border-kr-ink/55 px-1.5 py-0.5 text-[10px] font-medium">
+              Handoff
+            </span>
+          )}
+          {t.due_date && !overdue && (
+            <span className="text-xs text-muted-foreground">
+              due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short" })}
+            </span>
+          )}
+          {t.workflow_summary?.id && (
+            <a
+              href={`/my-work?view=workflows&type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
+              onClick={(e) => e.stopPropagation()}
+              data-testid={`wf-chip-${t.id}`}
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
+              title={`Open workflow: ${t.workflow_summary.title}`}
             >
-              <DotsThreeVertical size={16} weight="bold" aria-hidden="true" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[10rem]">
-            <DropdownMenuItem
-              onSelect={() => setDetailOpen(true)}
-              data-testid={`task-overflow-details-${t.id}`}
-            >
-              View details
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+              <FlowArrow size={11} weight="bold" />
+              <span>{(t.workflow_summary.stage || "").replace(/_/g, " ")}</span>
+            </a>
+          )}
+          {showAssignee && t.assignee_name && (
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <UserCircle size={11} weight="bold" /> {t.assignee_name}
+            </span>
+          )}
+          {(t.attachment_count || 0) > 0 && (
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <Paperclip size={11} weight="bold" /> {t.attachment_count}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* ASK-15 (2026-09-13): task detail slides in from the right as a

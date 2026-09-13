@@ -2050,18 +2050,17 @@ function FilterDropdown({ testid, label, value, options, counts, onSelect, loadi
   );
 }
 
-/* ASK-13 (2026-09-13): the bento is gone. Every card is one uniform cell in a
-   plain responsive grid; priority is a dropdown filter now, not a size code.
+/* ASK-13 (2026-09-13): uniform 4-column grid at xl, 3 at lg, 2 at sm, 1 below.
    An opened card takes the whole row via col-span-full, same rule as before. */
 function TaskGrid({ list, openId, setOpenId, cardProps }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" data-testid="mywork-grid">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" data-testid="mywork-grid">
       {list.map((t) => {
         const isOpen = openId === t.id;
         return (
           <div
             key={t.id}
-            className={isOpen ? "sm:col-span-2 xl:col-span-3" : "min-h-[112px]"}
+            className={isOpen ? "sm:col-span-2 lg:col-span-3 xl:col-span-4" : "min-h-[112px]"}
           >
             <TaskCard
               t={t}
@@ -2076,17 +2075,53 @@ function TaskGrid({ list, openId, setOpenId, cardProps }) {
   );
 }
 
-/* Priority bands, kept as a top-level list so both the desktop dropdown and
-   the mobile priority row read from one source. Was `BANDS` when it drove the
-   3-column TaskPriorityColumns layout; the name changed with its job. */
-const PRIORITY_BANDS = [
+/* AI PRIORITY ON → three columns, high | medium | low.
+   The ranker sorts the whole list by score; splitting it by the priority band
+   turns "a long sorted list" into "how much is on fire, how much is next, how
+   much can wait". Within a column the ranker's order is preserved. */
+const BANDS = [
   { key: "high", label: "High" },
   { key: "medium", label: "Medium" },
   { key: "low", label: "Low" },
 ];
 
-/* Desktop filter options include an "All" row that clears the filter. */
-const PRIORITY_FILTER_OPTIONS = [{ key: "", label: "All priorities" }, ...PRIORITY_BANDS];
+function TaskPriorityColumns({ list, openId, setOpenId, cardProps, band = "high" }) {
+  const grouped = BANDS.map((b) => ({ ...b, items: list.filter((t) => TIER_OF(t) === b.key) }));
+  return (
+    <div className="grid gap-4 lg:grid-cols-3" data-testid="mywork-priority-columns">
+      {grouped.map((col) => (
+        <section key={col.key} data-testid={`priority-col-${col.key}`}
+                 className={`min-w-0 lg:block ${band === col.key ? "block" : "hidden"}`}>
+          <div className="mb-3 hidden items-baseline gap-2 lg:flex">
+            <h3 className="text-sm font-semibold">{col.label}</h3>
+            <span className="font-mono text-xs tabular-nums opacity-55">{col.items.length}</span>
+          </div>
+          <div className="flex flex-col gap-3">
+            {col.items.length === 0 && (
+              <div className="rounded-tile border border-dashed border-foreground/15 p-5">
+                <p className="text-center text-xs text-muted-foreground">Nothing here</p>
+              </div>
+            )}
+            {col.items.map((t) => {
+              const isOpen = openId === t.id;
+              return (
+                <TaskCard
+                  key={t.id}
+                  t={t}
+                  hidePrio
+                  open={isOpen}
+                  onToggleOpen={() => setOpenId(isOpen ? null : t.id)}
+                  {...cardProps(t)}
+                />
+              );
+            })}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 const STATUS_FILTER_OPTIONS = [
   { key: "", label: "All statuses" },
   { key: "todo", label: "Not Started" },
@@ -2153,10 +2188,15 @@ export default function MyWork() {
      posture, not a destination — you flick through it while scanning and you
      do not want twenty history entries for it. */
   const [statusFilter, setStatusFilter] = useState("");
-  /* ASK-13 (2026-09-13): priority is a filter now, not a view-mode switch.
-     Default is "" (unfiltered); "high"/"medium"/"low" narrows the list. Shared
-     between the desktop dropdown and the mobile priority row. */
-  const [priorityFilter, setPriorityFilter] = useState("");
+  /* Priority band picker for the AI-priority kanban view. Owned by the page so
+     the mobile band bar can sit in the fixed header while the columns render
+     in the body; desktop shows all three columns and ignores it. */
+  const [band, setBand] = useState("high");
+  // Dismissing AI priority clears both filters so the list can never stay
+  // filtered by a control that is no longer on screen.
+  useEffect(() => {
+    if (!aiPriority) { setStatusFilter(""); setBand("high"); }
+  }, [aiPriority]);
 
   // Persist on any change. Guard on prefsKey so pre-login / test envs stay
   // no-op.
@@ -2261,13 +2301,11 @@ export default function MyWork() {
   } else {
     list = all.filter((t) => !isTerminal(t) && t.task_type === tab);
   }
-  // ASK-13: department (tab), priority and status filter regardless of AI
-  // Priority. Sparkle toggle only re-orders — it no longer switches into a
-  // 3-column view.
-  if (priorityFilter) list = list.filter((t) => TIER_OF(t) === priorityFilter);
-  if (statusFilter) list = list.filter((t) => t.status === statusFilter);
   if (aiPriority && tab !== "completed") {
+    if (statusFilter) list = list.filter((t) => t.status === statusFilter);
     list = [...list].sort((a, b) => (scoreMap[b.id]?.priority_score || 0) - (scoreMap[a.id]?.priority_score || 0));
+  } else if (statusFilter) {
+    list = list.filter((t) => t.status === statusFilter);
   }
 
   // KR-14.6 · MOBILE HEADER — reference-driven layout for MyWork on phones:
@@ -2482,15 +2520,13 @@ export default function MyWork() {
                   interpolate. */}
               <div className="kr-pressed flex items-center gap-1 rounded-pill p-1"
                    role="group" aria-label="Filter by priority" data-testid="mywork-priority-bands">
-                {PRIORITY_BANDS.map((b) => {
+                {BANDS.map((b) => {
                   const n = list.filter((tk) => TIER_OF(tk) === b.key).length;
-                  const active = priorityFilter === b.key;
                   return (
-                    <button key={b.key} type="button"
-                      onClick={() => setPriorityFilter((cur) => (cur === b.key ? "" : b.key))}
-                      aria-pressed={active} data-testid={`priority-band-${b.key}`}
+                    <button key={b.key} type="button" onClick={() => setBand(b.key)}
+                      aria-pressed={band === b.key} data-testid={`priority-band-${b.key}`}
                       className={`kr-seg-compact flex h-9 flex-1 items-center justify-center gap-1.5 rounded-pill px-2 text-[12px] ${
-                        active ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
+                        band === b.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
                       {b.label}
                       <span className="tabular-nums opacity-55">{n}</span>
                     </button>
@@ -2540,17 +2576,13 @@ export default function MyWork() {
           </h1>
         </div>
         <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:items-center" data-testid="mywork-controls">
-          {/* MW-11 fix: task-scope controls (New Task / My Tasks / All
-              Tasks / AI Priority) render only while view === "mywork".
-              In the Leave view "New Task" was previously the largest,
-              darkest button on the page and created a TASK rather than a
-              leave request. The three lens buttons also silently threw
-              the reader back to the task list on click. Both broken by
-              the same audience-mismatch; both fixed by simply not
-              rendering the cluster when the audience isn't there.
-              work-view-toggle (Workflows / Leave) stays -- that's how a
-              reader returns to My Work. */}
-          {view === "mywork" && (
+          {/* ASK-13 (2026-09-13): the task-scope cluster used to render only
+              in mywork view. That was the MW-11 rule from when Leave had its
+              own view here — showing a "New Task" button in Leave was actively
+              wrong. Leave is retired now and only Workflows remains, so the
+              cluster ALWAYS renders on desktop: every button in it already
+              flips view back to "mywork", which is the answer to "how do I get
+              back to my tasks from Workflows?". */}
           <div className="order-2 flex flex-wrap items-center gap-2.5 lg:order-1" data-testid="mywork-actions">
             {/* ASK-3: the desktop New Task ink button used to sit here at
                 the head of mywork-actions. Moved out to the tab-strip
@@ -2601,7 +2633,6 @@ export default function MyWork() {
                 </div>
             )}
           </div>
-          )}
           <div className="order-1 flex flex-wrap items-center gap-2.5 lg:order-2" data-testid="work-view-toggle">
             {/* U7-05.11 (2026-08-17): 'Tasks' view toggle removed for
                 owner. The MY TASKS / ALL TASKS / AI PRIORITY buttons
@@ -2718,13 +2749,6 @@ export default function MyWork() {
                 loading={tasksQ.isLoading && !tasksQ.data}
               />
               <FilterDropdown
-                testid="work-filter-priority"
-                label="Priority"
-                value={priorityFilter}
-                options={PRIORITY_FILTER_OPTIONS}
-                onSelect={setPriorityFilter}
-              />
-              <FilterDropdown
                 testid="work-filter-status"
                 label="Status"
                 value={statusFilter}
@@ -2793,14 +2817,16 @@ export default function MyWork() {
               highlight: t.id === focusTaskId,
               scores: aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined,
               // KM-30 — the card drops the status chip when the lens already
-              // says it. Same rule now for priority: hide the chip when the
-              // dropdown or the mobile row is narrowing to a single band.
+              // says it. Priority is handled by TaskPriorityColumns when AI
+              // Priority is on (each column already names the band).
               hideStatus: Boolean(statusFilter),
-              hidePrio: Boolean(priorityFilter),
               selected: selected.has(t.id),
               onToggleSelect: () => toggleSelected(t.id),
             });
-            return <TaskGrid list={list} openId={openId} setOpenId={setOpenId} cardProps={cardProps} />;
+            const shared = { list, openId, setOpenId, cardProps };
+            return aiPriority && tab !== "completed"
+              ? <TaskPriorityColumns {...shared} band={band} />
+              : <TaskGrid {...shared} />;
           })()}
 
           {/* U7-05.3 dialog: bulk-reassign target picker. */}

@@ -2713,7 +2713,10 @@ export default function MyWork() {
   ];
   const [params, setParams] = useSearchParams();
   const isOwner = user?.role === "owner";
-  const focusTaskId = params.get("task");
+  // ASK-28 TK-04 — ?task=<id>, and the older ?focus=task:<id> form the Brief
+  // and phone screens still link with, both open the task.
+  const focusParam = params.get("focus") || "";
+  const focusTaskId = params.get("task") || (focusParam.startsWith("task:") ? focusParam.slice(5) : null);
   const rawView = params.get("view");
   // "board" is no longer a top-level view — it now lives as a sub-tab inside Workflows.
   // ASK-6: rawView === "leave" also collapses to "mywork" (the sub-view was
@@ -2779,7 +2782,10 @@ export default function MyWork() {
      reload of plain /my-work still opens where the person normally works. */
   // URL_SCOPES (module level) lists the lenses that behave this way.
   const savedScope = loadedPrefs.scope && !URL_SCOPES.includes(loadedPrefs.scope) ? loadedPrefs.scope : "mine";
-  const [scope, setScope] = useState(URL_SCOPES.includes(rawView) ? rawView : savedScope);
+  // ASK-28 TK-04 — ?view=mine and ?view=all are addresses too (All Tasks is
+  // the owner's). They are also saved as the default, unlike asked and team.
+  const scopeFromUrl = (v) => (URL_SCOPES.includes(v) || v === "mine" || (v === "all" && isOwner) ? v : null);
+  const [scope, setScope] = useState(scopeFromUrl(rawView) || savedScope);
   const [tab, setTab] = useState(loadedPrefs.tab || "all");
   const [aiPriority, setAiPriority] = useState(Boolean(loadedPrefs.aiPriority));
   /* KM-30 — ONE progress lens, and no priority lens at all.
@@ -2881,6 +2887,26 @@ export default function MyWork() {
     enabled: !!focusTaskId, retry: false,
   });
   const focusDenied = !!focusTaskId && focusQ.isError && [403, 404].includes(focusQ.error?.response?.status);
+  const focusMissing = focusDenied && focusQ.error?.response?.status === 404;
+  // ASK-28 TK-04 — a link to a task opens it, including when My Work is
+  // already open (a notification clicked from here)...
+  useEffect(() => { if (focusTaskId) setOpenId(focusTaskId); }, [focusTaskId]);
+  // ...and closing it takes the link out of the address, so a refresh doesn't
+  // reopen a task the reader has already put away.
+  useEffect(() => {
+    if (!openId && focusTaskId) setFilterParams({ task: "", focus: "" });
+  }, [openId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The chosen view lives in ?view=, so Back and Forward move between views:
+  // when the address changes, the page follows it. The first render has
+  // already read it.
+  const viewSyncMounted = useRef(false);
+  useEffect(() => {
+    if (!viewSyncMounted.current) { viewSyncMounted.current = true; return; }
+    setView(rawView === "workflows" || rawView === "board" ? "workflows" : rawView === "approvals" ? "approvals" : "mywork");
+    const s = scopeFromUrl(rawView);
+    if (s) setScope(s);
+    else if (!rawView && URL_SCOPES.includes(scope)) setScope(savedScope);
+  }, [rawView]); // eslint-disable-line react-hooks/exhaustive-deps
   const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
   const prioritiesQ = useQuery({ queryKey: ["priorities"], queryFn: () => api.post("/tasks/prioritize").then((r) => r.data), enabled: aiOn });
   const members = usersQ.data || [];
@@ -2901,6 +2927,36 @@ export default function MyWork() {
     qc.invalidateQueries({ queryKey: ["tasks"] });
     qc.invalidateQueries({ queryKey: ["notifications"] });
   };
+
+  // ASK-28 TK-04 — every view is an address: ?view=mine | asked | team | all |
+  // approvals | workflows. Switching adds a history entry, so Back returns to
+  // the view before; the filters beside it still replace (no entry per tap).
+  const goView = (nextScope, nextView = "mywork") => {
+    if (nextScope) setScope(nextScope);
+    setView(nextView);
+    const value = nextView === "mywork" ? nextScope : nextView;
+    if ((params.get("view") || "") !== (value || "")) {
+      setParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (value) next.set("view", value); else next.delete("view");
+        return next;
+      });
+    }
+  };
+
+  // ASK-28 TK-04 — a linked task that isn't in the list on screen (a report's
+  // task, a finished one, one outside this view) still opens: its drawer is
+  // drawn from the task itself. The card face stays hidden; only the drawer
+  // (a portal) shows.
+  const focusDrawer = (shownIds, listReady) => (
+    focusTaskId && focusQ.data && listReady && openId === focusTaskId && !shownIds.includes(focusTaskId) ? (
+      <div hidden data-testid="focus-task-standalone">
+        <TaskCard t={focusQ.data} open onToggleOpen={() => setOpenId(null)} highlight
+          onChange={() => { refresh(); qc.invalidateQueries({ queryKey: ["task", focusTaskId] }); }}
+          members={members} roleOptions={roleOptions} />
+      </div>
+    ) : null
+  );
 
   useEffect(() => {
     if (!focusTaskId || !focusQ.data) return;
@@ -3188,13 +3244,13 @@ export default function MyWork() {
             <div className="flex shrink-0 items-center gap-1.5"
                  role="group" aria-label={t("mywork.title", "My Work")} data-testid="work-mobile-segment">
               <div className="flex items-center">
-                <button type="button" onClick={() => { setScope("mine"); setView("mywork"); }}
+                <button type="button" onClick={() => goView("mine")}
                   aria-pressed={mobileView === "mine"} data-testid="work-mobile-mine"
                   className={`${MSEG} rounded-l-pill ${mobileView === "mine" ? MSEG_ON : MSEG_OFF}`}>
                   {t("mywork.my_tasks")}
                 </button>
                 <span aria-hidden="true" className="h-5 w-px shrink-0 bg-kr-ink/15" />
-                <button type="button" onClick={() => { setScope("all"); setView("mywork"); }}
+                <button type="button" onClick={() => goView("all")}
                   aria-pressed={mobileView === "all"} data-testid="work-mobile-all"
                   className={`${MSEG} rounded-r-pill ${mobileView === "all" ? MSEG_ON : MSEG_OFF}`}>
                   {t("mywork.all_tasks")}
@@ -3411,12 +3467,8 @@ export default function MyWork() {
             const segments = [];
             // ASK-28 TK-01 — Asked by me is a place you can link to, so it
             // lives in the URL; every other segment clears it.
-            const go = (nextScope, nextView = "mywork") => {
-              if (nextScope) setScope(nextScope);
-              setView(nextView);
-              // ASK-28 TK-02 — Approvals is linkable too (?view=approvals).
-              setFilterParams({ view: URL_SCOPES.includes(nextScope) ? nextScope : nextView === "approvals" ? "approvals" : "" });
-            };
+            // ASK-28 TK-04 — every segment now writes its own ?view= (goView).
+            const go = goView;
             const askedSegment = {
               key: "asked", label: t("mywork.asked_by_me", "Asked by me"), testid: "work-scope-asked",
               active: view === "mywork" && scope === "asked",
@@ -3514,12 +3566,21 @@ export default function MyWork() {
       </header>
 
       {focusDenied && (
-        <div data-testid="access-restricted-banner" className="mb-6 flex items-center gap-3 rounded-control border-l-[3px] border-kr-accent bg-kr-accent/10 p-4">
+        /* ASK-28 TK-04 — say which it is (a task that no longer exists, or one
+           this person may not open), and let them put the message away. */
+        <div data-testid="access-restricted-banner" data-reason={focusMissing ? "missing" : "denied"}
+          className="mb-6 flex items-center gap-3 rounded-control border-l-[3px] border-kr-accent bg-kr-accent/10 p-4">
           <LockKey size={20} weight="bold" aria-hidden="true" className="shrink-0 text-kr-accent" />
-          <div>
-            <p className="text-sm font-semibold">{t("mywork.access_restricted")}</p>
-            <p className="text-sm text-muted-foreground">{t("mywork.access_restricted_desc")}</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">{focusMissing ? t("mywork.task_missing", "This task no longer exists") : t("mywork.access_restricted")}</p>
+            <p className="text-sm text-muted-foreground">{focusMissing
+              ? t("mywork.task_missing_desc", "It may have been deleted. Your work is below.")
+              : t("mywork.access_restricted_desc")}</p>
           </div>
+          <button type="button" onClick={() => setFilterParams({ task: "", focus: "" })} data-testid="access-restricted-dismiss"
+            className="shrink-0 rounded-pill px-3 py-1.5 text-sm font-medium text-foreground/70 transition-colors hover:bg-kr-ink/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/40">
+            Dismiss
+          </button>
         </div>
       )}
 
@@ -3579,6 +3640,7 @@ export default function MyWork() {
                 </div>
 
                 <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+                  {focusDrawer(sub === "tasks" ? apprList.map((tk) => tk.id) : [], !apprTasksQ.isLoading)}
                   {sub === "tasks" ? (
                     apprTasksQ.isLoading ? (
                       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" aria-hidden="true">
@@ -3836,6 +3898,7 @@ export default function MyWork() {
               ? <TaskPriorityColumns {...shared} band={band} />
               : <TaskGrid {...shared} />;
           })()}
+          {focusDrawer(list.map((tk) => tk.id), tasksQ.isSuccess)}
           </div>
 
           {/* U7-05.3 dialog: bulk-reassign target picker. 2026-09-14, founder —

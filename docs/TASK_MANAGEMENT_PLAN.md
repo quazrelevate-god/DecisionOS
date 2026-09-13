@@ -78,7 +78,7 @@ is assigned.
   - [x] My Work: shown only to a non-owner with direct reports (the owner keeps All Tasks); in the URL, not saved as default; Person filter lists the team; AI priority off; own empty state; a link opened without reports lands on My Tasks.
   - [x] The manager can open a report's task and activity and leave a note; outside their own department the drawer is note-only, inside it the department rule still gives full controls.
   - [x] Acceptance: a manager sees their reports' tasks and no one else's — **real data** (Sunita Rao → sai, 16 tasks), 21/21, writes blocked.
-- [ ] **1.4 Opening a task by link always works.** `/my-work?task=<id>` opens the drawer even when the task isn't in the current view (today the notification link lands on a list without it).
+- [x] **1.4 Opening a task by link always works.** *(TK-04, 2026-09-14)* `/my-work?task=<id>` (and the older `?focus=task:<id>`) opens the drawer whatever the view — from the single-task request when the task isn't in the list; opens again when followed while My Work is open; closing clears the link. A missing task says so; a refused one keeps Access restricted; both can be dismissed. Every view is in `?view=` and survives refresh, Back and Forward. Checked on real data with writes blocked, 23/23.
 - [ ] **1.5 Desk hook.** The Decision Desk "Task approvals" card (ASK-27) reads from 1.2.
 - [ ] Tracker rows + coverage; full backend tests; API parity baseline regenerated (routes change).
 

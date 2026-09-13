@@ -135,7 +135,8 @@ with sync_playwright() as pw:
 
     p.locator('[data-testid="work-scope-mine"]').click()
     settle(p, 1500)
-    rec("other-view-clears-url", "view" not in qs(p), f"url after My Tasks: {qs(p)}")
+    # ASK-28 TK-04: every view writes its own ?view= now, so My Tasks is view=mine.
+    rec("other-view-clears-url", qs(p).get("view") in (None, "mine"), f"url after My Tasks: {qs(p)}")
     p.locator('[data-testid="work-scope-asked"]').click()
     settle(p, 1500)
     p.goto(BASE + "/my-work")

@@ -1242,7 +1242,17 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
     <div id={`task-card-${t.id}`} data-testid={`mywork-task-${t.id}`}
       data-open={expanded ? "true" : "false"}
       data-tier={tier || "medium"}
-      className={`kr-bento flex h-full min-w-0 flex-col overflow-hidden ${highlight ? "ring-2 ring-kr-ink ring-offset-2 ring-offset-background" : ""}`}>
+      role="button" tabIndex={0}
+      aria-expanded={expanded}
+      aria-controls={`task-card-body-${t.id}`}
+      onClick={() => (controlled ? onToggleOpen?.() : setSelfExpanded((v) => !v))}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          controlled ? onToggleOpen?.() : setSelfExpanded((v) => !v);
+        }
+      }}
+      className={`kr-bento flex h-full min-w-0 flex-col overflow-hidden cursor-pointer ${highlight ? "ring-2 ring-kr-ink ring-offset-2 ring-offset-background" : ""}`}>
       <div className="flex flex-1 min-h-0">
         <div className="flex-1 min-w-0 flex flex-col">
 
@@ -1272,18 +1282,10 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
               />
             </label>
           )}
-          <button
-            type="button"
-            onClick={() => (controlled ? onToggleOpen?.() : setSelfExpanded((v) => !v))}
-            className="flex-1 min-w-0 text-left"
-            aria-expanded={expanded}
-            aria-controls={`task-card-body-${t.id}`}
-            data-testid={`task-summary-${t.id}`}
-          >
-            <p className="min-w-0 text-base font-normal leading-snug">
-              {t.title}
-            </p>
-          </button>
+          <p data-testid={`task-summary-${t.id}`}
+             className="flex-1 min-w-0 text-base font-normal leading-snug">
+            {t.title}
+          </p>
         </div>
 
         {/* BOTTOM ROW — every chip in a single flex-wrap row, pinned to the

@@ -34,7 +34,7 @@ import {
   DotsThreeVertical, // MW-02 · overflow menu on the summary row
   Check, Clock, ArrowFatLinesUp, // ASK-25 · card checkbox, Overdue + Escalation pills
 } from "@phosphor-icons/react";
-import { AvatarStack } from "../components/karma/PersonAvatar";
+import { AvatarStack, PersonAvatar } from "../components/karma/PersonAvatar";
 
 // RD-2 (2026-08-17): the toolbar control. Was uppercase + wide tracking +
 // hard black border — eight of these in a row read as a control panel. Now a
@@ -1076,19 +1076,97 @@ function StatusRing({ status, tone }) {
   );
 }
 
-/* Tasks carry ONE assignee today (assignee_id), or a role queue with nobody
-   named. The stack takes a list so a second assignee field needs no change
-   to the card. */
+/* ASK-26 — everyone on a task: the lead (assignee_id) first, then the people
+   added alongside them (co_assignee_ids). A role queue with nobody named yet
+   keeps the team glyph. Names come from /users so a photo set on Team shows
+   up here; the task's own enriched names are the fallback for anyone no
+   longer in that list. */
 function cardPeople(t, members, roleOptions) {
-  if (t.assignee_id) {
-    const m = members.find((x) => x.id === t.assignee_id);
-    return [{ id: t.assignee_id, name: m?.name || t.assignee_name || "Assignee", avatar_url: m?.avatar_url }];
-  }
+  const coNames = Object.fromEntries((t.co_assignees || []).map((c) => [c.id, c.name]));
+  const person = (id, fallback) => {
+    const m = members.find((x) => x.id === id);
+    return { id, name: m?.name || fallback || "Member", avatar_url: m?.avatar_url };
+  };
+  const co = (t.co_assignee_ids || [])
+    .filter((id) => id && id !== t.assignee_id)
+    .map((id) => person(id, coNames[id]));
+  if (t.assignee_id) return [person(t.assignee_id, t.assignee_name || "Assignee"), ...co];
   if (t.assignee_role) {
     const label = roleOptions.find((r) => r.key === t.assignee_role)?.label || t.assignee_role;
-    return [{ id: `role:${t.assignee_role}`, kind: "team", name: `${label} team` }];
+    return [{ id: `role:${t.assignee_role}`, kind: "team", name: `${label} team` }, ...co];
   }
-  return [];
+  return co;
+}
+
+/* ASK-26 — who is on the task, at the top of the drawer, and the one place
+   to change it after the task exists. The lead keeps the lead's jobs —
+   approvals, hand-offs and Reassign all act on assignee_id — so the lead is
+   shown, not removable here; everyone else can be added or taken off. The
+   server re-checks who may do this (owner, team_manage, the creator, the
+   lead). Static names carry no fill; a name you can tap to remove is a pill
+   with an ×, so the two never look alike (the KM-65 rule). */
+function AssigneesEditor({ t, members, roleOptions, canEdit, onPatched }) {
+  const [busy, setBusy] = useState(false);
+  const people = cardPeople(t, members, roleOptions);
+  const co = (t.co_assignee_ids || []).filter((id) => id && id !== t.assignee_id);
+  const addable = members.filter((m) => m.id !== t.assignee_id && !co.includes(m.id));
+  const save = async (next, done) => {
+    setBusy(true);
+    try {
+      const { data } = await api.patch(`/tasks/${t.id}`, { co_assignee_ids: next });
+      onPatched(data);
+      toast.success(done);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not change who is on this task");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section data-testid={`task-people-${t.id}`}>
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Assigned</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {people.length === 0 && <span className="text-sm text-muted-foreground">Nobody yet</span>}
+        {people.map((p) => {
+          const lead = !!t.assignee_id && p.id === t.assignee_id;
+          const removable = canEdit && !lead && p.kind !== "team";
+          const body = (
+            <>
+              {p.kind === "team"
+                ? <AvatarStack people={[p]} size={22} />
+                : <PersonAvatar name={p.name} src={p.avatar_url} size={22} ring={false} />}
+              <span className="truncate">{p.name}</span>
+              {lead && co.length > 0 && <span className="text-[11px] text-muted-foreground">· lead</span>}
+              {removable && <X size={11} weight="bold" aria-hidden="true" className="text-muted-foreground" />}
+            </>
+          );
+          return removable ? (
+            <button key={p.id} type="button" disabled={busy}
+              onClick={() => save(co.filter((x) => x !== p.id), `Removed ${p.name}`)}
+              aria-label={`Remove ${p.name} from this task`}
+              data-testid={`task-people-remove-${p.id}`}
+              className="inline-flex max-w-full items-center gap-1.5 rounded-pill bg-slate-500/[0.07] py-1 pl-1 pr-2.5 text-sm ring-1 ring-inset ring-slate-500/10 transition-colors hover:bg-slate-500/[0.13] disabled:opacity-50">
+              {body}
+            </button>
+          ) : (
+            <span key={p.id} className="inline-flex max-w-full items-center gap-1.5 py-1 pl-1 pr-2.5 text-sm">{body}</span>
+          );
+        })}
+      </div>
+      {canEdit && t.assignee_id && addable.length > 0 && (
+        <select value="" disabled={busy} aria-label="Add a person to this task"
+          data-testid={`task-people-add-${t.id}`}
+          onChange={(e) => {
+            const id = e.target.value;
+            if (id) save([...co, id], `Added ${members.find((m) => m.id === id)?.name || "a member"}`);
+          }}
+          className="nm-field mt-2 w-full px-3 py-2 text-sm disabled:opacity-50">
+          <option value="">+ Add a person</option>
+          {addable.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
+        </select>
+      )}
+    </section>
+  );
 }
 
 // "Mon, 29 Sep" — the reference's form; the year only when it is not this one.
@@ -1112,10 +1190,11 @@ function dueLabel(iso) {
  * local state, so any future call site outside the grid still works.
  *
  * ASK-25 — priority is read from the task (TIER_OF) and drawn as the stripe
- * in every view, so `tier` and `hidePrio` are gone. The faces show on every
- * card face regardless of `showAssignee`, which the expanded body still uses.
+ * in every view, so `tier` and `hidePrio` are gone. ASK-26 retired
+ * `showAssignee` too: the faces on the card and the Assigned section in the
+ * drawer show everyone on the task, for everyone.
  */
-function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions = [], scores, showAssignee = false, highlight = false, selected = false, onToggleSelect, open, onToggleOpen }) {
+function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions = [], scores, highlight = false, selected = false, onToggleSelect, open, onToggleOpen }) {
   const { user } = useAuth();
   // MW-01 fix: the queryClient is used to write PATCH responses straight
   // into the cache before onChange() invalidates. The old flow was
@@ -1187,6 +1266,10 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
   const prio = TIER_OF(t);
   const tone = STATUS_TONE[t.status] || STATUS_TONE.todo;
   const people = cardPeople(t, members, roleOptions);
+  // ASK-26 — who may change the people on a task. PATCH holds the same rule.
+  const canEditPeople = user?.role === "owner" || userPerms(user).includes("team_manage")
+    || t.created_by === user?.id || t.assignee_id === user?.id;
+  const onPeoplePatched = (data) => { applyPatched(data); onChange(); };
 
   const approveTask = async () => {
     try { await api.post(`/tasks/${t.id}/approve`); toast.success("Task approved"); onChange(); }
@@ -1529,6 +1612,9 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
           </span>
         </div>
 
+        <AssigneesEditor t={t} members={members} roleOptions={roleOptions}
+          canEdit={canEditPeople} onPatched={onPeoplePatched} />
+
         {/* Description card (orange) */}
         {t.description && (
           <div className="flex items-start gap-3 rounded-cardlg bg-orange-50/70 p-3">
@@ -1746,12 +1832,10 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
       {/* EXPANDED BODY (desktop) — same content as before, now inside the Sheet. */}
       <div id={`task-card-body-${t.id}`} className="hidden px-5 pb-6 space-y-3 pt-4 lg:block">
       {t.description && <p className="text-sm text-muted-foreground">{t.description}</p>}
-      {showAssignee && !isOp && (
-        <p className="label-mono text-muted-foreground flex items-center gap-1" data-testid={`assignee-line-${t.id}`}>
-          <UserCircle size={13} weight="bold" />
-          {t.assignee_name ? t.assignee_name : (t.assignee_role ? `${t.assignee_role} team` : "Unassigned")}
-        </p>
-      )}
+      {/* ASK-26 — replaces the owner-only one-name assignee line: everyone on
+          the task, for everyone who opens it. */}
+      <AssigneesEditor t={t} members={members} roleOptions={roleOptions}
+        canEdit={canEditPeople} onPatched={onPeoplePatched} />
       {/* U7-05.4: AI-priority bars get a "why?" tooltip on the container
           so users understand what drove the ranking. */}
       {scores && (
@@ -2341,7 +2425,8 @@ function matchesFilters(t, { tab, person, status }) {
   if (status && !STATUS_LENSES.has(status) && t.status !== status) return false;
   if (person === "unassigned") return !t.assignee_id && !t.assignee_role;
   if (person && person.startsWith("role:")) return !t.assignee_id && t.assignee_role === person.slice(5);
-  if (person) return t.assignee_id === person;
+  // ASK-26 — a person's filter holds every task they are on, lead or not.
+  if (person) return t.assignee_id === person || (t.co_assignee_ids || []).includes(person);
   return true;
 }
 
@@ -2486,7 +2571,7 @@ export default function MyWork() {
     if (!focusTaskId || !focusQ.data) return;
     const ft = focusQ.data;
     setView("mywork");
-    if (isOwner && ft.assignee_id !== user?.id && scope !== "all") { setScope("all"); return; }
+    if (isOwner && ft.assignee_id !== user?.id && !(ft.co_assignee_ids || []).includes(user?.id) && scope !== "all") { setScope("all"); return; }
     // ASK-24 — a deep-linked task must be visible, so drop any filter that
     // could hide it; a finished task opens under Status: Completed.
     setTab("all");
@@ -2643,6 +2728,10 @@ export default function MyWork() {
       if (tk.assignee_id) openBy.set(tk.assignee_id, (openBy.get(tk.assignee_id) || 0) + (isTerminal(tk) ? 0 : 1));
       else if (tk.assignee_role) teams.add(tk.assignee_role);
       else unassigned += 1;
+      // ASK-26 — a co-assignee is holding that work too: listed, and counted.
+      (tk.co_assignee_ids || []).forEach((id) => {
+        if (id && id !== tk.assignee_id) openBy.set(id, (openBy.get(id) || 0) + (isTerminal(tk) ? 0 : 1));
+      });
     });
     const memberOf = (id) => members.find((m) => m.id === id);
     const nameOf = (id) => memberOf(id)?.name || all.find((tk) => tk.assignee_id === id)?.assignee_name || "Unknown";

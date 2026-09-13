@@ -823,6 +823,8 @@ async def _bootstrap():
         await db.decisions.create_index([("tenant_id", 1), ("created_at", -1)])
         await db.tasks.create_index([("tenant_id", 1), ("status", 1), ("due_date", 1)])
         await db.tasks.create_index([("tenant_id", 1), ("assignee_id", 1), ("status", 1)])
+        # ASK-26: "tasks I am on" now also matches co_assignee_ids (multikey).
+        await db.tasks.create_index([("tenant_id", 1), ("co_assignee_ids", 1)])
         # BUG-13: engine-spawned template tasks are keyed by
         # (tenant_id, workflow_id, stage_key, title). on_stage_enter used a
         # find-then-insert with no unique index, so a concurrent stage re-entry

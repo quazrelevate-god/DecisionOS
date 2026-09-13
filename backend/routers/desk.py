@@ -104,7 +104,8 @@ async def _delayed_count(tid: str, user: dict) -> int:
     q = {"tenant_id": tid, "status": {"$nin": ["done", "cancelled"]},
          "due_date": {"$lt": today, "$ne": None}}
     if user.get("role") != "owner":
-        q["assignee_id"] = user["id"]
+        # ASK-26: a task I am on alongside the lead is mine to deliver too.
+        q["$or"] = [{"assignee_id": user["id"]}, {"co_assignee_ids": user["id"]}]
     return await db.tasks.count_documents(q)
 
 
@@ -510,6 +511,8 @@ async def _cards_on_fire(tid: str, user: dict) -> list:
     q_overdue = {
         "tenant_id": tid,
         "assignee_id": {"$ne": uid, "$exists": True, "$nin": [None, ""]},
+        # ASK-26: if I am on it, it is my own todo (My Work), not a chase.
+        "co_assignee_ids": {"$ne": uid},
         "status": {"$nin": ["done", "cancelled"]},
         "due_date": {"$lt": today, "$ne": None},
     }
@@ -605,6 +608,7 @@ async def _cards_due_today(tid: str, user: dict) -> list:
     q = {
         "tenant_id": tid,
         "assignee_id": {"$ne": uid, "$exists": True, "$nin": [None, ""]},
+        "co_assignee_ids": {"$ne": uid},  # ASK-26: same rule as on_fire
         "status": {"$nin": ["done", "cancelled"]},
         "due_date": today,
     }

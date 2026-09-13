@@ -6,6 +6,7 @@ Scope of THIS pass (safe, no inline call-graph fanout):
   • `_task_activity(t)`            — (updated_at, last_action) fallback derivation
   • `enrich_task(t)` / `enrich_tasks(list)` — hydrate assignee/support/approver names
   • `_can_work_task(user, t)`      — permission gate used by task-owning endpoints
+  • `clean_co_assignees` / `assignee_ids_of` — ASK-26 multiple assignees
   • `_plan_progress(steps)`        — execution-plan progress %
 
 Everything that needs LLM planners, notifications, or the resilient chat client
@@ -88,12 +89,14 @@ async def _fetch_workflow_summaries(tenant_id: str, wf_ids: set) -> dict:
 async def enrich_task(t: Optional[dict]) -> Optional[dict]:
     if not t:
         return t
-    ids = list({t.get(k) for k in ("assignee_id", "support_id", "approver_id", "created_by") if t.get(k)})
+    ids = list({t.get(k) for k in ("assignee_id", "support_id", "approver_id", "created_by") if t.get(k)}
+               | set(t.get("co_assignee_ids") or []))
     umap = {}
     if ids:
         for u in await db.users.find({"id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(50):
             umap[u["id"]] = u["name"]
     t["assignee_name"] = umap.get(t.get("assignee_id"))
+    t["co_assignees"] = [{"id": i, "name": umap.get(i)} for i in (t.get("co_assignee_ids") or [])]
     t["support_name"] = umap.get(t.get("support_id"))
     t["approver_name"] = umap.get(t.get("approver_id"))
     t["created_by_name"] = umap.get(t.get("created_by"))
@@ -120,6 +123,7 @@ async def enrich_tasks(tasks: List[dict]) -> List[dict]:
         for k in ("assignee_id", "support_id", "approver_id", "created_by"):
             if t.get(k):
                 ids.add(t[k])
+        ids.update(t.get("co_assignee_ids") or [])
         if t.get("workflow_id"):
             wf_ids.add(t["workflow_id"])
         if t.get("tenant_id") and tenant_id is None:
@@ -133,6 +137,7 @@ async def enrich_tasks(tasks: List[dict]) -> List[dict]:
     wf_map = await _fetch_workflow_summaries(tenant_id, wf_ids) if tenant_id else {}
     for t in tasks:
         t["assignee_name"] = umap.get(t.get("assignee_id"))
+        t["co_assignees"] = [{"id": i, "name": umap.get(i)} for i in (t.get("co_assignee_ids") or [])]
         t["support_name"] = umap.get(t.get("support_id"))
         t["approver_name"] = umap.get(t.get("approver_id"))
         t["created_by_name"] = umap.get(t.get("created_by"))
@@ -148,7 +153,41 @@ async def enrich_tasks(tasks: List[dict]) -> List[dict]:
 def _can_work_task(user: dict, t: dict) -> bool:
     return (user.get("role") == "owner"
             or t.get("assignee_id") == user["id"]
+            or user["id"] in (t.get("co_assignee_ids") or [])  # ASK-26
             or (t.get("assignee_role") and t.get("assignee_role") == user.get("role")))
+
+
+# ---------------------------------------------------------------------------
+# ASK-26 — multiple assignees
+# ---------------------------------------------------------------------------
+# A task has ONE lead (assignee_id) and any number of people alongside them
+# (co_assignee_ids). The lead is kept because approvals, hand-offs, reassign,
+# least-loaded routing and every workload count already act on assignee_id;
+# the list adds people to the task without moving any of that.
+MAX_CO_ASSIGNEES = 10
+
+
+async def clean_co_assignees(tenant_id: str, ids, lead_id: Optional[str]) -> List[str]:
+    """The co-assignee list made safe to store: de-duplicated in the order
+    given, never containing the lead, only members of this tenant, capped.
+    Unknown ids are dropped rather than rejected — the same way an unknown
+    assignee_id is treated on create."""
+    seen, wanted = set(), []
+    for i in ids or []:
+        if isinstance(i, str) and i and i != lead_id and i not in seen:
+            seen.add(i)
+            wanted.append(i)
+    if not wanted:
+        return []
+    found = {u["id"] for u in await db.users.find(
+        {"id": {"$in": wanted}, "tenant_id": tenant_id}, {"_id": 0, "id": 1}
+    ).to_list(len(wanted))}
+    return [i for i in wanted if i in found][:MAX_CO_ASSIGNEES]
+
+
+def assignee_ids_of(t: dict) -> List[str]:
+    """Everyone on the task, lead first — who gets told when it moves."""
+    return [i for i in dict.fromkeys([t.get("assignee_id"), *(t.get("co_assignee_ids") or [])]) if i]
 
 
 def _plan_progress(steps: list) -> int:

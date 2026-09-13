@@ -131,7 +131,7 @@ async def ceo_brief(period: str = "morning", user: dict = Depends(get_current_us
             "unmatched_payments": round(sum(_pay_remaining_amt(p) for p in unmatched), 2),
         }
     else:
-        mine = {"$or": [{"assignee_id": user["id"]}, {"assignee_role": user["role"]}]}
+        mine = {"$or": [{"assignee_id": user["id"]}, {"co_assignee_ids": user["id"]}, {"assignee_role": user["role"]}]}
 
         def mq(extra):
             return {"tenant_id": tid, **mine, **extra}
@@ -177,7 +177,7 @@ async def brief_details(key: str, period: str = "morning", user: dict = Depends(
     items: list = []
     actionable = False
     is_owner = user["role"] == "owner"
-    mine = None if is_owner else {"$or": [{"assignee_id": user["id"]}, {"assignee_role": user["role"]}]}
+    mine = None if is_owner else {"$or": [{"assignee_id": user["id"]}, {"co_assignee_ids": user["id"]}, {"assignee_role": user["role"]}]}
 
     def scope(q):
         return q if not mine else {**q, **mine}

@@ -15,6 +15,9 @@ class TaskCreateInput(BaseModel):
     description: Optional[str] = ""
     assignee_role: Optional[str] = None
     assignee_id: Optional[str] = None
+    # ASK-26: the people on the task alongside the lead (assignee_id). The
+    # lead stays the one approvals, hand-offs and reassign act on.
+    co_assignee_ids: Optional[List[str]] = None
     priority: Optional[str] = "medium"
     due_in_days: Optional[int] = None
     # Operational-task fields (all optional; used by the My Work "New Task" form)
@@ -50,6 +53,8 @@ class TaskUpdateInput(BaseModel):
     status: Optional[str] = None
     assignee_id: Optional[str] = None
     assignee_role: Optional[str] = None
+    # ASK-26: the whole list, replacing the stored one ([] clears it).
+    co_assignee_ids: Optional[List[str]] = None
     priority: Optional[str] = None
     progress: Optional[int] = None
     evidence_required: Optional[bool] = None

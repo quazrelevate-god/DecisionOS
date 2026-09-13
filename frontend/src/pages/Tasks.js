@@ -10,6 +10,7 @@ import { userPerms } from "../lib/perms";
 import { Plus, User, Paperclip, ClockCounterClockwise, X } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
+import { PersonAvatar } from "../components/karma/PersonAvatar";
 
 const COLUMNS = [
   { key: "blocked", label: "Pending Approval" },
@@ -39,6 +40,7 @@ const EMPTY_FORM = {
   assignee_id: "", assignee_role: "", support_id: "", priority: "medium",
   due_date: "", due_time: "", expected_output: "", approval_required: false, approver_id: "",
   evidence_required: false,
+  co_assignee_ids: [],   // ASK-26 — people on the task alongside the assigned employee
 };
 
 /**
@@ -71,6 +73,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
         op_category: isOp ? form.op_category : null,
         assignee_id: form.assignee_id || null,
         assignee_role: form.assignee_id ? null : (form.assignee_role || null),
+        co_assignee_ids: form.assignee_id ? form.co_assignee_ids : [],
         support_id: form.support_id || null,
         priority: form.priority,
         due_date: form.due_date || null,
@@ -225,7 +228,10 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
           <div className="kr-form-row">
             <div>
               <label className={lbl}>Assigned employee</label>
-              <select data-testid="task-member-select" className={`${inp} mt-1`} value={form.assignee_id} onChange={set("assignee_id")}>
+              {/* Picking someone who is already listed below as "also assigned"
+                  moves them up to lead instead of listing them twice. */}
+              <select data-testid="task-member-select" className={`${inp} mt-1`} value={form.assignee_id}
+                onChange={(e) => setForm({ ...form, assignee_id: e.target.value, co_assignee_ids: form.co_assignee_ids.filter((id) => id !== e.target.value) })}>
                 <option value="">— Pick a person —</option>
                 {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
               </select>
@@ -238,6 +244,39 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
               </select>
             </div>
           </div>
+          {/* ASK-26 — more than one person on a task. Offered once there is an
+              assigned employee to lead it; the lead stays the one approvals
+              and hand-offs act on. Each chosen person is a pill you tap to
+              take off again. */}
+          {form.assignee_id && (
+            <div data-testid="task-co-assignees">
+              <label className={lbl}>Also assigned (optional)</label>
+              {form.co_assignee_ids.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {form.co_assignee_ids.map((id) => {
+                    const m = members.find((x) => x.id === id);
+                    return (
+                      <button key={id} type="button"
+                        onClick={() => setForm({ ...form, co_assignee_ids: form.co_assignee_ids.filter((x) => x !== id) })}
+                        aria-label={`Remove ${m?.name || "member"}`}
+                        data-testid={`task-co-remove-${id}`}
+                        className="inline-flex items-center gap-1.5 rounded-pill bg-slate-500/[0.07] py-1 pl-1 pr-2.5 text-sm ring-1 ring-inset ring-slate-500/10 transition-colors hover:bg-slate-500/[0.13]">
+                        <PersonAvatar name={m?.name} src={m?.avatar_url} size={22} ring={false} />
+                        {m?.name || "Member"}
+                        <X size={11} weight="bold" aria-hidden="true" className="text-muted-foreground" />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <select data-testid="task-co-assignee-select" className={`${inp} mt-1.5`} value=""
+                onChange={(e) => e.target.value && setForm({ ...form, co_assignee_ids: [...form.co_assignee_ids, e.target.value] })}>
+                <option value="">+ Add a person</option>
+                {members.filter((m) => m.id !== form.assignee_id && !form.co_assignee_ids.includes(m.id))
+                  .map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
+              </select>
+            </div>
+          )}
           {!form.assignee_id && (
             <div>
               <label className={lbl}>…or assign by team/role</label>

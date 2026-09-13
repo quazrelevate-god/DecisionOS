@@ -157,6 +157,44 @@ def _can_work_task(user: dict, t: dict) -> bool:
             or (t.get("assignee_role") and t.get("assignee_role") == user.get("role")))
 
 
+def can_note_task(user: dict, t: dict) -> bool:
+    """ASK-28 TK-01 — who may leave a NOTE on a task: everyone who can work it,
+    plus the person who asked for it. Hand-off and escalate stay with the
+    people doing the work (`_can_work_task`)."""
+    return bool(_can_work_task(user, t) or t.get("created_by") == user["id"])
+
+
+def task_list_query(user: dict, mine: bool = False, view: Optional[str] = None,
+                    status: Optional[str] = None) -> dict:
+    """The Mongo filter behind GET /tasks.
+
+    view="asked" (ASK-28 TK-01, "Asked by me"): tasks I created that are not
+    mine to do — I am neither the doer nor a helper. `mine` is ignored there.
+    Otherwise, unchanged:
+      mine=true            my tasks + unclaimed tasks in my role's pool
+      mine=false, non-owner my role lane (my tasks + my role's tasks)
+      mine=false, owner    everything
+    """
+    uid = user["id"]
+    q: dict = {"tenant_id": user["tenant_id"]}
+    if status:
+        q["status"] = status
+    if view == "asked":
+        q["created_by"] = uid
+        # $ne also matches a task with no doer, and on an array it means
+        # "does not contain" — so a task I'm only helping on stays out.
+        q["assignee_id"] = {"$ne": uid}
+        q["co_assignee_ids"] = {"$ne": uid}
+        return q
+    if mine:
+        # ASK-26: and tasks I am on alongside the lead.
+        q["$or"] = [{"assignee_id": uid}, {"co_assignee_ids": uid},
+                    {"assignee_id": None, "assignee_role": user["role"]}]
+    elif user["role"] != "owner":
+        q["$or"] = [{"assignee_id": uid}, {"co_assignee_ids": uid}, {"assignee_role": user["role"]}]
+    return q
+
+
 # ---------------------------------------------------------------------------
 # ASK-26 — multiple assignees
 # ---------------------------------------------------------------------------

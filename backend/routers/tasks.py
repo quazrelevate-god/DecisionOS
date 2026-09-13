@@ -69,7 +69,9 @@ from services.tenancy import tenant_filter  # FIX-001-C
 from services.tasks import (
     TASK_STATUSES,
     assignee_ids_of,
+    can_note_task,
     clean_co_assignees,
+    task_list_query,
     _attach_reference_ids,
     _can_work_task,
     _plan_progress,
@@ -229,21 +231,15 @@ async def _resolve_task_handoff(user, t, task_id, action, text, step_text, inp):
 async def list_tasks(
     status: Optional[str] = None,
     mine: Optional[bool] = False,
+    view: Optional[str] = None,
     user: dict = Depends(get_current_user),
 ):
-    q: dict = {"tenant_id": user["tenant_id"]}
-    if status:
-        q["status"] = status
     # ?mine=true (My Work / personal): only tasks assigned to ME + unclaimed role-pool tasks.
     #   Excludes tasks assigned to other specific members of my role.
     # Non-owner team board (mine=false): the whole role lane (any member of my role + role-level tasks).
     # Owner (mine=false): everything.
-    if mine:
-        # ASK-26: and tasks I am on alongside the lead.
-        q["$or"] = [{"assignee_id": user["id"]}, {"co_assignee_ids": user["id"]},
-                    {"assignee_id": None, "assignee_role": user["role"]}]
-    elif user["role"] != "owner":
-        q["$or"] = [{"assignee_id": user["id"]}, {"co_assignee_ids": user["id"]}, {"assignee_role": user["role"]}]
+    # ASK-28 TK-01: ?view=asked — tasks I created for other people ("Asked by me").
+    q = task_list_query(user, mine=bool(mine), view=view, status=status)
     tasks = await db.tasks.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     return await enrich_tasks(tasks)
 
@@ -918,7 +914,10 @@ async def add_task_update(task_id: str, inp: TaskUpdateNoteInput, user: dict = D
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Not found")
-    if not _can_work_task(user, t):
+    # ASK-28 TK-01: the person who asked for the task may leave a note on it;
+    # hand-off and escalate stay with the people doing the work.
+    requested = inp.action if inp.action in ("note", "handoff", "escalate") else "note"
+    if not (_can_work_task(user, t) or (requested == "note" and can_note_task(user, t))):
         raise HTTPException(status_code=403, detail="Only the assignee or owner can post updates")
     text = (inp.text or "").strip()
     if not text:

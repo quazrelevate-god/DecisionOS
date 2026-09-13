@@ -1,6 +1,6 @@
 {
-  "count": 317,
-  "sha": "0bb1ed5667e45a85ba13a441986d70cb934fb1bcbfb17a833b4d3ec303aa6f27",
+  "count": 320,
+  "sha": "7e6e18009fa2b4fc96f67e2574956b1af23e681a47d88a2221951a8873b7239e",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -25,6 +25,7 @@
     "DELETE /api/tenant/ai-keys/{provider}",
     "DELETE /api/tenant/roles/{key}",
     "DELETE /api/users/{uid}/temp-grant/{perm}",
+    "DELETE /api/users/{user_id}/avatar",
     "DELETE /api/workflows/{workflow_id}",
     "GET /api/",
     "GET /api/admin/2fa/status",
@@ -128,6 +129,7 @@
     "GET /api/support/tickets/{ticket_id}",
     "GET /api/tasks",
     "GET /api/tasks/{task_id}",
+    "GET /api/tasks/{task_id}/activity",
     "GET /api/tenant/ai-consent",
     "GET /api/tenant/ai-keys",
     "GET /api/tenant/ai-setup/status",
@@ -312,6 +314,7 @@
     "POST /api/transcribe",
     "POST /api/users",
     "POST /api/users/{uid}/temp-grant",
+    "POST /api/users/{user_id}/avatar",
     "POST /api/users/{user_id}/deprovision",
     "POST /api/users/{user_id}/invite",
     "POST /api/users/{user_id}/uninvite",

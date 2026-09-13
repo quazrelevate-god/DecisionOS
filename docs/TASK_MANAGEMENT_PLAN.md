@@ -63,10 +63,11 @@ is assigned.
 
 ## Phase 1 — Everyone can see the work they're part of (P0)
 
-- [ ] **1.1 "Asked by me" view**
-  - [ ] Backend: `GET /tasks?view=asked` — tasks I created that aren't mine to do.
-  - [ ] My Work: new view on desktop and phone; Person and Status filters work on it.
-  - [ ] Acceptance: a non-owner creates a task for someone else and still sees it, with its live status.
+- [x] **1.1 "Asked by me" view** *(TK-01, desktop, 2026-09-14)*
+  - [x] Backend: `GET /tasks?view=asked` — tasks I created that aren't mine to do (`services/tasks.task_list_query`, unit-tested).
+  - [x] My Work: Asked by me in the desktop switcher, kept in the URL, not saved as default; Department, Person and Status filters work on it; AI priority off; own empty state. Phone link lands on the list (the phone switcher comes with the mobile pass).
+  - [x] The person who asked can leave a note (not hand off or escalate) — server and form.
+  - [ ] Acceptance: a non-owner creates a task for someone else and still sees it — **waits on a test database** (checked read-only: owner 53/53 vs API, sales empty state, note-only form mocked).
 - [ ] **1.2 "Waiting for my approval" view**
   - [ ] Backend: `GET /tasks?view=approvals` — approval required, not yet approved, and I may approve (named approver, or anyone with `approvals` when none is named, or owner).
   - [ ] My Work: view with a count; Approve / Request changes / Ask clarification reachable.

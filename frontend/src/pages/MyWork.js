@@ -138,7 +138,7 @@ const isOverdue = (t) => {
   return new Date(due) < new Date();
 };
 
-function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) {
+function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel, noteOnly = false }) {
   const [text, setText] = useState("");
   const [action, setAction] = useState("note");
   const [toId, setToId] = useState("");
@@ -160,11 +160,14 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) 
     finally { setBusy(false); }
   };
 
+  // ASK-28 TK-01 — the person who asked for a task can leave a note on it;
+  // handing off and escalating stay with the people doing the work (the
+  // server holds the same line).
   const ACTIONS = [
     { key: "note", label: "Log note", icon: ChatText },
     { key: "handoff", label: "Hand off", icon: ArrowBendUpRight },
     { key: "escalate", label: "Escalate", icon: WarningCircle },
-  ];
+  ].filter((a) => !noteOnly || a.key === "note");
 
   return (
     /* ASK-28 — the form that opens from "Log update or hand off" (and from a
@@ -326,7 +329,7 @@ function ProgressControl({ value, onCommit, testid, valueTestid, checklist }) {
   );
 }
 
-function TaskTrail({ t, members, roleOptions, onChange, openTrigger = 0 }) {
+function TaskTrail({ t, members, roleOptions, onChange, openTrigger = 0, noteOnly = false }) {
   const [open, setOpen] = useState(false);
   // MW-09 fix: the mobile "Log update or hand off" button on the collapsed
   // card can nudge this counter; each nudge opens the UpdateForm here.
@@ -405,7 +408,7 @@ function TaskTrail({ t, members, roleOptions, onChange, openTrigger = 0 }) {
       )}
       {open && (
         <div className="mt-3">
-          <UpdateForm taskId={t.id} stepId={null} members={members} roleOptions={roleOptions}
+          <UpdateForm taskId={t.id} stepId={null} members={members} roleOptions={roleOptions} noteOnly={noteOnly}
             onDone={() => { setOpen(false); onChange(); }} onCancel={() => setOpen(false)} />
         </div>
       )}
@@ -416,7 +419,8 @@ function TaskTrail({ t, members, roleOptions, onChange, openTrigger = 0 }) {
             data-testid={`add-update-${t.id}`}
             className={`flex h-14 w-full items-center justify-center gap-2.5 rounded-pill text-base font-medium ${INK_PILL}`}
           >
-            <Plus size={18} weight="bold" aria-hidden="true" /> Log update or hand off
+            {/* ASK-28 TK-01 — the person who asked can only leave a note. */}
+            <Plus size={18} weight="bold" aria-hidden="true" /> {noteOnly ? "Leave a note" : "Log update or hand off"}
           </button>
         </div>
       )}
@@ -1423,6 +1427,12 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
   const tone = STATUS_TONE[t.status] || STATUS_TONE.todo;
   const people = cardPeople(t, members, roleOptions);
   // ASK-26 — who may change the people on a task. PATCH holds the same rule.
+  // ASK-28 TK-01 — someone who asked for this task but isn't on it: they can
+  // note, not hand off or escalate. Mirrors can_note_task / _can_work_task.
+  const onThisTask = user?.role === "owner" || t.assignee_id === user?.id
+    || (t.co_assignee_ids || []).includes(user?.id)
+    || (!!t.assignee_role && t.assignee_role === user?.role);
+  const noteOnly = !onThisTask && t.created_by === user?.id;
   const canEditPeople = user?.role === "owner" || userPerms(user).includes("team_manage")
     || t.created_by === user?.id || t.assignee_id === user?.id;
   const onPeoplePatched = (data) => { applyPatched(data); onChange(); };
@@ -1879,7 +1889,7 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
             No transition utility: the track's children swap fills, and the
             selected segment also swaps against .kr-pressed's shadow, which is
             not interpolable against an outset pair. */}
-        {!terminal && !awaitingApproval && (
+        {!terminal && !awaitingApproval && !noteOnly && (
           <div className="kr-pressed flex items-center gap-1 rounded-pill p-1" role="group"
                aria-label="Task status" data-testid={`status-pills-m-${t.id}`}>
             {M_STATUS_PILLS.map((sp) => {
@@ -1917,7 +1927,7 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
 
         {/* Actions row — Complete + attach controls, now below the two
             plan-building buttons above. */}
-        {!isTerminal(t) && !awaitingApproval && (
+        {!isTerminal(t) && !awaitingApproval && !noteOnly && (
           /* KM-6 — flex-wrap. Cancel joining this row made five controls
              (Complete, Cancel, photo, file, voice) share 343px, and Complete
              was truncating to "Comp…". Wrapping lets the two endings hold the
@@ -2050,6 +2060,16 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
           control on the right. "Set % manually" is no longer behind a
           disclosure toggle — the bar beside it is the control. */}
       {!terminal && !awaitingApproval && (
+        noteOnly ? (
+          /* ASK-28 TK-01 — the person who asked sees where the work is, not
+             the controls that move it: those belong to whoever does it. */
+          <section data-testid={`task-status-${t.id}`}>
+            <p className={DRAWER_LABEL}>Status</p>
+            <p className="text-[15px] font-medium text-slate-800" data-testid={`requester-status-${t.id}`}>
+              {STATUS_LABEL[t.status] || t.status} · {checklist ? checklist.pct : (t.progress || 0)}% done
+            </p>
+          </section>
+        ) : (
         <section data-testid={`task-status-${t.id}`}>
           <p className={DRAWER_LABEL}>Status</p>
           <div className="flex items-stretch gap-5">
@@ -2068,6 +2088,7 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
               testid={`progress-select-${t.id}`} valueTestid={`progress-bar-${t.id}`} />
           </div>
         </section>
+        )
       )}
 
       {(() => {
@@ -2168,7 +2189,7 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
         </div>
       )}
 
-      {!isTerminal(t) && !awaitingApproval && (
+      {!isTerminal(t) && !awaitingApproval && !noteOnly && (
         <div className="flex items-center gap-4">
           {/* FUP-49: don't disable -- always click-through, handler shows
               a clear toast if evidence is missing. Silent-disabled
@@ -2226,7 +2247,7 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
         </div>
       )}
 
-      {isTerminal(t) && !awaitingApproval && (
+      {isTerminal(t) && !awaitingApproval && !noteOnly && (
         <div className="flex flex-wrap gap-2 mt-4" data-testid={`reopen-actions-${t.id}`}>
           <button onClick={reopen} data-testid={`reopen-${t.id}`} className="flex items-center gap-2 bg-nm px-4 py-2 text-sm font-medium nm-btn hover:bg-accent transition-colors">
             <ArrowClockwise size={16} weight="bold" /> Reopen
@@ -2246,10 +2267,19 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
           one control that records what happened inert on phones. Shared here,
           both triggers open the same visible form. */}
       <div className="space-y-6 px-4 pb-6 lg:px-7 lg:pb-8">
-        {!awaitingApproval && (
+        {!awaitingApproval && !noteOnly && (
           <ExecutionPlan t={t} onChange={onChange} onPatched={applyPatched} members={members} roleOptions={roleOptions} />
         )}
-        <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} />
+        {/* ASK-28 TK-01 — the person who asked for this task isn't on it: the
+            status, plan and completion controls belong to whoever does it
+            (the server refuses a plan from anyone else), so say what they CAN
+            do here instead of showing controls. */}
+        {noteOnly && (
+          <p className="text-sm text-slate-500" data-testid={`requester-hint-${t.id}`}>
+            You asked for this task, so {t.assignee_name || "the team"} does the work. Leave a note below to follow up.
+          </p>
+        )}
+        <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} noteOnly={noteOnly} />
 
         {/* ASK-28 — Delete sits under "Log update or hand off", full width like
             it, and asks first in the drawer's own glass. ASK-29: the same
@@ -2626,7 +2656,11 @@ export default function MyWork() {
     try { return JSON.parse(localStorage.getItem(prefsKey) || "{}"); }
     catch { return {}; }
   })();
-  const [scope, setScope] = useState(loadedPrefs.scope || "mine");
+  /* ASK-28 TK-01 — scope "asked" is "Asked by me": tasks I created for other
+     people. It comes from the URL (?view=asked), never from saved prefs, so a
+     reload of plain /my-work still opens where the person normally works. */
+  const savedScope = loadedPrefs.scope && loadedPrefs.scope !== "asked" ? loadedPrefs.scope : "mine";
+  const [scope, setScope] = useState(rawView === "asked" ? "asked" : savedScope);
   const [tab, setTab] = useState(loadedPrefs.tab || "all");
   const [aiPriority, setAiPriority] = useState(Boolean(loadedPrefs.aiPriority));
   /* KM-30 — ONE progress lens, and no priority lens at all.
@@ -2653,8 +2687,9 @@ export default function MyWork() {
   const rawStatus = params.get("status") || "";
   const statusFilter = STATUS_FILTER_OPTIONS.some((o) => o.key === rawStatus) ? rawStatus : "";
   const setStatusFilter = (v) => setFilterParams({ status: typeof v === "function" ? v(statusFilter) : v });
-  // Person only means something on All Tasks — on My Tasks every card is yours.
-  const personFilter = isOwner && scope === "all" ? (params.get("person") || "") : "";
+  // Person only means something on All Tasks and Asked by me — on My Tasks
+  // every card is yours.
+  const personFilter = (isOwner && scope === "all") || scope === "asked" ? (params.get("person") || "") : "";
   const setPersonFilter = (v) => setFilterParams({ person: v });
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   /* Priority band picker for the AI-priority kanban view. Owned by the page so
@@ -2681,9 +2716,10 @@ export default function MyWork() {
   useEffect(() => {
     if (!prefsKey) return;
     try {
-      localStorage.setItem(prefsKey, JSON.stringify({ scope, tab, aiPriority }));
+      // "asked" is a URL view, not a default to come back to (ASK-28 TK-01).
+      localStorage.setItem(prefsKey, JSON.stringify({ scope: scope === "asked" ? savedScope : scope, tab, aiPriority }));
     } catch { /* quota; ignore */ }
-  }, [prefsKey, scope, tab, aiPriority]);
+  }, [prefsKey, scope, tab, aiPriority, savedScope]);
 
   // U7-05.3: bulk selection. Set of task ids across the currently-visible
   // list. Cleared when the tab / scope / view changes so a stale selection
@@ -2700,10 +2736,17 @@ export default function MyWork() {
     return next;
   });
   const clearSelection = () => setSelected(new Set());
+  const asked = scope === "asked";
   const mine = !(isOwner && scope === "all");
+  // AI priority ranks the work YOU have to do; Asked by me is other people's
+  // work, so the ranking and its columns are off there.
+  const aiOn = aiPriority && !asked;
   // ASK-24 — with Person set, every card would repeat the same name.
   const showAssignee = isOwner && scope === "all" && !personFilter;
-  const tasksQ = useQuery({ queryKey: ["tasks", mine], queryFn: () => api.get(`/tasks?mine=${mine}`).then((r) => r.data) });
+  const tasksQ = useQuery({
+    queryKey: ["tasks", asked ? "asked" : mine],
+    queryFn: () => api.get(asked ? "/tasks?view=asked" : `/tasks?mine=${mine}`).then((r) => r.data),
+  });
   const focusQ = useQuery({
     queryKey: ["task", focusTaskId],
     queryFn: () => api.get(`/tasks/${focusTaskId}`).then((r) => r.data),
@@ -2711,7 +2754,7 @@ export default function MyWork() {
   });
   const focusDenied = !!focusTaskId && focusQ.isError && [403, 404].includes(focusQ.error?.response?.status);
   const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
-  const prioritiesQ = useQuery({ queryKey: ["priorities"], queryFn: () => api.post("/tasks/prioritize").then((r) => r.data), enabled: aiPriority });
+  const prioritiesQ = useQuery({ queryKey: ["priorities"], queryFn: () => api.post("/tasks/prioritize").then((r) => r.data), enabled: aiOn });
   const members = usersQ.data || [];
   const roleOptions = [{ key: "owner", label: "Owner" }, ...(tenant?.roles || [])];
 
@@ -2764,7 +2807,7 @@ export default function MyWork() {
 
   const scoreMap = {};
   (prioritiesQ.data?.tasks || []).forEach((pt) => { if (pt.ai_scores) scoreMap[pt.id] = pt.ai_scores; });
-  const scoring = aiPriority && prioritiesQ.isFetching && !prioritiesQ.data;
+  const scoring = aiOn && prioritiesQ.isFetching && !prioritiesQ.data;
 
   const all = tasksQ.data || [];
   const countFor = (key) => {
@@ -2792,7 +2835,7 @@ export default function MyWork() {
   };
   const countWith = (over) => all.filter((tk) => matchesFilters(tk, { ...filters, ...over })).length;
   let list = all.filter((tk) => matchesFilters(tk, filters));
-  if (aiPriority && !showingCompleted) {
+  if (aiOn && !showingCompleted) {
     list = [...list].sort((a, b) => (scoreMap[b.id]?.priority_score || 0) - (scoreMap[a.id]?.priority_score || 0));
   }
 
@@ -2840,9 +2883,13 @@ export default function MyWork() {
     // ASK-6: leave sub-view retired; the branch that returned "leave" here
     // was mapping to a case that no longer renders.
     if (isOwner && scope === "all") return "all";
+    // ASK-28 TK-01 — Asked by me reached by link on a phone: its own view, so
+    // the My Tasks pill doesn't claim a list that isn't yours. The phone's
+    // own switcher for it comes with the mobile pass.
+    if (scope === "asked") return "asked";
     return "mine";
   })();
-  const inSegmentView = mobileView === "mine" || mobileView === "all";
+  const inSegmentView = mobileView === "mine" || mobileView === "all" || mobileView === "asked";
   // The filter dropdown lists only tabs that have items — same rule the old
   // chip strip used. "Completed" appears when any completed task exists.
   /* KM-49 — EVERY category, not just the ones with work in them. The `> 0`
@@ -2873,7 +2920,7 @@ export default function MyWork() {
   const roleLabel = (key) => roleOptions.find((r) => r.key === key)?.label
     || String(key || "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
   const personOptions = (() => {
-    if (!(isOwner && scope === "all")) return [];
+    if (!((isOwner && scope === "all") || asked)) return [];
     const openBy = new Map();
     const teams = new Set();
     let unassigned = 0;
@@ -2909,7 +2956,8 @@ export default function MyWork() {
       });
     return [
       { key: "", label: "All people" },
-      ...(user?.id ? [{ key: user.id, label: "Me", group: "People" }] : []),
+      // Asked by me never holds my own tasks, so "Me" would always read 0.
+      ...(user?.id && !asked ? [{ key: user.id, label: "Me", group: "People" }] : []),
       ...people,
       ...(unassigned > 0 || personFilter === "unassigned" ? [{ key: "unassigned", label: "Unassigned", group: "People" }] : []),
       ...[...teams].sort().map((r) => ({ key: `role:${r}`, label: `${roleLabel(r)} team`, group: "Teams" })),
@@ -3201,34 +3249,48 @@ export default function MyWork() {
               rides to the LEFT of the slider and hides in Workflows view. */}
           {(() => {
             const segments = [];
+            // ASK-28 TK-01 — Asked by me is a place you can link to, so it
+            // lives in the URL; every other segment clears it.
+            const go = (nextScope, nextView = "mywork") => {
+              if (nextScope) setScope(nextScope);
+              setView(nextView);
+              setFilterParams({ view: nextScope === "asked" ? "asked" : "" });
+            };
+            const askedSegment = {
+              key: "asked", label: t("mywork.asked_by_me", "Asked by me"), testid: "work-scope-asked",
+              active: view === "mywork" && scope === "asked",
+              onClick: () => go("asked"),
+            };
             if (isOwner) {
               segments.push({
                 key: "mine", label: t("mywork.my_tasks"), testid: "work-scope-mine",
                 active: view === "mywork" && scope === "mine",
-                onClick: () => { setScope("mine"); setView("mywork"); },
+                onClick: () => go("mine"),
               });
+              segments.push(askedSegment);
               segments.push({
                 key: "all", label: t("mywork.all_tasks"), testid: "work-scope-all",
                 active: view === "mywork" && scope === "all",
-                onClick: () => { setScope("all"); setView("mywork"); },
+                onClick: () => go("all"),
               });
             } else {
               segments.push({
                 key: "tasks", label: t("mywork.view_mywork"), testid: "work-view-mywork",
-                active: view === "mywork",
-                onClick: () => setView("mywork"),
+                active: view === "mywork" && scope !== "asked",
+                onClick: () => go("mine"),
               });
+              segments.push(askedSegment);
             }
             if (canSeeWorkflows) {
               segments.push({
                 key: "workflows", label: t("mywork.view_workflows"), testid: "work-view-workflows",
                 active: view === "workflows",
-                onClick: () => setView("workflows"),
+                onClick: () => go(null, "workflows"),
               });
             }
             return (
               <div className="flex flex-wrap items-center gap-2.5" data-testid="mywork-lens-group">
-                {view === "mywork" && (
+                {view === "mywork" && !asked && (
                   <button onClick={() => setAiPriority((v) => !v)} data-testid="ai-priority-toggle"
                     aria-pressed={aiPriority}
                     aria-label={aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
@@ -3409,11 +3471,15 @@ export default function MyWork() {
           {!tasksQ.isLoading && list.length === 0 && !(filtersActive && all.length > 0) && (
             <EmptyState
               testid="mywork-empty"
-              title={showingCompleted ? t("mywork.empty_completed_title") : t("mywork.empty_title")}
-              hint={tab === "all" ? t("mywork.empty_all_hint") : t("mywork.empty_cat_hint")}
-              ctaLabel={showingCompleted ? null : "+ Open Decision Desk"}
-              ctaTo={showingCompleted ? null : "/inbox"}
-              secondary={showingCompleted ? null : "Tasks appear here once decisions are approved"}
+              title={asked
+                ? (showingCompleted ? "Nothing you asked for is finished yet" : "Nothing you've asked for is open")
+                : (showingCompleted ? t("mywork.empty_completed_title") : t("mywork.empty_title"))}
+              hint={asked
+                ? "Tasks you create for other people show up here, with their live status."
+                : (tab === "all" ? t("mywork.empty_all_hint") : t("mywork.empty_cat_hint"))}
+              ctaLabel={showingCompleted || asked ? null : "+ Open Decision Desk"}
+              ctaTo={showingCompleted || asked ? null : "/inbox"}
+              secondary={showingCompleted || asked ? null : "Tasks appear here once decisions are approved"}
             />
           )}
           {/* U7-05.3: bulk-action bar. Sticky at top of the list so it
@@ -3451,7 +3517,7 @@ export default function MyWork() {
               roleOptions,
               showAssignee,
               highlight: t.id === focusTaskId,
-              scores: aiPriority && !showingCompleted ? scoreMap[t.id] : undefined,
+              scores: aiOn && !showingCompleted ? scoreMap[t.id] : undefined,
               // KM-30 — the card drops the status chip when the lens already
               // says it. Priority is handled by TaskPriorityColumns when AI
               // Priority is on (each column already names the band).
@@ -3461,7 +3527,7 @@ export default function MyWork() {
               onToggleSelect: () => toggleSelected(t.id),
             });
             const shared = { list, openId, setOpenId, cardProps };
-            return aiPriority && !showingCompleted
+            return aiOn && !showingCompleted
               ? <TaskPriorityColumns {...shared} band={band} />
               : <TaskGrid {...shared} />;
           })()}

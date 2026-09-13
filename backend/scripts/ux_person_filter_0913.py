@@ -148,7 +148,7 @@ def owner_desktop(browser):
     rows = p.evaluate(TRUTH_JS, API)
     users = p.evaluate(USERS_JS, API)
     open_total = expect(rows)
-    row = [trig_text(p, n) for n in ("department", "person", "priority", "status")]
+    row = [trig_text(p, n) for n in ("department", "person", "status")]
     rec("all-tasks-filter-row", VP, all(row) and cards(p) == open_total,
         f"{row}; cards {cards(p)} / API open {open_total}")
 
@@ -159,8 +159,8 @@ def owner_desktop(browser):
     rec("status-options-complete", VP,
         all(any(s in i for i in status_items) for s in ("Pending Approval", "Overdue", "Completed", "Not Started")),
         str(status_items))
-    prio_items = menu_items(p, "priority")
-    rec("priority-dropdown", VP, len(prio_items) == 4, str(prio_items))
+    rec("no-priority-filter", VP, p.locator('[data-testid="work-filter-priority"]').count() == 0,
+        "Priority dropdown removed (founder call 2026-09-13)")
 
     open_by = {}
     for t in rows:
@@ -187,17 +187,18 @@ def owner_desktop(browser):
     dept_all = trig_count(p, "department")
     rec("person-x-overdue", VP, cards(p) == exp and dept_all == exp,
         f"cards {cards(p)}, API {exp}, Department 'All' count now {dept_all} (reflects other filters)")
-    pick(p, "priority", "high")
-    exp3 = expect(rows, person=pid, status="overdue", priority="high")
-    rec("person-x-overdue-x-high", VP, cards(p) == exp3 == trig_count(p, "priority"),
-        f"cards {cards(p)}, trigger {trig_count(p, 'priority')}, API {exp3}")
-    p.screenshot(path=str(OUT / "desktop_person_overdue_high.png"))
+    p.screenshot(path=str(OUT / "desktop_person_overdue.png"))
 
     p.reload()
     settle(p)
     rec("refresh-keeps-filters", VP,
-        cards(p) == exp3 and qs(p).get("status") == "overdue" and qs(p).get("priority") == "high" and qs(p).get("person") == pid,
-        f"after reload: cards {cards(p)}, url {qs(p)}, row {[trig_text(p, n) for n in ('person', 'priority', 'status')]}")
+        cards(p) == exp and qs(p).get("status") == "overdue" and qs(p).get("person") == pid,
+        f"after reload: cards {cards(p)}, url {qs(p)}, row {[trig_text(p, n) for n in ('person', 'status')]}")
+
+    p.goto(f"{BASE}/my-work?person={pid}&status=overdue&priority=high")
+    settle(p)
+    rec("stale-priority-link-ignored", VP, cards(p) == exp,
+        f"?priority=high left in an old link: cards {cards(p)} = Priya x Overdue {exp} (not narrowed)")
 
     p.locator('[data-testid="work-filters-clear"]').click()
     p.wait_for_timeout(900)
@@ -309,7 +310,7 @@ def owner_phone(browser, rows, pid, pname):
     groups = [g for g in ("department", "person", "priority", "status")
               if p.locator(f'[data-testid="work-sheet-{g}"]').count()]
     box = sheet.bounding_box() if sheet.count() else None
-    rec("sheet-opens-with-four-filters", VP, groups == ["department", "person", "priority", "status"] and box and box["y"] >= 0,
+    rec("sheet-opens-with-three-filters", VP, groups == ["department", "person", "status"] and box and box["y"] >= 0,
         f"groups {groups}; sheet box {box and {k: round(v) for k, v in box.items()}}")
     chip_labels = p.evaluate("""() => [...document.querySelectorAll('[data-testid="work-sheet-person"] button')].map(b => b.innerText.replace(/\\n/g,' '))""")
     base_labels = [re.sub(r"\s+\d+$", "", x) for x in chip_labels]

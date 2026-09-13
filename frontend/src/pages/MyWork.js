@@ -2229,26 +2229,20 @@ const STATUS_FILTER_OPTIONS = [
 ];
 // Overdue and Completed are LENSES, not t.status values.
 const STATUS_LENSES = new Set(["overdue", "completed"]);
-
-const PRIORITY_FILTER_OPTIONS = [
-  { key: "", label: "All priorities" },
-  { key: "high", label: "High" },
-  { key: "medium", label: "Medium" },
-  { key: "low", label: "Low" },
-];
+// ASK-24 — a Priority filter shipped briefly and was removed on a founder
+// call (2026-09-13): the AI-priority view already splits by High/Medium/Low.
 
 /* ASK-24 — ONE predicate for every filter, so the list and every count in
    every menu agree. A menu's counts are this with that menu's own dimension
    swapped for the option being counted, and the others held as they are.
    person: "" | a user id | "unassigned" | "role:<key>" (a team queue — a task
    given to a role with no named person). */
-function matchesFilters(t, { tab, person, priority, status }) {
+function matchesFilters(t, { tab, person, status }) {
   const completedLens = tab === "completed" || status === "completed";
   if (completedLens !== isTerminal(t)) return false;
   if (tab !== "all" && tab !== "completed" && t.task_type !== tab) return false;
   if (status === "overdue" && !isOverdue(t)) return false;
   if (status && !STATUS_LENSES.has(status) && t.status !== status) return false;
-  if (priority && TIER_OF(t) !== priority) return false;
   if (person === "unassigned") return !t.assignee_id && !t.assignee_role;
   if (person && person.startsWith("role:")) return !t.assignee_id && t.assignee_role === person.slice(5);
   if (person) return t.assignee_id === person;
@@ -2312,8 +2306,8 @@ export default function MyWork() {
      It lives in component state rather than the URL because it is a reading
      posture, not a destination — you flick through it while scanning and you
      do not want twenty history entries for it. */
-  /* ASK-24 (2026-09-13): Status, Priority and Person now live in the URL
-     (?status=&priority=&person=) so a refresh keeps them and a link can open
+  /* ASK-24 (2026-09-13): Status and Person now live in the URL
+     (?status=&person=) so a refresh keeps them and a link can open
      one person's tasks. `replace` keeps the reading-posture point above: no
      history entry per tap. Department stays in the saved prefs, where it
      already persisted. Unknown values from a hand-typed URL read as "All". */
@@ -2325,9 +2319,6 @@ export default function MyWork() {
   const rawStatus = params.get("status") || "";
   const statusFilter = STATUS_FILTER_OPTIONS.some((o) => o.key === rawStatus) ? rawStatus : "";
   const setStatusFilter = (v) => setFilterParams({ status: typeof v === "function" ? v(statusFilter) : v });
-  const rawPriority = params.get("priority") || "";
-  const priorityFilter = PRIORITY_FILTER_OPTIONS.some((o) => o.key === rawPriority) ? rawPriority : "";
-  const setPriorityFilter = (v) => setFilterParams({ priority: v });
   // Person only means something on All Tasks — on My Tasks every card is yours.
   const personFilter = isOwner && scope === "all" ? (params.get("person") || "") : "";
   const setPersonFilter = (v) => setFilterParams({ person: v });
@@ -2364,7 +2355,7 @@ export default function MyWork() {
   // list. Cleared when the tab / scope / view changes so a stale selection
   // can't apply to a different filter's tasks.
   const [selected, setSelected] = useState(() => new Set());
-  useEffect(() => { setSelected(new Set()); }, [scope, tab, view, personFilter, priorityFilter, statusFilter]);
+  useEffect(() => { setSelected(new Set()); }, [scope, tab, view, personFilter, statusFilter]);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkReassignOpen, setBulkReassignOpen] = useState(false);
   const [bulkAssigneeId, setBulkAssigneeId] = useState("");
@@ -2403,7 +2394,7 @@ export default function MyWork() {
     // ASK-24 — a deep-linked task must be visible, so drop any filter that
     // could hide it; a finished task opens under Status: Completed.
     setTab("all");
-    setFilterParams({ person: "", priority: "", status: isTerminal(ft) ? "completed" : "" });
+    setFilterParams({ person: "", status: isTerminal(ft) ? "completed" : "" });
     const timer = setTimeout(() => {
       document.getElementById(`task-card-${focusTaskId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 400);
@@ -2457,12 +2448,12 @@ export default function MyWork() {
   // or from the tab (mobile chip strip / deep link); both mean the same lens.
   const showingCompleted = urlFilter === "completed" || tab === "completed" || statusFilter === "completed";
 
-  // ASK-24 — Department x Person x Priority x Status, all through one
+  // ASK-24 — Department x Person x Status, all through one
   // predicate. countWith() swaps one dimension for the option being counted,
   // so every menu's numbers reflect the filters set in the others.
   const filters = {
     tab: urlFilter === "completed" ? "completed" : tab,
-    person: personFilter, priority: priorityFilter,
+    person: personFilter,
     status: statusFilter || (urlFilter === "overdue" ? "overdue" : ""),
   };
   const countWith = (over) => all.filter((tk) => matchesFilters(tk, { ...filters, ...over })).length;
@@ -2594,14 +2585,15 @@ export default function MyWork() {
   const filterParts = [
     tab !== "all" && tab !== "completed" ? labelIn(WORK_TABS, tab) : null,
     personFilter ? (labelIn(personOptions, personFilter) || "One person") : null,
-    priorityFilter ? `${labelIn(PRIORITY_FILTER_OPTIONS, priorityFilter)} priority` : null,
     filters.status ? labelIn(STATUS_FILTER_OPTIONS, filters.status) : null,
   ].filter(Boolean);
   const filtersActive = filterParts.length > 0;
   const filterSummary = filterParts.join(" · ");
   const clearFilters = () => {
     setTab("all");
-    setFilterParams({ person: "", priority: "", status: "", filter: "" });
+    // `priority` is gone as a filter, but links made while it existed can still
+    // carry it; it is ignored on read and stripped here so Clear leaves a clean URL.
+    setFilterParams({ person: "", status: "", filter: "", priority: "" });
   };
   const tasksLoading = tasksQ.isLoading && !tasksQ.data;
 
@@ -2777,9 +2769,6 @@ export default function MyWork() {
                   counts={(k) => countWith({ person: k })} onSelect={setPersonFilter}
                   loading={tasksLoading} searchable={peopleSearchable} />
               )}
-              <FilterChipGroup testid="work-sheet-priority" label="Priority"
-                value={priorityFilter} options={PRIORITY_FILTER_OPTIONS}
-                counts={(k) => countWith({ priority: k })} onSelect={setPriorityFilter} loading={tasksLoading} />
               <FilterChipGroup testid="work-sheet-status" label="Status"
                 value={filters.status} options={STATUS_FILTER_OPTIONS}
                 counts={(k) => countWith({ status: k })} onSelect={setStatusFilter} loading={tasksLoading} />
@@ -3031,15 +3020,6 @@ export default function MyWork() {
                   searchable={peopleSearchable}
                 />
               )}
-              <FilterDropdown
-                testid="work-filter-priority"
-                label="Priority"
-                value={priorityFilter}
-                options={PRIORITY_FILTER_OPTIONS}
-                counts={(k) => countWith({ priority: k })}
-                onSelect={setPriorityFilter}
-                loading={tasksLoading}
-              />
               <FilterDropdown
                 testid="work-filter-status"
                 label="Status"

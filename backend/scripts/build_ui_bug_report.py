@@ -329,6 +329,141 @@ FINDINGS = [
         found="2026-09-12",
     ),
     dict(
+        id="MW-15", section="My Work", screen="Task drawer - close (mobile)",
+        viewport="Mobile", persona="All", severity="High", status="Open",
+        area="Navigation / dead end",
+        tested="Opened a task on a 390x844 phone viewport (script and browser preview), "
+               "located every close control in the drawer and hit-tested its centre; then "
+               "tapped outside the drawer and pressed browser Back.",
+        expected="A phone user can close the task and return to the list.",
+        actual="There is no way to close it. The drawer is w-full, so it covers the whole "
+               "screen and there is no scrim left to tap. The new left-edge close tab sits "
+               "at x=-43, entirely off-screen. The stock Radix close is at top-right but "
+               "the sticky title bar paints over it - only a sliver of its focus ring "
+               "peeks out. Escape closes it, but phones have no Escape key. Browser Back "
+               "does not close the drawer either: it leaves My Work for the previous "
+               "route. A phone user who opens a task is stuck.",
+        evidence="Close tab rect [-43, 20, 44, 44]; stock close rect [330, 16, 44, 44] with "
+                 "elementFromPoint = H2 (the title). Drawer rect [0, 0, 390, 844]. Tap at "
+                 "(4, 300): drawer still open. Back: url /my-work -> /inbox. Screenshot "
+                 "verify_0913/mob390_drawer.png; reproduced in the browser preview at "
+                 "375x812.",
+        cause="c70508b / e5c9151 / 2a17592 placed the close with -translate-x-full so it "
+              "protrudes into the scrim. That works while the drawer is narrower than the "
+              "screen (sm:max-w-2xl), but below sm the drawer is w-full and the scrim is "
+              "0px wide, so the tab is pushed off the left edge. Nothing on mobile "
+              "replaces it.",
+        fix="Below sm, put the close INSIDE the drawer header (a 44px X at the right of "
+            "the sticky title bar, or a back chevron at its left) and keep the protruding "
+            "tab for sm and up: e.g. 'right-3 top-3 sm:left-0 sm:right-auto "
+            "sm:-translate-x-full'. Alternatively leave a strip of scrim on phones "
+            "(w-[92%]) so tapping outside works. Either way, test on a phone width "
+            "before shipping a change to the drawer frame.",
+        code="pages/MyWork.js:1427-1441 (SheetContent w-full + SheetClose -translate-x-full)",
+        found="2026-09-13",
+    ),
+    dict(
+        id="MW-16", section="My Work", screen="Task drawer - 'Log update or hand off' (mobile)",
+        viewport="Mobile", persona="All", severity="High", status="Open",
+        area="Regression",
+        tested="In the drawer on a 390x844 viewport, tapped 'Log update or hand off' and "
+               "looked for the update form it opens.",
+        expected="The update form opens, as MW-09's fix made it do.",
+        actual="Nothing appears. The button is visible and tappable, and the form IS "
+               "mounted - but inside the desktop body, which is display:none below lg. "
+               "This is MW-09 back: the one control that records what happened is inert "
+               "on phones again. Desktop is unaffected (form opens, no crash).",
+        evidence="After tap: one update-form node, 0x0, hidden by ancestor "
+                 "#task-card-body-<id> (the 'hidden lg:block' desktop body). Screenshot "
+                 "verify_0913/mob390_after_log_update_tap.png.",
+        cause="MW-09 was fixed by expanding the card and bumping trailOpenTrigger so "
+              "TaskTrail opens its form. ff3139f moved both bodies into the Sheet, but "
+              "TaskTrail is still rendered only once, inside the desktop body, so on a "
+              "phone the trigger opens a form nobody can see.",
+        fix="Render TaskTrail (or at least its UpdateForm) outside the lg-gated body, "
+            "shared by both layouts, or mount a second instance inside the mobile body. "
+            "Add the MW-09 check to the verify script so the next drawer change cannot "
+            "regress it silently.",
+        code="pages/MyWork.js:1658-1662 (mobile trigger), :1679 (desktop body 'hidden "
+             "lg:block'), :1960 (the only <TaskTrail>)",
+        dep="MW-09",
+        found="2026-09-13",
+    ),
+    dict(
+        id="MW-17", section="My Work", screen="Task drawer - two close buttons, invisible focus",
+        viewport="Mobile + Desktop", persona="All", severity="Medium", status="Open",
+        area="Accessibility",
+        tested="Listed the close controls inside the open drawer, hit-tested each, and "
+               "read document.activeElement straight after opening.",
+        expected="One close control, visible, and focus lands somewhere the user can see.",
+        actual="Every drawer carries TWO close buttons: the new 'Close task' tab and the "
+               "stock shadcn 'Close' that SheetContent always renders. The stock one is "
+               "covered by the sticky title bar, yet Radix focuses it on open - so "
+               "keyboard focus starts on a control nobody can see, and a screen reader "
+               "announces 'Close' and 'Close task' as two separate buttons.",
+        evidence="Desktop 1440: stock close [1408, 16, 16, 16], elementFromPoint = H2; "
+                 "activeElement on open = that button. Same at 1920 and on mobile.",
+        cause="components/ui/sheet.jsx:50-54 hard-codes a SheetPrimitive.Close in every "
+              "SheetContent. The new close tab was added alongside it rather than "
+              "replacing it, and the sticky header (z-10, opaque) was laid over it.",
+        fix="Give SheetContent a hideClose prop (default false, so other sheets are "
+            "unchanged) and pass it here; set onOpenAutoFocus to focus the title or the "
+            "close tab. That also resolves which close MW-15 should keep.",
+        code="components/ui/sheet.jsx:46-58; pages/MyWork.js:1427-1445",
+        found="2026-09-13",
+    ),
+    dict(
+        id="MW-18", section="Global", screen="Application shell at wide widths",
+        viewport="Desktop 1920", persona="All", severity="Medium", status="Open",
+        area="Layout / side effect",
+        tested="Loaded Finance, CRM, Team, My Work and Decision Desk at 1920x1080 after "
+               "da83b34 and screenshotted each once data had loaded.",
+        expected="Removing the width cap for My Work leaves other pages as they were.",
+        actual="The cap was removed in the shared Layout, so EVERY page now runs "
+               "edge-to-edge. On Finance each KPI tile is ~610px wide with its value at "
+               "the far left and its arrow ~550px away; the Capture bar is 1,856px wide "
+               "holding three small buttons; AI brief rows put the 'Urgent' tag ~1,700px "
+               "from the sentence it qualifies. On Team each member card is ~610px wide "
+               "with the name and '6 permissions' at opposite ends. Nothing overflows - "
+               "it just reads as sparse and makes the eye travel.",
+        evidence="main width 1920px on all five routes; screenshots "
+                 "verify_0913/wide1920_loaded_finance.png and _team.png.",
+        cause="da83b34 dropped lg:max-w-[1400px] from the app-shell div in "
+              "components/Layout.js:634 - a global container - to satisfy a My Work ask.",
+        fix="Restore the cap in Layout and lift it only where wanted: give My Work its "
+            "own page-level wrapper (or a data-wide flag the shell reads). If wider is "
+            "wanted everywhere, cap at ~1600px rather than none, and constrain the "
+            "Finance tiles and AI brief rows internally.",
+        code="components/Layout.js:634 (app-shell className)",
+        found="2026-09-13",
+    ),
+    dict(
+        id="MW-19", section="My Work", screen="Department filter dropdown",
+        viewport="Desktop", persona="Owner", severity="Low", status="Open",
+        area="Usability",
+        tested="Opened the new Department dropdown, read every option, and picked one "
+               "with a zero count.",
+        expected="The dropdown lists departments, and picking one filters to it.",
+        actual="Three problems. (1) 'Completed 7' is listed as a Department - it is a "
+               "state, and the Status dropdown beside it is where it belongs. (2) Six of "
+               "the nine options read 0 (Sales 0, Production 0, Quality Control 0, "
+               "Inventory 0, Finance 0, HR 0) - the old chip strip hid empty categories "
+               "on a founder ask (U7-05.9). (3) Picking an empty one is silently undone: "
+               "the trigger still reads 'Department: All 26' and nothing tells the user "
+               "why.",
+        evidence="Items: All 26, Sales 0, Production 0, Quality Control 0, Inventory 0, "
+                 "Finance 0, Logistics 1, HR 0, Completed 7. Picked 'Sales 0' -> cards "
+                 "26 -> 26, trigger 'Department: All 26'.",
+        cause="FilterDropdown maps every WORK_TABS entry, including 'completed' and "
+              "zero-count ones, while the U7-05.9 effect still snaps an empty selection "
+              "back to 'all'.",
+        fix="Filter options to count > 0 (keep All), or render zero-count ones disabled; "
+            "move Completed into the Status dropdown.",
+        code="pages/MyWork.js:2042-2075 (FilterDropdown), :2735-2743 (Department "
+             "options), :2288-2298 (snap-back effect)",
+        found="2026-09-13",
+    ),
+    dict(
         id="TM-01", section="Team", screen="Add member - login method toggle",
         viewport="Mobile + Desktop", persona="Owner", severity="Low", status="Open",
         area="Accessibility",
@@ -1254,6 +1389,56 @@ COVERAGE = [
      "Leave is usable on mobile through its own route", "Routing", "PASS",
      "/leave renders the user's leave records directly", ""),
 
+    # --- MY WORK re-check after the 2026-09-13 pull (9 commits) ---
+    ("T-110", "My Work", "View slider", "Desktop 1440 + 1920", "Owner",
+     "My Tasks / All Tasks / Workflows sit on one segmented control, one pressed",
+     "Functional", "PASS",
+     "3 segments, 40px tall, exactly one aria-pressed; AI Priority sits left of it", ""),
+    ("T-111", "My Work", "View slider", "Desktop 1440x900", "Sales",
+     "Non-owners get the same control shape", "Functional", "PASS",
+     "Segments read Tasks | Workflows", ""),
+    ("T-112", "My Work", "View slider - Workflows", "Desktop 1440 + 1920", "Owner",
+     "Workflows segment switches view, hides AI Priority, and the slider returns",
+     "Routing", "PASS",
+     "workflows-hub renders, AI toggle hidden, My Tasks brings the list back", ""),
+    ("T-113", "Workflows", "Board frame + stage labels", "Desktop 1440 + 1920", "Owner",
+     "No outer well; each stage label centred over its column", "Visual", "PASS",
+     "No kr-glass-well, transparent ground; label-centre offset 0px on all 4 stages", ""),
+    ("T-114", "My Work", "Uniform grid", "Desktop 1440 + 1920", "Owner",
+     "Cards sit in a uniform grid with no page overflow", "Responsive", "PASS",
+     "4 columns at both widths (332px / 452px cards), radius 16px, overflow 0", ""),
+    ("T-115", "My Work", "Status filter", "Desktop 1440x900", "Owner",
+     "Status dropdown filters the list", "Functional", "PASS",
+     "Not Started: 26 -> 18 cards, trigger reads 'Status: Not Started'", ""),
+    ("T-116", "My Work", "Department filter", "Desktop 1440x900", "Owner",
+     "Department dropdown lists departments and filters", "Usability", "FAIL",
+     "Lists 'Completed' as a department and six 0-count options; picking one is "
+     "silently undone", "MW-19"),
+    ("T-117", "My Work", "Task drawer - open", "Desktop 1440 + 1920", "Owner",
+     "A task opens in a right-side drawer with its title", "Functional", "PASS",
+     "672px drawer, title in sticky header; left close tab and Escape both close it", ""),
+    ("T-118", "My Work", "ASK-11 status dropdown", "Desktop 1440 + 1920", "Owner",
+     "The status dropdown carries no terminal states", "Functional", "PASS",
+     "Not Started / In Progress / Waiting / Under Review only", "ASK-11"),
+    ("T-119", "My Work", "Task drawer - log update", "Desktop 1440 + 1920", "Owner",
+     "MW-08 regression check: Log update opens the form without crashing",
+     "Regression", "PASS", "update-form visible, no error boundary", ""),
+    ("T-120", "My Work", "Task drawer - close", "Mobile 390x844", "Owner",
+     "A phone user can close the drawer", "Navigation", "FAIL",
+     "Close tab at x=-43 off-screen, stock close under the title, no scrim, Back leaves "
+     "the page", "MW-15"),
+    ("T-121", "My Work", "Task drawer - log update", "Mobile 390x844", "Owner",
+     "MW-09 regression check: Log update opens the form on a phone", "Regression",
+     "FAIL", "Form mounts inside the display:none desktop body", "MW-16"),
+    ("T-122", "My Work", "Task drawer - close controls", "Both", "Owner",
+     "One visible close; focus lands on something visible", "Accessibility", "FAIL",
+     "Two close buttons; initial focus on the stock one hidden under the title",
+     "MW-17"),
+    ("T-123", "Global", "Shell at 1920", "Desktop 1920x1080", "Owner",
+     "Pages keep a readable width after the My Work width change", "Layout", "FAIL",
+     "Cap removed in shared Layout; Finance tiles and Team cards stretch to ~610px",
+     "MW-18"),
+
     # --- TEAM ---
     ("T-200", "Team", "Page load", "Desktop 1440x900", "Owner",
      "/team loads directly with the full roster", "Routing", "PASS",
@@ -1865,8 +2050,11 @@ ASKS = [
             "complete an evidence-required task. So this is redundancy and inconsistency, "
             "not a hole.",
         code="pages/MyWork.js:79-86 (STATUS_OPTIONS), :1602 (desktop select), "
-             ":102-108 + :1594 (the mobile decision and its reasoning)",
-        dep="ASK-9", status="To do",
+             ":102-108 + :1594 (the mobile decision and its reasoning). VERIFIED "
+             "FIXED 2026-09-13 (5105ed1): the desktop status dropdown now offers only "
+             "Not Started / In Progress / Waiting / Under Review, checked at 1440 and "
+             "1920 inside the new task drawer.",
+        dep="ASK-9", status="Fixed",
     ),
     dict(
         id="ASK-12", section="My Work", item="Put logging where the work is",
@@ -2065,6 +2253,25 @@ ASKS = [
 #    picked up cold weeks later
 # ---------------------------------------------------------------------------
 NOTES = [
+    ("HEAD", "ASK numbers in commit messages do not match this workbook"),
+    ("META", "Found 2026-09-13 while verifying the 9 commits pulled that day. No "
+             "decision needed - a bookkeeping hazard to fix before it causes a wrong "
+             "status change."),
+    ("", ""),
+    ("Q", "WHAT HAPPENED"),
+    ("", "Only 5105ed1 (ASK-11) uses this workbook's numbering. The other commits label "
+         "their work ASK-13, ASK-14, ASK-15, ASK-16 and ASK-17, but in this workbook "
+         "those IDs are TEAM asks (stop showing access, redesign Add member, gate Edit "
+         "access, org chart, member card data). The commits are all My Work / Workflows "
+         "changes - uniform grid and dropdowns, the segmented slider, the task drawer, "
+         "the Workflows board, the drawer close tab - taken from a different list of "
+         "founder asks."),
+    ("So", "The Team asks ASK-13 to ASK-17 are still To do; nothing in those commits "
+           "touches Team.js. Anyone matching commits to this sheet by ID would wrongly "
+           "close five Team items."),
+    ("Suggest", "Use this workbook as the one numbering source, or prefix the other "
+                "list (e.g. FA-13) so the two cannot collide."),
+    ("", ""),
     ("HEAD", "Leave approvals: who approves, and is the Settings screen needed?"),
     ("META", "Raised 2026-09-12 by Yogesh - Owner. Status: DEFERRED, Yogesh deciding. "
              "Relates to ASK-8. Nothing is to be built from this note until that call "

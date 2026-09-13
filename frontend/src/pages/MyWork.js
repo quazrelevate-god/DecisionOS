@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react";
+import { Fragment, useRef, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -23,7 +23,7 @@ import Workflows from "./Workflows";
 import {
   CheckCircle, Camera, Microphone, Stop, ChatCircleText,
   Sparkle, Plus, Trash, Robot, PencilSimple, ListChecks, CaretDown, CaretUp,
-  ArrowBendUpRight, WarningCircle, ChatText, ArrowRight, Kanban, ListChecks as ListIcon,
+  ArrowBendUpRight, WarningCircle, ChatText, ArrowRight, Kanban,
   Paperclip, UserCircle, ShieldCheck, Tag, ClockCounterClockwise,
   ArrowClockwise, XCircle, LockKey, X, MagnifyingGlassPlus, Eye,
   File, FileArrowUp, Lightbulb, Info,
@@ -2576,100 +2576,71 @@ export default function MyWork() {
           </h1>
         </div>
         <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:items-center" data-testid="mywork-controls">
-          {/* ASK-13 (2026-09-13): the task-scope cluster used to render only
-              in mywork view. That was the MW-11 rule from when Leave had its
-              own view here — showing a "New Task" button in Leave was actively
-              wrong. Leave is retired now and only Workflows remains, so the
-              cluster ALWAYS renders on desktop: every button in it already
-              flips view back to "mywork", which is the answer to "how do I get
-              back to my tasks from Workflows?". */}
-          <div className="order-2 flex flex-wrap items-center gap-2.5 lg:order-1" data-testid="mywork-actions">
-            {/* ASK-3: the desktop New Task ink button used to sit here at
-                the head of mywork-actions. Moved out to the tab-strip
-                row below so it reads as an action for the list rather
-                than the largest, darkest button on the page header. The
-                scope + AI-priority cluster stays here -- those are
-                lenses ON the header row, not primary actions. */}
-            {/* THE CLUSTER. My Tasks and All Tasks are joined by GEOMETRY —
-                touching, outer corners round, inner corners square, a
-                hairline on the seam. No track, no fill, no tint, per the
-                founder. AI Priority sits with them as a circle: a third lens
-                on the same list, close enough to read as one group, round
-                enough not to read as a third tab. */}
-            {isOwner && (
-                <div className="flex items-center gap-2" role="group" aria-label="Task view" data-testid="mywork-lens-group">
-                  <div className="flex items-center">
-                    <button onClick={() => { setScope("mine"); setView("mywork"); }} data-testid="work-scope-mine"
-                      aria-pressed={view === "mywork" && scope === "mine" && !aiPriority}
-                      className={`${SEG} rounded-l-pill ${view === "mywork" && scope === "mine" && !aiPriority ? SEG_ON : SEG_OFF}`}>
-                      {t("mywork.my_tasks")}
-                    </button>
-                    <span aria-hidden="true" className="h-6 w-px shrink-0 bg-kr-ink/15" />
-                    <button onClick={() => { setScope("all"); setView("mywork"); }} data-testid="work-scope-all"
-                      aria-pressed={view === "mywork" && scope === "all" && !aiPriority}
-                      className={`${SEG} rounded-r-pill ${view === "mywork" && scope === "all" && !aiPriority ? SEG_ON : SEG_OFF}`}>
-                      {t("mywork.all_tasks")}
-                    </button>
-                  </div>
-
-                  {/* KR-11.6 — AI Priority is a circle now, and it lives INSIDE
-                      this cluster. It is a third lens on the same list, so it
-                      belongs with the other two; the circle is what keeps it
-                      from reading as a third tab. Icon-only, so it carries a
-                      real label and a title for anything not looking at it.
-                      Ink, not accent — the founder's call, and it also stops
-                      the toolbar's only red from sitting next to the overdue
-                      pills it has nothing to do with. */}
-                  <button onClick={() => { setAiPriority((v) => !v); setView("mywork"); }} data-testid="ai-priority-toggle"
-                    aria-pressed={view === "mywork" && aiPriority}
+          {/* ASK-14 (2026-09-13): My Tasks / All Tasks / Workflows collapse
+              into ONE segmented slider — same SEG/SEG_ON/SEG_OFF grammar the
+              mobile row already uses, so all three top-level places sit on
+              one control. AI Priority is a lens on the task list only, so it
+              rides to the LEFT of the slider and hides in Workflows view. */}
+          {(() => {
+            const segments = [];
+            if (isOwner) {
+              segments.push({
+                key: "mine", label: t("mywork.my_tasks"), testid: "work-scope-mine",
+                active: view === "mywork" && scope === "mine",
+                onClick: () => { setScope("mine"); setView("mywork"); },
+              });
+              segments.push({
+                key: "all", label: t("mywork.all_tasks"), testid: "work-scope-all",
+                active: view === "mywork" && scope === "all",
+                onClick: () => { setScope("all"); setView("mywork"); },
+              });
+            } else {
+              segments.push({
+                key: "tasks", label: t("mywork.view_mywork"), testid: "work-view-mywork",
+                active: view === "mywork",
+                onClick: () => setView("mywork"),
+              });
+            }
+            if (canSeeWorkflows) {
+              segments.push({
+                key: "workflows", label: t("mywork.view_workflows"), testid: "work-view-workflows",
+                active: view === "workflows",
+                onClick: () => setView("workflows"),
+              });
+            }
+            return (
+              <div className="flex flex-wrap items-center gap-2.5" data-testid="mywork-lens-group">
+                {view === "mywork" && (
+                  <button onClick={() => setAiPriority((v) => !v)} data-testid="ai-priority-toggle"
+                    aria-pressed={aiPriority}
                     aria-label={aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
                     title={scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
-                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground ${
-                      view === "mywork" && aiPriority ? "kr-pressed" : "kr-pop"
-                    }`}>
-                    <Sparkle size={16} weight={view === "mywork" && aiPriority ? "fill" : "bold"} aria-hidden="true"
+                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground ${aiPriority ? "kr-pressed" : "kr-pop"}`}>
+                    <Sparkle size={16} weight={aiPriority ? "fill" : "bold"} aria-hidden="true"
                       className={scoring ? "animate-pulse" : ""} />
                   </button>
-                </div>
-            )}
-          </div>
-          <div className="order-1 flex flex-wrap items-center gap-2.5 lg:order-2" data-testid="work-view-toggle">
-            {/* U7-05.11 (2026-08-17): 'Tasks' view toggle removed for
-                owner. The MY TASKS / ALL TASKS / AI PRIORITY buttons
-                already route back to view=mywork on click, so Tasks
-                sat unused next to Workflows and Leave. Non-owners keep
-                it because they don't have MY TASKS / ALL TASKS -- it's
-                their only path back to the task list from Workflows
-                or Leave. Founder ask: 'remove the Tasks got it .. lets
-                have only the my tasks, all tasks, ai priority,
-                workflow and leave'. */}
-            {!isOwner && (
-              <button onClick={() => setView("mywork")} data-testid="work-view-mywork"
-                aria-pressed={view === "mywork"}
-                className={`${SECTION_BTN} ${view === "mywork" ? "kr-pressed font-semibold" : "kr-pop text-foreground/75"}`}>
-                <ListIcon size={15} weight="regular" aria-hidden="true" /> {t("mywork.view_mywork")}
-              </button>
-            )}
-            {/* Workflows — the one control that NEVER changes depth. Held
-                pressed in BOTH states on the founder's call, so colour alone
-                carries selection: brown at rest, ink when you are in it.
-                Everything else in this row moves between raised and sunken,
-                which is what lets a permanently-sunken button read as a
-                place rather than a toggle. */}
-            {canSeeWorkflows && (
-              <button onClick={() => setView("workflows")} data-testid="work-view-workflows"
-                aria-pressed={view === "workflows"}
-                className={`${SECTION_BTN} kr-pressed ${
-                  view === "workflows" ? "font-semibold text-foreground" : "text-kr-brown"
-                }`}>
-                <FlowArrow size={16} weight="bold" aria-hidden="true" /> {t("mywork.view_workflows")}
-              </button>
-            )}
-            {/* ASK-6 (2026-09-12): Leave sub-view removed from My Work.
-                Register lives on /team, approvals on /inbox (Decision
-                Desk), config on /settings > Operations. Import Leave
-                references retired above. */}
-          </div>
+                )}
+                {segments.length > 0 && (
+                  <div className="flex items-center" role="group" aria-label="View" data-testid="work-view-segment">
+                    {segments.map((seg, i) => {
+                      const first = i === 0;
+                      const last = i === segments.length - 1;
+                      return (
+                        <Fragment key={seg.key}>
+                          {!first && <span aria-hidden="true" className="h-6 w-px shrink-0 bg-kr-ink/15" />}
+                          <button type="button" onClick={seg.onClick} data-testid={seg.testid}
+                            aria-pressed={seg.active}
+                            className={`${SEG} ${first ? "rounded-l-pill" : ""} ${last ? "rounded-r-pill" : ""} ${seg.active ? SEG_ON : SEG_OFF}`}>
+                            {seg.label}
+                          </button>
+                        </Fragment>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </header>
 

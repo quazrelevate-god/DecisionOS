@@ -2974,75 +2974,27 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
            dark from the top-left and light from the bottom-right, on a
            translucent wash. Re-cut for ink: the ground sits ONE STEP above
            pure black (9%, --kr-desk-ink) so the dark inset has something to
-           be darker than, the shadow is near-black at .9, and the light is a
-           10% white catch on the lower-right edges. The tabs above are the
-           same flat 9%, so they stay one surface with it. */
+           be darker than, the shadow is full black and reaches further in
+           than the well's (10px/22px against 7px/14px), and the light is a
+           14% white catch on the lower-right edges — the founder could not
+           see the .9/.10 cut at the well's own reach on a ground this dark. */
         --kr-desk-ink: 240 4% 9%;
         background: hsl(var(--kr-desk-ink));
         box-shadow:
-            inset 7px 7px 14px hsl(0 0% 0% / .90),
-            inset -7px -7px 14px hsl(0 0% 100% / .10);
+            inset 10px 10px 22px hsl(0 0% 0% / 1),
+            inset -8px -8px 18px hsl(0 0% 100% / .14);
         color: #fff;
         padding: 1rem;
         min-width: 0;
     }
     @media (min-width: 1024px) {
         .kr-desk-board {
-            /* 2026-09-14, founder — "Decisions and Task approvals is a Chrome
-               tab header and the contents like the page": the board is the
-               PAGE under a strip of tabs (.kr-desk-tab), so its top edge is
-               flat with 14px corners and the bottom corners are square — it
-               runs to the floor. */
+            /* The tile radius on top, square below — it runs to the floor. */
             padding: 1.125rem 1.25rem 1.375rem;
-            border-radius: 14px 14px 0 0;
+            border-radius: var(--radius-tile) var(--radius-tile) 0 0;
         }
     }
 
-    /* 2026-09-14, founder · .kr-desk-tab — a browser tab. The same ink as the
-       board it stands on, rounded at the top, and joined to the board at the
-       bottom by a pair of concave quarter-circle fillets, the way Chrome's
-       active tab flows into its page. Each fillet is one radial gradient in
-       an r×r square outside the tab's bottom corner: a circle of radius r
-       centred on the square's OUTER top corner is cut transparent and what
-       remains is the curve from the tab's side down to the board. The
-       half-pixel before r is the anti-aliasing step. isolation: isolate keeps
-       the z-index:-1 fillets behind the label without ever falling behind
-       the strip. */
-    .kr-desk-tab {
-        position: relative;
-        isolation: isolate;
-        --tab-r: 10px;
-        /* The same flat ink as the board (its 9% ground, not the page's
-           5% token), so tab and board are one surface; the fillets are
-           painted in it too. */
-        --tab-ink: hsl(240 4% 9%);
-        background: var(--tab-ink);
-        border-radius: 12px 12px 0 0;
-        color: hsl(0 0% 100% / .85);
-    }
-    .kr-desk-tab::before,
-    .kr-desk-tab::after {
-        content: "";
-        position: absolute;
-        bottom: 0;
-        width: var(--tab-r);
-        height: var(--tab-r);
-        z-index: -1;
-    }
-    .kr-desk-tab::before {
-        left: calc(-1 * var(--tab-r));
-        background: radial-gradient(circle at 0 0, transparent calc(var(--tab-r) - .5px), var(--tab-ink) var(--tab-r));
-    }
-    .kr-desk-tab::after {
-        right: calc(-1 * var(--tab-r));
-        background: radial-gradient(circle at 100% 0, transparent calc(var(--tab-r) - .5px), var(--tab-ink) var(--tab-r));
-    }
-    /* The first tab starts at the board's corner: its outer side runs
-       straight down into the board's left edge (Desk.js squares that corner
-       under it), so there is no fillet to draw, and its outer top corner
-       takes the board's 14px so the silhouette reads as one shape. */
-    .kr-desk-tab--first { border-top-left-radius: 14px; }
-    .kr-desk-tab--first::before { display: none; }
     /* The three-row stack's cards are the old dark band's glass: the section
        hue at a whisper over the ink, no blur (the board is opaque — nothing
        behind it to blur). .kr-desk--* already dial the tint to .10/.05; this

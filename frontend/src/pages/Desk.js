@@ -129,13 +129,13 @@ function CountPill({ n, onInk = false }) {
   );
 }
 
-/** The column's heading: dot · title · count · note. On desktop it is a
- *  browser TAB standing on the board (2026-09-14, founder: "Decisions and
- *  Task approvals is a Chrome tab header and the contents like the page");
- *  on the phone the same row sits at the top of its column. */
+/** The column's heading: dot · title · count · note, printed flat on the
+ *  board with a hairline under it (2026-09-14, founder — the Chrome-tab
+ *  treatment tried before it is gone: "remove the chrome header style to
+ *  flat line"). */
 function DeskHeading({ tone, title, count, note, className = "" }) {
   return (
-    <div className={`${TONE[tone]} flex min-w-0 items-center gap-2.5 ${className}`}>
+    <div className={`${TONE[tone]} flex min-w-0 items-center gap-2.5 border-b border-white/[.14] pb-2.5 ${className}`}>
       <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full bg-[hsl(var(--kr-glass-from))]" />
       {/* 2026-09-14, founder — "white is too bright": medium weight and
           white at 85%, never full white, everywhere on the board. */}
@@ -151,9 +151,9 @@ function DeskHeading({ tone, title, count, note, className = "" }) {
  * the overflow note on the left and the section-hued action pill on the
  * right. GREY type on the container itself (2026-09-14, founder: "use grey
  * color for the contents" — neutral-300 for what matters, neutral-500 for
- * the rest; only the tab headings keep their white); rows are parted by
- * hairlines, not boxed. The heading is a tab above the board from lg (DeskHeading in
- * the strip) and rides the column only on the phone.
+ * the rest; only the headings keep their white); rows are parted by
+ * hairlines, not boxed, and the heading sits flat at the top of the column
+ * over a hairline of its own.
  * @param {Array<{id, title, meta, amount?, onOpen}>} rows
  */
 function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix = "", cta, onCta, testid, className = "" }) {
@@ -195,7 +195,7 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
   return (
     <div className={`min-w-0 ${className}`} data-testid={testid}>
       <div className={`${TONE[tone]} flex h-full min-h-0 flex-col gap-1`}>
-        <DeskHeading tone={tone} title={title} count={count} note={note} className="lg:hidden" />
+        <DeskHeading tone={tone} title={title} count={count} note={note} className="shrink-0" />
 
         <div ref={listRef} className="min-h-0 flex-1 overflow-hidden">
           {loading && (
@@ -619,42 +619,12 @@ export default function Desk() {
           lg:p-8) — the founder: "there is a gap in the bottom, fill it with
           black". The board's own bottom padding keeps the rows off the edge.
 
-          THE TABS. From lg the two list headings stand ABOVE the board as
-          browser tabs (.kr-desk-tab), and the board is the page under them.
-          The strip is a second grid with the board's exact columns and
-          padding. Each tab is pulled left by the column's own padding and
-          pads itself by the same amount, so the tab's BOX starts where the
-          column's box starts and the tab's TEXT sits over the column's text
-          (founder: "left align the header tab"). The first tab therefore
-          begins at the board's own corner, the way Chrome's first tab meets
-          the window: no fillet on its outer side, and the board's top-left
-          corner is squared under it. The stack column's cell is empty.
-          Below lg the headings ride their columns instead. */}
-      <div className="flex flex-col lg:min-h-0 lg:flex-1">
-        <div
-          aria-hidden="true"
-          data-testid="desk-tabs"
-          className={`hidden shrink-0 px-5 lg:grid ${showDecisions ? "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]" : ""}`}
-        >
-          {showDecisions && (
-            <div className="flex items-end">
-              <DeskHeading tone="needs" title="Decisions" count={counters ? counters.needs_decision : null}
-                note="longest waiting first" className="kr-desk-tab kr-desk-tab--first -ml-5 h-10 pl-5 pr-4" />
-            </div>
-          )}
-          <div className={`grid min-w-0 ${showDecisions ? "lg:pl-5" : ""} ${showApprovals ? "lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]" : ""}`}>
-            {showApprovals && (
-              <div className="flex items-end">
-                <DeskHeading tone="flag" title="Task approvals" count={approvalsQ.data ? approvals.length : null}
-                  className={`kr-desk-tab -ml-5 h-10 pl-5 pr-4 ${showDecisions ? "" : "kr-desk-tab--first"}`} />
-              </div>
-            )}
-          </div>
-        </div>
+          The headings sit flat at the top of their columns, over a
+          hairline. */}
       <section
         aria-label="Decision desk"
         data-testid="desk-board"
-        className={`kr-desk-board grid gap-5 lg:-mb-8 lg:min-h-0 lg:flex-1 lg:gap-0 ${showDecisions || showApprovals ? "lg:rounded-tl-none" : ""} ${showDecisions ? "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]" : ""}`}
+        className={`kr-desk-board grid gap-5 lg:-mb-8 lg:min-h-0 lg:flex-1 lg:gap-0 ${showDecisions ? "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]" : ""}`}
       >
         {showDecisions && (
           <DeskCard
@@ -742,7 +712,6 @@ export default function Desk() {
           </div>
         </div>
       </section>
-      </div>
 
       {openDecisionId && (
         <DecisionDialog decisionId={openDecisionId} open onClose={closeDecision} />

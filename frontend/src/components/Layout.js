@@ -104,6 +104,11 @@ const NAV = [
 // founder discarded the PNG lockup for this design system. Wordmark.jsx
 // survives untouched for Landing/Login, which keep the registered artwork.
 
+/* MW-18 — routes that opt OUT of the shell's 1400px cap. Keep this short and
+   make a page earn its place: the cap exists because most pages are composed
+   against it, and a page that goes edge-to-edge has to be built for it. */
+const WIDE_ROUTES = ["/my-work"];
+
 export default function Layout({ children }) {
   const { user, tenant, logout } = useAuth();
   const { t } = useTranslation();
@@ -631,7 +636,21 @@ export default function Layout({ children }) {
           an unbounded height, so main never becomes a scrollport and the page
           scrolls the document exactly as before. The clip only exists if the
           height constraint reaches all the way down. */}
-      <div className="flex min-h-0 flex-1 flex-col min-w-0 app-shell lg:w-full lg:mx-auto">
+      {/* MW-18 — THE CAP IS BACK, and it is lifted per route rather than
+          deleted. Dropping lg:max-w-[1400px] to satisfy a My Work ask changed
+          a GLOBAL container: at 1920 every page went edge to edge, and the
+          pages that were composed against a cap fell apart — Finance KPI
+          tiles ~610px wide with the value and its arrow 550px apart, a
+          1,856px Capture bar holding three small buttons, Team member cards
+          with the name and '6 permissions' at opposite ends. Nothing
+          overflowed; it just made the eye travel.
+          My Work wants the width (a 4-column card grid genuinely uses it), so
+          it opts in by route and everything else keeps the composition it was
+          designed for. */}
+      <div className={cn(
+        "flex min-h-0 flex-1 flex-col min-w-0 app-shell lg:w-full lg:mx-auto",
+        !WIDE_ROUTES.some((p) => location.pathname.startsWith(p)) && "lg:max-w-[1400px]"
+      )}>
         {/* Mobile top app bar — MPWA-03.
             Two controls, not four; min-h + top inset so nothing sits under the
             status bar in iOS standalone. Untouched by KR-5 beyond what the

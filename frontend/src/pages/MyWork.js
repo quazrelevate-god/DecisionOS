@@ -1083,6 +1083,11 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
   const controlled = open !== undefined;
   const expanded = controlled ? open : selfExpanded;
   const setExpanded = controlled ? () => onToggleOpen?.() : setSelfExpanded;
+  const toggleCard = () => (controlled ? onToggleOpen?.() : setSelfExpanded((v) => !v));
+  // MW-20 — is this event really from the card, or did it reach us through
+  // the drawer's portal? React bubbles portal events along the COMPONENT
+  // tree; `contains` asks the DOM, where the portal is not a descendant.
+  const fromCard = (e) => e.currentTarget.contains(e.target);
   // U7-05 polish: replaced window.prompt() for reject + clarify with real
   // dialogs -- prompt is anti-pattern that blocks browser thread and
   // returns null in embed contexts (FUP-49 hit this pattern for confirm).
@@ -1090,6 +1095,7 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
   const [reasonText, setReasonText] = useState("");
   const [reasonBusy, setReasonBusy] = useState(false);
   const fileRef = useRef(null);
+  const closeRef = useRef(null);   // MW-17 — focus target when the drawer opens
   const evidenceRef = useRef(null);
   const mediaRef = useRef(null);
   const chunksRef = useRef([]);
@@ -1245,11 +1251,24 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
       role="button" tabIndex={0}
       aria-expanded={expanded}
       aria-controls={`task-card-body-${t.id}`}
-      onClick={() => (controlled ? onToggleOpen?.() : setSelfExpanded((v) => !v))}
+      /* MW-20 — fromCard() is the whole fix, and it has to be a DOM test.
+         The drawer's <Sheet> is rendered inside this component, and React
+         sends synthetic events through a PORTAL along the component tree, not
+         the DOM tree — so a click anywhere in the drawer arrived here and
+         toggled the card shut (10 of 10 clicks; the drawer is the only place
+         a task can be worked, so nothing in it was usable). The same path hit
+         onKeyDown, where preventDefault() on " " meant you could not type a
+         space into an update note.
+         `contains` asks a question about the DOM, where the portal really is
+         a sibling of this card rather than a descendant, so a drawer event
+         fails it and a genuine card event passes. Cheaper and harder to
+         forget than stopPropagation on every control inside the drawer. */
+      onClick={(e) => { if (fromCard(e)) toggleCard(); }}
       onKeyDown={(e) => {
+        if (!fromCard(e)) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          controlled ? onToggleOpen?.() : setSelfExpanded((v) => !v);
+          toggleCard();
         }
       }}
       className={`kr-bento flex h-full min-w-0 flex-col overflow-hidden cursor-pointer ${highlight ? "ring-2 ring-kr-ink ring-offset-2 ring-offset-background" : ""}`}>
@@ -1360,22 +1379,33 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
           decide which one renders at each breakpoint. */}
       <Sheet open={expanded} onOpenChange={(o) => { if (!o && expanded) setExpanded(); }}>
         <SheetContent side="right"
+          hideClose
           className="w-full sm:max-w-2xl p-0 overflow-visible"
-          data-testid={`task-drawer-${t.id}`}>
-          {/* ASK-17 (2026-09-13): a square close TAB attached to the drawer's
-              left edge. -translate-x-full places its right edge flush against
-              the drawer border; rounded-l-lg + border-r-0 makes it read as an
-              appendage protruding from the drawer, not a separate control.
-              SheetContent stays overflow-visible so the tab isn't clipped;
-              the scroll moves down onto the inner wrapper below. */}
+          data-testid={`task-drawer-${t.id}`}
+          /* MW-17 — the drawer supplies its own close, so send focus there on
+             open. Without this Radix focuses the stock close, which the sticky
+             header covers: focus started on something invisible. */
+          onOpenAutoFocus={(e) => { e.preventDefault(); closeRef.current?.focus(); }}>
+          {/* MW-15 — ONE close, reachable at every width, because the
+              protruding tab only works while there is scrim to protrude into.
+              The drawer is w-full below sm, so the scrim is 0px and the tab
+              sat at x=-43: entirely off-screen, with no Escape key on a phone
+              and Back leaving the route instead. So below sm the close sits
+              INSIDE the header at the right (44px, the touch floor); from sm
+              up it becomes the attached tab on the left edge as before. */}
           <SheetClose
+            ref={closeRef}
             data-testid={`task-drawer-close-${t.id}`}
             aria-label="Close task"
-            className="absolute left-0 top-5 z-20 -translate-x-full grid h-10 w-10 place-items-center rounded-l-lg bg-background text-foreground border border-r-0 border-nm-edge/60 shadow-[-4px_2px_10px_-4px_hsl(216_28%_18%/0.30)] transition-transform hover:-translate-x-[calc(100%+2px)] focus:outline-none focus:ring-2 focus:ring-ring">
+            className="absolute right-3 top-3 z-20 grid h-11 w-11 place-items-center rounded-full bg-background text-foreground border border-nm-edge/60 shadow-[0_2px_8px_-3px_hsl(216_28%_18%/0.30)] focus:outline-none focus:ring-2 focus:ring-ring
+                       sm:left-0 sm:right-auto sm:top-5 sm:h-10 sm:w-10 sm:-translate-x-full sm:rounded-l-lg sm:rounded-r-none sm:border-r-0 sm:shadow-[-4px_2px_10px_-4px_hsl(216_28%_18%/0.30)] sm:transition-transform sm:hover:-translate-x-[calc(100%+2px)]">
             <X size={16} weight="bold" aria-hidden="true" />
           </SheetClose>
           <div className="h-full overflow-y-auto">
-          <SheetHeader className="sticky top-0 z-10 border-b border-nm-edge/40 bg-background px-5 py-4">
+          {/* MW-15 — pr-16 below sm keeps the title clear of the in-header
+              close; from sm the close moves outside the panel so the title
+              gets its width back. */}
+          <SheetHeader className="sticky top-0 z-10 border-b border-nm-edge/40 bg-background px-5 py-4 pr-16 sm:pr-5">
             <SheetTitle className="font-display text-xl leading-tight">{t.title}</SheetTitle>
           </SheetHeader>
       {/* KR-14.22 · MOBILE EXPANDED BODY — reference-driven layout for the
@@ -1891,8 +1921,37 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
         </div>
       )}
 
-      {!awaitingApproval && <ExecutionPlan t={t} onChange={onChange} members={members} roleOptions={roleOptions} />}
-      <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} openTrigger={trailOpenTrigger} />
+      </div>
+
+      {/* MW-16 — the plan and the trail live OUTSIDE both breakpoint bodies,
+          because there is only ever one of each and the mobile layout needs
+          them too. They used to sit inside the desktop body, which is
+          `hidden lg:block`: the phone's 'Log update or hand off' bumped
+          trailOpenTrigger, TaskTrail dutifully opened its form, and the form
+          rendered inside a display:none subtree — MW-09 all over again, the
+          one control that records what happened inert on phones. Shared here,
+          both triggers open the same visible form. */}
+      <div className="px-4 pb-5 space-y-3 lg:px-5 lg:pb-6">
+        {!awaitingApproval && <ExecutionPlan t={t} onChange={onChange} members={members} roleOptions={roleOptions} />}
+        <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} openTrigger={trailOpenTrigger} />
+
+        {/* MW-21 / MW-02 — the way back into the detail dialog. Removing the
+            card's ••• menu took Delete with it: the dialog still holds it,
+            plus the proof gallery, source references and AI insight panels,
+            but nothing opened the dialog any more, so all of it was dead UI
+            for the second time. One entry point restores the lot.
+            It CLOSES the drawer before opening the dialog — two stacked Radix
+            overlays fight over focus (the same duelling FocusScopes that made
+            New Task untypable), so only one is ever open. */}
+        <div className="border-t border-nm-edge/40 pt-3">
+          <button
+            type="button"
+            data-testid={`open-task-details-${t.id}`}
+            onClick={() => { if (expanded) setExpanded(); setDetailOpen(true); }}
+            className="nm-btn flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium">
+            <Eye size={13} weight="bold" aria-hidden="true" /> View details
+          </button>
+        </div>
       </div>
           </div>
         </SheetContent>
@@ -2079,12 +2138,16 @@ function TaskPriorityColumns({ list, openId, setOpenId, cardProps, band = "high"
   );
 }
 
+/* MW-19 — Completed lives HERE, not in Department. It is a state, and the
+   Department dropdown beside it lists departments; "Completed" sitting among
+   Sales and Logistics asked the reader to hold two meanings in one control. */
 const STATUS_FILTER_OPTIONS = [
   { key: "", label: "All statuses" },
   { key: "todo", label: "Not Started" },
   { key: "in_progress", label: "In Progress" },
   { key: "waiting", label: "Waiting" },
   { key: "review", label: "Under Review" },
+  { key: "completed", label: "Completed" },
 ];
 
 export default function MyWork() {
@@ -2248,21 +2311,29 @@ export default function MyWork() {
   // to just isOverdue rows; completed forces the Completed tab.
   const urlFilter = params.get("filter");
 
+  // MW-19 — "completed" reaches this either from the Status dropdown (desktop)
+  // or from the tab (mobile chip strip / deep link); both mean the same lens.
+  const showingCompleted = urlFilter === "completed" || tab === "completed" || statusFilter === "completed";
+
   let list;
   if (urlFilter === "overdue") {
     list = all.filter((t) => !isTerminal(t) && isOverdue(t));
-  } else if (urlFilter === "completed" || tab === "completed") {
+  } else if (showingCompleted) {
     list = all.filter(isTerminal);
+    if (tab !== "all" && tab !== "completed") list = list.filter((t) => t.task_type === tab);
   } else if (tab === "all") {
     list = all.filter((t) => !isTerminal(t));
   } else {
     list = all.filter((t) => !isTerminal(t) && t.task_type === tab);
   }
-  if (aiPriority && tab !== "completed") {
-    if (statusFilter) list = list.filter((t) => t.status === statusFilter);
+  // "completed" is a LENS, already applied above — it is not a t.status value,
+  // so matching it here would filter the completed list down to nothing.
+  const statusMatch = statusFilter && statusFilter !== "completed" ? statusFilter : null;
+  if (aiPriority && !showingCompleted) {
+    if (statusMatch) list = list.filter((t) => t.status === statusMatch);
     list = [...list].sort((a, b) => (scoreMap[b.id]?.priority_score || 0) - (scoreMap[a.id]?.priority_score || 0));
-  } else if (statusFilter) {
-    list = list.filter((t) => t.status === statusFilter);
+  } else if (statusMatch) {
+    list = list.filter((t) => t.status === statusMatch);
   }
 
   // KR-14.6 · MOBILE HEADER — reference-driven layout for MyWork on phones:
@@ -2323,6 +2394,12 @@ export default function MyWork() {
      is this filter, doing exactly what it was told against a dataset where the
      other categories were empty. The counts still show, so an empty category
      reads as empty rather than missing. */
+  // MW-19 — Department = departments that actually hold work. "All" always
+  // shows (it is the baseline and the destination the snap-back effect uses);
+  // "completed" is excluded because it is a state, and it now lives in Status.
+  const departmentOptions = WORK_TABS.filter(
+    (tb) => tb.key !== "completed" && (tb.key === "all" || countFor(tb.key) > 0)
+  );
   const mobileFilterTabs = WORK_TABS;
   const activeTabLabel = (WORK_TABS.find((tb) => tb.key === tab) || WORK_TABS[0]).label;
 
@@ -2672,11 +2749,18 @@ export default function MyWork() {
               filters already used; New Task keeps its right-end position. */}
           <div className="mb-5 hidden shrink-0 items-end justify-between gap-4 border-b border-nm-edge/40 pb-4 lg:flex">
             <div className="flex flex-wrap items-center gap-2.5" data-testid="work-filters">
+              {/* MW-19 — departments only, and only ones with work in them.
+                  Listing every category meant six of nine options read 0, and
+                  picking one was silently undone: the U7-05.9 effect snaps an
+                  empty tab back to 'all', so the trigger still said
+                  'Department: All 26' with nothing explaining why. The old
+                  chip strip already hid empty categories on a founder ask;
+                  the dropdown just forgot to. 'Completed' moved to Status. */}
               <FilterDropdown
                 testid="work-filter-department"
                 label="Department"
                 value={tab}
-                options={WORK_TABS}
+                options={departmentOptions}
                 counts={countFor}
                 onSelect={setTab}
                 loading={tasksQ.isLoading && !tasksQ.data}

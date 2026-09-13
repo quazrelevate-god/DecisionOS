@@ -1380,7 +1380,13 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
       <Sheet open={expanded} onOpenChange={(o) => { if (!o && expanded) setExpanded(); }}>
         <SheetContent side="right"
           hideClose
-          className="w-full sm:max-w-2xl p-0 overflow-visible"
+          /* MW-15 — w-[92%] below sm, not w-full. The in-header close fixed
+             the dead end, but at full width there is no scrim left to tap,
+             and tapping outside is the gesture a phone user reaches for
+             first. An 8% strip costs nothing and restores it, so the drawer
+             now has three ways out on a phone: the close, the scrim, and
+             Escape for anyone on a keyboard. */
+          className="w-[92%] sm:w-full sm:max-w-2xl p-0 overflow-visible"
           data-testid={`task-drawer-${t.id}`}
           /* MW-17 — the drawer supplies its own close, so send focus there on
              open. Without this Radix focuses the stock close, which the sticky

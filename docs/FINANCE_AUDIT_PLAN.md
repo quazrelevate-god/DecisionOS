@@ -107,3 +107,22 @@ false positives, all now fixed in the harness rather than filed:
 The harness now compares the full URL including its query string, and ignores
 anything inside a scrollable strip. Both fixes were applied to all four section
 audits, not just this one.
+
+### Roles, destructive actions and failures — 2026-09-13
+
+The first pass was Owner-only. This one used the Team/Ops/CRM approach:
+Owner, Finance, Sales and Production at 1440 and 390, every write blocked, forced
+load failures, and the browser preview (`backend/scripts/ux_finance_roles_0913.py`).
+
+- **Works:** all six tabs for Owner and Finance; every capture upload, add dialog,
+  AI Refresh and Ask reports a failure and recovers; empty forms are refused before
+  sending; revenue filters narrow correctly; the Finance login gets the full ledger.
+- **New findings:** FN-06 High (delete fires on one tap, no confirmation), FN-07
+  High (Sales/Production can open Finance but every ledger call is refused — the
+  page says 'Loading…' and 'No expenses yet' instead of refusing), FN-08 High (no
+  way to add a record on a phone; the 'Add expense' tile is dead), FN-09 Medium
+  (a failed load shows 'Loading…' or empty books), FN-10 Low ('Export' tile
+  imports), FN-11 Low ('View all' 20px).
+- **Re-checked:** FN-01 and FN-02 still present.
+- **Not run:** a real extraction (upload), AI refresh or Ask — each makes a paid
+  model call and the upload creates an ingestion record.

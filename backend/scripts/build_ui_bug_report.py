@@ -1463,6 +1463,156 @@ FINDINGS = [
         found="2026-09-13",
     ),
     dict(
+        id="FN-06", section="Finance", screen="Delete on expenses, invoices and payments",
+        viewport="Mobile + Desktop", persona="Owner / Finance", severity="High",
+        status="Open", area="Destructive action / data loss",
+        tested="Pressed the delete (trash) control on an expense, a sales invoice and a "
+               "received payment, as Owner and as Finance, at 1440 and 390, with the "
+               "DELETE request blocked at the network layer.",
+        expected="Removing a money record asks first - it changes every total on the "
+                 "page and there is no undo.",
+        actual="One tap sends the DELETE straight away. No confirmation dialog, no "
+               "'are you sure', no undo toast - for all three record types, both "
+               "viewports, both roles. The trash icon is a 36px target at the end of "
+               "each row, so a stray tap while scrolling a phone ledger deletes a real "
+               "invoice or payment and silently changes Revenue, Received and Net "
+               "profit. (The harness blocked every DELETE, so nothing was removed.)",
+        evidence="DELETE /api/expenses/<id>, /api/revenue/invoice/<id> and "
+                 "/api/revenue/payment/<id> each fired on the first click; confirmation "
+                 "shown = false in 12 of 12 attempts. With the write blocked the page "
+                 "then reports 'Could not delete'.",
+        cause="The tables call onDelete(id) directly from the trash button, and "
+              "Ledger's del()/delRevenue() call api.delete immediately. Contrast Team's "
+              "delete-task, which has a confirm step.",
+        fix="Put a confirm step in del() and delRevenue(): an AlertDialog naming the "
+            "record and amount ('Delete invoice SBT/25-26/0431 for Rs 2,85,000?'). "
+            "Alternatively delete optimistically with an Undo toast and commit after a "
+            "few seconds. Either way, one tap must not be final.",
+        code="pages/Ledger.js:1541-1549 (del, delRevenue); :886 and :912 (revenue "
+             "invoice/payment trash); :1264 (expense trash)",
+        found="2026-09-13",
+    ),
+    dict(
+        id="FN-07", section="Finance", screen="Finance for Sales and Production",
+        viewport="Mobile + Desktop", persona="Sales / Production", severity="High",
+        status="Open", area="Permissions / dead end",
+        tested="Signed in as Sales and as Production (neither holds ledger or finance), "
+               "opened Finance from the nav / Money dock, and visited every tab.",
+        expected="A role either cannot reach Finance, or reaches a version of it that "
+                 "works for them and says what they can do.",
+        actual="Both roles see Finance in the nav and the Money dock and can open it - "
+               "then every ledger request is refused (6 x 403). The Overview sits on "
+               "'Loading...' forever. Revenue, Expenses, Assets and Inventory each show "
+               "their empty state ('No expenses yet...'), telling the user the company "
+               "has no money records rather than that they are not allowed to see them. "
+               "Only the capture bar works. So the page misinforms rather than refuses.",
+        evidence="Sales and Production, 1440 and 390: /ledger/summary, /expenses, "
+                 "/assets, /inventory, /revenue, /payables all 403; "
+                 "/captures/pending-count 200; overview text ends 'Loading...'; four tabs "
+                 "show empty-state copy.",
+        cause="The route admits perms ['ledger','finance','data_input'] (App.js:237) and "
+              "the nav/dock use the same list, but the backend's require_ledger accepts "
+              "only ledger or finance. Every Sales/Production user has data_input by "
+              "default, so they pass the front door and fail every request behind it; "
+              "the page has no isError handling to notice.",
+        fix="Decide what data_input-only users should get. If it is capture only, show "
+            "them the capture bar and Inbox with a line such as 'You can upload bills "
+            "here; totals are visible to Finance and the Owner', and hide the money "
+            "tabs. If they should not be here at all, drop data_input from the route and "
+            "nav perms. In both cases handle 403 in the page (see FN-09).",
+        code="App.js:237 (route perms); components/Layout.js:79 (nav perms); "
+             "routers/ledger.py:619-625 (require_ledger); pages/Ledger.js:1522-1527 "
+             "(queries without isError), :1641-1642 (Loading...)",
+        found="2026-09-13",
+    ),
+    dict(
+        id="FN-08", section="Finance", screen="Adding records on a phone",
+        viewport="Mobile", persona="Owner / Finance", severity="High", status="Open",
+        area="Missing function / dead control",
+        tested="At 375-390px, looked for a way to add income, an expense, an asset and "
+               "an inventory item on every tab, and tapped the 'Add expense' tile in "
+               "the capture card - by script and in the browser preview.",
+        expected="An owner can record an expense or income from their phone - the "
+                 "capture card itself offers 'Add expense'.",
+        actual="There is no way to add a record manually on a phone. The four Add "
+               "buttons (Add income / expense / asset / inventory) are rendered but "
+               "hidden below lg. The 'Add expense' tile in 'Simplify your finances' does "
+               "nothing on any tab: it looks for an element that does not exist. Upload "
+               "and scan still work, so a cash expense with no bill cannot be recorded "
+               "from the phone at all.",
+        evidence="Preview 375x812: tapping finance-hero-add-m opened 0 dialogs on "
+                 "Overview and 0 on Expenses. add-income-btn, add-expense-btn, "
+                 "add-asset-btn and add-inventory-btn are in the DOM but invisible on "
+                 "all four tabs; the only visible 'Add' is the dead tile.",
+        cause="The tile's onClick runs "
+              "document.querySelector('[data-testid=\"ledger-add-expense\"]')?.click(), "
+              "but no element carries that testid - the real trigger is add-expense-btn, "
+              "and it sits inside 'hidden lg:block' (Ledger.js:1630).",
+        fix="Render the per-tab Add button on mobile too (drop hidden lg:block, or add a "
+            "mobile placement), and have the tile open AddExpenseDialog directly through "
+            "state rather than clicking a DOM node by testid.",
+        code="pages/Ledger.js:1422-1429 (tile + querySelector), :1630 ('hidden lg:block' "
+             "addBtn), :1551-1557 (addBtn per tab)",
+        found="2026-09-13",
+    ),
+    dict(
+        id="FN-09", section="Finance", screen="Finance when a request fails",
+        viewport="Mobile + Desktop", persona="Owner", severity="Medium", status="Open",
+        area="Error handling",
+        tested="Aborted GET /api/ledger/summary, then separately GET /api/expenses, and "
+               "read the page at 1440 and 390.",
+        expected="A failed load says so and offers a retry.",
+        actual="Summary fails: the Overview says 'Loading...' indefinitely. Expenses "
+               "fails: the Expenses tab shows 'No expenses yet - approved purchase bills "
+               "and payments show up here automatically, or add one manually', directly "
+               "under an AI panel that is still analysing those same expenses. An owner "
+               "on a bad connection is told their books are empty. The same missing "
+               "branch is behind FN-07.",
+        evidence="Summary aborted: text ends 'Loading...' after 5s, both viewports. "
+                 "Expenses aborted: 0 rows, 'No expenses yet' shown. Screenshot "
+                 "finance_0913/desk_expenses_failed_v2.png.",
+        cause="Ledger's six queries read only data / isLoading; tables default to "
+              "'data || []' and render their empty state.",
+        fix="Check isError on each query and render 'Couldn't load <tab>' with Retry "
+            "(403: 'You don't have access to the ledger'). One shared <QueryError> would "
+            "serve this, OP-10 and CR-10.",
+        code="pages/Ledger.js:1522-1527, :1641-1642, :1657-1659",
+        found="2026-09-13",
+    ),
+    dict(
+        id="FN-10", section="Finance", screen="Mobile capture card - 'Export' tile",
+        viewport="Mobile", persona="Owner / Finance / Sales / Production", severity="Low",
+        status="Open", area="Copy / wrong label",
+        tested="Read the four capture tiles on mobile and checked what each does.",
+        expected="A tile labelled Export exports.",
+        actual="The fourth tile reads 'Export - CSV, Excel' but is a file picker that "
+               "UPLOADS a spreadsheet to /ingest/csv. An owner wanting to download their "
+               "books for the accountant taps it and gets a file-open dialog. Desktop "
+               "labels the same control correctly as 'CSV / Excel' under Capture. There "
+               "is no export anywhere on the page.",
+        evidence="finance-hero-csv-m text 'Export CSV, Excel'; it wraps <input "
+                 "type=file accept='.csv,.xlsx,.xls'> posting to /ingest/csv.",
+        cause="Label copied from a reference design that had an export action.",
+        fix="Rename it 'Import - CSV, Excel' with an upload icon. If export is wanted, "
+            "build it as a separate action.",
+        code="pages/Ledger.js:1430-1437",
+        found="2026-09-13",
+    ),
+    dict(
+        id="FN-11", section="Finance", screen="Mobile overview - 'View all 3+ action items'",
+        viewport="Mobile", persona="Owner / Finance", severity="Low", status="Open",
+        area="Accessibility / tap target",
+        tested="Measured interactive elements on the mobile Overview.",
+        expected="Controls are at least 24px tall.",
+        actual="'View all 3+ action items' is 322x20 - wide but under 24px tall. It works "
+               "(opens the Revenue tab).",
+        evidence="Under-24px list at 390x844: ['View all 3+ action items', 322, 20].",
+        cause="Text link with no vertical padding.",
+        fix="py-1 on the link.",
+        code="pages/Ledger.js:1075 (ledger-mobile-viewall)",
+        found="2026-09-13",
+    ),
+    dict(
         id="TM-02", section="Team", screen="Owner section grid",
         viewport="Desktop", persona="All", severity="Nit", status="Open",
         area="Visual / layout",
@@ -2367,6 +2517,60 @@ COVERAGE = [
      "Horizontally scrollable strip: scrollWidth 639 > clientWidth 446, "
      "overflow-x auto. The sweep first reported a 130px spill - a false positive "
      "on a deliberately scrollable strip, now excluded in the harness", ""),
+
+    # --- FINANCE pass, 2026-09-13 (Owner, Finance, Sales, Production; 1440 + 390; writes blocked) ---
+    ("T-514", "Finance", "Tabs by role", "Both", "Owner / Finance",
+     "All six tabs open without crashing or overflowing", "Functional", "PASS",
+     "Overview, Revenue, Expenses, Assets, Inventory, Inbox - 0 crashes, 0 overflow", ""),
+    ("T-515", "Finance", "Capture - uploads", "Both", "Owner / Finance",
+     "Upload bill, Photo / Scan receipt and CSV report a failed upload and recover",
+     "Error handling", "PASS", "Blocked POST /ingest/document and /ingest/csv -> error "
+     "toast each; 'Extracting...' clears (checked on fresh pages)", ""),
+    ("T-516", "Finance", "Add dialogs - validation", "Desktop 1440x900", "Owner / Finance",
+     "Empty income / expense / asset / inventory forms are refused before sending",
+     "Functional", "PASS", "'Add a title, customer or amount', 'Add a title/amount or "
+     "attach a bill', 'Add a name or attach a bill', 'Add an item or attach a bill'; no "
+     "request sent", ""),
+    ("T-517", "Finance", "Add dialogs - failed save", "Desktop 1440x900", "Owner / Finance",
+     "A failed save says so and keeps the form open", "Error handling", "PASS",
+     "'Could not record income' / 'Failed'; dialog stays open", ""),
+    ("T-518", "Finance", "Delete", "Both", "Owner / Finance",
+     "Deleting a money record asks first", "Destructive action", "FAIL",
+     "Expense, invoice and payment DELETE fire on the first tap; no confirmation",
+     "FN-06"),
+    ("T-519", "Finance", "Revenue filters", "Both", "Owner / Finance",
+     "Each status filter narrows the invoice list", "Functional", "PASS",
+     "all 5 / awaiting 3 / partial 0 / paid 2 / overdue 3", ""),
+    ("T-520", "Finance", "AI analysis", "Both", "Owner / Finance",
+     "Refresh and Ask report failure and keep the question", "Error handling", "PASS",
+     "'Could not refresh analysis'; 'AI is busy, try again' with the question kept", ""),
+    ("T-521", "Finance", "Mobile quick links", "Mobile 390x844", "Owner / Finance",
+     "View all and the Inbox arrow go where they say", "Routing", "PASS",
+     "View all -> ?tab=revenue; Inbox arrow selects the Inbox tab", ""),
+    ("T-522", "Finance", "Mobile - add a record", "Mobile 390x844", "Owner / Finance",
+     "Income, expenses, assets and inventory can be added on a phone", "Functional",
+     "FAIL", "All four Add buttons hidden below lg; the 'Add expense' tile is dead",
+     "FN-08"),
+    ("T-523", "Finance", "Mobile - capture labels", "Mobile 390x844", "All",
+     "Each capture tile's label matches its action", "Copy", "FAIL",
+     "'Export - CSV, Excel' uploads a spreadsheet", "FN-10"),
+    ("T-524", "Finance", "Mobile - link size", "Mobile 390x844", "Owner / Finance",
+     "Controls are at least 24px tall", "Accessibility", "FAIL",
+     "'View all 3+ action items' is 20px tall", "FN-11"),
+    ("T-525", "Finance", "Finance role", "Both", "Finance",
+     "The Finance login gets the full ledger", "Permissions", "PASS",
+     "All ledger calls 200; same tabs, dialogs and filters as the Owner", ""),
+    ("T-526", "Finance", "Sales / Production", "Both", "Sales / Production",
+     "A role without ledger access is refused clearly, not shown empty books",
+     "Permissions", "FAIL", "Money in nav/dock; page opens; 6 ledger calls 403; overview "
+     "'Loading...' forever; four tabs say 'No ... yet'", "FN-07"),
+    ("T-527", "Finance", "Failed loads", "Both", "Owner",
+     "A failed summary or expenses request says so", "Error handling", "FAIL",
+     "Summary: 'Loading...' forever. Expenses: 'No expenses yet'", "FN-09"),
+    ("T-528", "Finance", "FN-01 / FN-02 re-check", "Mobile 375x812", "Owner",
+     "Rupees grouped the Indian way; 'This month' shows a monthly figure", "Localisation",
+     "FAIL", "Preview 2026-09-13: still Rs 738,034 under 'This month', Revenue Rs 2,685,000",
+     "FN-01"),
 
     # --- personas ---
     ("T-070", "My Work", "Page load", "Desktop 1440x900", "Owner",

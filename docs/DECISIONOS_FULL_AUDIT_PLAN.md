@@ -185,10 +185,27 @@ in scope again.
    for staff), MW-22 (16px bulk-select checkbox; near-misses open the task). Desktop-only controls hidden with `hidden lg:*` and no mobile
    placement.
 
-**Not run — needs the founder's go**
-- Live AI: coach refresh, contact rescore, Finance extraction / AI refresh / Ask,
-  Dex ask — each is a paid model call and most store their result.
-- Invite link end to end (T-217) — mints a real token for a teammate.
+**Live AI runs — done 2026-09-13 with the founder's go** (`backend/scripts/ux_ai_live_0913.py`;
+only the six AI endpoints let through, every other write still blocked; outputs in
+`.audit-artifacts/ai_live_0913/`)
+
+| Run | Result |
+|---|---|
+| Finance AI refresh (expenses) | PASS — grounded: ₹6.6L outstanding, Surat Spinners ₹4.8L unpaid 33 days; 20.6s |
+| Finance Ask | Correct (Surat Spinners ₹4,80,000, 7.3s) but literal `**` shown — FN-12 |
+| Bill extraction (GST invoice X33) | Party, number, ₹27,625, due date, category, follow-up right (31.9s, 92%); no invoice date / GSTIN / items, no stale-date warning — FN-13. Left in review, not filed (ingestion 79ed62dd…) |
+| Coach refresh (TEST_member) | PASS — grounded review, 8.7s |
+| Score with AI (E2E Test Co) | PASS — Relationship 12 / Risk 78 citing 4 open complaints, 7.8s |
+| Dex — "What needs my attention today?" | **FAIL** — "no open or overdue tasks"; owner has 24 open / 6 overdue — DX-02 |
+| Dex — "How much do customers owe us?" | **FAIL** — "zero invoices, ₹0 outstanding"; ledger has ₹7,49,000 — DX-01 |
+| Dex — global search, mobile | PASS — overdue list; 53 of 77 decisions pending (mobile, no overflow) |
+| Dex as Sales — money questions | PASS — refused, nothing leaked |
+
+Dex's numbers come from code, not the model — the failures are in how the
+planner's output is applied: question words become record filters (DX-01) and
+"today" becomes a created/due-today filter (DX-02).
+
+Still not run: the invite link end to end (mints a real token for a teammate).
 
 **Decisions still parked**: ASK-8 (leave approvers), ASK-19 (operating score
 KPIs), ASK numbering collision note.

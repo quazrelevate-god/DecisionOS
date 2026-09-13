@@ -43,18 +43,23 @@ at `.to_list(2000)`.
 ## D · Routing
 
 - [x] **D1** Every `ops-action-*` next-move link resolves to a real screen
-- [ ] **D2** `?user_id=` view-as another person, and the banner that says so
-- [x] **D3** Employee card → work coach
+- [x] **D2** `?user=` view-as another person, and the banner that says so (2026-09-13)
+- [x] **D3** Employee card → work coach — *superseded 2026-09-13: the card now opens
+      view-as, and nothing in the app links to `/coach` any more (OP-12)*
 
 ## E · Roles
 
-- [ ] **E1** Owner, Sales, Production, Finance — company view vs self view
+- [x] **E1** Owner, Sales, Production, Finance — company view vs self view (2026-09-13)
 - [x] **E2** Finance leg correctly absent without the finance permission
 
 ## F · AI
 
-- [ ] **F1** Work coach: what it returns, how it fails
-- [ ] **F2** Score-with-AI on the contact/ops surface
+- [~] **F1** Work coach: read paths, permissions and the refresh FAILURE path done
+      2026-09-13. A live refresh is NOT run: it overwrites `users.coach_summary`
+      via a model call — waiting on the founder's go.
+- [~] **F2** Score-with-AI: desktop FAILURE path done; missing on mobile (CR-09).
+      A live rescore is NOT run: it overwrites the contact's AI score via a model
+      call — waiting on the founder's go.
 
 ## G · KPI validation — the headline question
 
@@ -85,3 +90,25 @@ Nine findings (OP-01…09, three High) plus ASK-19, the KPI redesign. Filed in
 - **F1/F2** — the work coach (`/work-coach`, `/work-coach/refresh`) and
   Score-with-AI. Both make live model calls, so they were left for a run where
   that cost is intended.
+
+### Gap pass — 2026-09-13
+
+D2 and E1 are now covered, and F1/F2 up to the point of a live model call
+(script `backend/scripts/ux_ops_gaps_0913.py`, 8 passes: four roles × 1440 / 390,
+writes blocked; plus the browser preview at 375×812).
+
+- **Works:** view-as opens from the leaderboard with a clear banner; Back to
+  company, browser Back and `?user=<own id>` all return cleanly; the owner's
+  view-as matches the person's own page exactly. Sales, Production and Finance
+  all get the self view. The coach loads for all four roles, the owner can open a
+  teammate's, non-owners are refused with a way back, and a failed refresh or
+  rescore says so.
+- **New findings:** OP-10 High (a refused or unknown person leaves the skeleton on
+  screen forever), OP-11 Medium (the fixed black band on the mobile self view),
+  OP-12 Medium (nothing links to the coach any more), OP-13 Low (Back to company
+  and See all under 24px), OP-14 Low (coach error titled 'Access denied' for a
+  404), CR-09 Low (no Score with AI on mobile).
+- **Still not run:** a live coach refresh and a live rescore. Each overwrites
+  stored data (`users.coach_summary`, the contact's AI score) through a paid model
+  call, so they wait for the founder's go — ideally on a TEST account and a test
+  contact.

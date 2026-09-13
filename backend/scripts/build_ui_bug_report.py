@@ -1068,6 +1068,164 @@ FINDINGS = [
         found="2026-09-13",
     ),
     dict(
+        id="OP-10", section="Ops", screen="Ops page when the request fails",
+        viewport="Mobile + Desktop", persona="All", severity="High", status="Open",
+        area="Error handling / dead end",
+        tested="Opened /operating-score?user=<id> where the API refuses or cannot find "
+               "the person: as the Owner with an id that does not exist, and as Sales, "
+               "Production and Finance with the Owner's id. Waited 9-10 seconds each "
+               "time, on 1440 and 390, and again in the browser preview.",
+        expected="The page says what went wrong and offers a way back, as /coach "
+                 "already does for exactly the same two errors.",
+        actual="The loading skeleton stays on screen forever, with aria-busy=true and "
+               "no text at all. The API answered in milliseconds - 404 'Team member not "
+               "found' for the owner, 403 for the three other roles - but the page never "
+               "shows it. The user cannot tell a slow page from a broken link or a "
+               "refused one, and there is no way back except the browser. Any stale "
+               "shared link (a person who has left, a link forwarded to a teammate) "
+               "lands here.",
+        evidence="8 of 8 attempts: skeleton present after 9s, main text empty. API: "
+                 "404 {'detail': 'Team member not found'} (owner), 403 (sales, "
+                 "production, finance). Browser preview at 375x812: skeleton=true, "
+                 "busy=true after 10s. Screenshots ops_0913/*_view_as_unknown.png, "
+                 "*_self_forbidden.png.",
+        cause="OperatingScore reads only { data, isLoading } from useQuery and renders "
+              "the skeleton whenever data is missing - 'if (isLoading || !data) return "
+              "<OperatingScoreSkeleton />'. A failed query has no data, so it is "
+              "indistinguishable from loading. WorkCoach.js handles isError with a "
+              "403 / other message; this page never got the same branch.",
+        fix="Read isError and error from the query and render a message: 403 -> 'Only "
+            "the owner can view another person's operating page', 404 -> 'This person "
+            "is no longer on the team', otherwise 'Couldn't load'. Each with a link to "
+            "/operating-score. WorkCoach.js:36-57 is the pattern to copy. Also set "
+            "retry: false for 4xx so the error shows at once.",
+        code="pages/OperatingScore.js:85-92 (useQuery + the skeleton fallback); "
+             "pages/WorkCoach.js:36-57 (the working pattern)",
+        found="2026-09-13",
+    ),
+    dict(
+        id="OP-11", section="Ops", screen="Personal (self) view - bottom band (mobile)",
+        viewport="Mobile", persona="Sales / Production / Finance", severity="Medium",
+        status="Open", area="Layout",
+        tested="Opened Ops as a non-owner on a 375-390px phone, scrolled to the bottom, "
+               "and measured the dark band and the dock.",
+        expected="Content that is pinned to the screen earns the space it takes.",
+        actual="A 176px near-black band is pinned to the bottom of every non-owner's "
+               "phone screen - over a fifth of the viewport - and it holds ONE sentence: "
+               "'Among your sales peers you are ranked 2 of 7.' That sentence sits "
+               "behind the floating dock, so it is only partly readable, and the band "
+               "does not move when the page scrolls. It reads as a black rendering "
+               "fault rather than a panel.",
+        evidence="operating-self-band: position fixed, rect [0, 652, 375, 176], text "
+                 "'Among your sales peers you are ranked 2 of 7.'; floating-dock fixed at "
+                 "[16, 724, 267, 72] on top of it. Screenshot ops_0913 and preview "
+                 "capture.",
+        cause="KM-33 made .kr-dark-band a fixed bottom sheet below lg, on the founder's "
+              "call, because on the OWNER view it holds the decisions to act on and "
+              "should not scroll away. The self view reuses the same class for a single "
+              "peer-ranking line, so it inherits a pinned sheet with nothing to act on.",
+        fix="Keep KM-33 for the owner view. In the self view, drop the kr-dark-band "
+            "class (or add a variant that stays in the scroll flow) and show the peer "
+            "ranking as an ordinary line or card above the open work. If a pinned sheet "
+            "is wanted here, it needs content worth pinning and bottom padding that "
+            "clears the dock.",
+        code="pages/OperatingScore.js (operating-self-band section); index.css:2171-2190 "
+             "(.kr-dark-band fixed below lg, KM-33)",
+        found="2026-09-13",
+    ),
+    dict(
+        id="OP-12", section="Ops", screen="AI Work Coach - entry point",
+        viewport="Mobile + Desktop", persona="All", severity="Medium", status="Open",
+        area="Navigation / orphaned feature",
+        tested="Looked for any link to /coach on every Ops screen for all four roles, "
+               "and searched the frontend for links to the route.",
+        expected="A working feature can be reached without typing its URL.",
+        actual="Nothing in the app links to the AI Work Coach. It still works - it "
+               "loads for all four roles, the owner can open a teammate's coach, the "
+               "permission message is right - but the only way in is typing /coach. "
+               "On 2026-09-12 the Ops employee card opened the coach (plan item D3); it "
+               "now opens that person's Ops page instead, which removed the last route "
+               "in. Two of the four demo seats already have coaching generated on "
+               "29 Aug, so this is a feature people used.",
+        evidence="coach links found on Ops screens: none, for Owner, Sales, Production "
+                 "and Finance on both viewports. Frontend references to '/coach': the "
+                 "route in App.js:228 and the 'View my coach' link inside WorkCoach's own "
+                 "error page.",
+        cause="The employee card was repointed to view-as (/operating-score?user=) "
+              "without moving the coach link anywhere else.",
+        fix="Add 'AI coach' next to 'Back to company' in the view-as banner (owner "
+            "coaching a teammate), and 'My AI coach' on the self view and in the More "
+            "panel. If the coach is being retired, remove the route and its endpoints "
+            "instead of leaving it reachable only by URL.",
+        code="App.js:228 (/coach route); pages/OperatingScore.js:931 (employee card "
+             "link); pages/OperatingScore.js:119-141 (ViewAsBanner)",
+        found="2026-09-13",
+    ),
+    dict(
+        id="OP-13", section="Ops", screen="'Back to company' and 'See all' links",
+        viewport="Mobile + Desktop", persona="All", severity="Low", status="Open",
+        area="Accessibility / tap target",
+        tested="Measured every interactive element on the view-as page and on the self "
+               "view for all four roles.",
+        expected="Links are at least 24px tall (WCAG 2.5.8).",
+        actual="'Back to company' in the view-as banner is 109x16 on desktop and 117x20 "
+               "on mobile - and it is the only way out of view-as mode other than the "
+               "browser. 'See all' above 'Your open work' is 52x16 on desktop and 55x20 "
+               "on mobile, on every non-owner's page. Same pattern as the 'View all' "
+               "links in OP-09, on two screens OP-09 did not cover.",
+        evidence="Under-24px list: ['Back to company', 109, 16] / [117, 20]; ['See all', "
+                 "52, 16] / [55, 20] - Sales, Production and Finance alike.",
+        cause="Text links styled with text-xs and no vertical padding.",
+        fix="Give both links py-1.5 (or min-h-6 with inline-flex items-center) so the "
+            "hit area reaches 24px without changing the look. Fix with OP-09 in one "
+            "pass.",
+        code="pages/OperatingScore.js:133-139 (Back to company); the 'See all' link in "
+             "the self view's open-work header",
+        found="2026-09-13",
+    ),
+    dict(
+        id="OP-14", section="Ops", screen="AI Work Coach - error page",
+        viewport="Mobile + Desktop", persona="Owner", severity="Low", status="Open",
+        area="Copy",
+        tested="Opened /coach?user=<id that does not exist> as the Owner.",
+        expected="The page title matches what happened.",
+        actual="The page is titled 'Access denied' while its body says 'Couldn't load "
+               "coaching - Something went wrong.' Nothing was denied: the owner may "
+               "view anyone's coach, and the API answered 404 'Employee not found'. The "
+               "title blames permissions for a missing person.",
+        evidence="Title 'Access denied'; coach-error text 'Couldn't load coaching / "
+                 "Something went wrong. Please try again. / View my coach'.",
+        cause="PageHeader title is hard-coded to 'Access denied' for every error; only "
+              "the body text branches on 403.",
+        fix="Branch the title too: 403 -> 'Not allowed', 404 -> 'Person not found', "
+            "otherwise 'Couldn't load coaching'.",
+        code="pages/WorkCoach.js:36-57",
+        found="2026-09-13",
+    ),
+    dict(
+        id="CR-09", section="CRM", screen="Contact profile (mobile) - Score with AI",
+        viewport="Mobile", persona="Owner", severity="Low", status="Open",
+        area="Feature parity",
+        tested="Opened the same contact on 1440 and 390 and looked for the Score with AI "
+               "control; pressed it on desktop with the write blocked.",
+        expected="An owner can re-score a customer from their phone, or the gap is "
+                 "deliberate and known.",
+        actual="Desktop has 'Score with AI' (and 'Re-score'); its failure path works - "
+               "'Could not score right now', label restored. The mobile contact profile "
+               "has no scoring control at all, only a read-only 'Health nn/100' row, so "
+               "the score cannot be refreshed from a phone.",
+        evidence="Desktop: rescore-contact-btn present, POST blocked -> toast 'Could not "
+                 "score right now'. Mobile after 9s: 0 rescore buttons, no visible button "
+                 "mentioning score.",
+        cause="ContactProfileMobile.jsx was built without the rescore mutation.",
+        fix="Add a 'Score with AI' action to the mobile profile's action row, reusing the "
+            "same POST /contacts/{id}/rescore mutation - or record that scoring is "
+            "desktop-only by design.",
+        code="pages/ContactProfile.js:134-137 + :250-273 (desktop); "
+             "pages/mobile/ContactProfileMobile.jsx:254 (Health row only)",
+        found="2026-09-13",
+    ),
+    dict(
         id="FN-01", section="Finance", screen="Every money figure",
         viewport="Mobile + Desktop", persona="All", severity="High", status="Open",
         area="Localisation",
@@ -1928,6 +2086,71 @@ COVERAGE = [
     ("T-418", "Ops", "Weighting", "n/a", "Finance-less roles",
      "Weights renormalise when a leg is unavailable", "Functional", "PASS",
      "finance is null without the permission and the remaining weights rescale", ""),
+
+    # --- OPS gap pass, 2026-09-13 (view-as, four roles, AI surfaces; writes blocked) ---
+    ("T-419", "Ops", "View-as - open", "Both", "Owner",
+     "An employee card opens that person's Ops with a banner naming them", "Routing",
+     "PASS", "/operating-score?user=<id>; banner 'Viewing Priya Nair - sales - Back to "
+     "company'; her self view renders", ""),
+    ("T-420", "Ops", "View-as - leaving", "Both", "Owner",
+     "Back to company, browser Back and ?user=<own id> all land on the company view",
+     "Routing", "PASS", "All three show the leaderboard with no banner", ""),
+    ("T-421", "Ops", "View-as - accuracy", "Both", "Owner + Sales",
+     "The owner sees exactly what the person sees on their own login", "Data quality",
+     "PASS", "Priya's own page and the owner's view-as both read Completed 1 / Open 29 / "
+     "Overdue 20 / Completion 3%; API payloads identical", ""),
+    ("T-422", "Ops", "View-as - unknown person", "Both", "Owner",
+     "An unknown ?user= id explains itself", "Error handling", "FAIL",
+     "API 404 'Team member not found'; page shows the loading skeleton forever", "OP-10"),
+    ("T-423", "Ops", "Roles - self view", "Both", "Sales / Production / Finance",
+     "Non-owners get their personal view, not the company leaderboard", "Permissions",
+     "PASS", "API view=self; no leaderboard, no banner; stats, open work and peer context "
+     "render (Production has no peer group)", ""),
+    ("T-424", "Ops", "Roles - self view links", "Both", "Sales / Production / Finance",
+     "Every link on the self view opens a real screen", "Routing", "PASS",
+     "/my-work and /my-work?filter=overdue both load", ""),
+    ("T-425", "Ops", "Roles - viewing someone else", "Both", "Sales / Production / Finance",
+     "A non-owner who opens another person's Ops is told they cannot", "Error handling",
+     "FAIL", "API 403 correctly; page shows the loading skeleton forever with no message",
+     "OP-10"),
+    ("T-426", "Ops", "Self view - bottom band", "Mobile 390x844",
+     "Sales / Production / Finance",
+     "Pinned content is worth the space and is not hidden by the dock", "Layout", "FAIL",
+     "176px fixed black band holding one sentence, mostly behind the dock", "OP-11"),
+    ("T-427", "Ops", "View-as + self view - link size", "Both", "All",
+     "Links are at least 24px tall", "Accessibility", "FAIL",
+     "'Back to company' 16-20px tall; 'See all' 16-20px tall", "OP-13"),
+    ("T-428", "Ops", "AI coach - own", "Both", "All four",
+     "/coach loads each person's own coach", "Functional", "PASS",
+     "Owner and Finance: 'No coaching yet' with Generate; Sales and Production: cached "
+     "review from 29 Aug with Refresh; no overflow", ""),
+    ("T-429", "Ops", "AI coach - a teammate's", "Both", "Owner",
+     "The owner can open a teammate's coach", "Permissions", "PASS",
+     "/coach?user=<Priya> reads 'Priya Nair - sales'", ""),
+    ("T-430", "Ops", "AI coach - not allowed", "Both", "Sales / Production / Finance",
+     "A non-owner is refused a colleague's coach, with a way back", "Permissions", "PASS",
+     "'Not allowed - Only the owner can view another team member's coaching'; 'View my "
+     "coach' returns to /coach", ""),
+    ("T-431", "Ops", "AI coach - unknown person", "Both", "Owner",
+     "An unknown id shows an accurate error", "Copy", "FAIL",
+     "Shows an error (good) but titles it 'Access denied' for a 404", "OP-14"),
+    ("T-432", "Ops", "AI coach - refresh failure", "Both", "All four",
+     "A failed Generate / Refresh says so and recovers", "Error handling", "PASS",
+     "POST blocked -> 'Could not refresh coaching'; button label restored", ""),
+    ("T-433", "Ops", "AI coach - entry point", "Both", "All four",
+     "The coach can be reached from the app", "Navigation", "FAIL",
+     "No link to /coach on any Ops screen or anywhere else in the app", "OP-12"),
+    ("T-434", "Ops", "AI coach + Score with AI - live generation", "Both", "Owner",
+     "A live model run produces a sensible review / score", "AI", "N/A",
+     "NOT RUN by choice: refresh overwrites users.coach_summary and rescore overwrites "
+     "the contact's AI score, both via a paid model call. Awaiting the founder's go, "
+     "ideally on a TEST account and a test contact", ""),
+    ("T-435", "CRM", "Score with AI - failure path", "Desktop 1440x900", "Owner",
+     "A failed rescore says so and recovers", "Error handling", "PASS",
+     "POST blocked -> 'Could not score right now'; label restored to 'Score with AI'", ""),
+    ("T-436", "CRM", "Score with AI - mobile", "Mobile 390x844", "Owner",
+     "The rescore action exists on the phone", "Feature parity", "FAIL",
+     "No scoring control on the mobile contact profile; Health row is read-only", "CR-09"),
 
     # --- FINANCE ---
     ("T-500", "Finance", "Page load", "Desktop 1280x800", "Owner",

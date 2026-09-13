@@ -32,8 +32,13 @@ async def download_file(file_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Not found")
     data, ctype = await obj_store.get_object(rec["storage_path"])
     fname = rec.get("original_filename", file_id)
-    return Response(content=data, media_type=rec.get("content_type", ctype),
-                    headers={"Content-Disposition": f'inline; filename="{fname}"'})
+    headers = {"Content-Disposition": f'inline; filename="{fname}"'}
+    if rec.get("kind") == "avatar":
+        # ASK-25: a My Work grid draws the same few faces on every card. Each
+        # upload mints a new file id, so a changed photo is a new URL and this
+        # one can never go stale — cache it rather than refetch per card.
+        headers["Cache-Control"] = "private, max-age=31536000, immutable"
+    return Response(content=data, media_type=rec.get("content_type", ctype), headers=headers)
 
 
 @router.get("/files/{fname}")

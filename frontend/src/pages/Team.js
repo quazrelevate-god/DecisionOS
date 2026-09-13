@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { formatPhone } from "../lib/format";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { PERMISSIONS, defaultPermsForRole, hasPerm, userPerms } from "../lib/perms";
 import { toast } from "sonner";
-import { UserPlus, PencilSimple, ShieldCheck, Check, LinkSimple, Copy, WhatsappLogo, Eye, MagnifyingGlass, User, EnvelopeSimple, Phone, X, AirplaneTakeoff } from "@phosphor-icons/react";
+import { UserPlus, PencilSimple, ShieldCheck, Check, LinkSimple, Copy, WhatsappLogo, Eye, MagnifyingGlass, User, EnvelopeSimple, Phone, X, AirplaneTakeoff, Camera } from "@phosphor-icons/react";
+import { PersonAvatar } from "../components/karma/PersonAvatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 // ASK-6 (2026-09-12): Leave register + personal history land here.
 // LeaveCard is reused as the shared card primitive; the register uses
@@ -464,6 +465,14 @@ export function TeamPanel({ readOnly = false } = {}) {
         onSaved={() => { refresh(); setProfileUser(null); }}
         onInvite={(info) => { setInvite(info); setProfileUser(null); }}
         onInviteLink={getInviteLink}
+        /* The dialog holds a snapshot of the member taken on click, so the new
+           photo is written into it as well as refetched into the roster.
+           avatar_url is set explicitly: a removal returns a record WITHOUT
+           the field, and a plain spread would keep the old photo. */
+        onAvatarChanged={(updated) => {
+          if (updated) setProfileUser((p) => (p ? { ...p, ...updated, avatar_url: updated.avatar_url } : p));
+          refresh();
+        }}
         members={members}
         roleOptions={roleOptions}
         canManageTeam={canManageTeam}
@@ -487,7 +496,6 @@ function MemberCard({ u, isMe, onOpen }) {
     suspended: { dot: "bg-neutral-400", label: "Inactive", tone: "text-muted-foreground line-through" },
   }[status] || { dot: "bg-foreground/70", label: "Active", tone: "text-muted-foreground" };
   const accessLabel = u.role === "owner" ? "Full access" : `${userPerms(u).length} permissions`;
-  const initial = u.name?.[0]?.toUpperCase() || "?";
   return (
     <button
       type="button"
@@ -500,9 +508,9 @@ function MemberCard({ u, isMe, onOpen }) {
       aria-label={`Open profile for ${u.name}`}
     >
       <div className="flex items-start gap-3">
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-control nm-inset text-lg font-medium text-primary">
-          {initial}
-        </div>
+        {/* ASK-25 — the member's photo, the same face My Work puts on the
+            tasks assigned to them; initials until they set one. */}
+        <PersonAvatar name={u.name} src={u.avatar_url} size={44} ring={false} />
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm truncate flex items-center gap-2">
             <span className="truncate">{u.name}</span>
@@ -531,7 +539,7 @@ function MemberCard({ u, isMe, onOpen }) {
 // pattern (Team isn't an attendance portal).
 // ---------------------------------------------------------------------------
 function MemberProfileDialog({
-  u, onClose, onSaved, onInvite, onInviteLink,
+  u, onClose, onSaved, onInvite, onInviteLink, onAvatarChanged,
   members, roleOptions, canManageTeam, isOwner, currentUserId,
 }) {
   // NM-16: `editAccess` is gone. It gated an intermediate card reading
@@ -579,9 +587,9 @@ function MemberProfileDialog({
             them. Close is a real 36px control, aligned to the avatar's top
             edge rather than floating in the corner. */}
         <div className="flex items-start gap-4 px-6 pt-6 pb-5">
-          <div className="grid h-16 w-16 shrink-0 place-items-center rounded-tile nm-raised text-2xl font-medium text-primary">
-            {u.name?.[0]?.toUpperCase() || "?"}
-          </div>
+          {/* ASK-25 — the member themselves, or anyone who could edit their
+              access, can set the photo. The server holds the same rule. */}
+          <AvatarEditor u={u} canChange={isMe || canEdit} onChanged={onAvatarChanged} />
           <div className="min-w-0 flex-1 pt-0.5">
             <p className="flex items-center gap-2 font-display text-2xl leading-tight">
               <span className="truncate">{u.name}</span>
@@ -707,6 +715,99 @@ function MemberProfileDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ASK-25 — squares and shrinks a photo in the browser before it is sent.
+   A phone photo is 3–12MB and a My Work grid draws the same faces on every
+   card; 256px covers the largest (64px) at 4x. JPEG over a white fill, so a
+   transparent PNG does not come back with a black background. */
+async function squareImage(file, size) {
+  const src = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = reject;
+      el.src = src;
+    });
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, size, size);
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, size, size);
+    return await new Promise((resolve, reject) =>
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("encode failed"))), "image/jpeg", 0.88));
+  } finally {
+    URL.revokeObjectURL(src);
+  }
+}
+
+function AvatarEditor({ u, canChange, onChanged }) {
+  const fileRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+
+  const run = async (request, done) => {
+    setBusy(true);
+    try {
+      const { data } = await request();
+      onChanged?.(data);
+      toast.success(done);
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Couldn't update the photo");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onFile = async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";   // picking the same file again should still fire
+    if (!f) return;
+    if (!/^image\/(jpeg|png|webp)$/.test(f.type)) {
+      toast.error("Use a JPG, PNG or WebP image");
+      return;
+    }
+    let blob;
+    try { blob = await squareImage(f, 256); }
+    catch { toast.error("Couldn't read that image"); return; }
+    const fd = new FormData();
+    fd.append("file", blob, "avatar.jpg");
+    run(() => api.post(`/users/${u.id}/avatar`, fd, { headers: { "Content-Type": "multipart/form-data" } }), "Photo updated");
+  };
+
+  return (
+    <div className="flex shrink-0 flex-col items-center gap-1.5">
+      <div className="relative">
+        <PersonAvatar name={u.name} src={u.avatar_url} size={64} ring={false}
+          className={busy ? "opacity-60" : ""} />
+        {canChange && (
+          <>
+            <button type="button" onClick={() => fileRef.current?.click()} disabled={busy}
+              data-testid={`avatar-change-${u.id}`}
+              aria-label={u.avatar_url ? "Change photo" : "Add photo"}
+              title={u.avatar_url ? "Change photo" : "Add photo"}
+              className="absolute -bottom-1 -right-1 grid h-7 w-7 place-items-center rounded-full border border-nm-edge/60 bg-[#fff] text-foreground shadow-[0_2px_8px_-2px_hsl(216_28%_18%/0.35)] transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/40 disabled:opacity-50">
+              <Camera size={14} weight="bold" aria-hidden="true" />
+            </button>
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp"
+              className="hidden" onChange={onFile} data-testid={`avatar-input-${u.id}`} />
+          </>
+        )}
+      </div>
+      {canChange && u.avatar_url && (
+        <button type="button" disabled={busy}
+          onClick={() => run(() => api.delete(`/users/${u.id}/avatar`), "Photo removed")}
+          data-testid={`avatar-remove-${u.id}`}
+          className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50">
+          Remove
+        </button>
+      )}
+    </div>
   );
 }
 

@@ -32,7 +32,9 @@ import {
   SlidersHorizontal,  // KR-14.6 · mobile MyWork filter icon (reference)
   Buildings, CalendarBlank, // KR-14.22 · mobile expanded task card
   DotsThreeVertical, // MW-02 · overflow menu on the summary row
+  Check, Clock, ArrowFatLinesUp, // ASK-25 · card checkbox, Overdue + Escalation pills
 } from "@phosphor-icons/react";
+import { AvatarStack } from "../components/karma/PersonAvatar";
 
 // RD-2 (2026-08-17): the toolbar control. Was uppercase + wide tracking +
 // hard black border — eight of these in a row read as a control panel. Now a
@@ -1025,6 +1027,80 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
   );
 }
 
+/* ASK-25 — the card face's vocabulary, on the founder's reference card.
+   One pill recipe for every chip, each meaning in its own soft tint: a light
+   wash, a hairline ring in the same hue, and text dark enough to read on it
+   (every pair below clears 4.5:1). Nothing bright — the stripe is the only
+   saturated colour on the card, and it is the priority. */
+const PILL = "inline-flex shrink-0 items-center gap-1 rounded-pill px-2 py-[3px] text-[11px] font-medium leading-none ring-1 ring-inset";
+const QUIET_PILL = "bg-slate-500/[0.07] text-slate-600 ring-slate-500/10";
+const PRIO_STRIPE = { high: "bg-red-500", medium: "bg-blue-500", low: "bg-neutral-500" };
+const PRIO_LABEL = { high: "High", medium: "Medium", low: "Low" };
+/* `arc` is how far through the flow a status sits — the ring's fill — and
+   deliberately NOT t.progress: an In Progress task at 0% would otherwise draw
+   an empty ring and read as Not Started. Waiting shares In Progress's point
+   in the flow; its amber is what says it has paused. */
+const STATUS_TONE = {
+  todo:        { pill: QUIET_PILL, ring: "#64748b", arc: 0 },
+  blocked:     { pill: "bg-teal-50 text-teal-700 ring-teal-100", ring: "#0d9488", arc: 0.2 },
+  in_progress: { pill: "bg-blue-50 text-blue-700 ring-blue-100", ring: "#3b82f6", arc: 0.72 },
+  waiting:     { pill: "bg-amber-50 text-amber-800 ring-amber-100", ring: "#d97706", arc: 0.72 },
+  review:      { pill: "bg-violet-50 text-violet-700 ring-violet-100", ring: "#7c3aed", arc: 0.88 },
+  done:        { pill: "bg-emerald-50 text-emerald-700 ring-emerald-100", ring: "#059669", arc: 1 },
+  cancelled:   { pill: "bg-stone-100 text-stone-600 ring-stone-200/70", ring: "#78716c", arc: 0 },
+};
+
+function StatusRing({ status, tone }) {
+  if (tone.arc >= 1) {
+    return (
+      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" className="shrink-0">
+        <circle cx="7" cy="7" r="6.5" fill={tone.ring} />
+        <path d="M4.3 7.2l1.8 1.8 3.6-3.8" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  const r = 5.25;
+  const c = 2 * Math.PI * r;
+  const untouched = tone.arc === 0 && status !== "cancelled";
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" className="shrink-0">
+      {/* Not Started is a dashed track: nothing filled, and visibly so. */}
+      <circle cx="7" cy="7" r={r} fill="none" stroke={tone.ring} strokeWidth="2.5"
+        strokeOpacity={untouched ? 0.6 : 0.22} strokeDasharray={untouched ? "2.1 1.6" : undefined} />
+      {tone.arc > 0 && (
+        <circle cx="7" cy="7" r={r} fill="none" stroke={tone.ring} strokeWidth="2.5" strokeLinecap="round"
+          strokeDasharray={`${c * tone.arc} ${c}`} transform="rotate(-90 7 7)" />
+      )}
+      {status === "cancelled" && <path d="M3.8 10.2l6.4-6.4" stroke={tone.ring} strokeWidth="1.6" strokeLinecap="round" />}
+    </svg>
+  );
+}
+
+/* Tasks carry ONE assignee today (assignee_id), or a role queue with nobody
+   named. The stack takes a list so a second assignee field needs no change
+   to the card. */
+function cardPeople(t, members, roleOptions) {
+  if (t.assignee_id) {
+    const m = members.find((x) => x.id === t.assignee_id);
+    return [{ id: t.assignee_id, name: m?.name || t.assignee_name || "Assignee", avatar_url: m?.avatar_url }];
+  }
+  if (t.assignee_role) {
+    const label = roleOptions.find((r) => r.key === t.assignee_role)?.label || t.assignee_role;
+    return [{ id: `role:${t.assignee_role}`, kind: "team", name: `${label} team` }];
+  }
+  return [];
+}
+
+// "Mon, 29 Sep" — the reference's form; the year only when it is not this one.
+function dueLabel(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const wd = d.toLocaleDateString(undefined, { weekday: "short" });
+  const mo = d.toLocaleDateString(undefined, { month: "short" });
+  const yr = d.getFullYear() !== new Date().getFullYear() ? ` ${d.getFullYear()}` : "";
+  return `${wd}, ${d.getDate()} ${mo}${yr}`;
+}
+
 /**
  * KR-11.2 — `expanded` is now CONTROLLED by the grid.
  *
@@ -1035,11 +1111,11 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
  * `open`/`onToggleOpen` are optional — omit them and the card falls back to
  * local state, so any future call site outside the grid still works.
  *
- * `tier` ("high" | "medium" | "low") scales the title only. The founder's
- * rule: bigger for high, smaller after, but "don't reduce too much" — so the
- * floor is 14px, not 12.
+ * ASK-25 — priority is read from the task (TIER_OF) and drawn as the stripe
+ * in every view, so `tier` and `hidePrio` are gone. The faces show on every
+ * card face regardless of `showAssignee`, which the expanded body still uses.
  */
-function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members = [], roleOptions = [], scores, showAssignee = false, highlight = false, selected = false, onToggleSelect, open, onToggleOpen, tier }) {
+function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions = [], scores, showAssignee = false, highlight = false, selected = false, onToggleSelect, open, onToggleOpen }) {
   const { user } = useAuth();
   // MW-01 fix: the queryClient is used to write PATCH responses straight
   // into the cache before onChange() invalidates. The old flow was
@@ -1107,6 +1183,10 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
   const lockedForAssignee = awaitingApproval && !canApprove;
   const overdue = isOverdue(t);
   const terminal = isTerminal(t);
+  // ASK-25 — what the card face draws.
+  const prio = TIER_OF(t);
+  const tone = STATUS_TONE[t.status] || STATUS_TONE.todo;
+  const people = cardPeople(t, members, roleOptions);
 
   const approveTask = async () => {
     try { await api.post(`/tasks/${t.id}/approve`); toast.success("Task approved"); onChange(); }
@@ -1247,7 +1327,7 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
        colour bar on every late card turned a grid of them into a barcode. */
     <div id={`task-card-${t.id}`} data-testid={`mywork-task-${t.id}`}
       data-open={expanded ? "true" : "false"}
-      data-tier={tier || "medium"}
+      data-tier={prio}
       role="button" tabIndex={0}
       aria-expanded={expanded}
       aria-controls={`task-card-body-${t.id}`}
@@ -1275,19 +1355,29 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
       <div className="flex flex-1 min-h-0">
         <div className="flex-1 min-w-0 flex flex-col">
 
-      {/* ASK-19 (2026-09-13): summary row redesigned.
-          - Checkbox pins to the TOP-LEFT corner
-          - Title fills the middle
-          - Every chip (priority, status, escalation, overdue, meta) sits in
-            ONE row at the BOTTOM via mt-auto
-          - Three-dot overflow menu removed; the drawer already exposes every
-            detail action, so the extra affordance was noise. */}
-      <div className={`group flex w-full flex-1 flex-col p-4 transition-colors ${selected ? "bg-kr-ink/[0.05]" : ""}`}>
-        {/* TOP ROW — checkbox (top-left) + expand caret + title */}
-        <div className="flex items-start gap-3 min-w-0">
+      {/* ASK-25 (2026-09-13): the card face, rebuilt on the founder's
+          reference card. The layout ASK-19 set stays — checkbox top-left,
+          chips pinned to the bottom by mt-auto — and the grid cell still owns
+          the height, so the card is the length it was.
+          - Priority is the STRIPE and nothing else: red high, blue medium,
+            grey low. The "Medium" word is gone. Colour alone is invisible to
+            a screen reader, so the stripe also says it in sr-only text.
+          - Due date is a pill at the top-right.
+          - Status leads with a progress ring; Overdue, Escalation, Handoff and
+            the workflow stage wear the same pill in their own tints.
+          - Assignees are faces at the bottom-right — photos from Team,
+            initials until one is set. */}
+      <div className={`group relative flex w-full flex-1 flex-col py-3.5 pl-5 pr-3.5 transition-colors ${selected ? "bg-kr-ink/[0.05]" : ""}`}>
+        <span aria-hidden="true" data-testid={`priority-stripe-${t.id}`} data-priority={prio}
+          className={`absolute bottom-3.5 left-2 top-3.5 w-1 rounded-full ${PRIO_STRIPE[prio]}`} />
+        <span className="sr-only">{PRIO_LABEL[prio]} priority.</span>
+
+        {/* TOP ROW — checkbox, title, due date */}
+        <div className="flex min-w-0 items-start gap-2.5">
           {onToggleSelect && (
+            /* -m-1 p-1 grows the hit area to 26px without moving the box. */
             <label
-              className="mt-0.5 cursor-pointer shrink-0"
+              className="relative -m-1 grid shrink-0 cursor-pointer place-items-center p-1"
               onClick={(e) => e.stopPropagation()}
               title={selected ? "Deselect" : "Select for bulk action"}
             >
@@ -1296,80 +1386,87 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
                 checked={selected}
                 onChange={onToggleSelect}
                 data-testid={`bulk-select-${t.id}`}
-                className="w-4 h-4 rounded border-nm-edge/40 accent-kr-ink cursor-pointer"
+                className="peer h-[18px] w-[18px] cursor-pointer appearance-none rounded-[5px] border-[1.5px] border-slate-300 bg-[#fff] transition-colors checked:border-kr-ink checked:bg-kr-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/40"
                 aria-label={`Select task ${t.title}`}
               />
+              <Check size={12} weight="bold" aria-hidden="true"
+                className="pointer-events-none absolute hidden text-white peer-checked:block" />
             </label>
           )}
-          <p data-testid={`task-summary-${t.id}`}
-             className="flex-1 min-w-0 text-base font-normal leading-snug">
+          {/* Two lines at most. The date pill shares this row, so a title
+              gets less width than it used to; unclamped, that alone made the
+              card 14–38px taller than before (measured A/B on the same tasks),
+              and "same length as today" was the brief. The whole title is on
+              hover and at the top of the drawer. */}
+          <p data-testid={`task-summary-${t.id}`} title={t.title}
+             className="line-clamp-2 min-w-0 flex-1 text-[15px] font-semibold leading-snug text-foreground">
             {t.title}
           </p>
+          {t.due_date && (
+            <span data-testid={`due-pill-${t.id}`} className={`${PILL} ${QUIET_PILL}`}>
+              <CalendarBlank size={11} weight="bold" aria-hidden="true" />
+              {dueLabel(t.due_date)}
+            </span>
+          )}
         </div>
 
-        {/* BOTTOM ROW — every chip in a single flex-wrap row, pinned to the
-            card's bottom edge by mt-auto so short titles still see the chips
-            sitting where the eye expects them. */}
-        <div className="mt-auto pt-3 flex flex-wrap items-center gap-2">
-          {!hidePrio && (
-            <span data-testid={`priority-chip-${t.id}`}
-              className="shrink-0 rounded-pill border-[0.5px] border-kr-ink/55 px-2 py-0.5 text-[11px] font-medium capitalize text-foreground/70">
-              {t.priority || "medium"}
-            </span>
-          )}
-          {!hideStatus && (
-            <span data-testid={`status-chip-${t.id}`}
-              className={`shrink-0 rounded-pill px-2 py-0.5 text-[11px] font-medium ${
-                terminal ? "bg-kr-ink text-white"
-                : awaitingApproval ? "border-[0.5px] border-kr-ink text-foreground"
-                : "bg-nm-sunken text-muted-foreground"
-              } ${expanded ? "hidden lg:inline-block" : ""}`}>
-              {STATUS_LABEL[t.status] || t.status}
-            </span>
-          )}
-          {t.source === "escalation" && (
-            <span className="shrink-0 rounded-pill bg-kr-accent px-2 py-0.5 text-[11px] font-medium text-white">
-              Escalation
-            </span>
-          )}
-          {overdue && !terminal && (
-            <span data-testid={`overdue-${t.id}`}
-              className="shrink-0 rounded-pill bg-kr-accent px-2 py-0.5 text-[11px] font-medium text-white">
-              Overdue
-            </span>
-          )}
-          {t.source === "handoff" && (
-            <span className="shrink-0 rounded-pill border-[0.5px] border-kr-ink/55 px-1.5 py-0.5 text-[10px] font-medium">
-              Handoff
-            </span>
-          )}
-          {t.due_date && !overdue && (
-            <span className="text-xs text-muted-foreground">
-              due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short" })}
-            </span>
-          )}
-          {t.workflow_summary?.id && (
-            <a
-              href={`/my-work?view=workflows&type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
-              onClick={(e) => e.stopPropagation()}
-              data-testid={`wf-chip-${t.id}`}
-              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
-              title={`Open workflow: ${t.workflow_summary.title}`}
-            >
-              <FlowArrow size={11} weight="bold" />
-              <span>{(t.workflow_summary.stage || "").replace(/_/g, " ")}</span>
-            </a>
-          )}
-          {showAssignee && t.assignee_name && (
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <UserCircle size={11} weight="bold" /> {t.assignee_name}
-            </span>
-          )}
-          {(t.attachment_count || 0) > 0 && (
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <Paperclip size={11} weight="bold" /> {t.attachment_count}
-            </span>
-          )}
+        {/* BOTTOM ROW — the pills wrap on the left; the people hold the right. */}
+        <div className="mt-auto flex items-end justify-between gap-2 pt-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            {!hideStatus && (
+              <span data-testid={`status-chip-${t.id}`} className={`${PILL} ${tone.pill}`}
+                title={awaitingApproval ? "Waiting for approval before work can start" : undefined}>
+                <StatusRing status={t.status} tone={tone} />
+                {STATUS_LABEL[t.status] || t.status}
+                {awaitingApproval && t.status !== "blocked" && (
+                  <LockKey size={11} weight="bold" aria-label="awaiting approval" />
+                )}
+              </span>
+            )}
+            {overdue && !terminal && (
+              <span data-testid={`overdue-${t.id}`} className={`${PILL} bg-red-50 text-red-700 ring-red-100`}>
+                <Clock size={12} weight="bold" aria-hidden="true" /> Overdue
+              </span>
+            )}
+            {t.source === "escalation" && (
+              <span data-testid={`escalation-${t.id}`} className={`${PILL} bg-orange-50 text-orange-700 ring-orange-100`}>
+                <ArrowFatLinesUp size={12} weight="bold" aria-hidden="true" /> Escalation
+              </span>
+            )}
+            {t.source === "handoff" && (
+              <span className={`${PILL} ${QUIET_PILL}`}>
+                <ArrowBendUpRight size={12} weight="bold" aria-hidden="true" /> Handoff
+              </span>
+            )}
+            {t.workflow_summary?.id && (
+              /* The only pill that is a link, so on a phone it is a 44px touch
+                 box (a[data-testid] — the MPWA-01 floor in index.css). With the
+                 tint on the link itself that box drew as a 44px-tall pill. The
+                 tint lives on the inner span instead: the link keeps the floor,
+                 the pill keeps the shape of its neighbours. */
+              <a
+                href={`/my-work?view=workflows&type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
+                onClick={(e) => e.stopPropagation()}
+                data-testid={`wf-chip-${t.id}`}
+                className="group/wf inline-flex shrink-0 items-center rounded-pill focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/40"
+                title={`Open workflow: ${t.workflow_summary.title}`}
+              >
+                <span className={`${PILL} ${QUIET_PILL} transition-colors group-hover/wf:bg-slate-500/[0.13]`}>
+                  <FlowArrow size={12} weight="bold" aria-hidden="true" />
+                  <span className="max-w-[8rem] truncate capitalize">{(t.workflow_summary.stage || "").replace(/_/g, " ")}</span>
+                </span>
+              </a>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {(t.attachment_count || 0) > 0 && (
+              <span className="inline-flex items-center gap-0.5 text-[11px] tabular-nums text-muted-foreground"
+                title={`${t.attachment_count} attached`}>
+                <Paperclip size={12} weight="bold" aria-hidden="true" /> {t.attachment_count}
+              </span>
+            )}
+            <AvatarStack people={people} size={26} testid={`assignees-${t.id}`} />
+          </div>
         </div>
       </div>
 
@@ -2199,7 +2296,6 @@ function TaskPriorityColumns({ list, openId, setOpenId, cardProps, band = "high"
                 <TaskCard
                   key={t.id}
                   t={t}
-                  hidePrio
                   open={isOpen}
                   onToggleOpen={() => setOpenId(isOpen ? null : t.id)}
                   {...cardProps(t)}

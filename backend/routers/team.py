@@ -7,6 +7,8 @@ Extracted from `server.py` in Phase B step 7. Owns 15 endpoints:
     • POST  /api/users                          — create (team_manage; owner-only for creating another owner)
     • POST  /api/users/{user_id}/invite         — regenerate invite token
     • PATCH /api/users/{user_id}                — update role/permissions/phone/manager
+    • POST  /api/users/{user_id}/avatar         — set profile photo (self, or team_manage)
+    • DELETE /api/users/{user_id}/avatar        — remove profile photo
 
   Attendance:
     • POST  /api/attendance                     — owner marks a member absent/present
@@ -32,7 +34,7 @@ from `server.py`:
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from core import (
     db,
@@ -424,6 +426,87 @@ async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(r
         {"id": user_id, "tenant_id": user["tenant_id"]},
         {"_id": 0, "password_hash": 0},
     )
+
+
+# ---------------------------------------------------------------------------
+# Profile photo (ASK-25)
+# ---------------------------------------------------------------------------
+# The face on a member's Team card and on every My Work card assigned to them.
+# A member sets their own; a team manager can set anyone's, except that only
+# an owner may change another owner's — the same line PATCH /users draws.
+# The client squares and shrinks the image to 256px before sending, so 2MB is
+# generous; the cap is for callers that skip that.
+AVATAR_MAX_BYTES = 2 * 1024 * 1024
+# content type -> (the extension _store_file accepts, a magic-byte test). The
+# declared type is the client's word; the bytes are checked so nothing that
+# is not an image gets stored and served back as one.
+_AVATAR_TYPES = {
+    "image/jpeg": ("jpg", lambda b: b[:3] == b"\xff\xd8\xff"),
+    "image/png": ("png", lambda b: b[:8] == b"\x89PNG\r\n\x1a\n"),
+    "image/webp": ("webp", lambda b: b[:4] == b"RIFF" and b[8:12] == b"WEBP"),
+}
+_USER_PUBLIC = {"_id": 0, "password_hash": 0, "invite_token": 0, "invite_expires_at": 0}
+
+
+async def _avatar_target(user: dict, user_id: str) -> dict:
+    target = await db.users.find_one(
+        {"id": user_id, "tenant_id": user["tenant_id"]},
+        {"_id": 0, "id": 1, "role": 1, "avatar_file_id": 1},
+    )
+    if not target:
+        raise HTTPException(status_code=404, detail="Member not found")
+    if user_id != user["id"]:
+        if "team_manage" not in user_perms(user):
+            raise HTTPException(status_code=403, detail="Only the member or a team manager can change this photo")
+        if target.get("role") == "owner" and user.get("role") != "owner":
+            raise HTTPException(status_code=403, detail="Only an owner can change another owner's photo")
+    return target
+
+
+async def _retire_avatar_file(tenant_id: str, file_id: Optional[str]) -> None:
+    # Soft delete, like every other file record: nothing references it now.
+    if file_id:
+        await db.files.update_one({"id": file_id, "tenant_id": tenant_id}, {"$set": {"is_deleted": True}})
+
+
+@router.post("/users/{user_id}/avatar")
+async def upload_avatar(user_id: str, file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    from services.files import _store_file
+    target = await _avatar_target(user, user_id)
+    kind = _AVATAR_TYPES.get((file.content_type or "").lower())
+    head = await file.read(12)
+    if not kind or not kind[1](head):
+        raise HTTPException(status_code=400, detail="Use a JPG, PNG or WebP image")
+    file.file.seek(0, 2)
+    too_big = file.file.tell() > AVATAR_MAX_BYTES
+    await file.seek(0)
+    if too_big:
+        raise HTTPException(status_code=400, detail="Photo too large (max 2MB)")
+    # _store_file takes the extension from the filename, so name the file for
+    # what its bytes were just shown to be rather than whatever was sent.
+    file.filename = f"avatar.{kind[0]}"
+    rec = await _store_file(user["tenant_id"], user["id"], file, "avatar")
+    await db.users.update_one(
+        {"id": user_id, "tenant_id": user["tenant_id"]},
+        {"$set": {
+            "avatar_url": f"/api/files/{rec['id']}/download",
+            "avatar_file_id": rec["id"],
+            "avatar_updated_at": now_iso(),
+        }},
+    )
+    await _retire_avatar_file(user["tenant_id"], target.get("avatar_file_id"))
+    return await db.users.find_one({"id": user_id, "tenant_id": user["tenant_id"]}, _USER_PUBLIC)
+
+
+@router.delete("/users/{user_id}/avatar")
+async def remove_avatar(user_id: str, user: dict = Depends(get_current_user)):
+    target = await _avatar_target(user, user_id)
+    await db.users.update_one(
+        {"id": user_id, "tenant_id": user["tenant_id"]},
+        {"$unset": {"avatar_url": "", "avatar_file_id": ""}, "$set": {"avatar_updated_at": now_iso()}},
+    )
+    await _retire_avatar_file(user["tenant_id"], target.get("avatar_file_id"))
+    return await db.users.find_one({"id": user_id, "tenant_id": user["tenant_id"]}, _USER_PUBLIC)
 
 
 # ---------------------------------------------------------------------------

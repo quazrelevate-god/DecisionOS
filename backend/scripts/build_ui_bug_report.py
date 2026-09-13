@@ -329,6 +329,70 @@ FINDINGS = [
         found="2026-09-12",
     ),
     dict(
+        id="MW-20", section="My Work", screen="Task drawer - every click inside closes it",
+        viewport="Mobile + Desktop", persona="All", severity="Critical", status="Open",
+        area="Regression / broken flow",
+        tested="On the newest code (after 78d01df), opened a task drawer at 1440x900 and "
+               "390x844 and clicked five harmless targets inside it, reopening before "
+               "each: the title, empty space at the bottom, the status control, 'Log "
+               "update or hand off', and 'Add manually'. Writes were blocked.",
+        expected="Clicking inside the drawer uses the drawer.",
+        actual="Every click closes it, on both viewports - 10 of 10. The drawer is now "
+               "the only place a task can be worked (status, progress, Complete, "
+               "Attach, Log update, hand off), so none of that is usable. On mobile the "
+               "status pill tap fired its PATCH before the drawer shut, so the action "
+               "happens but the user is thrown back to the list without seeing it. "
+               "Likely also (from the code, not testable while the form cannot be "
+               "opened): pressing Space or Enter in any drawer field hits the card's "
+               "onKeyDown, which calls preventDefault and toggles the drawer - so a "
+               "user could not type a space in an update note.",
+        evidence="Drawer still open after click: title False, empty body False, status "
+                 "False, Log update False (update-form 0), Add manually False - at both "
+                 "1440 and 390. Mobile: 1 mutation aborted by the harness on the status "
+                 "tap. Before 78d01df the same drawer stayed open and Log update worked "
+                 "on desktop (T-119).",
+        cause="78d01df moved the click handler to the card root (role=button, onClick "
+              "toggles the drawer). The Sheet is rendered INSIDE that card component. "
+              "React propagates synthetic events through portals along the component "
+              "tree, not the DOM tree, so a click anywhere in the portalled drawer "
+              "bubbles to the card's onClick and toggles it shut. The commit notes that "
+              "the checkbox and workflow chip stopPropagation - the drawer does not.",
+        fix="Stop propagation at the drawer boundary: onClick={(e) => "
+            "e.stopPropagation()} and onKeyDown={(e) => e.stopPropagation()} on "
+            "SheetContent. Or, better, render the Sheet as a SIBLING of the card root "
+            "rather than a child, so the drawer is outside the clickable element in the "
+            "component tree. Also guard the root handler with "
+            "e.currentTarget.contains(e.target) - that is a DOM check, which a portal "
+            "click fails. Add the five-click test to the verify script.",
+        code="pages/MyWork.js:1242-1255 (card root onClick / onKeyDown), the <Sheet> "
+             "rendered inside the same component (~:1360)",
+        found="2026-09-13",
+    ),
+    dict(
+        id="MW-21", section="My Work", screen="Task - Delete",
+        viewport="Mobile + Desktop", persona="Owner", severity="High", status="Open",
+        area="Regression / missing function",
+        tested="Searched the list page and the open drawer for any Delete, View details "
+               "or overflow control, and searched the code for what opens the task "
+               "detail dialog that holds Delete.",
+        expected="An owner can still delete a task (T-038 passed on 2026-09-12).",
+        actual="There is no way to delete a task. The detail dialog still contains "
+               "'Delete task' with its confirmation, but nothing opens that dialog any "
+               "more. Its only entry point was 'View details' in the card's ••• menu, "
+               "and 98b43f4 removed that menu on the reasoning that 'the drawer already "
+               "exposes every detail action' - but the drawer has no Delete.",
+        evidence="No visible Delete / View details control on the list or in the drawer "
+                 "at 1440 or 390. setDetailOpen is declared (:1074) and passed as "
+                 "onOpenChange (:1941) but never called with true anywhere.",
+        cause="98b43f4 removed the overflow menu without moving its one unique action.",
+        fix="Put 'Delete task' in the drawer - a quiet destructive button at the foot of "
+            "the drawer, keeping the existing confirm step - or restore a 'View "
+            "details' entry. Owner-only, as it was.",
+        code="pages/MyWork.js:782-940 (TaskDetailDialog + delete), :1074 and :1941 "
+             "(detailOpen with no opener)",
+        found="2026-09-13",
+    ),
+    dict(
         id="MW-15", section="My Work", screen="Task drawer - close (mobile)",
         viewport="Mobile", persona="All", severity="High", status="Open",
         area="Navigation / dead end",
@@ -359,6 +423,10 @@ FINDINGS = [
             "sm:-translate-x-full'. Alternatively leave a strip of scrim on phones "
             "(w-[92%]) so tapping outside works. Either way, test on a phone width "
             "before shipping a change to the drawer frame.",
+        verified="RE-CHECKED 2026-09-13 on the newest code (78d01df): close tab still at "
+                 "x=-43 and stock close still under the title. Tapping inside the drawer "
+                 "now closes it, but only because of MW-20; once MW-20 is fixed this "
+                 "dead end returns, so fix both together.",
         code="pages/MyWork.js:1427-1441 (SheetContent w-full + SheetClose -translate-x-full)",
         found="2026-09-13",
     ),
@@ -386,7 +454,10 @@ FINDINGS = [
             "regress it silently.",
         code="pages/MyWork.js:1658-1662 (mobile trigger), :1679 (desktop body 'hidden "
              "lg:block'), :1960 (the only <TaskTrail>)",
-        dep="MW-09",
+        dep="MW-09, MW-20",
+        verified="RE-CHECKED 2026-09-13 on the newest code: tapping Log update now "
+                 "closes the drawer outright (MW-20) and no form mounts. The hidden-body "
+                 "cause below still applies once MW-20 is fixed.",
         found="2026-09-13",
     ),
     dict(
@@ -1402,8 +1473,11 @@ COVERAGE = [
      "Routing", "PASS",
      "workflows-hub renders, AI toggle hidden, My Tasks brings the list back", ""),
     ("T-113", "Workflows", "Board frame + stage labels", "Desktop 1440 + 1920", "Owner",
-     "No outer well; each stage label centred over its column", "Visual", "PASS",
-     "No kr-glass-well, transparent ground; label-centre offset 0px on all 4 stages", ""),
+     "Each stage label centred over its column; board frame as the founder wants it",
+     "Visual", "PASS",
+     "Labels centred (0px offset on all 4 stages). The outer well was removed in c413f32 "
+     "and deliberately RESTORED in 21142be on founder call, with per-column gradients "
+     "cleared - by design, not a regression", ""),
     ("T-114", "My Work", "Uniform grid", "Desktop 1440 + 1920", "Owner",
      "Cards sit in a uniform grid with no page overflow", "Responsive", "PASS",
      "4 columns at both widths (332px / 452px cards), radius 16px, overflow 0", ""),
@@ -1415,14 +1489,17 @@ COVERAGE = [
      "Lists 'Completed' as a department and six 0-count options; picking one is "
      "silently undone", "MW-19"),
     ("T-117", "My Work", "Task drawer - open", "Desktop 1440 + 1920", "Owner",
-     "A task opens in a right-side drawer with its title", "Functional", "PASS",
-     "672px drawer, title in sticky header; left close tab and Escape both close it", ""),
+     "A task opens in a right-side drawer and stays open while used", "Functional", "FAIL",
+     "Opens (672px, whole card and Enter both work, checkbox does not open it) - but on "
+     "the newest code any click inside closes it", "MW-20"),
     ("T-118", "My Work", "ASK-11 status dropdown", "Desktop 1440 + 1920", "Owner",
      "The status dropdown carries no terminal states", "Functional", "PASS",
      "Not Started / In Progress / Waiting / Under Review only", "ASK-11"),
     ("T-119", "My Work", "Task drawer - log update", "Desktop 1440 + 1920", "Owner",
      "MW-08 regression check: Log update opens the form without crashing",
-     "Regression", "PASS", "update-form visible, no error boundary", ""),
+     "Regression", "FAIL",
+     "Passed on 2a17592 (form visible, no crash); after 78d01df the click closes the "
+     "drawer and no form appears", "MW-20"),
     ("T-120", "My Work", "Task drawer - close", "Mobile 390x844", "Owner",
      "A phone user can close the drawer", "Navigation", "FAIL",
      "Close tab at x=-43 off-screen, stock close under the title, no scrim, Back leaves "
@@ -1438,6 +1515,14 @@ COVERAGE = [
      "Pages keep a readable width after the My Work width change", "Layout", "FAIL",
      "Cap removed in shared Layout; Finance tiles and Team cards stretch to ~610px",
      "MW-18"),
+    ("T-124", "My Work", "Task drawer - clicks inside", "Both", "Owner",
+     "Clicking the title, body, status, Log update or Add manually keeps the drawer open",
+     "Functional", "FAIL",
+     "10 of 10 clicks closed the drawer across 1440 and 390", "MW-20"),
+    ("T-125", "My Work", "Task - Delete", "Both", "Owner",
+     "An owner can reach Delete task", "Functional", "FAIL",
+     "No Delete / View details control anywhere; the detail dialog has no opener",
+     "MW-21"),
 
     # --- TEAM ---
     ("T-200", "Team", "Page load", "Desktop 1440x900", "Owner",

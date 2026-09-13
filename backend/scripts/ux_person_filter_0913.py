@@ -30,11 +30,29 @@ def rec(key, vp, ok, detail):
 
 
 def settle(p, ms=2000):
+    """Wait out loading: skeletons gone and something real on the page (the
+    merged glass page takes a few seconds to draw its first cards)."""
     p.wait_for_timeout(ms)
-    for _ in range(12):
-        if p.locator(".animate-pulse:visible").count() == 0:
+    ready = ('[id^="task-card-"]:visible, [data-testid="mywork-empty"], [data-testid="mywork-empty-filtered"], '
+             '[data-testid="approvals-hub"]')
+    for _ in range(24):
+        if (p.locator(".animate-pulse:visible, .ds-skeleton:visible, [data-skeleton]:visible").count() == 0
+                and p.locator(ready).count() > 0):
             break
         p.wait_for_timeout(500)
+
+
+def stable_cards(p, polls=3, ms=300, max_polls=30):
+    """After a filter change, wait until the visible card count stops moving."""
+    last, same = None, 0
+    for _ in range(max_polls):
+        n = cards(p)
+        same = same + 1 if n == last else 0
+        last = n
+        if same >= polls:
+            break
+        p.wait_for_timeout(ms)
+    return last
 
 
 def block_writes(p):
@@ -107,6 +125,7 @@ def pick(p, name, key):
     p.wait_for_timeout(400)
     p.locator(f'[data-testid="work-filter-{name}-{key or "all"}"]').click()
     p.wait_for_timeout(800)
+    stable_cards(p)
 
 
 def menu_items(p, name):
@@ -200,8 +219,15 @@ def owner_desktop(browser):
     rec("stale-priority-link-ignored", VP, cards(p) == exp,
         f"?priority=high left in an old link: cards {cards(p)} = Priya x Overdue {exp} (not narrowed)")
 
+    before = cards(p)
     p.locator('[data-testid="work-filters-clear"]').click()
-    p.wait_for_timeout(900)
+    # The address clears at once and the list redraws about a second later
+    # (traced on the merged glass page), so wait for the count to move first.
+    for _ in range(30):
+        if cards(p) != before:
+            break
+        p.wait_for_timeout(250)
+    stable_cards(p)
     left = {k: v for k, v in qs(p).items() if k in ("person", "status", "priority", "filter")}
     rec("clear-filters", VP,
         cards(p) == open_total and not left and p.locator('[data-testid="work-filters-clear"]').count() == 0,
@@ -250,6 +276,7 @@ def owner_desktop(browser):
         if empty.count():
             p.locator('[data-testid="mywork-empty-filtered-cta"]').click()
             p.wait_for_timeout(900)
+            stable_cards(p)
         rec("no-match-empty-state", VP, ok and cards(p) == open_total,
             f"'{txt}'; after its Clear: cards {cards(p)} / {open_total}")
 
@@ -279,6 +306,11 @@ def owner_desktop(browser):
     if other:
         p.goto(f"{BASE}/my-work?person={pid}&status=review&task={other['id']}")
         settle(p, 3000)
+        # The filters are dropped once the linked task has loaded; give it time.
+        for _ in range(30):
+            if "person" not in qs(p) and p.locator(f'[id="task-card-{other["id"]}"]').count():
+                break
+            p.wait_for_timeout(300)
         vis = p.locator(f'[id="task-card-{other["id"]}"]').count()
         rec("deep-link-task-clears-filters", VP, vis == 1 and "person" not in qs(p),
             f"task card present={vis == 1}, url {qs(p)}")
@@ -344,6 +376,7 @@ def owner_phone(browser, rows, pid, pname):
 
     p.locator('[data-testid="work-mobile-filter-clear"]').click()
     p.wait_for_timeout(900)
+    stable_cards(p)
     rec("phone-caption-clear", VP,
         cards(p) == open_total and p.locator('[data-testid="work-mobile-filter-caption"]').count() == 0,
         f"cards {cards(p)} / {open_total}")

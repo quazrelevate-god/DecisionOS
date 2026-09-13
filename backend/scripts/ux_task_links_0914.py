@@ -75,9 +75,14 @@ def wait_for(p, fn, ms=6000):
 
 
 def settle(p, ms=2500):
+    """Wait out loading: skeletons gone (including [data-skeleton], which the
+    task list's skeleton cards use) and something real on the page."""
     p.wait_for_timeout(ms)
-    for _ in range(16):
-        if p.locator(".animate-pulse:visible, .ds-skeleton:visible").count() == 0:
+    ready = ('[id^="task-card-"]:visible, [data-testid="mywork-empty"], [data-testid="mywork-empty-filtered"], '
+             '[data-testid="approvals-hub"], [data-testid="workflows-hub"]')
+    for _ in range(24):
+        if (p.locator(".animate-pulse:visible, .ds-skeleton:visible, [data-skeleton]:visible").count() == 0
+                and p.locator(ready).count() > 0):
             break
         p.wait_for_timeout(500)
 
@@ -209,10 +214,12 @@ with sync_playwright() as pw:
     rec("back-and-forward-move-between-views", trail[0][0] == "all" and back1 and back2 and fwd,
         f"All -> Back {trail[1]} -> Back {trail[2]} -> Forward {trail[3]}")
     p.goto(BASE + "/my-work?view=all")
-    settle(p)
+    wait_for(p, lambda: "All Tasks" in pressed(p), ms=10000)
     rec("all-tasks-link", "All Tasks" in pressed(p), f"?view=all -> pressed {pressed(p)}")
     p.goto(BASE + "/my-work?view=approvals")
-    settle(p)
+    # The merged glass page takes a few seconds to draw the switcher; wait for
+    # it rather than reading a half-drawn header.
+    wait_for(p, lambda: "Approvals" in pressed(p) and p.locator('[data-testid="approvals-hub"]').count() == 1, ms=10000)
     rec("approvals-link", "Approvals" in pressed(p) and p.locator('[data-testid="approvals-hub"]').count() == 1, f"pressed {pressed(p)}")
     rec("no-page-errors-owner", not errors, errors[:3] or "none")
     close(ctx, p)

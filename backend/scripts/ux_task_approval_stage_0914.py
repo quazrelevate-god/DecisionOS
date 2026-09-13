@@ -148,8 +148,12 @@ with sync_playwright() as pw:
     p.locator('[data-testid="new-task-button"]:visible').first.click()
     p.wait_for_timeout(600)
     dlg = p.locator('[role="dialog"]')
-    dlg.locator('[data-testid="task-more-toggle"]').click()
-    p.wait_for_timeout(300)
+    # 0eaa411 opens New Task in full (no More options row); older builds hide
+    # the approval choice behind the toggle.
+    if dlg.locator('[data-testid="task-more-toggle"]').count():
+        dlg.locator('[data-testid="task-more-toggle"]').click()
+        p.wait_for_timeout(300)
+    dlg.locator('[data-testid="task-approval"]').wait_for(state="visible", timeout=8000)
     choices = dlg.locator('[data-testid="task-approval"] button').all_inner_texts()
     pressed = dlg.locator('[data-testid="task-approval-none"]').get_attribute("aria-pressed")
     rec("form-three-choices", choices == ["No", "Before work starts", "Before it's marked done"] and pressed == "true",

@@ -39,9 +39,14 @@ def block(route):
 
 
 def settle(p, ms=2500):
+    """Wait out loading: skeletons gone and something real on the page (the
+    merged glass page takes a few seconds to draw its first cards)."""
     p.wait_for_timeout(ms)
-    for _ in range(16):
-        if p.locator(".animate-pulse:visible").count() == 0:
+    ready = ('[id^="task-card-"]:visible, [data-testid="mywork-empty"], [data-testid="mywork-empty-filtered"], '
+             '[data-testid="approvals-hub"]')
+    for _ in range(24):
+        if (p.locator(".animate-pulse:visible, .ds-skeleton:visible, [data-skeleton]:visible").count() == 0
+                and p.locator(ready).count() > 0):
             break
         p.wait_for_timeout(500)
 

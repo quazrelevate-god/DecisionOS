@@ -3,6 +3,11 @@
 Nothing is written. Every POST/PATCH/PUT/DELETE after sign-in is aborted,
 except POST /api/tasks, which is answered by this script with a fake task so
 the form's success path runs and the exact payload it sends can be checked.
+
+2026-09-14: 0eaa411 (glass pass) turned every native <select> in the form into
+GlassSelect (Radix Select: the trigger carries the testid, each option
+`<testid>-option-<value>`) and opens the form in full (no More options row).
+The script drives both; the More options checks report n/a when the row is gone.
 """
 import json
 import pathlib
@@ -43,6 +48,23 @@ def open_form(p):
     return p.locator('[role="dialog"]')
 
 
+def options(p, dlg, testid):
+    """Open a dropdown, read its options (value from the option testid), close it."""
+    dlg.locator(f'[data-testid="{testid}"]').click()
+    p.locator('[role="option"]').first.wait_for(state="visible", timeout=5000)
+    opts = p.evaluate("""(tid) => [...document.querySelectorAll('[role="option"]')].map(o => ({
+        v: (o.getAttribute('data-testid') || '').replace(tid + '-option-', ''), t: o.textContent.trim() }))""", testid)
+    p.keyboard.press("Escape")
+    p.wait_for_timeout(300)
+    return opts
+
+
+def choose(p, dlg, testid, value):
+    dlg.locator(f'[data-testid="{testid}"]').click()
+    p.locator(f'[data-testid="{testid}-option-{value or "none"}"]').click()
+    p.wait_for_timeout(300)
+
+
 with sync_playwright() as pw:
     b = pw.chromium.launch()
     ctx = b.new_context(viewport={"width": 1440, "height": 900})
@@ -55,13 +77,17 @@ with sync_playwright() as pw:
     p.wait_for_timeout(4000)
 
     dlg = open_form(p)
+    has_more = dlg.locator('[data-testid="task-more-toggle"]').count() > 0
     labels = dlg.evaluate("""d => [...d.querySelectorAll('label, [id$="-label"]')]
       .filter(e => e.getBoundingClientRect().width > 0).map(e => e.textContent.trim()).filter(Boolean)""")
     gone = [x for x in ("Operational category", "Supporting employee", "…or assign by team/role") if any(x in l for l in labels)]
     rec("quick-part-fields", not gone and any("Department" in l for l in labels) and any("Assign to" in l for l in labels),
-        f"visible labels before More: {labels}; removed still present: {gone or 'none'}")
-    more_hidden = dlg.locator('[data-testid="task-more"]').count() == 0
-    rec("more-collapsed-by-default", more_hidden, "priority, helpers, approval, proof, files hidden until More options")
+        f"visible labels: {labels}; removed still present: {gone or 'none'}")
+    if has_more:
+        rec("more-collapsed-by-default", dlg.locator('[data-testid="task-more"]').count() == 0,
+            "priority, helpers, approval, proof, files hidden until More options")
+    else:
+        rec("more-collapsed-by-default", None, "n/a since 0eaa411: New Task opens in full, no More options row")
     p.screenshot(path=str(OUT / "form_quick.png"))
 
     dlg.locator('[data-testid="task-create-submit"]').click()
@@ -72,47 +98,52 @@ with sync_playwright() as pw:
     dlg.locator('[data-testid="task-title-input"]').fill("ASK-29 check: call Krishna Garments")
     rec("title-error-clears", dlg.locator('[data-testid="task-title-error"]').count() == 0, "error disappears on typing")
 
-    depts = dlg.locator('[data-testid="task-type-select"] option').evaluate_all("os => os.map(o => [o.value, o.textContent.trim()])")
-    sales = next((v for v, t in depts if v == "sales"), depts[0][0])
-    dlg.locator('[data-testid="task-type-select"]').select_option(sales)
+    depts = options(p, dlg, "task-type-select")
+    sales = next((o["v"] for o in depts if o["v"] == "sales"), depts[0]["v"])
+    choose(p, dlg, "task-type-select", sales)
 
-    opts = dlg.locator('[data-testid="task-assign-select"] option').evaluate_all(
-        "os => os.map(o => ({v: o.value, t: o.textContent.trim(), g: o.parentElement.label || ''}))")
+    opts = options(p, dlg, "task-assign-select")
     people = [o for o in opts if o["v"].startswith("u:")]
     teams = [o for o in opts if o["v"].startswith("r:")]
     rec("assign-to-people-and-teams", len(people) > 1 and len(teams) >= 1,
         f"{len(people)} people, teams: {[o['t'] for o in teams]}")
 
-    dlg.locator('[data-testid="task-assign-select"]').select_option(teams[0]["v"])
+    choose(p, dlg, "task-assign-select", teams[0]["v"])
     hint = dlg.locator('[data-testid="task-team-hint"]')
     rec("team-hint", hint.count() == 1, hint.inner_text() if hint.count() else "no hint")
 
     doer = next(o for o in people if not o["t"].startswith("Me"))
-    dlg.locator('[data-testid="task-assign-select"]').select_option(doer["v"])
+    choose(p, dlg, "task-assign-select", doer["v"])
 
     dlg.locator('[data-testid="task-due-tomorrow"]').click()
     summ = dlg.locator('[data-testid="task-due-summary"]')
     rec("due-preset-tomorrow", summ.count() == 1 and dlg.locator('[data-testid="task-due-tomorrow"]').get_attribute("aria-pressed") == "true",
         summ.inner_text() if summ.count() else "no summary")
 
-    dlg.locator('[data-testid="task-more-toggle"]').click()
-    p.wait_for_timeout(300)
-    more = dlg.locator('[data-testid="task-more"]')
-    rec("more-opens", more.count() == 1 and dlg.locator('[data-testid="task-more-toggle"]').get_attribute("aria-expanded") == "true",
-        "More options expanded")
+    if has_more:
+        dlg.locator('[data-testid="task-more-toggle"]').click()
+        p.wait_for_timeout(300)
+        rec("more-opens", dlg.locator('[data-testid="task-more"]').count() == 1
+            and dlg.locator('[data-testid="task-more-toggle"]').get_attribute("aria-expanded") == "true", "More options expanded")
+    else:
+        rec("more-opens", None, "n/a since 0eaa411: every field is already on the form")
     dlg.locator('[data-testid="task-priority-high"]').click()
-    helper = next(o for o in people if o["v"] != doer["v"])
-    dlg.locator('[data-testid="task-co-assignee-select"]').select_option(helper["v"][2:])
+    helpers = [o for o in options(p, dlg, "task-co-assignee-select") if o["v"] and o["v"] != doer["v"][2:]]
+    helper = helpers[0]
+    choose(p, dlg, "task-co-assignee-select", helper["v"])
     dlg.locator('[data-testid="task-due-time"]').fill("16:30")
     dlg.locator('[data-testid="task-approval-close"]').click()
-    approver_opts = dlg.locator('[data-testid="task-approver-select"] option').count()
-    dlg.locator('[data-testid="task-evidence-required"]').check()
+    approver_opts = len(options(p, dlg, "task-approver-select"))
+    dlg.locator('[data-testid="task-evidence-required"]').click()
     p.screenshot(path=str(OUT / "form_more.png"))
 
-    dlg.locator('[data-testid="task-more-toggle"]').click()
-    p.wait_for_timeout(200)
-    cnt = dlg.locator('[data-testid="task-more-count"]')
-    rec("closed-more-says-what-is-set", cnt.count() == 1, cnt.inner_text() if cnt.count() else "no count")
+    if has_more:
+        dlg.locator('[data-testid="task-more-toggle"]').click()
+        p.wait_for_timeout(200)
+        cnt = dlg.locator('[data-testid="task-more-count"]')
+        rec("closed-more-says-what-is-set", cnt.count() == 1, cnt.inner_text() if cnt.count() else "no count")
+    else:
+        rec("closed-more-says-what-is-set", None, "n/a since 0eaa411: no More options row to close")
 
     dlg.locator('[data-testid="task-create-submit"]').click()
     p.wait_for_timeout(1500)
@@ -120,7 +151,7 @@ with sync_playwright() as pw:
     tomorrow = (date.today() + timedelta(days=1)).isoformat()
     expect = {
         "title": "ASK-29 check: call Krishna Garments", "task_type": sales,
-        "assignee_id": doer["v"][2:], "assignee_role": None, "co_assignee_ids": [helper["v"][2:]],
+        "assignee_id": doer["v"][2:], "assignee_role": None, "co_assignee_ids": [helper["v"]],
         "priority": "high", "due_date": tomorrow, "due_time": "16:30",
         "approval_required": True, "approval_stage": "close", "approver_id": None, "evidence_required": True,
     }
@@ -131,10 +162,11 @@ with sync_playwright() as pw:
     rec("closes-after-create", closed, "dialog closed and success toast path ran")
 
     dlg = open_form(p)
-    fresh = dlg.locator('[data-testid="task-title-input"]').input_value() == "" and dlg.locator('[data-testid="task-more"]').count() == 0
-    rec("reopens-clean", fresh, "empty title, More collapsed")
+    fresh = dlg.locator('[data-testid="task-title-input"]').input_value() == "" \
+        and (not has_more or dlg.locator('[data-testid="task-more"]').count() == 0)
+    rec("reopens-clean", fresh, "empty title" + (", More collapsed" if has_more else ""))
     dlg.locator('[data-testid="task-title-input"]').fill("Team routing check")
-    dlg.locator('[data-testid="task-assign-select"]').select_option(teams[0]["v"])
+    choose(p, dlg, "task-assign-select", teams[0]["v"])
     dlg.locator('[data-testid="task-due-today"]').click()
     dlg.locator('[data-testid="task-create-submit"]').click()
     p.wait_for_timeout(1200)
@@ -143,11 +175,8 @@ with sync_playwright() as pw:
         and b2.get("co_assignee_ids") == [] and b2.get("due_date") == date.today().isoformat() and b2.get("due_time") is None,
         {k: b2.get(k) for k in ("assignee_id", "assignee_role", "co_assignee_ids", "due_date", "due_time")})
 
-    overdue_today = p.evaluate("""() => {
-      const cards = [...document.querySelectorAll('[id^="task-card-"]:not([id^="task-card-body-"])')];
-      return cards.length;
-    }""")
-    rec("my-work-still-renders", overdue_today > 0, f"{overdue_today} cards after creating")
+    n_cards = p.evaluate("""() => document.querySelectorAll('[id^="task-card-"]:not([id^="task-card-body-"])').length""")
+    rec("my-work-still-renders", n_cards > 0, f"{n_cards} cards after creating")
     rec("no-page-errors", not errors, errors[:3] or "none")
     p.unroute_all(behavior="ignoreErrors")
     ctx.close()

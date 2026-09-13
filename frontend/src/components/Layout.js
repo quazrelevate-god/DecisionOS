@@ -696,7 +696,11 @@ export default function Layout({ children }) {
             const y = e.currentTarget.scrollTop;
             setBrandGone((was) => (was ? y > 2 : y > 4));
           }}
-          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-dock app-canvas lg:overflow-x-clip lg:pb-8"
+          /* ASK-20 — lg:pb-0, not lg:pb-8. The bottom breathing room already
+             comes from the content wrapper's own lg:p-8; main's copy of it was
+             doubling to 64px, which read as dead space once main stopped being
+             the scroller and its box could no longer scroll that padding away. */
+          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-dock app-canvas lg:overflow-x-clip lg:pb-0"
         >
           <AnnouncementBanner />
           <div className="p-4 lg:p-8 px-gutter-safe lg:h-full lg:min-h-0 lg:flex lg:flex-col">{children}</div>

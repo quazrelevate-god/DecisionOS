@@ -60,7 +60,7 @@ anything that creates an account or messages a real person.
 - [x] **H · Admin portal** — `/admin/*`
 - [ ] **I · My Work full re-sweep** — once MW-20 (drawer closes on any click) is
       fixed; if it is still open, sweep everything outside the drawer
-- [ ] **J · Cross-cutting report** — the error-state pattern across all pages,
+- [x] **J · Cross-cutting report** — the error-state pattern across all pages,
       role × route matrix, open Highs by area, what still needs the founder's go
 
 ---
@@ -127,3 +127,59 @@ Script `backend/scripts/ux_auth_admin_0913.py` — signed out + signed-in owner 
 - Findings: AU-01 unlabelled sign-in/sign-up/admin fields; AU-02 3-digit OTP
   number sent; AU-03 20px links on desktop login; GL-03 /login shows the form to
   a signed-in user. Verified non-issue: dev OTP gated by an explicit flag (N-08).
+
+### I · My Work re-sweep — 2026-09-13
+MW-20 was fixed in `0a57743` (+ `89ed015` for the phone scrim), so the drawer is
+in scope again.
+- `backend/scripts/ux_verify_mywork_0913.py` (1440, 1920, 390, Sales): **55 pass /
+  2 fail**. Both fails are the stale "board has no outer well" expectation — the
+  well was restored on the founder's call in `21142be` (T-113 records it as by
+  design).
+- Drawer re-verified by hand-written probes at 1440 and 390: 5/5 inside clicks
+  keep it open; one 44px close in the header on phones, scrim strip closes; focus
+  lands on the close; Log update form visible on phones; View details → Delete →
+  confirm; /finance and /team capped at 1400 while /my-work is full width;
+  Department lists only departments with work. MW-15…MW-21 marked Fixed.
+- Full control sweep (`backend/scripts/ux_audit.py`, writes blocked): running.
+
+### J · Cross-cutting report — 2026-09-13
+
+**Totals** (workbook `DecisionOS_UI_Bug_Report.xlsx`): 83 findings — 62 open,
+20 fixed and verified, 1 by design. Open by severity: **15 High**, 22 Medium,
+22 Low, 3 Nit. Coverage 270 checks, 184 pass / 84 fail / 2 not run.
+
+**Open Highs by area**
+
+| Area | Open Highs |
+|---|---|
+| Finance | FN-01 rupee grouping · FN-02 all-time figure under "This month" · FN-03 trends from expenses · FN-06 one-tap delete · FN-07 Sales/Production see an empty Finance · FN-08 no add on phones |
+| Ops | OP-01 team execution panel · OP-02 "Do these first" on mobile · OP-03 score model · OP-10 endless skeleton on 403/404 |
+| CRM | CR-04 add menu (mobile) · CR-05 filter (mobile) · CR-10 endless skeleton on failed list |
+| Decision Desk | DD-01 dead-end decision page · DD-02 failed load says "Nothing waiting" |
+
+**Three faults account for most of what is left**
+
+1. **Failed loads pretend to be empty or loading** — OP-10, CR-10, CR-11, FN-07,
+   FN-09, DD-01, DD-02, DD-03, CL-01 (nine findings, every major page). Pages read
+   only `data`/`isLoading`, so an error falls through to the empty state or the
+   skeleton. One shared `<QueryError onRetry>` that branches on 403 / 404 / other
+   fixes the family.
+2. **Permission rules disagree between route, nav and API** — FN-07 (route allows
+   data_input, API needs ledger), CR-12 (`/crm/outstanding` ungated), CR-13 and
+   DD-03 (Desk tiles link or fetch for roles that are refused), GL-02 (mobile More
+   hides pages the routes allow), TM-05 (access matrix readable by everyone). One
+   permission map shared by `App.js`, `Layout.js`, `AllAppsPanel.jsx` and the
+   backend `require_*` guards would stop them drifting.
+3. **Phone parity** — FN-08 (no add), CR-04 / CR-05 (clipped mobile controls),
+   CR-09 (no Score with AI), DD-04 (no Company/You), GL-02 (no Ops/Team/Settings
+   for staff). Desktop-only controls hidden with `hidden lg:*` and no mobile
+   placement.
+
+**Not run — needs the founder's go**
+- Live AI: coach refresh, contact rescore, Finance extraction / AI refresh / Ask,
+  Dex ask — each is a paid model call and most store their result.
+- Invite link end to end (T-217) — mints a real token for a teammate.
+
+**Decisions still parked**: ASK-8 (leave approvers), ASK-19 (operating score
+KPIs), ASK numbering collision note.
+

@@ -463,7 +463,7 @@ export default function Layout({ children }) {
      with the theme instead of snapping — see .app-sky::before. */
   return (
     <HeaderSlotContext.Provider value={isMobileShell ? headerSlot : null}>
-    <div className="app-sky flex h-[100dvh] flex-col overflow-hidden bg-nm text-foreground lg:h-screen">
+    <div className="app-sky flex h-[100dvh] flex-col overflow-hidden bg-nm text-foreground lg:h-[calc(100vh/var(--ui-scale,1))]">
       {/* The page-artwork layer. Empty and invisible until a room sets
           --sky-art (see "PAGE ARTWORK" in index.css); position:fixed keeps it
           out of this flex column. It is a real element rather than a third

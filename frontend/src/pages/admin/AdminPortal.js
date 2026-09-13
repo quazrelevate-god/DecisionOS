@@ -63,7 +63,7 @@ export default function AdminPortal() {
 
   if (admin === undefined)
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0b] text-white/40 font-mono text-sm gap-2">
+      <div className="min-h-[calc(100vh/var(--ui-scale,1))] flex items-center justify-center bg-[#0a0a0b] text-white/40 font-mono text-sm gap-2">
         <Spinner size={16} className="animate-spin" /> Loading console…
       </div>
     );
@@ -72,7 +72,7 @@ export default function AdminPortal() {
   const Active = TABS.find((t) => t.key === tab)?.C || OverviewSection;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0b] text-white" data-testid="admin-portal">
+    <div className="min-h-[calc(100vh/var(--ui-scale,1))] bg-[#0a0a0b] text-white" data-testid="admin-portal">
       {/* Top bar */}
       <header className="border-b border-white/10 bg-[#0a0a0b] sticky top-0 z-20">
         <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">

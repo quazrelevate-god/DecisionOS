@@ -151,7 +151,7 @@ function AddExpenseDialog({ categories, onDone }) {
           <Plus size={16} weight="bold" /> {t("finance.add_expense")}
         </button>
       </DialogTrigger>
-      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-h-[90vh] overflow-y-auto">
+      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-h-[calc(90vh/var(--ui-scale,1))] overflow-y-auto">
         <DialogHeader><DialogTitle className="font-display text-xl">{t("finance.new_expense")}</DialogTitle><DialogDescription className="text-xs text-muted-foreground">{t("finance.new_expense_desc")}</DialogDescription></DialogHeader>
         <div className="space-y-4">
           <FileField file={file} setFile={setFile} />
@@ -217,7 +217,7 @@ function AddAssetDialog({ categories, onDone }) {
           <Plus size={16} weight="bold" /> {t("finance.add_asset")}
         </button>
       </DialogTrigger>
-      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-h-[90vh] overflow-y-auto">
+      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-h-[calc(90vh/var(--ui-scale,1))] overflow-y-auto">
         <DialogHeader><DialogTitle className="font-display text-xl">{t("finance.new_asset")}</DialogTitle><DialogDescription className="text-xs text-muted-foreground">{t("finance.new_asset_desc")}</DialogDescription></DialogHeader>
         <div className="space-y-4">
           <FileField file={file} setFile={setFile} />
@@ -275,7 +275,7 @@ function AddInventoryDialog({ onDone }) {
           <Plus size={16} weight="bold" /> {t("finance.add_item")}
         </button>
       </DialogTrigger>
-      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-h-[90vh] overflow-y-auto">
+      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-h-[calc(90vh/var(--ui-scale,1))] overflow-y-auto">
         <DialogHeader><DialogTitle className="font-display text-xl">{t("finance.new_inv")}</DialogTitle><DialogDescription className="text-xs text-muted-foreground">{t("finance.new_inv_desc")}</DialogDescription></DialogHeader>
         <div className="space-y-4">
           <FileField file={file} setFile={setFile} />
@@ -329,7 +329,7 @@ function AddIncomeDialog({ onDone }) {
           <Plus size={16} weight="bold" /> Add income
         </button>
       </DialogTrigger>
-      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-h-[90vh] overflow-y-auto">
+      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-h-[calc(90vh/var(--ui-scale,1))] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display text-xl">Record sale / service income</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">Money coming IN. Attach a sales invoice and AI will read the amount & customer, or type it in.</DialogDescription>

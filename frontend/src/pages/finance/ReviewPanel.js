@@ -90,7 +90,7 @@ function FilePreview({ fileUrl, kind, filename, testid }) {
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-3xl p-2" data-testid={`${testid}-lightbox`}>
             <DialogHeader><DialogTitle className="font-display text-xl text-sm truncate">{filename || "Attachment"}</DialogTitle></DialogHeader>
-            <img src={src} alt="attachment" className="w-full h-auto max-h-[80vh] object-contain" />
+            <img src={src} alt="attachment" className="w-full h-auto max-h-[calc(80vh/var(--ui-scale,1))] object-contain" />
           </DialogContent>
         </Dialog>
       )}

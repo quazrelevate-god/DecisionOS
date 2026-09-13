@@ -87,7 +87,7 @@ export default function Signup() {
        neumorphic pane is correct. Only here does it sit on a photograph.
        bg-white stays as the load fallback — the picture covers it once it
        arrives, and a white flash beats a black one. */
-    <div className="signup-stage relative isolate flex min-h-screen flex-col bg-white text-foreground">
+    <div className="signup-stage relative isolate flex min-h-[calc(100vh/var(--ui-scale,1))] flex-col bg-white text-foreground">
       {/* The artwork. On a phone it is a glow held above the pane; on desktop
           (>= 1024) it goes full-bleed and becomes the page itself. See
           "KM-21" / "KM-42" in index.css. */}

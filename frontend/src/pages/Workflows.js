@@ -47,11 +47,12 @@ import {
   SlidersHorizontal,  // KR-14.6 · mobile pipeline filter
   CaretDown,  // KR-14.21 · mobile stage collapse
   ListBullets,  // KM-31 · the standalone page's pipeline picker
-  X,  // 2026-09-14 · the New card window's glass close
+  X,  // the New Workflow dialog's close, as on New Task
 } from "@phosphor-icons/react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter,
 } from "../components/ui/dialog";
+import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
 /* ASK-2 fix (2026-09-12): the delete-card handler used to sit behind
    window.confirm. Some browsers and embed contexts silently return false
    from window.confirm with no visible UI, so the click looked like a
@@ -66,7 +67,7 @@ import {
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../components/ui/dropdown-menu";
 import { StickyHeader } from "../components/common";
 import {
-  DRAWER_FIELD, DRAWER_LABEL, GLASS_ICON_BTN, GLASS_MENU, GLASS_MENU_ITEM, GLASS_SHEET, INK_PILL,
+  DRAWER_FIELD, GLASS_MENU, GLASS_MENU_ITEM, INK_PILL,
 } from "../components/karma/glass";
 import { GlassSelect } from "../components/karma/GlassSelect";
 
@@ -78,10 +79,10 @@ function _initials(name) {
 }
 
 /* 2026-09-14, founder — the New card window (New Distribution, New
-   Production…) joins My Work's material: the gray glass sheet with a round
-   glass close, soft glass fields, the buyer or supplier as a GlassSelect
-   (never the operating system's list) under a small-caps label, and the black
-   ink Create. */
+   Production…) is styled on New Task (pages/Tasks.js): the frosted .kr-bento
+   card with a round close, the same sunken fields under plain labels, the
+   buyer or supplier as a GlassSelect (never the operating system's list),
+   and the black ink Create. */
 function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -98,23 +99,37 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
     const c = (contacts || []).find((x) => x.id === id);
     setForm({ ...form, contact_id: id, counterparty: c ? (c.company || c.name) : form.counterparty });
   };
+  const [titleError, setTitleError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const blank = { title: "", detail: "", amount: "", counterparty: "", contact_id: "" };
   const create = async () => {
-    if (!form.title.trim()) return;
+    if (!form.title.trim()) { setTitleError(t("workflows.title_required", "Give the workflow a title")); return; }
+    setBusy(true);
     try {
       await api.post("/workflows", {
-        type, title: form.title, detail: form.detail, counterparty: form.counterparty,
+        type, title: form.title.trim(), detail: form.detail, counterparty: form.counterparty,
         contact_id: form.contact_id || null, amount: form.amount ? Number(form.amount) : null,
       });
       toast.success(t("workflows.created"));
-      setForm({ title: "", detail: "", amount: "", counterparty: "", contact_id: "" });
+      setForm(blank);
+      setTitleError("");
       setOpen(false);
       onCreated();
     } catch {
       toast.error(t("workflows.create_failed"));
+    } finally {
+      setBusy(false);
     }
   };
+  /* The New Task dialog's field and label recipes, verbatim (pages/Tasks.js):
+     a sunken .kr-pressed groove with a hairline that goes to full ink on
+     focus — thin and black, not the 2px brand outline — and a plain sans
+     label above every field. `border-solid` is load-bearing: .kr-pressed sets
+     `border: 0`, which also resets the style to none. */
+  const inp = "w-full kr-pressed rounded-control border border-solid border-kr-ink/25 px-3.5 py-2.5 text-sm text-foreground placeholder:text-foreground/40 transition-colors focus:border-kr-ink focus:outline-none focus-visible:outline-none";
+  const lbl = "block text-xs font-medium text-muted-foreground";
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setTitleError(""); }}>
       <DialogTrigger asChild>
         <button data-testid="new-workflow-button"
           /* KM-31 — neumorphic, not a black slab. It is this page's own
@@ -123,43 +138,92 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
           <Plus size={16} weight="bold" aria-hidden="true" /> {t("workflows.new")}
         </button>
       </DialogTrigger>
-      <DialogContent data-testid="new-workflow-dialog"
-        className={`max-w-lg gap-5 rounded-[1.75rem] p-6 sm:rounded-[1.75rem] [&>button.absolute]:hidden ${GLASS_SHEET}`}>
-        <div className="flex items-start gap-3">
-          <DialogHeader className="min-w-0 flex-1 space-y-1.5 text-left">
-            <DialogTitle className="text-lg font-semibold text-neutral-900">{t("workflows.dlg_title", { type: typeLabel })}</DialogTitle>
-            <DialogDescription className="text-sm text-neutral-600">
-              {t("workflows.dlg_desc", { type: typeLabel.toLowerCase() })}
-            </DialogDescription>
-          </DialogHeader>
-          <button type="button" onClick={() => setOpen(false)} aria-label="Close" data-testid="wf-dialog-close" className={GLASS_ICON_BTN}>
-            <X size={16} weight="bold" aria-hidden="true" />
-          </button>
-        </div>
-        <div className="space-y-3">
-          <input data-testid="wf-title-input" className={DRAWER_FIELD} autoFocus aria-label={t("workflows.title_ph")}
-            placeholder={t("workflows.title_ph")} value={form.title} onChange={set("title")} />
-          <div className="pt-1">
-            <p className={DRAWER_LABEL}>{contactLabel}</p>
-            <GlassSelect testid="wf-contact-select" ariaLabel={contactLabel} value={form.contact_id} onChange={pickContact}
-              options={[
-                { value: "", label: t("workflows.select_contact", { label: contactLabel.toLowerCase() }) },
-                ...(contacts || []).map((c) => ({ value: c.id, label: c.company || c.name })),
-              ]} />
+      {/* The New Task dialog's shell (pages/Tasks.js): a frosted .kr-bento
+          sheet, full-screen on the phone, a centred card from lg with its
+          own round close. The card takes its natural height under the same
+          viewport ceiling New Task uses (divided by the UI scale: CSS zoom
+          leaves viewport units alone). */}
+      <DialogContent
+        className="kr-bento flex flex-col border-0 [&>button.absolute]:hidden
+                   left-0 top-0 h-full w-full max-w-none translate-x-0 translate-y-0
+                   [border-radius:0]
+                   [padding-top:max(1rem,env(safe-area-inset-top))]
+                   [padding-bottom:max(1rem,env(safe-area-inset-bottom))]
+                   lg:left-[50%] lg:top-[50%] lg:h-auto lg:max-h-[calc(100dvh/var(--ui-scale,1)-2rem)] lg:overflow-y-auto lg:max-w-2xl
+                   lg:-translate-x-1/2 lg:-translate-y-1/2
+                   lg:[border-radius:var(--radius-card)]
+                   lg:[padding-block:1.5rem]
+                   data-[state=open]:[--tw-enter-translate-x:0] data-[state=open]:[--tw-enter-translate-y:0]
+                   data-[state=closed]:[--tw-exit-translate-x:0] data-[state=closed]:[--tw-exit-translate-y:0]
+                   lg:data-[state=open]:[--tw-enter-translate-x:-50%] lg:data-[state=open]:[--tw-enter-translate-y:-48%]
+                   lg:data-[state=closed]:[--tw-exit-translate-x:-50%] lg:data-[state=closed]:[--tw-exit-translate-y:-48%]"
+      >
+        <DialogHeader className="shrink-0 pr-11">
+          <DialogPrimitiveClose
+            data-testid="wf-dialog-close"
+            aria-label="Close"
+            className="kr-pop absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full text-foreground/70">
+            <X size={15} weight="bold" aria-hidden="true" />
+          </DialogPrimitiveClose>
+          <DialogTitle className="font-display text-xl">{t("workflows.dlg_title", { type: typeLabel })}</DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">
+            {t("workflows.dlg_desc", { type: typeLabel.toLowerCase() })}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-0.5">
+          <div>
+            <label className="sr-only" htmlFor="wf-title">{t("workflows.title_ph")}</label>
+            <input id="wf-title" data-testid="wf-title-input" autoFocus className={inp}
+              placeholder={t("workflows.title_ph")} value={form.title}
+              aria-invalid={titleError ? "true" : undefined}
+              aria-describedby={titleError ? "wf-title-error" : undefined}
+              onChange={(e) => { setForm({ ...form, title: e.target.value }); if (titleError) setTitleError(""); }}
+              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); create(); } }} />
+            {titleError && (
+              <p id="wf-title-error" data-testid="wf-title-error" className="mt-1.5 text-xs font-medium text-kr-accent">{titleError}</p>
+            )}
           </div>
-          <input data-testid="wf-counterparty-input" className={DRAWER_FIELD} aria-label={t("workflows.counterparty_ph")}
-            placeholder={t("workflows.counterparty_ph")} value={form.counterparty} onChange={set("counterparty")} />
-          <input data-testid="wf-amount-input" className={DRAWER_FIELD} type="number" inputMode="decimal" aria-label={t("workflows.amount_ph")}
-            placeholder={t("workflows.amount_ph")} value={form.amount} onChange={set("amount")} />
-          <textarea data-testid="wf-detail-input" className={`${DRAWER_FIELD} resize-none`} rows={3} aria-label={t("workflows.detail_ph")}
-            placeholder={t("workflows.detail_ph")} value={form.detail} onChange={set("detail")} />
+
+          <div className="kr-form-row">
+            <div>
+              <label className={lbl} htmlFor="wf-contact">{contactLabel}</label>
+              {/* 2026-09-14, founder — GlassSelect, as on New Task: the field
+                  keeps this form's look, the list is the app's glass, never
+                  the operating system's. */}
+              <GlassSelect id="wf-contact" testid="wf-contact-select" variant="field" triggerClassName={`${inp} mt-1`}
+                ariaLabel={contactLabel} value={form.contact_id} onChange={pickContact}
+                options={[
+                  { value: "", label: t("workflows.select_contact", { label: contactLabel.toLowerCase() }) },
+                  ...(contacts || []).map((c) => ({ value: c.id, label: c.company || c.name })),
+                ]} />
+            </div>
+            <div>
+              <label className={lbl} htmlFor="wf-amount">{t("workflows.amount_ph")}</label>
+              <input id="wf-amount" data-testid="wf-amount-input" className={`${inp} mt-1`} type="number" inputMode="decimal"
+                placeholder="0" value={form.amount} onChange={set("amount")} />
+            </div>
+          </div>
+
+          <div>
+            <label className={lbl} htmlFor="wf-counterparty">{t("workflows.counterparty_ph")}</label>
+            <input id="wf-counterparty" data-testid="wf-counterparty-input" className={`${inp} mt-1`}
+              placeholder={t("workflows.counterparty_ph")} value={form.counterparty} onChange={set("counterparty")} />
+          </div>
+
+          <div>
+            <label className={lbl} htmlFor="wf-detail">{t("workflows.detail_ph")}</label>
+            <textarea id="wf-detail" data-testid="wf-detail-input" className={`${inp} mt-1`} rows={3}
+              placeholder={t("workflows.detail_ph")} value={form.detail} onChange={set("detail")} />
+          </div>
         </div>
-        <div className="flex justify-end">
-          <button data-testid="wf-create-submit" onClick={create} disabled={!form.title.trim()}
-            className={`flex h-11 items-center justify-center rounded-pill px-6 text-sm font-medium disabled:opacity-50 ${INK_PILL}`}>
-            {t("workflows.create")}
+
+        <DialogFooter className="shrink-0">
+          <button data-testid="wf-create-submit" onClick={create} disabled={busy}
+            className={`flex h-11 w-full items-center justify-center rounded-pill px-6 text-sm font-medium disabled:opacity-50 sm:w-auto ${INK_PILL}`}>
+            {busy ? t("workflows.creating", "Creating…") : t("workflows.create")}
           </button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

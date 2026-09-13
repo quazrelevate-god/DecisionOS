@@ -23,8 +23,6 @@ import Workflows from "./Workflows";
 // natively); leave uses the LeaveCard the register uses.
 import { LeaveCard } from "./Leave";
 import { ScopeSlider } from "../components/karma";
-// UI-SCALE — the page scales with the screen (pilot: this page only).
-import { useUiScale } from "../hooks/useUiScale";
 // ASK-6 (2026-09-12): Leave no longer embedded here. Register lives on
 // Team, approvals live on Desk, config lives on Settings > Operations.
 // Import retired. If a follow-up ever needs the Request Leave dialog
@@ -978,14 +976,14 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
   const isAudio = (a) => a.kind === "voice" || (a.content_type || "").startsWith("audio/");
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) { setZoom(null); setConfirmDel(false); } onOpenChange(o); }}>
-      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-2xl max-h-[90vh] overflow-y-auto" data-testid={`task-detail-${t.id}`}>
+      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-2xl max-h-[calc(90vh/var(--ui-scale,1))] overflow-y-auto" data-testid={`task-detail-${t.id}`}>
         <DialogHeader>
           <DialogTitle className="font-heading tracking-tight text-base pr-6">{t.title}</DialogTitle>
         </DialogHeader>
         {zoom ? (
           <div className="space-y-3">
             <button onClick={() => setZoom(null)} data-testid={`detail-zoom-back-${t.id}`} className="flex items-center gap-1 text-xs font-medium nm-btn px-2 py-1 hover:bg-accent"><X size={14} weight="bold" /> Back to details</button>
-            <img src={zoom} alt="proof full" className="w-full h-auto max-h-[70vh] object-contain nm-tile" />
+            <img src={zoom} alt="proof full" className="w-full h-auto max-h-[calc(70vh/var(--ui-scale,1))] object-contain nm-tile" />
           </div>
         ) : (
           <div className="space-y-5">
@@ -2172,7 +2170,7 @@ function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions =
           <DialogHeader>
             <DialogTitle className="sr-only">Proof photo</DialogTitle>
           </DialogHeader>
-          {lightbox && <img src={lightbox} alt="proof full" className="w-full h-auto max-h-[80vh] object-contain" />}
+          {lightbox && <img src={lightbox} alt="proof full" className="w-full h-auto max-h-[calc(80vh/var(--ui-scale,1))] object-contain" />}
         </DialogContent>
       </Dialog>
 
@@ -2513,7 +2511,7 @@ function FilterDropdown({ testid, label, value, options, counts, onSelect, loadi
       {/* 2026-09-14, founder — the list wears the app's glass menu, the same
           panel GlassSelect draws, instead of the stock popover. */}
       <DropdownMenuContent align="start" sideOffset={6}
-        className={`${GLASS_MENU} max-h-[60vh] overflow-y-auto p-1.5 ${searchable ? "w-64" : "w-56"}`}>
+        className={`${GLASS_MENU} max-h-[calc(60vh/var(--ui-scale,1))] overflow-y-auto p-1.5 ${searchable ? "w-64" : "w-56"}`}>
         {searchable && (
           <div className="sticky -top-1.5 z-10 -mx-1.5 -mt-1.5 mb-1 bg-white/95 p-1.5">
             {/* stopPropagation: Radix menus run typeahead on keydown, which
@@ -2702,7 +2700,6 @@ function matchesFilters(t, { tab, person, status }) {
 }
 
 export default function MyWork() {
-  useUiScale();
   // MPWA-08: rebuilt below lg (§8). Above lg the original tree renders
   // unchanged, keeping §9.2's desktop diff empty by construction.
   const qc = useQueryClient();
@@ -3145,12 +3142,7 @@ export default function MyWork() {
        the CARD GRID scrolls. Header and filter row are plain block children
        that never move, so they need no sticky offset and no backdrop blur —
        nothing passes behind them. */
-    /* UI-SCALE — `ui-scale`: the page zooms with the viewport (hooks/useUiScale),
-       so a 27" monitor shows the 1440 composition bigger, not smaller in a sea
-       of margin. Only this page for now; see the hook for the one-line move
-       to the whole app. The task sheet is portalled outside this root, so it
-       stays at 1× until that move. */
-    <div className="ui-scale lg:h-full lg:min-h-0 lg:flex lg:flex-col lg:overflow-hidden">
+    <div className="lg:h-full lg:min-h-0 lg:flex lg:flex-col lg:overflow-hidden">
       {/* ─── MOBILE HEADER (below lg) ───────────────────────────────────── */}
       {/* KM-48 — gap-2 and mb-2: one 8px rhythm for every gap in this header,
           where it used to be 10px between rows and then whatever the body's

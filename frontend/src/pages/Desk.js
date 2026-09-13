@@ -142,7 +142,12 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
     const measure = () => {
       const rs = el.querySelectorAll("[data-row]");
       let rowH = 0;
-      rs.forEach((r) => { rowH = Math.max(rowH, r.getBoundingClientRect().height); });
+      /* offsetHeight, not getBoundingClientRect: under the page's CSS zoom
+         (UI-SCALE) a rect is reported in visual px while clientHeight below
+         is in the element's own px, and dividing one by the other under-
+         filled the card by the zoom factor. Both offset* and client* are
+         local, so the ratio holds at every scale. */
+      rs.forEach((r) => { rowH = Math.max(rowH, r.offsetHeight); });
       if (!rowH) return;
       setFit(Math.max(1, Math.floor(el.clientHeight / rowH)));
     };

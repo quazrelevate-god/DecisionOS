@@ -179,7 +179,12 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
      .kr-pressed is the concave twin: dark inset from the top-left, light
      inset from the bottom-right, no border at all. A field you type into
      should look like a groove, not a card. */
-  const inp = "w-full kr-pressed rounded-control border-0 px-3.5 py-2.5 text-sm text-foreground placeholder:text-foreground/40";
+  /* ASK-29 follow-up (founder): the groove keeps its inset light, and gets a
+     HAIRLINE so the field's edge reads at a glance inside a tight form; on
+     focus that hairline goes to full ink — thin and black, not the 2px brand
+     outline the global focus net paints. `border-solid` is load-bearing:
+     .kr-pressed sets `border: 0`, which also resets the style to none. */
+  const inp = "w-full kr-pressed rounded-control border border-solid border-kr-ink/25 px-3.5 py-2.5 text-sm text-foreground placeholder:text-foreground/40 transition-colors focus:border-kr-ink focus:outline-none focus-visible:outline-none";
   const lbl = "block text-xs font-medium text-muted-foreground";
   return (
     <Dialog open={open} onOpenChange={(o) => {
@@ -269,7 +274,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                    [border-radius:0]
                    [padding-top:max(1rem,env(safe-area-inset-top))]
                    [padding-bottom:max(1rem,env(safe-area-inset-bottom))]
-                   lg:left-[50%] lg:top-[50%] lg:h-auto lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto lg:max-w-2xl
+                   lg:left-[50%] lg:top-[50%] lg:h-auto lg:max-h-[calc(100dvh/var(--ui-scale,1)-2rem)] lg:overflow-y-auto lg:max-w-2xl
                    lg:-translate-x-1/2 lg:-translate-y-1/2
                    lg:[border-radius:var(--radius-card)]
                    lg:[padding-block:1.25rem]

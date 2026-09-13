@@ -20,9 +20,18 @@
 // scale is 1 (it has its own breakpoints). Edit STEPS to retune; the widths
 // are the smallest viewport that gets that step.
 //
-// Scoped to a page on purpose for now (My Work is the pilot). Moving the
-// `ui-scale` class from a page root to <body> is the whole change needed to
-// scale the app — header, dock and dialogs included — once the pilot holds.
+// APP-WIDE: the hook puts the `ui-scale` class on <body>, so the header, the
+// dock, every page and every portal (dialogs, sheets, dropdowns — Radix
+// mounts them on body) scale together. Called once, from App.
+//
+// Two things CSS zoom does NOT do, handled elsewhere:
+//   · viewport units are not divided by zoom, so anything sized in vh on
+//     desktop divides by var(--ui-scale) itself (Layout's shell, dialog
+//     max-heights) or it overflows the real viewport by the scale factor;
+//   · getBoundingClientRect reports visual px while offset*/client* report
+//     an element's own px — measure in one space or the other, never both
+//     (see Desk's row fitting).
+// Radix poppers are fine: floating-ui ≥1.6.6 reads Element.currentCSSZoom.
 import { useEffect } from "react";
 
 export const UI_SCALE_REFERENCE_WIDTH = 1440;
@@ -47,6 +56,7 @@ export function computeUiScale(width) {
 export function useUiScale() {
   useEffect(() => {
     const root = document.documentElement;
+    document.body.classList.add("ui-scale");
     let raf = 0;
     const apply = () => {
       raf = 0;
@@ -59,6 +69,7 @@ export function useUiScale() {
       window.removeEventListener("resize", onResize);
       if (raf) cancelAnimationFrame(raf);
       root.style.removeProperty("--ui-scale");
+      document.body.classList.remove("ui-scale");
     };
   }, []);
 }

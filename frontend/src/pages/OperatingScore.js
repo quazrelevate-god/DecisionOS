@@ -766,7 +766,7 @@ function CategoryDrillModal({ cat, value, drivers, drill, onClose }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="nm-raised flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden"
+        className="nm-raised flex max-h-[calc(85vh/var(--ui-scale,1))] w-full max-w-2xl flex-col overflow-hidden"
       >
         <div className="flex items-start gap-4 border-b border-nm-edge/40 p-5">
           <IconChip icon={cat.icon} size={44} />

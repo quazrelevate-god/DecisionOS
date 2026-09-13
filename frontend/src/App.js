@@ -10,6 +10,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import DecisionReview from "./pages/DecisionReview";
+import { useUiScale } from "./hooks/useUiScale";
 import Workflows from "./pages/Workflows";
 // ASK-6 (2026-09-12): Leave default export no longer routed. The named
 // exports (LeaveCard, ApproverConfig, dialogs) are consumed directly by
@@ -70,7 +71,7 @@ function Protected({ children, perm, perms, ownerOnly }) {
   const { user, loading } = useAuth();
   if (loading)
     return (
-      <div className="min-h-screen flex items-center justify-center font-mono text-sm uppercase tracking-widest">
+      <div className="min-h-[calc(100vh/var(--ui-scale,1))] flex items-center justify-center font-mono text-sm uppercase tracking-widest">
         Loading…
       </div>
     );
@@ -86,7 +87,7 @@ function Home() {
   const { user, loading } = useAuth();
   if (loading)
     return (
-      <div className="min-h-screen flex items-center justify-center font-mono text-sm uppercase tracking-widest">
+      <div className="min-h-[calc(100vh/var(--ui-scale,1))] flex items-center justify-center font-mono text-sm uppercase tracking-widest">
         Loading…
       </div>
     );
@@ -143,6 +144,8 @@ function Home() {
 }
 
 function App() {
+  // UI-SCALE — the whole app zooms with the screen (see hooks/useUiScale).
+  useUiScale();
   return (
     <div className="App">
       <AuthProvider>

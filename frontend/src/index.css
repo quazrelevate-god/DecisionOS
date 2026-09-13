@@ -576,16 +576,29 @@
    7.5rem clears the taller bar with a real gap rather than a hairline. */
 .pb-dock { padding-bottom: calc(7.5rem + env(safe-area-inset-bottom, 0px)); }
 
-/* UI-SCALE · .ui-scale — a page that scales with the screen. hooks/useUiScale
-   writes --ui-scale (viewport width ÷ 1440, clamped) to <html>; a page root
-   wearing this class is zoomed by it, so everything inside — type, spacing,
-   controls, cards — grows and shrinks together and the layout REFLOWS at the
-   new size (zoom changes used values; a transform would only paint bigger).
+/* UI-SCALE · .ui-scale — the app scales with the screen. hooks/useUiScale
+   writes --ui-scale (a stepped table by viewport width, 0.9…1.3) to <html>
+   and puts this class on <body>, which is zoomed by it, so everything —
+   type, spacing, controls, cards, the header, the dock, every dialog and
+   sheet — grows and shrinks together and the layout REFLOWS at the new
+   size (zoom changes used values; a transform would only paint bigger).
    Desktop only: below lg the phone tree has its own breakpoints and the hook
-   writes 1 anyway. My Work is the pilot; move the class to <body> to scale
-   the whole app. */
+   writes 1 anyway. vh is NOT divided by zoom, so desktop vh sizes divide by
+   var(--ui-scale) themselves (the shell in Layout, dialog max-heights). */
 @media (min-width: 1024px) {
     .ui-scale { zoom: var(--ui-scale, 1); }
+
+    /* Radix poppers (dropdown menus, popovers, tooltips) position their
+       wrapper with a translate that floating-ui computed in VISUAL px; inside
+       the zoomed body that translate is applied in local px and lands
+       scale× too far right and down (measured 47px / 65px at 1.2). So the
+       wrapper cancels the zoom (its translate is now 1:1 with the screen) and
+       its content puts the zoom back — body × 1/s × s — so the menu itself is
+       drawn at the page's scale, just placed correctly. Dialogs and sheets
+       need none of this: they centre with a percentage translate of their
+       own size, which zoom scales consistently. */
+    .ui-scale [data-radix-popper-content-wrapper] { zoom: calc(1 / var(--ui-scale, 1)); }
+    .ui-scale [data-radix-popper-content-wrapper] > * { zoom: var(--ui-scale, 1); }
 }
 
 @layer base {

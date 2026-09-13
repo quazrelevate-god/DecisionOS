@@ -181,7 +181,7 @@ export function DexStage({ capture, onAsk, thinking, compact = false, status, tr
       <div
         className={cn(
           "flex flex-col items-center",
-          compact ? "pt-1 pb-1" : "justify-center min-h-[calc(100vh-16rem)] py-6"
+          compact ? "pt-1 pb-1" : "justify-center min-h-[calc(100vh/var(--ui-scale,1)-16rem)] py-6"
         )}
       >
         <Orb

@@ -211,7 +211,7 @@ export default function Login() {
        its parent's background if that parent is a stacking context. Without it
        the picture escapes to the root context, lands behind the body fill, and
        the page renders white. */
-    <div className="login-stage relative isolate flex min-h-screen flex-col bg-white text-foreground">
+    <div className="login-stage relative isolate flex min-h-[calc(100vh/var(--ui-scale,1))] flex-col bg-white text-foreground">
       {/* The artwork. It reuses .app-sky__art--aside wholesale — that layer
           carries two pictures, two fits, the phone radial mask and the desktop
           full-bleed, all measured against the DOM in KM-41/KM-42 — and only

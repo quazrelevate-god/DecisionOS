@@ -23,7 +23,7 @@ export default function AdminLogin({ onSuccess }) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0a0a0b] px-4" data-testid="admin-login-screen">
+    <div className="min-h-[calc(100vh/var(--ui-scale,1))] flex items-center justify-center bg-[#0a0a0b] px-4" data-testid="admin-login-screen">
       <div className="w-full max-w-md">
         <div className="flex items-center gap-3 mb-8">
           <div className="w-12 h-12 flex items-center justify-center bg-[#e5484d] border-2 border-white/10">

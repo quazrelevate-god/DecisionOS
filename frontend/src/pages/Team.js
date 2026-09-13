@@ -118,7 +118,7 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
   return (
     <Dialog open={open} onOpenChange={openChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-h-[90vh] overflow-y-auto">
+      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-h-[calc(90vh/var(--ui-scale,1))] overflow-y-auto">
         <DialogHeader><DialogTitle className="font-display text-xl">{editing ? `Edit access — ${initial.name}` : "Add team member"}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           {!editing && <>
@@ -577,7 +577,7 @@ function MemberProfileDialog({
        reader inferring its purpose from its contents. */
     <Dialog open={!!u} onOpenChange={openChange}>
       <DialogContent
-        className="max-w-xl max-h-[85vh] overflow-y-auto rounded-cardlg border-nm-edge/40 bg-nm p-0 [&>button.absolute]:hidden"
+        className="max-w-xl max-h-[calc(85vh/var(--ui-scale,1))] overflow-y-auto rounded-cardlg border-nm-edge/40 bg-nm p-0 [&>button.absolute]:hidden"
         data-testid={`profile-dialog-${u.id}`}
       >
         <DialogHeader className="sr-only"><DialogTitle>{u.name}</DialogTitle></DialogHeader>

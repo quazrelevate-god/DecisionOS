@@ -121,7 +121,20 @@ const M_STATUS_PILLS = [
   { key: "review",      label: "Review",      on: "bg-lime-600 text-white" },
 ];
 const isTerminal = (t) => t.status === "done" || t.status === "cancelled";
-const isOverdue = (t) => t.due_date && new Date(t.due_date) < new Date() && !isTerminal(t);
+/* ASK-29 — a due date with no time ("2026-09-14") is due for that whole day.
+   new Date() parses it as UTC midnight, which is 05:30 in India, so a task due
+   "Today" read as Overdue by breakfast. Compare calendar days instead; a date
+   that carries a time still compares as an instant. */
+const todayYmd = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+const isOverdue = (t) => {
+  if (!t.due_date || isTerminal(t)) return false;
+  const due = String(t.due_date);
+  if (due.length <= 10) return due < todayYmd();
+  return new Date(due) < new Date();
+};
 
 function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) {
   const [text, setText] = useState("");
@@ -3153,7 +3166,7 @@ export default function MyWork() {
               to `view === "mywork"` because it sits inside the mywork-
               list branch of the view guard above. */}
           <div className="mb-3 flex justify-end lg:hidden">
-            <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
+            <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members} defaultType={tab}
               onOpenChange={(o) => { if (o) setOpenId(null); }}
               triggerClassName="kr-lift inline-flex items-center gap-1.5 rounded-pill bg-kr-ink px-3.5 py-2 text-xs font-medium text-white" />
           </div>
@@ -3221,7 +3234,7 @@ export default function MyWork() {
                 </button>
               )}
             </div>
-            <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
+            <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members} defaultType={tab}
               onOpenChange={(o) => { if (o) setOpenId(null); }}
               triggerClassName={`${SECTION_BTN} kr-lift bg-kr-ink text-white`} />
           </div>

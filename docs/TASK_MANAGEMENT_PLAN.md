@@ -6,6 +6,16 @@ Source: product review of New Task, My Work and task access (2026-09-13/14).
 Work one phase at a time. Each phase ships on its own, is checked on desktop
 and phone, and updates `docs/DecisionOS_UI_Bug_Report.xlsx` in the same push.
 
+## Order we're working in (founder call, 2026-09-14)
+
+1. **New Task form — desktop** (Phase 5) · ASK-29 · ✅ built 2026-09-14
+2. **Task views — desktop** (Phase 1) · ASK-28 · checklist: https://claude.ai/code/artifact/53a2b23e-66a5-4eeb-bfb3-52a87ce08043
+3. **Phone** for the form and the views
+4. Phases 2, 3, 4, 6, 7
+
+Tracker numbers: ASK-25 cards + photos and ASK-26 helpers (registered after
+shipping), ASK-27 Decision Desk redesign, ASK-28 task views, ASK-29 New Task form.
+
 ---
 
 ## Goal
@@ -33,8 +43,9 @@ is assigned.
 - [ ] **D1 · Assigning outside your team** — Default: staff assign to themselves and their own team/role; owner and managers assign to anyone. *(Phase 6)*
 - [ ] **D2 · Approval moment** — Default: creator chooses *before starting* or *before closing* per task. *(Phase 4)*
 - [ ] **D3 · Managers see their team** — Default: yes, through the existing Reporting Manager field. *(Phase 1)*
-- [ ] **D4 · Supporting employee** — Default: merge into Helpers. *(Phase 2)*
-- [ ] **D5 · Expected output** — Default: show it in the task drawer (keep the field, under More). *(Phase 5)*
+- [x] **D4 · Supporting employee** — Removed from the form; helpers cover it. *(decided 2026-09-14)*
+- [x] **D5 · Expected output** — Kept, as "Expected result" under More options. *(2026-09-14)*
+- [x] **D8 · Department on a task** — Kept as the task's own field, not the doer's department: in a small company anyone can be given a Sales task and it still counts as Sales. Drives the Department filter. *(founder call 2026-09-14)*
 - [ ] **D6 · Statuses** — Default: change labels and flags in the UI first, keep stored statuses as they are; migrate data only later if needed. *(Phase 3)*
 - [ ] **D7 · Overdue reminders for Waiting / Under review / Pending approval tasks** — Default: yes, remind the person they are waiting on or the approver. *(Phase 7)*
 
@@ -93,10 +104,11 @@ is assigned.
 
 ## Phase 5 — The New Task form (P1)
 
-- [ ] **5.1 Quick add:** title, doer, due date (Today / Tomorrow / This week / pick), Create.
-- [ ] **5.2 "More" section:** priority, department, helpers, approval (moment + approver), proof required, description, files, expected output *(D5)*.
-- [ ] **5.3 Drop from the form:** Operational category (keep stored data), Supporting employee (merged in 2.1).
-- [ ] **5.4 Phone:** same quick add as a full-screen sheet; nothing moves when More opens.
+- [x] **5.1 Quick add (desktop):** title with inline error, Department, one Assign to (people or a team → least busy member), due presets No date / Today / Tomorrow / In a week / Pick a date. *(ASK-29, 2026-09-14)*
+- [x] **5.2 "More options" (desktop):** priority, helpers, description, due time, expected result, needs approval + approver, needs proof, reference files; closed section shows how many are set. Approval moment (before closing) waits for Phase 4.
+- [x] **5.3 Dropped from the form:** Operational category (stored data kept), Supporting employee.
+- [x] **5.3b Due "Today" no longer reads Overdue the same morning** (date-only due dates compare as calendar days).
+- [ ] **5.4 Phone:** same form as a full-screen sheet; nothing moves when More opens.
 - [ ] **5.5 Doer list respects access** (Phase 6): only people this user may assign to.
 
 ## Phase 6 — Access rules for tasks (P2)

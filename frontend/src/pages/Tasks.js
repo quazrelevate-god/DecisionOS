@@ -7,7 +7,7 @@ import { opModel } from "../lib/operatingModel";
 import { toast } from "sonner";
 import { timeAgo, fullTime } from "../lib/format";
 import { userPerms } from "../lib/perms";
-import { Plus, User, Paperclip, ClockCounterClockwise, X } from "@phosphor-icons/react";
+import { Plus, User, Paperclip, ClockCounterClockwise, X, CaretDown } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
 import { PersonAvatar } from "../components/karma/PersonAvatar";
@@ -36,11 +36,32 @@ export const OP_CATEGORIES = [
 ];
 
 const EMPTY_FORM = {
-  title: "", description: "", task_type: "operational", op_category: "Presentation",
-  assignee_id: "", assignee_role: "", support_id: "", priority: "medium",
-  due_date: "", due_time: "", expected_output: "", approval_required: false, approver_id: "",
+  title: "", description: "", task_type: "",
+  // ASK-29 — one "Assign to" control: "u:<userId>" for a person, "r:<roleKey>"
+  // for a team (the server hands a team task to its least busy member).
+  assign: "",
+  co_assignee_ids: [],   // ASK-26 — helpers alongside the person doing it
+  priority: "medium",
+  due_preset: "", due_date: "", due_time: "",
+  expected_output: "", approval_required: false, approver_id: "",
   evidence_required: false,
-  co_assignee_ids: [],   // ASK-26 — people on the task alongside the assigned employee
+};
+
+/* ASK-29 — due presets. A date with no time is due for that whole day. */
+const DUE_PRESETS = [
+  { key: "", label: "No date" },
+  { key: "today", label: "Today", days: 0 },
+  { key: "tomorrow", label: "Tomorrow", days: 1 },
+  { key: "week", label: "In a week", days: 7 },
+  { key: "pick", label: "Pick a date" },
+];
+const ymdLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const presetDate = (key) => {
+  const p = DUE_PRESETS.find((x) => x.key === key);
+  if (!p || p.days == null) return "";
+  const d = new Date();
+  d.setDate(d.getDate() + p.days);
+  return ymdLocal(d);
 };
 
 /**
@@ -56,29 +77,52 @@ const EMPTY_FORM = {
 export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, defaultType, triggerClassName, triggerChildren, triggerAriaLabel }) {
   const { user, tenant } = useAuth();
   const cats = opModel(tenant).task_categories;
+  // Opens on the Department My Work is filtered to, when that is a real one.
+  const firstType = () => (cats.some((c) => c.key === defaultType) ? defaultType : cats[0]?.key || "operational");
+  const blank = () => ({ ...EMPTY_FORM, task_type: firstType() });
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ ...EMPTY_FORM, task_type: defaultType || cats[0]?.key || "operational" });
+  const [form, setForm] = useState(blank);
+  const [more, setMore] = useState(false);
+  const [titleError, setTitleError] = useState("");
   const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-  const isOp = form.task_type === "operational";
+  const personId = form.assign.startsWith("u:") ? form.assign.slice(2) : "";
+  const teamKey = form.assign.startsWith("r:") ? form.assign.slice(2) : "";
+  const dueDate = form.due_preset === "pick" ? form.due_date : presetDate(form.due_preset);
+  const roleLabel = (key) => roleOptions.find((r) => r.key === key)?.label || key;
+  const teams = roleOptions.filter((r) => r.key !== "owner");
+  const approvers = members.filter((m) => m.role === "owner" || userPerms(m).includes("approvals"));
+  // How much "More options" is holding, so the closed section still says so.
+  const moreSet = [
+    form.priority !== "medium", form.co_assignee_ids.length > 0, !!form.description.trim(),
+    !!(dueDate && form.due_time), !!form.expected_output.trim(),
+    form.approval_required, form.evidence_required, files.length > 0,
+  ].filter(Boolean).length;
+
+  const pickAssign = (e) => {
+    const v = e.target.value;
+    const pid = v.startsWith("u:") ? v.slice(2) : "";
+    // Choosing someone already listed as a helper makes them the doer instead
+    // of listing them twice; a team or nobody has no helpers.
+    setForm({ ...form, assign: v, co_assignee_ids: pid ? form.co_assignee_ids.filter((id) => id !== pid) : [] });
+  };
 
   const create = async () => {
-    if (!form.title.trim()) return toast.error("Task title is required");
+    if (!form.title.trim()) { setTitleError("Give the task a title"); return; }
+    if (form.due_preset === "pick" && !form.due_date) { toast.error("Pick a due date, or choose No date"); return; }
     setBusy(true);
     try {
       const { data: task } = await api.post("/tasks", {
-        title: form.title, description: form.description,
+        title: form.title.trim(), description: form.description,
         task_type: form.task_type,
-        op_category: isOp ? form.op_category : null,
-        assignee_id: form.assignee_id || null,
-        assignee_role: form.assignee_id ? null : (form.assignee_role || null),
-        co_assignee_ids: form.assignee_id ? form.co_assignee_ids : [],
-        support_id: form.support_id || null,
+        assignee_id: personId || null,
+        assignee_role: personId ? null : (teamKey || null),
+        co_assignee_ids: personId ? form.co_assignee_ids : [],
         priority: form.priority,
-        due_date: form.due_date || null,
-        due_time: form.due_time || null,
-        expected_output: form.expected_output || null,
+        due_date: dueDate || null,
+        due_time: dueDate && form.due_time ? form.due_time : null,
+        expected_output: form.expected_output.trim() || null,
         approval_required: form.approval_required,
         approver_id: form.approval_required ? (form.approver_id || null) : null,
         evidence_required: form.evidence_required,
@@ -93,8 +137,10 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
         }
       }
       toast.success("Task created");
-      setForm({ ...EMPTY_FORM, task_type: defaultType || "operational" });
+      setForm(blank());
       setFiles([]);
+      setMore(false);
+      setTitleError("");
       setOpen(false);
       onCreated();
     } catch (e) { toast.error(e.response?.data?.detail || "Create failed"); }
@@ -117,7 +163,12 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
   const inp = "w-full kr-pressed rounded-control border-0 px-3.5 py-2.5 text-sm text-foreground placeholder:text-foreground/40";
   const lbl = "block text-xs font-medium text-muted-foreground";
   return (
-    <Dialog open={open} onOpenChange={(o) => { setOpen(o); onOpenChange?.(o); }}>
+    <Dialog open={open} onOpenChange={(o) => {
+      setOpen(o);
+      // A fresh form picks up the Department My Work is on now.
+      if (o && !form.title) setForm((f) => ({ ...f, task_type: firstType() }));
+      onOpenChange?.(o);
+    }}>
       <DialogTrigger asChild>
         <button data-testid="new-task-button"
           aria-label={triggerAriaLabel}
@@ -187,7 +238,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                    [border-radius:0]
                    [padding-top:max(1rem,env(safe-area-inset-top))]
                    [padding-bottom:max(1rem,env(safe-area-inset-bottom))]
-                   lg:left-[50%] lg:top-[50%] lg:h-[min(86vh,55rem)] lg:max-w-lg
+                   lg:left-[50%] lg:top-[50%] lg:h-[min(86vh,32rem)] lg:max-w-lg
                    lg:-translate-x-1/2 lg:-translate-y-1/2
                    lg:[border-radius:var(--radius-card)]
                    lg:[padding-block:1.5rem]
@@ -204,139 +255,207 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
             <X size={15} weight="bold" aria-hidden="true" />
           </DialogPrimitiveClose>
           <DialogTitle className="font-display text-xl">New Task</DialogTitle>
-          <DialogDescription className="text-sm text-muted-foreground">Capture any company task — operational or department work.</DialogDescription>
+          <DialogDescription className="text-sm text-muted-foreground">What, who and when. The rest is optional.</DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-0.5">
-          <input data-testid="task-title-input" className={inp} placeholder="Task title" value={form.title} onChange={set("title")} />
-          <textarea data-testid="task-description-input" className={inp} rows={2} placeholder="Description" value={form.description} onChange={set("description")} />
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-0.5">
+          {/* ASK-29 (2026-09-14): the quick part is what, which department, who
+              and when; everything else waits under "More options". Removed:
+              Operational category (stored, never read anywhere) and Supporting
+              employee (never shown to or told anything) — a helper under More
+              is the same idea, and helpers see the task and its updates. */}
+          <div>
+            <label className="sr-only" htmlFor="task-title">Task title</label>
+            <input id="task-title" data-testid="task-title-input" autoFocus className={inp}
+              placeholder="What needs to be done?" value={form.title}
+              aria-invalid={titleError ? "true" : undefined}
+              aria-describedby={titleError ? "task-title-error" : undefined}
+              onChange={(e) => { setForm({ ...form, title: e.target.value }); if (titleError) setTitleError(""); }}
+              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); create(); } }} />
+            {titleError && (
+              <p id="task-title-error" data-testid="task-title-error" className="mt-1.5 text-xs font-medium text-kr-accent">{titleError}</p>
+            )}
+          </div>
+
           <div className="kr-form-row">
             <div>
-              <label className={lbl}>Task type</label>
-              <select data-testid="task-type-select" className={`${inp} mt-1`} value={form.task_type} onChange={set("task_type")}>
+              {/* The task's own department, not the doer's: a sales task can be
+                  handed to anyone in a small company and still count as Sales. */}
+              <label className={lbl} htmlFor="task-department">Department</label>
+              <select id="task-department" data-testid="task-type-select" className={`${inp} mt-1`} value={form.task_type} onChange={set("task_type")}>
                 {cats.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
               </select>
             </div>
-            {isOp && (
-              <div data-testid="op-category-wrap">
-                <label className={lbl}>Operational category</label>
-                <select data-testid="op-category-select" className={`${inp} mt-1`} value={form.op_category} onChange={set("op_category")}>
-                  {OP_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
+            <div>
+              <label className={lbl} htmlFor="task-assign">Assign to</label>
+              <select id="task-assign" data-testid="task-assign-select" className={`${inp} mt-1`} value={form.assign} onChange={pickAssign}>
+                <option value="">Nobody yet</option>
+                <optgroup label="People">
+                  {members.map((m) => (
+                    <option key={m.id} value={`u:${m.id}`}>
+                      {m.id === user?.id ? `Me · ${m.name}` : `${m.name} · ${roleLabel(m.role)}`}
+                    </option>
+                  ))}
+                </optgroup>
+                {teams.length > 0 && (
+                  <optgroup label="A team (least busy person)">
+                    {teams.map((r) => <option key={r.key} value={`r:${r.key}`}>{r.label} team</option>)}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+          </div>
+          {teamKey && (
+            <p className="-mt-2 text-xs text-muted-foreground" data-testid="task-team-hint">
+              Goes to whoever in {roleLabel(teamKey)} has the least open work.
+            </p>
+          )}
+
+          <div>
+            <span className={lbl} id="task-due-label">Due</span>
+            <div className="mt-1.5 flex flex-wrap gap-1.5" role="group" aria-labelledby="task-due-label">
+              {DUE_PRESETS.map((p) => {
+                const on = form.due_preset === p.key;
+                return (
+                  <button key={p.key || "none"} type="button" aria-pressed={on}
+                    data-testid={`task-due-${p.key || "none"}`}
+                    onClick={() => setForm({ ...form, due_preset: p.key })}
+                    className={`h-9 rounded-pill px-3.5 text-xs ${on ? "kr-pressed font-semibold text-foreground" : "kr-pop text-foreground/75"}`}>
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+            {form.due_preset === "pick" && (
+              <input data-testid="task-due-date" type="date" aria-label="Due date" className={`${inp} mt-2`}
+                value={form.due_date} onChange={set("due_date")} />
+            )}
+            {dueDate && form.due_preset !== "pick" && (
+              <p className="mt-1.5 text-xs text-muted-foreground" data-testid="task-due-summary">
+                Due {new Date(`${dueDate}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}
+              </p>
             )}
           </div>
-          <div className="kr-form-row">
-            <div>
-              <label className={lbl}>Assigned employee</label>
-              {/* Picking someone who is already listed below as "also assigned"
-                  moves them up to lead instead of listing them twice. */}
-              <select data-testid="task-member-select" className={`${inp} mt-1`} value={form.assignee_id}
-                onChange={(e) => setForm({ ...form, assignee_id: e.target.value, co_assignee_ids: form.co_assignee_ids.filter((id) => id !== e.target.value) })}>
-                <option value="">— Pick a person —</option>
-                {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={lbl}>Supporting employee (optional)</label>
-              <select data-testid="task-support-select" className={`${inp} mt-1`} value={form.support_id} onChange={set("support_id")}>
-                <option value="">— None —</option>
-                {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
-              </select>
-            </div>
-          </div>
-          {/* ASK-26 — more than one person on a task. Offered once there is an
-              assigned employee to lead it; the lead stays the one approvals
-              and hand-offs act on. Each chosen person is a pill you tap to
-              take off again. */}
-          {form.assignee_id && (
-            <div data-testid="task-co-assignees">
-              <label className={lbl}>Also assigned (optional)</label>
-              {form.co_assignee_ids.length > 0 && (
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {form.co_assignee_ids.map((id) => {
-                    const m = members.find((x) => x.id === id);
+
+          <button type="button" onClick={() => setMore((v) => !v)} aria-expanded={more} aria-controls="task-more"
+            data-testid="task-more-toggle"
+            className="flex w-full items-center justify-between border-t border-nm-edge/40 pt-3 text-sm font-medium text-foreground">
+            <span>
+              More options
+              {moreSet > 0 && <span className="ml-2 text-xs font-normal text-muted-foreground" data-testid="task-more-count">{moreSet} set</span>}
+            </span>
+            <CaretDown size={14} weight="bold" aria-hidden="true" className={more ? "rotate-180" : ""} />
+          </button>
+
+          {more && (
+            <div id="task-more" data-testid="task-more" className="space-y-4">
+              <div>
+                <span className={lbl} id="task-priority-label">Priority</span>
+                <div className="mt-1.5 flex gap-1.5" role="group" aria-labelledby="task-priority-label">
+                  {["low", "medium", "high"].map((p) => {
+                    const on = form.priority === p;
                     return (
-                      <button key={id} type="button"
-                        onClick={() => setForm({ ...form, co_assignee_ids: form.co_assignee_ids.filter((x) => x !== id) })}
-                        aria-label={`Remove ${m?.name || "member"}`}
-                        data-testid={`task-co-remove-${id}`}
-                        className="inline-flex items-center gap-1.5 rounded-pill bg-slate-500/[0.07] py-1 pl-1 pr-2.5 text-sm ring-1 ring-inset ring-slate-500/10 transition-colors hover:bg-slate-500/[0.13]">
-                        <PersonAvatar name={m?.name} src={m?.avatar_url} size={22} ring={false} />
-                        {m?.name || "Member"}
-                        <X size={11} weight="bold" aria-hidden="true" className="text-muted-foreground" />
+                      <button key={p} type="button" aria-pressed={on} data-testid={`task-priority-${p}`}
+                        onClick={() => setForm({ ...form, priority: p })}
+                        className={`h-9 flex-1 rounded-pill px-3 text-xs capitalize ${on ? "kr-pressed font-semibold text-foreground" : "kr-pop text-foreground/75"}`}>
+                        {p}
                       </button>
                     );
                   })}
                 </div>
+              </div>
+
+              {/* ASK-26 — helpers alongside the person doing it. Offered once a
+                  person is chosen; that person stays the one approvals and
+                  hand-offs act on. Each helper is a pill you tap to take off. */}
+              {personId && (
+                <div data-testid="task-co-assignees">
+                  <label className={lbl} htmlFor="task-helper-add">Helpers</label>
+                  {form.co_assignee_ids.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {form.co_assignee_ids.map((id) => {
+                        const m = members.find((x) => x.id === id);
+                        return (
+                          <button key={id} type="button"
+                            onClick={() => setForm({ ...form, co_assignee_ids: form.co_assignee_ids.filter((x) => x !== id) })}
+                            aria-label={`Remove ${m?.name || "member"}`}
+                            data-testid={`task-co-remove-${id}`}
+                            className="inline-flex items-center gap-1.5 rounded-pill bg-slate-500/[0.07] py-1 pl-1 pr-2.5 text-sm ring-1 ring-inset ring-slate-500/10 transition-colors hover:bg-slate-500/[0.13]">
+                            <PersonAvatar name={m?.name} src={m?.avatar_url} size={22} ring={false} />
+                            {m?.name || "Member"}
+                            <X size={11} weight="bold" aria-hidden="true" className="text-muted-foreground" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <select id="task-helper-add" data-testid="task-co-assignee-select" className={`${inp} mt-1.5`} value=""
+                    onChange={(e) => e.target.value && setForm({ ...form, co_assignee_ids: [...form.co_assignee_ids, e.target.value] })}>
+                    <option value="">+ Add a helper</option>
+                    {members.filter((m) => m.id !== personId && !form.co_assignee_ids.includes(m.id))
+                      .map((m) => <option key={m.id} value={m.id}>{m.name} · {roleLabel(m.role)}</option>)}
+                  </select>
+                  <p className="mt-1 text-xs text-muted-foreground">Helpers see the task in My Tasks and get its updates.</p>
+                </div>
               )}
-              <select data-testid="task-co-assignee-select" className={`${inp} mt-1.5`} value=""
-                onChange={(e) => e.target.value && setForm({ ...form, co_assignee_ids: [...form.co_assignee_ids, e.target.value] })}>
-                <option value="">+ Add a person</option>
-                {members.filter((m) => m.id !== form.assignee_id && !form.co_assignee_ids.includes(m.id))
-                  .map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
-              </select>
+
+              <div>
+                <label className={lbl} htmlFor="task-description">Description</label>
+                <textarea id="task-description" data-testid="task-description-input" className={`${inp} mt-1`} rows={3}
+                  placeholder="Anything they need to know" value={form.description} onChange={set("description")} />
+              </div>
+
+              {dueDate && (
+                <div>
+                  <label className={lbl} htmlFor="task-due-time">Due time</label>
+                  <input id="task-due-time" data-testid="task-due-time" type="time" className={`${inp} mt-1`} value={form.due_time} onChange={set("due_time")} />
+                </div>
+              )}
+
+              <div>
+                <label className={lbl} htmlFor="task-expected">Expected result</label>
+                <input id="task-expected" data-testid="task-expected-output" className={`${inp} mt-1`}
+                  placeholder="e.g. Signed quote sent to the customer" value={form.expected_output} onChange={set("expected_output")} />
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input data-testid="task-approval-required" type="checkbox" className="h-4 w-4 accent-kr-ink" checked={form.approval_required} onChange={(e) => setForm({ ...form, approval_required: e.target.checked })} />
+                  Needs approval before work starts
+                </label>
+                {form.approval_required && (
+                  <div data-testid="task-approver-wrap">
+                    <label className={lbl} htmlFor="task-approver">Approver</label>
+                    <select id="task-approver" data-testid="task-approver-select" className={`${inp} mt-1`} value={form.approver_id} onChange={set("approver_id")}>
+                      <option value="">Anyone with approval access</option>
+                      {approvers.map((m) => <option key={m.id} value={m.id}>{m.name} · {roleLabel(m.role)}</option>)}
+                    </select>
+                  </div>
+                )}
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input data-testid="task-evidence-required" type="checkbox" className="h-4 w-4 accent-kr-ink" checked={form.evidence_required} onChange={(e) => setForm({ ...form, evidence_required: e.target.checked })} />
+                  Needs proof (photo, voice note or file) before it can be completed
+                </label>
+              </div>
+
+              <div>
+                <label className={`${lbl} flex items-center gap-1`} htmlFor="task-files"><Paperclip size={12} weight="bold" aria-hidden="true" /> Reference files</label>
+                <input id="task-files" data-testid="task-attachment-input" type="file" multiple className={`${inp} mt-1`} onChange={(e) => setFiles(Array.from(e.target.files || []))} />
+                <p className="mt-1 text-xs text-muted-foreground">Images, PDFs or documents for context. AI reads them and summarises what to do.</p>
+                {files.length > 0 && (
+                  <ul className="mt-2 space-y-1" data-testid="task-attachment-list">
+                    {files.map((f, i) => (
+                      <li key={`${f.name}-${f.size}-${f.lastModified}`} className="flex items-center justify-between gap-2 rounded-control bg-slate-500/[0.07] px-2.5 py-1.5 text-xs">
+                        <span className="truncate">{f.name}</span>
+                        <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} className="shrink-0 font-medium text-kr-accent">Remove</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           )}
-          {!form.assignee_id && (
-            <div>
-              <label className={lbl}>…or assign by team/role</label>
-              <select data-testid="task-role-select" className={`${inp} mt-1`} value={form.assignee_role} onChange={set("assignee_role")}>
-                <option value="">Any / unassigned</option>
-                {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
-              </select>
-            </div>
-          )}
-          <div className="kr-form-row kr-form-row--3">
-            <div>
-              <label className={lbl}>Priority</label>
-              <select data-testid="task-priority-select" className={`${inp} mt-1`} value={form.priority} onChange={set("priority")}>
-                {["low", "medium", "high"].map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={lbl}>Due date</label>
-              <input data-testid="task-due-date" type="date" className={`${inp} mt-1`} value={form.due_date} onChange={set("due_date")} />
-            </div>
-            <div>
-              <label className={lbl}>Due time</label>
-              <input data-testid="task-due-time" type="time" className={`${inp} mt-1`} value={form.due_time} onChange={set("due_time")} />
-            </div>
-          </div>
-          <input data-testid="task-expected-output" className={inp} placeholder="Expected output (e.g. Final deck in PDF)" value={form.expected_output} onChange={set("expected_output")} />
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input data-testid="task-approval-required" type="checkbox" className="w-4 h-4 border border-border" checked={form.approval_required} onChange={(e) => setForm({ ...form, approval_required: e.target.checked })} />
-            Approval required
-          </label>
-          {form.approval_required && (
-            <div data-testid="task-approver-wrap">
-              <label className={lbl}>Approver</label>
-              <select data-testid="task-approver-select" className={`${inp} mt-1`} value={form.approver_id} onChange={set("approver_id")}>
-                <option value="">— Anyone with approval access —</option>
-                {members.filter((m) => m.role === "owner" || userPerms(m).includes("approvals")).map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
-              </select>
-              <p className="label-mono text-muted-foreground mt-1">Grant approval access to a user in People → Access Control.</p>
-            </div>
-          )}
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input data-testid="task-evidence-required" type="checkbox" className="w-4 h-4 border border-border" checked={form.evidence_required} onChange={(e) => setForm({ ...form, evidence_required: e.target.checked })} />
-            Require proof of work before completion
-          </label>
-          <div>
-            <label className="label-mono text-muted-foreground flex items-center gap-1"><Paperclip size={12} weight="bold" /> Reference material (optional)</label>
-            <input data-testid="task-attachment-input" type="file" multiple className={`${inp} mt-1`} onChange={(e) => setFiles(Array.from(e.target.files || []))} />
-            <p className="label-mono text-muted-foreground mt-1">Attach images, PDFs or docs to give the assignee context. AI reads them and summarises what to do.</p>
-            {files.length > 0 && (
-              <ul className="mt-2 space-y-1" data-testid="task-attachment-list">
-                {files.map((f, i) => (
-                  <li key={`${f.name}-${f.size}-${f.lastModified}`} className="flex items-center justify-between gap-2 border border-border px-2 py-1 text-xs font-mono">
-                    <span className="truncate">{f.name}</span>
-                    <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} className="text-danger-600 font-bold shrink-0">Remove</button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <p className={lbl}>Created by: {user?.name}</p>
+
+          <p className={lbl}>Created by {user?.name}</p>
         </div>
         <DialogFooter>
           {/* KM-10 — ink, not brand-600 (the retired indigo), and a pill at

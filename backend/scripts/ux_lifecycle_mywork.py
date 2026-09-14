@@ -549,7 +549,9 @@ def phase_mobile(browser):
             `[data-testid="status-pill-m-${k}-${id}"]`)?.getAttribute('aria-pressed')""", [key, cid])
         rec(ph, f"mobile pill {key} sets the status", pressed == "true", f"aria-pressed={pressed}")
     shot(p, "11-mobile-pills")
-    for ctrl in (f"complete-m-{cid}", f"cancel-m-{cid}", f"log-update-m-{cid}",
+    # No cancel-m: the phone drawer's "Cancel this task" link is gone
+    # (2026-09-14, founder); Delete task at the drawer's foot is the one way out.
+    for ctrl in (f"complete-m-{cid}", f"log-update-m-{cid}",
                  f"photo-m-{cid}", f"voice-m-{cid}"):
         rec(ph, f"mobile control {ctrl.rsplit('-', 1)[0]} present",
             has(p, f"{ctrl}"))

@@ -282,7 +282,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
         className={`kr-bento flex flex-col border-0 [&>button.absolute]:hidden
-                   left-0 top-0 h-full max-h-none w-full max-w-none translate-x-0 translate-y-0 rounded-none
+                   left-0 top-0 h-full max-h-none w-full max-w-none translate-x-0 translate-y-0
                    [border-radius:0]
                    [padding-top:max(1rem,env(safe-area-inset-top))]
                    [padding-bottom:max(1rem,env(safe-area-inset-bottom))]

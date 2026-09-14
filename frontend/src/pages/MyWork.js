@@ -1896,17 +1896,19 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
     <Sheet open={expanded} onOpenChange={(o) => { if (!o && expanded) setExpanded(); }}>
       <SheetContent side="right"
         hideClose
-        /* MW-15 — w-[92%] below sm, not w-full. The in-header close fixed
-           the dead end, but at full width there is no scrim left to tap,
-           and tapping outside is the gesture a phone user reaches for
-           first. An 8% strip costs nothing and restores it, so the drawer
-           now has three ways out on a phone: the close, the scrim, and
-           Escape for anyone on a keyboard. */
+        /* 2026-09-14, founder — FULL SCREEN below lg: a task opens as its
+           own screen on a phone, not a side drawer like the desktop's. That
+           retires MW-15's 8% scrim strip; the ways out are the header close,
+           the phone's Back gesture (useBackDismiss in ui/sheet) and Escape.
+           sm:max-w-none cancels the right variant's sm:max-w-sm, so landscape
+           phones and tablets (still the phone shell) stay full screen too.
+           rounded-[0px], not rounded-none: index.css softens .rounded-none
+           to 0.5rem app-wide, which left 8px corners on a full screen. */
         /* ASK-27 — the founder's frosted sheet, with a rounded leading edge
-           and a long soft shadow onto the page. ASK-30: its wash is a light
-           neutral gray now, not blue-white — just dark enough that the
-           white pills sit visibly on top of it. */
-        className="w-[92%] overflow-hidden border-l-0 p-0 sm:w-full sm:max-w-2xl sm:rounded-l-[2rem] bg-[linear-gradient(165deg,hsl(0_0%_95%),hsl(0_0%_90.5%))] shadow-[-30px_0_80px_-30px_hsl(0_0%_0%/0.45)]"
+           and a long soft shadow onto the page, from lg up. ASK-30: its wash
+           is a light neutral gray now, not blue-white — just dark enough that
+           the white pills sit visibly on top of it. */
+        className="w-full max-w-none overflow-hidden rounded-[0px] border-l-0 p-0 sm:max-w-none lg:max-w-2xl lg:rounded-l-[2rem] bg-[linear-gradient(165deg,hsl(0_0%_95%),hsl(0_0%_90.5%))] lg:shadow-[-30px_0_80px_-30px_hsl(0_0%_0%/0.45)]"
         data-testid={`task-drawer-${t.id}`}
         /* MW-17 — the drawer supplies its own close, so send focus there on
            open. Without this Radix focuses the stock close. */
@@ -2081,15 +2083,10 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
 
       {/* Mobile PWA (2026-09-14) — Complete and the attach controls live in
           the sticky bar at the foot of the drawer (task-actions-m), so they
-          stay one thumb away however far the plan and activity run. Cancel
-          stays up here as a quiet text action, well away from Complete. */}
-      {!isTerminal(t) && !awaitingApproval && !signoffPending && !noteOnly && (
-        <button type="button" onClick={() => setStatus("cancelled")} data-testid={`cancel-m-${t.id}`}
-          className="flex h-11 items-center gap-1.5 px-1 text-sm font-medium text-slate-500 hover:text-slate-800">
-          <XCircle size={16} weight="bold" aria-hidden="true" /> Cancel this task
-        </button>
-      )}
-
+          stay one thumb away however far the plan and activity run.
+          2026-09-14, founder — no "Cancel this task" link: it read as a
+          second way to delete the task beside the Delete task pill at the
+          bottom, so the pill is the one way out, as on desktop. */}
       {attachmentBlocks("-m")}
       {reopenBlock("-m")}
 

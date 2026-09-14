@@ -1,1356 +1,118 @@
-import { useState, useMemo } from "react";
+// /finance — Finance, rebuilt end to end on the founder's reference
+// (2026-09-14).
+//
+// The shell: the section tabs (Overview, Revenue, Expenses, Assets,
+// Inventory, Inbox) as a glass track, a breadcrumb, the title and its line,
+// the period (Overview) and the Add record split button; Quick capture under
+// it; then the tab. The pieces live in pages/finance/*:
+//   ledgerMath        the period, change and trend arithmetic (honest windows)
+//   financeKit        the shared glass pieces
+//   FinanceOverview   KPI tiles, the AI brief, spend by category, top vendors
+//   FinanceAi         the AI brief / analysis, action items, ask
+//   FinanceRecords    Revenue, Expenses, Assets, Inventory
+//   FinanceForms      the Add dialogs and the Add record control
+//   ReviewPanel       review an uploaded document before filing it
+//
+// Two behaviour fixes ride along:
+//   * The tab lives in the URL (?tab=). Before, it was read once on mount, so
+//     every same-page link (a tile, "View all", /finance?tab=revenue&filter=
+//     overdue from the Desk) changed the address and not the page.
+//   * Adding works on a phone (the Add control was desktop-only) and the phone
+//     capture card's "Add expense" opens the dialog (it clicked a selector
+//     nothing carried — FN-08).
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useSearchParams, Link, useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import api from "../lib/api";
-import { lex } from "../lib/lexicon";
-import { useAuth } from "../context/AuthContext";
-import { PageHeader, Chip, EmptyState, StickyHeader } from "../components/common";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import {
-  Plus, Sparkle, Package, Receipt, TrendUp, Trash, Buildings, Robot,
-  Paperclip, ArrowClockwise, PaperPlaneRight, WarningCircle, Brain, CaretDown, ListPlus,
-  CurrencyDollar, Coins,
-  CaretRight, ArrowRight,  // KR-14.16 · mobile overview
-  // Epic 2 Sprint 4: hero capture bar + Inbox tab
-  FilePdf, Camera, UploadSimple, Tray, WhatsappLogo,
+  ArrowRight, Buildings, CalendarBlank, Camera, CaretRight, ChartPieSlice, ChatCircleDots, CurrencyInr, FilePdf,
+  Package, Plus, Receipt, Sparkle, Tray, UploadSimple,
 } from "@phosphor-icons/react";
-// Epic 2 Sprint 4 (E2-24 / E2-25 / E2-26): pull Capture Review Queue,
-// upload ReviewPanel, and WhatsApp status card from Ingest.js so
-// document-capture lives on /finance as the merged surface.
-import { CaptureReview } from "./Captures";
-// E2-30 (2026-08-15): extracted from Ingest.js so it could be retired.
-import ReviewPanel from "./finance/ReviewPanel";
+import { cn } from "@/lib/utils";
+import api, { formatApiError } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
-import { formatApiError } from "../lib/api";
-import {
-  StatTile, ScoreMeter, DonutBreak, HistoryBand, DarkBand, IconChip,
-  DataList, // KM-4 — table on desktop, cards on a phone
-} from "../components/karma";
-
-// KR-10 — THE TWELVE HEXES ARE GONE.
-// Ledger carried `PALETTE`, a hand-picked twelve-colour list dealt to
-// categories and vendors BY INDEX. It came from nowhere the token file knows
-// about, it re-coloured a category the moment a bigger one appeared above it,
-// and twelve hues on a page about cash made spend read as a subway map.
-// Colour now comes from lib/chartTheme (which reads the tokens) and from
-// DonutBreak's single-hue opacity ramp, where the ORDER is the encoding.
-/* KM-34 — THE DELTA COLOURS, DARKENED FOR GLASS.
-   The mobile Finance cards moved from opaque tiles onto translucent glass over
-   a picture, and a translucent card cannot promise a background — so the text
-   on it has to carry the contrast itself. Measured against the darkest sky a
-   card scrolls over: the old pair read 2.43 (kr-accent) and 2.27
-   (hsl(140 45% 35%)) against a 4.5 requirement.
-
-   --kr-accent is not the fix and cannot be: at hsl(19 100% 50%) its relative
-   luminance is 0.272, so its ceiling against PURE WHITE is 3.26 — it fails on
-   the app's cream canvas too, and its own token comment says what it is for
-   ("alerts, deltas, markers ONLY"). A marker is a shape you notice, not a
-   string you read. These two are for reading.
-
-   Hue is the reference's (its green core samples rgb(8,131,57) = hsl(144 88%
-   27%)) and the app's danger scale; only the lightness moved, far enough to
-   clear. Verified after the change, not just computed. */
-const UP_TEXT   = "text-[hsl(144_78%_18%)]";
-const DOWN_TEXT = "text-[hsl(var(--danger-900))]";
-
-const inp = "w-full nm-field px-3 py-2 text-sm";
-const label = "text-xs text-muted-foreground";
-
-const fmt = (cur) => (n) => {
-  try { return new Intl.NumberFormat(undefined, { style: "currency", currency: cur || "INR", maximumFractionDigits: 0 }).format(n || 0); }
-  catch { return `${cur || ""} ${Math.round(n || 0).toLocaleString()}`; }
-};
-
-// KR-10 — the provenance chip stops being a colour code. Where a capture came
-// from is metadata, not a status, and four tinted variants of it competed with
-// the money on the same row.
-const SOURCE_CHIP = {
-  manual: "bg-nm-sunken text-muted-foreground",
-  whatsapp: "bg-nm-sunken text-muted-foreground",
-  ingest: "bg-nm-sunken text-muted-foreground",
-  document: "bg-nm-sunken text-muted-foreground",
-};
-// Only `high` keeps the accent — that is the alert. Medium and low are
-// weight, not hue.
-const LEVEL_DOT = { high: "bg-kr-accent", medium: "bg-foreground/45", low: "bg-foreground/20" };
-const LEVEL_ACCENT = { high: "border-l-kr-accent", medium: "border-l-foreground/35", low: "border-l-foreground/15" };
-
-function Field({ label: l, children }) {
-  return <div><label className={label}>{l}</label><div className="mt-1">{children}</div></div>;
-}
-
-function FileField({ file, setFile }) {
-  const { t } = useTranslation();
-  return (
-    <Field label={t("finance.attach_label")}>
-      <label className="flex items-center gap-2 border border-dashed border-nm-edge/40 rounded-lg px-3 py-2.5 text-sm cursor-pointer hover:bg-accent/50">
-        <Paperclip size={15} weight="bold" />
-        <span className="truncate flex-1 text-muted-foreground">{file ? file.name : t("finance.attach_ph")}</span>
-        <input type="file" accept="image/*,application/pdf" className="hidden" data-testid="ledger-file-input" onChange={(e) => {
-          const sel = e.target.files?.[0] || null;
-          if (sel && sel.size > 15 * 1024 * 1024) { toast.error(t("finance.file_large")); return; }
-          if (sel && !/^image\//.test(sel.type) && sel.type !== "application/pdf") { toast.error(t("finance.file_type")); return; }
-          setFile(sel);
-        }} />
-      </label>
-      {file && <button type="button" onClick={() => setFile(null)} className="mt-1 text-xs text-kr-accent hover:underline">{t("finance.remove_attach")}</button>}
-    </Field>
-  );
-}
-
-function AttachmentLink({ att }) {
-  const { t } = useTranslation();
-  if (!att?.url) return null;
-  return (
-    <a href={`${process.env.REACT_APP_BACKEND_URL}${att.url}`} target="_blank" rel="noopener noreferrer" data-testid="view-attachment"
-      className="ml-2 inline-flex items-center gap-1 text-xs text-brand-blue hover:underline align-middle">
-      <Paperclip size={12} weight="bold" /> {t("finance.bill")}
-    </a>
-  );
-}
-
-// ---------- Add dialogs ----------
-function AddExpenseDialog({ categories, onDone }) {
-  const { t } = useTranslation();
-  const { tenant } = useAuth();
-  const L = lex(tenant);
-  const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ title: "", amount: "", vendor_name: "", category: "", date: "", status: "unpaid", notes: "" });
-  const [file, setFile] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [suggesting, setSuggesting] = useState(false);
-  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-  const reset = () => { setF({ title: "", amount: "", vendor_name: "", category: "", date: "", status: "unpaid", notes: "" }); setFile(null); };
-
-  const suggest = async () => {
-    const text = `${f.title} ${f.vendor_name} ${f.notes}`.trim();
-    if (!text) return toast.error(t("finance.add_title_first"));
-    setSuggesting(true);
-    try { const { data } = await api.post("/expenses/suggest-category", { text }); set("category", data.category); toast.success(t("finance.ai_suggests", { category: data.category })); }
-    catch { toast.error(t("finance.could_not_create")); } finally { setSuggesting(false); }
-  };
-  const save = async () => {
-    if (!f.title.trim() && !f.amount && !file) return toast.error(t("finance.need_expense"));
-    setBusy(true);
-    try {
-      const fd = new FormData();
-      Object.entries(f).forEach(([k, v]) => fd.append(k, v ?? ""));
-      if (file) fd.append("file", file);
-      await api.post("/expenses/with-file", fd);
-      toast.success(file ? t("finance.added_bill") : t("finance.expense_added"));
-      setOpen(false); reset(); onDone();
-    } catch (e) { toast.error(e.response?.data?.detail || t("finance.failed")); } finally { setBusy(false); }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
-      <DialogTrigger asChild>
-        <button data-testid="add-expense-btn" className="kr-lift flex w-full items-center justify-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all sm:w-auto">
-          <Plus size={16} weight="bold" /> {t("finance.add_expense")}
-        </button>
-      </DialogTrigger>
-      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-h-[calc(90vh/var(--ui-scale,1))] overflow-y-auto">
-        <DialogHeader><DialogTitle className="font-display text-xl">{t("finance.new_expense")}</DialogTitle><DialogDescription className="text-xs text-muted-foreground">{t("finance.new_expense_desc")}</DialogDescription></DialogHeader>
-        <div className="space-y-4">
-          <FileField file={file} setFile={setFile} />
-          <Field label={t("finance.c_title")}><input data-testid="expense-title" className={inp} value={f.title} onChange={(e) => set("title", e.target.value)} placeholder={t("finance.exp_title_ph")} /></Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={t("finance.c_amount")}><input data-testid="expense-amount" type="number" className={inp} value={f.amount} onChange={(e) => set("amount", e.target.value)} /></Field>
-            <Field label={t("finance.f_status")}>
-              <select className={inp} value={f.status} onChange={(e) => set("status", e.target.value)}>
-                <option value="unpaid">{t("finance.unpaid")}</option><option value="paid">{t("finance.paid")}</option>
-              </select>
-            </Field>
-          </div>
-          <Field label={t("finance.f_vendor", { vendor: L.vendor_singular })}><input data-testid="expense-vendor" className={inp} value={f.vendor_name} onChange={(e) => set("vendor_name", e.target.value)} /></Field>
-          <div>
-            <div className="flex items-center justify-between">
-              <label className={label}>{t("finance.c_category")}</label>
-              <button type="button" onClick={suggest} disabled={suggesting} data-testid="expense-suggest-category" className="flex items-center gap-1 text-xs font-semibold hover:underline disabled:opacity-50">
-                <Sparkle size={13} weight="bold" /> {suggesting ? t("finance.thinking") : t("finance.ai_suggest")}
-              </button>
-            </div>
-            <select data-testid="expense-category" className={`${inp} mt-1`} value={f.category} onChange={(e) => set("category", e.target.value)}>
-              <option value="">{t("finance.auto")}</option>
-              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={t("finance.c_date")}><input type="date" className={inp} value={f.date} onChange={(e) => set("date", e.target.value)} /></Field>
-          </div>
-          <Field label={t("finance.f_notes")}><textarea className={inp} rows={2} value={f.notes} onChange={(e) => set("notes", e.target.value)} /></Field>
-          <button onClick={save} disabled={busy} data-testid="expense-save" className="w-full kr-lift rounded-control bg-kr-ink py-2.5 text-sm font-medium text-white transition-all disabled:opacity-60">
-            {busy ? (file ? t("finance.ai_reading") : t("finance.saving")) : t("finance.save_expense")}
-          </button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function AddAssetDialog({ categories, onDone }) {
-  const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ name: "", purchase_amount: "", category: "Equipment", vendor_name: "", purchase_date: "", status: "active", notes: "" });
-  const [file, setFile] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-  const reset = () => { setF({ name: "", purchase_amount: "", category: "Equipment", vendor_name: "", purchase_date: "", status: "active", notes: "" }); setFile(null); };
-  const save = async () => {
-    if (!f.name.trim() && !file) return toast.error(t("finance.need_asset"));
-    setBusy(true);
-    try {
-      const fd = new FormData();
-      Object.entries(f).forEach(([k, v]) => fd.append(k, v ?? ""));
-      if (file) fd.append("file", file);
-      await api.post("/assets/with-file", fd);
-      toast.success(file ? t("finance.asset_added_bill") : t("finance.asset_added"));
-      setOpen(false); reset(); onDone();
-    } catch (e) { toast.error(e.response?.data?.detail || t("finance.failed")); } finally { setBusy(false); }
-  };
-  return (
-    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
-      <DialogTrigger asChild>
-        <button data-testid="add-asset-btn" className="kr-lift flex w-full items-center justify-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all sm:w-auto">
-          <Plus size={16} weight="bold" /> {t("finance.add_asset")}
-        </button>
-      </DialogTrigger>
-      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-h-[calc(90vh/var(--ui-scale,1))] overflow-y-auto">
-        <DialogHeader><DialogTitle className="font-display text-xl">{t("finance.new_asset")}</DialogTitle><DialogDescription className="text-xs text-muted-foreground">{t("finance.new_asset_desc")}</DialogDescription></DialogHeader>
-        <div className="space-y-4">
-          <FileField file={file} setFile={setFile} />
-          <Field label={t("finance.asset_name")}><input data-testid="asset-name" className={inp} value={f.name} onChange={(e) => set("name", e.target.value)} placeholder={t("finance.asset_name_ph")} /></Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={t("finance.purchase_amount")}><input data-testid="asset-amount" type="number" className={inp} value={f.purchase_amount} onChange={(e) => set("purchase_amount", e.target.value)} /></Field>
-            <Field label={t("finance.c_category")}>
-              <select data-testid="asset-category" className={inp} value={f.category} onChange={(e) => set("category", e.target.value)}>
-                {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </Field>
-          </div>
-          <Field label={t("finance.c_vendor")}><input className={inp} value={f.vendor_name} onChange={(e) => set("vendor_name", e.target.value)} /></Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={t("finance.purchase_date")}><input type="date" className={inp} value={f.purchase_date} onChange={(e) => set("purchase_date", e.target.value)} /></Field>
-            <Field label={t("finance.f_status")}>
-              <select className={inp} value={f.status} onChange={(e) => set("status", e.target.value)}>
-                <option value="active">{t("finance.active")}</option><option value="maintenance">{t("finance.maintenance")}</option><option value="disposed">{t("finance.disposed")}</option>
-              </select>
-            </Field>
-          </div>
-          <button onClick={save} disabled={busy} data-testid="asset-save" className="w-full kr-lift rounded-control bg-kr-ink py-2.5 text-sm font-medium text-white transition-all disabled:opacity-60">
-            {busy ? (file ? t("finance.ai_reading") : t("finance.saving")) : t("finance.save_asset")}
-          </button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function AddInventoryDialog({ onDone }) {
-  const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ item: "", sku: "", quantity: "", unit: "unit", unit_cost: "", category: "", vendor_name: "", notes: "" });
-  const [file, setFile] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-  const reset = () => { setF({ item: "", sku: "", quantity: "", unit: "unit", unit_cost: "", category: "", vendor_name: "", notes: "" }); setFile(null); };
-  const save = async () => {
-    if (!f.item.trim() && !file) return toast.error(t("finance.need_item"));
-    setBusy(true);
-    try {
-      const fd = new FormData();
-      Object.entries(f).forEach(([k, v]) => fd.append(k, v ?? ""));
-      if (file) fd.append("file", file);
-      await api.post("/inventory/with-file", fd);
-      toast.success(file ? t("finance.inv_added_bill") : t("finance.inv_added"));
-      setOpen(false); reset(); onDone();
-    } catch (e) { toast.error(e.response?.data?.detail || t("finance.failed")); } finally { setBusy(false); }
-  };
-  return (
-    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
-      <DialogTrigger asChild>
-        <button data-testid="add-inventory-btn" className="kr-lift flex w-full items-center justify-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all sm:w-auto">
-          <Plus size={16} weight="bold" /> {t("finance.add_item")}
-        </button>
-      </DialogTrigger>
-      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-h-[calc(90vh/var(--ui-scale,1))] overflow-y-auto">
-        <DialogHeader><DialogTitle className="font-display text-xl">{t("finance.new_inv")}</DialogTitle><DialogDescription className="text-xs text-muted-foreground">{t("finance.new_inv_desc")}</DialogDescription></DialogHeader>
-        <div className="space-y-4">
-          <FileField file={file} setFile={setFile} />
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={t("finance.i_item")}><input data-testid="inv-item" className={inp} value={f.item} onChange={(e) => set("item", e.target.value)} /></Field>
-            <Field label={t("finance.i_sku")}><input className={inp} value={f.sku} onChange={(e) => set("sku", e.target.value)} /></Field>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <Field label={t("finance.quantity")}><input data-testid="inv-qty" type="number" className={inp} value={f.quantity} onChange={(e) => set("quantity", e.target.value)} /></Field>
-            <Field label={t("finance.unit")}><input className={inp} value={f.unit} onChange={(e) => set("unit", e.target.value)} /></Field>
-            <Field label={t("finance.unit_cost")}><input data-testid="inv-cost" type="number" className={inp} value={f.unit_cost} onChange={(e) => set("unit_cost", e.target.value)} /></Field>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={t("finance.c_category")}><input className={inp} value={f.category} onChange={(e) => set("category", e.target.value)} /></Field>
-            <Field label={t("finance.c_vendor")}><input className={inp} value={f.vendor_name} onChange={(e) => set("vendor_name", e.target.value)} /></Field>
-          </div>
-          <button onClick={save} disabled={busy} data-testid="inv-save" className="w-full kr-lift rounded-control bg-kr-ink py-2.5 text-sm font-medium text-white transition-all disabled:opacity-60">
-            {busy ? (file ? t("finance.ai_reading") : t("finance.saving")) : t("finance.save_item")}
-          </button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function AddIncomeDialog({ onDone }) {
-  const { tenant } = useAuth();
-  const L = lex(tenant);
-  const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ title: "", customer_name: "", amount: "", number: "", date: "", due_date: "", status: "unpaid", notes: "" });
-  const [file, setFile] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-  const reset = () => { setF({ title: "", customer_name: "", amount: "", number: "", date: "", due_date: "", status: "unpaid", notes: "" }); setFile(null); };
-  const save = async () => {
-    if (!f.title.trim() && !f.amount && !f.customer_name.trim() && !file) return toast.error("Add a title, customer or amount");
-    setBusy(true);
-    try {
-      const fd = new FormData();
-      Object.entries(f).forEach(([k, v]) => fd.append(k, v ?? ""));
-      if (file) fd.append("file", file);
-      await api.post("/revenue/with-file", fd);
-      toast.success(file ? "Income recorded from the invoice" : "Income recorded");
-      setOpen(false); reset(); onDone();
-    } catch (e) { toast.error(e.response?.data?.detail || "Could not record income"); } finally { setBusy(false); }
-  };
-  return (
-    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
-      <DialogTrigger asChild>
-        <button data-testid="add-income-btn" className="kr-lift flex w-full items-center justify-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all sm:w-auto">
-          <Plus size={16} weight="bold" /> Add income
-        </button>
-      </DialogTrigger>
-      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-h-[calc(90vh/var(--ui-scale,1))] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="font-display text-xl">Record sale / service income</DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">Money coming IN. Attach a sales invoice and AI will read the amount & customer, or type it in.</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          <FileField file={file} setFile={setFile} />
-          <Field label="What was it for"><input data-testid="income-title" className={inp} value={f.title} onChange={(e) => set("title", e.target.value)} placeholder="e.g. Design retainer · Order #204" /></Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Amount"><input data-testid="income-amount" type="number" className={inp} value={f.amount} onChange={(e) => set("amount", e.target.value)} /></Field>
-            <Field label="Payment status">
-              <select data-testid="income-status" className={inp} value={f.status} onChange={(e) => set("status", e.target.value)}>
-                <option value="unpaid">Awaiting payment</option>
-                <option value="paid">Received</option>
-              </select>
-            </Field>
-          </div>
-          <Field label={`${L.customer_singular} name`}><input data-testid="income-customer" className={inp} value={f.customer_name} onChange={(e) => set("customer_name", e.target.value)} /></Field>
-          <div className="grid grid-cols-3 gap-3">
-            <Field label="Invoice #"><input className={inp} value={f.number} onChange={(e) => set("number", e.target.value)} /></Field>
-            <Field label="Date"><input type="date" className={inp} value={f.date} onChange={(e) => set("date", e.target.value)} /></Field>
-            <Field label="Due date"><input type="date" className={inp} value={f.due_date} onChange={(e) => set("due_date", e.target.value)} /></Field>
-          </div>
-          <button onClick={save} disabled={busy} data-testid="income-save" className="w-full kr-lift rounded-control bg-kr-ink py-2.5 text-sm font-medium text-white transition-all disabled:opacity-60">
-            {busy ? (file ? "AI reading…" : "Saving…") : "Save income"}
-          </button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-
-// ---------- AI insight pointers (create task / ask) ----------
-function CreateTaskFromInsight({ insight, members, roleOptions }) {
-  const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [desc, setDesc] = useState("");
-  const [assignee, setAssignee] = useState("");
-  const [priority, setPriority] = useState("medium");
-  const [busy, setBusy] = useState(false);
-
-  const openDialog = () => {
-    setTitle(insight.action || insight.title || "");
-    setDesc(insight.detail || "");
-    setPriority(insight.level === "high" ? "high" : insight.level === "low" ? "low" : "medium");
-    setAssignee("");
-    setOpen(true);
-  };
-  const save = async () => {
-    if (!title.trim()) return toast.error(t("finance.task_title_required"));
-    setBusy(true);
-    const payload = { title: title.trim(), description: desc.trim(), priority };
-    if (assignee.startsWith("user:")) payload.assignee_id = assignee.slice(5);
-    else if (assignee.startsWith("role:")) payload.assignee_role = assignee.slice(5);
-    try { await api.post("/tasks", payload); toast.success(t("finance.task_created")); setOpen(false); }
-    catch (e) { toast.error(e.response?.data?.detail || t("finance.could_not_create")); } finally { setBusy(false); }
-  };
-
-  return (
-    <>
-      <button onClick={openDialog} data-testid="insight-create-task" className="flex items-center gap-1.5 text-xs font-medium kr-lift rounded-pill bg-kr-ink px-3 py-1.5 text-white transition-all">
-        <ListPlus size={13} weight="bold" /> {t("finance.create_task")}
-      </button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="rounded-cardlg border border-nm-edge/40">
-          <DialogHeader><DialogTitle className="font-display text-xl">{t("finance.new_task_insight")}</DialogTitle><DialogDescription className="text-xs text-muted-foreground">{t("finance.new_task_insight_desc")}</DialogDescription></DialogHeader>
-          <div className="space-y-4">
-            <Field label={t("finance.task_title")}><input data-testid="insight-task-title" className={inp} value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
-            <Field label={t("finance.description")}><textarea className={inp} rows={3} value={desc} onChange={(e) => setDesc(e.target.value)} /></Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label={t("finance.assign_to")}>
-                <select className={inp} value={assignee} onChange={(e) => setAssignee(e.target.value)} data-testid="insight-task-assignee">
-                  <option value="">{t("finance.unassigned")}</option>
-                  {roleOptions.map((r) => <option key={`role:${r.key}`} value={`role:${r.key}`}>{t("finance.team_suffix", { role: r.label })}</option>)}
-                  {members.map((m) => <option key={`user:${m.id}`} value={`user:${m.id}`}>{m.name}</option>)}
-                </select>
-              </Field>
-              <Field label={t("finance.priority")}>
-                <select className={inp} value={priority} onChange={(e) => setPriority(e.target.value)}>
-                  <option value="low">{t("finance.low")}</option><option value="medium">{t("finance.medium")}</option><option value="high">{t("finance.high")}</option>
-                </select>
-              </Field>
-            </div>
-            <button onClick={save} disabled={busy} data-testid="insight-task-save" className="w-full kr-lift rounded-control bg-kr-ink py-2.5 text-sm font-medium text-white transition-all disabled:opacity-60">
-              {busy ? t("finance.creating") : t("finance.create_task")}
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
-function InsightCard({ insight, scope, idx, members, roleOptions, onAsk }) {
-  const { t } = useTranslation();
-  const LEVEL_LABEL = { high: t("finance.urgent"), medium: t("finance.important"), low: t("finance.fyi") };
-  const [open, setOpen] = useState(false);
-  return (
-    <div className={`nm-tile border-l-4 ${LEVEL_ACCENT[insight.level] || "border-l-black"} rounded-lg bg-nm overflow-hidden transition-shadow`} data-testid={`ai-alert-${scope}-${idx}`}>
-      <button onClick={() => setOpen((o) => !o)} data-testid={`insight-toggle-${scope}-${idx}`} className="w-full flex items-center gap-3 p-3 text-left hover:bg-accent/50 transition-colors">
-        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${LEVEL_DOT[insight.level] || "bg-black"}`} title={LEVEL_LABEL[insight.level]} />
-        <span className="flex-1 min-w-0 font-semibold text-sm leading-snug">{insight.title}</span>
-        <span className="hidden sm:inline label-mono text-[10px] text-muted-foreground shrink-0">{LEVEL_LABEL[insight.level] || ""}</span>
-        <CaretDown size={16} weight="bold" className={`shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && (
-        <div className="px-4 pb-3 space-y-3">
-          {insight.detail && <p className="text-sm text-muted-foreground leading-relaxed">{insight.detail}</p>}
-          <div className="flex flex-wrap gap-2">
-            <CreateTaskFromInsight insight={insight} members={members} roleOptions={roleOptions} />
-            <button onClick={() => onAsk(insight.title)} data-testid={`insight-ask-${scope}-${idx}`} className="flex items-center gap-1.5 text-xs font-medium nm-tile px-3 py-1.5 hover:bg-accent transition-colors">
-              <Brain size={13} weight="bold" /> {t("finance.ask_ai")}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------- AI Analysis panel (shared: brief + per-tab) ----------
-function AiPanel({ scope, variant = "inline" }) {
-  const { t } = useTranslation();
-  const qc = useQueryClient();
-  const { tenant } = useAuth();
-  const [q, setQ] = useState("");
-  const [answer, setAnswer] = useState("");
-  const [asking, setAsking] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const { data, isLoading } = useQuery({
-    queryKey: ["ledger-ai", scope],
-    queryFn: () => api.get(`/ledger/ai/${scope}`).then((r) => r.data),
-    staleTime: Infinity,
-  });
-  const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data), retry: false });
-  const members = usersQ.data || [];
-  const roleOptions = [{ key: "owner", label: "Owner" }, ...(tenant?.roles || [])];
-  const isBrief = variant === "brief";
-
-  const headline = data?.headline || data?.summary || "";
-  const insights = data?.insights || [
-    ...((data?.alerts) || []).map((a) => ({ level: a.level || "medium", title: a.title, detail: a.detail, action: a.title })),
-    ...((data?.recommendations) || []).map((r) => ({ level: "low", title: r.title, detail: r.detail, action: r.title })),
-  ];
-
-  const refresh = async () => {
-    setRefreshing(true);
-    try { const { data: d } = await api.post(`/ledger/ai/${scope}/refresh`); qc.setQueryData(["ledger-ai", scope], d); toast.success(t("finance.refreshed")); }
-    catch { toast.error(t("finance.refresh_failed")); } finally { setRefreshing(false); }
-  };
-  const ask = async (question) => {
-    const query = (typeof question === "string" ? question : q).trim();
-    if (!query) return;
-    setQ(query); setAsking(true); setAnswer("");
-    try { const { data: d } = await api.post("/ledger/ask", { question: query, scope }); setAnswer(d.answer); }
-    catch (e) { toast.error(e.response?.data?.detail || t("finance.ai_busy")); } finally { setAsking(false); }
-  };
-  const onAsk = (title) => ask(`Tell me more and what should I do about: ${title}`);
-
-  return (
-    /* KR-10 — a .kr-well, not a card. Finance's AI panel is something to
-       READ; the pit is the material this system now uses to say so, matching
-       /inbox's insight well and Ops's "Do these first". */
-    <div className="kr-well" data-testid={`ai-panel-${scope}`}>
-    <div className={`kr-well__pane ${isBrief ? "p-6" : "p-5"} space-y-5`}>
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Sparkle size={isBrief ? 20 : 17} weight="regular" aria-hidden="true" />
-          <h3 className={`font-medium ${isBrief ? "text-base" : "text-sm"}`}>{isBrief ? t("finance.finance_brief") : t("finance.ai_analysis")}</h3>
-        </div>
-        <div className="flex items-center gap-2">
-          {data?.generated_at && <span className="text-[11px] text-muted-foreground hidden sm:inline">{t("finance.updated", { time: new Date(data.generated_at).toLocaleString() })}</span>}
-          <button onClick={refresh} disabled={refreshing} data-testid={`ai-refresh-${scope}`} className="kr-pop flex items-center gap-1 rounded-pill px-3 py-2 text-xs font-semibold disabled:opacity-50">
-            <ArrowClockwise size={13} weight="bold" aria-hidden="true" className={refreshing ? "animate-spin" : ""} /> {refreshing ? t("finance.analysing") : t("finance.refresh")}
-          </button>
-        </div>
-      </div>
-
-      {isLoading ? (
-        <p className="font-mono text-sm text-muted-foreground">{t("finance.analysing_fin")}</p>
-      ) : (
-        <>
-          {headline && <p className={`${isBrief ? "text-base" : "text-sm"} font-semibold leading-snug`} data-testid={`ai-summary-${scope}`}>{headline}</p>}
-
-          {insights.length > 0 && (
-            <div>
-              <div className="flex items-center gap-1.5 mb-2 text-muted-foreground"><WarningCircle size={15} weight="bold" /><span className="label-mono text-xs">{t("finance.action_items")}</span></div>
-              <div className="space-y-2">
-                {insights.map((it, i) => (
-                  <InsightCard key={`${it.title || ""}-${i}`} insight={it} scope={scope} idx={i} members={members} roleOptions={roleOptions} onAsk={onAsk} />
-                ))}
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      <div className="border-t border-foreground/12 pt-4">
-        <div className="flex items-center gap-1.5 mb-2 text-muted-foreground"><Brain size={15} weight="bold" /><span className="label-mono text-xs">{scope === "brief" ? t("finance.ask_about_fin") : t("finance.ask_about", { scope })}</span></div>
-        <div className="flex gap-2">
-          <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask()} data-testid={`ai-ask-input-${scope}`} placeholder={t("finance.ask_ph")} className={inp} />
-          <button onClick={() => ask()} disabled={asking} data-testid={`ai-ask-btn-${scope}`} className="kr-lift flex shrink-0 items-center gap-1.5 rounded-pill bg-kr-ink px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-            <PaperPlaneRight size={15} weight="bold" aria-hidden="true" /> {asking ? "…" : t("finance.ask_btn")}
-          </button>
-        </div>
-        {answer && <div className="mt-3 rounded-control bg-white/45 p-3 text-sm leading-relaxed" data-testid={`ai-answer-${scope}`}>{answer}</div>}
-      </div>
-    </div>
-    </div>
-  );
-}
-
-// ---------- Sub-views ----------
-/**
- * KR-10 — the money KPIs become Karma StatTiles.
- *
- * The old ones painted revenue green, spend indigo and net profit green-or-
- * indigo. Six tiles, four hues, and the hue said nothing the number did not:
- * revenue is always revenue. Colour now appears ONLY when net profit is
- * negative or receivables are overdue, which is the one moment a finance page
- * genuinely needs to raise its voice.
- */
-function KpiRow({ summary }) {
-  const { t } = useTranslation();
-  const f = fmt(summary.currency);
-  const tt = summary.totals;
-  const net = tt.net_profit ?? ((tt.revenue_billed || 0) - (tt.total_spend || 0));
-  return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3" data-testid="ledger-kpis">
-      <StatTile icon={CurrencyDollar} label="Revenue billed" value={f(tt.revenue_billed || 0)} to="/finance?tab=revenue" testid="kpi-revenue" />
-      <StatTile icon={Receipt} label="Received" value={f(tt.revenue_received || 0)} to="/finance?tab=revenue" testid="kpi-received" />
-      <StatTile
-        icon={Coins}
-        label="Net profit"
-        value={f(net)}
-        urgent={net < 0}
-        alert={net < 0}
-        to="/finance?tab=expenses"
-        testid="kpi-net-profit"
-      />
-      <StatTile icon={TrendUp} label={t("finance.k_spend")} value={f(tt.total_spend)} to="/finance?tab=expenses" testid="kpi-spend" />
-      <StatTile icon={Buildings} label={t("finance.k_asset")} value={f(tt.asset_value)} to="/finance?tab=assets" testid="kpi-assets" />
-      <StatTile icon={Package} label={t("finance.k_inv")} value={f(tt.inventory_value)} to="/finance?tab=inventory" testid="kpi-inventory" />
-    </div>
-  );
-}
-
-/** The compact tile the Revenue tab uses — same material, no destination. */
-function MoneyTile({ icon, label: l, value, urgent = false, testid }) {
-  return (
-    <div className="nm-tile p-4 sm:p-5" data-testid={testid}>
-      <div className="flex items-start justify-between gap-3">
-        <IconChip icon={icon} size={34} alert={urgent} />
-      </div>
-      <p className="mt-3 text-sm text-muted-foreground">{l}</p>
-      <p className={`mt-1 font-mono text-2xl font-semibold tabular-nums ${urgent ? "text-kr-ink/80" : ""}`}>{value}</p>
-    </div>
-  );
-}
-
-function InvoicePicker({ open, value, onChange, cur, testid }) {
-  const f = fmt(cur);
-  const [q, setQ] = useState("");
-  const [show, setShow] = useState(false);
-  const sel = open.find((o) => o.id === value);
-  const label = (o) => (o.number ? `#${o.number} · ` : "") + (o.contact_name || o.title || "Invoice") + ` · bal ${f(o.balance)}`;
-  const filtered = open.filter((o) => label(o).toLowerCase().includes(q.toLowerCase()));
-  return (
-    <div className="relative" data-testid={testid}>
-      <button type="button" onClick={() => setShow((s) => !s)} data-testid={`${testid}-toggle`}
-        className={`${inp} w-full sm:w-[240px] text-left flex items-center justify-between gap-1`}>
-        <span className={`truncate ${sel ? "" : "text-muted-foreground"}`}>{sel ? label(sel) : "Match to invoice…"}</span>
-        <CaretDown size={14} weight="bold" />
-      </button>
-      {show && (
-        <div className="absolute z-30 mt-1 w-full sm:w-[280px] bg-nm nm-tile shadow-md max-h-64 overflow-hidden flex flex-col">
-          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} data-testid={`${testid}-search`}
-            placeholder="Search invoice # or name…" className="px-3 py-2 text-sm border-b border-nm-edge/40 focus:outline-none bg-transparent" />
-          <div className="overflow-y-auto">
-            {filtered.length === 0 && <div className="px-3 py-3 text-xs text-muted-foreground">No matching invoices</div>}
-            {filtered.map((o) => (
-              <button key={o.id} type="button" data-testid={`${testid}-opt-${o.id}`}
-                onClick={() => { onChange(o.id); setShow(false); setQ(""); }}
-                className="block w-full text-left px-3 py-2 text-sm hover:bg-kr-ink hover:text-white transition-colors border-b border-nm-edge/40/50">
-                {label(o)}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function NeedsMatchingPanel({ title, hint, unmatched, open, cur, endpoint, standaloneLabel, onChange, testid }) {
-  const f = fmt(cur);
-  const [picks, setPicks] = useState({});
-  const [busy, setBusy] = useState(null);
-  if (!unmatched || unmatched.length === 0) return null;
-
-  const match = async (pid) => {
-    const invoice_id = picks[pid];
-    if (!invoice_id) return toast.error("Pick an invoice to match");
-    setBusy(pid);
-    try {
-      const { data } = await api.post(`${endpoint}/${pid}/match`, { invoice_id });
-      toast.success(data.payment_remaining > 0.01 ? `Matched — ${f(data.payment_remaining)} still to match` : "Payment matched");
-      setPicks((s) => ({ ...s, [pid]: "" })); onChange();
-    } catch (e) { toast.error(e.response?.data?.detail || "Could not match"); } finally { setBusy(null); }
-  };
-  const standalone = async (pid) => {
-    setBusy(pid);
-    try { await api.post(`${endpoint}/${pid}/standalone`); toast.success(standaloneLabel.done); onChange(); }
-    catch { toast.error("Could not update"); } finally { setBusy(null); }
-  };
-
-  return (
-    <div className="nm-tile border-l-[3px] border-l-foreground/45 p-4" data-testid={testid}>
-      <div className="flex items-center gap-2 mb-1">
-        <WarningCircle size={18} weight="regular" aria-hidden="true" className="text-muted-foreground" />
-        <h3 className="text-sm font-medium">{title} ({unmatched.length})</h3>
-      </div>
-      <p className="text-xs text-muted-foreground mb-3">{hint}</p>
-      <div className="space-y-2">
-        {unmatched.map((p) => (
-          <div key={p.id} className="flex flex-wrap items-center gap-2 bg-nm nm-btn p-2" data-testid={`${testid}-item-${p.id}`}>
-            <span className="text-sm font-semibold">{f(p.remaining ?? p.amount)}</span>
-            <span className="text-xs text-muted-foreground flex-1 min-w-0 truncate">{p.contact_name || "Unknown"}{p.date ? ` · ${p.date}` : ""}{p.invoice_number ? ` · ref ${p.invoice_number}` : ""}{p.applied > 0 ? ` · ${f(p.applied)} already applied` : ""}</span>
-            <InvoicePicker open={open} value={picks[p.id] || ""} onChange={(v) => setPicks((s) => ({ ...s, [p.id]: v }))} cur={cur} testid={`match-picker-${p.id}`} />
-            <button onClick={() => match(p.id)} disabled={busy === p.id} data-testid={`match-btn-${p.id}`} className="px-3 py-1.5 text-xs font-medium kr-lift rounded-pill bg-kr-ink text-white transition-all disabled:opacity-50">Match</button>
-            <button onClick={() => standalone(p.id)} disabled={busy === p.id} data-testid={`standalone-btn-${p.id}`} className="px-3 py-1.5 text-xs font-medium nm-tile hover:bg-accent transition-all disabled:opacity-50">{standaloneLabel.btn}</button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// U7-08.1 (2026-08-17): overdue = awaiting invoice past this many days.
-// MSME payment terms in India are commonly Net 30; we treat "awaiting >
-// 30d" as the first visual flag. A stricter tenant can override later
-// by pushing terms into the invoice model, but the flat 30d rule catches
-// the common case without needing per-invoice due dates.
-const REVENUE_OVERDUE_DAYS = 30;
-
-function daysSinceIso(iso) {
-  if (!iso) return null;
-  const t = new Date(iso).getTime();
-  if (!t || Number.isNaN(t)) return null;
-  const d = Math.floor((Date.now() - t) / 86400000);
-  return d < 0 ? null : d;
-}
-
-function RevenueTab({ data, cur, onDelete, onChange, initialFilter = "all" }) {
-  const f = fmt(cur);
-  const tt = data?.totals || {};
-  const invoices = data?.invoices || [];
-  const payments = data?.payments || [];
-
-  // U7-08.1: status filter + sort control. Founder ask: fix the Revenue
-  // invoices UI/UX. A 5-invoice tenant is fine flat, but the moment
-  // they cross ~20 open invoices the flat table loses. Filters land now
-  // so the pattern scales with the tenant, not later.
-  const [statusFilter, setStatusFilter] = useState(initialFilter);  // all | awaiting | partial | paid | overdue
-  const [sortKey, setSortKey] = useState("date-desc");       // date-desc | date-asc | amount-desc | overdue
-
-  // KR-10 — three tints for three states put a traffic light on every row of
-  // a table the founder scans for AMOUNTS. Received is the settled state and
-  // wears the solid ink; the two unsettled states are outlines, distinguished
-  // by their label. Overdue keeps the accent — see the badge below.
-  const invStatus = (s) => s.status === "paid" ? { label: "received", cls: "bg-kr-ink text-white" }
-    : s.status === "partial" ? { label: "partial", cls: "border-[0.5px] border-kr-ink text-foreground" }
-    : { label: "awaiting", cls: "border-[0.5px] border-kr-ink/55 text-foreground/70" };
-
-  const isOverdue = (s) => s.status !== "paid" && (daysSinceIso(s.date) || 0) > REVENUE_OVERDUE_DAYS;
-  const overdueCount = invoices.filter(isOverdue).length;
-
-  // Bucket counts for the filter strip -- shown even when 0 so the tenant
-  // sees "Overdue: 0" as reassurance, not a hidden control.
-  const counts = {
-    all: invoices.length,
-    awaiting: invoices.filter((s) => s.status !== "paid" && s.status !== "partial").length,
-    partial: invoices.filter((s) => s.status === "partial").length,
-    paid: invoices.filter((s) => s.status === "paid").length,
-    overdue: overdueCount,
-  };
-
-  const filtered = useMemo(() => {
-    let list = invoices;
-    if (statusFilter === "overdue") list = list.filter(isOverdue);
-    else if (statusFilter === "awaiting") list = list.filter((s) => s.status !== "paid" && s.status !== "partial");
-    else if (statusFilter === "partial") list = list.filter((s) => s.status === "partial");
-    else if (statusFilter === "paid") list = list.filter((s) => s.status === "paid");
-    const sorted = [...list];
-    if (sortKey === "date-desc") sorted.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
-    else if (sortKey === "date-asc") sorted.sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
-    else if (sortKey === "amount-desc") sorted.sort((a, b) => (b.amount || 0) - (a.amount || 0));
-    else if (sortKey === "overdue") sorted.sort((a, b) => (daysSinceIso(b.date) || 0) - (daysSinceIso(a.date) || 0));
-    return sorted;
-
-  }, [invoices, statusFilter, sortKey]);
-
-  const filteredTotal = filtered.reduce((sum, s) => sum + (s.amount || 0), 0);
-
-  const FILTERS = [
-    { key: "all", label: "All", count: counts.all },
-    { key: "awaiting", label: "Awaiting", count: counts.awaiting },
-    { key: "partial", label: "Partial", count: counts.partial },
-    { key: "paid", label: "Received", count: counts.paid },
-    { key: "overdue", label: "Overdue", count: counts.overdue, danger: true },
-  ];
-
-  return (
-    <div className="space-y-6" data-testid="ledger-revenue">
-      {/* KR-10 — the three tiles are monochrome. Money-in is not "good" and
-          outstanding is not "attention"; they are both just amounts, and
-          tinting them made the row compete with the overdue callout directly
-          below, which IS the alarm. Outstanding wears the alert chip only
-          when something is actually overdue. */}
-      <div className="grid grid-cols-3 gap-3">
-        <MoneyTile icon={CurrencyDollar} label="Billed" value={f(tt.billed || 0)} testid="kpi-billed" />
-        <MoneyTile icon={Receipt} label="Received" value={f(tt.received || 0)} testid="kpi-received-rev" />
-        <MoneyTile icon={WarningCircle} label="Outstanding" value={f(tt.outstanding || 0)} urgent={overdueCount > 0} testid="kpi-outstanding" />
-      </div>
-
-      {overdueCount > 0 && (
-        <button
-          type="button"
-          onClick={() => setStatusFilter("overdue")}
-          data-testid="revenue-overdue-callout"
-          className="w-full flex items-center gap-2 rounded-control border-l-[3px] border-kr-accent bg-kr-accent/10 px-4 py-2.5 text-sm font-medium transition-colors hover:bg-kr-accent/15"
-        >
-          <WarningCircle size={16} weight="bold" />
-          {overdueCount} invoice{overdueCount === 1 ? "" : "s"} overdue &gt; {REVENUE_OVERDUE_DAYS} days
-          <span className="ml-auto text-xs font-mono normal-case tracking-normal">Show only overdue →</span>
-        </button>
-      )}
-
-      <NeedsMatchingPanel title="Needs matching" testid="revenue-needs-matching"
-        hint="These received payments couldn’t be auto-linked to an invoice. Pick the right one, or mark it as standalone income."
-        unmatched={data?.unmatched_payments} open={data?.open_invoices || []} cur={cur}
-        endpoint="/revenue/payment" standaloneLabel={{ btn: "Standalone income", done: "Marked as standalone income" }}
-        onChange={onChange} />
-
-      <AiPanel scope="revenue" />
-
-      <div>
-        <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
-          <h3 className="text-sm font-medium">
-            Sales &amp; Service Invoices ({invoices.length})
-          </h3>
-          {invoices.length > 0 && (
-            <div className="flex items-center gap-2 text-xs">
-              <span className="label-mono text-muted-foreground">Sort</span>
-              <select
-                value={sortKey}
-                onChange={(e) => setSortKey(e.target.value)}
-                data-testid="revenue-sort"
-                className="nm-tile px-2 py-1 focus:outline-none focus:shadow-sm text-xs"
-              >
-                <option value="date-desc">Newest first</option>
-                <option value="date-asc">Oldest first</option>
-                <option value="amount-desc">Amount (highest)</option>
-                <option value="overdue">Oldest awaiting</option>
-              </select>
-            </div>
-          )}
-        </div>
-
-        {invoices.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 mb-3" data-testid="revenue-status-filter">
-            {FILTERS.map((f) => {
-              const active = statusFilter === f.key;
-              const zero = f.count === 0;
-              const dangerActive = f.danger && f.count > 0;
-              return (
-                <button
-                  key={f.key}
-                  type="button"
-                  onClick={() => setStatusFilter(f.key)}
-                  data-testid={`revenue-filter-${f.key}`}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium border transition-colors ${
-                    active
-                      ? (dangerActive ? "border-kr-accent bg-kr-accent text-white" : "border-transparent bg-kr-ink text-white")
-                      : (dangerActive ? "border-kr-accent text-kr-accent hover:bg-kr-accent/5" : "border-kr-ink/55 text-foreground/65 hover:text-foreground")
-                  } ${zero && !active ? "opacity-50" : ""}`}
-                >
-                  {f.label}
-                  <span className={`label-mono px-1 py-px ${active ? "bg-nm/20" : "bg-nm-sunken"}`}>{f.count}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {invoices.length === 0 ? (
-          <EmptyState title="No invoices yet" hint="Record a sale/service with “Add income”, or send a sales invoice via WhatsApp/upload — it lands here." />
-        ) : filtered.length === 0 ? (
-          <EmptyState title={`No ${statusFilter} invoices`} hint="Try a different filter, or clear it to see all." />
-        ) : (
-          /* KM-4 — same six columns, cards below lg. The overdue tint rides
-             `rowClass`, so it is a wash on the table row and a wash on the
-             card without either renderer knowing about the other. */
-          <DataList
-            testid="revenue-invoices-table"
-            rows={filtered}
-            rowKey={(s) => s.id}
-            rowTestid={(s) => `revenue-invoice-row-${s.id}`}
-            rowClass={(s) => (isOverdue(s) ? "bg-kr-accent/[0.04]" : "")}
-            footer={filtered.length > 1 ? {
-              label: `Showing ${filtered.length} of ${invoices.length}`,
-              value: f(filteredTotal),
-              testid: "revenue-filtered-total",
-            } : undefined}
-            columns={[
-              { key: "invoice", head: "Invoice", role: "title", tdClass: "font-medium",
-                cell: (s) => (
-                  <>
-                    {/* Show invoice # AND title when both exist — title alone
-                        hides the reference customers quote back on WhatsApp
-                        or the phone when asking about payment. */}
-                    {s.number && <span className="mr-1.5 text-xs text-muted-foreground">#{s.number}</span>}
-                    <span>{s.title || (s.number ? "" : "Sale")}</span>
-                    {s.source && s.source !== "manual" && <Chip value={s.source} className={`ml-2 ${SOURCE_CHIP[s.source] || "bg-nm-sunken"}`} />}
-                    <AttachmentLink att={s.attachment} />
-                  </>
-                ) },
-              { key: "customer", head: "Customer", role: "meta", tdClass: "text-muted-foreground",
-                value: (s) => s.contact_name, cell: (s) => s.contact_name || "—" },
-              { key: "date", head: "Date", role: "meta", tdClass: "text-muted-foreground",
-                value: (s) => s.date, cell: (s) => s.date || "—" },
-              { key: "status", head: "Status", role: "chip",
-                cell: (s) => {
-                  const st = invStatus(s);
-                  const overdue = isOverdue(s);
-                  const days = overdue ? daysSinceIso(s.date) : null;
-                  return (
-                    <>
-                      <Chip value={st.label} className={st.cls} />
-                      {s.status === "partial" && <span className="ml-2 text-xs text-muted-foreground">bal {f(s.balance)}</span>}
-                      {overdue && (
-                        <span className="ml-2 inline-flex items-center gap-1 rounded-pill bg-kr-accent px-2 py-0.5 text-[10px] font-bold text-white"
-                          data-testid={`revenue-overdue-${s.id}`}>
-                          <WarningCircle size={11} weight="bold" /> {days}d overdue
-                        </span>
-                      )}
-                    </>
-                  );
-                } },
-              { key: "amount", head: "Amount", role: "amount", align: "right", tdClass: "font-mono font-semibold",
-                cell: (s) => f(s.amount) },
-              { key: "act", head: "", role: "action", align: "right",
-                cell: (s) => <button onClick={() => onDelete("invoice", s.id)} data-testid={`revenue-invoice-delete-${s.id}`} aria-label="Delete invoice" className="grid h-9 w-9 place-items-center text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button> },
-            ]}
-          />
-        )}
-      </div>
-
-      {payments.length > 0 && (
-        <div>
-          <h3 className="text-sm font-medium mb-3">Payments Received ({payments.length})</h3>
-          <DataList
-            testid="revenue-payments-table"
-            rows={payments}
-            rowKey={(p) => p.id}
-            rowTestid={(p) => `revenue-payment-row-${p.id}`}
-            columns={[
-              { key: "customer", head: "Customer", role: "title", tdClass: "font-medium",
-                cell: (p) => <>{p.contact_name || "—"}{p.source && p.source !== "manual" && <Chip value={p.source} className={`ml-2 ${SOURCE_CHIP[p.source] || "bg-nm-sunken"}`} />}</> },
-              { key: "date", head: "Date", role: "meta", tdClass: "text-muted-foreground",
-                value: (p) => p.date, cell: (p) => p.date || "—" },
-              { key: "method", head: "Method", role: "meta", tdClass: "text-muted-foreground",
-                value: (p) => p.method, cell: (p) => p.method || "—" },
-              { key: "ref", head: "Reference", role: "meta", tdClass: "text-muted-foreground",
-                value: (p) => p.reference || p.invoice_number, cell: (p) => p.reference || p.invoice_number || "—" },
-              { key: "amount", head: "Amount", role: "amount", align: "right", tdClass: "font-mono font-semibold",
-                cell: (p) => f(p.amount) },
-              { key: "act", head: "", role: "action", align: "right",
-                cell: (p) => <button onClick={() => onDelete("payment", p.id)} data-testid={`revenue-payment-delete-${p.id}`} aria-label="Delete payment" className="grid h-9 w-9 place-items-center text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button> },
-            ]}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * OverviewTab — KR-10.
- *
- * THE SPEND CHART IS A LINE, ON THE DARK BAND. It was a red bar chart on a
- * white card. The founder called the line during KR-8.2 and HistoryBand was
- * built for it then — but the plan had put it on /inbox, where a money chart
- * does not belong. This is the home it was written for, and it means the
- * dated series the backend actually owns (by_month, six months of real
- * expenses) is drawn once, in one component, in one place.
- *
- * CATEGORIES ARE ONE HUE. See DonutBreak — order is the encoding.
- *
- * VENDORS REUSE ScoreMeter, the primitive KR-9 minted for Ops categories. A
- * vendor bar and a category score are the same shape of claim: one value
- * against a fixed ceiling. Sharing the primitive is what keeps them reading
- * as one system across two pages.
- */
-function OverviewTab({ summary }) {
-  const { t } = useTranslation();
-  const f = fmt(summary.currency);
-  const vendorMax = summary.by_vendor?.[0]?.amount || 1;
-  const categories = (summary.by_category || []).map((c) => ({ label: c.category, amount: c.amount }));
-
-  return (
-    <div className="space-y-6" data-testid="ledger-overview">
-      {/* KR-14.16 · MOBILE — reference-driven Finance overview. Hidden from
-          lg up; the desktop tree below takes over there. */}
-      <MobileOverview summary={summary} f={f} />
-
-      {/* DESKTOP overview — original. */}
-      <div className="hidden space-y-6 lg:block">
-        <KpiRow summary={summary} />
-        <AiPanel scope="brief" variant="brief" />
-
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="nm-tile p-5">
-            <h3 className="text-sm font-medium">{t("finance.by_category")}</h3>
-            {categories.length ? (
-              <DonutBreak data={categories} format={f} className="mt-4" testid="ledger-category-donut" />
-            ) : (
-              <p className="mt-3 text-sm text-muted-foreground">{t("finance.no_categories")}</p>
-            )}
-          </div>
-
-          <div className="nm-tile p-5">
-            <h3 className="text-sm font-medium">{t("finance.top_vendors")}</h3>
-            {summary.by_vendor.length ? (
-              <ul className="mt-4 space-y-3" data-testid="ledger-vendors">
-                {summary.by_vendor.map((v) => (
-                  <li key={v.vendor} className="flex items-center gap-3">
-                    <span className="w-28 shrink-0 truncate text-sm sm:w-36">{v.vendor}</span>
-                    <ScoreMeter value={(v.amount / vendorMax) * 100} size="sm" className="flex-1" />
-                    <span className="w-24 shrink-0 text-right font-mono text-sm font-semibold tabular-nums">{f(v.amount)}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-3 text-sm text-muted-foreground">{t("finance.no_vendor")}</p>
-            )}
-          </div>
-        </div>
-
-        {/* The band: one dark zone per page, and on Finance it belongs to
-            the only real time series in the product. */}
-        <DarkBand testid="ledger-band" className="mt-8 pt-8 pb-10">
-          <HistoryBand
-            series={summary.by_month || []}
-            title={t("finance.monthly_spend")}
-            testid="ledger-history"
-          />
-        </DarkBand>
-      </div>
-    </div>
-  );
-}
-
-/**
- * KR-14.16 · MobileOverview — reference-driven mobile layout for the
- * Finance overview: net-profit hero with a sparkline, 2×2 KPI grid,
- * "View all financials" link, cash-flow alert card with overdue vendors,
- * and an "Ask AI" input card.
- */
-function MobileOverview({ summary, f }) {
-  const tt = summary.totals || {};
-  const net = tt.net_profit ?? ((tt.revenue_billed || 0) - (tt.total_spend || 0));
-  const overdueAmount = tt.overdue_amount ?? tt.receivables_overdue ?? 0;
-  const overdueCount = tt.overdue_count ?? tt.receivables_overdue_count ?? 0;
-
-  const months = summary.by_month || [];
-  const netPoints = months.map((m) => Number(m.net ?? m.amount ?? 0));
-
-  // Trend %: last month vs the previous, if we have at least 2 points.
-  const pct = (curr, prev) => (prev ? ((curr - prev) / Math.abs(prev)) * 100 : 0);
-  const lastNet = netPoints[netPoints.length - 1] ?? net;
-  const prevNet = netPoints[netPoints.length - 2] ?? lastNet;
-  const netTrend = pct(lastNet, prevNet);
-
-  // Cash-flow list — use top overdue receivables if the summary carries
-  // them, otherwise fall back to the top vendors as an interim signal.
-  const overdueList = (summary.overdue_receivables || summary.by_vendor || [])
-    .slice(0, 3)
-    .map((r) => ({
-      name: r.contact_name || r.vendor || r.name || "—",
-      note: r.overdue_days != null ? `Overdue ${r.overdue_days}+ days` : "Outstanding",
-      amount: r.balance ?? r.amount ?? 0,
-    }));
-
-  return (
-    <div className="space-y-4 lg:hidden" data-testid="ledger-overview-mobile">
-      {/* KM-34 · Net profit hero, to the reference's layout: the label and a
-          period pill on one row, the figure and its delta beneath, and the
-          chart sitting on the card's floor at the right.
-          The period pill is a LABEL, not a control. The reference draws it
-          with a caret, but /ledger/summary returns one window and nothing
-          behind it takes a range — a caret that opens nothing is a worse lie
-          than no caret. It says what you are looking at and stops there. */}
-      <Link to="/finance?tab=revenue" data-testid="ledger-mobile-netprofit"
-        className="kr-frost relative block overflow-hidden p-5">
-        <div className="flex items-start justify-between gap-3">
-          <p className="text-sm font-medium">Net profit</p>
-          <span className="kr-frost-min shrink-0 rounded-pill px-3 py-1 text-[11px] font-medium text-muted-foreground">
-            This month
-          </span>
-        </div>
-        <div className="mt-2 flex items-end justify-between gap-3">
-          <div className="min-w-0">
-            <p className="font-display text-3xl font-semibold leading-none">{f(net)}</p>
-              <p className={`mt-3 flex items-center gap-1 text-xs font-medium ${netTrend >= 0 ? UP_TEXT : DOWN_TEXT}`}>
-              <span aria-hidden="true">{netTrend >= 0 ? "↑" : "↓"}</span>
-              {Math.abs(netTrend).toFixed(1)}%
-              <span className="text-muted-foreground font-normal">vs last month</span>
-            </p>
-          </div>
-          <NetProfitBars points={netPoints} className="shrink-0" />
-        </div>
-      </Link>
-
-      {/* 2×2 KPI grid */}
-      <div className="grid grid-cols-2 gap-3">
-        <MobileKpiCard icon={CurrencyDollar} tint="green" label="Revenue" value={f(tt.revenue_billed || 0)}
-          trend={pct(months.at?.(-1)?.amount || 0, months.at?.(-2)?.amount || 0)} to="/finance?tab=revenue" testid="mkpi-revenue" />
-        <MobileKpiCard icon={Receipt} tint="blue" label="Received" value={f(tt.revenue_received || 0)}
-          trend={null} to="/finance?tab=revenue" testid="mkpi-received" />
-        {/* KM-34 — "Expenses" and "Outstanding", the reference's words. The
-            old labels described the query ("Total spend", "Overdue amount");
-            these describe the money, and they match the tabs they link to. */}
-        <MobileKpiCard icon={TrendUp} tint="rose" label="Expenses" value={f(tt.total_spend || 0)}
-          trend={null} to="/finance?tab=expenses" testid="mkpi-spend" />
-        <MobileKpiCard icon={WarningCircle} tint="warn" label="Outstanding" value={f(overdueAmount)}
-          note={overdueCount > 0 ? `${overdueCount} overdue invoice${overdueCount === 1 ? "" : "s"}` : "No overdue"}
-          urgent={overdueAmount > 0} to="/finance?tab=revenue&filter=overdue" testid="mkpi-overdue" />
-      </div>
-
-      {/* View all financials */}
-      <Link to="/finance?tab=revenue" data-testid="ledger-mobile-viewall"
-        className="kr-frost flex items-center justify-center gap-2 p-4 text-sm font-medium">
-        View all financials
-        <ArrowRight size={13} weight="bold" aria-hidden="true" />
-      </Link>
-
-      {/* Cash flow needs attention */}
-      {overdueList.length > 0 && (
-        <div className="kr-frost border-l-[3px] border-l-kr-accent p-4"
-          data-testid="ledger-mobile-cashflow">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-2 min-w-0">
-              <WarningCircle size={20} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0 text-kr-accent" />
-              <div className="min-w-0">
-                <p className="text-sm font-semibold">Cash flow needs attention</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {f(overdueAmount || overdueList.reduce((s, r) => s + Number(r.amount || 0), 0))} is stuck outside
-                </p>
-              </div>
-            </div>
-            <Link to="/finance?tab=revenue&filter=overdue"
-              className="kr-frost-min shrink-0 rounded-pill px-3 py-1.5 text-xs font-semibold">
-              View all
-            </Link>
-          </div>
-          <ul className="mt-3 space-y-2">
-            {overdueList.map((r, i) => (
-              <li key={i} className="kr-frost-min flex items-center gap-3 p-3">
-                <span aria-hidden="true"
-                  className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-orange-100 text-orange-700">
-                  <Buildings size={14} weight="regular" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{r.name}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{r.note}</p>
-                </div>
-                <span className={`shrink-0 text-sm font-semibold tabular-nums ${DOWN_TEXT}`}>{f(r.amount)}</span>
-                <CaretRight size={11} weight="bold" aria-hidden="true" className="text-muted-foreground" />
-              </li>
-            ))}
-          </ul>
-          <Link to="/finance?tab=revenue&filter=overdue"
-            className={`mt-3 flex items-center gap-1 text-xs font-semibold ${DOWN_TEXT}`}>
-            View all {overdueList.length}+ action items <ArrowRight size={11} weight="bold" aria-hidden="true" />
-          </Link>
-        </div>
-      )}
-
-      {/* Ask AI about your finances */}
-      <AskFinanceMobile />
-    </div>
-  );
-}
-
-/**
- * KR-14.16 — a tiny KPI card with icon-in-circle, label, big value and an
- * optional trend line or note. The whole card is a link, chevron at the far
- * right of the row.
- */
-function MobileKpiCard({ icon: Icon, tint, label, value, trend, note, urgent, to, testid }) {
-  const tintMap = {
-    green: "bg-green-100 text-green-700",
-    blue: "bg-blue-100 text-blue-700",
-    rose: "bg-rose-100 text-rose-700",
-    warn: "bg-orange-100 text-orange-700",
-  };
-  return (
-    <Link to={to} data-testid={testid}
-      className="kr-frost flex flex-col gap-1 p-4">
-      <div className="flex items-start justify-between gap-2">
-        <span className={`grid h-9 w-9 place-items-center rounded-full ${tintMap[tint] || "bg-nm-sunken"}`}>
-          <Icon size={16} weight="regular" aria-hidden="true" />
-        </span>
-        <CaretRight size={13} weight="bold" aria-hidden="true" className="mt-1 text-muted-foreground" />
-      </div>
-      <p className="mt-1 text-xs text-muted-foreground">{label}</p>
-      <p className={`font-mono text-lg font-semibold tabular-nums ${urgent ? DOWN_TEXT : ""}`}>{value}</p>
-      {trend != null && Number.isFinite(trend) && trend !== 0 && (
-        <p className={`text-[11px] font-medium ${trend >= 0 ? UP_TEXT : DOWN_TEXT}`}>
-          <span aria-hidden="true">{trend >= 0 ? "↑" : "↓"}</span> {Math.abs(trend).toFixed(1)}%
-          <span className="ml-1 text-muted-foreground font-normal">this month</span>
-        </p>
-      )}
-      {trend == null && note && (
-        <p className={`text-[11px] font-medium ${urgent ? DOWN_TEXT : "text-muted-foreground"}`}>{note}</p>
-      )}
-    </Link>
-  );
-}
-
-/**
- * KM-34 · NetProfitBars — the net-profit chart, traced off the founder's
- * "finance page reference.png" instead of eyeballed.
- *
- * WHAT REPLACED WHAT. This was MobileSparkline, an area-under-curve line in
- * inline SVG. The reference draws a column chart, and the measurements are
- * specific enough to be worth writing down (reference is 867px wide for a
- * 375px phone, so every figure below is the reference's divided by 2.31):
- *
- *   bar width   19px -> 8         pitch 23.8px -> 10, i.e. a 2px gutter
- *   chart box   233 x 117        -> 101 x 50
- *   cap         semicircular — widths run 4,9,11,14,15,16 down a 19px bar,
- *               which fits a radius of exactly half the width, so `rounded-t-full`
- *   floor       flush, no bottom radius, all bars on one baseline
- *
- * The fill is one gradient shared by every bar rather than a fade per bar —
- * see .kr-netbar in index.css for the measurement that settles it and for why
- * this green is not the success token.
- */
-function NetProfitBars({ points, className }) {
-  const vals = (points || []).slice(-12).map((v) => Math.max(0, Number(v) || 0));
-  if (vals.length < 2) return null;
-  const max = Math.max(...vals) || 1;
-  return (
-    <div className={`kr-netbars flex h-[50px] items-end gap-[2px] ${className || ""}`} aria-hidden="true">
-      {vals.map((v, i) => (
-        <span
-          key={i}
-          className="kr-netbar w-2 shrink-0 rounded-t-full"
-          /* a floor of 8%, so a month at zero still draws a tick rather than
-             leaving a hole in the row — the chart is a rhythm, not a table. */
-          style={{ height: `${Math.max(8, (v / max) * 100)}%` }}
-        />
-      ))}
-    </div>
-  );
-}
-
-/**
- * KR-14.16 — an "Ask AI about your finances" input card. Delegates the
- * actual query to the existing /brain page (the AiPanel is a heavier
- * component; this card is a scan-first entry point).
- */
-function AskFinanceMobile() {
-  const [q, setQ] = useState("");
-  const navigate = useNavigate();
-  const send = () => {
-    if (!q.trim()) return;
-    navigate(`/brain?q=${encodeURIComponent(q.trim())}`);
-  };
-  return (
-    <div className="kr-frost p-4" data-testid="ledger-mobile-askai">
-      <div className="mb-3 flex items-center gap-2">
-        <span aria-hidden="true" className="grid h-7 w-7 place-items-center rounded-full bg-violet-100 text-violet-700">
-          <Sparkle size={13} weight="fill" />
-        </span>
-        <p className="text-sm font-semibold">Ask AI about your finances</p>
-      </div>
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") send(); }}
-          placeholder="e.g. Which vendor did I spend the most on?"
-          className="kr-frost-min h-10 flex-1 rounded-pill px-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-kr-ink/15"
-          data-testid="ledger-mobile-askai-input"
-        />
-        <button type="button" onClick={send} data-testid="ledger-mobile-askai-send"
-          aria-label="Ask"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-kr-ink text-white">
-          <PaperPlaneRight size={14} weight="bold" aria-hidden="true" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function ExpensesTable({ rows, cur, onDelete }) {
-  const { t } = useTranslation();
-  const f = fmt(cur);
-  if (!rows.length) return <EmptyState title={t("finance.empty_exp_title")} hint={t("finance.empty_exp_hint")} />;
-  /* KM-4 — same seven columns, two renderers. `value` on the meta columns is
-     what lets DataList tell "no vendor" from a cell that renders an em dash,
-     so the phone's dot-joined line never shows a lone "—". */
-  const columns = [
-    { key: "title", head: t("finance.c_title"), role: "title", tdClass: "font-medium",
-      cell: (e) => <>{e.title}{e.source !== "manual" && <Chip value={e.source} className={`ml-2 ${SOURCE_CHIP[e.source] || "bg-nm-sunken"}`} />}<AttachmentLink att={e.attachment} /></> },
-    { key: "category", head: t("finance.c_category"), role: "chip",
-      cell: (e) => <Chip value={e.category} className="bg-nm-sunken text-foreground" /> },
-    { key: "vendor", head: t("finance.c_vendor"), role: "meta", tdClass: "text-muted-foreground",
-      value: (e) => e.vendor_name, cell: (e) => e.vendor_name || "—" },
-    { key: "date", head: t("finance.c_date"), role: "meta", tdClass: "text-muted-foreground",
-      value: (e) => e.date, cell: (e) => e.date || "—" },
-    { key: "status", head: t("finance.c_status"), role: "chip",
-      cell: (e) => <Chip value={e.status} className={e.status === "paid" ? "bg-kr-ink text-white" : "border-[0.5px] border-kr-ink/55 text-foreground/70"} /> },
-    { key: "amount", head: t("finance.c_amount"), role: "amount", align: "right", tdClass: "font-mono font-semibold",
-      cell: (e) => f(e.amount) },
-    { key: "act", head: "", role: "action", align: "right",
-      cell: (e) => <button onClick={() => onDelete(e.id)} data-testid={`expense-delete-${e.id}`} aria-label="Delete expense" className="grid h-9 w-9 place-items-center text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button> },
-  ];
-  return <DataList columns={columns} rows={rows} rowKey={(e) => e.id}
-    rowTestid={(e) => `expense-row-${e.id}`} testid="expenses-table" />;
-}
-
-function AssetsTable({ rows, cur, onDelete }) {
-  const { t } = useTranslation();
-  const f = fmt(cur);
-  if (!rows.length) return <EmptyState title={t("finance.empty_asset_title")} hint={t("finance.empty_asset_hint")} />;
-  const columns = [
-    { key: "name", head: t("finance.a_asset"), role: "title", tdClass: "font-medium",
-      cell: (a) => <>{a.name}{a.source !== "manual" && <Chip value={a.source} className={`ml-2 ${SOURCE_CHIP[a.source] || "bg-nm-sunken"}`} />}<AttachmentLink att={a.attachment} /></> },
-    { key: "category", head: t("finance.c_category"), role: "chip",
-      cell: (a) => <Chip value={a.category} className="bg-nm-sunken text-foreground" /> },
-    { key: "vendor", head: t("finance.c_vendor"), role: "meta", tdClass: "text-muted-foreground",
-      value: (a) => a.vendor_name, cell: (a) => a.vendor_name || "—" },
-    { key: "bought", head: t("finance.a_bought"), role: "meta", tdClass: "text-muted-foreground",
-      value: (a) => a.purchase_date, cell: (a) => a.purchase_date || "—" },
-    { key: "status", head: t("finance.c_status"), role: "chip",
-      cell: (a) => <Chip value={a.status} className={a.status === "active" ? "bg-kr-ink text-white" : "bg-nm-sunken text-foreground"} /> },
-    { key: "value", head: t("finance.a_value"), role: "amount", align: "right", tdClass: "font-mono font-semibold",
-      cell: (a) => f(a.purchase_amount) },
-    { key: "act", head: "", role: "action", align: "right",
-      cell: (a) => <button onClick={() => onDelete(a.id)} aria-label="Delete asset" className="grid h-9 w-9 place-items-center text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button> },
-  ];
-  return <DataList columns={columns} rows={rows} rowKey={(a) => a.id}
-    rowTestid={(a) => `asset-row-${a.id}`} testid="assets-table" />;
-}
-
-function InventoryTable({ rows, cur, onDelete }) {
-  const { t } = useTranslation();
-  const f = fmt(cur);
-  if (!rows.length) return <EmptyState title={t("finance.empty_inv_title")} hint={t("finance.empty_inv_hint")} />;
-  const columns = [
-    { key: "item", head: t("finance.i_item"), role: "title", tdClass: "font-medium",
-      cell: (i) => <>{i.item}<AttachmentLink att={i.attachment} /></> },
-    { key: "sku", head: t("finance.i_sku"), role: "meta", tdClass: "text-muted-foreground",
-      value: (i) => i.sku, cell: (i) => i.sku || "—" },
-    /* Quantity is the one "meta" here that is really data, so it keeps its
-       mono treatment in the table and rides the dot-joined line on a phone. */
-    { key: "qty", head: t("finance.i_qty"), role: "meta", tdClass: "font-mono",
-      value: (i) => i.quantity, cell: (i) => `${i.quantity} ${i.unit}` },
-    { key: "unitcost", head: t("finance.i_unitcost"), role: "meta", tdClass: "font-mono",
-      value: (i) => i.unit_cost, cell: (i) => f(i.unit_cost) },
-    { key: "vendor", head: t("finance.c_vendor"), role: "meta", tdClass: "text-muted-foreground",
-      value: (i) => i.vendor_name, cell: (i) => i.vendor_name || "—" },
-    { key: "value", head: t("finance.i_value"), role: "amount", align: "right", tdClass: "font-mono font-semibold",
-      cell: (i) => f(i.value) },
-    { key: "act", head: "", role: "action", align: "right",
-      cell: (i) => <button onClick={() => onDelete(i.id)} aria-label="Delete item" className="grid h-9 w-9 place-items-center text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button> },
-  ];
-  return <DataList columns={columns} rows={rows} rowKey={(i) => i.id}
-    rowTestid={(i) => `inv-row-${i.id}`} testid="inventory-table" />;
-}
+import { useIsMobile } from "../hooks/useIsMobile";
+import { StickyHeader } from "../components/common";
+import { GlassSelect } from "../components/karma/GlassSelect";
+import { GLASS_PILL, INK_PILL } from "../components/karma/glass";
+import { CaptureReview } from "./Captures";
+import ReviewPanel from "./finance/ReviewPanel";
+import { AddRecordControl, AddRecordDialogs } from "./finance/FinanceForms";
+import { OverviewTab } from "./finance/FinanceOverview";
+import { AssetsTab, ExpensesTab, InventoryTab, RevenueTab } from "./finance/FinanceRecords";
+import { CARD, FIELD, LoadError } from "./finance/financeKit";
+import { LIST_LIMIT, PERIODS, periodOf } from "./finance/ledgerMath";
 
 const TABS = [
-  { key: "overview", tkey: "finance.t_overview", icon: Sparkle },
-  { key: "revenue", tkey: "finance.t_revenue", icon: CurrencyDollar },
+  { key: "overview", tkey: "finance.t_overview", icon: ChartPieSlice },
+  { key: "revenue", tkey: "finance.t_revenue", icon: CurrencyInr },
   { key: "expenses", tkey: "finance.t_expenses", icon: Receipt },
   { key: "assets", tkey: "finance.t_assets", icon: Buildings },
   { key: "inventory", tkey: "finance.t_inventory", icon: Package },
-  // Epic 2 Sprint 4 (E2-24): Inbox tab hosts the Capture Review Queue —
-  // the former /ingest page's Review Queue collapsed under Finance.
+  // Epic 2 Sprint 4 (E2-24): the Capture Review Queue, formerly /ingest.
   { key: "inbox", tkey: "finance.t_inbox", icon: Tray },
 ];
+const PERIOD_KEY = "finance.period";
 
+function SectionTabs({ tab, setTab, pendingCount, isMobile }) {
+  const { t } = useTranslation();
+  const prefix = isMobile ? "ledger-tab-mobile" : "ledger-tab";
+  return (
+    /* On a phone the track scrolls and bleeds to the page gutter, so the last
+       pill is cut by the screen — the thing that reads as "there is more".
+       `relative` makes the scroller the containing block of the sr-only badge
+       text: an absolutely positioned child of a non-positioned scroller escapes
+       its clip and widened the whole page by ~190px. */
+    <div className={isMobile ? "relative -mx-4 min-w-0 self-stretch overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" : "flex justify-center"}>
+      <div role="group" aria-label={t("nav.finance", "Finance")} data-testid={isMobile ? "ledger-tabs-mobile" : "ledger-tabs"}
+        className={`inline-flex gap-1 rounded-pill p-1 ${GLASS_PILL}`}>
+        {TABS.map((tb) => {
+          const active = tab === tb.key;
+          return (
+            <button key={tb.key} type="button" onClick={() => setTab(tb.key)} aria-pressed={active} data-testid={`${prefix}-${tb.key}`}
+              className={cn(
+                "flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-pill px-3.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25",
+                active ? cn(INK_PILL, "font-medium") : "text-slate-600 hover:bg-white hover:text-slate-900",
+              )}>
+              <tb.icon size={15} aria-hidden="true" />
+              {t(tb.tkey)}
+              {tb.key === "inbox" && pendingCount > 0 && (
+                <>
+                  <span aria-hidden="true" className={cn(
+                    "grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
+                    active ? "bg-white/20 text-white" : "bg-orange-500 text-white",
+                  )}>{pendingCount}</span>
+                  <span className="sr-only">, {pendingCount} waiting</span>
+                </>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
-// Epic 2 Sprint 4 (E2-25): Capture hero bar.
-// Always-visible at the top of every Finance tab. Founder pick
-// 2026-08-14 over tab-placement or FAB: capture stays 1-click from
-// anywhere in Finance.
-function CaptureHero({ pendingCount, onIngested, onOpenInbox }) {
+// Epic 2 Sprint 4 (E2-25): capture stays one click from every Finance tab.
+function QuickCapture({ pendingCount, isMobile, onIngested, onOpenInbox, onAddExpense }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
   const canIngest = user?.role === "owner" || hasPerm(user, "data_input");
   const [uploading, setUploading] = useState(false);
   const [active, setActive] = useState(null);
-  const qc = useQueryClient();
+  const [question, setQuestion] = useState("");
 
-  const upload = async (endpoint, files) => {
-    const f = files?.[0];
-    if (!f) return;
+  const upload = async (endpoint, file) => {
+    if (!file) return;
     setUploading(true);
     setActive(null);
     try {
       const fd = new FormData();
-      fd.append("file", f);
-      const { data } = await api.post(endpoint, fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      fd.append("file", file);
+      const { data } = await api.post(endpoint, fd, { headers: { "Content-Type": "multipart/form-data" } });
       if (data.status === "failed") {
         toast.error("Extraction failed: " + (data.error || "unreadable file"));
       } else {
@@ -1364,168 +126,163 @@ function CaptureHero({ pendingCount, onIngested, onOpenInbox }) {
       setUploading(false);
     }
   };
-
-  const onFiled = () => {
-    setActive(null);
-    onIngested && onIngested();
+  const ask = (e) => {
+    e.preventDefault();
+    const q = question.trim();
+    if (q) navigate(`/brain?q=${encodeURIComponent(q)}`);
   };
 
-  if (!canIngest) return null;
+  const sfx = isMobile ? "-m" : "";
+  const pick = (key, Icon, label, endpoint, accept, title, capture) => (
+    <label key={key} data-testid={`finance-hero-${key}${sfx}`} title={title}
+      className={cn(
+        `flex h-11 cursor-pointer items-center gap-2 rounded-pill px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-white focus-within:ring-2 focus-within:ring-neutral-900/25 ${GLASS_PILL}`,
+        isMobile && "justify-center px-3",
+        uploading && "pointer-events-none opacity-60",
+      )}>
+      <Icon size={17} aria-hidden="true" /> {label}
+      <input type="file" className="sr-only" accept={accept} {...(capture ? { capture } : {})}
+        onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; upload(endpoint, file); }} />
+    </label>
+  );
+  const askForm = (
+    <form onSubmit={ask} className={cn("flex min-w-0 items-center gap-2.5", isMobile ? "mt-4" : "ml-auto")}>
+      {!isMobile && (
+        <span className="flex items-center gap-1.5 whitespace-nowrap text-sm text-slate-600">
+          <Sparkle size={15} weight="fill" aria-hidden="true" className="text-orange-500" /> Need help?
+        </span>
+      )}
+      <label className="relative min-w-0 flex-1 lg:w-80 lg:flex-none">
+        <span className="sr-only">Ask Dex anything about your finances</span>
+        <ChatCircleDots size={16} aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input value={question} onChange={(e) => setQuestion(e.target.value)} data-testid="finance-ask"
+          placeholder="Ask about your finances…" className={cn(FIELD, "rounded-pill pl-10 pr-12")} />
+        <button type="submit" aria-label="Ask Dex" data-testid="finance-ask-send" disabled={!question.trim()}
+          className="absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-slate-900/[0.06] text-slate-600 transition-colors hover:bg-slate-900 hover:text-white disabled:opacity-40 disabled:hover:bg-slate-900/[0.06] disabled:hover:text-slate-600">
+          <ArrowRight size={14} weight="bold" aria-hidden="true" />
+        </button>
+      </label>
+    </form>
+  );
 
   return (
     <>
-      {/* KR-14.15 · MOBILE — capture actions as a four-column icon grid
-          inside one card, matching the reference. Each column: colored
-          circular icon on the left, two-line label on the right. */}
-      {/* KM-34 — the reference gives this card a name and a way out: a title
-          block ("Simplify your finances" + what the four buttons are for) and
-          a dark circular arrow to the Inbox, with the icon grid underneath.
-          Without the heading the four circles read as a toolbar someone
-          forgot to label; with it, the card explains itself, which is the
-          whole brief for this pass. */}
-      <div className="kr-frost mb-5 p-4 lg:hidden" data-testid="finance-capture-hero-mobile">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[15px] font-semibold leading-tight">Simplify your finances</p>
-            <p className="mt-1 text-xs leading-snug text-muted-foreground">
-              Upload bills, track expenses and get real-time insights.
-            </p>
-          </div>
-          <button type="button" onClick={onOpenInbox} data-testid="finance-hero-inbox-m"
-            aria-label={pendingCount > 0 ? `Open Inbox, ${pendingCount} waiting` : "Open Inbox"}
-            className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full bg-kr-ink text-white">
-            <ArrowRight size={14} weight="bold" aria-hidden="true" />
-            {pendingCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-kr-accent px-1 text-[9px] font-bold text-white">
-                {pendingCount}
-              </span>
+      {isMobile ? (
+        <section data-testid="finance-capture-hero-mobile" className={`mb-5 p-4 ${CARD}`}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[15px] font-semibold text-slate-900">Quick capture</p>
+              <p className="mt-0.5 text-xs text-slate-500">Upload a bill or receipt and AI reads it for you.</p>
+            </div>
+            {canIngest && (
+              <button type="button" onClick={onOpenInbox} data-testid="finance-hero-inbox-m"
+                aria-label={pendingCount > 0 ? `Open Inbox, ${pendingCount} waiting` : "Open Inbox"}
+                className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-full ${INK_PILL}`}>
+                <Tray size={16} aria-hidden="true" />
+                {pendingCount > 0 && (
+                  <span aria-hidden="true" className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-orange-500 px-1 text-[10px] font-semibold text-white">
+                    {pendingCount}
+                  </span>
+                )}
+              </button>
             )}
-          </button>
-        </div>
-        <div className="mt-4 grid grid-cols-4 gap-2">
-        <label data-testid="finance-hero-doc-m" title="Upload a bill or receipt (PDF or photo)"
-          className={`flex flex-col items-center gap-1.5 rounded-tile p-1 text-center cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-blue-100 text-blue-700">
-            <FilePdf size={16} weight="bold" aria-hidden="true" />
-          </span>
-          <span className="text-[10px] leading-tight font-medium">Upload bill<br /><span className="whitespace-nowrap text-[9px] text-muted-foreground font-normal">PDF, Image</span></span>
-          <input type="file" hidden accept="image/*,application/pdf" onChange={(e) => upload("/ingest/document", e.target.files)} />
-        </label>
-        <label data-testid="finance-hero-photo-m" title="Scan a receipt"
-          className={`flex flex-col items-center gap-1.5 rounded-tile p-1 text-center cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-green-100 text-green-700">
-            <Camera size={16} weight="bold" aria-hidden="true" />
-          </span>
-          <span className="text-[10px] leading-tight font-medium">Scan<br /><span className="whitespace-nowrap text-[9px] text-muted-foreground font-normal">receipt</span></span>
-          <input type="file" hidden accept="image/*" capture="environment" onChange={(e) => upload("/ingest/document", e.target.files)} />
-        </label>
-        <button type="button" data-testid="finance-hero-add-m" title="Add expense"
-          onClick={() => document.querySelector('[data-testid="ledger-add-expense"]')?.click()}
-          className="flex flex-col items-center gap-1.5 rounded-tile p-1 text-center">
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-violet-100 text-violet-600">
-            <Plus size={16} weight="bold" aria-hidden="true" />
-          </span>
-          <span className="text-[10px] leading-tight font-medium">Add<br /><span className="whitespace-nowrap text-[9px] text-muted-foreground font-normal">expense</span></span>
-        </button>
-        <label data-testid="finance-hero-csv-m" title="Bulk CSV or Excel import"
-          className={`flex flex-col items-center gap-1.5 rounded-tile p-1 text-center cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-green-100 text-green-700">
-            <UploadSimple size={16} weight="bold" aria-hidden="true" />
-          </span>
-          <span className="text-[10px] leading-tight font-medium">Export<br /><span className="whitespace-nowrap text-[9px] text-muted-foreground font-normal">CSV, Excel</span></span>
-          <input type="file" hidden accept=".csv,.xlsx,.xls" onChange={(e) => upload("/ingest/csv", e.target.files)} />
-        </label>
-        </div>
-      </div>
-
-      {/* DESKTOP capture bar — unchanged. */}
-      <div className="nm-tile p-3 mb-6 hidden flex-wrap items-center gap-2 lg:flex" data-testid="finance-capture-hero">
-        <span className="text-xs text-muted-foreground hidden sm:inline mr-1">
-          Capture
-        </span>
-        <label
-          data-testid="finance-hero-doc"
-          className={`flex items-center gap-2 nm-tile px-3 py-2 text-xs font-medium hover:bg-kr-ink hover:text-white transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}
-          title="Upload a bill or receipt (PDF or photo)"
-        >
-          <FilePdf size={14} weight="bold" />
-          Upload bill / receipt
-          <input type="file" hidden accept="image/*,application/pdf" onChange={(e) => upload("/ingest/document", e.target.files)} />
-        </label>
-        <label
-          data-testid="finance-hero-photo"
-          className={`flex items-center gap-2 nm-tile px-3 py-2 text-xs font-medium hover:bg-accent transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}
-          title="Take a photo (mobile camera)"
-        >
-          <Camera size={14} weight="bold" />
-          Photo
-          <input type="file" hidden accept="image/*" capture="environment" onChange={(e) => upload("/ingest/document", e.target.files)} />
-        </label>
-        <label
-          data-testid="finance-hero-csv"
-          className={`flex items-center gap-2 nm-tile px-3 py-2 text-xs font-medium hover:bg-accent transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}
-          title="Bulk CSV or Excel import"
-        >
-          <UploadSimple size={14} weight="bold" />
-          CSV / Excel
-          <input type="file" hidden accept=".csv,.xlsx,.xls" onChange={(e) => upload("/ingest/csv", e.target.files)} />
-        </label>
-        {pendingCount > 0 && (
-          <button
-            data-testid="finance-hero-inbox-badge"
-            onClick={onOpenInbox}
-            className="flex items-center gap-2 kr-lift rounded-pill bg-kr-ink px-3.5 py-2 text-xs font-medium text-white transition-all"
-          >
-            <Tray size={14} weight="bold" />
-            {pendingCount} in Inbox →
-          </button>
-        )}
-        {uploading && (
-          <span className="text-xs text-muted-foreground font-mono ml-1">Extracting…</span>
-        )}
-      </div>
+          </div>
+          {canIngest && (
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              {pick("doc", FilePdf, "Upload bill", "/ingest/document", "image/*,application/pdf", "Upload a bill or receipt (PDF or photo)")}
+              {pick("photo", Camera, "Photo", "/ingest/document", "image/*", "Take a photo of a receipt", "environment")}
+              <button type="button" data-testid="finance-hero-add-m" onClick={onAddExpense}
+                className={`flex h-11 items-center justify-center gap-2 rounded-pill px-3 text-sm font-medium text-slate-700 transition-colors hover:bg-white ${GLASS_PILL}`}>
+                <Plus size={17} aria-hidden="true" /> Add expense
+              </button>
+              {pick("csv", UploadSimple, "CSV / Excel", "/ingest/csv", ".csv,.xlsx,.xls", "Bulk import from CSV or Excel")}
+            </div>
+          )}
+          {askForm}
+          {uploading && <p role="status" className="mt-3 text-xs text-slate-500">Extracting…</p>}
+        </section>
+      ) : (
+        <section data-testid="finance-capture-hero" className={`mb-5 flex flex-wrap items-center gap-2.5 p-2.5 pl-5 ${CARD}`}>
+          {canIngest && (
+            <>
+              <span className="text-sm font-medium text-slate-800">Quick capture</span>
+              <span aria-hidden="true" className="mx-1 h-6 w-px bg-slate-900/10" />
+              {pick("doc", FilePdf, "Upload bill / receipt", "/ingest/document", "image/*,application/pdf", "Upload a bill or receipt (PDF or photo)")}
+              {pick("photo", Camera, "Photo", "/ingest/document", "image/*", "Take a photo of a receipt", "environment")}
+              {pick("csv", UploadSimple, "CSV / Excel", "/ingest/csv", ".csv,.xlsx,.xls", "Bulk import from CSV or Excel")}
+              {pendingCount > 0 && (
+                <button type="button" data-testid="finance-hero-inbox-badge" onClick={onOpenInbox}
+                  className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium ${INK_PILL}`}>
+                  <Tray size={16} aria-hidden="true" /> {pendingCount} in Inbox <ArrowRight size={13} weight="bold" aria-hidden="true" />
+                </button>
+              )}
+              {uploading && <span role="status" className="text-xs text-slate-500">Extracting…</span>}
+            </>
+          )}
+          {askForm}
+        </section>
+      )}
       {active && (
-        <div className="mb-6" data-testid="finance-hero-review">
-          <ReviewPanel ingestion={active} onFiled={onFiled} onCancel={() => setActive(null)} />
+        <div className="mb-5" data-testid="finance-hero-review">
+          <ReviewPanel ingestion={active} onFiled={() => { setActive(null); onIngested?.(); }} onCancel={() => setActive(null)} />
         </div>
       )}
     </>
   );
 }
 
-export default function Ledger() {
-  // KR-10 — FinanceMobile.jsx is deleted and the isMobile early-return with
-  // it, on the founder's mid-build directive ("don't use any old mobile view
-  // port uiux design layout"). This tree is the one tree: the KPI grid goes
-  // 2-up, the charts stack, the tables scroll, and the band spans the phone
-  // exactly as it does the desktop.
+function OverviewSkeleton() {
   const { t } = useTranslation();
-  const { user } = useAuth();
-  const [searchParams] = useSearchParams();
-  const initialTab = TABS.some((tb) => tb.key === searchParams.get("tab")) ? searchParams.get("tab") : "overview";
-  const [tab, setTab] = useState(initialTab);
-  // KR-10 — the ?filter= fix the plan flagged. /inbox's "To collect (overdue)"
-  // tile and Ops's overdue action have both linked to
-  // ?tab=revenue&filter=overdue since KR-8; nothing has ever read the second
-  // half, so the founder landed on the full invoice list and had to re-find
-  // the overdue ones by hand.
-  const initialFilter = searchParams.get("filter") || "all";
+  return (
+    <div aria-busy="true" className="space-y-5" data-testid="ledger-loading">
+      <p className="sr-only">{t("finance.loading")}</p>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 lg:gap-4 xl:grid-cols-6">
+        {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="ds-skeleton h-[176px] rounded-[1.6rem]" />)}
+      </div>
+      <div className="ds-skeleton h-[420px] rounded-[1.6rem]" />
+      <div className="grid gap-5 lg:grid-cols-2">
+        <div className="ds-skeleton h-[320px] rounded-[1.6rem]" />
+        <div className="ds-skeleton h-[320px] rounded-[1.6rem]" />
+      </div>
+    </div>
+  );
+}
+
+export default function Ledger() {
+  const { t } = useTranslation();
+  const { tenant } = useAuth();
+  const isMobile = useIsMobile();
   const qc = useQueryClient();
-  const invalidate = () => ["ledger-summary", "expenses", "assets", "inventory", "revenue", "payables"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
-  // U7-08.2 (2026-08-17): "Fix old purchases" button removed from the
-  // desktop Finance header per founder ask. The AI classifier already
-  // runs on every new capture; a manual re-run belongs in admin tooling
-  // if we need it again, not in the owner's day-to-day toolbar. Mobile
-  // still exposes it as "Recheck earlier bills" (FinanceMobile.jsx §8);
-  // the backend endpoint /ledger/reclassify-purchases stays live.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const tab = TABS.some((tb) => tb.key === tabParam) ? tabParam : "overview";
+  const current = TABS.find((tb) => tb.key === tab);
+  // KR-10 — /inbox and Ops link to ?tab=revenue&filter=overdue.
+  const filterParam = searchParams.get("filter") || "all";
+  const setTab = (key) => setSearchParams((prev) => {
+    const next = new URLSearchParams(prev);
+    if (key === "overview") next.delete("tab"); else next.set("tab", key);
+    next.delete("filter");
+    return next;
+  });
+  const [period, setPeriodState] = useState(() => {
+    try { return periodOf(localStorage.getItem(PERIOD_KEY)).value; } catch { return PERIODS[0].value; }
+  });
+  const setPeriod = (value) => {
+    setPeriodState(value);
+    try { localStorage.setItem(PERIOD_KEY, value); } catch { /* storage unavailable — the choice lasts this visit */ }
+  };
+  const [adding, setAdding] = useState(null);
+
+  const invalidate = () => ["ledger-summary", "expenses", "assets", "inventory", "revenue", "payables"]
+    .forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
 
   const summaryQ = useQuery({ queryKey: ["ledger-summary"], queryFn: () => api.get("/ledger/summary").then((r) => r.data) });
-  const expensesQ = useQuery({ queryKey: ["expenses"], queryFn: () => api.get("/expenses").then((r) => r.data) });
-  const assetsQ = useQuery({ queryKey: ["assets"], queryFn: () => api.get("/assets").then((r) => r.data) });
-  const inventoryQ = useQuery({ queryKey: ["inventory"], queryFn: () => api.get("/inventory").then((r) => r.data) });
+  const expensesQ = useQuery({ queryKey: ["expenses"], queryFn: () => api.get("/expenses", { params: { limit: LIST_LIMIT } }).then((r) => r.data) });
+  const assetsQ = useQuery({ queryKey: ["assets"], queryFn: () => api.get("/assets", { params: { limit: LIST_LIMIT } }).then((r) => r.data) });
+  const inventoryQ = useQuery({ queryKey: ["inventory"], queryFn: () => api.get("/inventory", { params: { limit: LIST_LIMIT } }).then((r) => r.data) });
   const revenueQ = useQuery({ queryKey: ["revenue"], queryFn: () => api.get("/revenue").then((r) => r.data) });
   const payablesQ = useQuery({ queryKey: ["payables"], queryFn: () => api.get("/payables").then((r) => r.data) });
-  // Epic 2 Sprint 4 (E2-25): pending-capture badge feeds the hero's "N in Inbox →" pill.
   const capPendingQ = useQuery({
     queryKey: ["captures-pending"],
     queryFn: () => api.get("/captures/pending-count").then((r) => r.data),
@@ -1534,139 +291,82 @@ export default function Ledger() {
   const pendingCount = capPendingQ.data?.count || 0;
 
   const summary = summaryQ.data;
-  const cur = summary?.currency || "INR";
-  const categories = summary?.categories || [];
-  const assetCategories = summary?.asset_categories || [];
+  const cur = summary?.currency || tenant?.currency || "INR";
+  const overviewReady = !summaryQ.isLoading && !revenueQ.isLoading && !expensesQ.isLoading && !assetsQ.isLoading && !inventoryQ.isLoading;
 
   const del = async (kind, id) => {
     try { await api.delete(`/${kind}/${id}`); invalidate(); toast.success(t("finance.deleted")); }
     catch { toast.error(t("finance.del_failed")); }
   };
-
   const delRevenue = async (kind, id) => {
     try { await api.delete(`/revenue/${kind}/${id}`); invalidate(); toast.success(t("finance.deleted")); }
     catch { toast.error(t("finance.del_failed")); }
   };
 
-  const addBtn = useMemo(() => {
-    if (tab === "revenue") return <AddIncomeDialog onDone={invalidate} />;
-    if (tab === "expenses") return <AddExpenseDialog categories={categories} onDone={invalidate} />;
-    if (tab === "assets") return <AddAssetDialog categories={assetCategories} onDone={invalidate} />;
-    if (tab === "inventory") return <AddInventoryDialog onDone={invalidate} />;
-    return null;
-  }, [tab, categories, assetCategories]);
-
   return (
-    <div>
-      <StickyHeader className="mb-5 flex flex-col gap-4 lg:mb-7 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          {/* KR-14.15 — MOBILE: title + "Money in one place" subtitle,
-              matching the reference. DESKTOP keeps the uppercase eyebrow. */}
-          <p className="hidden text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground lg:block">{t("finance.eyebrow")}</p>
-          <h1 className="font-display text-3xl sm:text-4xl lg:mt-1.5">{t("finance.title")}</h1>
-          <p className="mt-1 text-sm text-muted-foreground lg:hidden">Money in one place</p>
-        </div>
-        <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto" data-testid="ledger-controls">
-          {/* KM-4 · MOBILE TABS — a rail, and ALL SIX tabs.
-              The previous strip dropped Inventory to make five fit, on the
-              stated grounds that it was "folded into the Assets tab on
-              mobile". It was not: `tab === "inventory"` renders its own
-              InventoryTable and the Assets tab renders only AssetsTable, so
-              on a phone there was no route to inventory at all — the data was
-              simply unreachable. Squeezing six into a fixed row is not the
-              answer either: at 343px `flex-1 basis-0` gives ~52px a tab and
-              every label truncates to nonsense.
-              So it scrolls, and it says so. The rail bleeds to the page gutter
-              (-mx-4 px-4) so the last pill is cut by the SCREEN rather than
-              stopping short of it, which is the thing that reads as "there is
-              more this way". Snap keeps it landing on whole pills. Same
-              grammar as the /calendar filter rail.
-              KM-34 — SELECTION IS INK HERE, not depth, and this room is the
-              exception on purpose: the founder's Finance reference draws the
-              active tab as a filled black pill against light glass ones, and
-              on a page whose every surface is now translucent a pressed
-              neomorphic shadow has nothing to press INTO — the well needs an
-              opaque ground to read against and the glass does not give it one.
-              Measured: .kr-pressed over the finance sky is a smudge. The
-              elsewhere-in-the-app depth convention still holds on the opaque
-              pages. (No transition utility either way — .kr-pop and
-              .kr-pressed swap outset for inset shadow lists, which do not
-              interpolate.) */}
-          <div className="-mx-4 flex snap-x snap-mandatory gap-1.5 overflow-x-auto px-4 pb-1 lg:hidden"
-               style={{ scrollbarWidth: "none" }}
-               role="tablist" aria-label={t("nav.finance", "Finance")} data-testid="ledger-tabs-mobile">
-            {TABS.map((tb) => {
-              const active = tab === tb.key;
-              return (
-                <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`ledger-tab-mobile-${tb.key}`}
-                  aria-pressed={active}
-                  className={`flex h-9 shrink-0 snap-start items-center gap-1.5 whitespace-nowrap rounded-pill px-3.5 text-xs ${
-                    active ? "bg-kr-ink font-semibold text-white" : "kr-frost text-foreground/75"
-                  }`}>
-                  <tb.icon size={14} weight="regular" aria-hidden="true" />
-                  {t(tb.tkey)}
-                </button>
-              );
-            })}
+    <div data-testid="finance-page">
+      <StickyHeader className="mb-5 lg:mb-6">
+        <SectionTabs tab={tab} setTab={setTab} pendingCount={pendingCount} isMobile={isMobile} />
+        <nav aria-label="Breadcrumb" className="mt-4 lg:mt-5">
+          <ol className="flex items-center gap-1.5 text-sm text-slate-500">
+            <li>
+              {tab === "overview"
+                ? t("finance.title")
+                : <button type="button" onClick={() => setTab("overview")} className="rounded hover:text-slate-800 hover:underline">{t("finance.title")}</button>}
+            </li>
+            <li aria-hidden="true"><CaretRight size={11} weight="bold" /></li>
+            <li aria-current="page" className="font-medium text-slate-700">{t(current.tkey)}</li>
+          </ol>
+        </nav>
+        <div className="mt-1 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+          <div className="min-w-0">
+            <h1 className="font-display text-3xl sm:text-4xl">{t("finance.title")}</h1>
+            <p className="mt-1.5 text-sm text-muted-foreground sm:text-base">
+              {t("finance.subtitle", "Track your money flow, control costs, and make smarter decisions.")}
+            </p>
           </div>
-
-          {/* DESKTOP tabs — original pill row, hidden below lg. */}
-          <div className="hidden grid-cols-2 gap-1.5 lg:flex lg:gap-1 lg:w-auto">
-            {TABS.map((tb) => {
-              const active = tab === tb.key;
-              return (
-                <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`ledger-tab-${tb.key}`}
-                  aria-pressed={active}
-                  className={`flex h-9 items-center justify-center gap-1.5 rounded-pill border-[0.5px] px-3.5 text-xs transition-colors sm:text-sm ${
-                    active
-                      ? "border-kr-ink font-medium text-foreground"
-                      : "border-kr-ink/55 text-foreground/65 hover:text-foreground/85"
-                  }`}>
-                  <tb.icon size={15} weight="regular" aria-hidden="true" /> {t(tb.tkey)}
-                </button>
-              );
-            })}
+          <div className="flex w-full flex-wrap items-center gap-2.5 sm:w-auto" data-testid="ledger-controls">
+            {tab === "overview" && (
+              <GlassSelect testid="finance-period" ariaLabel="Period" value={period} onChange={setPeriod} align="end" icon={CalendarBlank}
+                options={PERIODS.map((p) => ({ value: p.value, label: p.label }))} triggerClassName="h-11 w-auto min-w-[11rem] text-sm" />
+            )}
+            <AddRecordControl tab={tab} onPick={setAdding} />
           </div>
-          <div className="hidden lg:block">{addBtn}</div>
         </div>
       </StickyHeader>
 
-      {/* Epic 2 Sprint 4 (E2-25): hero capture bar above every tab. */}
-      <CaptureHero
-        pendingCount={pendingCount}
+      <QuickCapture pendingCount={pendingCount} isMobile={isMobile}
         onIngested={() => { invalidate(); qc.invalidateQueries({ queryKey: ["captures-pending"] }); }}
-        onOpenInbox={() => setTab("inbox")}
-      />
-
-      {(summaryQ.isLoading && tab === "overview") ? (
-        <p className="font-mono text-sm">{t("finance.loading")}</p>
-      ) : (
-        <>
-          {tab === "overview" && summary && (
-            /* KM-5 — the WhatsApp QR / status card is removed on the founder's
-               call: the pairing QR, its refresh control and the inbound
-               "recent WhatsApp activity" log all went with it. Overview is a
-               single column again rather than a 1fr/320px split with a
-               sidebar. The component file stays in the tree unreferenced
-               rather than being deleted in the same breath as a layout change
-               — if the pairing surface is wanted back it belongs somewhere
-               deliberate (Settings), not stapled to the money page. */
-            <OverviewTab summary={summary} />
-          )}
-          {tab === "revenue" && <RevenueTab data={revenueQ.data} cur={cur} onDelete={delRevenue} onChange={invalidate} initialFilter={initialFilter} />}
-          {tab === "expenses" && <div className="space-y-6"><NeedsMatchingPanel title="Supplier payments to match" testid="payables-needs-matching" hint="These payments to suppliers couldn’t be auto-linked to a purchase bill. Pick the bill they settle, or mark as a standalone expense." unmatched={payablesQ.data?.unmatched_payments} open={payablesQ.data?.open_invoices || []} cur={cur} endpoint="/payables/payment" standaloneLabel={{ btn: "Standalone expense", done: "Booked as a standalone expense" }} onChange={invalidate} /><AiPanel scope="expenses" /><ExpensesTable rows={expensesQ.data || []} cur={cur} onDelete={(id) => del("expenses", id)} /></div>}
-          {tab === "assets" && <div className="space-y-6"><AiPanel scope="assets" /><AssetsTable rows={assetsQ.data || []} cur={cur} onDelete={(id) => del("assets", id)} /></div>}
-          {tab === "inventory" && <div className="space-y-6"><AiPanel scope="inventory" /><InventoryTable rows={inventoryQ.data || []} cur={cur} onDelete={(id) => del("inventory", id)} /></div>}
-          {/* Epic 2 Sprint 4 (E2-24): Inbox tab hosts CaptureReview from /ingest. */}
-          {tab === "inbox" && <CaptureReview />}
-        </>
-      )}
+        onOpenInbox={() => setTab("inbox")} onAddExpense={() => setAdding("expense")} />
 
       {tab === "overview" && (
-        <p className="mt-6 text-xs text-muted-foreground flex items-center gap-1.5">
-          <Robot size={14} weight="bold" /> {t("finance.auto_flow")}
-        </p>
+        summaryQ.isError ? (
+          <LoadError title="Couldn't load your finances" hint="You may not have the Finance permission, or the connection dropped. Try again in a moment." />
+        ) : !overviewReady ? (
+          <OverviewSkeleton />
+        ) : (
+          <OverviewTab summary={summary} revenue={revenueQ.data} expenses={expensesQ.data} assets={assetsQ.data}
+            inventory={inventoryQ.data} period={period} cur={cur} onViewExpenses={() => setTab("expenses")} />
+        )
       )}
+      {tab === "revenue" && (
+        <RevenueTab key={filterParam} data={revenueQ.data} loading={revenueQ.isLoading} error={revenueQ.isError}
+          cur={cur} onDelete={delRevenue} onChange={invalidate} initialFilter={filterParam} />
+      )}
+      {tab === "expenses" && (
+        <ExpensesTab rows={expensesQ.data || []} loading={expensesQ.isLoading} error={expensesQ.isError} payables={payablesQ.data}
+          cur={cur} onDelete={(id) => del("expenses", id)} onChange={invalidate} />
+      )}
+      {tab === "assets" && (
+        <AssetsTab rows={assetsQ.data || []} loading={assetsQ.isLoading} error={assetsQ.isError} cur={cur} onDelete={(id) => del("assets", id)} />
+      )}
+      {tab === "inventory" && (
+        <InventoryTab rows={inventoryQ.data || []} loading={inventoryQ.isLoading} error={inventoryQ.isError} cur={cur} onDelete={(id) => del("inventory", id)} />
+      )}
+      {tab === "inbox" && <CaptureReview />}
+
+      <AddRecordDialogs adding={adding} setAdding={setAdding} categories={summary?.categories || []}
+        assetCategories={summary?.asset_categories || []} cur={cur} onDone={invalidate} />
     </div>
   );
 }

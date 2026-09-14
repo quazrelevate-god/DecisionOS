@@ -22,6 +22,11 @@
 // its own header argues the case: rendering the desktop tree untouched above lg
 // makes the desktop guarantee structural rather than something to re-verify,
 // and it keeps one copy of the DOM instead of shipping both and hiding one.
+//
+// 2026-09-14 — onto the glass with the Finance rebuild (Finance is the only
+// caller). The white glass card now belongs to the page, which wraps each list
+// in one, so the table draws no box of its own: a slate head, hairline rows, a
+// white wash on hover. On a phone each row is a small white glass tile.
 import * as React from "react";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { cn } from "@/lib/utils";
@@ -66,16 +71,19 @@ export function DataList({ columns, rows, rowKey, rowTestid, rowClass, testid, f
             <div
               key={rowKey(row)}
               data-testid={rowTestid ? rowTestid(row) : undefined}
-              className={cn("kr-bento p-3.5", rowClass?.(row))}
+              className={cn(
+                "rounded-2xl bg-white/80 p-3.5 ring-1 ring-inset ring-white shadow-[0_8px_22px_-14px_hsl(150_15%_20%/0.3)]",
+                rowClass?.(row),
+              )}
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1 text-sm font-medium leading-snug line-clamp-2">
+                <div className="min-w-0 flex-1 text-sm font-medium leading-snug text-slate-900 line-clamp-2">
                   {titles.map((c) => <React.Fragment key={c.key}>{c.cell(row)}</React.Fragment>)}
                 </div>
                 {/* tabular-nums, not font-mono: Plex Mono's wide comma splits
                     an Indian-grouped figure (₹4,80,000) into three visually
                     separate blocks at this size. */}
-                <span className="shrink-0 text-sm font-semibold tabular-nums">
+                <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">
                   {amounts.map((c) => <React.Fragment key={c.key}>{c.cell(row)}</React.Fragment>)}
                 </span>
               </div>
@@ -88,7 +96,7 @@ export function DataList({ columns, rows, rowKey, rowTestid, rowClass, testid, f
 
               {(metaNodes.length > 0 || actions.length > 0) && (
                 <div className="mt-2 flex items-center gap-2">
-                  <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                  <p className="min-w-0 flex-1 truncate text-xs text-slate-500">
                     {metaNodes.map((c, i) => (
                       <React.Fragment key={c.key}>
                         {i > 0 && <span aria-hidden="true" className="px-1.5">·</span>}
@@ -109,9 +117,9 @@ export function DataList({ columns, rows, rowKey, rowTestid, rowClass, testid, f
         {/* The table's <tfoot> becomes a plain summary line — a footer row in a
             card list has no columns to align to. */}
         {footer && (
-          <div className="flex items-center justify-between gap-3 px-1 pt-1 text-xs text-muted-foreground">
+          <div className="flex items-center justify-between gap-3 px-1 pt-1 text-xs text-slate-500">
             <span>{footer.label}</span>
-            <span className="font-semibold tabular-nums text-foreground" data-testid={footer.testid}>
+            <span className="font-semibold tabular-nums text-slate-900" data-testid={footer.testid}>
               {footer.value}
             </span>
           </div>
@@ -120,14 +128,14 @@ export function DataList({ columns, rows, rowKey, rowTestid, rowClass, testid, f
     );
   }
 
-  // >= lg: the original table, verbatim in structure and classes.
+  // >= lg: the table, in the page's glass card.
   return (
-    <div className="card-brutal overflow-x-auto" data-testid={testid}>
+    <div className="-mx-2 overflow-x-auto" data-testid={testid}>
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-nm-edge/40 text-left text-xs font-medium text-muted-foreground">
+          <tr className="border-b border-slate-900/[0.07] text-left text-xs font-medium text-slate-500">
             {columns.map((c) => (
-              <th key={c.key} className={cn("p-3", c.align === "right" && "text-right", c.thClass)}>
+              <th key={c.key} className={cn("px-3 py-2.5 font-medium", c.align === "right" && "text-right", c.thClass)}>
                 {c.head}
               </th>
             ))}
@@ -138,10 +146,10 @@ export function DataList({ columns, rows, rowKey, rowTestid, rowClass, testid, f
             <tr
               key={rowKey(row)}
               data-testid={rowTestid ? rowTestid(row) : undefined}
-              className={cn("border-b border-nm-edge/60 hover:bg-accent/50", rowClass?.(row))}
+              className={cn("border-b border-slate-900/[0.05] transition-colors last:border-0 hover:bg-white/60", rowClass?.(row))}
             >
               {columns.map((c) => (
-                <td key={c.key} className={cn("p-3", c.align === "right" && "text-right", c.tdClass)}>
+                <td key={c.key} className={cn("px-3 py-3 align-middle text-slate-700", c.align === "right" && "text-right", c.tdClass)}>
                   {c.cell(row)}
                 </td>
               ))}
@@ -150,11 +158,11 @@ export function DataList({ columns, rows, rowKey, rowTestid, rowClass, testid, f
         </tbody>
         {footer && (
           <tfoot>
-            <tr className="border-t border-nm-edge/40 bg-nm-sunken/40">
-              <td colSpan={Math.max(1, columns.length - 2)} className="p-3 text-xs text-muted-foreground">
+            <tr className="border-t border-slate-900/[0.07]">
+              <td colSpan={Math.max(1, columns.length - 2)} className="px-3 py-3 text-xs text-slate-500">
                 {footer.label}
               </td>
-              <td className="p-3 text-right font-mono font-bold" data-testid={footer.testid}>
+              <td className="px-3 py-3 text-right font-semibold tabular-nums text-slate-900" data-testid={footer.testid}>
                 {footer.value}
               </td>
               <td />

@@ -519,7 +519,7 @@ export default function Desk() {
               to: "/finance", testid: "kpi-profit-m" },
           ].map((k) => (
             <Link key={k.testid} to={k.to} data-testid={k.testid}
-              className="nm-tile flex min-w-0 items-center justify-between gap-2 p-3">
+              className="flex min-w-0 items-center justify-between gap-2 rounded-[1.1rem] bg-white/75 p-3 ring-1 ring-inset ring-white/80 shadow-[0_8px_22px_-14px_hsl(150_15%_20%/0.3)] backdrop-blur-xl">
               <p className="min-w-0 truncate text-xs font-medium text-foreground/80">{k.label}</p>
               <span className="flex shrink-0 items-center gap-1.5">
                 <k.icon size={13} weight="regular" aria-hidden="true" className="text-muted-foreground" />

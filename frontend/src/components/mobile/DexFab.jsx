@@ -96,6 +96,7 @@ export function DexFab({ onOpen, recording = false, seconds = 0, onStop, intent 
               tabIndex={-1}
               onClick={() => onPick?.(null)}
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              data-mobile-chrome=""
               className="lg:hidden fixed inset-0 z-[9999] cursor-default"
             />
             {PICKS.map((p, i) => (
@@ -103,6 +104,7 @@ export function DexFab({ onOpen, recording = false, seconds = 0, onStop, intent 
                 key={p.kind}
                 type="button"
                 data-testid={`dex-pick-${p.kind}`}
+                data-mobile-chrome=""
                 aria-label={p.aria}
                 onClick={() => onPick?.(p.kind)}
                 initial={{ opacity: 0, scale: 0.5, y: 18 }}
@@ -147,6 +149,7 @@ export function DexFab({ onOpen, recording = false, seconds = 0, onStop, intent 
     <button
       type="button"
       data-testid="dex-fab"
+      data-mobile-chrome=""
       aria-label={
         recording ? `Stop recording, ${seconds} seconds`
         : intent === "send" ? "Send to Dex"

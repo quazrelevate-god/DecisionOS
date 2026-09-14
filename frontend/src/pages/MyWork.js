@@ -1734,6 +1734,150 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
 
   const isOp = t.task_type === "operational" || !!t.op_category;
 
+  /* Mobile PWA (2026-09-14) — the drawer blocks both bodies render.
+     They were written once, inside the desktop body (`hidden lg:block`), so a
+     phone never saw the approval step, its banners, the proof notice, the
+     attachments or Reopen: the Approvals view opened on a phone and nothing in
+     it could be approved. Each is a render function taking a testid suffix —
+     "" for the desktop body (ids unchanged) and "-m" for the phone body. */
+  const approvalBlocks = (sfx) => (
+    <>
+      {needsMyApproval && (
+        <div className={`mt-4 p-4 ${DRAWER_CARD}`} data-testid={`approval-actions${sfx}-${t.id}`} data-stage={apprStage}>
+          <p className={DRAWER_LABEL}>Needs your approval</p>
+          <p className="text-sm text-slate-700">{apprStage === "close"
+            ? `${t.assignee_name || "The assignee"} marked this task complete. Check the work — approving closes it.`
+            : `This task needs your approval before ${t.assignee_name || "the assignee"} can start work.`}</p>
+          {t.approval_status === "rejected" && t.rejection_reason && <p className="mt-1.5 text-xs text-slate-500">Previously requested: {t.rejection_reason}</p>}
+          <div className="mt-3.5 flex flex-wrap gap-2">
+            <button onClick={approveTask} data-testid={`approve${sfx}-${t.id}`}
+              className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-pill px-5 text-sm font-medium ${INK_PILL}`}>
+              <CheckCircle size={16} weight="bold" aria-hidden="true" /> Approve
+            </button>
+            <button onClick={rejectTask} data-testid={`reject${sfx}-${t.id}`}
+              className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
+              <WarningCircle size={16} weight="bold" aria-hidden="true" /> Request changes
+            </button>
+            <button onClick={clarifyTask} data-testid={`clarify${sfx}-${t.id}`}
+              className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
+              <ChatText size={16} weight="bold" aria-hidden="true" /> Ask clarification
+            </button>
+          </div>
+        </div>
+      )}
+
+      {lockedForAssignee && (
+        <div className={`mt-4 flex items-start gap-3 p-4 ${DRAWER_CARD}`} data-testid={`approval-locked${sfx}-${t.id}`}>
+          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-600 ${GLASS_PILL}`}>
+            <LockKey size={16} weight="bold" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-neutral-900">{t.approval_status === "rejected" ? "Changes requested" : "Awaiting approval"}</p>
+            <p className="mt-0.5 text-xs text-slate-600">You can start once {t.approver_name || "the approver"} approves this task. Status, progress and the execution plan are locked until then.</p>
+            {t.approval_status === "rejected" && t.rejection_reason && <p className="mt-1.5 text-xs text-slate-500">Note: {t.rejection_reason}</p>}
+          </div>
+        </div>
+      )}
+
+      {/* ASK-28 TK-05 — approval before closing, seen by everyone but the
+          approver. Both banners wear the same glass card as "Awaiting
+          approval"; the sent-back one carries the rose of the chip. */}
+      {signoffPending && !canApprove && (
+        <div className={`mt-4 flex items-start gap-3 p-4 ${DRAWER_CARD}`} data-testid={`approval-signoff${sfx}-${t.id}`}>
+          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-600 ${GLASS_PILL}`}>
+            <ShieldCheck size={16} weight="bold" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-neutral-900">Waiting for approval</p>
+            <p className="mt-0.5 text-xs text-slate-600">Marked complete. {t.approver_name || "The approver"} will check the work and close it. Moving the status back takes the request away.</p>
+          </div>
+        </div>
+      )}
+      {signoffSentBack && (
+        <div className={`mt-4 flex items-start gap-3 p-4 ${DRAWER_CARD}`} data-testid={`approval-changes${sfx}-${t.id}`}>
+          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-rose-700 ${GLASS_PILL}`}>
+            <WarningCircle size={16} weight="bold" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-neutral-900">Changes requested</p>
+            <p className="mt-0.5 text-xs text-slate-600">{t.rejection_reason ? `${t.approver_name || "The approver"}: ${t.rejection_reason}` : `${t.approver_name || "The approver"} sent this back.`} Complete it again when it's fixed — it goes back for approval.</p>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  const evidenceNotice = (sfx) => (t.evidence_required && !isTerminal(t) && !awaitingApproval ? (
+    <div className={`mt-3 flex items-start gap-2.5 p-3 ${DRAWER_CARD}`} data-testid={`evidence-required${sfx}-${t.id}`}>
+      {hasEvidence
+        ? <CheckCircle size={16} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0 text-emerald-600" />
+        : <Info size={16} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0 text-amber-600" />}
+      <p className="text-xs leading-relaxed text-slate-700">{hasEvidence
+        ? "Proof attached — you can mark this task complete."
+        : "This task requires proof before it can be completed. Add a photo, voice note, or file."}</p>
+    </div>
+  ) : null);
+
+  const attachmentBlocks = (sfx) => {
+    const beUrl = process.env.REACT_APP_BACKEND_URL;
+    const atts = t.attachments || [];
+    const refs = atts.filter((a) => a.kind === "reference");
+    const proof = atts.filter((a) => a.kind !== "reference");
+    if (!refs.length && !proof.length) return null;
+    const insights = t.reference_insights || [];
+    const isImg = (a) => a.kind === "photo" || (a.content_type || "").startsWith("image/");
+    const isAudio = (a) => a.kind === "voice" || (a.content_type || "").startsWith("audio/");
+    const label = "mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500";
+    const renderAtt = (a) => (
+      isImg(a)
+        ? <button key={a.url} type="button" onClick={() => setLightbox(`${beUrl}${a.url}`)}
+            className="group relative h-20 w-20 overflow-hidden rounded-xl ring-1 ring-slate-900/[0.06]" title="View the full image"
+            data-testid={`att-photo${sfx}-${t.id}-${a.url}`}>
+            <img src={`${beUrl}${a.url}`} alt={a.filename || "attachment"} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+            <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/20 group-hover:opacity-100">
+              <MagnifyingGlassPlus size={20} weight="bold" aria-hidden="true" className="text-white" />
+            </span>
+          </button>
+        : isAudio(a)
+          ? <audio key={a.url} controls preload="none" src={`${beUrl}${a.url}`} className="h-9 max-w-full" data-testid={`att-voice${sfx}-${t.id}-${a.url}`} />
+          : <a key={a.url} href={`${beUrl}${a.url}`} target="_blank" rel="noreferrer" data-testid={`att-file${sfx}-${t.id}-${a.url}`}
+              className="inline-flex max-w-[180px] items-center gap-1.5 rounded-pill bg-white/80 px-2.5 py-1.5 text-xs text-slate-700 ring-1 ring-inset ring-slate-900/[0.06] transition-colors hover:bg-white">
+              <File size={13} weight="bold" aria-hidden="true" /> <span className="truncate">{a.filename || "file"}</span>
+            </a>
+    );
+    return (
+      <>
+        {refs.length > 0 && (
+          <div className={`mt-3 p-3 ${DRAWER_CARD}`} data-testid={`reference-block${sfx}-${t.id}`}>
+            <p className={label}><Paperclip size={13} weight="bold" aria-hidden="true" /> Reference material · {refs.length}</p>
+            <div className="flex flex-wrap items-center gap-2">{refs.map(renderAtt)}</div>
+            {insights.length > 0 && (
+              <div className="mt-2 flex items-start gap-1.5" data-testid={`reference-insight${sfx}-${t.id}`}>
+                <Lightbulb size={13} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0 text-amber-500" />
+                <p className="line-clamp-2 text-xs text-slate-500">{insights[insights.length - 1].summary}</p>
+              </div>
+            )}
+          </div>
+        )}
+        {proof.length > 0 && (
+          <div className={`mt-3 p-3 ${DRAWER_CARD}`} data-testid={`proof-block${sfx}-${t.id}`}>
+            <p className={label}><Paperclip size={13} weight="bold" aria-hidden="true" /> Proof of work · {proof.length}</p>
+            <div className="flex flex-wrap items-center gap-2">{proof.map(renderAtt)}</div>
+          </div>
+        )}
+      </>
+    );
+  };
+
+  const reopenBlock = (sfx) => (isTerminal(t) && !awaitingApproval && !noteOnly ? (
+    <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2" data-testid={`reopen-actions${sfx}-${t.id}`}>
+      <button type="button" onClick={reopen} data-testid={`reopen${sfx}-${t.id}`}
+        className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-slate-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
+        <ArrowClockwise size={16} weight="bold" aria-hidden="true" /> Reopen
+      </button>
+      <span className="text-xs text-slate-500">Completed by mistake? Reopen brings it back to your active work.</span>
+    </div>
+  ) : null);
 
   /* 2026-09-14, founder — the drawer is a value of its own so a caller that
      only wants the DRAWER (the Decision Desk's Task approvals column: "open
@@ -1774,7 +1918,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
             every width) holds without the tab. ASK-28: the ⋯ beside it is
             gone on the founder's call — Delete now sits at the bottom of
             the drawer and attachments already show in its body. */}
-        <SheetHeader className="sticky top-0 z-10 flex-row items-start gap-3 space-y-0 bg-[hsl(0_0%_95%/0.85)] px-5 pb-4 pt-5 text-left backdrop-blur-xl lg:px-7 lg:pt-6">
+        <SheetHeader className="sticky top-0 z-10 flex-row items-start gap-3 space-y-0 bg-[hsl(0_0%_95%/0.85)] px-5 pb-4 pt-[max(1.25rem,env(safe-area-inset-top))] text-left backdrop-blur-xl lg:px-7 lg:pt-6">
           <div className="min-w-0 flex-1 pt-1.5">
             <SheetTitle className="text-left text-[22px] font-semibold leading-tight tracking-tight text-slate-900">{t.title}</SheetTitle>
             {/* The due date sits under the title on desktop (the phone body
@@ -1814,6 +1958,10 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
         </span>
       </div>
 
+      {/* The approval step leads on a phone: when a task waits on you, that
+          is the one thing to do here. */}
+      {approvalBlocks("-m")}
+
       <AssigneesEditor t={t} members={members} roleOptions={roleOptions}
         canEdit={canEditPeople} onPatched={onPeoplePatched} />
 
@@ -1834,7 +1982,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       {(t.workflow_summary?.title || t.due_date || t.created_at) && (() => {
         const hasTop = !!(t.workflow_summary?.title || t.due_date);
         return (
-          <div className="rounded-cardlg border border-nm-edge/40 p-3">
+          <div className={`p-3 ${DRAWER_CARD}`}>
             {hasTop && (
               <div className="flex items-center gap-2">
                 {t.workflow_summary?.title && (
@@ -1846,7 +1994,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                   </>
                 )}
                 {t.workflow_summary?.title && t.due_date && (
-                  <span className="mx-1 h-5 w-px shrink-0 bg-nm-edge/60" />
+                  <span className="mx-1 h-5 w-px shrink-0 bg-slate-900/10" />
                 )}
                 {t.due_date && (
                   <>
@@ -1861,7 +2009,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
               </div>
             )}
             {t.created_at && (
-              <div className={`flex items-center gap-1 text-xs text-muted-foreground ${hasTop ? "mt-3 border-t border-nm-edge/30 pt-2" : ""}`}>
+              <div className={`flex items-center gap-1 text-xs text-muted-foreground ${hasTop ? "mt-3 border-t border-slate-900/[0.06] pt-2" : ""}`}>
                 <span aria-hidden="true" className="h-1 w-1 rounded-full bg-muted-foreground/60" />
                 Created {timeAgo(t.created_at)}
               </div>
@@ -1869,6 +2017,8 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
           </div>
         );
       })()}
+
+      {evidenceNotice("-m")}
 
       {/* KM-5 · STATUS — ONE ROW, A SEGMENTED BAR.
           KM-6 note: `blocked` (pending approval) still matches no segment —
@@ -1887,7 +2037,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
           selected segment also swaps against .kr-pressed's shadow, which is
           not interpolable against an outset pair. */}
       {!terminal && !awaitingApproval && !noteOnly && (
-        <div className="kr-pressed flex items-center gap-1 rounded-pill p-1" role="group"
+        <div className="kr-pressed grid grid-cols-2 gap-1 rounded-pill p-1" role="group"
              aria-label="Task status" data-testid={`status-pills-m-${t.id}`}>
           {M_STATUS_PILLS.map((sp) => {
             const on = stageOf(t.status) === sp.key;
@@ -1898,10 +2048,11 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                 onClick={() => setStatus(sp.key)}
                 aria-pressed={on}
                 data-testid={`status-pill-m-${sp.key}-${t.id}`}
-                /* text-[10px] and px-0.5: four segments share 323px of a
-                   343px row, so each label gets ~76px and "Not Started" is
-                   the one that decides the size. */
-                className={`flex h-9 min-w-0 flex-1 basis-0 items-center justify-center rounded-pill px-0.5 text-[10px] leading-tight ${
+                /* Mobile PWA (2026-09-14) — two equal halves of the row, at
+                   the 13px index.css gives every small label on a phone, each
+                   a full 40px touch target. The 10px type was sized for the
+                   four segments TK-07 retired. */
+                className={`flex h-10 min-w-0 items-center justify-center rounded-pill px-2 text-[13px] leading-tight ${
                   /* KM-6 — the selected segment is RAISED, not a flat
                      swatch: .kr-pop supplies the lift and the colour
                      utility overrides its white ground (utilities layer
@@ -1926,70 +2077,19 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
           every width — this second copy put the guide and its buttons on
           the phone twice. */}
 
-      {/* Actions row — Complete + attach controls, now below the two
-          plan-building buttons above. */}
+      {/* Mobile PWA (2026-09-14) — Complete and the attach controls live in
+          the sticky bar at the foot of the drawer (task-actions-m), so they
+          stay one thumb away however far the plan and activity run. Cancel
+          stays up here as a quiet text action, well away from Complete. */}
       {!isTerminal(t) && !awaitingApproval && !signoffPending && !noteOnly && (
-        /* KM-6 — flex-wrap. Cancel joining this row made five controls
-           (Complete, Cancel, photo, file, voice) share 343px, and Complete
-           was truncating to "Comp…". Wrapping lets the two endings hold the
-           first line and the three attachment circles drop to the second. */
-        <div className="flex items-center gap-2">
-          {/* KM-7 — Complete and Cancel are ONE welded control, and Cancel is
-              icon-only. Five worded/round controls could not share 343px, so
-              KM-6 wrapped the row onto two lines; dropping the word "Cancel"
-              and joining the two endings into a single .kr-pop group buys
-              back enough width for the whole row to fit again.
-              Cancel keeps a real aria-label and title — an icon-only
-              destructive action with no name is not a control, it is a
-              guess. */}
-          <div className="kr-pop flex shrink-0 items-center gap-1 rounded-pill p-1"
-               role="group" aria-label="Finish this task">
-            <button
-              onClick={complete}
-              data-testid={`complete-m-${t.id}`}
-              title={t.evidence_required && !hasEvidence ? "Add proof first" : "Mark as complete"}
-              className="flex h-9 items-center gap-1.5 rounded-pill bg-kr-ink px-3.5 text-xs font-medium text-white"
-            >
-              <CheckCircle size={13} weight="bold" aria-hidden="true" /> Complete
-            </button>
-            <button
-              onClick={() => setStatus("cancelled")}
-              data-testid={`cancel-m-${t.id}`}
-              aria-label="Cancel this task"
-              title="Cancel this task"
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-foreground/70"
-            >
-              <XCircle size={15} weight="bold" aria-hidden="true" />
-            </button>
-          </div>
-          <button
-            onClick={() => fileRef.current?.click()}
-            disabled={uploading}
-            data-testid={`photo-m-${t.id}`}
-            aria-label="Attach a photo"
-            className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground disabled:opacity-40"
-          >
-            <Camera size={16} weight="regular" />
-          </button>
-          <button
-            onClick={() => evidenceRef.current?.click()}
-            disabled={uploading}
-            data-testid={`upload-file-m-${t.id}`}
-            aria-label="Upload a file"
-            className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground disabled:opacity-40"
-          >
-            <FileArrowUp size={16} weight="regular" />
-          </button>
-          <button
-            onClick={toggleVoice}
-            data-testid={`voice-m-${t.id}`}
-            aria-label={recording ? "Stop recording" : "Record voice reply"}
-            className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${recording ? "bg-kr-accent text-white" : "kr-pop text-foreground"}`}
-          >
-            {recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="regular" />}
-          </button>
-        </div>
+        <button type="button" onClick={() => setStatus("cancelled")} data-testid={`cancel-m-${t.id}`}
+          className="flex h-11 items-center gap-1.5 px-1 text-sm font-medium text-slate-500 hover:text-slate-800">
+          <XCircle size={16} weight="bold" aria-hidden="true" /> Cancel this task
+        </button>
       )}
+
+      {attachmentBlocks("-m")}
+      {reopenBlock("-m")}
 
       {/* ASK-27 — the phone footer ("No activity yet" + its own "Log update
           or hand off") is gone: TaskTrail below renders both, full width, at
@@ -2098,58 +2198,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       )
     )}
 
-    {(() => {
-      const beUrl = process.env.REACT_APP_BACKEND_URL;
-      const atts = t.attachments || [];
-      const refs = atts.filter((a) => a.kind === "reference");
-      const proof = atts.filter((a) => a.kind !== "reference");
-      const insights = t.reference_insights || [];
-      const isImg = (a) => a.kind === "photo" || (a.content_type || "").startsWith("image/");
-      const isAudio = (a) => a.kind === "voice" || (a.content_type || "").startsWith("audio/");
-      const renderAtt = (a) => (
-        isImg(a)
-          ? <button key={a.url} type="button" onClick={() => setLightbox(`${beUrl}${a.url}`)}
-              className="relative w-20 h-20 nm-tile overflow-hidden group" title="Click to view full image"
-              data-testid={`att-photo-${t.id}-${a.url}`}>
-              <img src={`${beUrl}${a.url}`} alt={a.filename || "attachment"} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
-              <span className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
-                <MagnifyingGlassPlus size={20} weight="bold" className="text-white" />
-              </span>
-            </button>
-          : isAudio(a)
-            ? <audio key={a.url} controls preload="none" src={`${beUrl}${a.url}`} className="h-9" data-testid={`att-voice-${t.id}-${a.url}`} />
-            : <a key={a.url} href={`${beUrl}${a.url}`} target="_blank" rel="noreferrer" data-testid={`att-file-${t.id}-${a.url}`}
-                className="inline-flex items-center gap-1.5 nm-tile px-2.5 py-1.5 text-xs font-mono hover:bg-accent transition-colors max-w-[180px]">
-                <File size={13} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
-              </a>
-      );
-      return (
-        <>
-          {refs.length > 0 && (
-            <div className="nm-inset mt-3 p-3" data-testid={`reference-block-${t.id}`}>
-              <p className="label-mono text-brand-blue flex items-center gap-1.5 mb-2">
-                <Paperclip size={13} weight="bold" /> Reference material · {refs.length}
-              </p>
-              <div className="flex flex-wrap gap-2 items-center">{refs.map(renderAtt)}</div>
-              {insights.length > 0 && (
-                <div className="mt-2 flex items-start gap-1.5" data-testid={`reference-insight-${t.id}`}>
-                  <Lightbulb size={13} weight="fill" className="text-brand-yellow shrink-0 mt-0.5" />
-                  <p className="text-xs text-muted-foreground line-clamp-2">{insights[insights.length - 1].summary}</p>
-                </div>
-              )}
-            </div>
-          )}
-          {proof.length > 0 && (
-            <div className="mt-3 nm-inset p-3" data-testid={`proof-block-${t.id}`}>
-              <p className="label-mono text-muted-foreground flex items-center gap-1.5 mb-2">
-                <Paperclip size={13} weight="bold" /> Proof of work · {proof.length}
-              </p>
-              <div className="flex flex-wrap gap-2 items-center">{proof.map(renderAtt)}</div>
-            </div>
-          )}
-        </>
-      );
-    })()}
+    {attachmentBlocks("")}
 
     <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
       <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-3xl p-2" data-testid={`photo-lightbox-${t.id}`}>
@@ -2164,79 +2213,10 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
         DRAWER_CARD holding the ink Approve pill, with white glass pills for
         the two ways to push back. ASK-28 TK-05 decides when it shows
         (before work starts, or once the work is marked done) and what it
-        says for each. */}
-    {needsMyApproval && (
-      <div className={`mt-4 p-4 ${DRAWER_CARD}`} data-testid={`approval-actions-${t.id}`} data-stage={apprStage}>
-        <p className={DRAWER_LABEL}>Needs your approval</p>
-        <p className="text-sm text-slate-700">{apprStage === "close"
-          ? `${t.assignee_name || "The assignee"} marked this task complete. Check the work — approving closes it.`
-          : `This task needs your approval before ${t.assignee_name || "the assignee"} can start work.`}</p>
-        {t.approval_status === "rejected" && t.rejection_reason && <p className="mt-1.5 text-xs text-slate-500">Previously requested: {t.rejection_reason}</p>}
-        <div className="mt-3.5 flex flex-wrap gap-2">
-          <button onClick={approveTask} data-testid={`approve-${t.id}`}
-            className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-pill px-5 text-sm font-medium ${INK_PILL}`}>
-            <CheckCircle size={16} weight="bold" aria-hidden="true" /> Approve
-          </button>
-          <button onClick={rejectTask} data-testid={`reject-${t.id}`}
-            className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
-            <WarningCircle size={16} weight="bold" aria-hidden="true" /> Request changes
-          </button>
-          <button onClick={clarifyTask} data-testid={`clarify-${t.id}`}
-            className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
-            <ChatText size={16} weight="bold" aria-hidden="true" /> Ask clarification
-          </button>
-        </div>
-      </div>
-    )}
+        says for each. Shared with the phone body — see approvalBlocks. */}
+    {approvalBlocks("")}
 
-    {lockedForAssignee && (
-      <div className={`mt-4 flex items-start gap-3 p-4 ${DRAWER_CARD}`} data-testid={`approval-locked-${t.id}`}>
-        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-600 ${GLASS_PILL}`}>
-          <LockKey size={16} weight="bold" aria-hidden="true" />
-        </span>
-        <div>
-          <p className="text-sm font-semibold text-neutral-900">{t.approval_status === "rejected" ? "Changes requested" : "Awaiting approval"}</p>
-          <p className="mt-0.5 text-xs text-slate-600">You can start once {t.approver_name || "the approver"} approves this task. Status, progress and the execution plan are locked until then.</p>
-          {t.approval_status === "rejected" && t.rejection_reason && <p className="mt-1.5 text-xs text-slate-500">Note: {t.rejection_reason}</p>}
-        </div>
-      </div>
-    )}
-
-    {/* ASK-28 TK-05 — approval before closing, seen by everyone but the approver.
-        2026-09-14 — both banners wear the same glass card as "Awaiting
-        approval" above; the sent-back one carries the rose of the
-        "Changes requested" chip. */}
-    {signoffPending && !canApprove && (
-      <div className={`mt-4 flex items-start gap-3 p-4 ${DRAWER_CARD}`} data-testid={`approval-signoff-${t.id}`}>
-        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-600 ${GLASS_PILL}`}>
-          <ShieldCheck size={16} weight="bold" aria-hidden="true" />
-        </span>
-        <div>
-          <p className="text-sm font-semibold text-neutral-900">Waiting for approval</p>
-          <p className="mt-0.5 text-xs text-slate-600">Marked complete. {t.approver_name || "The approver"} will check the work and close it. Moving the status back takes the request away.</p>
-        </div>
-      </div>
-    )}
-    {signoffSentBack && (
-      <div className={`mt-4 flex items-start gap-3 p-4 ${DRAWER_CARD}`} data-testid={`approval-changes-${t.id}`}>
-        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-rose-700 ${GLASS_PILL}`}>
-          <WarningCircle size={16} weight="bold" aria-hidden="true" />
-        </span>
-        <div>
-          <p className="text-sm font-semibold text-neutral-900">Changes requested</p>
-          <p className="mt-0.5 text-xs text-slate-600">{t.rejection_reason ? `${t.approver_name || "The approver"}: ${t.rejection_reason}` : `${t.approver_name || "The approver"} sent this back.`} Complete it again when it's fixed — it goes back for approval.</p>
-        </div>
-      </div>
-    )}
-
-    {t.evidence_required && !isTerminal(t) && !awaitingApproval && (
-      <div className={`mt-3 flex items-start gap-2 nm-tile p-2.5 ${hasEvidence ? "bg-nm-sunken" : "bg-kr-accent/8"}`} data-testid={`evidence-required-${t.id}`}>
-        {hasEvidence ? <CheckCircle size={16} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0" /> : <Info size={16} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0 text-kr-accent" />}
-        <p className="text-xs">{hasEvidence
-          ? "Proof attached — you can mark this task complete."
-          : "This task requires proof before it can be completed. Add a photo, voice note, or file below."}</p>
-      </div>
-    )}
+    {evidenceNotice("")}
 
     {!isTerminal(t) && !awaitingApproval && !signoffPending && !noteOnly && (
       <div className="flex items-center gap-4">
@@ -2296,14 +2276,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       </div>
     )}
 
-    {isTerminal(t) && !awaitingApproval && !noteOnly && (
-      <div className="flex flex-wrap gap-2 mt-4" data-testid={`reopen-actions-${t.id}`}>
-        <button onClick={reopen} data-testid={`reopen-${t.id}`} className="flex items-center gap-2 bg-nm px-4 py-2 text-sm font-medium nm-btn hover:bg-accent transition-colors">
-          <ArrowClockwise size={16} weight="bold" /> Reopen
-        </button>
-        <span className="flex items-center text-xs text-muted-foreground">Completed by mistake? Reopen brings it back to your active work.</span>
-      </div>
-    )}
+    {reopenBlock("")}
 
     </div>
 
@@ -2376,6 +2349,43 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
         </>
       )}
     </div>
+
+    {/* Mobile PWA (2026-09-14) — the phone's action bar. Sticky at the foot
+        of the drawer's scroller, above the home indicator, so Complete is
+        always one thumb away instead of mid-scroll above the plan. */}
+    {!isTerminal(t) && !awaitingApproval && !signoffPending && !noteOnly && (
+      <div data-testid={`task-actions-m-${t.id}`}
+        className="sticky bottom-0 z-10 border-t border-white/70 bg-[hsl(0_0%_93%/0.92)] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl lg:hidden">
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={complete} data-testid={`complete-m-${t.id}`}
+            title={t.evidence_required && !hasEvidence ? "Add proof first" : "Mark as complete"}
+            className={`flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-pill px-4 text-[15px] font-medium ${t.evidence_required && !hasEvidence ? `${GLASS_PILL} text-slate-500` : INK_PILL}`}>
+            <CheckCircle size={18} weight="fill" aria-hidden="true" /> Complete
+          </button>
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+            data-testid={`photo-m-${t.id}`} aria-label="Attach a photo"
+            className={`grid h-12 w-12 shrink-0 place-items-center rounded-full text-slate-700 disabled:opacity-40 ${GLASS_PILL}`}>
+            <Camera size={18} aria-hidden="true" />
+          </button>
+          <button type="button" onClick={() => evidenceRef.current?.click()} disabled={uploading}
+            data-testid={`upload-file-m-${t.id}`} aria-label="Upload a file"
+            className={`grid h-12 w-12 shrink-0 place-items-center rounded-full text-slate-700 disabled:opacity-40 ${GLASS_PILL}`}>
+            <FileArrowUp size={18} aria-hidden="true" />
+          </button>
+          <button type="button" onClick={toggleVoice} data-testid={`voice-m-${t.id}`}
+            aria-label={recording ? "Stop recording and send" : "Record a voice reply"}
+            className={`grid h-12 w-12 shrink-0 place-items-center rounded-full ${recording ? "bg-kr-accent text-white" : `text-slate-700 ${GLASS_PILL}`}`}>
+            {recording ? <Stop size={18} weight="fill" aria-hidden="true" /> : <Microphone size={18} aria-hidden="true" />}
+          </button>
+          {recording && (
+            <button type="button" onClick={cancelVoice} data-testid={`voice-cancel-m-${t.id}`} aria-label="Discard recording"
+              className={`grid h-12 w-12 shrink-0 place-items-center rounded-full text-slate-700 ${GLASS_PILL}`}>
+              <X size={18} weight="bold" aria-hidden="true" />
+            </button>
+          )}
+        </div>
+      </div>
+    )}
         </div>
       </SheetContent>
     </Sheet>
@@ -2438,9 +2448,12 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
         {/* TOP ROW — checkbox, title, due date */}
         <div className="flex min-w-0 items-start gap-2.5">
           {onToggleSelect && (
-            /* -m-1 p-1 grows the hit area to 26px without moving the box. */
+            /* The negative margins and matching padding grow the hit area to
+               44px tall without moving the box (MW-22: it was 26px, under the
+               phone's touch floor). The right side stays tight so a tap on
+               the title still opens the card. */
             <label
-              className="relative -m-1 grid shrink-0 cursor-pointer place-items-center p-1"
+              className="relative -my-[13px] -ml-[13px] -mr-1 grid shrink-0 cursor-pointer place-items-center py-[13px] pl-[13px] pr-1"
               onClick={(e) => e.stopPropagation()}
               title={selected ? "Deselect" : "Select for bulk action"}
             >
@@ -2751,12 +2764,15 @@ function FilterChipGroup({ testid, label, value, options, counts, onSelect, load
   );
 }
 
-/* ASK-13/15 (2026-09-13): uniform 4-column grid at xl, 3 at lg, 2 at sm, 1
-   below. Opened cards no longer expand inline — details live in a right-side
-   drawer (see the Sheet inside TaskCard), so every cell stays the same size. */
+/* ASK-13/15 (2026-09-13): uniform 4-column grid at xl, 3 at lg, 1 below.
+   Opened cards no longer expand inline — details live in a right-side drawer
+   (see the Sheet inside TaskCard), so every cell stays the same size.
+   Mobile PWA (2026-09-14): no 2-up at sm — below lg the app is a 448px
+   column, so `sm:` fired on landscape phones and tablets and squeezed two
+   ~210px cards side by side. */
 function TaskGrid({ list, openId, setOpenId, cardProps }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" data-testid="mywork-grid">
+    <div className="grid gap-3 lg:grid-cols-3 lg:gap-4 xl:grid-cols-4" data-testid="mywork-grid">
       {list.map((t) => {
         const isOpen = openId === t.id;
         return (
@@ -3531,7 +3547,7 @@ export default function MyWork() {
         {/* ASK-28 phone pass — the view picker's sheet. */}
         <Sheet open={viewSheetOpen} onOpenChange={setViewSheetOpen}>
           <SheetContent side="bottom" hideClose data-testid="work-mobile-view-sheet"
-            className="flex max-h-[85vh] flex-col gap-0 rounded-t-cardlg p-0 lg:hidden">
+            className="flex max-h-[85dvh] flex-col gap-0 rounded-t-cardlg p-0 lg:hidden">
             <SheetHeader className="flex-row items-center justify-between space-y-0 px-5 pb-3 pt-5 text-left">
               <SheetTitle className="text-base">Show</SheetTitle>
               <SheetClose asChild>
@@ -3541,7 +3557,7 @@ export default function MyWork() {
                 </button>
               </SheetClose>
             </SheetHeader>
-            <div className="flex flex-col gap-2 overflow-y-auto px-5 pb-6" role="group" aria-label="View">
+            <div className="flex flex-col gap-2 overflow-y-auto px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]" role="group" aria-label="View">
               {mobileViewOptions.map((o) => {
                 const on = mobileView === o.key;
                 return (
@@ -3566,7 +3582,7 @@ export default function MyWork() {
 
         <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
           <SheetContent side="bottom" hideClose data-testid="work-mobile-filter-sheet"
-            className="flex max-h-[85vh] flex-col gap-0 rounded-t-cardlg p-0 lg:hidden">
+            className="flex max-h-[85dvh] flex-col gap-0 rounded-t-cardlg p-0 lg:hidden">
             <SheetHeader className="flex-row items-center justify-between space-y-0 px-5 pb-3 pt-5 text-left">
               <SheetTitle className="text-base">Filter tasks</SheetTitle>
               <SheetClose asChild>
@@ -3590,7 +3606,7 @@ export default function MyWork() {
                 value={filters.status} options={STATUS_FILTER_OPTIONS}
                 counts={(k) => countWith({ status: k })} onSelect={setStatusFilter} loading={tasksLoading} />
             </div>
-            <div className="flex items-center gap-2 border-t border-nm-edge/40 px-5 pb-6 pt-3">
+            <div className="flex items-center gap-2 border-t border-slate-900/[0.06] px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3">
               <button type="button" onClick={clearFilters} disabled={!filtersActive}
                 data-testid="work-sheet-clear"
                 className="kr-pop h-11 flex-1 rounded-pill text-[13px] font-medium disabled:opacity-40">
@@ -3605,55 +3621,6 @@ export default function MyWork() {
             </div>
           </SheetContent>
         </Sheet>
-
-        {inSegmentView && aiPriority && (
-          <div className="flex flex-col gap-2" data-testid="work-mobile-lenses">
-            <div>
-              <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-foreground/70">
-                {t("mywork.filter_priority", "Priority")}
-              </p>
-              {/* NO transition utility: the segments swap .kr-pop's outset
-                  shadows against .kr-pressed's inset ones, which do not
-                  interpolate. */}
-              <div className="kr-pressed flex items-center gap-1 rounded-pill p-1"
-                   role="group" aria-label="Filter by priority" data-testid="mywork-priority-bands">
-                {BANDS.map((b) => {
-                  const n = list.filter((tk) => TIER_OF(tk) === b.key).length;
-                  return (
-                    <button key={b.key} type="button" onClick={() => setBand(b.key)}
-                      aria-pressed={band === b.key} data-testid={`priority-band-${b.key}`}
-                      className={`kr-seg-compact flex h-9 flex-1 items-center justify-center gap-1.5 rounded-pill px-2 text-[12px] ${
-                        band === b.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
-                      {b.label}
-                      <span className="tabular-nums opacity-55">{n}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div>
-              <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-foreground/70">
-                {t("mywork.filter_status", "Status")}
-              </p>
-              {/* Scrolls rather than wraps: four status segments do not fit
-                  343px, and a control row that reflows to two lines as you tap
-                  through it is worse than one that slides. */}
-              <div className="kr-pressed flex items-center gap-1 overflow-x-auto rounded-pill p-1 [scrollbar-width:none]"
-                   role="group" aria-label="Filter by progress" data-testid="work-mobile-status-lens">
-                {M_STATUS_PILLS.map((sp) => (
-                  <button key={sp.key} type="button"
-                    onClick={() => setStatusFilter((cur) => (cur === sp.key ? "" : sp.key))}
-                    aria-pressed={statusFilter === sp.key} data-testid={`work-status-${sp.key}`}
-                    className={`kr-seg-compact flex h-9 shrink-0 items-center rounded-pill px-3.5 text-[12px] ${
-                      statusFilter === sp.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
-                    {sp.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
 
       </StickyHeader>
 
@@ -3864,7 +3831,7 @@ export default function MyWork() {
                   {focusDrawer(sub === "tasks" ? apprList.map((tk) => tk.id) : [], !apprTasksQ.isLoading)}
                   {sub === "tasks" ? (
                     apprTasksQ.isLoading ? (
-                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" aria-hidden="true">
+                      <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3" aria-hidden="true">
                         {[0, 1, 2].map((i) => <div key={i} className="ds-skeleton h-36 rounded-tile" />)}
                       </div>
                     ) : apprList.length === 0 ? (
@@ -3889,7 +3856,7 @@ export default function MyWork() {
                     )
                   ) : (
                     leavesQ.isLoading ? (
-                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-hidden="true">
+                      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3" aria-hidden="true">
                         {[0, 1, 2].map((i) => <div key={i} className="ds-skeleton h-44 rounded-tile" />)}
                       </div>
                     ) : pendingLeaves.length === 0 ? (
@@ -3897,7 +3864,7 @@ export default function MyWork() {
                         Leave requests routed to you will appear here.
                       </div>
                     ) : (
-                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" data-testid="approvals-leave">
+                      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3" data-testid="approvals-leave">
                         {pendingLeaves.map((lv) => (
                           <LeaveCard key={lv.id} lv={lv} canAct
                             onRefresh={() => qc.invalidateQueries({ queryKey: ["leaves"] })}
@@ -3946,6 +3913,58 @@ export default function MyWork() {
               instance on its right side. This row is naturally scoped
               to `view === "mywork"` because it sits inside the mywork-
               list branch of the view guard above. */}
+          {/* Mobile PWA (2026-09-14) — the two lenses scroll with the list now.
+              They sat in the fixed header region above the scroller, so with
+              AI priority on they took ~150px of a phone's height away from the
+              list for as long as you stayed. Captions and behaviour unchanged. */}
+          {inSegmentView && aiPriority && (
+            <div className="mb-3 flex flex-col gap-2 lg:hidden" data-testid="work-mobile-lenses">
+              <div>
+                <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-foreground/70">
+                  {t("mywork.filter_priority", "Priority")}
+                </p>
+                {/* NO transition utility: the segments swap .kr-pop's outset
+                    shadows against .kr-pressed's inset ones, which do not
+                    interpolate. */}
+                <div className="kr-pressed flex items-center gap-1 rounded-pill p-1"
+                     role="group" aria-label="Filter by priority" data-testid="mywork-priority-bands">
+                  {BANDS.map((b) => {
+                    const n = list.filter((tk) => TIER_OF(tk) === b.key).length;
+                    return (
+                      <button key={b.key} type="button" onClick={() => setBand(b.key)}
+                        aria-pressed={band === b.key} data-testid={`priority-band-${b.key}`}
+                        className={`kr-seg-compact flex h-9 flex-1 items-center justify-center gap-1.5 rounded-pill px-2 text-[12px] ${
+                          band === b.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
+                        {b.label}
+                        <span className="tabular-nums opacity-55">{n}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-foreground/70">
+                  {t("mywork.filter_status", "Status")}
+                </p>
+                {/* Scrolls rather than wraps: four status segments do not fit
+                    343px, and a control row that reflows to two lines as you tap
+                    through it is worse than one that slides. */}
+                <div className="kr-pressed relative flex items-center gap-1 overflow-x-auto rounded-pill p-1 [scrollbar-width:none]"
+                     role="group" aria-label="Filter by progress" data-testid="work-mobile-status-lens">
+                  {M_STATUS_PILLS.map((sp) => (
+                    <button key={sp.key} type="button"
+                      onClick={() => setStatusFilter((cur) => (cur === sp.key ? "" : sp.key))}
+                      aria-pressed={statusFilter === sp.key} data-testid={`work-status-${sp.key}`}
+                      className={`kr-seg-compact flex h-9 shrink-0 items-center rounded-pill px-3.5 text-[12px] ${
+                        statusFilter === sp.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
+                      {sp.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
           <div className="mb-3 flex justify-end lg:hidden">
             <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members} defaultType={tab}
               onOpenChange={(o) => { if (o) setOpenId(null); }}

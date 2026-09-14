@@ -4,8 +4,12 @@ import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { toast } from "sonner";
 import { Buildings, Package, Plus, Trash, UsersThree, Kanban, ListChecks, ShieldCheck, Copy, WhatsappLogo } from "@phosphor-icons/react";
+import { GlassSelect } from "./karma/GlassSelect";
 
-const inp = "w-full border border-nm-edge/40 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:bg-muted disabled:text-muted-foreground";
+// Mobile PWA (2026-09-14) — the glass field (glass.js DRAWER_FIELD), not a
+// square monospace box: Settings' company form was the last form on the old
+// input, and on a phone it read as a different app.
+const inp = "w-full rounded-2xl bg-white/80 px-4 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 ring-1 ring-inset ring-slate-900/[0.06] shadow-[inset_0_1px_2px_hsl(216_30%_25%/0.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 disabled:bg-muted disabled:text-muted-foreground";
 const uid = () => Math.random().toString(36).slice(2, 9);
 const FIELDS = [
   { key: "name", label: "Company name" },
@@ -285,10 +289,15 @@ export function CompanyDetails() {
             {opTasks.map((t, i) => (
               <div key={t._key || i} className="flex gap-2" data-testid={`os-optask-${i}`}>
                 <input data-testid={`os-optask-title-${i}`} className={inp} value={t.title} onChange={(e) => setOpTaskField(i, "title", e.target.value)} placeholder="Task title" />
-                <select data-testid={`os-optask-cat-${i}`} className="border border-nm-edge/40 px-1 py-2 text-xs font-mono focus:outline-none w-28 shrink-0" value={t.category} onChange={(e) => setOpTaskField(i, "category", e.target.value)}>
-                  {OP_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <button onClick={() => removeOpTask(i)} data-testid={`os-optask-remove-${i}`} className="border border-nm-edge/40 p-2 hover:bg-kr-accent hover:text-white transition-colors shrink-0"><Trash size={14} weight="bold" /></button>
+                {/* Our own dropdown, never the operating system's list. */}
+                <div className="w-32 shrink-0">
+                  <GlassSelect variant="field" testid={`os-optask-cat-${i}`} ariaLabel="Task category" align="end"
+                    value={t.category} onChange={(v) => setOpTaskField(i, "category", v)}
+                    options={OP_CATS.map((c) => ({ value: c, label: c }))}
+                    triggerClassName="h-full min-h-10 rounded-xl bg-white/80 px-3 text-xs capitalize ring-1 ring-inset ring-slate-900/[0.06]" />
+                </div>
+                <button type="button" onClick={() => removeOpTask(i)} data-testid={`os-optask-remove-${i}`} aria-label="Remove task"
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/80 text-slate-600 ring-1 ring-inset ring-slate-900/[0.06] transition-colors hover:bg-rose-50 hover:text-rose-600"><Trash size={14} weight="bold" aria-hidden="true" /></button>
               </div>
             ))}
           </div>

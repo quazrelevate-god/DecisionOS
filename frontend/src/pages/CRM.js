@@ -758,7 +758,7 @@ export default function CRM() {
           )}
         </div>
       ) : view === "grid" ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3" data-testid="crm-grid">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3 lg:gap-4" data-testid="crm-grid">
           {visible.map((c) => (
             <ContactCard key={c.id} c={c} info={describe(c)} onOpen={openProfile(c)} canOpen={can360} />
           ))}

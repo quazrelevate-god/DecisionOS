@@ -377,7 +377,7 @@ function MemberLeaveHistory({ userId }) {
       {mine.length === 0 ? (
         <p className={`px-4 py-3 text-sm text-slate-500 ${DRAWER_CARD}`}>No leave on record.</p>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-3 lg:grid-cols-2">
           {mine.slice(0, 6).map((lv) => (
             <LeaveCard key={lv.id} lv={lv} canAct={false} onRefresh={refresh} />
           ))}

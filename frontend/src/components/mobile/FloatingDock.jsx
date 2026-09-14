@@ -156,6 +156,7 @@ export function FloatingDock({
       // On a phone the offset collapses to the original 1rem.
       className="lg:hidden fixed app-dock-left app-dock-right z-[10000] bottom-safe-4"
       data-testid="floating-dock"
+      data-mobile-chrome=""
       aria-label={t("nav.primary", "Primary")}
     >
       <div

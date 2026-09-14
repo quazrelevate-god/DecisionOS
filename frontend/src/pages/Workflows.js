@@ -145,7 +145,7 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
           leaves viewport units alone). */}
       <DialogContent
         className="kr-bento flex flex-col border-0 [&>button.absolute]:hidden
-                   left-0 top-0 h-full w-full max-w-none translate-x-0 translate-y-0
+                   left-0 top-0 h-full max-h-none w-full max-w-none translate-x-0 translate-y-0 rounded-none
                    [border-radius:0]
                    [padding-top:max(1rem,env(safe-area-inset-top))]
                    [padding-bottom:max(1rem,env(safe-area-inset-bottom))]

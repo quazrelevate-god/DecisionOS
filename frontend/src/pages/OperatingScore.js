@@ -217,7 +217,7 @@ function OverallCard({ title, score, caption, delta, onExplain, testid }) {
             <p className="mt-2 max-w-xs text-sm leading-relaxed text-slate-600">{caption}</p>
             {delta}
           </div>
-          <div className="hidden sm:block"><ScoreRing value={score} testid="operating-gauge" /></div>
+          <div className="hidden lg:block"><ScoreRing value={score} testid="operating-gauge" /></div>
         </div>
       </div>
     </section>
@@ -373,7 +373,7 @@ function TeamHealthCard({ stats }) {
   return (
     <section className={`p-5 sm:p-6 ${CARD}`} data-testid="operating-quick-stats">
       <SectionHead icon={UsersThree} title="Team & work health" sub="Key indicators across your team's work." />
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <HealthTile icon={Check} tone="good" label="Tasks done" value={stats.done} to="/my-work" testid="ops-stat-done"
           instrument={<TileMeter value={pctOf(stats.done, total)} tone="good" label={`${stats.done} of ${total} tasks done`} />} />
         <HealthTile icon={ClipboardText} tone="quiet" label="Open tasks" value={stats.open} to="/my-work" testid="ops-stat-open"
@@ -395,7 +395,7 @@ function OwnExecutionCard({ stats, title = "Your own execution", sub = "Your per
   return (
     <section className={`p-5 sm:p-6 ${CARD}`} data-testid="operating-personal-snapshot">
       <SectionHead icon={User} title={title} sub={sub} />
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <HealthTile icon={ChartLineUp} tone="good" label="Completion" value={stats.completion_rate} suffix="%" to="/my-work" testid="ops-me-completion"
           instrument={<TileMeter value={stats.completion_rate} tone="good" label={`${stats.completed} of ${stats.actionable} of your tasks done`} showValue={false} />} />
         <HealthTile icon={ClipboardText} tone="quiet" label="Open" value={stats.open} to="/my-work" testid="ops-me-open"
@@ -473,9 +473,8 @@ function OwnerView({ data }) {
 
       <TeamExecution
         employees={rankedEmployees}
-        formula={enough ? (
-          <FormulaExplainer open={formulaOpen} onToggle={() => setFormulaOpen((v) => !v)} weights={weights} setWeights={setWeights} panelRef={formulaRef} />
-        ) : null}
+        panel={enough ? <FormulaPanel open={formulaOpen} weights={weights} setWeights={setWeights} panelRef={formulaRef} /> : null}
+        toggle={enough ? <FormulaToggle open={formulaOpen} onToggle={() => setFormulaOpen((v) => !v)} /> : null}
       />
 
       {drillCat && (
@@ -491,9 +490,10 @@ function OwnerView({ data }) {
   );
 }
 
-/* The team, on a dark card. The "How is this calculated?" control sits on the
-   notch in its top edge; its panel, when open, unfolds above the card. */
-function TeamExecution({ employees, formula }) {
+/* The team, on a dark card. The "How is this calculated?" pill sits in a cut
+   carved out of the card's top edge (.kr-notch, lg and up — on a phone the
+   pill sits above the card); its panel, when open, unfolds above both. */
+function TeamExecution({ employees, panel, toggle }) {
   const { tenant } = useAuth();
   const roles = useMemo(() => tenant?.roles || [], [tenant]);
   const [sortBy, setSortBy] = useState("score");
@@ -518,9 +518,12 @@ function TeamExecution({ employees, formula }) {
 
   return (
     <div className="mt-8">
-      {formula}
+      {panel}
+      {/* The pill's centre lands on the card's top edge (-mb = half its 44px). */}
+      {toggle && <div className="relative z-10 mb-3 flex justify-center lg:-mb-[22px]">{toggle}</div>}
+      {/* A mask clips box-shadow too, so the notched card carries no outer shadow. */}
       <section data-testid="operating-band"
-        className={`relative mt-6 rounded-[2rem] px-4 pb-5 pt-9 text-white ring-1 ring-inset ring-white/[0.06] shadow-[0_30px_60px_-30px_hsl(0_0%_0%/0.6)] sm:px-6 lg:px-7 ${DARK_BAND}`}>
+        className={`relative rounded-[2rem] px-4 pb-5 pt-7 text-white ring-1 ring-inset ring-white/[0.06] sm:px-6 lg:px-7 ${toggle ? "kr-notch lg:pt-12" : ""} ${DARK_BAND}`}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/[0.08] ring-1 ring-inset ring-white/15">
@@ -565,7 +568,7 @@ function TeamExecution({ employees, formula }) {
   );
 }
 
-const TEAM_COLS = "grid-cols-[1.75rem_minmax(0,1fr)_auto] sm:grid-cols-[1.75rem_minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,1.3fr)_minmax(0,1.6fr)]";
+const TEAM_COLS = "grid-cols-[1.75rem_minmax(0,1fr)_auto] lg:grid-cols-[1.75rem_minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,1.3fr)_minmax(0,1.6fr)]";
 
 function TeamTable({ rows, offset, roles, continuation, continued }) {
   return (
@@ -575,8 +578,8 @@ function TeamTable({ rows, offset, roles, continuation, continued }) {
     )}>
       <div aria-hidden="true"
         className={cn(`gap-3 border-b border-white/[0.06] px-4 py-2.5 text-xs text-white/55 ${TEAM_COLS}`, continuation ? "hidden xl:grid" : "grid")}>
-        <span>#</span><span>Member</span><span className="hidden sm:block">Department</span>
-        <span className="text-right sm:text-left">Score</span><span className="hidden sm:block">Activity (tasks | open | overdue)</span>
+        <span>#</span><span>Member</span><span className="hidden lg:block">Department</span>
+        <span className="text-right lg:text-left">Score</span><span className="hidden lg:block">Activity (tasks | open | overdue)</span>
       </div>
       <ul>
         {rows.map((e, i) => (
@@ -590,17 +593,17 @@ function TeamTable({ rows, offset, roles, continuation, continued }) {
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{e.name}</span>
-                  <span className="block text-[11px] leading-snug text-white/50 sm:hidden">
+                  <span className="block text-[11px] leading-snug text-white/50 lg:hidden">
                     {roleLabelFor(roles, e.role)} · {e.done} done · {e.open} open{e.overdue > 0 ? ` · ${e.overdue} overdue` : ""}
                   </span>
                 </span>
               </span>
-              <span className="hidden truncate text-white/70 sm:block">{roleLabelFor(roles, e.role)}</span>
-              <span className="flex items-center justify-end gap-3 sm:justify-start">
+              <span className="hidden truncate text-white/70 lg:block">{roleLabelFor(roles, e.role)}</span>
+              <span className="flex items-center justify-end gap-3 lg:justify-start">
                 <span className="w-6 text-right font-semibold tabular-nums">{e.score != null ? e.score : "—"}</span>
-                <Bar value={e.score} dark label={`${e.name} score`} className="hidden h-1.5 w-16 sm:block lg:w-20" />
+                <Bar value={e.score} dark label={`${e.name} score`} className="hidden h-1.5 w-16 lg:block lg:w-20" />
               </span>
-              <span className="hidden truncate text-xs text-white/65 sm:block">
+              <span className="hidden truncate text-xs text-white/65 lg:block">
                 {e.done} done <span className="mx-1 text-white/25">|</span> {e.open} open <span className="mx-1 text-white/25">|</span>{" "}
                 <span className={e.overdue > 0 ? "text-rose-300" : ""}>{e.overdue} overdue</span>
               </span>
@@ -841,9 +844,9 @@ function CategoryDrill({ cat, value, drivers, drill, onClose }) {
 
 // ─── formula panel ───────────────────────────────────────────────────────────
 
-/* KM-28 — a real control, centred, sitting on the notch of the dark card below
-   (the reference's placement). Its panel unfolds above the card. */
-function FormulaExplainer({ open, onToggle, weights = DEFAULT_WEIGHTS, setWeights, panelRef }) {
+/* KM-28 — the formula and the weights, unfolded above the Team execution card.
+   The control that opens it is FormulaToggle, in the card's notch. */
+function FormulaPanel({ open, weights = DEFAULT_WEIGHTS, setWeights, panelRef }) {
   const total = Object.values(weights).reduce((a, b) => a + b, 0);
   return (
     <div ref={panelRef}>
@@ -899,15 +902,19 @@ function FormulaExplainer({ open, onToggle, weights = DEFAULT_WEIGHTS, setWeight
           </div>
         </div>
       )}
-      <div className="relative z-10 -mb-12 flex justify-center">
-        <button type="button" onClick={onToggle} aria-expanded={open} aria-controls="operating-formula-panel" data-testid="operating-formula-toggle"
-          className={`flex h-12 items-center gap-2 rounded-pill px-6 text-sm font-medium text-slate-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
-          <Info size={16} aria-hidden="true" />
-          How is this calculated?
-          <CaretDown size={13} weight="bold" aria-hidden="true" className={`transition-transform duration-200 motion-reduce:transition-none ${open ? "rotate-180" : ""}`} />
-        </button>
-      </div>
     </div>
+  );
+}
+
+/** 44px tall — .kr-notch's cut is sized to this pill (its lower half + 10px). */
+function FormulaToggle({ open, onToggle }) {
+  return (
+    <button type="button" onClick={onToggle} aria-expanded={open} aria-controls="operating-formula-panel" data-testid="operating-formula-toggle"
+      className={`flex h-11 items-center gap-2 rounded-pill px-5 text-sm font-medium text-slate-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
+      <Info size={16} aria-hidden="true" />
+      How is this calculated?
+      <CaretDown size={13} weight="bold" aria-hidden="true" className={`transition-transform duration-200 motion-reduce:transition-none ${open ? "rotate-180" : ""}`} />
+    </button>
   );
 }
 

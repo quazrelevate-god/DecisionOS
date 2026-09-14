@@ -104,6 +104,7 @@ export function InstallPrompt() {
         <div
           data-testid="install-prompt"
           role="region"
+          data-mobile-chrome=""
           aria-label={t("install.title", "Add DecisionOS to your home screen")}
           /* KM-50 — the toast wore .nm-raised + shadow-brutal-lg, both from
              design systems this app retired two passes ago; it was the last

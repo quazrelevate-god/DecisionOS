@@ -1,34 +1,43 @@
+// The Capture Review Queue — WhatsApp captures reviewed before they become
+// work. Rendered as the Finance page's Inbox tab (CaptureReview).
+//
+// 2026-09-14 — on the Finance glass with the page rebuild: a status track,
+// white glass cards, tinted status chips that say what they mean, our own
+// dropdowns for every choice, ink for Approve. Flows and data-testids are
+// unchanged.
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import api from "../lib/api";
-import { useAuth } from "../context/AuthContext";
-import { PageHeader, Chip, EmptyState } from "../components/common";
-import { timeAgo, fullTime } from "../lib/format";
 import { toast } from "sonner";
 import {
-  WhatsappLogo, CheckCircle, XCircle, ArrowsClockwise, Question, PencilSimple,
-  ShieldWarning, Clock, FilePdf, ChatText,
+  ArrowsClockwise, ChatText, CheckCircle, FilePdf, PencilSimple, Question, ShieldWarning, Tray, WhatsappLogo, XCircle,
 } from "@phosphor-icons/react";
+import { cn } from "@/lib/utils";
+import api from "../lib/api";
+import { useAuth } from "../context/AuthContext";
+import { PageHeader } from "../components/common";
+import { timeAgo, fullTime } from "../lib/format";
+import { GlassSelect } from "../components/karma/GlassSelect";
+import { DRAWER_FIELD, DRAWER_TRACK, INK_PILL } from "../components/karma/glass";
+import { CARD, EmptyNote, SMALL_INK, SMALL_PILL, Tag } from "./finance/financeKit";
 
-const inp = "w-full border border-border px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-600";
+const INPUT = cn(DRAWER_FIELD, "h-10 rounded-xl px-3 py-0 text-sm");
+const LABEL = "mb-1 block text-[11px] font-medium text-slate-500";
 
-const CLASS_STYLE = {
-  invoice: "bg-brand-blue text-white", payment: "bg-brand-blue text-white",
-  purchase: "bg-purple-600 text-white", sales: "bg-green-600 text-white",
-  hr: "bg-pink-600 text-white", meeting: "bg-amber-500 text-black",
-  decision: "bg-primary text-primary-foreground", approval: "bg-brand-600 text-white",
-  workflow: "bg-teal-600 text-white", operational_task: "bg-black/10 text-black",
-  other: "bg-black/10 text-black",
-};
 const STATUS_TABS = [
   { key: "pending_review", label: "Pending" },
-  { key: "needs_attention", label: "Needs Attention" },
+  { key: "needs_attention", label: "Needs attention" },
   { key: "clarification_requested", label: "Clarification" },
   { key: "executed", label: "Filed" },
   { key: "rejected", label: "Rejected" },
 ];
 const ROLE_OPTS = ["sales", "finance", "purchase", "hr", "operations", "owner"];
 const PRIORITY_OPTS = ["low", "medium", "high"];
+const BUCKETS = [
+  { value: "expense", label: "Expense" },
+  { value: "asset", label: "Asset" },
+  { value: "inventory", label: "Inventory" },
+];
+const money = (n) => `₹${Number(n).toLocaleString()}`;
 
 export default function Captures() {
   return (
@@ -43,7 +52,7 @@ export function CaptureReview() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [tab, setTab] = useState("pending_review");
-  const { data: rows = [], isLoading } = useQuery({
+  const { data: rows = [], isLoading, isError } = useQuery({
     queryKey: ["captures", tab],
     queryFn: () => api.get(`/captures?status=${tab}`).then((r) => r.data),
     refetchInterval: 20000,
@@ -56,19 +65,35 @@ export function CaptureReview() {
 
   return (
     <div data-testid="captures-page">
-      <div className="flex flex-wrap gap-2 mb-6">
-        {STATUS_TABS.map((t) => (
-          <button key={t.key} data-testid={`capture-tab-${t.key}`} onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm font-medium border border-border transition-all ${tab === t.key ? "bg-primary text-primary-foreground shadow-sm" : "bg-white hover:bg-accent"}`}>
-            {t.label}
-          </button>
-        ))}
+      <div className="-mx-4 mb-5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden">
+        <div role="group" aria-label="Review status" className={`inline-flex gap-1 rounded-pill p-1 ${DRAWER_TRACK}`}>
+          {STATUS_TABS.map((s) => {
+            const active = tab === s.key;
+            return (
+              <button key={s.key} type="button" data-testid={`capture-tab-${s.key}`} onClick={() => setTab(s.key)} aria-pressed={active}
+                className={cn(
+                  "h-9 shrink-0 whitespace-nowrap rounded-pill px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25",
+                  active ? INK_PILL : "text-slate-600 hover:bg-white/80 hover:text-slate-900",
+                )}>
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <div className="space-y-3" aria-busy="true">
+          {[0, 1].map((i) => <div key={i} className="ds-skeleton h-44 rounded-[1.6rem]" />)}
+        </div>
+      ) : isError ? (
+        <div className={CARD}>
+          <EmptyNote icon={XCircle} title="Couldn't load the queue" hint="You may not review captures for this role, or the connection dropped." />
+        </div>
       ) : rows.length === 0 ? (
-        <EmptyState title="Nothing here" hint="WhatsApp messages appear here as AI-drafted items for your review before anything is created." />
+        <div className={CARD}>
+          <EmptyNote icon={Tray} title="Nothing here" hint="WhatsApp messages appear here as AI-drafted items for your review before anything is created." />
+        </div>
       ) : (
         <div className="space-y-4">
           {rows.map((c) => <CaptureCard key={c.id} c={c} user={user} onChange={refresh} />)}
@@ -153,156 +178,184 @@ function CaptureCard({ c, user, onChange }) {
   const recCounts = c.records
     ? `${(c.records.invoices || []).length} invoice, ${(c.records.payments || []).length} payment, ${(c.records.contacts || []).length} contact`
     : null;
+  const pct = c.confidence != null ? Math.round(c.confidence * 100) : null;
+  const why = [
+    `Read as “${(c.classification || "other").replace(/_/g, " ")}”`,
+    c.reviewer_perm === "finance" ? "money item → routed to Finance" : c.reviewer_role ? `routed to the ${c.reviewer_role} team` : null,
+    c.priority ? `${c.priority} priority` : null,
+    c.needs_owner ? "needs owner sign-off" : null,
+    pct != null ? (pct >= 80 ? `high AI confidence (${pct}%)` : pct >= 50 ? `medium confidence (${pct}%) — worth a check` : `low confidence (${pct}%) — please verify`) : null,
+  ].filter(Boolean);
+  const fileSrc = c.file_url ? `${process.env.REACT_APP_BACKEND_URL}${c.file_url}` : null;
 
   return (
-    <div data-testid={`capture-card-${c.id}`} className="card-brutal p-4">
-      <div className="flex items-start gap-3 flex-wrap">
-        <div className="w-10 h-10 shrink-0 flex items-center justify-center border border-border bg-green-50">
-          {c.kind === "pdf" || c.kind === "image" ? <FilePdf size={20} weight="bold" className="text-green-600" /> : <ChatText size={20} weight="bold" className="text-green-600" />}
-        </div>
+    <article data-testid={`capture-card-${c.id}`} className={`p-4 sm:p-5 ${CARD}`}>
+      <div className="flex items-start gap-3">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100">
+          {c.kind === "pdf" || c.kind === "image" ? <FilePdf size={20} aria-hidden="true" /> : <ChatText size={20} aria-hidden="true" />}
+        </span>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Chip value={c.classification.replace("_", " ")} className={CLASS_STYLE[c.classification] || "bg-black/10 text-black"} />
-            <Chip value={`review: ${c.reviewer_role}`} className="bg-white border-border" />
-            <Chip value={c.priority} className={c.priority === "high" ? "bg-danger-600 text-white" : "bg-white border-border"} />
-            {c.needs_owner && <span data-testid={`capture-escalated-${c.id}`} className="inline-flex items-center gap-1 text-xs font-bold uppercase text-danger-600"><ShieldWarning size={13} weight="bold" /> Owner approval</span>}
-            {c.status === "needs_attention" && <Chip value="needs attention" className="bg-amber-500 text-black" />}
-            {c.auto_processed && <Chip value="auto-filed" className="bg-green-600 text-white" />}
-            {c.duplicate_of && <Chip value="possible duplicate" className="bg-amber-500 text-black" />}
-            {c.confidence != null && (() => {
-              const pct = Math.round(c.confidence * 100);
-              const tone = pct >= 80 ? "bg-green-600 text-white" : pct >= 50 ? "bg-amber-500 text-black" : "bg-brand-600 text-white";
-              return <span data-testid={`capture-confidence-${c.id}`} className={`label-mono px-1.5 py-0.5 rounded ${tone}`} title="AI confidence in this classification">AI {pct}%</span>;
-            })()}
-            <span className="label-mono text-muted-foreground ml-auto flex items-center gap-1" title={c.sender_name ? `${c.sender_name}${c.wa_from ? " · " + c.wa_from : ""} · ${fullTime(c.created_at)}` : fullTime(c.created_at)}>
-              <WhatsappLogo size={12} weight="bold" />
-              {c.sender_name
-                ? <span data-testid={`capture-sender-${c.id}`}>{c.sender_name}{c.sender_role ? ` (${c.sender_role})` : ""}</span>
-                : (c.wa_from || "whatsapp")}
-              {" · "}{timeAgo(c.created_at)}
-            </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Tag>{String(c.classification || "other").replace(/_/g, " ")}</Tag>
+            <Tag className="normal-case">review: {c.reviewer_role}</Tag>
+            <Tag tone={c.priority === "high" ? "bad" : "quiet"}>{c.priority}</Tag>
+            {c.needs_owner && (
+              <Tag tone="bad" className="normal-case" data-testid={`capture-escalated-${c.id}`}>
+                <ShieldWarning size={12} weight="bold" aria-hidden="true" /> Owner approval
+              </Tag>
+            )}
+            {c.status === "needs_attention" && <Tag tone="warn" className="normal-case">needs attention</Tag>}
+            {c.auto_processed && <Tag tone="good" className="normal-case">auto-filed</Tag>}
+            {c.duplicate_of && <Tag tone="warn" className="normal-case">possible duplicate</Tag>}
+            {pct != null && (
+              <Tag tone={pct >= 80 ? "good" : pct >= 50 ? "warn" : "bad"} className="normal-case" data-testid={`capture-confidence-${c.id}`} title="AI confidence in this classification">
+                AI {pct}%
+              </Tag>
+            )}
           </div>
-          <p className="text-sm font-semibold mt-2">{c.summary}</p>
-          {c.intent && <p className="text-xs text-muted-foreground">Intent: {c.intent}</p>}
-          {(() => {
-            const parts = [];
-            parts.push(`Read as “${(c.classification || "other").replace(/_/g, " ")}”`);
-            if (c.reviewer_perm === "finance") parts.push("money item → routed to Finance");
-            else if (c.reviewer_role) parts.push(`routed to the ${c.reviewer_role} team`);
-            if (c.priority) parts.push(`${c.priority} priority`);
-            if (c.needs_owner) parts.push("needs owner sign-off");
-            if (c.confidence != null) {
-              const pct = Math.round(c.confidence * 100);
-              parts.push(pct >= 80 ? `high AI confidence (${pct}%)` : pct >= 50 ? `medium confidence (${pct}%) — worth a check` : `low confidence (${pct}%) — please verify`);
-            }
-            return (
-              <p data-testid={`capture-why-${c.id}`} className="text-xs text-muted-foreground mt-1 border-l-2 border-border pl-2">
-                <span className="font-semibold text-foreground">Why AI routed this:</span> {parts.join(" · ")}.
-              </p>
-            );
-          })()}
-          {c.text && <p className="text-xs text-muted-foreground mt-1 italic">“{c.text.slice(0, 200)}”</p>}
-          {recCounts && <p className="label-mono text-muted-foreground mt-1">Extracted: {recCounts}{c.amount ? ` · ₹${Number(c.amount).toLocaleString()}` : ""}</p>}
-          {!recCounts && c.amount ? <p className="label-mono text-muted-foreground mt-1">Amount: ₹{Number(c.amount).toLocaleString()}</p> : null}
-          {c.attention_reason && <p className="text-xs text-amber-700 mt-1">⚠ {c.attention_reason}</p>}
-          {c.escalate_reason && <p className="text-xs text-danger-600 mt-1">⚠ {c.escalate_reason}</p>}
-          {isPending && purchaseBills.length > 0 && (
-            <div className="mt-3 border border-border bg-brand-paper p-3" data-testid={`capture-buckets-${c.id}`}>
-              <p className="label-mono text-brand-600 mb-2">Classify purchase{purchaseBills.length > 1 ? "s" : ""} before approving</p>
-              <div className="space-y-2">
-                {purchaseBills.map(({ inv, i }) => {
-                  const pt = (inv.purchase_type || "").toLowerCase();
-                  const needs = !["expense", "asset", "inventory"].includes(pt);
-                  return (
-                    <div key={i} className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-semibold flex-1 min-w-0 truncate">
-                        {inv.contact_name || "Supplier"}{inv.number ? ` · #${inv.number}` : ""}{inv.amount ? ` · ₹${Number(inv.amount).toLocaleString()}` : ""}
-                      </span>
-                      <select data-testid={`capture-bucket-select-${c.id}-${i}`}
-                        className={`${inp} w-auto ${needs ? "ring-2 ring-brand-600" : ""}`}
-                        value={pt} onChange={(e) => setBucket(i, e.target.value)}>
-                        <option value="">Book as…</option>
-                        <option value="expense">Expense</option>
-                        <option value="asset">Asset</option>
-                        <option value="inventory">Inventory</option>
-                      </select>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          {c.clarification_note && <p className="text-xs text-amber-700 mt-1">Note: {c.clarification_note}</p>}
-          {c.file_url && (
-            <div className="mt-2">
-              <p className="label-mono text-muted-foreground text-[10px] mb-1">Under review — original file</p>
-              {c.kind === "image" ? (
-                <a href={`${process.env.REACT_APP_BACKEND_URL}${c.file_url}`} target="_blank" rel="noopener noreferrer" data-testid={`capture-file-${c.id}`} title="Open full image" className="inline-block border border-border transition-all">
-                  <img src={`${process.env.REACT_APP_BACKEND_URL}${c.file_url}`} alt={c.filename || "attachment"} className="h-28 w-auto object-cover" />
-                </a>
-              ) : (
-                <a href={`${process.env.REACT_APP_BACKEND_URL}${c.file_url}`} target="_blank" rel="noopener noreferrer" data-testid={`capture-file-${c.id}`}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium border border-border px-3 py-1.5 hover:bg-accent transition-colors">
-                  <FilePdf size={14} weight="bold" /> Open file{c.filename ? ` · ${c.filename}` : ""}
-                </a>
-              )}
-            </div>
-          )}
+          <p className="mt-1.5 flex items-center gap-1 text-xs text-slate-500"
+            title={c.sender_name ? `${c.sender_name}${c.wa_from ? " · " + c.wa_from : ""} · ${fullTime(c.created_at)}` : fullTime(c.created_at)}>
+            <WhatsappLogo size={13} aria-hidden="true" />
+            {c.sender_name
+              ? <span data-testid={`capture-sender-${c.id}`}>{c.sender_name}{c.sender_role ? ` (${c.sender_role})` : ""}</span>
+              : (c.wa_from || "whatsapp")}
+            {" · "}{timeAgo(c.created_at)}
+          </p>
         </div>
       </div>
 
-      {edit && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 border-t border-border/20 pt-3" data-testid={`capture-edit-${c.id}`}>
-          <label className="block"><span className="label-mono text-muted-foreground text-[10px]">Type</span>
-            <input className={inp} value={form.classification} onChange={(e) => setForm({ ...form, classification: e.target.value })} /></label>
-          <label className="block"><span className="label-mono text-muted-foreground text-[10px]">Reviewer role</span>
-            <select className={inp} value={form.reviewer_role} onChange={(e) => setForm({ ...form, reviewer_role: e.target.value, assignee_id: "" })}>
-              {ROLE_OPTS.map((r) => <option key={r} value={r}>{r}</option>)}
-            </select></label>
-          <label className="block"><span className="label-mono text-muted-foreground text-[10px]">Priority</span>
-            <select className={inp} value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
-              {PRIORITY_OPTS.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select></label>
-          <label className="block"><span className="label-mono text-muted-foreground text-[10px]">Due date</span>
-            <input type="date" className={inp} value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} /></label>
-          {roleMembers.length > 0 && (
-            <label className="block col-span-2"><span className="label-mono text-muted-foreground text-[10px]">Assign to</span>
-              <select className={inp} value={form.assignee_id} onChange={(e) => setForm({ ...form, assignee_id: e.target.value })}>
-                <option value="">Auto (by workload)</option>
-                {roleMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select></label>
+      <p className="mt-3 text-[15px] font-semibold leading-snug text-slate-900">{c.summary}</p>
+      {c.intent && <p className="mt-0.5 text-xs text-slate-500">Intent: {c.intent}</p>}
+      <p data-testid={`capture-why-${c.id}`} className="mt-2 rounded-xl bg-slate-900/[0.03] px-3 py-2 text-xs leading-relaxed text-slate-600">
+        <span className="font-semibold text-slate-800">Why AI routed this:</span> {why.join(" · ")}.
+      </p>
+      {c.text && <p className="mt-2 text-xs italic text-slate-500">“{c.text.slice(0, 200)}”</p>}
+      {recCounts && <p className="mt-1.5 text-xs text-slate-500">Extracted: {recCounts}{c.amount ? ` · ${money(c.amount)}` : ""}</p>}
+      {!recCounts && c.amount ? <p className="mt-1.5 text-xs text-slate-500">Amount: {money(c.amount)}</p> : null}
+      {c.attention_reason && <p className="mt-1.5 text-xs text-amber-800">⚠ {c.attention_reason}</p>}
+      {c.escalate_reason && <p className="mt-1.5 text-xs text-rose-700">⚠ {c.escalate_reason}</p>}
+
+      {isPending && purchaseBills.length > 0 && (
+        <div className="mt-3 rounded-2xl bg-amber-50/80 p-3 ring-1 ring-inset ring-amber-100" data-testid={`capture-buckets-${c.id}`}>
+          <p className="mb-2 text-xs font-semibold text-amber-900">Classify purchase{purchaseBills.length > 1 ? "s" : ""} before approving</p>
+          <div className="space-y-2">
+            {purchaseBills.map(({ inv, i }) => {
+              const pt = (inv.purchase_type || "").toLowerCase();
+              const needs = !["expense", "asset", "inventory"].includes(pt);
+              return (
+                <div key={i} className="flex flex-wrap items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-800">
+                    {inv.contact_name || "Supplier"}{inv.number ? ` · #${inv.number}` : ""}{inv.amount ? ` · ${money(inv.amount)}` : ""}
+                  </span>
+                  <div className="w-40">
+                    <GlassSelect variant="field" testid={`capture-bucket-select-${c.id}-${i}`} ariaLabel="Book as" placeholder="Book as…"
+                      value={pt} onChange={(v) => setBucket(i, v)} options={BUCKETS} align="end"
+                      triggerClassName={cn(INPUT, "bg-white", needs && "ring-2 ring-amber-400")} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {c.clarification_note && <p className="mt-1.5 text-xs text-amber-800">Note: {c.clarification_note}</p>}
+      {fileSrc && (
+        <div className="mt-3">
+          <p className="mb-1 text-[11px] font-medium text-slate-500">Under review — original file</p>
+          {c.kind === "image" ? (
+            <a href={fileSrc} target="_blank" rel="noopener noreferrer" data-testid={`capture-file-${c.id}`} title="Open full image"
+              className="inline-block overflow-hidden rounded-xl ring-1 ring-slate-900/[0.08]">
+              <img src={fileSrc} alt={c.filename || "attachment"} className="h-28 w-auto object-cover" />
+            </a>
+          ) : (
+            <a href={fileSrc} target="_blank" rel="noopener noreferrer" data-testid={`capture-file-${c.id}`} className={SMALL_PILL}>
+              <FilePdf size={14} aria-hidden="true" /> Open file{c.filename ? ` · ${c.filename}` : ""}
+            </a>
           )}
-          <label className="block col-span-2 md:col-span-4"><span className="label-mono text-muted-foreground text-[10px]">Summary</span>
-            <input className={inp} value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} /></label>
+        </div>
+      )}
+
+      {edit && (
+        <div className="mt-4 grid grid-cols-2 gap-2.5 border-t border-slate-900/[0.06] pt-4 md:grid-cols-4" data-testid={`capture-edit-${c.id}`}>
+          <div className="min-w-0">
+            <label htmlFor={`cap-${c.id}-type`} className={LABEL}>Type</label>
+            <input id={`cap-${c.id}-type`} className={INPUT} value={form.classification} onChange={(e) => setForm({ ...form, classification: e.target.value })} />
+          </div>
+          <div className="min-w-0">
+            <label htmlFor={`cap-${c.id}-role`} className={LABEL}>Reviewer role</label>
+            <GlassSelect id={`cap-${c.id}-role`} variant="field" ariaLabel="Reviewer role" value={form.reviewer_role}
+              onChange={(v) => setForm({ ...form, reviewer_role: v, assignee_id: "" })} triggerClassName={INPUT}
+              options={ROLE_OPTS.map((r) => ({ value: r, label: r }))} />
+          </div>
+          <div className="min-w-0">
+            <label htmlFor={`cap-${c.id}-priority`} className={LABEL}>Priority</label>
+            <GlassSelect id={`cap-${c.id}-priority`} variant="field" ariaLabel="Priority" value={form.priority}
+              onChange={(v) => setForm({ ...form, priority: v })} triggerClassName={INPUT}
+              options={PRIORITY_OPTS.map((p) => ({ value: p, label: p }))} />
+          </div>
+          <div className="min-w-0">
+            <label htmlFor={`cap-${c.id}-due`} className={LABEL}>Due date</label>
+            <input id={`cap-${c.id}-due`} type="date" className={INPUT} value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
+          </div>
+          {roleMembers.length > 0 && (
+            <div className="col-span-2 min-w-0">
+              <label htmlFor={`cap-${c.id}-assignee`} className={LABEL}>Assign to</label>
+              <GlassSelect id={`cap-${c.id}-assignee`} variant="field" ariaLabel="Assign to" value={form.assignee_id}
+                onChange={(v) => setForm({ ...form, assignee_id: v })} triggerClassName={INPUT}
+                options={[{ value: "", label: "Auto (by workload)" }, ...roleMembers.map((m) => ({ value: m.id, label: m.name }))]} />
+            </div>
+          )}
+          <div className="col-span-2 min-w-0 md:col-span-4">
+            <label htmlFor={`cap-${c.id}-summary`} className={LABEL}>Summary</label>
+            <input id={`cap-${c.id}-summary`} className={INPUT} value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} />
+          </div>
         </div>
       )}
 
       {isPending && (
-        <div className="flex flex-wrap gap-2 mt-3 border-t border-border/20 pt-3">
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-900/[0.06] pt-4">
           {edit ? (
             <>
-              <button data-testid={`capture-save-${c.id}`} disabled={busy} onClick={saveEdit} className="px-3 py-1.5 text-xs font-medium border border-border transition-all disabled:opacity-50 bg-primary text-primary-foreground flex items-center gap-1"><PencilSimple size={14} weight="bold" /> Save</button>
-              <button onClick={() => setEdit(false)} className="px-3 py-1.5 text-xs font-medium border border-border transition-all disabled:opacity-50 bg-white flex items-center gap-1">Cancel</button>
+              <button type="button" data-testid={`capture-save-${c.id}`} disabled={busy} onClick={saveEdit} className={SMALL_INK}>
+                <PencilSimple size={14} weight="bold" aria-hidden="true" /> Save
+              </button>
+              <button type="button" onClick={() => setEdit(false)} className={SMALL_PILL}>Cancel</button>
             </>
           ) : (
             <>
-              <button data-testid={`capture-approve-${c.id}`} disabled={busy || blockedByEscalation || anyUnclassified}
+              <button type="button" data-testid={`capture-approve-${c.id}`} disabled={busy || blockedByEscalation || anyUnclassified}
                 title={blockedByEscalation ? "Requires Owner approval" : anyUnclassified ? "Classify the purchase first" : ""}
-                onClick={approve} className={`px-3 py-1.5 text-xs font-medium border border-border transition-all disabled:opacity-50 flex items-center gap-1 ${blockedByEscalation || anyUnclassified ? "bg-black/20 text-black/50 cursor-not-allowed" : "bg-green-600 text-white"}`}>
-                <CheckCircle size={14} weight="bold" /> Approve
+                onClick={approve} className={SMALL_INK}>
+                <CheckCircle size={14} weight="bold" aria-hidden="true" /> Approve
               </button>
-              <button data-testid={`capture-edit-btn-${c.id}`} disabled={busy} onClick={() => setEdit(true)} className="px-3 py-1.5 text-xs font-medium border border-border transition-all disabled:opacity-50 bg-white flex items-center gap-1"><PencilSimple size={14} weight="bold" /> Edit</button>
-              <button data-testid={`capture-reassign-${c.id}`} disabled={busy} onClick={reassign} className="px-3 py-1.5 text-xs font-medium border border-border transition-all disabled:opacity-50 bg-white flex items-center gap-1"><ArrowsClockwise size={14} weight="bold" /> Reassign</button>
-              <button data-testid={`capture-clarify-${c.id}`} disabled={busy} onClick={clarify} className="px-3 py-1.5 text-xs font-medium border border-border transition-all disabled:opacity-50 bg-white flex items-center gap-1"><Question size={14} weight="bold" /> Clarify</button>
-              <button data-testid={`capture-reject-${c.id}`} disabled={busy} onClick={reject} className="px-3 py-1.5 text-xs font-medium border border-border transition-all disabled:opacity-50 bg-white text-danger-600 flex items-center gap-1"><XCircle size={14} weight="bold" /> Reject</button>
+              <button type="button" data-testid={`capture-edit-btn-${c.id}`} disabled={busy} onClick={() => setEdit(true)} className={SMALL_PILL}>
+                <PencilSimple size={14} weight="bold" aria-hidden="true" /> Edit
+              </button>
+              <button type="button" data-testid={`capture-reassign-${c.id}`} disabled={busy} onClick={reassign} className={SMALL_PILL}>
+                <ArrowsClockwise size={14} weight="bold" aria-hidden="true" /> Reassign
+              </button>
+              <button type="button" data-testid={`capture-clarify-${c.id}`} disabled={busy} onClick={clarify} className={SMALL_PILL}>
+                <Question size={14} weight="bold" aria-hidden="true" /> Clarify
+              </button>
+              <button type="button" data-testid={`capture-reject-${c.id}`} disabled={busy} onClick={reject} className={cn(SMALL_PILL, "text-rose-700")}>
+                <XCircle size={14} weight="bold" aria-hidden="true" /> Reject
+              </button>
             </>
           )}
-          {blockedByEscalation && <span className="text-xs text-danger-600 self-center">Waiting for Owner — you can still edit or reassign.</span>}
+          {blockedByEscalation && <span className="text-xs text-rose-700">Waiting for Owner — you can still edit or reassign.</span>}
         </div>
       )}
 
-      {c.status === "executed" && <p className="text-xs text-green-700 mt-2 flex items-center gap-1"><CheckCircle size={13} weight="bold" /> {c.auto_processed ? "Auto-filed" : "Approved"} & created ({c.result_ref?.type})</p>}
-      {c.status === "rejected" && <p className="text-xs text-danger-600 mt-2 flex items-center gap-1"><XCircle size={13} weight="bold" /> Rejected</p>}
-    </div>
+      {c.status === "executed" && (
+        <p className="mt-3 flex items-center gap-1 text-xs text-emerald-700">
+          <CheckCircle size={13} weight="bold" aria-hidden="true" /> {c.auto_processed ? "Auto-filed" : "Approved"} & created ({c.result_ref?.type})
+        </p>
+      )}
+      {c.status === "rejected" && (
+        <p className="mt-3 flex items-center gap-1 text-xs text-rose-700">
+          <XCircle size={13} weight="bold" aria-hidden="true" /> Rejected
+        </p>
+      )}
+    </article>
   );
 }

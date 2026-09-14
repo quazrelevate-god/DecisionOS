@@ -4,8 +4,14 @@ import { cva } from "class-variance-authority";
 import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { useBackDismiss } from "@/hooks/useBackDismiss"
 
-const Sheet = SheetPrimitive.Root
+/* Mobile PWA (2026-09-14) — Back closes a controlled sheet on a phone: the
+   task drawer, My Work's view and filter sheets. */
+function Sheet({ open, onOpenChange, ...props }) {
+  useBackDismiss(open, onOpenChange)
+  return <SheetPrimitive.Root open={open} onOpenChange={onOpenChange} {...props} />
+}
 
 const SheetTrigger = SheetPrimitive.Trigger
 

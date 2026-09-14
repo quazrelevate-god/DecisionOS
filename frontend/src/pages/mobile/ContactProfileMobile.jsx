@@ -212,7 +212,8 @@ export default function ContactProfileMobile() {
               <li key={d.id} className="text-sm">
                 <span className="font-semibold">{d.title}</span>
                 <span className="block text-muted-foreground">
-                  {humanDate(d.due_date) || `Due ${d.due_date}`}
+                  {/* CR-08 — a delivery with no due date read "Due undefined". */}
+                  {humanDate(d.due_date) || (d.due_date ? `Due ${d.due_date}` : "No due date")}
                   {d.amount ? ` · ${inr(d.amount)}` : ""}
                 </span>
               </li>

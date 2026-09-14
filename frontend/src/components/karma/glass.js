@@ -40,7 +40,10 @@ export const QUIET_CHIP = "bg-slate-500/[0.07] text-slate-600 ring-slate-500/10"
 // panel, a row, and a group label, shared by GlassSelect and by DropdownMenu
 // content so every list in the app is the same white glass. focus: overrides
 // the stock menu item's accent wash.
-export const GLASS_MENU = "z-[80] overflow-hidden rounded-2xl border-0 bg-white/90 text-slate-800 ring-1 ring-inset ring-slate-900/[0.06] shadow-[0_18px_44px_-18px_hsl(0_0%_0%/0.38),inset_0_1px_0_hsl(0_0%_100%/0.9)] backdrop-blur-xl data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0";
+// Mobile PWA (2026-09-14): z-[10030], above the phone dock and Dex button
+// (z 10000) — a list opening near the bottom of a phone used to slide under
+// them — and still below the install prompt and the More panel.
+export const GLASS_MENU = "z-[10030] overflow-hidden rounded-2xl border-0 bg-white/90 text-slate-800 ring-1 ring-inset ring-slate-900/[0.06] shadow-[0_18px_44px_-18px_hsl(0_0%_0%/0.38),inset_0_1px_0_hsl(0_0%_100%/0.9)] backdrop-blur-xl data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0";
 export const GLASS_MENU_ITEM = "relative flex min-h-11 w-full cursor-pointer select-none items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-700 outline-none transition-colors focus:bg-slate-900/[0.06] focus:text-slate-900 data-[highlighted]:bg-slate-900/[0.06] data-[highlighted]:text-slate-900 data-[state=checked]:font-semibold data-[state=checked]:text-slate-900 data-[disabled]:pointer-events-none data-[disabled]:opacity-40 lg:min-h-10";
 export const GLASS_MENU_LABEL = "px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500";
 

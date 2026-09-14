@@ -383,12 +383,14 @@ export default function Layout({ children }) {
           <button data-testid="notif-bell"
             aria-label={count > 0 ? `Notifications, ${count} need you` : "Notifications"}
             className={mobile
-              ? "relative flex items-center justify-center border border-border hover:bg-accent transition-colors w-12 h-12"
+              /* Mobile PWA (2026-09-14) — the phone bell joins the glass: a
+                 white glass circle instead of the retired square outline. */
+              ? "relative grid h-12 w-12 place-items-center rounded-full bg-white/75 text-slate-800 ring-1 ring-inset ring-slate-900/[0.05] shadow-[0_6px_16px_-8px_hsl(216_30%_25%/0.35),inset_0_1px_0_hsl(0_0%_100%/0.9)] transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25"
               : "relative h-10 w-10 rounded-full border border-kr-ink/55 grid place-items-center text-foreground/90 transition-colors hover:bg-white/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"}>
             <Bell size={mobile ? 22 : 18} weight="regular" />
             {count > 0 && (
               <span data-testid="notif-count" className={mobile
-                ? "absolute -top-2 -right-2 grid h-5 min-w-5 place-items-center rounded-full bg-kr-accent px-1 text-[10px] font-bold leading-none text-white"
+                ? "absolute -top-1 -right-1 grid h-5 min-w-5 place-items-center rounded-full bg-kr-accent px-1 text-[10px] font-bold leading-none text-white"
                 : "absolute -top-1.5 -right-1.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-kr-accent px-1 text-[10px] font-bold leading-none text-white"}>
                 {mobile ? Math.min(9, count) : (unread > 99 ? "99+" : unread)}
               </span>
@@ -723,6 +725,7 @@ export default function Layout({ children }) {
              comes from the content wrapper's own lg:p-8; main's copy of it was
              doubling to 64px, which read as dead space once main stopped being
              the scroller and its box could no longer scroll that padding away. */
+          data-app-scroller=""
           className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-dock app-canvas lg:overflow-x-clip lg:pb-0"
         >
           <AnnouncementBanner />
@@ -768,7 +771,7 @@ export default function Layout({ children }) {
       {/* KM-11 — the vignette. Rendered always so it can transition rather
           than pop in, and gated by a data attribute. Sits below the dock's
           z-index so the bar stays fully lit while the edges fall away. */}
-      <div className="kr-vignette lg:hidden" data-on={dex.recording ? "1" : "0"}
+      <div className="kr-vignette lg:hidden" data-on={dex.recording ? "1" : "0"} data-mobile-chrome=""
            data-testid="dex-vignette" aria-hidden="true" />
 
       {/* KM-23 — the FAB opens the CONVERSATION again, and this time it is a

@@ -576,6 +576,21 @@
    7.5rem clears the taller bar with a real gap rather than a hairline. */
 .pb-dock { padding-bottom: calc(7.5rem + env(safe-area-inset-bottom, 0px)); }
 
+/* Mobile PWA (2026-09-14) — the dock, the Dex button, their pickers, the
+   vignette and the install prompt step aside while a modal dialog, sheet or
+   drawer is open. They sit at z 10000, above Radix's z-50 overlays, so they
+   covered the bottom ~5.5rem of every sheet: New Task's Create button, the
+   task drawer's last actions, the filter sheet's Done. More (AllAppsPanel)
+   grows out of the dock and marks itself data-keeps-chrome, so it keeps it. */
+@media (max-width: 1023.98px) {
+    body:has([role="dialog"][data-state="open"]:not([data-keeps-chrome])) [data-mobile-chrome],
+    body:has([role="alertdialog"][data-state="open"]) [data-mobile-chrome] {
+        opacity: 0 !important;
+        visibility: hidden;
+        pointer-events: none;
+    }
+}
+
 /* UI-SCALE · .ui-scale — the app scales with the screen. hooks/useUiScale
    writes --ui-scale (a stepped table by viewport width, 0.9…1.3) to <html>
    and puts this class on <body>, which is zoomed by it, so everything —
@@ -759,8 +774,12 @@
        same reason: 73 call sites take the new surface in one edit. Karma's
        card is a white object on the greige canvas, 28px radius, separated by
        TONE — no shadow, the faint hairline as the glare floor. */
+    /* Mobile PWA (2026-09-14) — the last pages still on this recipe
+       (Notifications, Work Coach, Calendar's panels, the desktop contact
+       profile, skeletons) join the glass: a white glass card with a lit rim
+       instead of a greige block with a hairline. One rule, every call site. */
     .card-brutal {
-        @apply bg-nm-raised border border-nm-edge/40 rounded-cardlg;
+        @apply rounded-[1.4rem] border-0 bg-white/70 ring-1 ring-inset ring-white/80 shadow-[0_10px_30px_-14px_hsl(0_0%_10%/0.22)] backdrop-blur-xl;
     }
     /* KR-2 — .shadow-hover keeps its NAME (dozens of call sites) but its
        body inverts NM-4's rule: shadows no longer exist, so THE CARD MOVES.
@@ -1038,13 +1057,16 @@
     /* A field is the one thing that is genuinely concave — you type INTO it.
        Kept separate from nm-inset because inputs also need the focus ring and
        must not inherit a card's padding assumptions. */
+    /* Mobile PWA (2026-09-14) — the glass field (glass.js DRAWER_FIELD) for the
+       forms still on this recipe: a white field with an inset hairline and a
+       neutral focus ring, not a square outline with the lavender one. */
     .nm-field {
-        @apply rounded-control bg-nm-raised border border-kr-outline/70
-               outline-none transition-shadow;
+        @apply rounded-2xl border-0 bg-white/80 ring-1 ring-inset ring-slate-900/[0.06]
+               shadow-[inset_0_1px_2px_hsl(216_30%_25%/0.08)] outline-none transition-shadow;
     }
     .nm-field:focus,
     .nm-field:focus-within {
-        @apply ring-2 ring-primary/40;
+        @apply ring-2 ring-neutral-900/25;
     }
 }
 
@@ -2062,6 +2084,21 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
     .kr-new-glow::after {
         animation: none;
         box-shadow: 0 0 0 1px hsl(var(--kr-gold) / .55);
+    }
+}
+
+/* Ops — the notch in the Team execution card's top edge: the cut the "How is
+   this calculated?" pill sits in (the founder's cut reference). A mask, not a
+   shape painted on top, so the sky shows through the cut. Sized to the pill
+   (FormulaToggle, 44px, centred on the edge): its lower 22px plus a 10px gap,
+   380px across with smooth shoulders. Below lg (the 448px phone column) the card is too narrow for a
+   cut beside its 2rem corners, so the pill sits above the card there. */
+@media (min-width: 1024px) {
+    .kr-notch {
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='380' height='32' viewBox='0 0 380 32'%3E%3Cpath d='M0 0C27 0 31 32 58 32H322C349 32 353 0 380 0Z'/%3E%3C/svg%3E") center top / 380px 32px no-repeat, linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='380' height='32' viewBox='0 0 380 32'%3E%3Cpath d='M0 0C27 0 31 32 58 32H322C349 32 353 0 380 0Z'/%3E%3C/svg%3E") center top / 380px 32px no-repeat, linear-gradient(#000 0 0);
+        mask-composite: exclude;
     }
 }
 

@@ -286,6 +286,10 @@ export default function Settings() {
         <div className="max-w-2xl">
           <ProfileCard />
           <div className="mt-6"><SecurityCard /></div>
+          {/* Mobile PWA (2026-09-14) — Sign out, for everyone. KM-5 moved it
+              out of the phone's More panel into Settings, but only the owner
+              view rendered it, so on a phone a teammate could not sign out. */}
+          <div className="mt-6"><SignOutCard /></div>
         </div>
       </div>
     );

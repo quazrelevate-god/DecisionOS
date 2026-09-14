@@ -4,6 +4,7 @@ import {
   Plus, X, Paperclip, Camera, Keyboard, Microphone, CircleNotch, Sparkle,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import { useBackDismiss } from "@/hooks/useBackDismiss";
 
 // KM-23 · DexChat — Dex as a conversation, over the page you were on.
 //
@@ -132,6 +133,8 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
   const [plusOpen, setPlusOpen] = React.useState(false);
   const endRef = React.useRef(null);
   const photoRef = React.useRef(null);
+  // Mobile PWA (2026-09-14): Back closes the conversation instead of the page.
+  useBackDismiss(open, (o) => { if (!o) onClose?.(); });
 
   React.useEffect(() => {
     if (log.length) endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });

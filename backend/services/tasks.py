@@ -210,6 +210,37 @@ def can_note_task(user: dict, t: dict, manages: bool = False) -> bool:
     return bool(_can_work_task(user, t) or t.get("created_by") == user["id"] or manages or waited_on)
 
 
+def can_see_all_tasks(user: dict, perms) -> bool:
+    """ASK-28 TK-08 (plan 6.4) — All Tasks: the owner, or anyone given
+    "See all tasks" (tasks_view_all). Off for every role by default."""
+    return user.get("role") == "owner" or "tasks_view_all" in (perms or ())
+
+
+def can_assign_any(user: dict, perms) -> bool:
+    return user.get("role") == "owner" or "tasks_assign_any" in (perms or ())
+
+
+def can_assign_person(user: dict, target: dict, team_ids, perms) -> bool:
+    """ASK-28 TK-08 (plan 6.3, D1) — who a person may give work to (as doer or
+    helper): anyone, for the owner or a holder of "Assign tasks to anyone";
+    otherwise themselves, someone in their own team (role), or one of their
+    direct reports (`team_ids`)."""
+    if can_assign_any(user, perms):
+        return True
+    if not target:
+        return False
+    if target.get("id") == user.get("id"):
+        return True
+    if target.get("role") and target.get("role") == user.get("role"):
+        return True
+    return target.get("id") in set(team_ids or [])
+
+
+def can_assign_team(user: dict, role_key: Optional[str], perms) -> bool:
+    """Routing a task to a whole team: one's own team, unless assigning to anyone."""
+    return can_assign_any(user, perms) or (bool(role_key) and role_key == user.get("role"))
+
+
 def manages_task(t: dict, team_ids) -> bool:
     """ASK-28 TK-03 — the doer or a helper on this task reports to me.
     `team_ids` are the ids of my direct reports (users whose
@@ -262,7 +293,7 @@ def reopen_updates(t: dict, new_status: str) -> dict:
 
 def task_list_query(user: dict, mine: bool = False, view: Optional[str] = None,
                     status: Optional[str] = None, can_approve_any: bool = False,
-                    team_ids: Optional[List[str]] = None) -> dict:
+                    team_ids: Optional[List[str]] = None, see_all: bool = False) -> dict:
     """The Mongo filter behind GET /tasks.
 
     view="team" (ASK-28 TK-03, "My team"): tasks whose doer or a helper is one
@@ -322,7 +353,7 @@ def task_list_query(user: dict, mine: bool = False, view: Optional[str] = None,
         # ASK-26: and tasks I am on alongside the lead.
         q["$or"] = [{"assignee_id": uid}, {"co_assignee_ids": uid},
                     {"assignee_id": None, "assignee_role": user["role"]}]
-    elif user["role"] != "owner":
+    elif user["role"] != "owner" and not see_all:  # ASK-28 TK-08: See all tasks widens it
         q["$or"] = [{"assignee_id": uid}, {"co_assignee_ids": uid}, {"assignee_role": user["role"]}]
     return q
 

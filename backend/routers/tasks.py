@@ -72,6 +72,9 @@ from services.tasks import (
     TASK_STATUSES,
     approval_stage,
     assignee_ids_of,
+    can_assign_person,
+    can_assign_team,
+    can_see_all_tasks,
     can_note_task,
     clean_co_assignees,
     completion_updates,
@@ -196,6 +199,33 @@ async def _team_ids(user: dict) -> list:
     return [r["id"] for r in rows]
 
 
+async def _check_assignable(user: dict, lead_id: Optional[str] = None, team_key: Optional[str] = None,
+                            helper_ids=()) -> None:
+    """ASK-28 TK-08 (plan 6.3, D1) — refuse work given to someone the person may
+    not assign to: a doer, the team a task is routed to, or added helpers. The
+    owner and holders of "Assign tasks to anyone" pass; everyone else may give
+    work to themselves, their own team and their direct reports."""
+    perms = user_perms(user)
+    if user.get("role") == "owner" or "tasks_assign_any" in perms:
+        return
+    if team_key and not can_assign_team(user, team_key, perms):
+        raise HTTPException(status_code=403, detail=(
+            "You can hand tasks to your own team only. Ask someone with \"Assign tasks to anyone\" "
+            "to give this to another team."))
+    ids = [i for i in dict.fromkeys([lead_id, *(helper_ids or [])]) if i]
+    if not ids:
+        return
+    team_ids = await _team_ids(user)
+    people = {u["id"]: u for u in await db.users.find(
+        {"tenant_id": user["tenant_id"], "id": {"$in": ids}}, {"_id": 0, "id": 1, "role": 1, "name": 1}).to_list(len(ids))}
+    for i in ids:
+        target = people.get(i)
+        if target and not can_assign_person(user, target, team_ids, perms):
+            raise HTTPException(status_code=403, detail=(
+                f"You can give tasks to yourself, your own team or the people who report to you, not "
+                f"{target.get('name') or 'that person'}. Ask someone with \"Assign tasks to anyone\"."))
+
+
 async def _tenant_industry(tenant_id: str) -> str:
     t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "industry": 1})
     return (t or {}).get("industry") or "general"
@@ -272,7 +302,8 @@ async def list_tasks(
     # ASK-28 TK-03: ?view=team — work my direct reports are doing or helping on.
     q = task_list_query(user, mine=bool(mine), view=view, status=status,
                         can_approve_any="approvals" in user_perms(user),
-                        team_ids=await _team_ids(user) if view == "team" else None)
+                        team_ids=await _team_ids(user) if view == "team" else None,
+                        see_all=can_see_all_tasks(user, user_perms(user)))  # ASK-28 TK-08
     tasks = await db.tasks.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     return await enrich_tasks(tasks)
 
@@ -282,7 +313,8 @@ async def get_task(task_id: str, user: dict = Depends(get_current_user)):
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Task not found")
-    allowed = (user.get("role") == "owner" or _can_work_task(user, t)
+    allowed = (user.get("role") == "owner" or "tasks_view_all" in user_perms(user)  # ASK-28 TK-08
+               or _can_work_task(user, t)
                or t.get("approver_id") == user["id"] or t.get("created_by") == user["id"]
                or (t.get("waiting_on") or {}).get("user_id") == user["id"]  # ASK-28 TK-07: waited on
                or manages_task(t, await _team_ids(user)))  # ASK-28 TK-03: their manager
@@ -344,7 +376,8 @@ async def task_activity(task_id: str, user: dict = Depends(get_current_user)):
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Task not found")
-    allowed = (user.get("role") == "owner" or _can_work_task(user, t)
+    allowed = (user.get("role") == "owner" or "tasks_view_all" in user_perms(user)  # ASK-28 TK-08
+               or _can_work_task(user, t)
                or t.get("approver_id") == user["id"] or t.get("created_by") == user["id"]
                or (t.get("waiting_on") or {}).get("user_id") == user["id"]  # ASK-28 TK-07: waited on
                or manages_task(t, await _team_ids(user)))  # ASK-28 TK-03: their manager
@@ -396,6 +429,10 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
     from services.notifications import _approver_ids, push_notification
     from services.voice import pick_least_loaded_member
     from services.workflows import derive_task_workflow_link  # WE-01
+    # ASK-28 TK-08 (plan 6.2): creating a task needs the Tasks permission (on for
+    # every role by default; the owner can switch it off for someone).
+    if "tasks" not in user_perms(user):
+        raise HTTPException(status_code=403, detail="You don't have access to create tasks.")
     tid = new_id()
     # WE-01: resolve workflow linkage BEFORE the DB write. If the user
     # supplied an invalid workflow_id or a cross-tenant one, this
@@ -440,6 +477,11 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
         lead = await db.users.find_one({"id": assignee_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "role": 1})
         role = (lead or {}).get("role")
     task_type = (inp.task_type or "").strip() or None
+    # ASK-28 TK-08 (plan 6.3): checked on what the person chose — a doer, a team
+    # to route to, helpers — not the member the least-busy rule then picks.
+    chosen_lead = assignee_id if (assignee_id and not auto_assigned) else None
+    routed_team = role if (inp.assignee_role and role == inp.assignee_role and not chosen_lead) else None
+    await _check_assignable(user, chosen_lead, routed_team, co_ids)
     # Plan 4.3: a named approver must be able to approve. Someone outside the
     # company is still dropped (anyone with approval access approves instead).
     approver_id = None
@@ -602,6 +644,13 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
     elif updates.get("assignee_id") and updates["assignee_id"] in old_co:
         # A co-assignee promoted to lead is not also listed beside themselves.
         updates["co_assignee_ids"] = [i for i in old_co if i != updates["assignee_id"]]
+    # ASK-28 TK-08 (plan 6.3): a new doer, a team to route to, or added helpers
+    # must be people this person may give work to. Taking someone off is free.
+    new_lead = updates.get("assignee_id") if updates.get("assignee_id") and updates["assignee_id"] != t.get("assignee_id") else None
+    new_team = updates.get("assignee_role") if ("assignee_role" in updates and not updates.get("assignee_id")
+                                               and updates.get("assignee_role") != t.get("assignee_role")) else None
+    if new_lead or new_team or added_co:
+        await _check_assignable(user, new_lead, new_team, added_co)
     if updates:
         if signoff_requested:
             updates["last_action"] = "Sent for approval"
@@ -781,6 +830,7 @@ async def reassign_task(task_id: str, inp: TaskReassignInput, user: dict = Depen
         member = await db.users.find_one({"id": inp.assignee_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "role": 1, "name": 1})
         if not member:
             raise HTTPException(status_code=400, detail="Member not found")
+        await _check_assignable(user, inp.assignee_id)  # ASK-28 TK-08
         updates["assignee_id"] = inp.assignee_id
         updates["assignee_role"] = member["role"]
         new_assignee_id = inp.assignee_id
@@ -791,6 +841,7 @@ async def reassign_task(task_id: str, inp: TaskReassignInput, user: dict = Depen
     elif inp.assignee_role:
         if inp.assignee_role not in await tenant_role_keys(user["tenant_id"]):
             raise HTTPException(status_code=400, detail="Invalid role")
+        await _check_assignable(user, None, inp.assignee_role)  # ASK-28 TK-08
         updates["assignee_id"] = None
         updates["assignee_role"] = inp.assignee_role
         who = inp.assignee_role

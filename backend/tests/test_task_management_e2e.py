@@ -242,9 +242,10 @@ def test_team_task_says_who_it_went_to_until_someone_reassigns(with_test_db):
     async def scenario(db):
         await _seed(db)
         with e2e_env(db, stubs=STUBS, keep=KEEP):
-            t = await _create(SALES, title="Count the yarn cones", assignee_role="operations")
+            # (the owner routes it: sales may route only to its own team since TK-08)
+            t = await _create(OWNER, title="Count the yarn cones", assignee_role="operations")
             assert (t["assignee_id"], t["auto_assigned"]) == ("u-ops", {"role": "operations", "rule": "fewest_open_tasks"})
-            assert t["created_by_name"] == SALES["name"]
+            assert t["created_by_name"] == OWNER["name"]
             # A person chooses the doer now -> the automatic note no longer holds.
             out = await tasks.update_task(t["id"], TaskUpdateInput(assignee_id="u-fin"), user=OWNER)
             assert out["assignee_id"] == "u-fin" and out.get("auto_assigned") is None
@@ -267,13 +268,14 @@ def test_helpers_hear_status_changes_and_overdue_reminders(with_test_db):
                  "services.finance_signals.dispatch_owner_alert": _zero}
         with e2e_env(db, stubs=stubs, keep=KEEP):
             import services.finance_signals as fs
-            t = await _create(SALES, title="Dispatch the Kapoor order", assignee_id="u-ops", co_assignee_ids=["u-fin"])
+            # (the owner puts finance on it: sales may add only its own team or reports since TK-08)
+            t = await _create(OWNER, title="Dispatch the Kapoor order", assignee_id="u-ops", co_assignee_ids=["u-fin"])
             await db.notifications.delete_many({})
 
             # The lead moves it: the helper and the person who asked both hear.
             await tasks.update_task(t["id"], TaskUpdateInput(status="in_progress"), user=OPS)
             heard = {n["user_id"] async for n in db.notifications.find({"entity_id": t["id"]}, {"_id": 0, "user_id": 1})}
-            assert {"u-fin", "u-sales"} <= heard and "u-ops" not in heard, heard
+            assert {"u-fin", "u-owner"} <= heard and "u-ops" not in heard, heard
 
             # Overdue by half a day: the first reminder (days 0-1 go to the people
             # on the task; later levels alert the owner) reaches the helper too.
@@ -345,6 +347,90 @@ def test_waiting_on_respects_the_start_approval_lock(with_test_db):
                               approval_required=True, approval_stage="start", approver_id="u-fin")
             await _refused(tasks.update_task(t["id"], TaskUpdateInput(waiting_on={"name": "Supplier"}), user=OPS))
             assert (await db.tasks.find_one({"id": t["id"]}))["status"] == "blocked"
+            return True
+    assert with_test_db(scenario) is True
+
+
+# ---------------------------------------------------------------------------
+# TK-08 — task access (plan Phase 6)
+# ---------------------------------------------------------------------------
+SALES2 = {"id": "u-sales2", "tenant_id": T, "role": "sales", "name": "Kiran (sales)"}
+BASE_PERMS = ["inbox", "data_input", "workflows", "tasks", "brain", "ask"]
+
+
+def test_who_may_give_work_to_whom(with_test_db):
+    async def scenario(db):
+        await _seed(db)
+        await db.users.insert_one({**SALES2, "email": f"u-sales2@{T}.test", "created_at": now_iso()})
+        with e2e_env(db, stubs=STUBS, keep=KEEP):
+            # Sales: themselves, their own team, their direct report (operations reports to sales).
+            for who in ("u-sales", "u-sales2", "u-ops"):
+                assert (await _create(SALES, title=f"for {who}", assignee_id=who))["assignee_id"] == who
+            assert (await _create(SALES, title="to the sales team", assignee_role="sales"))["assignee_role"] == "sales"
+
+            before = await db.tasks.count_documents({})
+            detail = await _refused(_create(SALES, title="for production", assignee_id="u-prod"))
+            assert "Ravi" in detail and "Assign tasks to anyone" in detail
+            await _refused(_create(SALES, title="to production", assignee_role="production"))
+            await _refused(_create(SALES, title="with a finance helper", assignee_id="u-sales2", co_assignee_ids=["u-fin"]))
+            assert await db.tasks.count_documents({}) == before, "a refused task must not be saved"
+
+            # Changing people later follows the same rule; taking someone off is free.
+            t = await _create(SALES, title="Quote for Kapoor", assignee_id="u-sales2", co_assignee_ids=["u-ops"])
+            await _refused(tasks.update_task(t["id"], TaskUpdateInput(assignee_id="u-prod"), user=SALES))
+            await _refused(tasks.update_task(t["id"], TaskUpdateInput(co_assignee_ids=["u-ops", "u-fin"]), user=SALES))
+            await _refused(tasks.update_task(t["id"], TaskUpdateInput(assignee_role="production"), user=SALES))
+            out = await tasks.update_task(t["id"], TaskUpdateInput(co_assignee_ids=[]), user=SALES)
+            assert out["co_assignee_ids"] == []
+            from models.tasks import TaskReassignInput
+            manager = {**SALES, "permissions": BASE_PERMS + ["team_manage"]}
+            await _refused(tasks.reassign_task(t["id"], TaskReassignInput(assignee_id="u-prod"), user=manager))
+
+            # "Assign tasks to anyone" lifts the limit; the owner always could.
+            anyone = {**SALES, "permissions": BASE_PERMS + ["tasks_assign_any", "team_manage"]}
+            assert (await _create(anyone, title="for production", assignee_id="u-prod"))["assignee_id"] == "u-prod"
+            assert (await _create(anyone, title="to production", assignee_role="production"))["assignee_role"] == "production"
+            out = await tasks.reassign_task(t["id"], TaskReassignInput(assignee_id="u-prod"), user=anyone)
+            assert out["assignee_id"] == "u-prod"
+            assert (await _create(OWNER, title="owner to finance", assignee_id="u-fin"))["assignee_id"] == "u-fin"
+            return True
+    assert with_test_db(scenario) is True
+
+
+def test_creating_a_task_needs_the_tasks_permission(with_test_db):
+    async def scenario(db):
+        await _seed(db)
+        with e2e_env(db, stubs=STUBS, keep=KEEP):
+            no_tasks = {**SALES, "permissions": ["inbox", "brain"]}
+            detail = await _refused(_create(no_tasks, title="Nope", assignee_id="u-sales"))
+            assert "create tasks" in detail
+            assert await db.tasks.count_documents({}) == 0
+            return True
+    assert with_test_db(scenario) is True
+
+
+def test_see_all_tasks_is_opt_in_and_finance_does_not_have_it(with_test_db):
+    async def scenario(db):
+        await _seed(db)
+        with e2e_env(db, stubs=STUBS, keep=KEEP):
+            prod_task = await _create(OWNER, title="Fix loom 4", assignee_id="u-prod")
+            sales_task = await _create(OWNER, title="Call Kapoor", assignee_id="u-sales")
+
+            # Finance (defaults, no grant): its own lane only, and the other task stays closed.
+            fin_default = {k: v for k, v in FIN.items() if k != "permissions"}
+            ids = _ids(await tasks.list_tasks(mine=False, user=fin_default))
+            assert prod_task["id"] not in ids and sales_task["id"] not in ids
+            await _refused(tasks.get_task(prod_task["id"], user=fin_default))
+
+            # Sales without the grant: its lane.
+            assert _ids(await tasks.list_tasks(mine=False, user=SALES)) == {sales_task["id"]}
+
+            # Given "See all tasks": everything, and any task opens.
+            seer = {**SALES, "permissions": BASE_PERMS + ["tasks_view_all"]}
+            assert {prod_task["id"], sales_task["id"]} <= _ids(await tasks.list_tasks(mine=False, user=seer))
+            assert (await tasks.get_task(prod_task["id"], user=seer))["id"] == prod_task["id"]
+            # My Tasks stays theirs.
+            assert _ids(await tasks.list_tasks(mine=True, user=seer)) == {sales_task["id"]}
             return True
     assert with_test_db(scenario) is True
 

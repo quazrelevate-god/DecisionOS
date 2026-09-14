@@ -826,7 +826,11 @@ async def me(user: dict = Depends(get_current_user)):
         fc = await ai_generate_finance_categories(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"), tenant.get("description") or "")
         await db.tenants.update_one({"id": tenant["id"]}, {"$set": {"finance_categories": fc}})
         tenant["finance_categories"] = fc
-    return {"user": user, "tenant": tenant}
+    # ASK-28 TK-08 (plan 6.5): the permissions the server actually applies (own
+    # list, else the company's role settings, else role defaults, plus live temp
+    # grants), so the screens decide with the same answer as the routes.
+    from core import user_perms
+    return {"user": {**user, "effective_permissions": sorted(user_perms(user))}, "tenant": tenant}
 
 
 @router.patch("/profile")

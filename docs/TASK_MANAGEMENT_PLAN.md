@@ -40,7 +40,7 @@ is assigned.
 
 ## Decisions (defaults proposed — confirm before the phase that needs them)
 
-- [ ] **D1 · Assigning outside your team** — Default: staff assign to themselves and their own team/role; owner and managers assign to anyone. *(Phase 6)*
+- [x] **D1 · Assigning outside your team** — Everyone may assign to themselves, their own team and their direct reports; the owner and anyone given "Assign tasks to anyone" may assign to anyone. "Manage Team" alone does not widen it. *(founder go-ahead 2026-09-14, built as TK-08)*
 - [x] **D2 · Approval moment** — Creator chooses *before work starts* or *before it's marked done* per task. *(founder call 2026-09-14, built as ASK-28 TK-05)*
 - [x] **D3 · Managers see their team** — Yes, through the existing Reporting Manager field: the owner keeps All Tasks, a manager gets My team. *(founder call 2026-09-14, built as TK-03)*
 - [x] **D4 · Supporting employee** — Removed everywhere (form, server, drawer, phone app); helpers cover it. *(decided 2026-09-14, done in Phase 2)*
@@ -131,16 +131,19 @@ A task has four kinds of people: **Doer** (one), **Helpers** (optional), **Asked
 - [x] **5.3 Dropped from the form:** Operational category (stored data kept), Supporting employee.
 - [x] **5.3b Due "Today" no longer reads Overdue the same morning** (date-only due dates compare as calendar days).
 - [x] **5.4 Phone:** same form as a full-screen sheet (0eaa411 opens it in full; there is no More row any more). Checked at 390x844 on 2026-09-14: nothing past the edge, Create in reach, the approval choice now wraps instead of cutting off. My Work views on the phone: one view pill for everyone opening a sheet of that person's views (My Tasks, Asked by me, My team, All Tasks, Approvals with its count).
-- [ ] **5.5 Doer list respects access** (Phase 6): only people this user may assign to.
+- [x] **5.5 Doer list respects access** (Phase 6): Assign to, helpers, Add a person and bulk reassign list only people and teams this user may assign to. *(TK-08)*
 
 ## Phase 6 — Access rules for tasks (P2)
 
-- [ ] **6.1 New permissions** in both `backend/config.py` `PERMISSION_KEYS` and `frontend/src/lib/perms.js`: `tasks_assign_any`, `tasks_view_all`. Add them to Settings → Roles. (Also sync `brain_export`, which the frontend list is missing.)
-- [ ] **6.2 Enforce creating:** `POST /tasks` requires `tasks` (on by default for every role).
-- [ ] **6.3 Enforce assigning** *(needs D1)*: outside own team/role needs `tasks_assign_any`; server rejects, form hides.
-- [ ] **6.4 "Everything" view** for `tasks_view_all`, not only the owner.
-- [ ] **6.5 One rule list** used by My Work views, the Desk and routes (first slice of ASK-21).
-- [ ] **6.6 Role × view check:** owner, finance, sales, production, a manager, an approver, an owner with a permission removed — desktop and phone, no refused requests.
+*Built 2026-09-14 as ASK-28 TK-08. Founder calls: finance does NOT see all tasks; the missing check on `PATCH /tasks/{id}` (who may edit a task) is deferred to a later discussion.*
+
+- [x] **6.1 New permissions** `tasks_assign_any` ("Assign tasks to anyone") and `tasks_view_all` ("See all tasks") in `backend/config.py` and `frontend/src/lib/perms.js`; off for every role by default (the owner has them); ticked per person in Team → member → Access (there is no per-role editor on screen; the per-role API accepts them too). *Correction:* `brain_export` stays out of the frontend list on purpose (RBAC-10: owner-only by omission, pinned by `test_s3_role_matrix`).
+- [x] **6.2 Enforce creating:** `POST /tasks` requires `tasks` (on for every role by default); refused with a reason, nothing saved.
+- [x] **6.3 Enforce assigning** *(D1)*: without "Assign tasks to anyone", a person may give work to themselves, their own team (role) and their direct reports — as doer, team to route to, or helper — on create, on changing people, and on reassign (bulk reassign goes through the same PATCH). The server refuses with who and why; New Task, the drawer's Add a person and bulk reassign list only the people and teams allowed (an empty helper list says so).
+- [x] **6.4 All Tasks** for the owner and anyone with "See all tasks": `GET /tasks?mine=false` returns everything for them and any task opens; desktop switcher, phone view sheet and `?view=all` follow it. Finance keeps its lane.
+- [x] **6.5 One rule list:** `services/tasks.py` (`can_see_all_tasks`, `can_assign_person`, `can_assign_team`) on the server and `frontend/src/lib/taskAccess.js` on the screens; `/auth/me` now sends `effective_permissions` (what the server applies, company role settings included) so both decide with the same answer.
+- [x] **6.6 Role × view check** — owner, sales, production, finance (a manager, Sunita → sai), desktop and phone: views, Assign to and helper lists exactly as the rule says, no refused requests, 49/49 (writes blocked); a mocked grant of both permissions to sales; real-save journeys for every refusal and grant. The approver path is covered by the Approvals checks (TK-02/05); "an owner with a permission removed" needs a test database to set owner exclusions — not run.
+- [ ] **6.7 (later, after discussion)** Who may edit a task through `PATCH /tasks/{id}` — today any signed-in member of the company can.
 
 ## Phase 7 — "Stuck" signals cleanup (P2)
 

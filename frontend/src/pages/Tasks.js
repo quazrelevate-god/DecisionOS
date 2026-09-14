@@ -7,6 +7,7 @@ import { opModel } from "../lib/operatingModel";
 import { toast } from "sonner";
 import { timeAgo, fullTime } from "../lib/format";
 import { userPerms } from "../lib/perms";
+import { canAssignPerson, canAssignTeam } from "../lib/taskAccess";
 import { Plus, User, Paperclip, ClockCounterClockwise, X, Check } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
@@ -118,7 +119,11 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
   const teamKey = form.assign.startsWith("r:") ? form.assign.slice(2) : "";
   const dueDate = form.due_preset === "pick" ? form.due_date : presetDate(form.due_preset);
   const roleLabel = (key) => roleOptions.find((r) => r.key === key)?.label || key;
-  const teams = roleOptions.filter((r) => r.key !== "owner");
+  // ASK-28 TK-08 (plan 5.5 / 6.3) — only the teams and people this person may
+  // give work to; the server refuses the rest.
+  const teams = roleOptions.filter((r) => r.key !== "owner" && canAssignTeam(user, r.key));
+  const assignable = members.filter((m) => canAssignPerson(user, m));
+  const helperChoices = assignable.filter((m) => m.id !== personId && !form.co_assignee_ids.includes(m.id));
   const approvers = members.filter((m) => m.role === "owner" || userPerms(m).includes("approvals"));
   const pickAssign = (v) => {
     const pid = v.startsWith("u:") ? v.slice(2) : "";
@@ -338,7 +343,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                 value={form.assign} onChange={pickAssign}
                 options={[
                   { value: "", label: "Nobody yet" },
-                  { label: "People", options: members.map((m) => ({
+                  { label: "People", options: assignable.map((m) => ({
                     value: `u:${m.id}`,
                     label: m.id === user?.id ? `Me · ${m.name}` : `${m.name} · ${roleLabel(m.role)}`,
                   })) },
@@ -426,12 +431,23 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                       })}
                     </div>
                   )}
-                  <GlassSelect id="task-helper-add" testid="task-co-assignee-select" variant="field" triggerClassName={`${inp} mt-1.5`}
-                    value="" placeholder="+ Add a helper"
-                    onChange={(id) => id && setForm({ ...form, co_assignee_ids: [...form.co_assignee_ids, id] })}
-                    options={members.filter((m) => m.id !== personId && !form.co_assignee_ids.includes(m.id))
-                      .map((m) => ({ value: m.id, label: `${m.name} · ${roleLabel(m.role)}` }))} />
-                  <p className="mt-1 text-xs text-muted-foreground">Helpers see the task in My Tasks and get its updates.</p>
+                  {helperChoices.length > 0 ? (
+                    <>
+                      <GlassSelect id="task-helper-add" testid="task-co-assignee-select" variant="field" triggerClassName={`${inp} mt-1.5`}
+                        value="" placeholder="+ Add a helper"
+                        onChange={(id) => id && setForm({ ...form, co_assignee_ids: [...form.co_assignee_ids, id] })}
+                        options={helperChoices.map((m) => ({ value: m.id, label: `${m.name} · ${roleLabel(m.role)}` }))} />
+                      <p className="mt-1 text-xs text-muted-foreground">Helpers see the task in My Tasks and get its updates.</p>
+                    </>
+                  ) : (
+                    /* ASK-28 TK-08 — nobody else this person may add: say so,
+                       instead of a dropdown that opens empty. */
+                    <p className="mt-1 text-xs text-muted-foreground" data-testid="task-co-assignee-none">
+                      {form.co_assignee_ids.length > 0
+                        ? "Everyone you can add is already helping."
+                        : "There's no one else you can add. People outside your team need someone with “Assign tasks to anyone”."}
+                    </p>
+                  )}
                 </div>
               )}
 

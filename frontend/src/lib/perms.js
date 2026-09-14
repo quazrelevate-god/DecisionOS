@@ -13,6 +13,9 @@ export const PERMISSIONS = [
   { key: "decisions_approve", label: "Approve Decisions" },
   { key: "leave_approve", label: "Approve Leave" },
   { key: "team_manage", label: "Manage Team" },
+  // ASK-28 TK-08 (plan Phase 6) — off for every role unless ticked here.
+  { key: "tasks_assign_any", label: "Assign tasks to anyone" },
+  { key: "tasks_view_all", label: "See all tasks" },
 ];
 
 export const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
@@ -33,6 +36,9 @@ export function defaultPermsForRole(role) {
 export function userPerms(user) {
   if (!user) return [];
   if (user.role === "owner") return PERMISSION_KEYS;
+  // ASK-28 TK-08 — the signed-in user carries what the server resolved
+  // (company role settings included); other members fall back to their list.
+  if (Array.isArray(user.effective_permissions)) return user.effective_permissions.filter((k) => PERMISSION_KEYS.includes(k));
   const p = user.permissions;
   if (Array.isArray(p) && p.length) return p.filter((k) => PERMISSION_KEYS.includes(k));
   return defaultPermsForRole(user.role);

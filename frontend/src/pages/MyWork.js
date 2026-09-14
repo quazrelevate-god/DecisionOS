@@ -7,6 +7,7 @@ import { timeAgo, fullTime } from "../lib/format";
 import { PageHeader, Chip, EmptyState, SkeletonCard, StickyHeader } from "../components/common";
 import { useAuth } from "../context/AuthContext";
 import { userPerms } from "../lib/perms";
+import { canAssignPerson, canAssignTeam, canSeeAllTasks } from "../lib/taskAccess";
 import { opModel } from "../lib/operatingModel";
 import { toast } from "sonner";
 // WE-14 (2026-08-16): TaskBoard import retired -- the Board sub-tab
@@ -1282,7 +1283,8 @@ function AssigneesEditor({ t, members, roleOptions, canEdit, onPatched }) {
   const teamLabel = (key) => roleOptions.find((r) => r.key === key)?.label || key;
   const people = cardPeople(t, members, roleOptions);
   const co = (t.co_assignee_ids || []).filter((id) => id && id !== t.assignee_id);
-  const addable = members.filter((m) => m.id !== t.assignee_id && !co.includes(m.id));
+  // ASK-28 TK-08 — only people this person may give work to.
+  const addable = members.filter((m) => m.id !== t.assignee_id && !co.includes(m.id) && canAssignPerson(user, m));
   const save = async (next, done) => {
     setBusy(true);
     try {
@@ -2902,6 +2904,9 @@ export default function MyWork() {
   ];
   const [params, setParams] = useSearchParams();
   const isOwner = user?.role === "owner";
+  // ASK-28 TK-08 (plan 6.4) — All Tasks is for the owner and anyone given
+  // "See all tasks"; every "All Tasks" decision below reads this.
+  const canSeeAll = canSeeAllTasks(user);
   // ASK-28 TK-04 — ?task=<id>, and the older ?focus=task:<id> form the Brief
   // and phone screens still link with, both open the task.
   const focusParam = params.get("focus") || "";
@@ -2975,7 +2980,7 @@ export default function MyWork() {
   const savedScope = loadedPrefs.scope && !URL_SCOPES.includes(loadedPrefs.scope) ? loadedPrefs.scope : "mine";
   // ASK-28 TK-04 — ?view=mine and ?view=all are addresses too (All Tasks is
   // the owner's). They are also saved as the default, unlike asked and team.
-  const scopeFromUrl = (v) => (URL_SCOPES.includes(v) || v === "mine" || (v === "all" && isOwner) ? v : null);
+  const scopeFromUrl = (v) => (URL_SCOPES.includes(v) || v === "mine" || (v === "all" && canSeeAll) ? v : null);
   const [scope, setScope] = useState(scopeFromUrl(rawView) || savedScope);
   const [tab, setTab] = useState(loadedPrefs.tab || "all");
   const [aiPriority, setAiPriority] = useState(Boolean(loadedPrefs.aiPriority));
@@ -3005,7 +3010,7 @@ export default function MyWork() {
   const setStatusFilter = (v) => setFilterParams({ status: typeof v === "function" ? v(statusFilter) : v });
   // Person only means something on All Tasks and Asked by me — on My Tasks
   // every card is yours.
-  const personFilter = (isOwner && scope === "all") || scope === "asked" || scope === "team" ? (params.get("person") || "") : "";
+  const personFilter = (canSeeAll && scope === "all") || scope === "asked" || scope === "team" ? (params.get("person") || "") : "";
   const setPersonFilter = (v) => setFilterParams({ person: v });
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [viewSheetOpen, setViewSheetOpen] = useState(false);
@@ -3058,12 +3063,12 @@ export default function MyWork() {
   // owner keeps All Tasks; a manager (anyone named as someone's Reporting
   // Manager) gets this instead.
   const team = scope === "team";
-  const mine = !(isOwner && scope === "all");
+  const mine = !(canSeeAll && scope === "all");
   // AI priority ranks the work YOU have to do; Asked by me and My team are
   // other people's work, so the ranking and its columns are off there.
   const aiOn = aiPriority && !asked && !team;
   // ASK-24 — with Person set, every card would repeat the same name.
-  const showAssignee = ((isOwner && scope === "all") || team) && !personFilter;
+  const showAssignee = ((canSeeAll && scope === "all") || team) && !personFilter;
   const tasksQ = useQuery({
     queryKey: ["tasks", asked ? "asked" : team ? "team" : mine],
     queryFn: () => api.get(asked ? "/tasks?view=asked" : team ? "/tasks?view=team" : `/tasks?mine=${mine}`).then((r) => r.data),
@@ -3163,7 +3168,7 @@ export default function MyWork() {
     setView("mywork");
     // ASK-28 TK-01/02 — a task opened from Asked by me or Approvals is in that
     // list already; only My Tasks needs to widen to All Tasks for the owner.
-    if (isOwner && !URL_SCOPES.includes(scope) && ft.assignee_id !== user?.id && !(ft.co_assignee_ids || []).includes(user?.id) && scope !== "all") { setScope("all"); return; }
+    if (canSeeAll && !URL_SCOPES.includes(scope) && ft.assignee_id !== user?.id && !(ft.co_assignee_ids || []).includes(user?.id) && scope !== "all") { setScope("all"); return; }
     // ASK-24 — a deep-linked task must be visible, so drop any filter that
     // could hide it; a finished task opens under Status: Completed.
     setTab("all");
@@ -3180,14 +3185,14 @@ export default function MyWork() {
   // isn't empty just because none of them are the owner's own todos.
   useEffect(() => {
     const f = params.get("filter");
-    if (f && isOwner && scope !== "all") setScope("all");
+    if (f && canSeeAll && scope !== "all") setScope("all");
     // ASK-24 — the Desk's ?filter= link becomes the visible Status filter, so
     // the reader can see why the list is narrowed and clear it.
     if (f === "completed" || f === "overdue" || f === "due_today") {
       setTab("all");
       setFilterParams({ filter: "", status: f });
     }
-  }, [params, isOwner]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [params, canSeeAll]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // U7-05.9: if the currently-selected tab has no items, snap back to
   // 'all' so the user doesn't see a "tab selected but no chip visible"
@@ -3281,7 +3286,7 @@ export default function MyWork() {
     if (view === "approvals") return "approvals";
     // ASK-6: leave sub-view retired; the branch that returned "leave" here
     // was mapping to a case that no longer renders.
-    if (isOwner && scope === "all") return "all";
+    if (canSeeAll && scope === "all") return "all";
     // ASK-28 TK-01 — Asked by me reached by link on a phone: its own view, so
     // the My Tasks pill doesn't claim a list that isn't yours. The phone's
     // own switcher for it comes with the mobile pass.
@@ -3298,7 +3303,7 @@ export default function MyWork() {
     { key: "mine", label: t("mywork.my_tasks"), pick: () => goView("mine") },
     { key: "asked", label: t("mywork.asked_by_me", "Asked by me"), pick: () => goView("asked") },
     ...(hasReports ? [{ key: "team", label: t("mywork.my_team", "My team"), pick: () => goView("team") }] : []),
-    ...(isOwner ? [{ key: "all", label: t("mywork.all_tasks"), pick: () => goView("all") }] : []),
+    ...(canSeeAll ? [{ key: "all", label: t("mywork.all_tasks"), pick: () => goView("all") }] : []),
     ...(showApprovalsView
       ? [{ key: "approvals", label: t("mywork.view_approvals"), count: waitingOnMe, pick: () => goView(null, "approvals") }]
       : []),
@@ -3335,7 +3340,7 @@ export default function MyWork() {
   const roleLabel = (key) => roleOptions.find((r) => r.key === key)?.label
     || String(key || "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
   const personOptions = (() => {
-    if (!((isOwner && scope === "all") || asked || team)) return [];
+    if (!((canSeeAll && scope === "all") || asked || team)) return [];
     const openBy = new Map();
     const teams = new Set();
     let unassigned = 0;
@@ -3662,13 +3667,22 @@ export default function MyWork() {
               active: view === "mywork" && scope === "asked",
               onClick: () => go("asked"),
             };
-            if (isOwner) {
+            // ASK-28 TK-08 — the owner and anyone given "See all tasks" get
+            // All Tasks (a non-owner with reports keeps My team beside it).
+            if (canSeeAll) {
               segments.push({
                 key: "mine", label: t("mywork.my_tasks"), testid: "work-scope-mine",
                 active: view === "mywork" && scope === "mine",
                 onClick: () => go("mine"),
               });
               segments.push(askedSegment);
+              if (hasReports) {
+                segments.push({
+                  key: "team", label: t("mywork.my_team", "My team"), testid: "work-scope-team",
+                  active: view === "mywork" && scope === "team",
+                  onClick: () => go("team"),
+                });
+              }
               segments.push({
                 key: "all", label: t("mywork.all_tasks"), testid: "work-scope-all",
                 active: view === "mywork" && scope === "all",
@@ -4167,7 +4181,7 @@ export default function MyWork() {
                     ariaLabel="Reassign to a team member" testid="bulk-reassign-member"
                     options={[
                       { value: "", label: "Choose a person" },
-                      ...members.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` })),
+                      ...members.filter((m) => canAssignPerson(user, m)).map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` })),
                     ]} />
                 </div>
                 <div>
@@ -4176,7 +4190,7 @@ export default function MyWork() {
                     ariaLabel="Or hand off to a whole team" testid="bulk-reassign-team"
                     options={[
                       { value: "", label: bulkAssigneeId ? "A person is chosen" : "Choose a team" },
-                      ...roleOptions.map((r) => ({ value: r.key, label: r.label })),
+                      ...roleOptions.filter((r) => canAssignTeam(user, r.key)).map((r) => ({ value: r.key, label: r.label })),
                     ]} />
                 </div>
               </div>

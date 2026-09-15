@@ -48,8 +48,8 @@ Numbers below are from the live owner company (Sharma), read-only, 2026-09-15.
 - [x] **DD2 · Who decides** — always name one person: the person who captured it if they can approve; else their reporting manager if the manager can approve; else the owner. One permission for routing and approving (`decisions_approve`). *(Yokesh, 2026-09-15: the Decide flow is for the owner and, in some cases, managers; the person who captures is the approver. Phase 2.)*
 - [x] **DD3 · Questions are not decisions** — a capture with nothing to act on gets a "Nothing to decide" reply and no decision card. *(Default taken in Phase 1.)*
 - [x] **DD4 · Reject cancels, it doesn't erase** — reject only while undecided; proposed items are simply not created; for older decisions, waiting tasks are cancelled and only untouched auto-created work is removed. *(Default taken in Phase 1.)*
-- [ ] **DD5 · Approve with edits** — the approver can change tasks (doer, due date, priority), drop an item, and change / remove the workflow before approving. *Default: yes.*
-- [ ] **DD6 · Workflow tagging** — first match an **existing** workflow (same counterparty / order) and attach or move it; create a new one only when none matches; the approver sees and can change it. *Default: yes.*
+- [x] **DD5 · Approve with edits** — the approver can change tasks (doer, due date, priority), drop an item, and change / remove the workflow before approving. *Default: yes.*
+- [x] **DD6 · Workflow tagging** — first match an **existing** workflow (same counterparty / order) and attach or move it; create a new one only when none matches; the approver sees and can change it. *Default: yes.*
 - [x] **DD7 · Duplicates** — the same capture within 24 hours is flagged "Looks like a repeat of …" instead of silently creating another decision. *(Flag, not block — built in Phase 1.)*
 
 ---
@@ -124,7 +124,18 @@ Numbers below are from the live owner company (Sharma), read-only, 2026-09-15.
 
 </details>
 
+## Desk and My Work tidy-up
+
+*Yokesh, 2026-09-15: decisions are approved on the Desk only, so they do not belong in My Work's Needs approval. Built 2026-09-15.*
+
+- [x] **Needs approval is task approvals only**: the My Work filter lists tasks waiting for approval before work starts (sent back included) or for sign-off. It no longer includes tasks waiting for a decision (32 of the 39). Those tasks still show in All tasks with "Waiting for a decision" and a link to it.
+- [x] **The decision card says who raised it and who decides**: "Raised by Priya · You decide · Waiting 13 days · Unblocks 2 tasks", or "Raised by you · Sunita decides · …" for the person following it.
+- [x] **Old test data cleared** from the Sharma company (dev data): 60 test tasks (TEST_…, TESTIT57…, QA_NOTIF_TEST…), 22 decisions with nothing to act on ("No actionable directive", "said hello"…), and their 62 notifications and 113 activity entries. Everything is copied to `cleanup_archive` first and can be restored (`scripts/cleanup_test_data_0915.py --restore <run>`).
+- [ ] **Approver on every approval task**: checked. New Task still offers "Anyone with approval access", and the backend accepts no approver, so a task with no named approver can still be created. Only 3 old test tasks had none (now cleared). Until a name is required, the owner's Desk Approvals button (My approvals) can miss those tasks.
+
 ## Phase 5 — Capture feedback and history
+
+*Later — Yokesh, 2026-09-15: not now, we will do it later.*
 
 - [ ] **5.1 Result after capture** (desktop and phone): "Decision ready for Sunita: 2 tasks, 1 workflow" with a link; or "Nothing to decide" with the answer.
 - [ ] **5.2 Failures say why** — e.g. "AI is off for this company — turn on AI consent in Settings" (14 of today's 15 failures) — with Retry.

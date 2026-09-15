@@ -2979,7 +2979,9 @@ const STATUS_LENSES = new Set(["overdue", "due_today", "completed", "waiting", "
 function statusMatches(t, status) {
   if (status === "todo" || status === "in_progress") return stageOf(t.status) === status;
   if (status === "waiting") return t.status === "waiting";
-  if (status === "approval") return t.status === "blocked" || (!!t.approval_required && t.approval_status === "pending");
+  // Yokesh 2026-09-15: task approvals only. A task waiting for its decision is
+  // blocked too, but decisions are approved on the Desk, not here.
+  if (status === "approval") return !!t.approval_required && (t.status === "blocked" || t.approval_status === "pending");
   return true; // overdue / due_today / completed are checked on their own
 }
 // ASK-28 TK-01 — My Work task lenses you reach by link (?view=…) and never

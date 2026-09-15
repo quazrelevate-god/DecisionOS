@@ -487,12 +487,15 @@ async def _cards_needs_decision(tid: str, user: dict) -> list:
     for d, following in ordered:
         creator = (umap.get(d.get("created_by") or "", {}) or {}).get("name") or "Unknown"
         waiting_days = _days_between(d.get("created_at"))
-        ctx_parts = [f"Waiting {waiting_days} day{'s' if waiting_days != 1 else ''}"]
+        # Yokesh 2026-09-15: "Raised by Priya · You decide · Waiting 13 days · …",
+        # or "Raised by you · Sunita decides" on a decision someone else decides.
+        raised_by = "you" if d.get("created_by") == user["id"] else creator
         if following:
             decider = (umap.get(d.get("approver_id") or "", {}) or {}).get("name")
-            ctx_parts.append(f"Waiting on {decider or 'an owner'}")
+            ctx_parts = [f"Raised by {raised_by}", f"{decider or 'An owner'} decides"]
         else:
-            ctx_parts.append(f"From {creator}")
+            ctx_parts = [f"Raised by {raised_by}", "You decide"]
+        ctx_parts.append(f"Waiting {waiting_days} day{'s' if waiting_days != 1 else ''}")
         # ASK-32 Phase 1: a new decision PROPOSES its work; an older one created
         # its tasks blocked and unblocks them. (`proposed_tasks` was never written.)
         prop = d.get("proposal") or {}

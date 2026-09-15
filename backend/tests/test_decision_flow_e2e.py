@@ -329,10 +329,13 @@ def test_decider_is_routed_and_told(with_test_db):
             # The Desk: Sales follows theirs (not counted); Finance has one to decide.
             sales_desk = await desk.desk_chip(chip="needs_decision", user=SALES)
             follow = [c for c in sales_desk["cards"] if c["id"] == d1["id"]]
-            assert follow and follow[0]["cta"] == "follow" and "Waiting on Finance User" in follow[0]["context_line"]
+            assert follow and follow[0]["cta"] == "follow"
+            assert follow[0]["context_line"].startswith("Raised by you · Finance User decides · Waiting 0 days"), follow[0]["context_line"]
             assert sales_desk["counters"]["needs_decision"] == 0
             fin_desk = await desk.desk_chip(chip="needs_decision", user=FIN)
             assert [c["cta"] for c in fin_desk["cards"] if c["id"] == d1["id"]] == ["review"]
+            fin_card = next(c for c in fin_desk["cards"] if c["id"] == d1["id"])
+            assert fin_card["context_line"].startswith("Raised by Sales User · You decide · Waiting 0 days"), fin_card["context_line"]
             assert fin_desk["counters"]["needs_decision"] == 1
 
             # Approving tells the person the work went to and the person who raised it.

@@ -18,6 +18,7 @@
 // decisionId, decision, said and error — and reports a done note with no
 // decision as status "nothing". If a field is renamed, change readNote() below
 // and nothing else.
+import { proposalCounts, executionSummaryCounts, proposalCreatesText } from "./decisionProposal";
 
 export const AI_CONSENT_CODE = "ai_consent_required";
 
@@ -34,7 +35,12 @@ export const OUTCOME_COPY = {
   consentLink: "Open Settings",
   failed: (reason) => (reason ? `That didn't go through: ${reason}` : "That didn't go through. Please try again."),
   slow: "Still working on it. It will show up in Decisions on the Desk.",
+  // ASK-33 Phase 4 — a Retry pressed while Dex is still reading another capture.
+  retryWait: "Dex is still reading your last one — retry once it's done.",
 };
+
+// The statuses useDexCapture's follow() ends a note on.
+export const ENDING_STATUSES = ["done", "nothing", "failed", "slow"];
 
 function readNote(u) {
   return {
@@ -80,4 +86,27 @@ export function captureOutcome(understanding) {
 export function readyFor(decision, userId) {
   if (decision?.approver_id && decision.approver_id === userId) return "you";
   return decision?.approver_name || "an owner";
+}
+
+/** What a ready decision creates: its proposal's counts, or — for a decision
+ *  captured before proposals existed — the execution_summary stored on it. */
+export function decisionCounts(decision) {
+  return decision?.proposal
+    ? proposalCounts(decision.proposal)
+    : executionSummaryCounts(decision?.execution_summary);
+}
+
+/** Plan 5.1 — "Decision ready for Sunita Rao · 2 tasks, 1 workflow". ONE
+ *  builder for the Desk well, the phone's sheet and the toast. */
+export function readyLine(decision, userId) {
+  return OUTCOME_COPY.ready(readyFor(decision, userId), proposalCreatesText(decisionCounts(decision)));
+}
+
+/** ASK-33 Phase 4 — is this capture hook still following a note to its ending?
+ *  useDexCapture follows ONE note at a time: a new follow() retires the note it
+ *  was on. Starting another while this is true would leave that note unpolled
+ *  and its ending unreported. */
+export function isReading(dex) {
+  const s = dex?.understanding?.status;
+  return !!s && !ENDING_STATUSES.includes(s);
 }

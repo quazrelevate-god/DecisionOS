@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../lib/api";
+import { captureOutcome, failureReason, isReading, readyLine, OUTCOME_COPY } from "../lib/dexOutcome";
 
 // KM-26 · the Dex conversation, lifted out of the view.
 //
@@ -15,15 +16,6 @@ import api from "../lib/api";
 // so it lives here and Layout hands it to all three.
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
-/* ASK-32 1.4 — a failed capture says why, in words a person can act on. */
-function captureError(error) {
-  const e = String(error || "");
-  if (e.includes("ai_consent_required")) {
-    return "AI is switched off for your company, so Dex couldn't read that. Turn on AI in Settings, then try again.";
-  }
-  return "That didn't go through. Please try again.";
-}
-
 /* KM-54 — `channel` is which door the founder came through, and it decides
    what a typed line MEANS. Nothing here guesses.
      "ask"    -> POST /ask            : read-only analytics, creates nothing
@@ -31,7 +23,11 @@ function captureError(error) {
                                          lands in Decisions on the Desk. Its
                                          tasks and workflows are only created
                                          when it is approved (ASK-32 Phase 1). */
-export function useDexConversation({ dex, open, channel = "ask", onCommitted } = {}) {
+/* ASK-33 Phase 4 — two more options, for the phone's sheet.
+     userId    who is reading, so "Decision ready for …" can say "you"
+     onEnding  told of each Decide ending as it lands (Layout refreshes the Desk,
+               and toasts the ending if the sheet has been closed) */
+export function useDexConversation({ dex, open, channel = "ask", onCommitted, userId, onEnding } = {}) {
   const [log, setLog] = useState([]);
   const [ctxId, setCtxId] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -45,7 +41,14 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted } =
   const heldNoteRef = useRef(null);
   // ASK-33 Phase 3 — what the last decide-channel send carried, for Retry.
   const lastSentRef = useRef(null);
+  // ASK-33 Phase 4 — and what EACH note carried, by note id, so a failure's
+  // Retry re-sends that capture rather than whichever was sent last.
+  const sentRef = useRef(new Map());
   const seenRef = useRef(null);
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
+  const onEndingRef = useRef(onEnding);
+  onEndingRef.current = onEnding;
 
   const push = useCallback((m) => setLog((l) => [...l, { id: uid(), ...m }]), []);
 
@@ -77,42 +80,57 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted } =
      so a poll updating the same note in place cannot stack duplicates.
      ASK-32 Phase 1: the reply says what Dex UNDERSTOOD and that it is waiting
      for a decision — nothing is created yet — or that there was nothing to
-     decide, or why it failed. */
+     decide, or why it failed.
+     ASK-33 Phase 4 — the turn also says WHICH ending it is (`outcome`, read by
+     lib/dexOutcome), so the phone's sheet can put Review, Retry and the
+     Settings link on it; and its words are lib/dexOutcome's, the Desk well's
+     own, so the two surfaces print one sentence for one ending. (ASK-32 1.4's
+     "a failed capture says why, in words a person can act on" lives there
+     now.) A failure keeps the capture it came from, for its Retry. */
   useEffect(() => {
     const u = dex?.understanding;
     if (!u || !["done", "nothing", "failed", "slow"].includes(u.status)) return;
     const seenKey = `${u.noteId}:${u.status}`;
     if (seenRef.current === seenKey) return;
     seenRef.current = seenKey;
-    let text;
-    if (u.status === "nothing") {
-      text = `Nothing to decide in that${u.said ? ` — ${u.said}` : ""}.\nIf it was a question, ask Dex instead.`;
-    } else if (u.status === "failed") {
-      text = captureError(u.error);
-    } else if (u.status === "slow") {
-      text = "Still working on it. It will show up in Decisions on the Desk.";
-    } else {
+    const o = captureOutcome(u) || { kind: "slow" };
+    let outcome = o;
+    if (o.kind === "ready") {
       const d = u.decision || {};
       const p = d.proposal || {};
-      const title = d.title || u.transcript || "your decision";
-      const lines = [`Ready for a decision — ${title}`];
-      // ASK-32 Phase 2 — say who decides when it is not the person who said it.
-      if (d.approver_name && d.approver_id && d.approver_id !== d.created_by) lines.push(`Sent to ${d.approver_name} to decide.`);
+      const title = d.title || u.transcript || "";
+      // The 5.1 line names who decides, so ASK-32 Phase 2's "Sent to … to
+      // decide" is not repeated under it; the rest is the echo it always was.
+      const lines = [title];
       const nTasks = (p.tasks || u.tasks || []).length;
-      if (nTasks) {
-        const names = [...new Set((p.tasks || []).map((t) => t.assignee_name || (t.assignee_role ? `${t.assignee_role} team` : null)).filter(Boolean))];
-        lines.push(`${nTasks} task${nTasks > 1 ? "s" : ""}${names.length ? ` for ${names.slice(0, 3).join(", ")}` : ""}`);
-      }
+      const names = [...new Set((p.tasks || []).map((t) => t.assignee_name || (t.assignee_role ? `${t.assignee_role} team` : null)).filter(Boolean))];
+      if (nTasks && names.length) lines.push(`${nTasks} task${nTasks > 1 ? "s" : ""} for ${names.slice(0, 3).join(", ")}`);
       if ((p.workflows || []).length) {
         lines.push(p.workflows.map((w) => `${w.pipeline_label || "Workflow"}: ${w.title}`).slice(0, 2).join("\n"));
       }
       if (d.repeat_of) lines.push(`Looks like a repeat of “${d.repeat_of.title}”.`);
-      lines.push(d.status === "pending_approval" ? "Nothing is created until it's approved." : "");
-      text = lines.filter(Boolean).join("\n");
+      if (d.status === "pending_approval") lines.push("Nothing is created until it's approved.");
+      outcome = {
+        kind: "ready",
+        decisionId: o.decisionId,
+        title,
+        // A decision that could not be read still has the note's own counts.
+        headline: readyLine(u.decision || { execution_summary: u.summary }, userIdRef.current),
+        lines: lines.filter(Boolean),
+      };
+    } else if (o.kind === "failed") {
+      outcome = { ...o, retry: sentRef.current.get(u.noteId) || null };
     }
-    push({ role: "dex", text });
+    const text =
+      outcome.kind === "ready" ? [outcome.headline, ...outcome.lines].join("\n")
+      : outcome.kind === "nothing" ? [OUTCOME_COPY.nothing, outcome.answer].filter(Boolean).join("\n")
+      : outcome.kind === "failed" ? outcome.message
+      : OUTCOME_COPY.slow;
+    const message = { id: uid(), role: "dex", text, outcome };
+    setLog((l) => [...l, message]);
     dex.clearUnderstanding?.();
-  }, [dex, dex?.understanding, push]);
+    onEndingRef.current?.(message);
+  }, [dex, dex?.understanding]);
 
   /** ASK-32 1.6 — a finished recording fills the draft and remembers its note. */
   const setDraftFromVoice = useCallback((text, noteId) => {
@@ -120,16 +138,22 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted } =
     heldNoteRef.current = noteId || null;
   }, []);
 
-  const ask = useCallback(async (question) => {
+  /* ASK-33 Phase 4 — a decide send also REPORTS what it did: { ok, noteId,
+     text, files, file_ids } or { ok: false, message, text, files, file_ids }, so
+     the Desk well can hand the capture to the phone's sheet. `follow: false`
+     leaves the polling to the caller — whoever ends up showing the ending. */
+  const ask = useCallback(async (question, { follow = true } = {}) => {
     const text = String(question || "").trim();
     const withFiles = channel === "decide" && pendingFiles.length > 0;
-    if ((!text && !withFiles) || busy) return;
+    if ((!text && !withFiles) || busy) return null;
     push({ role: "user", text: text || pendingFiles.map((f) => f.name).join(", ") });
     setDraft("");
     setBusy(true);
+    const files = channel === "decide" ? pendingFiles : [];
+    const sent = { text, files, file_ids: files.map((f) => f.id) };
     try {
       if (channel === "decide") {
-        const file_ids = pendingFiles.map((f) => f.id);
+        const { file_ids } = sent;
         lastSentRef.current = { text, file_ids };
         const held = heldNoteRef.current;
         const { data } = held
@@ -138,9 +162,13 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted } =
         heldNoteRef.current = null;
         setPendingFiles([]);
         push({ role: "dex", text: "Reading it now…" });
-        if (data?.id && dex?.follow) dex.follow(data.id, { transcript: text });
+        if (data?.id) sentRef.current.set(data.id, { text, file_ids });
+        if (follow && data?.id && dex?.follow) {
+          seenRef.current = null;
+          dex.follow(data.id, { transcript: text });
+        }
         onCommitted?.();
-        return;
+        return { ...sent, ok: true, noteId: data?.id || null };
       }
       // Verified shape: { type, answer, missing_information, suggested_questions }.
       const { data } = await api.post("/ask", { question: text, context_id: ctxId });
@@ -151,8 +179,12 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted } =
         followups: data.suggested_questions,
         missing: data.missing_information,
       });
+      return undefined;
     } catch (e) {
       push({ role: "dex", text: e.response?.data?.detail || "I couldn't reach the brain just now." });
+      if (channel !== "decide") return undefined;
+      const detail = e.response?.data?.detail;
+      return { ...sent, ok: false, message: typeof detail === "string" && detail ? detail : "I couldn't reach the brain just now." };
     } finally {
       setBusy(false);
     }
@@ -194,17 +226,35 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted } =
       The upload itself stays in files, as a sent one always has. */
   const removeFile = useCallback((id) => setPendingFiles((p) => p.filter((f) => f.id !== id)), []);
 
+  /* ASK-33 Phase 4 — ONE NOTE AT A TIME. useDexCapture follows a single note: a
+     new follow() retires the one in flight, and a recording's transcript poll
+     shares the same generation. So nothing here starts another while a note
+     is still being read or a recording is under way — that note would stop
+     being polled and its ending would never be reported. */
+  const oneAtATime = isReading(dex) || !!dex?.recording || !!dex?.sending;
+  const canRetry = !busy && !oneAtATime;
+
   /** ASK-33 Phase 3 — Retry re-sends the same capture, its words and its files,
       rather than asking the founder to say it again. A held recording's words
-      are text by the time it could fail, so it goes again as a typed note. */
-  const retry = useCallback(async () => {
-    const last = lastSentRef.current;
-    if (!last || busy || channel !== "decide") return false;
+      are text by the time it could fail, so it goes again as a typed note.
+      Phase 4 — `payload` names the capture (a failed ending's own), and
+      `fromId` is the message it came from, which then stops offering Retry. */
+  const retry = useCallback(async (payload, fromId) => {
+    const last = payload || (channel === "decide" ? lastSentRef.current : null);
+    if (!last || busy || oneAtATime) return false;
     setBusy(true);
     try {
       const { data } = await api.post("/voice-notes/text", { text: last.text, file_ids: last.file_ids });
+      lastSentRef.current = last;
+      if (fromId) {
+        setLog((l) => l.map((m) => (m.id === fromId && m.outcome ? { ...m, outcome: { ...m.outcome, spent: true } } : m)));
+      }
       push({ role: "dex", text: "Reading it again…" });
-      if (data?.id && dex?.follow) dex.follow(data.id, { transcript: last.text });
+      if (data?.id) sentRef.current.set(data.id, last);
+      if (data?.id && dex?.follow) {
+        seenRef.current = null;
+        dex.follow(data.id, { transcript: last.text });
+      }
       onCommitted?.();
       return true;
     } catch (e) {
@@ -214,7 +264,49 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted } =
     } finally {
       setBusy(false);
     }
-  }, [busy, channel, dex, onCommitted, push]);
+  }, [busy, channel, dex, oneAtATime, onCommitted, push]);
+
+  /** ASK-33 Phase 4 — THE SHEET TAKES A CAPTURE THE DESK WELL SENT.
+      { noteId, text, files } for a note that reached the pipeline, or
+      { error, text, files } for a send that never did. The words go into the
+      transcript and the note is followed HERE, so its ending lands in this
+      transcript as any other. Returns false — and changes nothing — when there
+      is nothing to take or when this hook is still reading another note (see
+      ONE NOTE AT A TIME); the well then keeps the capture itself. */
+  const adopt = useCallback(({ noteId = null, text = "", files = [], error = null } = {}) => {
+    if (!noteId && !error) return false;
+    if (noteId && !dex?.follow) return false;
+    if (oneAtATime) return false;
+    const payload = { text, file_ids: files.map((f) => f.id) };
+    const said = text || files.map((f) => f.name).join(", ");
+    const fresh = [];
+    if (said) fresh.push({ id: uid(), role: "user", text: said });
+    if (noteId) {
+      fresh.push({ id: uid(), role: "dex", text: "Reading it now…" });
+    } else {
+      const f = failureReason(error);
+      fresh.push({ id: uid(), role: "dex", text: f.message, outcome: { kind: "failed", ...f, retry: payload } });
+    }
+    /* KM-54 — arriving through the Decide door starts a Decide transcript. The
+       switch is made here, before the channel changes, so the channel effect
+       above does not then wipe what was just added. */
+    const switching = lastChannelRef.current !== "decide";
+    lastChannelRef.current = "decide";
+    if (switching) {
+      setCtxId(null);
+      setDraft("");
+      setPendingFiles([]);
+      heldNoteRef.current = null;
+    }
+    setLog((l) => (switching ? fresh : [...l, ...fresh]));
+    lastSentRef.current = payload;
+    if (noteId) {
+      sentRef.current.set(noteId, payload);
+      seenRef.current = null;
+      dex.follow(noteId, { transcript: text });
+    }
+    return true;
+  }, [dex, oneAtATime]);
 
   const canSendFiles = channel === "decide" && pendingFiles.length > 0;
 
@@ -240,7 +332,7 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted } =
     dex?.startRecording?.();
   }, [ask, canSendFiles, draft, dex, mode]);
 
-  return { log, busy, mode, setMode, draft, setDraft, setDraftFromVoice, ask, attach, removeFile, retry, submit, fabIntent, pendingFiles };
+  return { log, busy, mode, setMode, draft, setDraft, setDraftFromVoice, ask, attach, removeFile, retry, adopt, canRetry, submit, fabIntent, pendingFiles };
 }
 
 export default useDexConversation;

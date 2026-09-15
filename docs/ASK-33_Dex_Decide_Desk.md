@@ -440,9 +440,10 @@ depend on a conversation summary. Branch `karma-redesign`, built on `bb0a9e8`.*
 | 1 | `e40aff4` | The Desk's Dex well becomes the Decide composer ([+] · composer · mic, chips, still-at-rest wave, [+] inline swap below lg) |
 | 2 | `db09b42` | On send, the desktop well grows to the KPI grid's top; real stages; reduced motion painted |
 | 3 | `e638b86` | The three endings on desktop (ready / nothing / failed), Review → existing DecisionDialog, Retry; carries two fixes below |
+| — | `c32e7bd` | This Progress section |
+| 4-B | the commit that adds this row | The well sends, DexChat shows: the hand-off and its guard, endings as transcript messages, the split late-ending toast, `verify-dex.mjs` rewritten with `npm run verify:dex`, five stale DexSheet comments corrected |
 
-Phase 4 is **not started**. After these three commits the branch is 3 ahead of
-`origin/karma-redesign` (plus the commit that adds this section).
+Phase 4-A is **not started**. Nothing is pushed.
 
 ### The two fixes carried by `e638b86` (Phase 3)
 
@@ -498,36 +499,135 @@ for the next capture became invisible. Fix: chips render whenever
 5. **Attachment chips on the phone**: the remove button becomes 44×44 via the
    global rule, so a chip grows to its 176px max quickly — check spacing and the
    horizontal scroll of several chips at 360.
-6. **Touch tiers when outcomes reach the phone** (Phase 4 sheet): 44px minimum,
-   56px for commit actions (Approve, Retry). Desktop outcome buttons are h-10.
-7. **Harness**: `npm run verify:dex` has no npm script (the file
-   `scripts/verify-dex.mjs` exists) — run it with `node`, or add the script
-   with approval.
+6. **Touch tiers on the phone's outcomes** (4-B, DexChat): Review, Retry, Got it
+   and Not now are h-11 (44px); the ticket wants 56px for anything that commits
+   (Retry). Desktop outcome buttons are h-10. The Settings link in the ink
+   bubble is inline text that the global `a[data-testid]` rule makes 44px tall —
+   check it by eye.
+7. ~~Harness: `npm run verify:dex` missing~~ — resolved in 4-B. The script was
+   testing the unmounted DexSheet; it was rewritten against DexChat and the npm
+   entry landed with it.
+8. **Dark mode on the sheet's outcome messages and the late-ending toasts**
+   (4-B): the ink bubble is the same in both themes, but the rose warning glyph,
+   the white Review/Retry pill and Sonner's error toast need a look.
+9. **Late-ending toasts at 360** (4-B): Sonner draws them at the top. Seen at
+   360x640: the persistent failure toast (a three-line reason) wraps cleanly
+   but sits over the score row and the notification bell until it is
+   dismissed. Whether that is acceptable, or the toast belongs elsewhere on a
+   phone, is a design call — ask.
 
 Resolved and therefore NOT on the list: the [+] overlapping the KPI strip on
 the phone (fixed in Phase 1 by the inline swap).
 
-### Phase 4 — the split about to be done
+### Phase 4 — the split (revised 2026-09-16 against the REAL sheet)
 
-- **Heads-up first:** `DexSheet` is **not mounted anywhere**. Layout mounts
-  `DexChat`; the `channel` prop the ticket cites at `Layout.js ~841` is
-  DexChat's. Phase 4 targets DexChat unless the founder says otherwise.
-- **4-B ADDITIVE first.** The well (below lg) opens the existing phone sheet
-  in the decide channel and the sheet's understanding state renders the SAME
-  three endings from `lib/dexOutcome.js` (shared adapter and copy — also switch
-  `useDexConversation.captureError`, whose consent sentence currently differs:
-  "AI is switched off for your company…"). The two-door picker is still there,
-  so nothing is taken away. Replaces the Phase 1 interim toast on phones.
-  Commit.
-- **4-A DESTRUCTIVE second.** Remove the KM-54 picker from DexFab and its
-  `dexPicker` + Escape handler from Layout; the FAB opens Dex in **ask**
-  directly. Channels stay. Rewrite (not delete) the KM-54 comment as the ASK-33
-  note (decide capture on the phone now requires /inbox — accepted knowingly).
-  Move decision-shaped DexChat/DexSheet chips out (questions only). Keep the
-  `voice_capture` permission check exactly as is. Commit.
+- **The premise was corrected before building.** `DexSheet` is **not mounted
+  anywhere**: `<DexSheet>` left Layout in `97c2bfc` (KM-23). Layout imports and
+  renders only `DexFab` and `DexChat` (Layout.js ~41-42, ~796, ~836), confirmed in
+  the running app at 390 and 360 (FAB → picker → Decide → `dex-chat`, never
+  `dex-sheet`). The only reference left is the re-export in
+  `components/mobile/index.js`. **DexSheet and that re-export are kept** —
+  deleting them is a separate founder decision. The live sheet has no
+  "understanding state": DexChat is a transcript, the dock is its composer and
+  the FAB its mic/send. The five comments that described DexSheet as live
+  (DexFab.jsx, useDexCapture.js, DexCaptureBar.js, fixtures/mobile/_shared.js,
+  DeskDexWell.jsx) were corrected in 4-B.
+- **4-B ADDITIVE — built; see "Phase 4-B as built" below.** The two-door picker
+  is still there, so nothing was taken away. Commit.
+- **4-A DESTRUCTIVE second.** Remove the KM-54 picker from DexFab (PICKS, the
+  picker branch, and its Escape handler — which lives in DexFab.jsx, not in
+  Layout) and `dexPicker` from Layout; the FAB opens Dex in **ask** directly.
+  Channels stay. Rewrite (not delete) the KM-54 comments as the ASK-33 note
+  (decide capture on the phone now requires /inbox — accepted knowingly). There
+  are no chips to move: DexChat has no chip list (the decision-shaped chips are
+  in the dead DexSheet). Keep the `voice_capture` permission check exactly as
+  is. Rewrite `scripts/verify-nav.mjs`'s Dex section (~239-267) against DexChat,
+  leaving its inherited All Apps failures alone. Then the production build, the
+  full audit and the route-by-route comparison. Commit.
 - **HARD STOP:** if at any point the phone loses Dex — the FAB no longer opens
   Ask, or the well no longer reaches a sheet that shows Decide outcomes, on
   390×844 or 360×640 — stop, do not commit, and report.
+
+### Phase 4-B as built (founder decisions, 2026-09-16)
+
+- **On the phone the well is the input and DexChat is the output.** Below lg
+  the well sends the capture itself (held recording, words, files — unchanged)
+  without following it, and hands `{ channel: "decide", noteId, text, files,
+  error }` to Layout on the existing `dos:open-dex` event. Layout's
+  `chat.adopt()` puts the words and "Reading it now…" into the sheet's
+  transcript and follows the note with Layout's Dex; then the sheet opens on
+  Decide. A send that never reached the pipeline is handed over as a failed
+  ending with Retry.
+- **Endings are transcript messages** — not a state the sheet switches into
+  (KM-23's ghost-card precedent), not a pinned result. `useDexConversation`
+  writes each Decide ending as `{ role: "dex", text, outcome }` and DexChat draws
+  it in the ink bubble: READY = the 5.1 line, the echo, Review (closes the sheet
+  and replaces to `/inbox?decision=<id>`, which the Desk opens in
+  DecisionDialog); NOTHING = Dex's answer, Got it; FAILED = the reason
+  (role=alert, wraps), the Settings link, Retry, Not now. One copy for both
+  surfaces: `lib/dexOutcome.js` (`readyLine()` is now the only 5.1 builder; the
+  old `captureError` consent sentence is gone). Each failure keeps its own
+  capture, so Retry on an older message re-sends that one, and the message then
+  stops offering Retry. Testids reused: `dex-outcome-ready|nothing|failed|retry`;
+  new: `dex-outcome-review`, `dex-outcome-dismiss`, `dex-outcome-settings`,
+  `dex-outcome-reason`.
+- **THE GUARD (founder).** The hand-off counts only when Layout calls
+  `preventDefault()` on the event, which it does after `adopt()` has put the
+  capture in the transcript and started following its note, and after telling
+  the sheet to open. Unacknowledged — no listener, not the mobile shell, or
+  Layout still reading another note — the well keeps Phase 1's behaviour: it
+  follows the note itself and reports the ending as a toast. The phone toast is
+  gone only on the success path.
+- **ONE NOTE AT A TIME.** `useDexCapture.follow()` follows a single note: a new
+  follow retires the one in flight (a recording's transcript poll shares the
+  same generation). So `adopt()` and `retry()` refuse while that hook is reading
+  a note, recording or transcribing (`isReading()` in lib/dexOutcome), and a toast
+  Retry pressed then keeps its toast and says "Dex is still reading your last
+  one — retry once it's done." verify-dex E sends two overlapping captures and
+  expects both endings reported.
+- **Late endings (founder).** An ending that lands after the sheet is closed is
+  a toast, never a sheet that re-opens itself (KM-23). READY and NOTHING TO
+  DECIDE are transient: a ready decision is not lost (the Decisions column,
+  `/inbox?decision=<id>`, and ASK-32 2.3 notifies the decider), and nothing is at
+  stake in the other. **FAILED is a persistent toast** — no auto-dismiss — with
+  the reason, Retry and Dismiss, until the founder dismisses it: a failed capture
+  creates no decision, so nothing else records it. **This persistent toast
+  stands in for plan item 5.3 ("My captures") until 5.3 is built; 5.3 is its
+  proper home.** (`lib/dexOutcomeToast.js`; the well's kept captures use the same
+  helper.)
+- **Layout refreshes the Desk at every Decide ending** (`onEnding` →
+  `refreshAfterCapture`), since the well no longer polls a handed-off note.
+- **FIX carried by 4-B — a pre-existing DexChat defect (KM-23), found by the
+  4-B gate.** Closing the sheet while a bubble was still settling left the sheet
+  in the page at opacity 0, still taking every tap (a tap on the Desk went to
+  the invisible sheet; only the dock above it still worked). Cause: each
+  `layout` bubble is a presence child of the sheet's exit, and framer-motion
+  11.18 holds the exit until that bubble's layout animation completes, which
+  never happens once the exit starts. Reproduced 4/4 on the Ask path with no
+  ASK-33 code, and 4/4 after a Retry. Fix: the transcript sits in
+  `<PresenceContext.Provider value={null}>`, so the bubbles no longer hold the
+  exit; they fade with the sheet as before. After: 0/4 in every case.
+- **Known limit, NOT changed — needs a founder call.** The single-note follow
+  also bites where 4-B added no guard: a second send from the desktop well
+  while the first is still being read (Phases 1-3), or from the dock while an
+  open Decide sheet is still reading (KM-54's door) — the earlier note then
+  stops being polled and its ending is not reported. Options: block the send
+  while reading, or let useDexCapture follow several notes.
+
+### Inherited breakage from KM-23 (recorded, NOT fixed)
+
+KM-23 (`97c2bfc`) unmounted DexSheet; these harness files still wait for its
+`dex-sheet`, so the next person finds them here rather than by crashing into
+them:
+- `frontend/scripts/verify-empty.mjs:148` — counts `[data-testid="dex-sheet"]`.
+- `frontend/scripts/_review-shots.mjs:75` — `waitForSelector('[data-testid="dex-sheet"]')`
+  after tapping the FAB.
+- `frontend/scripts/verify-nav.mjs` ~239-267, the Dex section — to be rewritten
+  in 4-A. Its All Apps failures are inherited and stay: "Send Daily Digest is not
+  adjacent to Sign out" and "Sign out is last in the utility strip" fail, then the
+  run crashes at line 203 waiting for `allapps-tile-coach`, before the Dex section.
+- `frontend/scripts/verify-dex.mjs` was the fourth: rewritten in 4-B against
+  DexChat and the Desk well, landing together with the new `npm run verify:dex`.
 
 ### Standing constraints (every phase)
 

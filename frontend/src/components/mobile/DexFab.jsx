@@ -1,8 +1,9 @@
 // MPWA-03 · DexFab — the 64px mic circle, bottom-right, on the dock's baseline.
 //
-// §8 is emphatic that this IS Dex, not a second capture surface: it opens
-// DexSheet (which hosts the existing DexCaptureBar), and Dex therefore gets no
-// All Apps tile. Nothing appears in two places.
+// §8 is emphatic that this IS Dex, not a second capture surface: it opens the
+// Dex sheet, and Dex therefore gets no All Apps tile. Nothing appears in two
+// places. (This used to say it opens DexSheet. DexSheet was removed from Layout
+// in 97c2bfc (KM-23) and is not mounted; the live sheet is DexChat.)
 //
 // The glyph is a microphone — the action he wants — not an abstract persona
 // mark. The name is carried by aria-label="Dex" so it is announced and learned

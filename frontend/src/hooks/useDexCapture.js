@@ -7,8 +7,11 @@
 // recorder would give us two copies of the mic lifecycle and two places for the
 // upload endpoints to drift.
 //
-// So the behaviour lives here and both surfaces consume it:
-//   DexCaptureBar (desktop /brain, unchanged markup)  ·  DexSheet (mobile)
+// So the behaviour lives here and its surfaces consume it:
+//   DexCaptureBar (desktop /brain, unchanged markup)  ·  the phone's Dex sheet
+//   (DexChat, whose instance Layout creates)  ·  the Desk's Dex well (ASK-33)
+// This list used to name DexSheet as the mobile surface. DexSheet was removed
+// from Layout in 97c2bfc (KM-23) and is not mounted; DexChat is the live sheet.
 //
 // Endpoints are exactly the ones Sprint 5 shipped — POST /voice-notes,
 // POST /voice-notes/text, POST /files. Nothing new, nothing renamed.

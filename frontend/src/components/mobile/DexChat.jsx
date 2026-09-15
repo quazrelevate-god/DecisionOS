@@ -1,9 +1,11 @@
 import * as React from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { Link, useNavigate } from "react-router-dom";
+import { AnimatePresence, PresenceContext, motion } from "framer-motion";
 import {
-  Plus, X, Paperclip, Camera, Keyboard, Microphone, CircleNotch, Sparkle,
+  Plus, X, Paperclip, Camera, Keyboard, Microphone, CircleNotch, Sparkle, WarningCircle,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import { OUTCOME_COPY } from "@/lib/dexOutcome";
 import { useBackDismiss } from "@/hooks/useBackDismiss";
 
 // KM-23 · DexChat — Dex as a conversation, over the page you were on.
@@ -51,6 +53,83 @@ function richText(text) {
   );
 }
 
+/* ASK-33 Phase 4 — A DECIDE ENDING, AS A MESSAGE.
+   A capture ends one of three ways (plan 1.4, 5.1, 5.2) and the ending arrives
+   as a Dex turn that knows which, drawn in the bubble every turn already has.
+   Not a state the sheet switches into — that is the receipt card KM-23 replaced,
+   and the ghost card with it — and not a result pinned under the transcript,
+   where it would sit on the newest line, the plus and the dock. The words are
+   lib/dexOutcome's, the Desk well's own, so a failure reads the same sentence on
+   both surfaces. Each ending keeps the capture it came from, so Retry on an
+   older one re-sends that one. */
+const ACTION = "flex h-11 items-center rounded-pill px-4 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-40";
+// bg-[#fff]/text-kr-ink for the reason the white bubble gives below (KM-51).
+const ACTION_MAIN = cn(ACTION, "bg-[#fff] font-semibold text-kr-ink");
+const ACTION_QUIET = cn(ACTION, "bg-white/10 font-medium text-white hover:bg-white/20");
+
+function Outcome({ o, onReview, onRetry, onDismiss, retryDisabled }) {
+  if (o.kind === "ready") {
+    return (
+      <div data-testid="dex-outcome-ready">
+        <p className="text-[15px] font-semibold leading-snug text-white">{o.headline}</p>
+        {o.lines?.length > 0 && (
+          <p className="mt-1.5 whitespace-pre-line break-words text-white/75">{o.lines.join("\n")}</p>
+        )}
+        {o.decisionId && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" data-testid="dex-outcome-review" onClick={() => onReview(o.decisionId)} className={ACTION_MAIN}>
+              Review
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+  if (o.kind === "nothing") {
+    // Not an error, and it must not look like one: plain words, one way out.
+    return (
+      <div data-testid="dex-outcome-nothing">
+        <p className="text-[15px] font-semibold leading-snug text-white">{OUTCOME_COPY.nothing}</p>
+        {o.answer && <p className="mt-1.5 whitespace-pre-line break-words text-white/75">{o.answer}</p>}
+        <div className="mt-3 flex">
+          <button type="button" data-testid="dex-outcome-dismiss" onClick={onDismiss} className={ACTION_QUIET}>Got it</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div data-testid="dex-outcome-failed" role="alert">
+      <p className="flex items-start gap-2 text-[15px] font-semibold leading-snug text-white">
+        <WarningCircle size={18} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0 text-rose-300" />
+        {/* The reason is the whole point of this ending: it wraps, never truncates. */}
+        <span data-testid="dex-outcome-reason" className="min-w-0 break-words">{o.message}</span>
+      </p>
+      {o.href && (
+        <Link
+          to={o.href}
+          replace
+          onClick={onDismiss}
+          data-testid="dex-outcome-settings"
+          className="mt-2 inline-flex items-center text-white underline underline-offset-4"
+        >
+          {o.linkLabel}
+        </Link>
+      )}
+      {/* Once retried, the new attempt speaks for itself further down. */}
+      {!o.spent && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {o.retry && (
+            <button type="button" data-testid="dex-outcome-retry" onClick={onRetry} disabled={retryDisabled} className={ACTION_MAIN}>
+              Retry
+            </button>
+          )}
+          <button type="button" data-testid="dex-outcome-dismiss" onClick={onDismiss} className={ACTION_QUIET}>Not now</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** One turn in the transcript. */
 function Bubble({ m, index }) {
   const mine = m.role === "user";
@@ -92,6 +171,14 @@ function Bubble({ m, index }) {
           <span className="flex items-center gap-2 text-white/70">
             <CircleNotch size={14} className="animate-spin" /> {m.text}
           </span>
+        ) : m.outcome && m.outcome.kind !== "slow" ? (
+          <Outcome
+            o={m.outcome}
+            onReview={m.onReview}
+            onRetry={m.onRetry}
+            onDismiss={m.onDismiss}
+            retryDisabled={m.retryDisabled}
+          />
         ) : (
           <span className="whitespace-pre-wrap">{richText(m.text)}</span>
         )}
@@ -129,7 +216,17 @@ function Bubble({ m, index }) {
  * @param {object}   dex     the shared useDexCapture instance from Layout
  */
 export function DexChat({ open, onClose, dex, chat, channel }) {
-  const { log, busy, mode, setMode, ask, attach, pendingFiles = [] } = chat;
+  const { log, busy, mode, setMode, ask, attach, retry, canRetry, pendingFiles = [] } = chat;
+  const navigate = useNavigate();
+  /* ASK-33 Phase 4 — Review opens the decision the way the phone already opens
+     one: /inbox?decision=<id>, which the Desk raises in DecisionDialog, as it
+     does for a notification or a pasted link. `replace` swaps out the Back entry
+     the open sheet holds (useBackDismiss), so Back from the dialog is not a
+     dead step. */
+  const onReview = (id) => {
+    onClose?.();
+    navigate(`/inbox?decision=${encodeURIComponent(id)}`, { replace: true });
+  };
   const [plusOpen, setPlusOpen] = React.useState(false);
   const endRef = React.useRef(null);
   const photoRef = React.useRef(null);
@@ -214,6 +311,18 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
 
             {/* Transcript. Bottom-anchored so the newest turn sits just above
                 the composer and older ones stack away upward. */}
+            {/* ASK-33 Phase 4 — FIX: closing could leave the sheet in the page,
+                invisible and still taking every tap. Each `layout` bubble is a
+                presence child of the sheet's exit, and framer-motion (11.18)
+                holds that exit until the bubble's layout animation completes;
+                close while one is still settling — an answer or an ending just
+                landed, a Retry just reflowed the transcript — and the
+                completion never arrives, so the sheet is never removed. It
+                reproduced four times in four on the Ask path, with no ASK-33
+                code involved. The bubbles fade with the sheet regardless, so a
+                null presence context stops them holding its exit and nothing on
+                screen changes. */}
+            <PresenceContext.Provider value={null}>
             <div className="flex min-h-0 flex-1 flex-col justify-end gap-2.5 overflow-y-auto px-4 pb-3">
               {log.length === 0 && (
                 <div className="pb-6 text-center">
@@ -229,7 +338,20 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                   </p>
                 </div>
               )}
-              {log.map((m, i) => <Bubble key={m.id} m={{ ...m, onAsk: ask }} index={i} />)}
+              {log.map((m, i) => (
+                <Bubble
+                  key={m.id}
+                  m={{
+                    ...m,
+                    onAsk: ask,
+                    onReview,
+                    onDismiss: onClose,
+                    onRetry: () => retry(m.outcome?.retry, m.id),
+                    retryDisabled: busy || !canRetry,
+                  }}
+                  index={i}
+                />
+              ))}
               {busy && <Bubble m={{ role: "dex", text: "Thinking…", pending: true }} index={log.length} />}
               {pendingFiles.length > 0 && (
                 <p data-testid="dex-attached" className="self-end rounded-pill bg-white/15 px-3 py-1 text-[11px] text-white/85">
@@ -239,6 +361,7 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
               )}
               <div ref={endRef} />
             </div>
+            </PresenceContext.Provider>
 
             {/* KM-26 · the plus, and only the plus.
                 It sits on the DOCK's baseline, clear of the bar (which is now

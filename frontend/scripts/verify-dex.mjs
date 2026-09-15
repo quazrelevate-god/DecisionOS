@@ -1,225 +1,295 @@
 #!/usr/bin/env node
 /**
- * MPWA-12e verification — the Dex sheet's three states (§5.6).
+ * ASK-33 Phase 4 verification — the phone's Dex sheet shows what a decision
+ * capture came to.
  *
- * Launched with Chromium's fake audio device so getUserMedia actually resolves
- * and the AnalyserNode sees a real signal — a waveform test that stubs the
- * amplitude would pass on an animation of random numbers, which is precisely the
- * thing §5.6 says a waveform must not be.
+ * REWRITTEN. This file used to verify MPWA-12e's DexSheet: a 64px mic, contextual
+ * chips, a recording stage and an "understanding" stage with Looks right / Fix.
+ * DexSheet was removed from Layout in 97c2bfc (KM-23) and is not mounted, so the
+ * old run waited for a `dex-sheet` that never appears and crashed on its first
+ * open. The live sheet is DexChat — a transcript — and on the phone a decision is
+ * captured in the Desk's Dex well, which hands what it sent to that sheet.
  *
- * Runs against the fixtures: the understanding state depends on the backend's
- * BackgroundTask walking a note queued -> transcribing -> structuring -> done,
- * and the fixture simulates that walk deterministically (and without spending an
- * LLM call per run).
+ * At 390x844 and 360x640, against the fixtures:
+ *   A  speak into the well (Chromium's fake audio device), read the words back,
+ *      send: the sheet opens on Decide and the READY ending lands as a message —
+ *      the 5.1 line, the echo, Review — and Review opens DecisionDialog
+ *   B  type, NOTHING TO DECIDE: Dex's answer, one way out, not an error
+ *   C  attach a file, AI-consent FAILURE: the reason untruncated, the Settings
+ *      link, Retry re-sends that capture and a new ending arrives
+ *   D  endings that land after the sheet is closed: READY is a toast that goes
+ *      away; FAILED is a toast that stays, with Retry and Dismiss
+ *   E  one note at a time: a second capture sent while the sheet is still
+ *      reading the first is kept by the well, and both endings are reported
+ *   F  the guard: when nothing takes the hand-off, the well keeps the capture —
+ *      it polls the note itself and reports the ending
+ *
+ * The fixtures walk a note queued -> transcribing -> structuring -> done, and
+ * sessionStorage "dos_fixture_capture" (nothing | consent | failed) picks the
+ * ending (src/fixtures/mobile/_shared.js) — no LLM call is spent per run.
  */
 import { chromium } from 'playwright';
 import { signIn } from './lib/auth.mjs';
 
 const BASE = process.env.AUDIT_BASE || 'http://localhost:3000';
+const READY = /^Decision ready for Sunita Rao · 2 tasks, 1 workflow$/;
+const CONSENT = 'AI is off for this company — turn on AI consent in Settings';
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64'
+);
+
 const results = [];
 const check = (name, pass, detail = '') => {
   results.push({ name, pass, detail });
   console.log(`${pass ? '  ok  ' : ' FAIL '} ${name}${detail ? ` — ${detail}` : ''}`);
 };
+const clip = (s, n = 80) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n);
+const until = async (fn, timeout = 25000, step = 250) => {
+  const end = Date.now() + timeout;
+  for (;;) {
+    if (await fn().catch(() => false)) return true;
+    if (Date.now() > end) return false;
+    await new Promise((r) => setTimeout(r, step));
+  }
+};
 
 const browser = await chromium.launch({
-  args: [
-    '--use-fake-device-for-media-stream',
-    '--use-fake-ui-for-media-stream',
-    '--autoplay-policy=no-user-gesture-required',
-  ],
+  args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
 });
-const ctx = await browser.newContext({
-  viewport: { width: 390, height: 844 },
-  isMobile: true,
-  hasTouch: true,
-  permissions: ['microphone'],
-});
-const page = await ctx.newPage();
-page.on('pageerror', (e) => check('no page errors', false, e.message.split('\n')[0]));
 
-check('signed in', await signIn(page, BASE));
-
-const openDex = async (route) => {
-  await page.goto(`${BASE}${route}${route.includes('?') ? '&' : '?'}fixture=busy`, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('[data-testid="dex-fab"]', { timeout: 12000 });
-  await page.waitForTimeout(700);
-  await page.locator('[data-testid="dex-fab"]').click();
-  await page.waitForSelector('[data-testid="dex-sheet"]', { timeout: 6000 });
-  await page.waitForTimeout(500);
-};
-const stage = () => page.locator('[data-testid="dex-sheet-stage"]').getAttribute('data-stage');
-
-// ------------------------------------------------------------------- idle
-await openDex('/inbox');
-check('opens in the idle state', (await stage()) === 'idle', await stage());
-
-const mic = await page.locator('[data-testid="dex-mic-record"]').boundingBox();
-check('the mic is the hero at 64px',
-  Math.round(mic.width) === 64 && Math.round(mic.height) === 64,
-  `${Math.round(mic.width)}x${Math.round(mic.height)}`);
-const sheetBox = await page.locator('[data-testid="dex-sheet"]').boundingBox();
-check('the mic is centred',
-  Math.abs((mic.x + mic.width / 2) - (sheetBox.x + sheetBox.width / 2)) <= 2,
-  `mic centre ${Math.round(mic.x + mic.width / 2)} vs sheet centre ${Math.round(sheetBox.x + sheetBox.width / 2)}`);
-check('idle sits around 45% height, not the tall sheet',
-  sheetBox.height / 844 < 0.62, `${Math.round((sheetBox.height / 844) * 100)}%`);
-
-const placeholder = await page.locator('[data-testid="dex-text-input"]').getAttribute('placeholder');
-check('typing is offered as the alternative', /type instead/i.test(placeholder), placeholder);
-
-// §5.6: "Horizontal pills, not a vertical stack of four full-width buttons."
-const pills = await page.locator('[data-testid="dex-suggestion"]').all();
-check('there are suggestion chips', pills.length >= 3, `${pills.length} chips`);
-const boxes = await Promise.all(pills.map((p) => p.boundingBox()));
-const tops = new Set(boxes.map((b) => Math.round(b.y)));
-check('chips are one horizontal row, not a vertical stack', tops.size === 1, `${tops.size} row(s)`);
-check('chips are pills, not full-width buttons',
-  boxes.every((b) => b.width < 390 * 0.9), `widest ${Math.round(Math.max(...boxes.map((b) => b.width)))}px`);
-for (const b of boxes) {
-  check(`chip clears 44px`, b.height >= 44, `${Math.round(b.height)}px`);
+async function open(viewport, { blockHandoff = false } = {}) {
+  const ctx = await browser.newContext({ viewport, isMobile: true, hasTouch: true, permissions: ['microphone'] });
+  if (blockHandoff) {
+    // Heard first (capture, registered before the app's own listener), so
+    // nothing takes the hand-off — as if the sheet could not.
+    await ctx.addInitScript(() => {
+      window.addEventListener('dos:open-dex', (e) => {
+        if (e.detail?.channel === 'decide') e.stopImmediatePropagation();
+      }, true);
+    });
+  }
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message.split('\n')[0]));
+  const signedIn = await signIn(page, BASE);
+  await gotoDesk(page);
+  return { ctx, page, errors, signedIn };
 }
-const chipRow = await page.locator('[data-testid="dex-chips"]').evaluate((el) => ({
-  scrolls: el.scrollWidth > el.clientWidth + 1,
-  overflowX: getComputedStyle(el).overflowX,
-}));
-check('the chip row scrolls horizontally', chipRow.overflowX === 'auto', JSON.stringify(chipRow));
 
-const sendBox = await page.locator('[data-testid="dex-send"]').boundingBox();
-check('Send is not clipped at the right edge', sendBox.x + sendBox.width <= 390 - 4,
-  `right edge at ${Math.round(sendBox.x + sendBox.width)}`);
-
-// §5.6: suggestions are contextual to the screen Dex was opened from.
-const deskChips = (await page.locator('[data-testid="dex-suggestion"]').allInnerTexts()).join(' | ');
-await page.keyboard.press('Escape');
-await page.waitForTimeout(500);
-await openDex('/finance');
-const moneyChips = (await page.locator('[data-testid="dex-suggestion"]').allInnerTexts()).join(' | ');
-check('chips differ between Desk and Money', deskChips !== moneyChips,
-  `desk: ${deskChips.slice(0, 40)}… / money: ${moneyChips.slice(0, 40)}…`);
-check('Money offers a money phrase', /payment|owes|late/i.test(moneyChips), moneyChips.slice(0, 60));
-check('Desk offers a decision phrase', /approve|waiting/i.test(deskChips), deskChips.slice(0, 60));
-await openDex('/crm');
-const crmChips = (await page.locator('[data-testid="dex-suggestion"]').allInnerTexts()).join(' | ');
-check('CRM offers a relationship phrase', /call|customer|credit/i.test(crmChips), crmChips.slice(0, 60));
-check('no chip set is reused verbatim across all three screens',
-  new Set([deskChips, moneyChips, crmChips]).size === 3);
-
-// tapping a chip fills the box rather than sending blind
-await openDex('/inbox');
-await page.locator('[data-testid="dex-suggestion"]').first().click();
-await page.waitForTimeout(300);
-const filled = await page.locator('[data-testid="dex-text-input"]').inputValue();
-check('a chip fills the input instead of firing immediately', filled.length > 0, filled.slice(0, 50));
-
-// -------------------------------------------------------------- recording
-await page.locator('[data-testid="dex-mic-record"]').click();
-await page.waitForSelector('[data-testid="dex-recording"]', { timeout: 8000 });
-await page.waitForTimeout(400);
-check('the mic starts the recording state', (await stage()) === 'recording', await stage());
-
-const wave = page.locator('[data-testid="dex-waveform"]');
-check('a waveform is shown, not a bare timer', await wave.isVisible());
-const growBox = await page.locator('[data-testid="dex-sheet"]').boundingBox();
-check('the sheet expands while recording', growBox.height / 844 >= 0.78,
-  `${Math.round((growBox.height / 844) * 100)}%`);
-
-// The bars must actually move with the input. Sample the geometry twice.
-const shape = () => wave.evaluate((el) =>
-  Array.from(el.children).map((c) => Math.round(c.getBoundingClientRect().height)).join(','));
-const before = await shape();
-await page.waitForTimeout(1400);
-const after = await shape();
-check('the waveform reacts to input amplitude', before !== after,
-  `${before.slice(0, 40)}… -> ${after.slice(0, 40)}…`);
-const amp = Number(await wave.getAttribute('data-amplitude'));
-check('the amplitude read is non-zero on a live mic', amp > 0, String(amp));
-const bars = await wave.evaluate((el) => new Set(Array.from(el.children).map((c) => Math.round(c.getBoundingClientRect().height))).size);
-check('bars differ from each other (a signal, not a block)', bars > 1, `${bars} distinct heights`);
-
-// Elapsed time present but secondary.
-const elapsed = page.locator('[data-testid="dex-elapsed"]');
-check('elapsed time is shown', /\d+:\d\d/.test((await elapsed.innerText()).trim()), (await elapsed.innerText()).trim());
-const [eFs, wFs] = await Promise.all([
-  elapsed.evaluate((el) => parseFloat(getComputedStyle(el).fontSize)),
-  wave.evaluate((el) => el.getBoundingClientRect().height),
-]);
-check('elapsed time is secondary to the waveform', eFs <= 16 && wFs > eFs * 3,
-  `${eFs}px text vs ${Math.round(wFs)}px waveform`);
-const elapsedBox = await elapsed.boundingBox();
-const waveBox = await wave.boundingBox();
-check('elapsed time sits beneath the waveform', elapsedBox.y > waveBox.y + waveBox.height - 2,
-  `elapsed y=${Math.round(elapsedBox.y)}, waveform bottom=${Math.round(waveBox.y + waveBox.height)}`);
-
-const stopBox = await page.locator('[data-testid="dex-mic-stop"]').boundingBox();
-check('the stop control is large', stopBox.height >= 64 && stopBox.width >= 64,
-  `${Math.round(stopBox.width)}x${Math.round(stopBox.height)}`);
-check('the idle chips are gone while recording',
-  (await page.locator('[data-testid="dex-suggestion"]').count()) === 0);
-
-// ---------------------------------------------------------- understanding
-await page.locator('[data-testid="dex-mic-stop"]').click();
-await page.waitForSelector('[data-testid="dex-understanding"]', { timeout: 15000 });
-check('stopping goes straight to the understanding state', (await stage()) === 'understanding', await stage());
-
-// §5.6: "It must not happen silently behind a 'structuring…' banner." The
-// progression is visible, and it ends on structure.
-const seen = new Set();
-for (let i = 0; i < 24; i++) {
-  const st = await page.locator('[data-testid="dex-understanding"]').getAttribute('data-status');
-  seen.add(st);
-  if (st === 'done' || st === 'failed' || st === 'slow') break;
-  await page.waitForTimeout(500);
+async function gotoDesk(page) {
+  await page.goto(`${BASE}/inbox?fixture=busy`, { waitUntil: 'domcontentloaded' });
+  await page.getByTestId('desk-insight').waitFor({ timeout: 20000 });
+  await page.waitForTimeout(1200);
 }
-check('the pipeline is shown progressing, not hidden', seen.size >= 2, [...seen].join(' -> '));
-check('it reaches a structured result', seen.has('done'), [...seen].join(' -> '));
 
-check('Dex echoes back what it heard',
-  /indigo/i.test(await page.locator('[data-testid="dex-heard"]').innerText()),
-  (await page.locator('[data-testid="dex-heard"]').innerText()).replace(/\n/g, ' ').slice(0, 70));
-const structured = page.locator('[data-testid="dex-structured"]');
-check('the extraction is echoed as a structured card', await structured.isVisible());
-const sText = (await structured.innerText()).replace(/\s+/g, ' ');
-check('the card names what it became', sText.length > 30, sText.slice(0, 90));
-const taskRows = await page.locator('[data-testid^="dex-task-"]').count();
-check('the tasks it produced are listed', taskRows > 0, `${taskRows} task(s)`);
-check('extracted fields are labelled (for / by)', /\bfor\b/.test(sText) || /\bby\b/.test(sText), sText.slice(0, 90));
+const setEnding = (page, v) => page.evaluate((x) => {
+  if (x) sessionStorage.setItem('dos_fixture_capture', x);
+  else sessionStorage.removeItem('dos_fixture_capture');
+}, v);
+const sheet = (page) => page.getByTestId('dex-chat');
+const toasts = (page, text) => page.locator('[data-sonner-toast]').filter({ hasText: text });
+const sheetGone = (page) => until(async () => (await sheet(page).count()) === 0, 3000);
 
-const lr = await page.locator('[data-testid="dex-looks-right"]').boundingBox();
-check('"Looks right" is offered', !!lr);
-check('"Looks right" is on the 56px tier', lr.height >= 56, `${Math.round(lr.height)}px`);
-const fx = await page.locator('[data-testid="dex-fix"]').boundingBox();
-check('"Fix" is offered beside it', !!fx);
-check('"Fix" clears 44px', fx.height >= 44, `${Math.round(fx.height)}px`);
-check('"Looks right" and "Fix" are >= 8px apart',
-  fx.x - (lr.x + lr.width) >= 7.5, `${Math.round(fx.x - (lr.x + lr.width))}px`);
-
-// Fix hands the words back so he can restate them.
-await page.locator('[data-testid="dex-fix"]').click();
-await page.waitForTimeout(1200);
-check('"Fix" returns to idle', (await stage()) === 'idle', await stage());
-const back = await page.locator('[data-testid="dex-text-input"]').inputValue();
-check('"Fix" hands the words back to be restated', /indigo/i.test(back), back.slice(0, 60));
-
-// Typing is the other route into understanding.
-await page.locator('[data-testid="dex-text-input"]').fill('Ask Priya about the Krishna payment');
-await page.locator('[data-testid="dex-send"]').click();
-await page.waitForSelector('[data-testid="dex-understanding"]', { timeout: 10000 });
-check('typed capture reaches the understanding state too', (await stage()) === 'understanding');
-for (let i = 0; i < 20; i++) {
-  if ((await page.locator('[data-testid="dex-understanding"]').getAttribute('data-status')) === 'done') break;
-  await page.waitForTimeout(500);
+/** Type into the well and press Enter, switching it to typing first if needed. */
+async function typeAndSend(page, words) {
+  const composer = page.getByTestId('desk-dex-composer');
+  if ((await composer.getAttribute('data-mode')) !== 'type') {
+    await page.getByTestId('desk-dex-plus').click();
+    await page.waitForTimeout(300);
+    await page.getByTestId('desk-dex-mode').click();
+    await page.waitForTimeout(300);
+  }
+  const input = composer.locator('input');
+  await input.fill(words);
+  await input.press('Enter');
 }
-await page.locator('[data-testid="dex-looks-right"]').click();
-await page.waitForTimeout(900);
-check('"Looks right" closes the sheet',
-  (await page.locator('[data-testid="dex-sheet"]').count()) === 0);
 
+async function closeSheet(page) {
+  await page.getByTestId('dex-chat-close').click();
+  return sheetGone(page);
+}
+
+async function run(viewport) {
+  const w = `${viewport.width}`;
+  const { ctx, page, errors, signedIn } = await open(viewport);
+  check(`${w}: signed in`, signedIn);
+  const well = page.getByTestId('desk-insight');
+  const wellRest = await well.boundingBox();
+
+  // ------------------------------------------------------------ A · READY
+  await setEnding(page, null);
+  const mic = page.getByTestId('desk-dex-mic');
+  await mic.click();
+  await page.waitForTimeout(1500);
+  check(`${w} A: the well records`, (await mic.getAttribute('data-intent')) === 'stop');
+  await mic.click();
+  const field = page.getByTestId('desk-dex-composer').locator('input');
+  await until(async () => (await field.inputValue()).length > 0, 20000);
+  const said = await field.inputValue().catch(() => '');
+  check(`${w} A: the words come back into the well to be read first`, said.length > 0, clip(said, 60));
+  await mic.click();
+  await sheet(page).waitFor({ timeout: 8000 }).catch(() => {});
+  check(`${w} A: sending from the well opens the Dex sheet`, await sheet(page).isVisible().catch(() => false));
+  check(`${w} A: the sheet says it is Decide`,
+    (await sheet(page).locator('span.rounded-pill', { hasText: /^decide$/i }).count()) === 1);
+  check(`${w} A: what was said is in the transcript`, (await sheet(page).textContent()).includes(said.slice(0, 24)));
+  const ready = sheet(page).getByTestId('dex-outcome-ready');
+  await ready.waitFor({ timeout: 25000 }).catch(() => {});
+  check(`${w} A: the READY ending lands as a message`, await ready.isVisible().catch(() => false));
+  const headline = clip(await ready.locator('p').first().textContent().catch(() => ''), 120);
+  check(`${w} A: it leads with the 5.1 line`, READY.test(headline), headline);
+  const readyText = clip(await ready.textContent().catch(() => ''), 400);
+  check(`${w} A: the echo says what it became`,
+    /Ship the indigo lot to Tirupur before Friday/.test(readyText) && /Nothing is created until it's approved/.test(readyText),
+    readyText.slice(0, 90));
+  check(`${w} A: nothing is toasted while the sheet shows it`, (await page.locator('[data-sonner-toast]').count()) === 0);
+  const wellNow = await well.boundingBox();
+  check(`${w} A: the well stays at rest (no desktop expansion)`, Math.round(wellNow.height) === Math.round(wellRest.height),
+    `${Math.round(wellRest.height)} -> ${Math.round(wellNow.height)}`);
+  check(`${w} A: the field is clear for the next one`, (await field.inputValue().catch(() => '')) === '');
+  const rb = await ready.boundingBox();
+  check(`${w} A: the ending sits inside the screen`, !!rb && rb.x >= 0 && rb.x + rb.width <= viewport.width,
+    rb ? `${Math.round(rb.x)}..${Math.round(rb.x + rb.width)}` : 'no box');
+  await ready.getByTestId('dex-outcome-review').click();
+  await page.getByTestId('decision-dialog').waitFor({ timeout: 8000 }).catch(() => {});
+  check(`${w} A: Review closes the sheet`, await sheetGone(page));
+  check(`${w} A: … and opens the decision in DecisionDialog`,
+    await page.getByTestId('decision-dialog').isVisible().catch(() => false)
+      && new URL(page.url()).searchParams.get('decision') === 'dec_fixture',
+    new URL(page.url()).search);
+  await page.getByTestId('decision-close').click().catch(() => {});
+  await until(async () => (await page.getByTestId('decision-dialog').count()) === 0, 5000);
+  await page.waitForTimeout(500);
+
+  // ---------------------------------------------------- B · NOTHING TO DECIDE
+  await setEnding(page, 'nothing');
+  await typeAndSend(page, 'How much profit did we make this month?');
+  await sheet(page).waitFor({ timeout: 8000 }).catch(() => {});
+  const nothing = sheet(page).getByTestId('dex-outcome-nothing');
+  await nothing.waitFor({ timeout: 25000 }).catch(() => {});
+  check(`${w} B: NOTHING TO DECIDE lands as a message`, await nothing.isVisible().catch(() => false));
+  const nothingText = clip(await nothing.textContent().catch(() => ''), 200);
+  check(`${w} B: Dex's answer is shown`, /Nothing to decide in that/.test(nothingText) && /question, not a decision/.test(nothingText), nothingText.slice(0, 90));
+  check(`${w} B: exactly one way out`, (await nothing.getByRole('button').count()) === 1);
+  check(`${w} B: not styled as an error`,
+    (await nothing.getAttribute('role')) !== 'alert' && (await nothing.locator('svg').count()) === 0);
+  await nothing.getByTestId('dex-outcome-dismiss').click();
+  check(`${w} B: the way out closes the sheet`, await sheetGone(page));
+
+  // ------------------------------------------- C · FAILED, with a file attached
+  await setEnding(page, 'consent');
+  await page.getByTestId('desk-dex-plus').click();
+  await page.waitForTimeout(300);
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser', { timeout: 5000 }),
+    page.getByTestId('desk-dex-attach').click(),
+  ]);
+  await chooser.setFiles({ name: 'indigo-po.png', mimeType: 'image/png', buffer: PNG });
+  const chips = well.locator('ul[aria-label="Attached files"] li');
+  await chips.first().waitFor({ timeout: 8000 }).catch(() => {});
+  check(`${w} C: the file is attached in the well`, (await chips.count()) === 1);
+  await typeAndSend(page, 'Tell Suresh to ship the indigo lot before Friday');
+  await sheet(page).waitFor({ timeout: 8000 }).catch(() => {});
+  check(`${w} C: the file goes with the capture`, (await chips.count()) === 0);
+  const failed = sheet(page).getByTestId('dex-outcome-failed');
+  await failed.first().waitFor({ timeout: 25000 }).catch(() => {});
+  check(`${w} C: the FAILED ending lands as a message`, await failed.first().isVisible().catch(() => false));
+  check(`${w} C: it is announced`, (await failed.first().getAttribute('role')) === 'alert');
+  const reason = failed.first().getByTestId('dex-outcome-reason');
+  check(`${w} C: the consent reason, in the Desk well's words`, (await reason.textContent().catch(() => '')) === CONSENT,
+    clip(await reason.textContent().catch(() => '')));
+  const whole = await reason.evaluate((el) => el.scrollWidth <= el.clientWidth + 1
+    && el.scrollHeight <= el.clientHeight + 1 && getComputedStyle(el).textOverflow !== 'ellipsis').catch(() => false);
+  check(`${w} C: the reason is not truncated`, whole);
+  check(`${w} C: it links to Settings`,
+    (await failed.first().getByTestId('dex-outcome-settings').getAttribute('href').catch(() => '')) === '/settings#ai-consent');
+  await failed.first().getByTestId('dex-outcome-retry').click();
+  check(`${w} C: Retry re-sends without asking to say it again`,
+    await until(async () => (await sheet(page).getByText('Reading it again…').count()) > 0, 5000));
+  check(`${w} C: the retried ending stops offering Retry`,
+    (await failed.first().getByTestId('dex-outcome-retry').count()) === 0);
+  check(`${w} C: the re-sent capture reaches its own ending`,
+    await until(async () => (await failed.count()) === 2));
+  await failed.last().getByTestId('dex-outcome-settings').click();
+  check(`${w} C: the Settings link leaves the sheet for Settings`,
+    (await sheetGone(page)) && new URL(page.url()).pathname === '/settings', new URL(page.url()).pathname);
+  await gotoDesk(page);
+
+  // ------------------------------------- D · endings after the sheet is closed
+  await setEnding(page, null);
+  await typeAndSend(page, 'Tell Suresh to ship the indigo lot before Friday');
+  await sheet(page).waitFor({ timeout: 8000 }).catch(() => {});
+  check(`${w} D: the sheet can be closed before the note ends`, await closeSheet(page));
+  const readyToast = toasts(page, 'Decision ready for Sunita Rao');
+  check(`${w} D: a READY ending that lands after closing is toasted`, await until(async () => (await readyToast.count()) === 1));
+  // Sonner marks both buttons data-button; the action is data-action, the cancel data-cancel.
+  check(`${w} D: … with Review`, (await readyToast.first().locator('[data-action]').textContent().catch(() => '')) === 'Review');
+  check(`${w} D: … and it goes away on its own`, await until(async () => (await readyToast.count()) === 0, 12000));
+
+  await setEnding(page, 'failed');
+  await typeAndSend(page, 'Tell Suresh to ship the indigo lot before Friday');
+  await sheet(page).waitFor({ timeout: 8000 }).catch(() => {});
+  await closeSheet(page);
+  const failToast = toasts(page, "That didn't go through");
+  check(`${w} D: a FAILED ending that lands after closing is toasted`, await until(async () => (await failToast.count()) === 1));
+  check(`${w} D: … with the reason`, /structuring service did not answer/.test(await failToast.first().textContent().catch(() => '')),
+    clip(await failToast.first().textContent().catch(() => '')));
+  check(`${w} D: … Retry and Dismiss`,
+    (await failToast.first().locator('[data-action]').textContent().catch(() => '')) === 'Retry'
+      && (await failToast.first().locator('[data-cancel]').textContent().catch(() => '')) === 'Dismiss');
+  await page.waitForTimeout(9000);
+  check(`${w} D: … and it stays until dismissed`, (await failToast.count()) === 1);
+  await failToast.first().locator('[data-action]').click();
+  const retried = await until(async () => (await failToast.count()) === 0, 4000);
+  check(`${w} D: Retry from the toast re-sends it, and its ending is reported again`,
+    retried && (await until(async () => (await failToast.count()) === 1)) && (await sheet(page).count()) === 0);
+  await failToast.first().locator('[data-cancel]').click().catch(() => {});
+  check(`${w} D: Dismiss clears it`, await until(async () => (await failToast.count()) === 0, 4000));
+
+  // --------------------------------------------------- E · one note at a time
+  await setEnding(page, null);
+  await typeAndSend(page, 'Tell Suresh to ship the indigo lot before Friday');
+  await sheet(page).waitFor({ timeout: 8000 }).catch(() => {});
+  await closeSheet(page);
+  await typeAndSend(page, 'Ask Priya to book the Tirupur truck for Thursday');
+  await page.waitForTimeout(1000);
+  check(`${w} E: a second capture while the sheet still reads the first is not taken over it`, (await sheet(page).count()) === 0);
+  check(`${w} E: both endings are reported`,
+    await until(async () => (await toasts(page, 'Decision ready for Sunita Rao').count()) >= 2));
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  check(`${w}: no horizontal overflow`, overflow <= 0, `${overflow}px`);
+  check(`${w}: no page errors`, errors.length === 0, errors[0] || '');
+  await ctx.close();
+
+  // ------------------------------------------------------------- F · the guard
+  const g = await open(viewport, { blockHandoff: true });
+  await setEnding(g.page, null);
+  await typeAndSend(g.page, 'Tell Suresh to ship the indigo lot before Friday');
+  await g.page.waitForTimeout(1500);
+  check(`${w} F: nothing took the hand-off, so no sheet`, (await sheet(g.page).count()) === 0);
+  check(`${w} F: the well kept polling and reported the ending`,
+    await until(async () => (await toasts(g.page, 'Decision ready for Sunita Rao').count()) === 1));
+  await until(async () => (await toasts(g.page, 'Decision ready').count()) === 0, 12000);
+  await setEnding(g.page, 'failed');
+  await typeAndSend(g.page, 'Tell Suresh to ship the indigo lot before Friday');
+  const kept = toasts(g.page, "That didn't go through");
+  check(`${w} F: a failure the well kept is reported too`, await until(async () => (await kept.count()) === 1));
+  await g.page.waitForTimeout(9000);
+  check(`${w} F: … and it stays until dismissed`, (await kept.count()) === 1);
+  check(`${w} F: no page errors`, g.errors.length === 0, g.errors[0] || '');
+  await g.ctx.close();
+}
+
+await run({ width: 390, height: 844 });
+await run({ width: 360, height: 640 });
 await browser.close();
-const failed = results.filter((r) => !r.pass);
-console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
-if (failed.length) {
+
+const failedChecks = results.filter((r) => !r.pass);
+console.log(`\n${results.length - failedChecks.length}/${results.length} checks passed`);
+if (failedChecks.length) {
   console.log('\nfailed:');
-  for (const f of failed) console.log(`  · ${f.name}${f.detail ? ` — ${f.detail}` : ''}`);
+  for (const f of failedChecks) console.log(`  · ${f.name}${f.detail ? ` — ${f.detail}` : ''}`);
 }
-process.exit(failed.length ? 1 : 0);
+process.exit(failedChecks.length ? 1 : 0);

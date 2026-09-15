@@ -42,6 +42,7 @@ import { DexFab } from "./mobile/DexFab";
 import { DexChat } from "./mobile/DexChat";
 import { HeaderSlotContext } from "./mobile/HeaderSlot";
 import { useDexConversation } from "../hooks/useDexConversation";
+import { toastDexOutcome } from "../lib/dexOutcomeToast";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { cn } from "../lib/utils";
 import { useDexCapture } from "../hooks/useDexCapture";
@@ -257,8 +258,14 @@ export default function Layout({ children }) {
   // event rather than threading a callback through every page: the alternative is
   // a prop on Layout -> page -> list -> EmptyState, four levels deep, for one
   // button. 12i uses the same event across the rest of the empty states.
+  /* ASK-33 Phase 4 — the Desk's Dex well sends the same event WITH a detail, to
+     hand a sent decision to the sheet. See handoffRef, below the Dex hooks. */
+  const handoffRef = useRef(null);
   useEffect(() => {
-    const open = () => setDexOpen(true);
+    const open = (e) => {
+      if (e.detail?.channel === "decide") { handoffRef.current?.(e); return; }
+      setDexOpen(true);
+    };
     window.addEventListener("dos:open-dex", open);
     return () => window.removeEventListener("dos:open-dex", open);
   }, []);
@@ -319,13 +326,49 @@ export default function Layout({ children }) {
   /* KM-26 — one conversation, three surfaces: the dock hosts the input, the
      FAB submits it, the transcript shows it. None of them can own the state, so
      it lives in the hook and Layout hands it to all three. */
+  /* ASK-33 Phase 4 — every Decide ending, wherever it was sent from. The Desk
+     refreshes as it lands (the decision exists only once the note is
+     structured), and when the sheet has been closed by then the ending is a
+     toast, not a sheet that re-opens itself (KM-23's ghost card). Read through
+     refs: a toast's buttons act long after this render. */
+  const dexOpenRef = useRef(dexOpen);
+  dexOpenRef.current = dexOpen;
+  const dexChatRef = useRef(null);
+  const onDexEnding = useCallback((message) => {
+    refreshAfterCapture();
+    if (dexOpenRef.current) return;
+    toastDexOutcome(message, {
+      onReview: (id) => navigate(`/inbox?decision=${encodeURIComponent(id)}`),
+      onRetry: (o) => dexChatRef.current?.retry(o.retry),
+      canRetry: () => !!dexChatRef.current?.canRetry,
+    });
+  }, [navigate, refreshAfterCapture]);
   const chat = useDexConversation({
     dex,
     open: dexOpen,
     channel: dexChannel === "decide" ? "decide" : "ask",
     onCommitted: refreshAfterCapture,
+    userId: user?.id,
+    onEnding: onDexEnding,
   });
   draftSinkRef.current = chat.setDraftFromVoice;
+  dexChatRef.current = chat;
+  /* ASK-33 Phase 4 — THE WELL SENDS, THE SHEET SHOWS.
+     Below lg the Desk's Dex well sends a decision itself, then hands it here on
+     dos:open-dex with { channel: "decide", noteId, text, files, error }. The
+     hand-off is acknowledged — preventDefault — only once the capture is in
+     this transcript, this Dex is following its note, and the sheet has been
+     told to open. Anything short of that stays unacknowledged, and the well
+     keeps the capture: it polls the note itself and reports the ending. A
+     capture that is sent, unpolled and unreported is worse than a duplicate
+     toast. */
+  handoffRef.current = (e) => {
+    if (!isMobileShell) return;          // the sheet is lg:hidden; nothing would show it
+    if (!chat.adopt(e.detail)) return;   // nothing to take, or still reading another note
+    setDexChannel("decide");
+    setDexOpen(true);
+    e.preventDefault();
+  };
   const [langOpen, setLangOpen] = useState(false);
   // KR-5: the global search moved into a ⌘K dialog; same /brain?q= handoff.
   const [globalQuery, setGlobalQuery] = useState("");

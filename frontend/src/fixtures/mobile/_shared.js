@@ -38,8 +38,11 @@ export const series = (...points) => points.map((v, i) => ({ x: i, v }));
 /**
  * Writes that must answer with a real shape rather than a bare `ok: true`,
  * because the UI reads a field out of the response and takes its next step from
- * it. MPWA-12e: DexSheet follows the returned note id to build §5.6's
- * "understanding" state, so a response without `id` would silently skip it.
+ * it. MPWA-12e: the Dex sheet follows the returned note id to show what Dex
+ * understood, so a response without `id` would silently skip it. (This named
+ * DexSheet, which was removed from Layout in 97c2bfc (KM-23) and is not mounted;
+ * the live sheet is DexChat, which follows the id through useDexCapture, as the
+ * Desk's Dex well does.)
  */
 /* The capture walk's read counter, shared by the write that starts a capture
    (it resets the walk) and the note route that walks it. */

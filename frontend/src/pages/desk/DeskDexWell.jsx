@@ -31,8 +31,8 @@ import {
 } from "@phosphor-icons/react";
 import api from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
-import { captureOutcome, failureReason, readyFor, OUTCOME_COPY } from "../../lib/dexOutcome";
-import { proposalCounts, executionSummaryCounts, proposalCreatesText } from "../../lib/decisionProposal";
+import { captureOutcome, decisionCounts, failureReason, readyLine, OUTCOME_COPY } from "../../lib/dexOutcome";
+import { toastDexOutcome } from "../../lib/dexOutcomeToast";
 import { hasPerm } from "../../lib/perms";
 import { cn } from "../../lib/utils";
 import { useDexCapture } from "../../hooks/useDexCapture";
@@ -125,7 +125,9 @@ function AttachmentChip({ file, onRemove, disabled }) {
  */
 export function DeskDexWell({ className, testid, growToRef, onExpandedChange, onReview }) {
   const { user } = useAuth();
-  // The gate every Dex capture surface uses (DexFab, DexSheet, DexCaptureBar).
+  // The gate every Dex capture surface uses (DexFab, DexCaptureBar). This used to
+  // list DexSheet too; DexSheet was removed from Layout in 97c2bfc (KM-23) and is
+  // not mounted — the live sheet is DexChat, opened behind DexFab's gate.
   const canCapture = user?.role === "owner" || hasPerm(user, "voice_capture");
   const qc = useQueryClient();
   const refresh = useCallback(
@@ -144,8 +146,11 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
     onTranscript: (text, noteId) => draftSinkRef.current?.(text, noteId),
     onCaptured: refresh,
   });
-  const chat = useDexConversation({ dex, open: true, channel: "decide", onCommitted: refresh });
+  const chat = useDexConversation({ dex, open: true, channel: "decide", onCommitted: refresh, userId: user?.id });
   draftSinkRef.current = chat.setDraftFromVoice;
+  // For toasts, which act long after the render that raised them.
+  const chatRef = useRef(chat);
+  chatRef.current = chat;
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [attaching, setAttaching] = useState(false);
@@ -296,16 +301,30 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
     if (readyId && readyDecision?.status && readyDecision.status !== "pending_approval") collapse();
   }, [readyId, readyDecision, collapse]);
 
-  /* ASK-33 Phase 1, INTERIM — the well has no outcome screen yet (Phases 2-3
-     give it one on desktop, Phase 4 on the phone). Until then Dex's reply to a
-     send — the words useDexConversation already writes into its log — is
-     shown as a toast rather than dropped. No copy of its own: the text is the
-     conversation's. The "reading it now" acknowledgement is skipped because
-     it lands while the note is still being followed. */
+  /* ASK-33 Phase 1 — Dex's reply to a send, as a toast, where the well has no
+     screen for it. Phase 3 gave the desktop that screen (the workspace) and
+     Phase 4 gives the phone the sheet, so below lg this now runs only for a
+     capture the well KEPT because nothing took the hand-off (see send). The
+     words and actions are the sheet's own late toasts' (lib/dexOutcomeToast).
+     The "reading it now" acknowledgement is skipped because it lands while the
+     note is still being followed. */
   const awaitingReplyRef = useRef(false);
   const seenLogRef = useRef(0);
   const understandingRef = useRef(null);
   understandingRef.current = dex.understanding;
+  // A kept capture's Retry, from its toast: the ending is reported the same way.
+  const retryKept = async (o) => {
+    endingRef.current = null;
+    awaitingReplyRef.current = true;
+    const ok = await chatRef.current.retry(o.retry);
+    if (!ok) awaitingReplyRef.current = false;
+  };
+  const toastEndingRef = useRef(null);
+  toastEndingRef.current = (message) => toastDexOutcome(message, {
+    onReview: (id) => onReview?.(id),
+    onRetry: retryKept,
+    canRetry: () => !!chatRef.current.canRetry,
+  });
   useEffect(() => {
     const fresh = chat.log.slice(seenLogRef.current);
     seenLogRef.current = chat.log.length;
@@ -323,21 +342,61 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
       if (!endingRef.current) setOutcome({ kind: "failed", ...failureReason(reply.text) });
       return;
     }
-    // Below lg the Phase 1 interim stands until the sheet shows endings (Phase 4).
-    // No ending recorded means the send itself failed (ask()'s catch).
-    if (endingRef.current === "failed" || !endingRef.current) toast.error(reply.text);
-    else toast(reply.text);
+    // Below lg: a capture the well kept (see send).
+    toastEndingRef.current(reply);
   }, [chat.log]);
 
-  const send = () => {
+  /* ASK-33 Phase 4 — THE WELL SENDS, THE SHEET SHOWS. Below lg the well has no
+     workspace: an ending is read in the phone's Dex sheet (DexChat, in Layout).
+     So the well sends the capture itself — the held recording, the words, the
+     files, exactly as on desktop — without following it, and hands what it sent
+     to the sheet on dos:open-dex. Layout cancels the event to say it has it, and
+     only once the capture is in the sheet's transcript and its note is being
+     followed there. */
+  const handToSheet = (sent) => !window.dispatchEvent(new CustomEvent("dos:open-dex", {
+    cancelable: true,
+    detail: {
+      channel: "decide",
+      noteId: sent.ok ? sent.noteId : null,
+      text: sent.text,
+      files: sent.files,
+      error: sent.ok ? null : sent.message,
+    },
+  }));
+
+  const send = async () => {
     if (!canSend || dex.sending || chat.busy) return;
-    awaitingReplyRef.current = true;
     endingRef.current = null;
     setMenuOpen(false);
-    setSentText(chat.draft.trim() || chat.pendingFiles.map((f) => f.name).join(", "));
-    setOutcome(null);
-    expand();
-    chat.ask(chat.draft);
+    if (isDesktop()) {
+      awaitingReplyRef.current = true;
+      setSentText(chat.draft.trim() || chat.pendingFiles.map((f) => f.name).join(", "));
+      setOutcome(null);
+      expand();
+      chat.ask(chat.draft);
+      return;
+    }
+    awaitingReplyRef.current = false;
+    const sent = await chat.ask(chat.draft, { follow: false });
+    if (!sent) return;
+    if (handToSheet(sent)) {
+      // A send that failed goes to the sheet with its files, for its Retry; left
+      // here too, they would also ride along with the next capture.
+      if (!sent.ok) sent.files.forEach((f) => chatRef.current.removeFile(f.id));
+      return;
+    }
+    /* THE GUARD — nothing took it: no sheet to show it, or the sheet is still
+       reading another note. The well keeps the capture, as Phase 1 did: it
+       follows the note itself, and the ending comes back as a toast. */
+    if (sent.ok && sent.noteId) {
+      awaitingReplyRef.current = true;
+      dex.follow(sent.noteId, { transcript: sent.text });
+    } else if (!sent.ok) {
+      toastEndingRef.current({
+        text: sent.message,
+        outcome: { kind: "failed", ...failureReason(sent.message), retry: { text: sent.text, file_ids: sent.file_ids } },
+      });
+    }
   };
 
   // Outcome C — Retry re-sends the same capture; the workspace thinks again.
@@ -428,15 +487,13 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
      here is a review surface: Review hands off to DecisionDialog, which already
      has the rows, the people and dates to change, what was said and the links
      to what approval creates (ASK-32 Phase 3). */
-  const outcomeCounts = readyDecision?.proposal
-    ? proposalCounts(readyDecision.proposal)
-    : executionSummaryCounts(readyDecision?.execution_summary);
+  const outcomeCounts = decisionCounts(readyDecision);
   const quietPill = "kr-pop flex h-10 items-center rounded-pill px-4 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60";
   const inkPill = "flex h-10 items-center rounded-pill bg-kr-ink px-5 text-sm font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60 disabled:opacity-40";
   const outcomeView = !outcome ? null : outcome.kind === "ready" ? (
     <div data-testid="dex-outcome-ready" className="flex min-h-0 flex-1 flex-col">
       <p data-testid="desk-dex-summary" className="text-[17px] font-semibold leading-snug text-foreground">
-        {OUTCOME_COPY.ready(readyFor(readyDecision, user?.id), proposalCreatesText(outcomeCounts))}
+        {readyLine(readyDecision, user?.id)}
       </p>
       {readyDecision?.title && (
         <p className="mt-1 line-clamp-2 text-sm leading-snug text-foreground/70">{readyDecision.title}</p>

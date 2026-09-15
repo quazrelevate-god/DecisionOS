@@ -32,7 +32,10 @@ import {
 //                                       would drift against this one.
 //   seedText                            lets DexSheet's suggestion chips fill
 //                                       the input instead of duplicating the
-//                                       send logic.
+//                                       send logic. (DexSheet was removed from
+//                                       Layout in 97c2bfc (KM-23) and is not
+//                                       mounted; DexChat, the live sheet, has
+//                                       no chips and does not render this bar.)
 //   size="lg"                           thumb-sized mic/input for the sheet.
 //
 // MPWA-12e: the recorder, the uploads and the endpoints moved into

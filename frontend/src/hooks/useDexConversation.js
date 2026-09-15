@@ -43,6 +43,8 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted } =
   // the draft came from (its words are reviewed here, then sent on as ONE note).
   const [pendingFiles, setPendingFiles] = useState([]);
   const heldNoteRef = useRef(null);
+  // ASK-33 Phase 3 — what the last decide-channel send carried, for Retry.
+  const lastSentRef = useRef(null);
   const seenRef = useRef(null);
 
   const push = useCallback((m) => setLog((l) => [...l, { id: uid(), ...m }]), []);
@@ -128,6 +130,7 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted } =
     try {
       if (channel === "decide") {
         const file_ids = pendingFiles.map((f) => f.id);
+        lastSentRef.current = { text, file_ids };
         const held = heldNoteRef.current;
         const { data } = held
           ? await api.post(`/voice-notes/${held}/submit`, { text, file_ids })
@@ -191,6 +194,28 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted } =
       The upload itself stays in files, as a sent one always has. */
   const removeFile = useCallback((id) => setPendingFiles((p) => p.filter((f) => f.id !== id)), []);
 
+  /** ASK-33 Phase 3 — Retry re-sends the same capture, its words and its files,
+      rather than asking the founder to say it again. A held recording's words
+      are text by the time it could fail, so it goes again as a typed note. */
+  const retry = useCallback(async () => {
+    const last = lastSentRef.current;
+    if (!last || busy || channel !== "decide") return false;
+    setBusy(true);
+    try {
+      const { data } = await api.post("/voice-notes/text", { text: last.text, file_ids: last.file_ids });
+      push({ role: "dex", text: "Reading it again…" });
+      if (data?.id && dex?.follow) dex.follow(data.id, { transcript: last.text });
+      onCommitted?.();
+      return true;
+    } catch (e) {
+      const detail = e.response?.data?.detail;
+      push({ role: "dex", text: typeof detail === "string" && detail ? detail : "That didn't go through. Please try again." });
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, channel, dex, onCommitted, push]);
+
   const canSendFiles = channel === "decide" && pendingFiles.length > 0;
 
   /** What the FAB does right now — the single source for its icon and action.
@@ -215,7 +240,7 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted } =
     dex?.startRecording?.();
   }, [ask, canSendFiles, draft, dex, mode]);
 
-  return { log, busy, mode, setMode, draft, setDraft, setDraftFromVoice, ask, attach, removeFile, submit, fabIntent, pendingFiles };
+  return { log, busy, mode, setMode, draft, setDraft, setDraftFromVoice, ask, attach, removeFile, retry, submit, fabIntent, pendingFiles };
 }
 
 export default useDexConversation;

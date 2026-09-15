@@ -62,6 +62,7 @@ import { GlassSelect } from "./karma/GlassSelect";
 import { useAuth } from "../context/AuthContext";
 import { userPerms } from "../lib/perms";
 import { canAssignPerson } from "../lib/taskAccess";
+import { proposalCreatesText } from "../lib/decisionProposal";
 
 /* ── helpers shared with the Desk's decision cards ───────────────────────── */
 export function raisedByLabel(d) {
@@ -171,11 +172,9 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
     ...(proposal.memory_notes || []).map((n) => ({ key: n.key, kind: "memory_notes", label: `Company note: ${n.text}`, sub: n.tag })),
   ] : [];
   const nWorkflows = (proposal?.workflows || []).length;
-  const createsText = [
-    rows.length ? `${rows.length} task${rows.length === 1 ? "" : "s"}` : null,
-    nWorkflows ? `${nWorkflows} workflow${nWorkflows === 1 ? "" : "s"}` : null,
-    extras.length - nWorkflows > 0 ? `${extras.length - nWorkflows} more item${extras.length - nWorkflows === 1 ? "" : "s"}` : null,
-  ].filter(Boolean).join(", ");
+  // ASK-33 — the wording lives in lib/decisionProposal, so the Desk's Dex well
+  // says exactly what this popup says about the same proposal.
+  const createsText = proposalCreatesText({ tasks: rows.length, workflows: nWorkflows, extras: extras.length });
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["decision", decisionId] });

@@ -23,12 +23,16 @@
 // Desk, so a keystroke in the field or a recording tick re-renders this well
 // and nothing else on the page.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  Plus, Microphone, Stop, PaperPlaneRight, Paperclip, Keyboard, Waveform, X, Check, File as FileGlyph,
+  Plus, Microphone, Stop, PaperPlaneRight, Paperclip, Keyboard, Waveform, X, Check, WarningCircle, File as FileGlyph,
 } from "@phosphor-icons/react";
+import api from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
+import { captureOutcome, failureReason, readyFor, OUTCOME_COPY } from "../../lib/dexOutcome";
+import { proposalCounts, executionSummaryCounts, proposalCreatesText } from "../../lib/decisionProposal";
 import { hasPerm } from "../../lib/perms";
 import { cn } from "../../lib/utils";
 import { useDexCapture } from "../../hooks/useDexCapture";
@@ -68,7 +72,7 @@ const CIRCLE =
    arrive from the [+]: sideways below lg, where they swap into the composer's
    slot, and upward from lg, where they stack above it. */
 const POP_ITEM = "transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none";
-const POP_OPEN = "translate-x-0 translate-y-0 scale-100 opacity-100";
+const POP_OPEN = "pointer-events-auto translate-x-0 translate-y-0 scale-100 opacity-100";
 const POP_SHUT = "pointer-events-none -translate-x-2 scale-90 opacity-0 lg:translate-x-0 lg:translate-y-2";
 
 /** One attached file: a preview (the image itself, or a file glyph), its name,
@@ -115,8 +119,11 @@ function AttachmentChip({ file, onRemove, disabled }) {
  * @param {Function}        [onExpandedChange] told true/false as the well becomes
  *                                             and stops being the workspace, so
  *                                             the Desk can fade what it covers
+ * @param {Function}        [onReview]         ASK-33 Phase 3 — opens a ready
+ *                                             decision in the Desk's existing
+ *                                             DecisionDialog
  */
-export function DeskDexWell({ className, testid, growToRef, onExpandedChange }) {
+export function DeskDexWell({ className, testid, growToRef, onExpandedChange, onReview }) {
   const { user } = useAuth();
   // The gate every Dex capture surface uses (DexFab, DexSheet, DexCaptureBar).
   const canCapture = user?.role === "owner" || hasPerm(user, "voice_capture");
@@ -182,6 +189,7 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange }) 
   const [grow, setGrow] = useState(null);
   const [steps, setSteps] = useState([]);
   const [sentText, setSentText] = useState("");
+  const [outcome, setOutcome] = useState(null);
   const growing = !!grow;
   const growPhase = grow?.phase;
 
@@ -257,7 +265,36 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange }) 
 
   const waveState = dex.recording
     ? "listening"
-    : (chat.busy || (expanded && !ENDINGS.includes(stage))) ? "thinking" : "idle";
+    : (chat.busy || (expanded && !outcome && !ENDINGS.includes(stage))) ? "thinking" : "idle";
+
+  /* ASK-33 Phase 3 — THE ENDINGS (plan 5.1, 5.2). When the note ends while the
+     well is the workspace, lib/dexOutcome reads what it came to — a decision
+     ready, nothing to decide, or a failure — and the well shows that instead
+     of settling back down. It is read here, in the render the ending arrives
+     in, because useDexConversation clears the understanding straight after. */
+  const growingRef = useRef(false);
+  growingRef.current = growing;
+  useEffect(() => {
+    if (!growing || !ENDINGS.includes(stage)) return;
+    setOutcome(captureOutcome(dex.understanding));
+  }, [growing, stage, dex.understanding]);
+  // Collapsed is done with: the next send starts clean.
+  useEffect(() => { if (!growing) setOutcome(null); }, [growing]);
+
+  /* A ready decision is read live, on DecisionDialog's own cache key, so the
+     counts follow any edit made in Review — and once it is decided (approved or
+     rejected there) the well settles back down. Later leaves it undecided, in
+     the Decisions column and at /inbox?decision=<id>, both unchanged. */
+  const readyId = outcome?.kind === "ready" ? outcome.decisionId : null;
+  const decisionQ = useQuery({
+    queryKey: ["decision", readyId],
+    queryFn: () => api.get(`/decisions/${readyId}`).then((r) => r.data),
+    enabled: !!readyId,
+  });
+  const readyDecision = decisionQ.data || outcome?.decision || null;
+  useEffect(() => {
+    if (readyId && readyDecision?.status && readyDecision.status !== "pending_approval") collapse();
+  }, [readyId, readyDecision, collapse]);
 
   /* ASK-33 Phase 1, INTERIM — the well has no outcome screen yet (Phases 2-3
      give it one on desktop, Phase 4 on the phone). Until then Dex's reply to a
@@ -278,13 +315,19 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange }) 
     const reply = fresh.filter((m) => m.role === "dex").pop();
     if (!reply) return;
     awaitingReplyRef.current = false;
+    /* ASK-33 Phase 3 — on desktop the workspace shows the ending itself (see
+       THE ENDINGS), so no toast. The one ending it cannot see is a send that
+       never reached the pipeline — ask()'s catch — and that is a failure with
+       a reason, shown the same way. */
+    if (growingRef.current) {
+      if (!endingRef.current) setOutcome({ kind: "failed", ...failureReason(reply.text) });
+      return;
+    }
+    // Below lg the Phase 1 interim stands until the sheet shows endings (Phase 4).
     // No ending recorded means the send itself failed (ask()'s catch).
     if (endingRef.current === "failed" || !endingRef.current) toast.error(reply.text);
     else toast(reply.text);
-    // ASK-33 Phase 2 — nothing more to show in the workspace yet (Phase 3 gives
-    // the endings a screen of their own), so the well settles back down.
-    collapse();
-  }, [chat.log, collapse]);
+  }, [chat.log]);
 
   const send = () => {
     if (!canSend || dex.sending || chat.busy) return;
@@ -292,8 +335,22 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange }) 
     endingRef.current = null;
     setMenuOpen(false);
     setSentText(chat.draft.trim() || chat.pendingFiles.map((f) => f.name).join(", "));
+    setOutcome(null);
     expand();
     chat.ask(chat.draft);
+  };
+
+  // Outcome C — Retry re-sends the same capture; the workspace thinks again.
+  const onRetry = async () => {
+    setOutcome(null);
+    setSteps([]);
+    endingRef.current = null;
+    awaitingReplyRef.current = true;
+    const ok = await chat.retry();
+    if (!ok) {
+      awaitingReplyRef.current = false;
+      setOutcome((o) => o || { kind: "failed", ...failureReason("") });
+    }
   };
 
   /* The mic circle: stop while recording; send once there is something to
@@ -348,13 +405,16 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange }) 
   /* The line under "Dex". Attached files take its place rather than adding a
      row, so the well never changes height. The row's py-2 / -my-2 pair gives
      each remove its 44px target without moving anything around it. */
-  const prompt = growing ? null : chat.pendingFiles.length > 0 ? (
+  /* ASK-33 Phase 3 — files attached for the NEXT capture show while the well
+     is the workspace too, now that it stays open on an ending; only the prompt
+     line gives way there. */
+  const prompt = chat.pendingFiles.length > 0 ? (
     <ul aria-label="Attached files" className="-mb-2 -mt-0.5 flex min-w-0 gap-1.5 overflow-x-auto py-2 [scrollbar-width:none]">
       {chat.pendingFiles.map((f) => (
         <AttachmentChip key={f.id} file={f} onRemove={() => chat.removeFile(f.id)} disabled={chat.busy} />
       ))}
     </ul>
-  ) : (
+  ) : growing ? null : (
     <p className="mt-1.5 text-sm leading-snug text-foreground/70">
       {canCapture
         ? "Tell Dex what you decided — speak or type."
@@ -364,9 +424,81 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange }) 
 
   /* ASK-33 Phase 2 — the workspace while the proposal builds: what was sent,
      then each stage the note has reached, the current one live. */
+  /* ASK-33 Phase 3 — the three endings, as the workspace shows them. Nothing
+     here is a review surface: Review hands off to DecisionDialog, which already
+     has the rows, the people and dates to change, what was said and the links
+     to what approval creates (ASK-32 Phase 3). */
+  const outcomeCounts = readyDecision?.proposal
+    ? proposalCounts(readyDecision.proposal)
+    : executionSummaryCounts(readyDecision?.execution_summary);
+  const quietPill = "kr-pop flex h-10 items-center rounded-pill px-4 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60";
+  const inkPill = "flex h-10 items-center rounded-pill bg-kr-ink px-5 text-sm font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60 disabled:opacity-40";
+  const outcomeView = !outcome ? null : outcome.kind === "ready" ? (
+    <div data-testid="dex-outcome-ready" className="flex min-h-0 flex-1 flex-col">
+      <p data-testid="desk-dex-summary" className="text-[17px] font-semibold leading-snug text-foreground">
+        {OUTCOME_COPY.ready(readyFor(readyDecision, user?.id), proposalCreatesText(outcomeCounts))}
+      </p>
+      {readyDecision?.title && (
+        <p className="mt-1 line-clamp-2 text-sm leading-snug text-foreground/70">{readyDecision.title}</p>
+      )}
+      <dl className="mt-4 grid grid-cols-4 gap-2">
+        {[["Tasks", outcomeCounts.tasks], ["People", outcomeCounts.people], ["Approvals", outcomeCounts.approvals], ["Meetings", outcomeCounts.meetings]].map(([label, n]) => (
+          <div key={label} className="kr-pop min-w-0 rounded-2xl px-3 py-2.5">
+            <dt className="truncate text-[11px] font-medium text-foreground/60">{label}</dt>
+            <dd className="mt-1 font-display text-2xl leading-none tabular-nums text-foreground">{n}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
+        <button type="button" data-testid="desk-dex-review" onClick={() => onReview?.(outcome.decisionId)} className={inkPill}>
+          Review
+        </button>
+        <button type="button" onClick={collapse} className={quietPill}>Later</button>
+      </div>
+    </div>
+  ) : outcome.kind === "nothing" ? (
+    /* Not an error, and it must not look like one: plain words, one way out. */
+    <div data-testid="dex-outcome-nothing" className="flex min-h-0 flex-1 flex-col">
+      <p className="text-[17px] font-semibold leading-snug text-foreground">{OUTCOME_COPY.nothing}</p>
+      {outcome.answer && (
+        <p className="mt-2 whitespace-pre-line break-words text-[15px] leading-relaxed text-foreground/80">{outcome.answer}</p>
+      )}
+      <div className="mt-auto pt-4">
+        <button type="button" onClick={collapse} className={quietPill}>Got it</button>
+      </div>
+    </div>
+  ) : outcome.kind === "failed" ? (
+    <div data-testid="dex-outcome-failed" role="alert" className="flex min-h-0 flex-1 flex-col">
+      <p className="flex items-start gap-2 text-[17px] font-semibold leading-snug text-foreground">
+        <WarningCircle size={20} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0 text-rose-600" />
+        {/* The reason is the whole point of this ending: it wraps, never truncates. */}
+        <span className="min-w-0 break-words">{outcome.message}</span>
+      </p>
+      {outcome.href && (
+        <Link to={outcome.href} className="mt-2 w-fit text-sm font-medium text-foreground underline underline-offset-4">
+          {outcome.linkLabel}
+        </Link>
+      )}
+      <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
+        <button type="button" data-testid="dex-outcome-retry" onClick={onRetry} disabled={chat.busy} className={inkPill}>
+          Retry
+        </button>
+        <button type="button" onClick={collapse} className={quietPill}>Not now</button>
+      </div>
+    </div>
+  ) : (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <p className="text-[15px] leading-relaxed text-foreground/80">{OUTCOME_COPY.slow}</p>
+      <div className="mt-auto pt-4">
+        <button type="button" onClick={collapse} className={quietPill}>OK</button>
+      </div>
+    </div>
+  );
+
   const shownSteps = ["sending", ...steps];
   const body = growing ? (
     <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-y-auto animate-in fade-in-0 duration-300 motion-reduce:animate-none" aria-live="polite">
+      {outcome ? outcomeView : (<>
       {sentText && (
         <p className="line-clamp-3 text-[15px] leading-snug text-foreground">&ldquo;{sentText}&rdquo;</p>
       )}
@@ -388,6 +520,7 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange }) 
           );
         })}
       </ol>
+      </>)}
     </div>
   ) : null;
 
@@ -404,9 +537,13 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange }) 
             ABOVE the [+], nearest first — the desktop well leaves ~147px over
             it for 96px of circles, clear of the prompt line.
             Always mounted so they can animate out as well as in; shut, they
-            take no taps and no focus. */}
+            take no taps and no focus. Neither does the box that holds them —
+            it is pointer-events-none and only the circles opt back in, while
+            open. Shut, that box still has their size: on a phone it sits over
+            the composer's left edge and on desktop over the actions an
+            outcome puts above the [+], and it swallowed taps on both. */}
         <div
-          className="absolute left-full top-0 z-10 ml-2 flex h-full items-center gap-2 lg:bottom-full lg:left-0 lg:top-auto lg:mb-2 lg:ml-0 lg:h-auto lg:flex-col-reverse"
+          className="pointer-events-none absolute left-full top-0 z-10 ml-2 flex h-full items-center gap-2 lg:bottom-full lg:left-0 lg:top-auto lg:mb-2 lg:ml-0 lg:h-auto lg:flex-col-reverse"
           aria-hidden={!menuOpen}
         >
           <button

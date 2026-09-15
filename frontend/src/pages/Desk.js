@@ -520,6 +520,7 @@ export default function Desk() {
             testid="desk-insight"
             growToRef={kpiGridRef}
             onExpandedChange={setDexExpanded}
+            onReview={(id) => setOpenDecisionId(id)}
           />
         </div>
 

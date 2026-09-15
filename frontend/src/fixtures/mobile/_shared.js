@@ -41,11 +41,22 @@ export const series = (...points) => points.map((v, i) => ({ x: i, v }));
  * it. MPWA-12e: DexSheet follows the returned note id to build §5.6's
  * "understanding" state, so a response without `id` would silently skip it.
  */
+/* The capture walk's read counter, shared by the write that starts a capture
+   (it resets the walk) and the note route that walks it. */
+let dexReads = 0;
+/* ASK-33 — which ending the simulated capture reaches. Dev-only (fixtures are
+   never in the production bundle): sessionStorage "dos_fixture_capture" set to
+   "nothing", "consent" or "failed"; anything else is a ready decision. */
+const dexEnding = () => {
+  try { return window.sessionStorage.getItem("dos_fixture_capture") || "decision"; } catch { return "decision"; }
+};
+
 export function buildWrites() {
   return [
     // ASK-32 1.6 — a held recording is sent as /voice-notes/{id}/submit and
     // followed by the same id, so that write answers with it too.
-    { match: /^\/voice-notes(\/text|\/[^/]+\/submit)?$/, data: { id: "vn_fixture", status: "queued" } },
+    // ASK-33 — every new capture walks the stages again from the start.
+    { match: /^\/voice-notes(\/text|\/[^/]+\/submit)?$/, data: () => { dexReads = 0; return { id: "vn_fixture", status: "queued" }; } },
     // ASK-33 — the Desk well attaches a file by the id this returns; without
     // one there is nothing to send with the note and no chip to show.
     { match: /^\/files$/, data: { id: "file_fixture", filename: "attachment" } },
@@ -110,12 +121,28 @@ export function buildRoutes(d) {
   const DEX_NOTE = "vn_fixture";
   const DEX_DECISION = "dec_fixture";
   const dexTasks = (d.tasks || []).slice(0, 2);
-  let dexReads = 0;
   R.push({
     match: `/voice-notes/${DEX_NOTE}`,
     data: () => {
       dexReads += 1;
       const status = dexReads === 1 ? "transcribing" : dexReads === 2 ? "structuring" : "done";
+      const ending = dexEnding();
+      if (status === "done" && ending === "nothing") {
+        return {
+          id: DEX_NOTE, kind: "text", status: "done", outcome: "nothing_to_decide", decision_id: null,
+          transcript: "How much profit did we make this month?",
+          summary: "The founder asked how much profit the company made this month. That is a question, not a decision.",
+        };
+      }
+      if (status === "done" && (ending === "consent" || ending === "failed")) {
+        return {
+          id: DEX_NOTE, kind: "text", status: "failed",
+          transcript: "Tell Suresh to ship the indigo lot before Friday",
+          error: ending === "consent"
+            ? "451: {'code': 'ai_consent_required', 'message': 'This AI feature is unavailable until your workspace owner grants consent for AI data processing.'}"
+            : "The structuring service did not answer within 60 seconds",
+        };
+      }
       return {
         id: DEX_NOTE,
         kind: "text",
@@ -124,6 +151,7 @@ export function buildRoutes(d) {
         detected_language_name: "English",
         ...(status === "done"
           ? {
+              outcome: "decision",
               decision_id: DEX_DECISION,
               execution_summary: { tasks: dexTasks.length, assignees: dexTasks.length, approvals: 1, workflows: 0, meetings: 0, reminders: 0 },
             }
@@ -141,6 +169,23 @@ export function buildRoutes(d) {
       confidence: 0.91,
       status: "pending_approval",
       task_ids: dexTasks.map((t) => t.id),
+      // ASK-33 — the ASK-32 shape: who decides, and the proposal nothing is
+      // created from until approval.
+      created_by: OWNER.id,
+      approver_id: "u_fixture_sunita",
+      approver_name: "Sunita Rao",
+      execution_summary: { tasks: dexTasks.length, assignees: dexTasks.length, approvals: dexTasks.length ? 1 : 0, workflows: 1, meetings: 0, reminders: 0 },
+      proposal: {
+        tasks: dexTasks.map((t, i) => ({
+          key: `t${i + 1}`, title: t.title, assignee_id: t.assignee_id || `u_fixture_${i + 1}`,
+          assignee_name: t.assignee_name || null, due_date: t.due_date || null, priority: t.priority || "medium",
+        })),
+        workflows: [{
+          key: "w1", mode: "existing", pipeline_label: "Dispatch", title: "Indigo lot for Tirupur",
+          counterparty: "Tirupur Knits", stage: "ready_to_dispatch", move_to: "dispatched",
+        }],
+        meetings: [], reminders: [], memory_notes: [],
+      },
     },
   });
 

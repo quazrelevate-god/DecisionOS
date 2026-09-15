@@ -208,6 +208,9 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
           summary: note.execution_summary || null,
           said: note.summary || null,
           error: note.error || null,
+          // ASK-33 — the pipeline's own word for the ending ("decision" |
+          // "nothing_to_decide"), read by lib/dexOutcome.
+          outcome: note.outcome || null,
         };
 
         // ASK-32 1.4 — nothing to act on: no decision was made, say so.

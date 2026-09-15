@@ -2,10 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
-import { useTheme } from "../hooks/useTheme";
 import api, { formatApiError } from "../lib/api";
 import { KarmaLogo } from "../components/karma/Logo";
-import { DeviceMobile, Sun, MoonStars, ArrowRight, ArrowLeft } from "@phosphor-icons/react";
+import { DeviceMobile, ArrowRight, ArrowLeft } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 // KM-66 — the demo takes the whole card, not a corner of it. The default
@@ -103,7 +102,6 @@ const OtpBoxes = ({ value, onChange, disabled }) => {
 
 export default function Login() {
   const { login, loginWithOtp } = useAuth();
-  const { isDark, toggle: toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [loginTab, setLoginTab] = useState("password");
   const [otpPhone, setOtpPhone] = useState("");
@@ -220,15 +218,8 @@ export default function Login() {
           twice. */}
       <div className="app-sky__art app-sky__art--aside" aria-hidden="true" />
 
-      <button
-        onClick={toggleTheme}
-        data-testid="login-theme-toggle"
-        title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-        aria-label="Toggle dark mode"
-        className="kr-pop fixed right-4 top-4 z-50 grid h-10 w-10 place-items-center rounded-full"
-      >
-        {isDark ? <Sun size={18} weight="bold" /> : <MoonStars size={18} weight="bold" />}
-      </button>
+      {/* ASK-33 Phase 5 — the dark-mode switch that sat here is gone: the app
+          is designed light-only (founder, 2026-09-16). */}
 
       {/* Header — signup's exact header: on a phone the wordmark alone,
           centred; on desktop a floating glass pill with the way out on the

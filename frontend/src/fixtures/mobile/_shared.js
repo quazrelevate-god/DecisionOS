@@ -49,7 +49,9 @@ export const series = (...points) => points.map((v, i) => ({ x: i, v }));
 let dexReads = 0;
 /* ASK-33 — which ending the simulated capture reaches. Dev-only (fixtures are
    never in the production bundle): sessionStorage "dos_fixture_capture" set to
-   "nothing", "consent" or "failed"; anything else is a ready decision. */
+   "nothing", "consent" or "failed"; anything else is a ready decision.
+   ASK-33 Phase 5 — "failed_long" fails with a raw, unbroken exception string,
+   to check a long reason wraps rather than truncates or overflows. */
 const dexEnding = () => {
   try { return window.sessionStorage.getItem("dos_fixture_capture") || "decision"; } catch { return "decision"; }
 };
@@ -137,13 +139,15 @@ export function buildRoutes(d) {
           summary: "The founder asked how much profit the company made this month. That is a question, not a decision.",
         };
       }
-      if (status === "done" && (ending === "consent" || ending === "failed")) {
+      if (status === "done" && (ending === "consent" || ending === "failed" || ending === "failed_long")) {
         return {
           id: DEX_NOTE, kind: "text", status: "failed",
           transcript: "Tell Suresh to ship the indigo lot before Friday",
           error: ending === "consent"
             ? "451: {'code': 'ai_consent_required', 'message': 'This AI feature is unavailable until your workspace owner grants consent for AI data processing.'}"
-            : "The structuring service did not answer within 60 seconds",
+            : ending === "failed_long"
+              ? "HTTPSConnectionPool(host='structuring.internal.decisionos.example', port=443): Max retries exceeded with url: /v1/structure?note=vn_fixture&trace=7f3c2a9e1b4d4c0f8a6e5d2c1b0a9f8e7d6c5b4a (Caused by NewConnectionError('<urllib3.connection.HTTPSConnection object at 0x7f9c2b3d4e50>: Failed to establish a new connection: [Errno 111] Connection refused'))"
+              : "The structuring service did not answer within 60 seconds",
         };
       }
       return {

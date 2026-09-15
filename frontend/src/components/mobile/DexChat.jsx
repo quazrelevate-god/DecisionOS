@@ -6,6 +6,7 @@ import {
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { OUTCOME_COPY } from "@/lib/dexOutcome";
+import { DexFailureNotice } from "./DexFailureNotice";
 import { useBackDismiss } from "@/hooks/useBackDismiss";
 
 // KM-23 · DexChat — Dex as a conversation, over the page you were on.
@@ -64,7 +65,9 @@ function richText(text) {
    older one re-sends that one. */
 const ACTION = "flex h-11 items-center rounded-pill px-4 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-40";
 // bg-[#fff]/text-kr-ink for the reason the white bubble gives below (KM-51).
-const ACTION_MAIN = cn(ACTION, "bg-[#fff] font-semibold text-kr-ink");
+// Phase 5 — Review and Retry commit, so they take the 56px tier; Got it and
+// Not now hold the 44px floor (MPWA-01 §5.1).
+const ACTION_MAIN = cn(ACTION, "h-14 min-h-touch-lg px-6 bg-[#fff] font-semibold text-kr-ink");
 const ACTION_QUIET = cn(ACTION, "bg-white/10 font-medium text-white hover:bg-white/20");
 
 function Outcome({ o, onReview, onRetry, onDismiss, retryDisabled }) {
@@ -364,6 +367,11 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
               <div ref={endRef} />
             </div>
             </PresenceContext.Provider>
+
+            {/* ASK-33 Phase 5 — a failed Dex capture that must stay until
+                dismissed sits here while the sheet is open: in the flow,
+                between the transcript and the plus, so it covers neither. */}
+            <DexFailureNotice placement="inline" className="mx-4 mb-3" />
 
             {/* KM-26 · the plus, and only the plus.
                 It sits on the DOCK's baseline, clear of the bar (which is now

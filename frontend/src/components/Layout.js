@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { useSkyFade } from "../hooks/useSkyFade";
-import { useTheme } from "../hooks/useTheme";
 import { hasPerm } from "../lib/perms";
 import { toast } from "sonner";
 import api from "../lib/api";
@@ -43,6 +42,7 @@ import { DexChat } from "./mobile/DexChat";
 import { HeaderSlotContext } from "./mobile/HeaderSlot";
 import { useDexConversation } from "../hooks/useDexConversation";
 import { toastDexOutcome } from "../lib/dexOutcomeToast";
+import { DexFailureNotice } from "./mobile/DexFailureNotice";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { cn } from "../lib/utils";
 import { useDexCapture } from "../hooks/useDexCapture";
@@ -144,7 +144,6 @@ export default function Layout({ children }) {
 
   const navigate = useNavigate();
   const location = useLocation();
-  const { isDark, toggle: toggleTheme } = useTheme();
 
   // ── NM-17 · the Dex dissolve ────────────────────────────────────────────
   // /brain renders dark whatever the app's theme is; the transition into the
@@ -153,9 +152,10 @@ export default function Layout({ children }) {
   // KR-5: `wantDark = dexRoute`, full stop. User-facing dark mode retired
   // with the Karma language (approved plan) — Karma is a two-zone light
   // composition and `dark` now means "inside the ink", which only the Dex
-  // room asserts at page level. useTheme still owns the stored preference;
-  // the mobile AllAppsPanel theme tile keeps working against it for now, and
-  // desktop simply no longer reads it.
+  // room asserts at page level. ASK-33 Phase 5 (founder, 2026-09-16) removed
+  // the rest: useTheme, the Settings and Login switches and the All Apps theme
+  // branch are gone, and index.js clears any saved "dark". This class now
+  // belongs to the Dex room alone.
   const dexRoute = location.pathname.startsWith("/brain") || location.pathname.startsWith("/dex");
   const wantDark = dexRoute;
   const lastDark = useRef(null);
@@ -337,12 +337,16 @@ export default function Layout({ children }) {
   const dexChatRef = useRef(null);
   const onDexEnding = useCallback((message) => {
     refreshAfterCapture();
-    if (dexOpenRef.current) return;
+    if (dexOpenRef.current) return false;
     toastDexOutcome(message, {
       onReview: (id) => navigate(`/inbox?decision=${encodeURIComponent(id)}`),
-      onRetry: (o) => dexChatRef.current?.retry(o.retry),
+      // Phase 5 — re-sent from the notice with the sheet closed: quiet, so no
+      // transcript no one is reading gets "Reading it again…".
+      onRetry: (o) => dexChatRef.current?.retry(o.retry, null, { quiet: !dexOpenRef.current }),
       canRetry: () => !!dexChatRef.current?.canRetry,
     });
+    // Reported here, so it is not also left in the transcript (Phase 5).
+    return true;
   }, [navigate, refreshAfterCapture]);
   const chat = useDexConversation({
     dex,
@@ -480,9 +484,8 @@ export default function Layout({ children }) {
 
   // KR-5: ThemeToggle is DELETED from the desktop shell, not hidden — dark
   // mode retired with the Karma language and a control that can never change
-  // what is on screen is worse than no control. The mobile AllAppsPanel tile
-  // still receives isDark/onToggleTheme below and keeps working against the
-  // stored preference; that surface's retirement is a separate product call.
+  // what is on screen is worse than no control. ASK-33 Phase 5 finished the
+  // job on the founder's call: no theme switch anywhere, no stored preference.
 
   const doLogout = () => {
     logout();
@@ -855,14 +858,16 @@ export default function Layout({ children }) {
         open={allAppsOpen}
         onClose={() => setAllAppsOpen(false)}
         user={user}
-        isDark={isDark}
-        onToggleTheme={toggleTheme}
         onSignOut={doLogout}
         onOpenLanguage={() => setLangOpen(true)}
         counts={{ notifications: bellCount }}
       />
       {/* MPWA-05: third session, dismissible, above the dock (§8). */}
       <InstallPrompt />
+      {/* ASK-33 Phase 5 — a failed Dex capture that must stay until dismissed,
+          docked above the dock. While the sheet is open it moves into the
+          sheet's own flow instead (DexChat). */}
+      {!dexOpen && <DexFailureNotice placement="dock" />}
       {/* KM-23 — one surface, opened deliberately, closed for good.
           The old DexSheet was mounted on `!!dex.understanding`, so it let
           itself back in: finish a capture, dismiss the card, and the next poll

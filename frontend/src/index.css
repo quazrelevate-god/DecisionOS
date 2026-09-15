@@ -574,7 +574,10 @@
    offset, and the FAB is 4rem beside it, so 6rem left the last card sliding
    under the bar — the founder's "shouldn't be interfering with the fab behind".
    7.5rem clears the taller bar with a real gap rather than a hairline. */
-.pb-dock { padding-bottom: calc(7.5rem + env(safe-area-inset-bottom, 0px)); }
+/* ASK-33 Phase 5 — plus the height of a Dex failure notice docked above the
+   dock, while one is up (components/mobile/DexFailureNotice sets the variable),
+   so whatever it sits over can still be scrolled clear of it. */
+.pb-dock { padding-bottom: calc(7.5rem + env(safe-area-inset-bottom, 0px) + var(--dex-notice-space, 0px)); }
 
 /* Mobile PWA (2026-09-14) — the dock, the Dex button, their pickers, the
    vignette and the install prompt step aside while a modal dialog, sheet or

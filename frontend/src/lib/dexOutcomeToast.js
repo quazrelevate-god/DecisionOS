@@ -6,19 +6,22 @@
 // Re-opening the sheet on its own is not an option: a sheet that lets itself
 // back in when a poll lands is KM-23's ghost card.
 //
-// READY and NOTHING TO DECIDE go away on their own. A ready decision is not lost
-// with the toast — it waits in the Decisions column, /inbox?decision=<id> opens
-// it, and ASK-32 2.3 notifies whoever decides — and nothing-to-decide has
-// nothing at stake.
+// READY and NOTHING TO DECIDE are toasts that go away on their own. A ready
+// decision is not lost with the toast — it waits in the Decisions column,
+// /inbox?decision=<id> opens it, and ASK-32 2.3 notifies whoever decides — and
+// nothing-to-decide has nothing at stake.
 //
 // FAILED STAYS until the founder dismisses it. A failed capture creates no
 // decision: nothing in the Decisions column records it and there is nothing to
-// deep-link to, so a toast that timed out while the phone was in a pocket would
-// lose the failure silently — the exact problem plan 5.2 exists to fix, and 14
-// of the 15 real failures. Its proper home is plan 5.3 ("My captures"); this
-// persistent toast stands in for it until 5.3 is built.
+// deep-link to, so a message that timed out while the phone was in a pocket
+// would lose the failure silently — the exact problem plan 5.2 exists to fix,
+// and 14 of the 15 real failures. Its proper home is plan 5.3 ("My captures").
+// Phase 5: it is no longer a toast. A toast with no auto-dismiss sat over the
+// score row and the bell at 360px indefinitely; it is now a notice that never
+// covers a control (lib/dexFailureNotices, components/mobile/DexFailureNotice).
 import { toast } from "sonner";
 import { OUTCOME_COPY } from "./dexOutcome";
+import { addFailureNotice } from "./dexFailureNotices";
 
 /**
  * @param {{text: string, outcome?: object}} message  an ending, as useDexConversation writes it
@@ -44,23 +47,11 @@ export function toastDexOutcome(message, { onReview, onRetry, canRetry } = {}) {
     return;
   }
   if (o.kind === "failed") {
-    toast.error(o.message, {
-      duration: Infinity,
-      action: o.retry && onRetry
-        ? {
-            label: "Retry",
-            onClick: (e) => {
-              // Kept, and said why, rather than re-sent over a capture still being read.
-              if (canRetry && !canRetry()) {
-                e.preventDefault();
-                toast(OUTCOME_COPY.retryWait);
-                return;
-              }
-              onRetry(o);
-            },
-          }
-        : undefined,
-      cancel: { label: "Dismiss", onClick: () => {} },
+    addFailureNotice({
+      message: o.message,
+      retry: o.retry || null,
+      onRetry: onRetry ? () => onRetry(o) : null,
+      canRetry,
     });
     return;
   }

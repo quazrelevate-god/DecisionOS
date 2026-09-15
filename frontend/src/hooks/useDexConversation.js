@@ -127,9 +127,14 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
       : outcome.kind === "failed" ? outcome.message
       : OUTCOME_COPY.slow;
     const message = { id: uid(), role: "dex", text, outcome };
-    setLog((l) => [...l, message]);
     dex.clearUnderstanding?.();
-    onEndingRef.current?.(message);
+    /* ASK-33 Phase 5 — an ending the host reports somewhere else (Layout, when
+       the sheet has been closed: a toast, or the failure notice) comes back
+       true and is not also left in the transcript. Otherwise the next Ask
+       sheet showed that failure twice — a message and the notice — with two
+       Retries for one capture. */
+    if (onEndingRef.current?.(message) === true) return;
+    setLog((l) => [...l, message]);
   }, [dex, dex?.understanding]);
 
   /** ASK-32 1.6 — a finished recording fills the draft and remembers its note. */
@@ -238,8 +243,11 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
       rather than asking the founder to say it again. A held recording's words
       are text by the time it could fail, so it goes again as a typed note.
       Phase 4 — `payload` names the capture (a failed ending's own), and
-      `fromId` is the message it came from, which then stops offering Retry. */
-  const retry = useCallback(async (payload, fromId) => {
+      `fromId` is the message it came from, which then stops offering Retry.
+      Phase 5 — `quiet`: re-sent from the failure notice while the sheet is
+      closed, so nothing is written into a transcript no one is reading; if the
+      re-send itself fails, that failure is reported the same way again. */
+  const retry = useCallback(async (payload, fromId, { quiet = false } = {}) => {
     const last = payload || (channel === "decide" ? lastSentRef.current : null);
     if (!last || busy || oneAtATime) return false;
     setBusy(true);
@@ -249,7 +257,7 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
       if (fromId) {
         setLog((l) => l.map((m) => (m.id === fromId && m.outcome ? { ...m, outcome: { ...m.outcome, spent: true } } : m)));
       }
-      push({ role: "dex", text: "Reading it again…" });
+      if (!quiet) push({ role: "dex", text: "Reading it again…" });
       if (data?.id) sentRef.current.set(data.id, last);
       if (data?.id && dex?.follow) {
         seenRef.current = null;
@@ -259,7 +267,9 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
       return true;
     } catch (e) {
       const detail = e.response?.data?.detail;
-      push({ role: "dex", text: typeof detail === "string" && detail ? detail : "That didn't go through. Please try again." });
+      const text = typeof detail === "string" && detail ? detail : "That didn't go through. Please try again.";
+      const failure = { id: uid(), role: "dex", text, outcome: { kind: "failed", ...failureReason(text), retry: last } };
+      if (!(quiet && onEndingRef.current?.(failure) === true)) push({ role: "dex", text });
       return false;
     } finally {
       setBusy(false);

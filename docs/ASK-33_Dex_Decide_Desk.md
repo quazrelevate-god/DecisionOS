@@ -442,9 +442,10 @@ depend on a conversation summary. Branch `karma-redesign`, built on `bb0a9e8`.*
 | 3 | `e638b86` | The three endings on desktop (ready / nothing / failed), Review → existing DecisionDialog, Retry; carries two fixes below |
 | — | `c32e7bd` | This Progress section |
 | 4-B | `b6965fd` | The well sends, DexChat shows: the hand-off and its guard, endings as transcript messages, the split late-ending toast, `verify-dex.mjs` rewritten with `npm run verify:dex`, five stale DexSheet comments corrected; carries the DexChat stuck-sheet fix |
-| 4-A | the commit that adds this row | The FAB opens Ask directly: KM-54's picker removed from DexFab and Layout, its reasoning rewritten as the ASK-33 note, verify-nav's Dex section rewritten against DexChat; the end-of-Phase-4 build, full audit and route comparison |
+| 4-A | `ee53663` | The FAB opens Ask directly: KM-54's picker removed from DexFab and Layout, its reasoning rewritten as the ASK-33 note, verify-nav's Dex section rewritten against DexChat; the end-of-Phase-4 build, full audit and route comparison |
+| 5 | the commit that adds this row | Phone QA: the failure notice that never covers a control, dark mode removed, measured touch sizes, the draft behind [+], the two-line field, long reasons, chip spacing; the framer-motion write-up |
 
-Phase 5 is **not started**. Nothing is pushed.
+**Nothing is pushed** — the founder decides when this goes to Railway.
 
 ### The two fixes carried by `e638b86` (Phase 3)
 
@@ -484,6 +485,9 @@ for the next capture became invisible. Fix: chips render whenever
   3 more at 360). Removed.
 
 ### Phase 5 list (accumulated — do not lose)
+
+*Phase 5 (2026-09-16): items 1–6, 8 and 9 were addressed — see "Phase 5 as
+built". Still open: item 10 (the dock's placeholder, a copy call).*
 
 1. **Composer field grows to at most TWO lines** so the founder can read back
    the sentence before sending. It is a resize, so it belongs to Phase 5.
@@ -613,22 +617,151 @@ the phone (fixed in Phase 1 by the inline swap).
   helper.)
 - **Layout refreshes the Desk at every Decide ending** (`onEnding` →
   `refreshAfterCapture`), since the well no longer polls a handed-off note.
-- **FIX carried by 4-B — a pre-existing DexChat defect (KM-23), found by the
-  4-B gate.** Closing the sheet while a bubble was still settling left the sheet
-  in the page at opacity 0, still taking every tap (a tap on the Desk went to
-  the invisible sheet; only the dock above it still worked). Cause: each
-  `layout` bubble is a presence child of the sheet's exit, and framer-motion
-  11.18 holds the exit until that bubble's layout animation completes, which
-  never happens once the exit starts. Reproduced 4/4 on the Ask path with no
-  ASK-33 code, and 4/4 after a Retry. Fix: the transcript sits in
-  `<PresenceContext.Provider value={null}>`, so the bubbles no longer hold the
-  exit; they fade with the sheet as before. After: 0/4 in every case.
+- **FIX carried by 4-B — a pre-existing DexChat defect, found by the 4-B gate.**
+  See "The framer-motion exit trap" below for the full write-up.
 - **Known limit, NOT changed — needs a founder call.** The single-note follow
   also bites where 4-B added no guard: a second send from the desktop well
   while the first is still being read (Phases 1-3), or from the dock while an
   open Decide sheet is still reading (KM-54's door) — the earlier note then
   stops being polled and its ending is not reported. Options: block the send
   while reading, or let useDexCapture follow several notes.
+
+### Phase 5 as built (the founder's order, 2026-09-16)
+
+**Must fix**
+
+1. **The persistent failure no longer sits over the score row and the bell.**
+   Phase 4's no-auto-dismiss Sonner toast did, at 360, indefinitely. Sonner
+   cannot place one toast apart from the rest, so a failed capture is now a
+   notice from a small store (`lib/dexFailureNotices.js`), drawn by
+   `components/mobile/DexFailureNotice.jsx`:
+   - **Sheet closed:** docked just above the dock (`bottom: 6.25rem` + safe
+     area, inside the shell's gutters, z-40 so dialogs and sheets always cover
+     it). Its height + 12px is published as `--dex-notice-space`, which
+     `.pb-dock` adds to the page's bottom clearance. Measured on the fixtures:
+     390x844 — notice 606–744 (139px), dock at 756, FAB at 764; 360x640 —
+     402–540, dock at 552, FAB at 560. Never over the header, the bell, the
+     score row, the dock or the FAB. Scrolled to the end, the lowest control on
+     the page ends above the notice (390: 541 vs 606; 360: 337 vs 402).
+   - **At rest it does sit over the lower Decisions rows** (390: rows d_1–d_4;
+     360: row d_0), the way the dock already does — they scroll clear of it, but
+     they are under it until then. If "never covers anything interactive" has to
+     hold at rest as well, the alternative is an in-flow banner at the top of
+     the page (AnnouncementBanner's slot): it covers nothing, but it can scroll
+     out of sight. A founder call.
+   - **Sheet open:** the notice moves into DexChat's own flow, between the
+     transcript and the plus, and covers nothing there.
+   - Retry 56px, Dismiss 44px. A Retry pressed while Dex is still reading
+     another capture keeps the notice and says why. Late READY and
+     NOTHING-TO-DECIDE endings stay transient Sonner toasts.
+   - **Found while looking, fixed:** a failure that landed while the sheet was
+     closed was ALSO left in the transcript, so the next Ask sheet showed it
+     twice — the message and the notice, two Retries for one capture. An ending
+     Layout reports elsewhere (a toast, the notice) is now not written into the
+     transcript (`onEnding` returns true), and a Retry from the notice with the
+     sheet closed is quiet: no "Reading it again…" into a transcript no one is
+     reading, and if that re-send fails before reaching Dex, the failure comes
+     back as a notice.
+2. **Dark mode removed** (founder: dark mode was not intended; remove the
+   functionality and the switch). Gone: `hooks/useTheme.js`; Settings → Account's
+   Appearance card (`settings-theme-card`, `settings-theme-toggle`); the Login
+   page's switch (`login-theme-toggle`); AllAppsPanel's dead theme branch, props
+   and icons; `index.js`'s pre-paint "dark" (it now clears a saved
+   `decisionos-theme` instead); `offline.html`'s `prefers-color-scheme: dark`
+   block; and the toast renderer's "system" theme (now always light — a dark-OS
+   phone was getting dark toasts). **Kept:** the Dex room. `/brain` and `/dex`
+   still set their own `dark` class (NM-17 / KR-5, "inside the ink") — a page
+   design, not a mode — so the `.dark` CSS it relies on stays. The well and
+   every outcome now render light only.
+3. **Touch sizes, measured at 390 and 360:** Review 56, Retry 56 (the sheet's and
+   the notice's), Approve 56 and Reject 56 (DecisionDialog: `h-14` below lg,
+   `h-12` from lg); Not now 44, Got it 44, Dismiss 44, the Settings link 44.
+4. **The draft behind [+].** Focusing or typing into the field puts the [+]
+   circles away — so on iOS, where tapping [+] does not take focus from the
+   field, the next keystroke brings the field straight back — and while the
+   circles are out, the end of the draft shows in the prompt line
+   (`desk-dex-draft-peek`).
+
+**If they came easily — they did**
+
+5. **The composer field grows to at most two lines.** The well's field is a
+   `<textarea rows=1>` sized from its own computed line height and padding, so
+   the phone's 16px text and the desktop's 14px both stop at exactly two lines
+   and scroll inside after that; Enter still sends. The pill takes the field's
+   height while typing (fixed 40px while it draws the wave) and rounds less at
+   two lines. On a phone the well grows by the extra line while two lines are
+   typed — the one place Phase 5 moves layout.
+6. **Long non-consent failure reasons wrap.** A new dev-only fixture ending,
+   `dos_fixture_capture = "failed_long"`, fails with a raw exception string
+   carrying unbroken URL / object tokens. Checked in the desktop well, the
+   sheet's message and the docked notice at 390 and 360: it wraps (no ellipsis,
+   no line clamp, no horizontal overflow). The copy stays the backend's raw
+   text — making it friendlier is a separate copy decision. Found while
+   looking, fixed: in the desktop well a nine-line reason pushed Retry and Not
+   now half under the composer, so the reason now scrolls inside its own block
+   and the actions stay whole beneath it; and the docked notice caps a long
+   reason at six scrolling lines, so it stays compact on a 640px screen.
+7. **Chip spacing.** Attachment chips sit on the 8px `touch-gap` token (was
+   6px); three chips at 360 scroll inside the well, each remove clears 44px,
+   and the well keeps its size.
+
+**Gates (Phase 5, on the fixtures)**
+
+- `npm run verify:dex` 112/112 at 390 and 360 (now covering the notice: above
+  the dock, clear of the FAB, its scroll clearance, its move into the sheet, no
+  duplicate). The Phase 5 scratch checks all pass at 390 and 360 (and 1440 where
+  it applies); the Phase 1–3 scratch checks all pass; verify-nav's Dex section
+  passes.
+- Scoped audits: `--only inbox` 40 failing + 2 warnings, no count changed from
+  4-B, the same 6 desktop diffs, 0 console errors; `--only settings` 7 findings
+  as in the clean full run, 0 desktop diffs. Baseline not regenerated.
+- `npm run build` succeeds with the same warnings as at the end of Phase 4.
+- Inherited and left alone: `verify:nav`'s All Apps checks (stops at line 203)
+  and `verify:brief` (stops at line 34, see above).
+
+### The framer-motion exit trap (found in 4-B — NOT ASK-33's bug)
+
+The most useful thing this ticket found, and it will bite again wherever
+`AnimatePresence` wraps children that animate their layout.
+
+- **Symptom.** After closing the phone's Dex sheet, `dex-chat` stayed in the
+  DOM — `fixed inset-0 z-[9990]`, fully transparent (opacity 0), still taking
+  pointer events. Every tap on the page landed on the invisible sheet (its
+  full-screen "Close Dex" scrim button); only the dock and the FAB, which sit
+  above it at z 10000, still worked. To the founder the app would look frozen.
+- **It predates ASK-33.** The same close reproduced it on the Ask path —
+  FAB → Ask → type → answer lands → close — with no ASK-33 code involved
+  (KM-23's DexChat, framer-motion 11.18.0). ASK-33 made it more likely: a
+  Retry re-flows the transcript, and an ending lands just as a founder reaches
+  for the X.
+- **Mechanism.** DexChat renders `<AnimatePresence>{open && <motion.div exit=…>}`
+  and each message is a `<motion.div layout>`. Every motion component inside the
+  exiting child registers with its `PresenceContext` (`usePresence`), and the
+  child is removed only when ALL of them have called `safeToRemove`. A layout
+  node (framer's `MeasureLayout`) calls it from `componentDidUpdate` only when
+  `!projection.currentAnimation`; otherwise it waits for that layout
+  animation's `animationComplete`. Close the sheet while a bubble's layout
+  animation is still running — a message just arrived, the transcript just
+  re-flowed — and that completion never comes once the exit has begun, so
+  `onExitComplete` never fires and the sheet's opacity reaches 0 but it is
+  never unmounted.
+- **Fix** (`components/mobile/DexChat.jsx`). The transcript is wrapped in
+  `<PresenceContext.Provider value={null}>`. With a null context `usePresence`
+  returns `[true]` without registering, so the bubbles no longer take part in
+  the sheet's exit; they still fade with it, so nothing on screen changes.
+  `PresenceContext` is a public export of framer-motion.
+- **Measured** (fixtures, 390x844, close the moment the new content lands, four
+  trials each): Ask path 4/4 stuck → 0/4; Retry then close 4/4 → 0/4; ready or
+  failed ending then close 0/4 before and after. verify-dex C ("the Settings
+  link leaves the sheet for Settings") was 98/100 → 100/100.
+- **Where else to look.** Any `AnimatePresence` whose exiting child contains
+  `layout` / `layoutId` motion nodes that can still be animating when it exits.
+  At `ee53663`: `pages/onboarding/BuildReveal.js` (`AnimatePresence
+  mode="wait"` around count tiles with `layoutId`) is the other candidate;
+  `pages/Login.js` uses `AnimatePresence mode="wait"` without layout nodes.
+  Neither was changed. A generic guard: detach layout children from an exiting
+  overlay with a null `PresenceContext`, or give the overlay a key and unmount it
+  on `onExitComplete` with a timeout fallback.
 
 ### Inherited breakage from KM-23 (recorded, NOT fixed)
 
@@ -647,6 +780,9 @@ them:
   FloatingDock.jsx or AllAppsPanel.jsx, and its only index.css change is the
   `.kr-dex-grow` / `.kr-dex-fade` rules. (The 4-B-era note listed only the last
   two failures: that run's output had been cut to its final 25 lines.)
+- `frontend/scripts/verify-brief.mjs:34` — waits for `[data-testid="desk-mobile"]`
+  after the `/brief` redirect; that id left the app in `1cf1dbf` (KR-8), before
+  ASK-33, so `npm run verify:brief` stops there. Found in Phase 5.
 - `frontend/scripts/verify-dex.mjs` was the fourth: rewritten in 4-B against
   DexChat and the Desk well, landing together with the new `npm run verify:dex`.
 

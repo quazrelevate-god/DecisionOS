@@ -18,7 +18,9 @@
  *   C  attach a file, AI-consent FAILURE: the reason untruncated, the Settings
  *      link, Retry re-sends that capture and a new ending arrives
  *   D  endings that land after the sheet is closed: READY is a toast that goes
- *      away; FAILED is a toast that stays, with Retry and Dismiss
+ *      away; FAILED is a notice docked above the dock that stays, with Retry and
+ *      Dismiss, never over the dock or the FAB, and moves into the sheet's flow
+ *      while the sheet is open (ASK-33 Phase 5)
  *   E  one note at a time: a second capture sent while the sheet is still
  *      reading the first is kept by the well, and both endings are reported
  *   F  the guard: when nothing takes the hand-off, the well keeps the capture —
@@ -100,7 +102,7 @@ async function typeAndSend(page, words) {
     await page.getByTestId('desk-dex-mode').click();
     await page.waitForTimeout(300);
   }
-  const input = composer.locator('input');
+  const input = composer.locator('textarea');
   await input.fill(words);
   await input.press('Enter');
 }
@@ -124,7 +126,7 @@ async function run(viewport) {
   await page.waitForTimeout(1500);
   check(`${w} A: the well records`, (await mic.getAttribute('data-intent')) === 'stop');
   await mic.click();
-  const field = page.getByTestId('desk-dex-composer').locator('input');
+  const field = page.getByTestId('desk-dex-composer').locator('textarea');
   await until(async () => (await field.inputValue()).length > 0, 20000);
   const said = await field.inputValue().catch(() => '');
   check(`${w} A: the words come back into the well to be read first`, said.length > 0, clip(said, 60));
@@ -231,21 +233,46 @@ async function run(viewport) {
   await typeAndSend(page, 'Tell Suresh to ship the indigo lot before Friday');
   await sheet(page).waitFor({ timeout: 8000 }).catch(() => {});
   await closeSheet(page);
-  const failToast = toasts(page, "That didn't go through");
-  check(`${w} D: a FAILED ending that lands after closing is toasted`, await until(async () => (await failToast.count()) === 1));
-  check(`${w} D: … with the reason`, /structuring service did not answer/.test(await failToast.first().textContent().catch(() => '')),
-    clip(await failToast.first().textContent().catch(() => '')));
+  // Phase 5 — a failure is not a toast: a notice docked above the dock.
+  const notice = page.getByTestId('dex-failure-notice');
+  check(`${w} D: a FAILED ending that lands after closing is a notice`, await until(async () => (await notice.count()) === 1));
+  check(`${w} D: … with the reason`, /structuring service did not answer/.test(await notice.textContent().catch(() => '')),
+    clip(await notice.textContent().catch(() => '')));
   check(`${w} D: … Retry and Dismiss`,
-    (await failToast.first().locator('[data-action]').textContent().catch(() => '')) === 'Retry'
-      && (await failToast.first().locator('[data-cancel]').textContent().catch(() => '')) === 'Dismiss');
+    (await notice.getByTestId('dex-failure-retry').count()) === 1 && (await notice.getByTestId('dex-failure-dismiss').count()) === 1);
+  check(`${w} D: … and no toast for it`, (await toasts(page, "That didn't go through").count()) === 0);
   await page.waitForTimeout(9000);
-  check(`${w} D: … and it stays until dismissed`, (await failToast.count()) === 1);
-  await failToast.first().locator('[data-action]').click();
-  const retried = await until(async () => (await failToast.count()) === 0, 4000);
-  check(`${w} D: Retry from the toast re-sends it, and its ending is reported again`,
-    retried && (await until(async () => (await failToast.count()) === 1)) && (await sheet(page).count()) === 0);
-  await failToast.first().locator('[data-cancel]').click().catch(() => {});
-  check(`${w} D: Dismiss clears it`, await until(async () => (await failToast.count()) === 0, 4000));
+  check(`${w} D: … and it stays until dismissed`, (await notice.count()) === 1);
+  const nb = await notice.boundingBox();
+  const dockBox = await page.getByTestId('floating-dock').boundingBox();
+  const fabBox = await page.getByTestId('dex-fab').boundingBox();
+  check(`${w} D: … above the dock and the FAB, never over them`,
+    !!nb && nb.y + nb.height <= Math.min(dockBox.y, fabBox.y),
+    nb ? `notice ends ${Math.round(nb.y + nb.height)} · dock ${Math.round(dockBox.y)} · FAB ${Math.round(fabBox.y)}` : 'no box');
+  const clearance = await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('[data-app-scroller]')).paddingBottom));
+  check(`${w} D: … and the page gains its height as scroll clearance`, !!nb && clearance >= 120 + nb.height,
+    `padding-bottom ${Math.round(clearance)} for a ${Math.round(nb?.height || 0)}px notice`);
+  await page.getByTestId('dex-fab').click();
+  await sheet(page).waitFor({ timeout: 6000 }).catch(() => {});
+  await page.waitForTimeout(500);
+  const inline = sheet(page).getByTestId('dex-failure-notice');
+  const ib = await inline.boundingBox();
+  const plusBox = await page.getByTestId('dex-plus').boundingBox();
+  check(`${w} D: … and the failure is not shown twice there`,
+    (await sheet(page).getByTestId('dex-outcome-failed').count()) === 0 && (await sheet(page).getByTestId('dex-failure-notice').count()) === 1);
+  check(`${w} D: with the sheet open it sits in the sheet's flow, clear of the plus`,
+    (await page.locator('[data-testid="dex-failure-notice"][data-placement="dock"]').count()) === 0
+      && !!ib && !!plusBox && ib.y + ib.height <= plusBox.y,
+    ib && plusBox ? `notice ends ${Math.round(ib.y + ib.height)} · plus ${Math.round(plusBox.y)}` : 'no box');
+  await closeSheet(page);
+  await notice.getByTestId('dex-failure-retry').click();
+  const retried = await until(async () => (await notice.count()) === 0, 4000);
+  check(`${w} D: Retry from the notice re-sends it, and its ending is reported again`,
+    retried && (await until(async () => (await notice.count()) === 1)) && (await sheet(page).count()) === 0);
+  await notice.getByTestId('dex-failure-dismiss').click().catch(() => {});
+  check(`${w} D: Dismiss clears it`, await until(async () => (await notice.count()) === 0, 4000));
+  const settled = await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('[data-app-scroller]')).paddingBottom));
+  check(`${w} D: … and gives the clearance back`, settled < clearance, `${Math.round(clearance)} -> ${Math.round(settled)}`);
 
   // --------------------------------------------------- E · one note at a time
   await setEnding(page, null);
@@ -274,7 +301,7 @@ async function run(viewport) {
   await until(async () => (await toasts(g.page, 'Decision ready').count()) === 0, 12000);
   await setEnding(g.page, 'failed');
   await typeAndSend(g.page, 'Tell Suresh to ship the indigo lot before Friday');
-  const kept = toasts(g.page, "That didn't go through");
+  const kept = g.page.getByTestId('dex-failure-notice');
   check(`${w} F: a failure the well kept is reported too`, await until(async () => (await kept.count()) === 1));
   await g.page.waitForTimeout(9000);
   check(`${w} F: … and it stays until dismissed`, (await kept.count()) === 1);

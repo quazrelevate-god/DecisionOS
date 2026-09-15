@@ -451,7 +451,7 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
                           onClick={() => approveM.mutate()}
                           disabled={busy}
                           data-testid="decision-approve"
-                          className={`flex h-12 flex-1 items-center justify-center gap-2 rounded-pill px-5 text-sm font-medium disabled:opacity-60 ${INK_PILL}`}
+                          className={`flex h-14 flex-1 items-center justify-center gap-2 rounded-pill px-5 text-sm font-medium disabled:opacity-60 lg:h-12 ${INK_PILL}`}
                         >
                           <CheckCircle size={16} weight="bold" aria-hidden="true" />
                           {approveM.isPending ? "Approving…" : "Approve"}
@@ -461,7 +461,7 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
                           onClick={() => (confirmReject ? rejectM.mutate() : setConfirmReject(true))}
                           disabled={busy}
                           data-testid="decision-reject"
-                          className={`flex h-12 flex-1 items-center justify-center gap-2 rounded-pill px-5 text-sm font-medium disabled:opacity-60 ${
+                          className={`flex h-14 flex-1 items-center justify-center gap-2 rounded-pill px-5 text-sm font-medium disabled:opacity-60 lg:h-12 ${
                             confirmReject ? MAROON_PILL : `text-slate-800 hover:bg-white ${GLASS_PILL}`}`}
                         >
                           {confirmReject

@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { useTheme } from "../hooks/useTheme";
 import api from "../lib/api";
 import { hasPerm } from "../lib/perms";
 import { PageHeader } from "../components/common";
@@ -19,7 +18,7 @@ import { ProfileForm, ChangePasswordForm } from "../components/ProfileDialog";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { CurrencyCircleDollar, ShieldCheck, FloppyDisk, Info, UserCircle, Translate, Lock, Buildings, FlowArrow, User, MoonStars, Sun, SignOut } from "@phosphor-icons/react";
+import { CurrencyCircleDollar, ShieldCheck, FloppyDisk, Info, UserCircle, Translate, Lock, Buildings, FlowArrow, User, SignOut } from "@phosphor-icons/react";
 
 const CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "AUD"];
 const inp = "w-full nm-field px-3 py-2 text-sm";
@@ -186,37 +185,12 @@ const TABS = [
 ];
 const VALID_TAB_KEYS = new Set(TABS.map((t) => t.key));
 
-/* KM-5 — Theme and Sign out move here from the mobile "More" panel, on the
+/* KM-5 — Theme and Sign out moved here from the mobile "More" panel, on the
    founder's call: a nav menu is a list of PLACES, and a theme switch and a
-   session-ending action are neither. Language already lived here, so Account
-   now holds the whole set — appearance, profile, password, session — and the
-   menu is left with destinations only. */
-function ThemeCard() {
-  const { isDark, toggle } = useTheme();
-  return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="settings-theme-card">
-      <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0">
-          <h3 className="flex items-center gap-2 text-base font-semibold">
-            {isDark ? <MoonStars size={17} weight="regular" aria-hidden="true" />
-                    : <Sun size={17} weight="regular" aria-hidden="true" />}
-            Appearance
-          </h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {isDark ? "Dark theme is on." : "Light theme is on."}
-          </p>
-        </div>
-        <button type="button" onClick={toggle} data-testid="settings-theme-toggle"
-          aria-pressed={isDark}
-          className="kr-pop flex h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-sm font-medium text-foreground">
-          {isDark ? <Sun size={15} weight="bold" aria-hidden="true" />
-                  : <MoonStars size={15} weight="bold" aria-hidden="true" />}
-          {isDark ? "Switch to light" : "Switch to dark"}
-        </button>
-      </div>
-    </div>
-  );
-}
+   session-ending action are neither. ASK-33 Phase 5 (founder, 2026-09-16): the
+   theme switch is gone altogether — the app is designed light-only, so the
+   Appearance card had nothing left to offer. Account holds language, profile,
+   password and session. */
 
 function SignOutCard() {
   const { logout } = useAuth();
@@ -375,7 +349,6 @@ export default function Settings() {
         {tab === "account" && (
           <>
             <LanguageCard />
-            <ThemeCard />
             <ProfileCard />
             <SecurityCard />
             <SignOutCard />

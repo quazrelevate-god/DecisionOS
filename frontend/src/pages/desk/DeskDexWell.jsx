@@ -22,7 +22,7 @@
 // exactly as Layout does for the dock — and the hooks live HERE rather than in
 // Desk, so a keystroke in the field or a recording tick re-renders this well
 // and nothing else on the page.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -165,6 +165,29 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
   const showField = chat.mode === "type" || !!chat.draft || transcribing;
   const canSend = !!chat.draft.trim() || chat.pendingFiles.length > 0;
   const intent = dex.recording ? "stop" : canSend ? "send" : "mic";
+
+  /* ASK-33 Phase 5 — THE FIELD GROWS TO TWO LINES, no further, so a decision
+     can be read back whole before it is sent (at 360px one line holds about
+     half of "Tell Suresh to ship the indigo lot before Friday"). Measured from
+     the field's own line height and padding, so the phone's 16px text and the
+     desktop's 14px both land on exactly two lines; past that it scrolls inside
+     itself. The pill grows with it and rounds less, so its ends do not clip
+     the text. */
+  const fieldRef = useRef(null);
+  const [twoLines, setTwoLines] = useState(false);
+  useLayoutEffect(() => {
+    const el = fieldRef.current;
+    if (!el) { setTwoLines(false); return; }
+    const cs = getComputedStyle(el);
+    const line = parseFloat(cs.lineHeight) || 20;
+    const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    el.style.height = "auto";
+    const max = Math.round(line * 2 + pad);
+    const next = Math.min(el.scrollHeight, max);
+    el.style.height = `${next}px`;
+    el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
+    setTwoLines(next > line + pad + 1);
+  }, [chat.draft, showField]);
 
   /* The decision exists once the note is structured, not when it is sent, so
      the Desk's feeds refresh again at the ending — otherwise the Decisions
@@ -468,12 +491,25 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
      is the workspace too, now that it stays open on an ending; only the prompt
      line gives way there. */
   const prompt = chat.pendingFiles.length > 0 ? (
-    <ul aria-label="Attached files" className="-mb-2 -mt-0.5 flex min-w-0 gap-1.5 overflow-x-auto py-2 [scrollbar-width:none]">
+    <ul aria-label="Attached files" className="-mb-2 -mt-0.5 flex min-w-0 gap-touch-gap overflow-x-auto py-2 [scrollbar-width:none]">
       {chat.pendingFiles.map((f) => (
         <AttachmentChip key={f.id} file={f} onRemove={() => chat.removeFile(f.id)} disabled={chat.busy} />
       ))}
     </ul>
-  ) : growing ? null : (
+  ) : growing ? null : menuOpen && chat.draft.trim() ? (
+    /* Phase 5 — below lg the [+] circles swap into the composer's slot, so the
+       words typed so far step up into this line while they are out instead of
+       disappearing — the end of the draft, where the newest words are. From lg
+       the circles stack above the field, which stays in view. */
+    <>
+      <p data-testid="desk-dex-draft-peek" className="mt-1.5 truncate text-sm leading-snug text-foreground lg:hidden">
+        {chat.draft.length > 44 ? `…${chat.draft.slice(-43)}` : chat.draft}
+      </p>
+      <p className="mt-1.5 hidden text-sm leading-snug text-foreground/70 lg:block">
+        Tell Dex what you decided — speak or type.
+      </p>
+    </>
+  ) : (
     <p className="mt-1.5 text-sm leading-snug text-foreground/70">
       {canCapture
         ? "Tell Dex what you decided — speak or type."
@@ -526,17 +562,20 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
     </div>
   ) : outcome.kind === "failed" ? (
     <div data-testid="dex-outcome-failed" role="alert" className="flex min-h-0 flex-1 flex-col">
-      <p className="flex items-start gap-2 text-[17px] font-semibold leading-snug text-foreground">
+      {/* Phase 5 — a long raw reason scrolls inside its own block, so Retry and
+          Not now stay whole and in view beneath it rather than sliding under
+          the composer. */}
+      <p className="flex min-h-0 shrink items-start gap-2 overflow-y-auto text-[17px] font-semibold leading-snug text-foreground">
         <WarningCircle size={20} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0 text-rose-600" />
         {/* The reason is the whole point of this ending: it wraps, never truncates. */}
         <span className="min-w-0 break-words">{outcome.message}</span>
       </p>
       {outcome.href && (
-        <Link to={outcome.href} className="mt-2 w-fit text-sm font-medium text-foreground underline underline-offset-4">
+        <Link to={outcome.href} className="mt-2 w-fit shrink-0 text-sm font-medium text-foreground underline underline-offset-4">
           {outcome.linkLabel}
         </Link>
       )}
-      <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
+      <div className="mt-auto flex shrink-0 flex-wrap items-center gap-2 pt-4">
         <button type="button" data-testid="dex-outcome-retry" onClick={onRetry} disabled={chat.busy} className={inkPill}>
           Retry
         </button>
@@ -666,27 +705,38 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
            44px below lg (index.css --control-h-sm), so the pill never sits
            shorter than its neighbours on a phone. */
         className={cn(
-          "kr-pop flex h-10 min-h-[var(--control-h-sm)] min-w-0 flex-1 items-center overflow-hidden rounded-pill focus-within:ring-2 focus-within:ring-kr-ink/60",
+          "kr-pop flex min-h-[var(--control-h-sm)] min-w-0 flex-1 items-center overflow-hidden focus-within:ring-2 focus-within:ring-kr-ink/60",
+          // Phase 5 — a fixed 40px while it draws the wave; as a field it takes
+          // the field's height (one line or two) and rounds less at two.
+          showField ? "h-auto" : "h-10",
+          twoLines ? "rounded-[1.375rem]" : "rounded-pill",
           "transition-opacity duration-200 motion-reduce:transition-none",
           // Below lg the [+] circles swap into this slot; the pill steps back.
           menuOpen && "pointer-events-none opacity-0 lg:pointer-events-auto lg:opacity-100"
         )}
       >
         {showField ? (
-          <input
+          <textarea
+            ref={fieldRef}
+            rows={1}
             // Mounts on switching to type, so the keyboard comes up with it —
             // but not for a transcript arriving, which is only to be watched.
             autoFocus={typing}
             value={chat.draft}
             readOnly={transcribing}
             disabled={!canCapture}
-            onChange={(e) => chat.setDraft(e.target.value)}
+            onChange={(e) => { setMenuOpen(false); chat.setDraft(e.target.value); }}
+            // Phase 5 — below lg the [+] circles take this field's slot. A
+            // field that is focused or typed into puts them away, so the words
+            // being typed are never hidden behind them.
+            onFocus={() => setMenuOpen(false)}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); send(); } }}
             // Short enough to fit whole at 360px, where the field is ~150px of text.
             placeholder={transcribing ? "Transcribing…" : "Type a decision…"}
             aria-label="Tell Dex what you decided"
             className={cn(
-              "h-full min-w-0 flex-1 bg-transparent px-4 text-sm text-foreground focus:outline-none",
+              // Enter still sends (onKeyDown); the text wraps, it never breaks lines.
+              "block min-w-0 flex-1 resize-none bg-transparent px-4 py-2.5 text-sm leading-5 text-foreground focus:outline-none max-lg:leading-6 [scrollbar-width:none]",
               // A status being waited on should not wear the grey of a hint.
               transcribing ? "animate-pulse placeholder:text-foreground/75" : "placeholder:text-foreground/45"
             )}

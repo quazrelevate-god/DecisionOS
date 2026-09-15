@@ -32,7 +32,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   CalendarBlank, AddressBook, UsersThree, Sparkle, BookOpen, Gauge, FlowArrow, AirplaneTakeoff,
-  Bell, GearSix, Translate, MoonStars, Sun, SignOut, X,
+  Bell, GearSix, Translate, SignOut, X,
   MagnifyingGlass, ArrowRight,
 } from "@phosphor-icons/react";
 import { hasPerm } from "@/lib/perms";
@@ -129,9 +129,9 @@ function buildTiles({ user, t, counts }) {
   });
 }
 
-function buildUtility({ user, isDark, t }) {
+function buildUtility({ user, t }) {
   /* KM-5 — Language, Theme and Sign out are gone from here and live in
-     Settings -> Account. A nav menu is a list of PLACES; a theme switch and a
+     Settings -> Account (Theme has since left the app altogether — ASK-33). A nav menu is a list of PLACES; a theme switch and a
      session-ending action are neither, and putting Sign out one mis-tap from
      Theme in a 4-up strip was the arrangement that made it need a red colour
      to feel safe. Settings is the only utility left, so it is the only one
@@ -221,8 +221,6 @@ function Tile({ tile, onPick }) {
  * @param {boolean}  open
  * @param {Function} onClose
  * @param {object}   user
- * @param {boolean}  isDark
- * @param {Function} onToggleTheme
  * @param {Function} onSignOut
  * @param {Function} onOpenLanguage
  * @param {{notifications?:number}} [counts]  KM-1: myWork was never read by buildTiles.
@@ -231,8 +229,6 @@ export function AllAppsPanel({
   open,
   onClose,
   user,
-  isDark,
-  onToggleTheme,
   onSignOut,
   onOpenLanguage,
   counts = {},
@@ -254,7 +250,7 @@ export function AllAppsPanel({
     () => buildTiles({ user, t, counts }),
     [user, t, counts]
   );
-  const utility = React.useMemo(() => buildUtility({ user, isDark, t }), [user, isDark, t]);
+  const utility = React.useMemo(() => buildUtility({ user, t }), [user, t]);
 
   const needle = q.trim().toLowerCase();
   const shown = needle ? tiles.filter((x) => x.label.toLowerCase().includes(needle)) : tiles;
@@ -274,10 +270,6 @@ export function AllAppsPanel({
       return;
     }
     switch (tile.action) {
-      case "theme":
-        // Stay open: theme is a thing you look at while toggling.
-        onToggleTheme?.();
-        break;
       case "language":
         onClose?.();
         onOpenLanguage?.();

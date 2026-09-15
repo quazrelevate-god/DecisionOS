@@ -1,14 +1,13 @@
-import { useTheme } from "next-themes"
 import { Toaster as Sonner, toast } from "sonner"
 
 const Toaster = ({
   ...props
 }) => {
-  const { theme = "system" } = useTheme()
-
+  // ASK-33 Phase 5 — light, always. "system" followed the phone's OS setting,
+  // so a dark-mode phone got dark toasts in a light-only app.
   return (
     <Sonner
-      theme={theme}
+      theme="light"
       className="toaster group"
       toastOptions={{
         classNames: {

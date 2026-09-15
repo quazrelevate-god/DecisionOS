@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { timeAgo, fullTime } from "../lib/format";
 import { userPerms } from "../lib/perms";
 import { canAssignPerson, canAssignTeam } from "../lib/taskAccess";
-import { Plus, User, Paperclip, ClockCounterClockwise, X, Check } from "@phosphor-icons/react";
+import { Plus, User, Paperclip, ClockCounterClockwise, X, Check, ShieldCheck, Prohibit, Play, Lightbulb, Info, CloudArrowUp } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
 import { PersonAvatar } from "../components/karma/PersonAvatar";
@@ -42,9 +42,9 @@ export const OP_CATEGORIES = [
 // until approved; before it's marked done lets the work start straight away
 // and makes Complete a request the approver closes.
 const APPROVAL_CHOICES = [
-  { key: "none", label: "No", hint: "Spending money or committing the company? Approve before work starts. Checking the result? Approve before it's marked done." },
-  { key: "start", label: "Before work starts", hint: "The task stays locked until it is approved." },
-  { key: "close", label: "Before it's marked done", hint: "Work starts straight away. Complete sends it to the approver, who closes it." },
+  { key: "none", label: "No", sub: "Not required", icon: Prohibit, hint: "Spending money or committing the company? Approve before work starts. Checking the result? Approve before it's marked done." },
+  { key: "start", label: "Before work starts", sub: "Locked until approved", icon: Play, hint: "The task stays locked until it is approved." },
+  { key: "close", label: "Before it's marked done", sub: "Approver closes it", icon: Check, hint: "Work starts straight away. Complete sends it to the approver, who closes it." },
 ];
 
 const EMPTY_FORM = {
@@ -84,7 +84,7 @@ function DesignCheckbox({ checked, onChange, testid, children }) {
     <label className="flex cursor-pointer items-start gap-3 text-sm leading-snug text-foreground">
       <span className="relative mt-px grid shrink-0 place-items-center">
         <input type="checkbox" data-testid={testid} checked={checked} onChange={onChange}
-          className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border-[1.5px] border-neutral-400/80 bg-[#fff] transition-colors checked:border-transparent checked:bg-[linear-gradient(180deg,hsl(0_0%_24%),hsl(0_0%_6%))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30" />
+          className="peer h-5 w-5 cursor-pointer appearance-none rounded-full border-[1.5px] border-neutral-400/80 bg-[#fff] transition-colors checked:border-transparent checked:bg-[linear-gradient(180deg,hsl(0_0%_24%),hsl(0_0%_6%))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30" />
         <Check size={12} weight="bold" aria-hidden="true" className="pointer-events-none absolute hidden text-white peer-checked:block" />
       </span>
       <span>{children}</span>
@@ -473,25 +473,55 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
               </div>
 
               {/* ASK-28 TK-05 — when the approval happens, chosen per task. */}
-              <div data-testid="task-approval">
-                <span className={lbl} id="task-approval-label">Needs approval</span>
-                <div className="mt-1.5 flex gap-1.5" role="group" aria-labelledby="task-approval-label">
+              {/* 2026-09-15, founder reference — a titled panel with one card per
+                  choice instead of a pill row. Same choices, same testids, same
+                  state; only the presentation changes. Colours are the app's
+                  own brand-tint tokens, which also carry dark mode. */}
+              <div data-testid="task-approval" className="rounded-2xl border border-solid border-brand-tint-line bg-brand-tint p-3.5">
+                <div className="flex items-start gap-3">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-600 text-white" aria-hidden="true">
+                    <ShieldCheck size={20} weight="fill" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-foreground" id="task-approval-label">Needs approval</span>
+                    <span className="block text-xs text-muted-foreground">Approve before work starts or when it's completed.</span>
+                  </div>
+                  <span className="shrink-0 text-muted-foreground" title="Choose whether someone must approve this task, and when." aria-hidden="true">
+                    <Info size={18} />
+                  </span>
+                </div>
+
+                <div className="mt-3 grid grid-cols-3 gap-2" role="group" aria-labelledby="task-approval-label">
                   {APPROVAL_CHOICES.map((c) => {
                     const on = form.approval === c.key;
+                    const Icon = c.icon;
                     return (
                       <button key={c.key} type="button" aria-pressed={on} data-testid={`task-approval-${c.key}`}
                         onClick={() => setForm({ ...form, approval: c.key, approver_id: c.key === "none" ? "" : form.approver_id })}
-                        /* Phone pass: at 390px "Before it's marked done" did not fit one
-                           line in a third of the row, so labels may wrap below lg. */
-                        className={`min-h-9 flex-1 rounded-pill px-2 py-1.5 text-xs leading-tight lg:h-9 lg:whitespace-nowrap lg:py-0 ${on ? "kr-pressed font-semibold text-foreground" : "kr-pop text-foreground/75"}`}>
-                        {c.label}
+                        className={`flex min-w-0 flex-col items-stretch gap-1 rounded-xl border border-solid p-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${on ? "border-brand-600 bg-card" : "kr-pop border-transparent hover:border-brand-tint-line"}`}>
+                        {/* Icon and radio dot share the top row, so the label below
+                            gets the card's full width instead of dodging the dot. */}
+                        <span className="flex items-center justify-between">
+                          <span aria-hidden="true" className={`grid h-7 w-7 place-items-center rounded-full ${on ? "bg-brand-tint text-brand-600" : "bg-muted text-foreground"}`}>
+                            <Icon size={14} weight="bold" />
+                          </span>
+                          <span aria-hidden="true" className={`grid h-4 w-4 place-items-center rounded-full border-[1.5px] border-solid ${on ? "border-brand-600" : "border-neutral-400/80"}`}>
+                            {on && <span className="h-2 w-2 rounded-full bg-brand-600" />}
+                          </span>
+                        </span>
+                        <span className="text-xs font-semibold leading-tight text-foreground">{c.label}</span>
+                        <span className="text-[11px] leading-tight text-muted-foreground">{c.sub}</span>
                       </button>
                     );
                   })}
                 </div>
-                <p className="mt-1.5 text-xs text-muted-foreground" data-testid="task-approval-hint">
-                  {APPROVAL_CHOICES.find((c) => c.key === form.approval)?.hint}
-                </p>
+
+                <div className="mt-2.5 flex items-start gap-2 rounded-xl bg-card px-3 py-2">
+                  <Lightbulb size={16} weight="bold" className="mt-px shrink-0 text-brand-600" aria-hidden="true" />
+                  <p className="text-xs leading-snug text-muted-foreground" data-testid="task-approval-hint">
+                    {APPROVAL_CHOICES.find((c) => c.key === form.approval)?.hint}
+                  </p>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -527,15 +557,17 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                   setFiles((prev) => [...prev, ...picked.filter((f) => !prev.some((p) => key(p) === key(f)))]);
                   e.target.value = "";
                 }} />
-              {/* Desktop sets the hint beside the pill: one row instead of two. */}
-              <div className="mt-1.5 lg:flex lg:items-center lg:gap-4">
-                <button type="button" onClick={() => fileRef.current?.click()} data-testid="task-attachment-add"
-                  aria-describedby="task-files-hint"
-                  className={`inline-flex h-11 shrink-0 items-center gap-2 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
-                  <Paperclip size={16} weight="bold" aria-hidden="true" /> {files.length ? "Add more files" : "Add files"}
-                </button>
-                <p id="task-files-hint" className="mt-1.5 text-xs text-muted-foreground lg:mt-0">Images, PDFs or documents for context. AI reads them and summarises what to do.</p>
-              </div>
+              {/* 2026-09-15, founder reference — a dashed drop area replaces the
+                  pill. Same hidden input, same testid, same add-to-list behaviour. */}
+              <button type="button" onClick={() => fileRef.current?.click()} data-testid="task-attachment-add"
+                aria-describedby="task-files-hint"
+                className="mt-1.5 flex w-full flex-col items-center justify-center gap-1 rounded-xl border-[1.5px] border-dashed border-neutral-400/60 px-4 py-4 text-center transition-colors hover:border-neutral-500 hover:bg-neutral-900/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <CloudArrowUp size={20} weight="fill" aria-hidden="true" /> {files.length ? "Add more files" : "Add files"}
+                </span>
+                <span className="text-xs text-muted-foreground">Images, PDFs or documents for context.</span>
+              </button>
+              <p id="task-files-hint" className="mt-1.5 text-xs text-muted-foreground">AI reads them and summarises what to do.</p>
               {files.length > 0 && (
                 <ul className="mt-2 flex flex-wrap gap-1.5" data-testid="task-attachment-list">
                   {files.map((f, i) => (
@@ -555,12 +587,12 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
             </div>
           </div>
 
-          <p className={`${lbl} lg:hidden`}>Created by {user?.name}</p>
+          <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground lg:hidden"><User size={14} weight="fill" aria-hidden="true" /> Created by {user?.name}</p>
         </div>
         {/* Desktop: "Created by" shares the footer row with the button, which
             gives the open form back a line of height. */}
         <DialogFooter className="lg:items-center lg:justify-between">
-          <p className="hidden text-xs font-medium text-muted-foreground lg:block">Created by {user?.name}</p>
+          <p className="hidden items-center gap-1.5 text-xs font-medium text-muted-foreground lg:flex"><User size={14} weight="fill" aria-hidden="true" /> Created by {user?.name}</p>
           {/* KM-10 — ink, not brand-600 (the retired indigo), and a pill at
               the app's control height. */}
           <button data-testid="task-create-submit" onClick={create} disabled={busy}

@@ -116,7 +116,7 @@ export default function OperatingScore() {
 
 function PageHeader({ title, subtitle }) {
   return (
-    <StickyHeader className="mb-5 lg:mb-6">
+    <StickyHeader className="mb-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="font-display text-3xl sm:text-4xl">{title}</h1>

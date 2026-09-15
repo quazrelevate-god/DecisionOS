@@ -1328,3 +1328,34 @@ async def upload_task_attachment(task_id: str, file: UploadFile = File(...), kin
     if kind == "reference" and background is not None:
         background.add_task(_analyze_reference_file, user["tenant_id"], task_id, rec)
     return att
+
+
+@router.delete("/tasks/{task_id}/attachments/{att_id}")
+async def delete_task_attachment(task_id: str, att_id: str, user: dict = Depends(get_current_user)):
+    """Remove one attachment (proof or reference) from a task — 2026-09-15.
+
+    Only the person who added it, the task's creator or the owner may remove
+    it: proof is evidence, so a doer cannot quietly clear someone else's. The
+    file record is soft-deleted rather than dropped, matching how files are
+    kept everywhere else (is_deleted).
+    """
+    t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]})
+    if not t:
+        raise HTTPException(status_code=404, detail="Not found")
+    att = next((a for a in (t.get("attachments") or []) if a.get("id") == att_id), None)
+    if not att:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    allowed = user.get("role") == "owner" or att.get("by") == user["id"] or t.get("created_by") == user["id"]
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Only the person who added it, the task's creator or the owner can remove it")
+    await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {
+        "$pull": {"attachments": {"id": att_id}},
+        "$set": {"updated_at": now_iso(), "last_action": "Attachment removed"},
+    })
+    await db.files.update_one({"id": att_id, "tenant_id": user["tenant_id"]},
+                              {"$set": {"is_deleted": True, "deleted_at": now_iso(), "deleted_by": user["id"]}})
+    what = {"photo": "Removed a photo", "voice": "Removed a voice note",
+            "reference": "Removed reference material"}.get(att.get("kind"), "Removed a document")
+    await _log_task_event(user, task_id, "task_attachment_removed", f"{what} on '{t['title']}'",
+                          f"{what}: {att.get('filename') or 'file'}" if att.get("kind") != "voice" else what)
+    return {"ok": True}

@@ -15,7 +15,14 @@ from core import model_for
 from prompts import render
 
 
-ATTACH_ALLOWED_EXT = {"jpg", "jpeg", "png", "gif", "webp", "heic", "pdf", "doc", "docx", "xls", "xlsx", "csv", "txt"}
+# Audio added 2026-09-15: the task attachment route has always accepted
+# kind="voice", but this list never held an audio extension, so every voice
+# note from the task card's mic was refused with 400 "Unsupported file type
+# .webm". These are the formats browsers' MediaRecorder produces: webm/ogg
+# (Chrome, Firefox, Android) and mp4/m4a (Safari, including the iOS PWA),
+# plus the common ones people upload by hand.
+ATTACH_AUDIO_EXT = {"webm", "ogg", "oga", "opus", "m4a", "mp4", "mp3", "wav", "aac"}
+ATTACH_ALLOWED_EXT = {"jpg", "jpeg", "png", "gif", "webp", "heic", "pdf", "doc", "docx", "xls", "xlsx", "csv", "txt"} | ATTACH_AUDIO_EXT
 
 
 ATTACH_MAX_BYTES = 25 * 1024 * 1024  # 25 MB

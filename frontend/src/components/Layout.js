@@ -673,6 +673,10 @@ export default function Layout({ children }) {
             over. The brand row collapses on first movement and gives its space
             to the page title, which portals into the slot beneath it. */}
         <div className="lg:hidden shrink-0">
+          {/* 2026-09-15, founder — the wordmark + bell row belongs to Decision
+              Desk (/inbox) only. Every other page opens straight on its own
+              title, which then needs the safe-area inset the row used to give. */}
+          {location.pathname.startsWith("/inbox") && (
           <header
             data-testid="mobile-brand-row"
             aria-hidden={brandFolded}
@@ -689,6 +693,7 @@ export default function Layout({ children }) {
               <Bellicon mobile />
             </div>
           </header>
+          )}
           {/* A page's header lands here. Zero-height on routes with none.
               KM-27 — the title landed hard against the top edge once the brand
               row folded away. `pt-3` on top of the safe inset gives it the
@@ -697,7 +702,15 @@ export default function Layout({ children }) {
           <div
             ref={setHeaderSlot}
             data-testid="page-header-slot"
-            className={cn("px-gutter-safe", brandFolded && "pt-safe pt-3")}
+            className={cn(
+              "px-gutter-safe",
+              /* Pages without the brand row (everything but Decision Desk) get
+                 more room above their title: the safe-area inset plus 1.75rem,
+                 in one value so two padding-top utilities cannot fight. */
+              !location.pathname.startsWith("/inbox")
+                ? "pt-[calc(env(safe-area-inset-top)+1.75rem)]"
+                : brandFolded && "pt-safe pt-3",
+            )}
           />
         </div>
 

@@ -365,7 +365,7 @@ export default function Leave({ embedded = false }) {
               title pinned, and one row under it carrying both actions. They
               used to be black slabs floating to the right of the heading; they
               are the page's own controls, so they wear its raised material. */}
-          <StickyHeader className="mb-3 flex flex-col gap-2.5 lg:hidden" data-testid="leave-mobile-header">
+          <StickyHeader className="mb-3 flex flex-col gap-6 lg:hidden" data-testid="leave-mobile-header">
             <h1 className="font-display text-3xl">Leaves</h1>
             <div className="flex items-center gap-2">{actions}</div>
           </StickyHeader>

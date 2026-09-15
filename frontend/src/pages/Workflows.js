@@ -307,7 +307,7 @@ function StandaloneHeader({ show, title, pipelines, activeKey, counts, onPick, n
   if (!show) return null;
   const active = pipelines.find((p) => p.key === activeKey);
   return (
-    <StickyHeader className="mb-3 flex flex-col gap-2.5 lg:hidden" data-testid="workflows-mobile-header">
+    <StickyHeader className="mb-3 flex flex-col gap-6 lg:hidden" data-testid="workflows-mobile-header">
       <h1 className="font-display text-3xl">{title}</h1>
       <div className="flex items-center gap-2">
         <DropdownMenu>

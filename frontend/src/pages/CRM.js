@@ -671,7 +671,7 @@ export default function CRM() {
 
       {/* KM-27 — the controls pin with the title: they act ON the list, so
           they are the last things to scroll away. */}
-      <StickyHeader className="mb-5 lg:mb-6">
+      <StickyHeader className="mb-6">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="font-display text-3xl sm:text-4xl">{t("crm.title")}</h1>

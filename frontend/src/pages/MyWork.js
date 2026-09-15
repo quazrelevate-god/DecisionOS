@@ -34,7 +34,10 @@ import {
   ArrowBendUpRight, WarningCircle, ChatText, ArrowRight, Kanban,
   Paperclip, UserCircle, ShieldCheck, Tag, ClockCounterClockwise,
   ArrowClockwise, XCircle, LockKey, X, MagnifyingGlassPlus,
-  File, FileArrowUp, Lightbulb, Info,
+  // Aliased: imported bare, the icon `File` shadowed the browser's File
+  // constructor, so `new File([blob], "voice.webm")` in the recorder's onstop
+  // threw "is not a constructor" the moment a voice note stopped (2026-09-15).
+  File as FileIcon, FileArrowUp, Lightbulb, Info,
   FlowArrow,  // WE-11 stage chip
   SlidersHorizontal,  // KR-14.6 · mobile MyWork filter icon (reference)
   Buildings, CalendarBlank, // KR-14.22 · mobile expanded task card
@@ -1049,7 +1052,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
                         ? <audio key={a.url} controls preload="none" src={url(a.url)} className="h-9 w-full" data-testid={`detail-ref-voice-${t.id}-${a.url}`} />
                         : <a key={a.url} href={url(a.url)} target="_blank" rel="noreferrer" data-testid={`detail-ref-file-${t.id}-${a.url}`}
                             className="inline-flex items-center gap-1.5 nm-tile px-2.5 py-1.5 text-xs font-mono hover:bg-accent transition-colors max-w-[220px]">
-                            <File size={14} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
+                            <FileIcon size={14} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
                           </a>
                   ))}
                 </div>
@@ -1089,7 +1092,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
                       ? <audio key={a.url} controls preload="none" src={url(a.url)} className="h-9 w-full" data-testid={`detail-voice-${t.id}-${a.url}`} />
                       : <a key={a.url} href={url(a.url)} target="_blank" rel="noreferrer" data-testid={`detail-proof-file-${t.id}-${a.url}`}
                           className="inline-flex items-center gap-1.5 nm-tile px-2.5 py-1.5 text-xs font-mono hover:bg-accent transition-colors max-w-[220px]">
-                          <File size={14} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
+                          <FileIcon size={14} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
                         </a>
                   ))}
                 </div>
@@ -1155,12 +1158,19 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
          founder: it joins the drawer's material and turns WHITE — a white
          glass strip, Complete as the black ink pill, Reassign as a glass
          pill, Clear as a quiet text button. */
-      className="sticky top-2 z-20 mb-4 flex flex-wrap items-center gap-2.5 rounded-pill bg-white/90 py-2 pl-5 pr-2 text-neutral-900 ring-1 ring-inset ring-black/[0.05] shadow-[0_12px_32px_-14px_hsl(0_0%_0%/0.28)] backdrop-blur-xl"
+      /* 2026-09-15, founder reference — on a phone this was one pill that
+         merely wrapped: "1 selected" broke over two lines, Clear fell onto a
+         row of its own, and a full pill radius on a two-line block read as
+         lopsided. Below lg it is now a two-row card: count and Clear share
+         the top row, Complete and Reassign split the second evenly. `order`
+         moves Clear up on phones only, so the DOM (and tab) order still
+         matches the single desktop row. */
+      className="sticky top-2 z-20 mb-4 grid grid-cols-2 items-center gap-2 rounded-[1.75rem] bg-white/90 p-2.5 text-neutral-900 ring-1 ring-inset ring-black/[0.05] shadow-[0_12px_32px_-14px_hsl(0_0%_0%/0.28)] backdrop-blur-xl lg:flex lg:gap-2.5 lg:rounded-pill lg:py-2 lg:pl-5 lg:pr-2"
       data-testid="bulk-action-bar"
     >
-      <div className="flex min-w-0 flex-1 items-center gap-2">
+      <div className="order-1 flex min-w-0 items-center gap-2 pl-2 lg:order-none lg:flex-1 lg:pl-0">
         <ListChecks size={17} weight="bold" aria-hidden="true" className="shrink-0 text-neutral-700" />
-        <p className="text-sm font-semibold">
+        <p className="min-w-0 truncate whitespace-nowrap text-sm font-semibold">
           {selectedIds.length} selected
           {openCount > 0 && doneCount > 0 && (
             <span className="ml-2 text-xs font-normal text-neutral-500">
@@ -1173,7 +1183,7 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
         type="button"
         onClick={onComplete}
         disabled={busy || openCount === 0}
-        className={`inline-flex h-10 items-center gap-1.5 rounded-pill px-4 text-sm font-medium disabled:opacity-40 ${INK_PILL}`}
+        className={`order-3 inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-pill px-4 text-sm font-medium disabled:opacity-40 lg:order-none lg:h-10 lg:w-auto ${INK_PILL}`}
         data-testid="bulk-complete"
       >
         <CheckCircle size={15} weight="bold" aria-hidden="true" />
@@ -1186,7 +1196,7 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
         type="button"
         onClick={openReassign}
         disabled={busy}
-        className={`inline-flex h-10 items-center gap-1.5 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}
+        className={`order-4 inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white disabled:opacity-40 lg:order-none lg:h-10 lg:w-auto ${GLASS_PILL}`}
         data-testid="bulk-reassign"
       >
         <ArrowBendUpRight size={15} weight="bold" aria-hidden="true" />
@@ -1197,7 +1207,7 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
         type="button"
         onClick={onClear}
         disabled={busy}
-        className="inline-flex h-10 items-center gap-1 rounded-pill px-3.5 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-900/5 hover:text-neutral-900 disabled:opacity-40"
+        className="order-2 inline-flex h-10 items-center gap-1 justify-self-end rounded-pill px-3.5 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-900/5 hover:text-neutral-900 disabled:opacity-40 lg:order-none"
         data-testid="bulk-clear"
       >
         <X size={13} weight="bold" aria-hidden="true" /> Clear
@@ -1656,10 +1666,28 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       const label = kind === "photo" ? "Photo" : kind === "voice" ? "Voice reply" : "File";
       toast.success(`${label} added`);
       onChange();
-    } catch {
-      toast.error("Upload failed");
+    } catch (err) {
+      // Say why. A bare "Upload failed" is what hid the server refusing every
+      // voice note as an unsupported file type.
+      toast.error(err?.response?.data?.detail || "Upload failed");
     } finally {
       setUploading(false);
+    }
+  };
+
+  // 2026-09-15 — remove a proof or reference attachment. Two taps: the first
+  // arms the corner button ("Remove", red), the second deletes, so a stray tap
+  // on a phone cannot clear evidence.
+  const [armedAtt, setArmedAtt] = useState(null);
+  const removeAtt = async (a) => {
+    try {
+      await api.delete(`/tasks/${t.id}/attachments/${a.id}`);
+      toast.success("Attachment removed");
+      onChange();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Could not remove attachment");
+    } finally {
+      setArmedAtt(null);
     }
   };
 
@@ -1690,8 +1718,13 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       mr.onstop = () => {
         stream.getTracks().forEach((x) => x.stop());
         if (cancelledRef.current) { chunksRef.current = []; return; }
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        upload(new File([blob], "voice.webm"), "voice");
+        // Label the note with the format the recorder really used. Safari
+        // (and the iOS PWA) records audio/mp4, not webm; the old hard-coded
+        // "voice.webm" mislabelled every note from those devices.
+        const mime = (mr.mimeType || "audio/webm").split(";")[0];
+        const ext = mime.includes("mp4") ? "m4a" : mime.includes("ogg") ? "ogg" : "webm";
+        const blob = new Blob(chunksRef.current, { type: mime });
+        upload(new File([blob], `voice.${ext}`, { type: mime }), "voice");
       };
       mediaRef.current = mr;
       mr.start();
@@ -1864,7 +1897,25 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
     const isImg = (a) => a.kind === "photo" || (a.content_type || "").startsWith("image/");
     const isAudio = (a) => a.kind === "voice" || (a.content_type || "").startsWith("audio/");
     const label = "mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500";
+    // Same rule the server enforces: whoever added it, the task's creator, or
+    // the owner. Hiding the button is a courtesy, not the check.
+    const canRemove = (a) => !!a.id && (user?.role === "owner" || a.by === user?.id || t.created_by === user?.id);
     const renderAtt = (a) => (
+      <div key={a.url} className={`relative ${isAudio(a) && !isImg(a) ? "w-full" : ""}`}>
+        {renderAttInner(a)}
+        {canRemove(a) && (
+          <button type="button"
+            onClick={(e) => { e.stopPropagation(); if (armedAtt === a.id) removeAtt(a); else setArmedAtt(a.id); }}
+            onBlur={() => setArmedAtt((cur) => (cur === a.id ? null : cur))}
+            aria-label={armedAtt === a.id ? `Confirm: remove ${a.filename || "attachment"}` : `Remove ${a.filename || "attachment"}`}
+            data-testid={`att-remove${sfx}-${t.id}-${a.id}`}
+            className={`absolute -right-1.5 -top-1.5 z-10 grid h-6 min-w-6 place-items-center rounded-full px-1 text-[10px] font-semibold shadow-sm ring-1 ring-inset ring-black/[0.06] transition-colors ${armedAtt === a.id ? "bg-red-600 px-2 text-white" : "bg-white text-slate-600 hover:text-red-600"}`}>
+            {armedAtt === a.id ? "Remove" : <X size={11} weight="bold" aria-hidden="true" />}
+          </button>
+        )}
+      </div>
+    );
+    const renderAttInner = (a) => (
       isImg(a)
         ? <button key={a.url} type="button" onClick={() => setLightbox(`${beUrl}${a.url}`)}
             className="group relative h-20 w-20 overflow-hidden rounded-xl ring-1 ring-slate-900/[0.06]" title="View the full image"
@@ -1878,7 +1929,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
           ? <audio key={a.url} controls preload="none" src={`${beUrl}${a.url}`} className="h-9 max-w-full" data-testid={`att-voice${sfx}-${t.id}-${a.url}`} />
           : <a key={a.url} href={`${beUrl}${a.url}`} target="_blank" rel="noreferrer" data-testid={`att-file${sfx}-${t.id}-${a.url}`}
               className="inline-flex max-w-[180px] items-center gap-1.5 rounded-pill bg-white/80 px-2.5 py-1.5 text-xs text-slate-700 ring-1 ring-inset ring-slate-900/[0.06] transition-colors hover:bg-white">
-              <File size={13} weight="bold" aria-hidden="true" /> <span className="truncate">{a.filename || "file"}</span>
+              <FileIcon size={13} weight="bold" aria-hidden="true" /> <span className="truncate">{a.filename || "file"}</span>
             </a>
     );
     return (
@@ -2007,7 +2058,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       {t.description && (
         <div className="flex items-start gap-3 rounded-cardlg bg-orange-50/70 p-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-tile bg-orange-100 text-kr-accent">
-            <File size={18} weight="regular" />
+            <FileIcon size={18} weight="regular" />
           </span>
           <p className="text-sm leading-relaxed">{t.description}</p>
         </div>
@@ -2137,7 +2188,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
     {t.description && (
       <div className={`${DRAWER_CARD} flex items-start gap-4 p-4`} data-testid={`task-context-${t.id}`}>
         <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[linear-gradient(160deg,hsl(0_0%_100%),hsl(0_0%_88%))] text-neutral-800 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.9)]">
-          <File size={24} weight="duotone" aria-hidden="true" />
+          <FileIcon size={24} weight="duotone" aria-hidden="true" />
         </span>
         <p className="min-w-0 whitespace-pre-line pt-1 text-[15px] leading-relaxed text-slate-600">{t.description}</p>
       </div>
@@ -2298,7 +2349,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
             title="Upload a document"
             className={`flex h-12 min-w-0 flex-1 basis-0 items-center justify-center gap-2 rounded-pill text-[15px] font-medium text-slate-700 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}
           >
-            <File size={19} weight="regular" aria-hidden="true" /> Document
+            <FileIcon size={19} weight="regular" aria-hidden="true" /> Document
           </button>
           <button
             onClick={toggleVoice}
@@ -2830,11 +2881,18 @@ function FilterChipGroup({ testid, label, value, options, counts, onSelect, load
    ~210px cards side by side. */
 function TaskGrid({ list, openId, setOpenId, cardProps }) {
   return (
-    <div className="grid gap-3 lg:grid-cols-3 lg:gap-4 xl:grid-cols-4" data-testid="mywork-grid">
+    /* 2026-09-15 — below lg this grid had no column definition, so the
+       browser built one implicit `auto` column sized to the WIDEST card's
+       min-content. A single card whose footer could not shrink widened the
+       column for every card, and the page clipped them all at the right edge
+       (reported on Asked by me). grid-cols-1 is minmax(0, 1fr): the column is
+       exactly the container's width. min-w-0 on each cell stops a cell from
+       spilling past that column on its own. */
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-3 lg:gap-4 xl:grid-cols-4" data-testid="mywork-grid">
       {list.map((t) => {
         const isOpen = openId === t.id;
         return (
-          <div key={t.id} className="min-h-[112px]">
+          <div key={t.id} className="min-h-[112px] min-w-0">
             <TaskCard
               t={t}
               open={isOpen}
@@ -3486,7 +3544,10 @@ export default function MyWork() {
             and gaps recovers ~16px of the 35px gap, so the row genuinely
             cannot hold six controls; a destination pair moving up is the only
             fix that keeps every control reachable. */}
-        <div className="flex items-center gap-1.5">
+        {/* mb-4 on the title row only: with the header's gap-2 that is ~24px
+            under "My Work" (2026-09-15, app bar gone), while every other row in
+            this header keeps the 8px rhythm. */}
+        <div className="mb-4 flex items-center gap-1.5">
           <h1 className="min-w-0 flex-1 font-display text-3xl leading-none">{t("mywork.title")}</h1>
           {/* KM-31 — the Workflows and Leave pills are gone from this row.
               They were destinations wearing the costume of lenses: tapping
@@ -3527,6 +3588,17 @@ export default function MyWork() {
             <CaretDown size={12} weight="bold" aria-hidden="true" className="shrink-0 opacity-60" />
           </button>
 
+          {/* 2026-09-15, founder — New Task is a round ink plus sitting right
+              beside the view dropdown: pick where you are, then add to it. It
+              was a worded pill on a row of its own under the toolbar. Same
+              dialog, same views (the task lists). */}
+          {inSegmentView && (
+            <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members} defaultType={tab}
+              onOpenChange={(o) => { if (o) setOpenId(null); }}
+              triggerAriaLabel="New task"
+              triggerChildren={<Plus size={20} weight="bold" aria-hidden="true" />}
+              triggerClassName={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${INK_PILL}`} />
+          )}
 
           {/* The two circles, as a pair, hard right. AI priority moved up here
               from its own row so that both controls that act on the LIST
@@ -4012,34 +4084,11 @@ export default function MyWork() {
                   })}
                 </div>
               </div>
-
-              <div>
-                <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-foreground/70">
-                  {t("mywork.filter_status", "Status")}
-                </p>
-                {/* Scrolls rather than wraps: four status segments do not fit
-                    343px, and a control row that reflows to two lines as you tap
-                    through it is worse than one that slides. */}
-                <div className="kr-pressed relative flex items-center gap-1 overflow-x-auto rounded-pill p-1 [scrollbar-width:none]"
-                     role="group" aria-label="Filter by progress" data-testid="work-mobile-status-lens">
-                  {M_STATUS_PILLS.map((sp) => (
-                    <button key={sp.key} type="button"
-                      onClick={() => setStatusFilter((cur) => (cur === sp.key ? "" : sp.key))}
-                      aria-pressed={statusFilter === sp.key} data-testid={`work-status-${sp.key}`}
-                      className={`kr-seg-compact flex h-9 shrink-0 items-center rounded-pill px-3.5 text-[12px] ${
-                        statusFilter === sp.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
-                      {sp.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              {/* 2026-09-15, founder — the Status lens is gone from here: status
+                  is already a filter in the Filter sheet, so the same control
+                  twice a thumb apart only took height from the list. */}
             </div>
           )}
-          <div className="mb-3 flex justify-end lg:hidden">
-            <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members} defaultType={tab}
-              onOpenChange={(o) => { if (o) setOpenId(null); }}
-              triggerClassName={`inline-flex items-center gap-1.5 rounded-pill px-3.5 py-2 text-xs font-medium ${INK_PILL}`} />
-          </div>
 
           {/* MW-06 fix: while the tasks query is loading, tabs render a
               dash instead of a hard 0. The card skeleton below is

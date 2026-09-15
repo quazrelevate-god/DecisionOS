@@ -519,7 +519,7 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
     <div data-testid="team-panel">
       <InviteLinkModal info={invite} onClose={() => setInvite(null)} />
 
-      <div className="mb-6 flex flex-col gap-4 lg:mb-8 lg:flex-row lg:items-start lg:justify-between">
+      <div className="mb-6 flex flex-col gap-6 lg:mb-8 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
         {title ? (
           <StickyHeader className="min-w-0">
             <h1 className="font-display text-3xl sm:text-4xl">{title}</h1>

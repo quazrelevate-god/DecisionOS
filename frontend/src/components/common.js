@@ -66,7 +66,9 @@ export function PageHeader({ eyebrow, title, children, testid }) {
   if (!eyebrow && !title && !children) return null;
   return (
     <header className="mb-6 lg:mb-7" data-testid={testid}>
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between lg:gap-4">
+      {/* gap-6 below lg: ~24px under the title on phones, where the app bar
+          no longer sits above it (2026-09-15). Desktop keeps gap-4. */}
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between lg:gap-4">
         {(eyebrow || title) && (
           <div className="min-w-0">
             {eyebrow && (

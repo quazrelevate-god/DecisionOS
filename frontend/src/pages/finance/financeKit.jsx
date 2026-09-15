@@ -12,10 +12,16 @@ import { CHIP, DRAWER_FIELD, GLASS_ICON_BTN, GLASS_PILL, GLASS_SHEET, INK_PILL, 
 
 export const CARD = "rounded-[1.6rem] bg-white/75 ring-1 ring-inset ring-white shadow-[0_14px_36px_-18px_hsl(150_15%_20%/0.28),0_1px_2px_hsl(150_15%_20%/0.06)] backdrop-blur-xl";
 export const TILE = "rounded-[1.25rem] bg-white/85 ring-1 ring-inset ring-white shadow-[0_8px_22px_-14px_hsl(150_15%_20%/0.3)]";
-export const FIELD = cn(DRAWER_FIELD, "h-11 py-0 text-sm");
+export const FIELD = cn(DRAWER_FIELD, "h-11 w-full min-w-0 py-0 text-sm");
 export const AREA = cn(DRAWER_FIELD, "py-2.5 text-sm");
 export const SHEET_CONTENT = cn(
-  "max-h-[calc(90dvh/var(--ui-scale,1))] gap-0 overflow-y-auto rounded-[1.75rem] p-0 sm:rounded-[1.75rem] [&>button.absolute]:hidden",
+  /* grid-cols-1 (minmax(0, 1fr)) is the actual fix for the phone overflow.
+     DialogContent is a CSS grid with no column set, so its one implicit
+     column took the WIDEST child's min-content — and FileField's hint is
+     `truncate` (nowrap), so that was the full length of the placeholder
+     sentence. Every row was laid out that wide; overflow-x-hidden only
+     traded the sideways scroll for clipped content (2026-09-15). */
+  "max-h-[calc(90dvh/var(--ui-scale,1))] grid-cols-1 gap-0 overflow-y-auto overflow-x-hidden rounded-[1.75rem] p-0 sm:rounded-[1.75rem] [&>button.absolute]:hidden",
   GLASS_SHEET,
 );
 export const SMALL_PILL = `inline-flex h-9 shrink-0 items-center gap-1.5 rounded-pill px-3.5 text-xs font-medium text-slate-700 transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 disabled:opacity-50 ${GLASS_PILL}`;
@@ -44,7 +50,11 @@ export const compactMoney = (cur) => ((cur || "INR") === "INR" ? inrCompact : fm
 
 export function Field({ label, htmlFor, aside, className, children }) {
   return (
-    <div className={className}>
+    /* min-w-0 — a Field is usually a grid cell, and a grid cell's default
+       min-width is its content. Date inputs carry a browser minimum width, so
+       a three-up row of them outgrew the dialog on a phone and the whole sheet
+       scrolled sideways (2026-09-15). */
+    <div className={cn("min-w-0", className)}>
       <div className="mb-1.5 flex min-h-5 items-center justify-between gap-2">
         <label htmlFor={htmlFor} className="text-xs font-medium text-slate-600">{label}</label>
         {aside}

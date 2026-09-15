@@ -26,7 +26,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  ArrowRight, Buildings, CalendarBlank, Camera, CaretRight, ChartPieSlice, ChatCircleDots, CurrencyInr, FilePdf,
+  ArrowRight, Buildings, CalendarBlank, Camera, ChartPieSlice, ChatCircleDots, CurrencyInr, FilePdf,
   Package, Plus, Receipt, Sparkle, Tray, UploadSimple,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
@@ -59,13 +59,40 @@ const PERIOD_KEY = "finance.period";
 function SectionTabs({ tab, setTab, pendingCount, isMobile }) {
   const { t } = useTranslation();
   const prefix = isMobile ? "ledger-tab-mobile" : "ledger-tab";
+  /* 2026-09-15, founder — on a phone all six tabs fit the screen, as in the
+     mobile app: six equal cells, the icon stacked over the label, no sideways
+     scroll. The pending count rides on the Inbox icon as a small badge. */
+  if (isMobile) {
+    return (
+      <div role="group" aria-label={t("nav.finance", "Finance")} data-testid="ledger-tabs-mobile"
+        className={`relative grid w-full grid-cols-6 gap-0.5 rounded-[1.25rem] p-1 ${GLASS_PILL}`}>
+        {TABS.map((tb) => {
+          const active = tab === tb.key;
+          return (
+            <button key={tb.key} type="button" onClick={() => setTab(tb.key)} aria-pressed={active} data-testid={`${prefix}-${tb.key}`}
+              className={cn(
+                "flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-2xl px-0.5 py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25",
+                active ? cn(INK_PILL, "font-medium") : "text-slate-600 hover:bg-white hover:text-slate-900",
+              )}>
+              <span className="relative">
+                <tb.icon size={17} aria-hidden="true" />
+                {tb.key === "inbox" && pendingCount > 0 && (
+                  <span aria-hidden="true" className={cn(
+                    "absolute -right-2.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[9px] font-semibold tabular-nums",
+                    active ? "bg-white text-neutral-900" : "bg-orange-500 text-white",
+                  )}>{pendingCount}</span>
+                )}
+              </span>
+              <span className="w-full truncate text-center text-[10.5px] leading-tight">{t(tb.tkey)}</span>
+              {tb.key === "inbox" && pendingCount > 0 && <span className="sr-only">, {pendingCount} waiting</span>}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
   return (
-    /* On a phone the track scrolls and bleeds to the page gutter, so the last
-       pill is cut by the screen — the thing that reads as "there is more".
-       `relative` makes the scroller the containing block of the sr-only badge
-       text: an absolutely positioned child of a non-positioned scroller escapes
-       its clip and widened the whole page by ~190px. */
-    <div className={isMobile ? "relative -mx-4 min-w-0 self-stretch overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" : "flex justify-center"}>
+    <div className="flex justify-center">
       <div role="group" aria-label={t("nav.finance", "Finance")} data-testid={isMobile ? "ledger-tabs-mobile" : "ledger-tabs"}
         className={`inline-flex gap-1 rounded-pill p-1 ${GLASS_PILL}`}>
         {TABS.map((tb) => {
@@ -256,7 +283,6 @@ export default function Ledger() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
   const tab = TABS.some((tb) => tb.key === tabParam) ? tabParam : "overview";
-  const current = TABS.find((tb) => tb.key === tab);
   // KR-10 — /inbox and Ops link to ?tab=revenue&filter=overdue.
   const filterParam = searchParams.get("filter") || "all";
   const setTab = (key) => setSearchParams((prev) => {
@@ -305,26 +331,35 @@ export default function Ledger() {
 
   return (
     <div data-testid="finance-page">
-      <StickyHeader className="mb-5 lg:mb-6">
-        <SectionTabs tab={tab} setTab={setTab} pendingCount={pendingCount} isMobile={isMobile} />
-        <nav aria-label="Breadcrumb" className="mt-4 lg:mt-5">
-          <ol className="flex items-center gap-1.5 text-sm text-slate-500">
-            <li>
-              {tab === "overview"
-                ? t("finance.title")
-                : <button type="button" onClick={() => setTab("overview")} className="rounded hover:text-slate-800 hover:underline">{t("finance.title")}</button>}
-            </li>
-            <li aria-hidden="true"><CaretRight size={11} weight="bold" /></li>
-            <li aria-current="page" className="font-medium text-slate-700">{t(current.tkey)}</li>
-          </ol>
-        </nav>
-        <div className="mt-1 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-          <div className="min-w-0">
-            <h1 className="font-display text-3xl sm:text-4xl">{t("finance.title")}</h1>
-            <p className="mt-1.5 text-sm text-muted-foreground sm:text-base">
-              {t("finance.subtitle", "Track your money flow, control costs, and make smarter decisions.")}
-            </p>
-          </div>
+      {/* 2026-09-15, founder — only the tabs stay pinned. The breadcrumb,
+          title and controls used to sit inside StickyHeader too, so the whole
+          hero stayed stuck to the top; now it scrolls away with the page. */}
+      {/* Desktop keeps the pinned tab strip at the top. On a phone the tabs sit
+          under the Finance title instead (2026-09-15, founder) — see below. */}
+      {!isMobile && (
+        <StickyHeader>
+          <SectionTabs tab={tab} setTab={setTab} pendingCount={pendingCount} isMobile={isMobile} />
+        </StickyHeader>
+      )}
+      {/* 2026-09-15, founder — on a phone the Finance title and the section
+          tabs are pinned together: StickyHeader lands in the frame's top slot,
+          outside the scroller, so both stay put while the page moves under
+          them. The period and Add record controls still scroll with the page. */}
+      {isMobile && (
+        <StickyHeader className="mb-5 flex flex-col gap-6" data-testid="finance-mobile-header">
+          <h1 className="font-display text-3xl">{t("finance.title")}</h1>
+          <SectionTabs tab={tab} setTab={setTab} pendingCount={pendingCount} isMobile={isMobile} />
+        </StickyHeader>
+      )}
+      <div className="mb-5 lg:mb-6">
+        <div className="mt-1 flex flex-wrap items-end justify-between gap-x-6 gap-y-6 lg:gap-y-3">
+          {/* 2026-09-15, founder — the "Track your money flow…" line is gone.
+              Desktop only here; the phone title is pinned above with the tabs. */}
+          {!isMobile && (
+            <div className="min-w-0">
+              <h1 className="font-display text-3xl sm:text-4xl">{t("finance.title")}</h1>
+            </div>
+          )}
           <div className="flex w-full flex-wrap items-center gap-2.5 sm:w-auto" data-testid="ledger-controls">
             {tab === "overview" && (
               <GlassSelect testid="finance-period" ariaLabel="Period" value={period} onChange={setPeriod} align="end" icon={CalendarBlank}
@@ -333,7 +368,7 @@ export default function Ledger() {
             <AddRecordControl tab={tab} onPick={setAdding} />
           </div>
         </div>
-      </StickyHeader>
+      </div>
 
       <QuickCapture pendingCount={pendingCount} isMobile={isMobile}
         onIngested={() => { invalidate(); qc.invalidateQueries({ queryKey: ["captures-pending"] }); }}

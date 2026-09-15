@@ -315,8 +315,10 @@ export function AddIncomeDialog({ open, onOpenChange, onDone }) {
           <Field label={`${L.customer_singular} name`} htmlFor={`${uid}-customer`}>
             <input id={`${uid}-customer`} data-testid="income-customer" className={FIELD} value={f.customer_name} onChange={(e) => set("customer_name", e.target.value)} />
           </Field>
-          <div className="grid grid-cols-3 gap-3">
-            <Field label="Invoice #" htmlFor={`${uid}-number`}>
+          {/* Phone: a third of the sheet is too narrow for a date field, so the
+              invoice number takes a row and the two dates share the next. */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <Field label="Invoice #" htmlFor={`${uid}-number`} className="col-span-2 sm:col-span-1">
               <input id={`${uid}-number`} className={FIELD} value={f.number} onChange={(e) => set("number", e.target.value)} />
             </Field>
             <Field label="Date" htmlFor={`${uid}-date`}>

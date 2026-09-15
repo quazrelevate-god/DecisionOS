@@ -234,40 +234,53 @@ check('/brief lands on the Desk\'s morning scope',
 check('the Desk slot is the active one after the redirect',
   (await page.locator('[data-testid="dock-desk"]').getAttribute('aria-current')) === 'page');
 
-// Dex FAB opens the sheet, which hosts the EXISTING capture bar
+// ASK-33 Phase 4 — ONE TAP ON THE DEX FAB OPENS DEX IN ASK.
+// This section used to drive MPWA-12e's DexSheet (an idle stage, a 64px mic in
+// the sheet, "Open Dex" to /brain). DexSheet was removed from Layout in 97c2bfc
+// (KM-23) and is not mounted: the live sheet is DexChat, a transcript whose
+// composer is the dock and whose mic and send is the FAB. KM-54's two-door
+// picker went in ASK-33 — Ask is the FAB, Decide is the Desk's Dex well
+// (scripts/verify-dex.mjs covers that side).
+const dexBadge = async () =>
+  (await page.locator('[data-testid="dex-chat"] span.rounded-pill').first().innerText().catch(() => '')).trim().toLowerCase();
 await page.goto(`${BASE}/inbox`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('[data-testid="dex-fab"]', { timeout: 8000 });
 await page.waitForTimeout(300);
 await page.locator('[data-testid="dex-fab"]').click();
-await page.waitForSelector('[data-testid="dex-sheet"]', { timeout: 5000 });
+await page.waitForSelector('[data-testid="dex-chat"]', { timeout: 5000 });
 await page.waitForTimeout(400);
-check('Dex FAB opens DexSheet', await page.locator('[data-testid="dex-sheet"]').isVisible());
-// MPWA-12e replaced the sheet's presentation (§5.6: it "looks like a support
-// form, and Dex is the product's personality") while keeping the behaviour —
-// hooks/useDexCapture holds the recorder and the same Sprint 5 endpoints, and
-// DexCaptureBar still renders it verbatim on desktop /brain.
-check('DexSheet opens on the idle state',
-  (await page.locator('[data-testid="dex-sheet-stage"]').getAttribute('data-stage')) === 'idle');
-check('DexSheet offers speak, type and attach',
-  (await page.locator('[data-testid="dex-mic-record"]').isVisible())
-    && (await page.locator('[data-testid="dex-text-input"]').isVisible())
-    && (await page.locator('[data-testid="dex-file-upload"]').isVisible()));
-check('the old capture-bar form is gone from the sheet',
-  (await page.locator('[data-testid="dex-sheet"] [data-testid="dex-capture-bar"]').count()) === 0);
-check('DexSheet offers "Open Dex"',
-  await page.locator('[data-testid="dex-sheet-open-full"]').isVisible());
-const sendBox = await page.locator('[data-testid="dex-send"]').boundingBox();
-check('Dex send button is not clipped at the right edge',
-  sendBox.x + sendBox.width <= vw - 4,
-  `right edge at ${Math.round(sendBox.x + sendBox.width)} of ${vw}`);
-const micBox = await page.locator('[data-testid="dex-mic-record"]').boundingBox();
-check('Dex mic is >= 56px', micBox.height >= 56, `${Math.round(micBox.height)}px`);
-check('Dex mic is the sheet\'s hero, not one control in a row', micBox.height >= 64,
-  `${Math.round(micBox.width)}x${Math.round(micBox.height)}`);
-await page.locator('[data-testid="dex-sheet-open-full"]').click();
-await page.waitForTimeout(700);
-check('"Open Dex" navigates to /brain', new URL(page.url()).pathname === '/brain',
-  new URL(page.url()).pathname);
+check('one tap on the Dex FAB opens the Dex sheet', await page.locator('[data-testid="dex-chat"]').isVisible());
+check('no two-door picker', (await page.locator('[data-testid^="dex-pick-"]').count()) === 0);
+check('the sheet opens on Ask', (await dexBadge()) === 'ask', await dexBadge());
+check('the dock becomes the composer',
+  (await page.locator('[data-testid="dock-dex-wave"]').isVisible())
+    && !(await page.locator('[data-testid="dock-desk"]').isVisible()));
+check('the FAB offers to speak',
+  (await page.locator('[data-testid="dex-fab"]').getAttribute('aria-label')) === 'Speak to Dex');
+await page.locator('[data-testid="dex-plus"]').click();
+await page.waitForTimeout(400);
+check('the plus offers type, attach and photo',
+  (await page.locator('[data-testid="dex-action-type"]').isVisible())
+    && (await page.locator('[data-testid="dex-action-file"]').isVisible())
+    && (await page.locator('[data-testid="dex-action-photo"]').isVisible()));
+await page.locator('[data-testid="dex-action-type"]').click();
+await page.waitForTimeout(400);
+check('Type turns the dock into a text field', await page.locator('[data-testid="dock-dex-input"]').isVisible());
+const fabBox = await page.locator('[data-testid="dex-fab"]').boundingBox();
+check('the Dex FAB is not clipped at the right edge', fabBox.x + fabBox.width <= vw - 4,
+  `right edge at ${Math.round(fabBox.x + fabBox.width)} of ${vw}`);
+check('the Dex FAB stays >= 56px as the composer\'s button', fabBox.height >= 56,
+  `${Math.round(fabBox.width)}x${Math.round(fabBox.height)}`);
+await page.locator('[data-testid="dex-chat-close"]').click();
+await page.waitForTimeout(800);
+check('closing gives the dock its destinations back',
+  (await page.locator('[data-testid="dex-chat"]').count()) === 0
+    && (await page.locator('[data-testid="dock-desk"]').isVisible()));
+await page.locator('[data-testid="dex-fab"]').click();
+await page.waitForSelector('[data-testid="dex-chat"]', { timeout: 5000 });
+await page.waitForTimeout(400);
+check('the next tap opens Ask again, still with no picker',
+  (await page.locator('[data-testid^="dex-pick-"]').count()) === 0 && (await dexBadge()) === 'ask');
 await ctx.close();
 
 // ----------------------------------------------------------------- desktop

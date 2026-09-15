@@ -441,9 +441,10 @@ depend on a conversation summary. Branch `karma-redesign`, built on `bb0a9e8`.*
 | 2 | `db09b42` | On send, the desktop well grows to the KPI grid's top; real stages; reduced motion painted |
 | 3 | `e638b86` | The three endings on desktop (ready / nothing / failed), Review → existing DecisionDialog, Retry; carries two fixes below |
 | — | `c32e7bd` | This Progress section |
-| 4-B | the commit that adds this row | The well sends, DexChat shows: the hand-off and its guard, endings as transcript messages, the split late-ending toast, `verify-dex.mjs` rewritten with `npm run verify:dex`, five stale DexSheet comments corrected |
+| 4-B | `b6965fd` | The well sends, DexChat shows: the hand-off and its guard, endings as transcript messages, the split late-ending toast, `verify-dex.mjs` rewritten with `npm run verify:dex`, five stale DexSheet comments corrected; carries the DexChat stuck-sheet fix |
+| 4-A | the commit that adds this row | The FAB opens Ask directly: KM-54's picker removed from DexFab and Layout, its reasoning rewritten as the ASK-33 note, verify-nav's Dex section rewritten against DexChat; the end-of-Phase-4 build, full audit and route comparison |
 
-Phase 4-A is **not started**. Nothing is pushed.
+Phase 5 is **not started**. Nothing is pushed.
 
 ### The two fixes carried by `e638b86` (Phase 3)
 
@@ -515,6 +516,12 @@ for the next capture became invisible. Fix: chips render whenever
    but sits over the score row and the notification bell until it is
    dismissed. Whether that is acceptable, or the toast belongs elsewhere on a
    phone, is a design call — ask.
+10. **The dock's placeholder contradicts the one-door rule** (seen after 4-A):
+    on the Ask sheet the dock's text field reads "Ask Dex, or state a
+    decision…", but a decision stated there goes to POST /ask and creates
+    nothing — Decide is the Desk's well now. FloatingDock is outside ASK-33's
+    edits, so it was not changed. A copy decision: a placeholder per channel, or
+    plain "Ask Dex…".
 
 Resolved and therefore NOT on the list: the [+] overlapping the KPI strip on
 the phone (fixed in Phase 1 by the inline swap).
@@ -534,16 +541,25 @@ the phone (fixed in Phase 1 by the inline swap).
   DeskDexWell.jsx) were corrected in 4-B.
 - **4-B ADDITIVE — built; see "Phase 4-B as built" below.** The two-door picker
   is still there, so nothing was taken away. Commit.
-- **4-A DESTRUCTIVE second.** Remove the KM-54 picker from DexFab (PICKS, the
-  picker branch, and its Escape handler — which lives in DexFab.jsx, not in
-  Layout) and `dexPicker` from Layout; the FAB opens Dex in **ask** directly.
-  Channels stay. Rewrite (not delete) the KM-54 comments as the ASK-33 note
-  (decide capture on the phone now requires /inbox — accepted knowingly). There
-  are no chips to move: DexChat has no chip list (the decision-shaped chips are
-  in the dead DexSheet). Keep the `voice_capture` permission check exactly as
-  is. Rewrite `scripts/verify-nav.mjs`'s Dex section (~239-267) against DexChat,
-  leaving its inherited All Apps failures alone. Then the production build, the
-  full audit and the route-by-route comparison. Commit.
+- **4-A DESTRUCTIVE — built.** DexFab lost PICKS, the picker branch, its scrim
+  and the MW-04 Escape handler that existed only to dismiss the picker (it lived
+  in DexFab.jsx, not Layout). Layout lost `dexPicker` and `onPick`; closed, the
+  FAB sets the channel to "ask" and opens the sheet in one tap. Channels
+  untouched; the `voice_capture` check unchanged. KM-54's comments were
+  rewritten, not deleted: DexFab.jsx carries the ASK-33 note (the founder's
+  two-door instruction and its reasoning, why the doors collapsed, and the
+  consequence accepted knowingly — capturing a decision on the phone requires
+  /inbox); Layout.js's two KM-54 notes and DexChat's header note point to it.
+  No chips to move (DexChat has no chip list). `scripts/verify-nav.mjs`'s Dex
+  section was rewritten against DexChat; its inherited All Apps failures were
+  left alone, so `npm run verify:nav` still stops at line 203 before reaching
+  that section, which is therefore also run on its own from a scratch harness.
+  **Test ids removed: `dex-pick-ask`, `dex-pick-decide`** — the picker's own
+  circles. The ticket both says "delete the PICKS array and the picker branch"
+  and "do not remove an existing data-testid"; the explicit deletion was
+  followed, and nothing else was removed. DexChat's empty-transcript Decide copy
+  ("Say or type the decision.") is now unreachable, since a Decide sheet always
+  opens with an adopted capture — left as is.
 - **HARD STOP:** if at any point the phone loses Dex — the FAB no longer opens
   Ask, or the well no longer reaches a sheet that shows Decide outcomes, on
   390×844 or 360×640 — stop, do not commit, and report.
@@ -622,10 +638,15 @@ them:
 - `frontend/scripts/verify-empty.mjs:148` — counts `[data-testid="dex-sheet"]`.
 - `frontend/scripts/_review-shots.mjs:75` — `waitForSelector('[data-testid="dex-sheet"]')`
   after tapping the FAB.
-- `frontend/scripts/verify-nav.mjs` ~239-267, the Dex section — to be rewritten
-  in 4-A. Its All Apps failures are inherited and stay: "Send Daily Digest is not
-  adjacent to Sign out" and "Sign out is last in the utility strip" fail, then the
-  run crashes at line 203 waiting for `allapps-tile-coach`, before the Dex section.
+- `frontend/scripts/verify-nav.mjs`, the Dex section — rewritten in 4-A against
+  DexChat. The rest of its failures are inherited and stay: "dock is 64px tall"
+  (it is 72px), "backdrop is blurred" (none), "tiles are >= 88x88" (77x100),
+  "Send Daily Digest is not adjacent to Sign out" and "Sign out is last in the
+  utility strip" fail, then the run crashes at line 203 waiting for
+  `allapps-tile-coach`, before the Dex section. None of ASK-33's commits touch
+  FloatingDock.jsx or AllAppsPanel.jsx, and its only index.css change is the
+  `.kr-dex-grow` / `.kr-dex-fade` rules. (The 4-B-era note listed only the last
+  two failures: that run's output had been cut to its final 25 lines.)
 - `frontend/scripts/verify-dex.mjs` was the fourth: rewritten in 4-B against
   DexChat and the Desk well, landing together with the new `npm run verify:dex`.
 
@@ -659,6 +680,15 @@ them:
 - Desktop, against the baseline regenerated on clean code: **6 diffs**, all
   /inbox — lg-1024 14,924 px (1.475%), xl-1280 16,823 px (1.183%) — identical
   in Phases 1–3 (the audit captures the resting state).
+- **End of Phase 4 (4-A), the one full run:** mobile **307 failing + 34
+  warnings across 24 routes — identical to the clean run rule by rule and route
+  by route**; nothing worse, nothing better. Console errors: the same four
+  `out.map is not a function` ErrorBoundary reports (390, 360) as the clean run.
+  The scoped `--only inbox` run after 4-B was 40 + 2, unchanged. Desktop: **8
+  diffs** — the six /inbox captures above plus `/brief` at lg and xl with
+  identical pixel counts (`/brief` redirects to `/inbox?scope=morning`).
+  Regenerating the desktop baseline now that Phase 4 is done is recommended —
+  with the founder's go.
 
 ### Things the diff will not tell you
 

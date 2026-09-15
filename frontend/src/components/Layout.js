@@ -299,11 +299,12 @@ export default function Layout({ children }) {
   }, [qc]);
 
   const draftSinkRef = useRef(null);
-  /* KM-54 — which door Dex was opened by: "ask" or "decide". null means the
-     picker has not been used, and the FAB shows the two doors instead of
-     opening anything. */
+  /* KM-54 — which door Dex was opened by: "ask" or "decide"; null while it is
+     closed. ASK-33 Phase 4 — there is no picker any more: the FAB opens "ask",
+     and "decide" is set only when the Desk's Dex well hands a decision to the
+     sheet (handoffRef, below). DexFab.jsx records why the doors collapsed and
+     what that trade costs. */
   const [dexChannel, setDexChannel] = useState(null);
-  const [dexPicker, setDexPicker] = useState(false);
   const dex = useDexCapture({
     watch: true,
     onRecordingChange: (on, secs) => setDexRecording({ on, secs }),
@@ -837,20 +838,18 @@ export default function Layout({ children }) {
           type into and attach to, so there is something worth opening. Voice
           still starts one tap in, from the mic inside it. */}
       <DexFab
-        /* Closed, the FAB no longer opens Dex — it asks WHICH Dex. Open, it is
-           the composer's send/mic/stop exactly as before. */
-        onOpen={() => (dexOpen ? chat.submit() : setDexPicker((v) => !v))}
+        /* ASK-33 Phase 4 — closed, the FAB opens Dex in ASK: one tap, no
+           picker, no scrim (KM-54's two doors collapsed; see DexFab.jsx). Open,
+           it is the composer's send/mic/stop exactly as before. */
+        onOpen={() => {
+          if (dexOpen) { chat.submit(); return; }
+          setDexChannel("ask");
+          setDexOpen(true);
+        }}
         recording={dex.recording}
         seconds={dex.recordSecs}
         onStop={() => dex.stopRecording()}
         intent={dexOpen ? chat.fabIntent : "sparkle"}
-        picker={dexPicker && !dexOpen}
-        onPick={(kind) => {
-          setDexPicker(false);
-          if (!kind) return;              // tapped the scrim
-          setDexChannel(kind);
-          setDexOpen(true);
-        }}
       />
       <AllAppsPanel
         open={allAppsOpen}
@@ -873,9 +872,9 @@ export default function Layout({ children }) {
           message inside it rather than a window of its own. (The poll that
           caused the re-open is separately fenced — see the dismiss token in
           useDexCapture.) */}
-      {/* KM-54 — closing clears the channel, so the next tap on the FAB asks
-          which Dex you want rather than silently reusing the last answer. A
-          door you chose two hours ago is not a door you chose. */}
+      {/* KM-54 — closing clears the channel, so the sheet never silently reuses
+          a door opened earlier. ASK-33 Phase 4: the next tap on the FAB opens
+          Ask; Decide is reached from the Desk's Dex well. */}
       <DexChat
         open={dexOpen}
         onClose={() => { setDexOpen(false); setDexChannel(null); }}

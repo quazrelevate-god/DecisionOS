@@ -288,8 +288,10 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
               {/* KM-54 — the header states WHICH Dex. The two doors have
                   different consequences (one answers, one creates a decision
                   and its tasks), so the surface has to keep saying which one
-                  you are in — the choice was made on the previous screen and
-                  is otherwise invisible by the time you start typing. */}
+                  you are in. ASK-33 Phase 4: the door is no longer picked on a
+                  screen before this one but by where you came from — the FAB
+                  opens Ask, the Desk's Dex well opens Decide — and it is just
+                  as invisible once you start typing. */}
               <span className="flex items-center gap-2 text-sm font-semibold text-white drop-shadow">
                 <Sparkle size={14} weight="fill" className="text-[hsl(var(--kr-gold))]" /> Dex
                 {channel && (

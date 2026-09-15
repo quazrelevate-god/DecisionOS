@@ -9,8 +9,7 @@
 // mark. The name is carried by aria-label="Dex" so it is announced and learned
 // without spending a visible label on it.
 import * as React from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { Sparkle, Stop, Microphone, PaperPlaneRight, Keyboard, ChatCircleDots, Scales } from "@phosphor-icons/react";
+import { Sparkle, Stop, Microphone, PaperPlaneRight, Keyboard } from "@phosphor-icons/react";
 import { useAuth } from "@/context/AuthContext";
 import { hasPerm } from "@/lib/perms";
 import { cn } from "@/lib/utils";
@@ -33,120 +32,43 @@ import { cn } from "@/lib/utils";
      recording      stop     — with the running seconds
    `intent` is computed once in useDexConversation, so the bar, the FAB and the
    transcript can never disagree about which mode they are in. */
-/* KM-54 — the two doors. `dictate` is the ask side (POST /transcribe or /ask,
-   nothing persisted); `capture` is the decision side (POST /voice-notes or
-   /voice-notes/text, which produces a decision, its tasks and an inbox item).
-   Order is bottom-up, so Ask sits nearest the thumb. */
-const PICKS = [
-  { kind: "ask", icon: ChatCircleDots, label: "Ask", aria: "Ask Dex a question" },
-  { kind: "decide", icon: Scales, label: "Decide", aria: "Record a decision" },
-];
+/* ASK-33 Phase 4 — ONE DOOR: the FAB opens Dex in ASK.
 
-export function DexFab({ onOpen, recording = false, seconds = 0, onStop, intent = "sparkle", picker = false, onPick }) {
+   KM-54 gave this button two doors, on the founder's instruction: "I want two
+   separate buttons for two separate functionalities of Dex. When I click the
+   Dex icon it should pop up two more small circular icons — one for asking and
+   another for decision making — each routing to their own respective
+   functionality." The reasoning behind that was right, and still is. Typing
+   into Dex used to mean one thing (a question — POST /ask, read-only) while
+   speaking meant another (a capture — POST /voice-notes, which creates a
+   decision and its tasks): same field, same button, two consequences, and
+   nothing on screen said which you were about to get. Picking the door first
+   made the consequence visible BEFORE the sentence was written, the only moment
+   it could still be changed.
+
+   ASK-33 keeps that separation and gives it a place instead of a picker. The
+   doors collapsed because Decide now has a permanent home: Decide lives in the
+   Dex well on the Desk (/inbox), at every width; Ask lives in the Dex icon —
+   /brain on desktop, this FAB on the phone. You no longer choose a door; you
+   are standing in one. The channels are untouched (useDexCapture's dictate /
+   capture, useDexConversation's ask / decide), and the sheet still says which
+   Dex it is (DexChat's header).
+
+   THE CONSEQUENCE, ACCEPTED KNOWINGLY: capturing a decision on the phone now
+   requires being on /inbox. The founder took that trade on purpose (ASK-33,
+   2026-09-15) — one rule for both surfaces rather than a second door on every
+   screen. Weigh it before bringing the picker back. (The picker's Escape
+   handler, MW-04, went with it: there is no picker left to dismiss.) */
+export function DexFab({ onOpen, recording = false, seconds = 0, onStop, intent = "sparkle" }) {
   // Set when pointerdown already stopped the recording, so the click that
   // follows it is swallowed instead of being read as "start a new one".
   const stoppedRef = React.useRef(false);
   const { user } = useAuth();
-  // MW-04 fix: Escape dismisses the picker. Before this, tapping the FAB
-  // opened the two-door picker but Escape did nothing -- the full-screen
-  // scrim kept blocking the page underneath, and keyboard users had to
-  // hunt for the transparent close button to get out. onPick(null) is
-  // the same tear-down the outside-tap uses, so keyboard and pointer
-  // dismissal share one code path. Listener attaches only while the
-  // picker is open, so idle FAB does not pay for it.
-  React.useEffect(() => {
-    if (!picker) return undefined;
-    const onKey = (e) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onPick?.(null);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [picker, onPick]);
   // Same check DexCaptureBar makes — hidden entirely, not disabled (§8).
   const canCapture = user?.role === "owner" || hasPerm(user, "voice_capture");
   if (!canCapture) return null;
 
   return (
-    <>
-      {/* KM-54 — TWO DOORS, NOT ONE GUESS.
-          Founder: "I want two separate buttons for two separate
-          functionalities of Dex. When I click the Dex icon it should pop up
-          two more small circular icons — one for asking and another for
-          decision making — each routing to their own respective
-          functionality."
-
-          This is the right call and it is worth saying why: typing into Dex
-          used to mean one thing (a question, POST /ask, read-only) while
-          speaking meant another (a capture, POST /voice-notes, which creates a
-          decision and tasks). Same field, same button, two different
-          consequences, and nothing on screen said which you were about to get.
-          Picking the door first makes the consequence visible BEFORE the
-          sentence is written, which is the only moment it can still be
-          changed. */}
-      <AnimatePresence>
-        {picker && !recording && (
-          <>
-            {/* A tap anywhere else puts the doors away. Transparent and below
-                them, above everything else. */}
-            <motion.button
-              type="button"
-              aria-label="Close"
-              tabIndex={-1}
-              onClick={() => onPick?.(null)}
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              data-mobile-chrome=""
-              className="lg:hidden fixed inset-0 z-[9999] cursor-default"
-            />
-            {PICKS.map((p, i) => (
-              <motion.button
-                key={p.kind}
-                type="button"
-                data-testid={`dex-pick-${p.kind}`}
-                data-mobile-chrome=""
-                aria-label={p.aria}
-                onClick={() => onPick?.(p.kind)}
-                initial={{ opacity: 0, scale: 0.5, y: 18 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.5, y: 12 }}
-                transition={{ type: "spring", stiffness: 420, damping: 28, delay: i * 0.05 }}
-                /* Stacked straight up the FAB's own axis so the three read as
-                   one column rather than a scatter.
-
-                   The offsets are arithmetic, not taste, and the first attempt
-                   was wrong by 22px — measured, the Ask circle sat ON the FAB.
-                   The FAB is bottom:1rem and 4rem tall, so its top edge is 5rem
-                   up; a 3.5rem circle clearing it by the same 12px the FAB
-                   keeps from the dock must start at 5rem + 0.75rem = 5.75rem,
-                   and each further one adds its own height plus that gap
-                   (3.5 + 0.75 = 4.25rem). */
-                style={{ bottom: `calc(${5.75 + i * 4.25}rem + env(safe-area-inset-bottom, 0px))` }}
-                className={cn(
-                  "lg:hidden fixed app-fab-right z-[10000] grid h-14 w-14 place-items-center",
-                  "rounded-pill bg-kr-ink text-white ring-1 ring-[hsl(40_30%_92%/.30)]",
-                  "shadow-[0_8px_28px_rgba(0,0,0,.40),0_0_22px_-4px_hsl(40_35%_92%/.45)]",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  /* The FAB is 4rem and these are 3.5rem, so their right edges
-                     do not line up on their own — 0.25rem puts the centres on
-                     one line. */
-                  "mr-1"
-                )}
-              >
-                <p.icon size={24} weight="fill" aria-hidden="true" />
-                <span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute right-full mr-3 whitespace-nowrap rounded-pill bg-kr-ink/85 px-2.5 py-1 text-xs font-semibold text-white"
-                >
-                  {p.label}
-                </span>
-              </motion.button>
-            ))}
-          </>
-        )}
-      </AnimatePresence>
-
     <button
       type="button"
       data-testid="dex-fab"
@@ -240,7 +162,6 @@ export function DexFab({ onOpen, recording = false, seconds = 0, onStop, intent 
         <Sparkle size={28} weight="fill" aria-hidden="true" />
       )}
     </button>
-    </>
   );
 }
 

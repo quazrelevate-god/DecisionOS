@@ -160,5 +160,6 @@ async def approve_capture(cid: str, user: dict = Depends(require_perm("approvals
         "reviewed_at": now_iso(), "result_ref": result,
     }})
     if d.get("wa_from"):
-        await send_wa_reply(d["wa_from"], "✅ Approved and actioned in DecisionOS.")
+        await send_wa_reply(d["wa_from"], "📨 Received — waiting for a decision in DecisionOS." if result.get("waiting_on")
+                            else "✅ Approved and actioned in DecisionOS.")
     return {"ok": True, "result": result}

@@ -116,6 +116,7 @@ const MENU_PREVIEW = [
 function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onInvite, members = [] }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const { user: me } = useAuth();
   const editing = !!initial;
   const startRole = defaultRole && roleOptions.some((r) => r.key === defaultRole) ? defaultRole : roleOptions[0]?.key || "";
   const blankForm = () => ({
@@ -280,9 +281,17 @@ function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onI
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" data-testid="permission-list">
                   {PERMISSIONS.map((p) => {
                     const on = form.permissions.includes(p.key);
+                    // RBAC P0 (2026-09-15) — same rule as the server: someone who isn't
+                    // an owner gives only access they hold, the person already has, or
+                    // their role's defaults (not to themselves).
+                    const selfEdit = editing && initial?.id === me?.id;
+                    const locked = me?.role !== "owner" && !on && !userPerms(me).includes(p.key)
+                      && !(initial?.permissions || []).includes(p.key)
+                      && (selfEdit || !defaultPermsForRole(form.role).includes(p.key));
                     return (
-                      <button key={p.key} type="button" data-testid={`perm-${p.key}`} aria-pressed={on} onClick={() => togglePerm(p.key)}
-                        className={`flex min-h-11 items-center justify-between gap-2 rounded-2xl px-3.5 py-2 text-left text-[13px] font-medium ring-1 ring-inset transition-colors ${on ? "bg-neutral-900 text-white ring-transparent" : "bg-white/70 text-slate-700 ring-slate-900/[0.06] hover:bg-white"}`}>
+                      <button key={p.key} type="button" data-testid={`perm-${p.key}`} aria-pressed={on} disabled={locked}
+                        title={locked ? "Only an owner can give access you don't have" : undefined} onClick={() => togglePerm(p.key)}
+                        className={`flex min-h-11 items-center justify-between gap-2 rounded-2xl px-3.5 py-2 text-left text-[13px] font-medium ring-1 ring-inset transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${on ? "bg-neutral-900 text-white ring-transparent" : "bg-white/70 text-slate-700 ring-slate-900/[0.06] hover:bg-white"}`}>
                         <span>{p.label}</span>
                         <span aria-hidden="true" className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${on ? "bg-white text-neutral-900" : "ring-1 ring-inset ring-slate-900/20"}`}>
                           {on && <Check size={11} weight="bold" />}

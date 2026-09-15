@@ -145,6 +145,14 @@ async def grant_temp_perm(uid: str, inp: TempGrantInput,
                                       {"_id": 0, "id": 1, "name": 1})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    # RBAC P0 (2026-09-15): Manage team could grant itself anything. Someone who
+    # isn't an owner may not grant to themselves, nor a permission they lack.
+    if user.get("role") != "owner":
+        from core import user_perms
+        if uid == user["id"]:
+            raise HTTPException(status_code=403, detail="You can't give yourself access. Ask an owner.")
+        if inp.perm not in user_perms(user):
+            raise HTTPException(status_code=403, detail=f"You can only give access you have yourself. Ask an owner for: {inp.perm}.")
     from services.auth.membership import find_membership, update_membership
     m = await find_membership(db, uid, tid)
     if not m:

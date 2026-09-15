@@ -232,6 +232,54 @@ def test_nobody_picked_the_manager_approves_else_the_owner(with_test_db):
     assert with_test_db(scenario) is True
 
 
+def test_files_and_checklist_follow_the_task_rules(with_test_db):
+    """RBAC P0 (2026-09-15): adding a file and ticking the checklist are held to
+    the people who may work the task; the checklist closes it only for someone
+    who may finish it, and only with its proof."""
+    from models.tasks import ExecPlanInput, ExecStep
+
+    async def fake_store(tenant_id, user_id, file, kind, task_id=None):
+        return {"id": f"f-{user_id}", "kind": kind, "by": user_id, "filename": "receipt.jpg"}
+
+    def fake_public(rec):
+        return {**rec, "url": f"/files/{rec['id']}"}
+
+    stubs = {**STUBS, "services.files._store_file": fake_store, "services.files._file_public": fake_public}
+    all_done = ExecPlanInput(steps=[ExecStep(text="Count", done=True), ExecStep(text="Sign", done=True)], status="accepted")
+
+    async def scenario(db):
+        await _seed(db)
+        # Another operations member who is not on the task.
+        await db.users.insert_one({"id": "u-ops2", "tenant_id": T, "role": "operations", "name": "Karthik (operations)"})
+        ops2 = {"id": "u-ops2", "tenant_id": T, "role": "operations", "name": "Karthik (operations)"}
+        with e2e_env(db, stubs=stubs, keep=KEEP):
+            t = await _create(OWNER, title="Stock count in godown 2", assignee_id="u-ops", evidence_required=True)
+
+            # Files: someone not on it is refused; the doer adds one.
+            await _refused(tasks.upload_task_attachment(t["id"], file=None, kind="photo", background=None, user=PROD))
+            await _refused(tasks.upload_task_attachment(t["id"], file=None, kind="photo", background=None, user=ops2))
+
+            # Checklist: a same-department colleague is refused.
+            await _refused(tasks.save_execution_plan(t["id"], all_done, user=ops2))
+            # The doer ticks everything without proof: stays in progress at 100%.
+            await tasks.save_execution_plan(t["id"], all_done, user=OPS)
+            assert await _status(db, t["id"]) == ("in_progress", None, 100)
+            # With proof, ticking everything completes it.
+            await tasks.upload_task_attachment(t["id"], file=None, kind="photo", background=None, user=OPS)
+            assert len((await db.tasks.find_one({"id": t["id"]}))["attachments"]) == 1
+            await tasks.save_execution_plan(t["id"], all_done, user=OPS)
+            assert (await _status(db, t["id"]))[0] == "done"
+
+            # A helper may tick steps but not close the task.
+            t2 = await _create(OWNER, title="Pack the Kapoor order", assignee_id="u-ops", co_assignee_ids=["u-prod"])
+            await tasks.save_execution_plan(t2["id"], all_done, user=PROD)
+            assert await _status(db, t2["id"]) == ("in_progress", None, 100)
+            await tasks.save_execution_plan(t2["id"], all_done, user=OPS)
+            assert (await _status(db, t2["id"]))[0] == "done"
+            return True
+    assert with_test_db(scenario) is True
+
+
 def test_proof_stays_once_the_work_is_completed(with_test_db):
     """Yokesh 2026-09-15: proof can be removed while the work is open, never once
     it is sent for sign-off or done — not even by the owner. Reopening frees it;

@@ -279,6 +279,10 @@ async def update_role_permissions(key: str, inp: RolePermissionsInput,
             status_code=400,
             detail="The Owner role's permissions are managed via owner-exclusions, not per-role.",
         )
+    # RBAC P0 (2026-09-15): what a role can do reaches everyone holding it — the
+    # editor's own role included — so only an owner changes it.
+    if user.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Only an owner can change what a role can do.")
     t = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "roles": 1})
     roles = (t or {}).get("roles") or []
     if not any(r.get("key") == key for r in roles):

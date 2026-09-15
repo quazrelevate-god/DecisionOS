@@ -261,6 +261,8 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
             raise HTTPException(status_code=403, detail="Only an owner can create another owner")
     elif inp.role not in role_keys:
         raise HTTPException(status_code=400, detail="Invalid role")
+    else:
+        await _refuse_ungrantable(user, clean_perms(inp.permissions), inp.role)
     # FIX-005-A (S3-02): enforce the plan's seat cap BEFORE creating
     # the user. Raises 402 with a friendly upgrade prompt when full.
     # Owner-role invitees still count against the cap — a workspace
@@ -357,6 +359,28 @@ async def regenerate_invite(user_id: str, user: dict = Depends(require_perm("tea
             "phone_masked": _mask_phone(target.get("phone", ""))}
 
 
+async def _refuse_ungrantable(user: dict, perms: list, role: Optional[str], target: Optional[dict] = None) -> None:
+    """RBAC P0 (2026-09-15) — Manage team could raise access, its own included.
+    Someone who isn't an owner may give only what they hold themselves, what the
+    person already has, or (for someone else) the defaults of that person's role,
+    which the owner set."""
+    if user.get("role") == "owner":
+        return
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "roles": 1})
+    role_map = {r["key"]: list(r["permissions"]) for r in ((tenant or {}).get("roles") or [])
+                if r.get("key") and isinstance(r.get("permissions"), list) and r.get("permissions")}
+    allowed = set(user_perms(user))
+    self_edit = bool(target) and target.get("id") == user["id"]
+    if target:
+        allowed |= set(user_perms({**target, "_role_perms_map": role_map}))
+    if role and not self_edit:
+        allowed |= set(user_perms({"role": role, "permissions": [], "_role_perms_map": role_map}))
+    extra = sorted(set(perms) - allowed)
+    if extra:
+        raise HTTPException(status_code=403, detail=(
+            f"You can only give access you have yourself. Ask an owner for: {', '.join(extra)}."))
+
+
 @router.patch("/users/{user_id}")
 async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(require_perm("team_manage"))):
     target = await db.users.find_one({"id": user_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
@@ -366,6 +390,12 @@ async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(r
     # Only an owner may change another owner's access (e.g. to demote them).
     if target["role"] == "owner" and not acting_is_owner:
         raise HTTPException(status_code=403, detail="Only an owner can change another owner's access")
+    if not acting_is_owner:
+        if user_id == user["id"] and inp.role is not None and inp.role != target["role"]:
+            raise HTTPException(status_code=403, detail="You can't change your own role. Ask an owner.")
+        if inp.permissions is not None and inp.role != "owner":
+            await _refuse_ungrantable(user, clean_perms(inp.permissions),
+                                      inp.role if inp.role is not None else target["role"], target)
     updates: dict = {}
     new_role = target["role"]
     if inp.role is not None and inp.role != target["role"]:

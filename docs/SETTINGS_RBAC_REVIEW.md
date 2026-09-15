@@ -36,7 +36,7 @@ Owners and people with **Manage team** see all tabs. Everyone else sees only Pro
 | Account | Language, theme, profile, password | Self |
 
 **Findings**
-- [ ] **P0:** Someone with Manage team who isn't an owner sees the Money card, but saving it fails with a 403 (`tenant_settings.py:186`).
+- [x] **P0:** Someone with Manage team who isn't an owner sees the Money card, but saving it fails with a 403 (`tenant_settings.py:186`). *Fixed 2026-09-15: only owners see the card.*
 - [ ] **P1:** No AI consent section. The "AI is off" message links to `/settings#ai-consent`, which doesn't exist (`api.js:128`).
 - [ ] **P1:** "Approval rules" is free text that nothing enforces. Either enforce it or remove it.
 - [ ] **P2:** Currency is set in two places.
@@ -66,7 +66,7 @@ Owners and people with **Manage team** see all tabs. Everyone else sees only Pro
   - Add member always saves a personal list, which permanently overrides the role (`Team.js:123,175`, `permissions.py:58-61`) ✔.
   - Result: changing a role never reaches anyone added through the app.
   - Fix: a per-role permission editor, and people follow their role unless you deliberately override it.
-- [ ] **P0: Manage team can give itself any permission** ✔: its own list (`team.py:361,386`), temporary grants (`access.py:137`) and role permissions. In practice it's close to owner. Stop self-changes, or make those owner-only.
+- [x] **P0: Manage team can give itself any permission** ✔ — *fixed 2026-09-15: nobody but an owner changes their own role or access; a non-owner gives only access they hold, the person already has, or that person's role defaults (members, temporary grants); only an owner changes what a role can do. The Team dialog greys out access you can't give.* Was: its own list (`team.py:361,386`), temporary grants (`access.py:137`) and role permissions. In practice it's close to owner. Stop self-changes, or make those owner-only.
 - [ ] **P1:** An empty list means "use the role defaults", so a person can't be given no access at all.
 - [ ] **P1:** Contacts, CRM and complaints check the role *name* (owner or sales) instead of a permission (`contacts.py:45,70,137`, `complaints.py:31,59`, `crm.py:114`). A custom role with People access gets refused, even though the buttons show.
 - [ ] **P2:**
@@ -89,8 +89,8 @@ Owners and people with **Manage team** see all tabs. Everyone else sees only Pro
 | Remove proof | Uploader, asker or owner, and never once done | Yes |
 
 **Findings**
-- [ ] **P0: Anyone can attach proof to any task** ✔, even tasks they can't open. There's no access check (`tasks.py:1333`).
-- [ ] **P0: The checklist can close someone else's task without proof.** Anyone in the same role can save a checklist, which marks the task done at 100%. That skips the "who may finish" rule and the proof rule (`tasks.py:1032-1067`, `services/tasks.py:206`).
+- [x] **P0: Anyone can attach proof to any task** ✔ (*fixed 2026-09-15: only the people who may work the task add files*), even tasks they can't open. There's no access check (`tasks.py:1333`).
+- [x] **P0: The checklist can close someone else's task without proof.** *Fixed 2026-09-15: the checklist follows the task's rules; ticking every step completes it only for someone who may finish it, and only with its proof. Otherwise it stays in progress at 100%.* Anyone in the same role can save a checklist, which marks the task done at 100%. That skips the "who may finish" rule and the proof rule (`tasks.py:1032-1067`, `services/tasks.py:206`).
 - [x] **Approval with nobody picked** (fixed 2026-09-15): the creator's manager if they can approve, else the owner.
 - [ ] **P1:** Creators and doers with "Approve tasks" can approve their own task. Completing a "sign-off before done" task approves it at once when the doer can approve.
 - [ ] **P1:** The New Task Approver list, and anyone notified about unnamed approvals, only look at personal permission lists, not role permissions (`Tasks.js:127`, `notifications.py:23`) ✔. Less important now that every task names an approver.
@@ -102,7 +102,7 @@ Owners and people with **Manage team** see all tabs. Everyone else sees only Pro
 ## 6. Decision access (Decision Desk)
 
 - **Who decides:** owner, the named approver, or anyone with Approve decisions. Routing: the person who raised it if they can decide, else their manager, else the owner.
-- [ ] **P0: Approving a WhatsApp capture approves its decision** with only "Approve tasks". The named decider and Approve decisions are skipped (`captures.py:148` → `services/captures.py:270`) ✔.
+- [x] **P0: Approving a WhatsApp capture approves its decision** *(fixed 2026-09-15: it approves the decision only when the reviewer may decide it; otherwise the decision waits for the person it names, who is told, and WhatsApp replies "waiting for a decision")* with only "Approve tasks". The named decider and Approve decisions are skipped (`captures.py:148` → `services/captures.py:270`) ✔.
 - [ ] **P1:** The decisions list returns every decision's title to anyone, even decisions they can't open (`decisions.py:58`).
 - [ ] **P1:** Adding a task to a decision skips the participant check and the assign rules (`decisions.py:120`).
 - [ ] **P1:** Deciders are looked up from old user records: temporary grants and owner exclusions are ignored, so routing and the approve check can disagree.

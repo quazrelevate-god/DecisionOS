@@ -1054,8 +1054,15 @@ async def save_execution_plan(task_id: str, inp: ExecPlanInput, user: dict = Dep
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Not found")
-    if not _can_work_task(user, t):
-        raise HTTPException(status_code=403, detail="Only the assignee or owner can edit this plan")
+    # RBAC P0 (2026-09-15): the checklist follows the task's own rules (item 7).
+    # It used to let anyone in the task's department tick it, and ticking the
+    # last step closed the task without the right to finish it or its proof.
+    rights = task_edit_rights(user, t, await _team_ids(user), user_perms(user))
+    if not rights["work"]:
+        raise HTTPException(status_code=403, detail=(
+            "Only the people on this task, the person who asked for it, their manager or the owner can change its checklist."))
+    has_proof = any((a or {}).get("kind") != "reference" for a in (t.get("attachments") or []))
+    may_close = rights["finish"] and not (t.get("evidence_required") and not has_proof)
     if is_start_locked(t):
         raise HTTPException(status_code=403, detail="This task must be approved before you can plan it.")
     steps = [{"id": s.id or new_id(), "text": s.text.strip(), "done": bool(s.done)}
@@ -1074,7 +1081,9 @@ async def save_execution_plan(task_id: str, inp: ExecPlanInput, user: dict = Dep
         updates["progress"] = plan["progress"]
     # Keep the task board in sync: starting work moves a todo task into progress; finishing all steps can complete it.
     if plan["status"] == "accepted" and steps:
-        if plan["progress"] == 100 and t.get("status") not in ("done", "blocked") and not (
+        # Every step ticked completes the task only for someone who may finish
+        # it, and only with its proof; otherwise it stays in progress at 100%.
+        if plan["progress"] == 100 and may_close and t.get("status") not in ("done", "blocked") and not (
                 approval_stage(t) == "close" and t.get("approval_status") == "pending"):
             # ASK-28 TK-05: approval before closing turns this into a sign-off request.
             updates.update(completion_updates(t, _can_approve_task(user, t)))
@@ -1336,6 +1345,11 @@ async def upload_task_attachment(task_id: str, file: UploadFile = File(...), kin
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]})
     if not t:
         raise HTTPException(status_code=404, detail="Not found")
+    # RBAC P0 (2026-09-15): any member could attach "proof" to any task, even
+    # one they cannot open. Now the people who may work it (item 7).
+    if user.get("role") != "owner" and not task_edit_rights(user, t, await _team_ids(user), user_perms(user))["work"]:
+        raise HTTPException(status_code=403, detail=(
+            "Only the people on this task, the person who asked for it, their manager or the owner can add files to it."))
     kind = kind if kind in ("reference", "evidence", "photo", "voice") else "evidence"
     rec = await _store_file(user["tenant_id"], user["id"], file, kind, task_id=task_id)
     att = _file_public(rec)

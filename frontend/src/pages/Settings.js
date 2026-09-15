@@ -367,7 +367,9 @@ export default function Settings() {
                 owner actually touches; the category editor is a long
                 list they rarely re-order. Putting categories first
                 buried the two decisions that matter for approvals. */}
-            <MoneyAndApprovalsCard />
+            {/* RBAC P0 (2026-09-15): the server lets only an owner save this card,
+                so Manage team without owner saw it and hit "Could not save". */}
+            {user?.role === "owner" && <MoneyAndApprovalsCard />}
             <FinanceCategoriesEditor />
           </>
         )}

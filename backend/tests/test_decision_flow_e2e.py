@@ -269,6 +269,32 @@ def test_whatsapp_capture_approves_through_the_one_path(with_test_db):
     assert with_test_db(scenario) is True
 
 
+def test_capture_approver_who_cannot_decide_leaves_the_decision_waiting(with_test_db):
+    """RBAC P0 (2026-09-15): approving a WhatsApp capture needs only Approve tasks;
+    it no longer approves the decision for someone who may not decide it. The
+    decision waits for the person it names, who is told."""
+    async def scenario(db):
+        with e2e_env(db, stubs=STUBS, keep={*KEEP, "services.notifications.push_notification"}):
+            await _setup(db)
+            import services.captures as captures
+            import routers.decisions as decisions
+            STATE["extract"] = rich
+            sales = {**SALES, "permissions": ["inbox", "tasks", "approvals"]}
+            draft = {"id": "cd9", "tenant_id": T, "kind": "text", "text": "Buy 50 spindles", "wa_from": "+919800000000"}
+            res = await captures.execute_capture(draft, sales)
+            dec = await db.decisions.find_one({"id": res["id"]}, {"_id": 0})
+            assert dec["status"] in ("pending", "pending_approval") and dec["approver_id"] == "u-owner"
+            assert res["waiting_on"] == "u-owner"
+            assert await db.tasks.count_documents({"tenant_id": T, "decision_id": dec["id"]}) == 0, "nothing created yet"
+            assert await db.notifications.count_documents({"user_id": "u-owner", "entity_id": dec["id"]}) == 1
+            # The person it names decides; then the work is created.
+            await decisions.approve_decision(dec["id"], user=OWNER)
+            assert (await db.decisions.find_one({"id": dec["id"]}))["status"] == "approved"
+            assert await db.tasks.count_documents({"tenant_id": T, "decision_id": dec["id"]}) >= 1
+            return True
+    assert with_test_db(scenario) is True
+
+
 def test_dex_capture_needs_voice_capture(with_test_db):
     async def scenario(db):
         # Inside the harness: the operating-model read must hit the test database.

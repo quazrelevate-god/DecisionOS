@@ -7,7 +7,7 @@ import { timeAgo, fullTime } from "../lib/format";
 import { PageHeader, Chip, EmptyState, SkeletonCard, StickyHeader } from "../components/common";
 import { useAuth } from "../context/AuthContext";
 import { userPerms } from "../lib/perms";
-import { canAssignPerson, canAssignTeam, canSeeAllTasks } from "../lib/taskAccess";
+import { canAssignPerson, canAssignTeam, canSeeAllTasks, taskEditRights } from "../lib/taskAccess";
 import { opModel } from "../lib/operatingModel";
 import { toast } from "sonner";
 // WE-14 (2026-08-16): TaskBoard import retired -- the Board sub-tab
@@ -184,6 +184,11 @@ const isDueToday = (t) => {
 };
 
 function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel, noteOnly = false }) {
+  const { user } = useAuth();
+  // ASK-28 Phase 7 — Escalate goes to your reporting manager first, the owner
+  // only if you have none (the server decides; this names who it will be).
+  const managerId = members.find((m) => m.id === user?.id)?.reporting_manager_id;
+  const escalateTo = managerId && managerId !== user?.id ? members.find((m) => m.id === managerId) : null;
   const [text, setText] = useState("");
   const [action, setAction] = useState("note");
   const [toId, setToId] = useState("");
@@ -195,11 +200,13 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel, no
     if (action === "handoff" && !toId && !toRole) return toast.error("Pick a person or team to hand off to");
     setBusy(true);
     try {
-      await api.post(`/tasks/${taskId}/updates`, {
+      const { data } = await api.post(`/tasks/${taskId}/updates`, {
         text, step_id: stepId || null, action,
         to_id: toId || null, to_role: toId ? null : (toRole || null),
       });
-      toast.success(action === "note" ? "Update logged" : action === "escalate" ? "Escalated to owner" : "Handed off");
+      const sentTo = (data?.updates || []).slice(-1)[0]?.to_name;
+      toast.success(action === "note" ? "Update logged"
+        : action === "escalate" ? `Escalated to ${sentTo || escalateTo?.name || "your manager"}` : "Handed off");
       onDone();
     } catch (e) { toast.error(e.response?.data?.detail || "Could not post update"); }
     finally { setBusy(false); }
@@ -258,7 +265,11 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel, no
         </div>
       )}
       {action === "escalate" && (
-        <p className="px-1 text-sm text-slate-500">This will alert the owner and create a follow-up for them.</p>
+        <p className="px-1 text-sm text-slate-500" data-testid={`escalate-to-${taskId}`}>
+          {escalateTo
+            ? `This will alert your manager, ${escalateTo.name}, and create a follow-up for them.`
+            : "You have no reporting manager, so this will alert the owner and create a follow-up for them."}
+        </p>
       )}
       <div className="flex gap-2">
         <button type="button" onClick={submit} disabled={busy} data-testid={`update-submit-${taskId}`}
@@ -1560,16 +1571,18 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
   const onThisTask = user?.role === "owner" || t.assignee_id === user?.id
     || (t.co_assignee_ids || []).includes(user?.id)
     || (!!t.assignee_role && t.assignee_role === user?.role);
-  // ASK-28 TK-03 — the manager of someone on the task gets the same: they
-  // follow the work and can note on it; the people doing it drive it.
-  const managesThis = !!user?.id && [t.assignee_id, ...(t.co_assignee_ids || [])]
-    .some((id) => id && members.find((m) => m.id === id)?.reporting_manager_id === user.id);
   // ASK-28 TK-07 — and the colleague this task is waiting on: they answer with
   // a note, they don't drive the task.
   const waitedOnMe = !!user?.id && t.waiting_on?.user_id === user.id;
-  const noteOnly = !onThisTask && (t.created_by === user?.id || managesThis || waitedOnMe);
-  const canEditPeople = user?.role === "owner" || userPerms(user).includes("team_manage")
-    || t.created_by === user?.id || t.assignee_id === user?.id;
+  // ASK-28 item 7 (plan 6.7) — what this person may CHANGE, the server's rule
+  // (taskEditRights): the doer, helpers, the person who asked, the manager and
+  // the owner move the work; only the doer (not helpers), the asker, the
+  // manager and the owner finish, cancel or reopen it. Hand-off and escalate
+  // still belong to whoever is on the task (onThisTask); everyone else who can
+  // open it — See all tasks, the approver, a colleague waited on — leaves notes.
+  const rights = taskEditRights(user, t, members);
+  const noteOnly = !onThisTask;
+  const canEditPeople = rights.people;
   const onPeoplePatched = (data) => { applyPatched(data); onChange(); };
   // ASK-28 — progress comes from the checklist whenever the task has one.
   const planSteps = t.execution_plan?.steps || [];
@@ -1871,7 +1884,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
     );
   };
 
-  const reopenBlock = (sfx) => (isTerminal(t) && !awaitingApproval && !noteOnly ? (
+  const reopenBlock = (sfx) => (isTerminal(t) && !awaitingApproval && rights.finish ? (
     <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2" data-testid={`reopen-actions${sfx}-${t.id}`}>
       <button type="button" onClick={reopen} data-testid={`reopen${sfx}-${t.id}`}
         className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-slate-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
@@ -2040,7 +2053,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
           No transition utility: the track's children swap fills, and the
           selected segment also swaps against .kr-pressed's shadow, which is
           not interpolable against an outset pair. */}
-      {!terminal && !awaitingApproval && !noteOnly && (
+      {!terminal && !awaitingApproval && rights.work && (
         <div className="kr-pressed grid grid-cols-2 gap-1 rounded-pill p-1" role="group"
              aria-label="Task status" data-testid={`status-pills-m-${t.id}`}>
           {M_STATUS_PILLS.map((sp) => {
@@ -2073,7 +2086,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       )}
       {/* ASK-28 TK-07 — Waiting on, under the two stages. */}
       {!terminal && !awaitingApproval && (
-        <WaitingOn t={t} members={members} onPatched={onPeoplePatched} readOnly={noteOnly} />
+        <WaitingOn t={t} members={members} onPatched={onPeoplePatched} readOnly={!rights.work} />
       )}
 
       {/* ASK-27 — the Execution Guide is NOT rendered here any more. MW-16
@@ -2167,9 +2180,10 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
         control on the right. "Set % manually" is no longer behind a
         disclosure toggle — the bar beside it is the control. */}
     {!terminal && !awaitingApproval && (
-      noteOnly ? (
-        /* ASK-28 TK-01 — the person who asked sees where the work is, not
-           the controls that move it: those belong to whoever does it. */
+      !rights.work ? (
+        /* ASK-28 TK-01 / item 7 — someone following the task (See all tasks,
+           the approver, a colleague waited on) sees where the work is, not the
+           controls that move it. */
         <section data-testid={`task-status-${t.id}`}>
           <p className={DRAWER_LABEL}>Status</p>
           <p className="text-[15px] font-medium text-slate-800" data-testid={`requester-status-${t.id}`}>
@@ -2217,16 +2231,23 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
 
     {evidenceNotice("")}
 
-    {!isTerminal(t) && !awaitingApproval && !signoffPending && !noteOnly && (
+    {!isTerminal(t) && !awaitingApproval && !signoffPending && rights.work && (
       <div className="flex items-center gap-4">
         {/* FUP-49: don't disable -- always click-through, handler shows
             a clear toast if evidence is missing. Silent-disabled
-            buttons were the original bug. */}
-        <button onClick={complete} data-testid={`complete-${t.id}`}
-          title={t.evidence_required && !hasEvidence ? "Add a voice note or file first" : "Mark as complete"}
-          className={`flex h-14 shrink-0 items-center gap-2.5 rounded-pill px-7 text-base font-medium ${t.evidence_required && !hasEvidence ? `${GLASS_PILL} text-slate-500` : INK_PILL}`}>
-          <CheckCircle size={22} weight="fill" aria-hidden="true" /> Complete
-        </button>
+            buttons were the original bug. Item 7: a helper attaches and
+            moves the work, but the doer marks it done. */}
+        {rights.finish ? (
+          <button onClick={complete} data-testid={`complete-${t.id}`}
+            title={t.evidence_required && !hasEvidence ? "Add a voice note or file first" : "Mark as complete"}
+            className={`flex h-14 shrink-0 items-center gap-2.5 rounded-pill px-7 text-base font-medium ${t.evidence_required && !hasEvidence ? `${GLASS_PILL} text-slate-500` : INK_PILL}`}>
+            <CheckCircle size={22} weight="fill" aria-hidden="true" /> Complete
+          </button>
+        ) : (
+          <p className="max-w-[12rem] shrink-0 text-sm leading-snug text-slate-500" data-testid={`finish-hint-${t.id}`}>
+            {t.assignee_name || "The doer"} marks this done.
+          </p>
+        )}
 
         <span aria-hidden="true" className="h-8 w-px shrink-0 bg-slate-900/10" />
         <span className="text-[15px] text-slate-500">Attach:</span>
@@ -2288,17 +2309,17 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
         one control that records what happened inert on phones. Shared here,
         both triggers open the same visible form. */}
     <div className="space-y-6 px-4 pb-6 lg:px-7 lg:pb-8">
-      {!awaitingApproval && !noteOnly && (
+      {!awaitingApproval && onThisTask && (
         <ExecutionPlan t={t} onChange={onChange} onPatched={applyPatched} members={members} roleOptions={roleOptions} />
       )}
       {/* ASK-28 TK-01 — the person who asked for this task isn't on it: the
           status, plan and completion controls belong to whoever does it
           (the server refuses a plan from anyone else), so say what they CAN
           do here instead of showing controls. */}
-      {noteOnly && (
+      {!rights.work && (
         <p className="text-sm text-slate-500" data-testid={`requester-hint-${t.id}`}>
-          {t.created_by === user?.id
-            ? `You asked for this task, so ${t.assignee_name || "the team"} does the work. Leave a note below to follow up.`
+          {t.approver_id === user?.id
+            ? `You approve this task, so ${t.assignee_name || "the team"} does the work. Leave a note below to follow up.`
             : waitedOnMe
             ? `${t.assignee_name || "The team"} is waiting on you for this task. Leave a note below with what they need.`
             : `${t.assignee_name || "Your team"} is doing this task. Leave a note below to follow up.`}
@@ -2352,15 +2373,21 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
     {/* Mobile PWA (2026-09-14) — the phone's action bar. Sticky at the foot
         of the drawer's scroller, above the home indicator, so Complete is
         always one thumb away instead of mid-scroll above the plan. */}
-    {!isTerminal(t) && !awaitingApproval && !signoffPending && !noteOnly && (
+    {!isTerminal(t) && !awaitingApproval && !signoffPending && rights.work && (
       <div data-testid={`task-actions-m-${t.id}`}
         className="sticky bottom-0 z-10 border-t border-white/70 bg-[hsl(0_0%_93%/0.92)] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl lg:hidden">
         <div className="flex items-center gap-2">
-          <button type="button" onClick={complete} data-testid={`complete-m-${t.id}`}
-            title={t.evidence_required && !hasEvidence ? "Add proof first" : "Mark as complete"}
-            className={`flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-pill px-4 text-[15px] font-medium ${t.evidence_required && !hasEvidence ? `${GLASS_PILL} text-slate-500` : INK_PILL}`}>
-            <CheckCircle size={18} weight="fill" aria-hidden="true" /> Complete
-          </button>
+          {rights.finish ? (
+            <button type="button" onClick={complete} data-testid={`complete-m-${t.id}`}
+              title={t.evidence_required && !hasEvidence ? "Add proof first" : "Mark as complete"}
+              className={`flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-pill px-4 text-[15px] font-medium ${t.evidence_required && !hasEvidence ? `${GLASS_PILL} text-slate-500` : INK_PILL}`}>
+              <CheckCircle size={18} weight="fill" aria-hidden="true" /> Complete
+            </button>
+          ) : (
+            <p className="min-w-0 flex-1 text-[13px] leading-snug text-slate-500" data-testid={`finish-hint-m-${t.id}`}>
+              {t.assignee_name || "The doer"} marks this done.
+            </p>
+          )}
           <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
             data-testid={`photo-m-${t.id}`} aria-label="Attach a photo"
             className={`grid h-12 w-12 shrink-0 place-items-center rounded-full text-slate-700 disabled:opacity-40 ${GLASS_PILL}`}>
@@ -4113,9 +4140,14 @@ export default function MyWork() {
               onComplete={async () => {
                 setBulkBusy(true);
                 try {
-                  const targets = list.filter((tk) => selected.has(tk.id) && !isTerminal(tk));
+                  // ASK-28 item 7 — only the tasks this person may finish.
+                  const open = list.filter((tk) => selected.has(tk.id) && !isTerminal(tk));
+                  const targets = open.filter((tk) => taskEditRights(user, tk, members).finish);
+                  const skipped = open.length - targets.length;
                   await Promise.all(targets.map((tk) => api.patch(`/tasks/${tk.id}`, { status: "done" })));
-                  toast.success(`Completed ${targets.length} ${targets.length === 1 ? "task" : "tasks"}`);
+                  const msg = `Completed ${targets.length} ${targets.length === 1 ? "task" : "tasks"}`
+                    + (skipped ? ` · ${skipped} skipped: the doer marks ${skipped === 1 ? "it" : "them"} done` : "");
+                  (targets.length ? toast.success : toast.error)(msg);
                   clearSelection();
                   refresh();
                 } catch (e) {
@@ -4208,12 +4240,17 @@ export default function MyWork() {
                       const patch = bulkAssigneeId
                         ? { assignee_id: bulkAssigneeId, assignee_role: null }
                         : { assignee_id: null, assignee_role: bulkAssigneeRole };
-                      const ids = Array.from(selected);
+                      // ASK-28 item 7 — only the tasks this person may change people on.
+                      const chosen = list.filter((tk) => selected.has(tk.id));
+                      const ids = chosen.filter((tk) => taskEditRights(user, tk, members).people).map((tk) => tk.id);
+                      const skipped = selected.size - ids.length;
                       await Promise.all(ids.map((id) => api.patch(`/tasks/${id}`, patch)));
                       const label = bulkAssigneeId
                         ? (members.find((m) => m.id === bulkAssigneeId)?.name || "member")
                         : `${bulkAssigneeRole} team`;
-                      toast.success(`Reassigned ${ids.length} ${ids.length === 1 ? "task" : "tasks"} to ${label}`);
+                      const msg = `Reassigned ${ids.length} ${ids.length === 1 ? "task" : "tasks"} to ${label}`
+                        + (skipped ? ` · ${skipped} skipped: only the person who asked, the manager or the owner can` : "");
+                      (ids.length ? toast.success : toast.error)(msg);
                       clearSelection();
                       setBulkReassignOpen(false);
                       refresh();

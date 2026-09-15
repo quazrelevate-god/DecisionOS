@@ -188,10 +188,11 @@ with sync_playwright() as pw:
         p.reload()
         settle(p)
         hint, complete, labels = drawer("fake-team-1")
-        rec("manager-other-department-note-only", hint is not None and "is doing this task" in hint
-            and complete == 0 and labels == ["Log note"],
+        # Item 7 (plan 6.7, 2026-09-14): the manager runs a report's task — stage
+        # and Complete — while hand-off stays with the people on it.
+        rec("manager-other-department-runs-task", hint is None and complete == 1 and labels == ["Log note"],
             f"hint {hint!r}; Complete {complete}; actions {labels} (task made up: no report of hers works outside Finance)")
-        p.screenshot(path=str(OUT / "manager_note_only_drawer.png"))
+        p.screenshot(path=str(OUT / "manager_other_department_drawer.png"))
         p.keyboard.press("Escape")
         p.wait_for_timeout(500)
         state["fake"] = None

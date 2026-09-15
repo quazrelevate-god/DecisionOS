@@ -11,7 +11,7 @@ import os
 from datetime import datetime, timezone, timedelta
 
 from core import db, logger, new_id, now_iso, tenant_role_keys
-from services.notifications import push_notification, dispatch_owner_alert, _owner_ids
+from services.notifications import push_notification, dispatch_owner_alert, _owner_ids, _approver_ids
 from services.voice import pick_least_loaded_member
 
 
@@ -35,8 +35,12 @@ async def run_followup(tenant_id: str):
             logger.info(f"[rbac-27] auto-revoked {revoked} expired temp grant(s) in tenant {tenant_id[:8]}...")
     except Exception as e:
         logger.warning(f"[rbac-27] temp-grant sweep failed: {e}")
+    # ASK-28 Phase 7 (plan 7.1–7.3): every open stage counts — Waiting on and
+    # waiting for approval too — and the ladder and who hears at each step
+    # live in services/tasks (followup_level, stuck_on, escalation_manager_id).
+    from services.tasks import OPEN_STATUSES, followup_level
     tasks = await db.tasks.find(
-        {"tenant_id": tenant_id, "status": {"$in": ["todo", "in_progress"]}, "due_date": {"$ne": None, "$lt": now.isoformat()}},
+        {"tenant_id": tenant_id, "status": {"$in": list(OPEN_STATUSES)}, "due_date": {"$ne": None, "$lt": now.isoformat()}},
         {"_id": 0}
     ).to_list(500)
     owners = await _owner_ids(tenant_id)
@@ -48,21 +52,17 @@ async def run_followup(tenant_id: str):
         except Exception:
             continue
         days = (now - due).days
-        target = 1 if days < 1 else 2 if days < 2 else 3 if days < 3 else 4
+        target = followup_level(days)
         if target <= t.get("escalation_level", 0):
             continue
-        if t.get("assignee_id"):
-            # ASK-28 TK-06: the overdue reminder reaches helpers too, not only the lead.
-            recipients = [i for i in dict.fromkeys([t["assignee_id"], *(t.get("co_assignee_ids") or [])]) if i]
-        elif t.get("assignee_role"):
-            recipients = [u["id"] for u in await db.users.find({"tenant_id": tenant_id, "role": t["assignee_role"]}, {"_id": 0, "id": 1}).to_list(50)]
-        else:
-            recipients = owners
         msg = f"Task '{t['title']}' is overdue by {days} day(s)."
         if target in (1, 2):
-            await push_notification(tenant_id, recipients, target, msg, "task", t["id"])
+            for recipients, text in await _followup_reminders(tenant_id, t, owners, msg):
+                await push_notification(tenant_id, recipients, target, text, "task", t["id"])
         elif target == 3:
-            await push_notification(tenant_id, owners, 3, f"[Manager escalation] {msg}", "task", t["id"])
+            # The doer's reporting manager hears first; the owner only when nobody manages the doer.
+            managers = await _doer_manager_ids(tenant_id, t)
+            await push_notification(tenant_id, managers or owners, 3, f"[Manager escalation] {msg}", "task", t["id"])
         else:
             await push_notification(tenant_id, owners, 4, f"[OWNER ALERT] {msg}", "task", t["id"])
             await dispatch_owner_alert(tenant_id, msg)
@@ -71,6 +71,44 @@ async def run_followup(tenant_id: str):
         await run_finance_actions(tenant_id)
     except Exception as e:
         logger.warning(f"[finance-actions] tenant {tenant_id} failed: {e}")
+
+
+async def _followup_reminders(tenant_id: str, t: dict, owners: list, msg: str) -> list:
+    """Levels 1–2 (ASK-28 Phase 7, plan 7.2): who can move an overdue task, as
+    (recipients, text) pairs. Waiting for approval → the approver; otherwise
+    the doer and helpers (the team for an unpicked team task), plus the
+    colleague it is waiting on."""
+    from services.tasks import stuck_on
+    reason = stuck_on(t)
+    if reason == "approval":
+        approvers = [t["approver_id"]] if t.get("approver_id") else await _approver_ids(tenant_id)
+        return [(approvers, f"{msg} It is waiting for your approval.")]
+    if t.get("assignee_id"):
+        # ASK-28 TK-06: the overdue reminder reaches helpers too, not only the lead.
+        doers = [i for i in dict.fromkeys([t["assignee_id"], *(t.get("co_assignee_ids") or [])]) if i]
+    elif t.get("assignee_role"):
+        doers = [u["id"] for u in await db.users.find({"tenant_id": tenant_id, "role": t["assignee_role"]}, {"_id": 0, "id": 1}).to_list(50)]
+    else:
+        doers = owners
+    out = [(doers, msg)]
+    waited_id = (t.get("waiting_on") or {}).get("user_id") if reason == "waiting" else None
+    if waited_id and waited_id not in doers:
+        out.append(([waited_id], f"{msg} It is waiting on you."))
+    return out
+
+
+async def _doer_manager_ids(tenant_id: str, t: dict) -> list:
+    """Level 3: the doer's reporting manager, if they have one in the company."""
+    from services.tasks import escalation_manager_id
+    if not t.get("assignee_id"):
+        return []
+    doer = await db.users.find_one({"id": t["assignee_id"], "tenant_id": tenant_id},
+                                   {"_id": 0, "id": 1, "reporting_manager_id": 1})
+    mid = escalation_manager_id(doer)
+    if not mid:
+        return []
+    manager = await db.users.find_one({"id": mid, "tenant_id": tenant_id}, {"_id": 0, "id": 1})
+    return [manager["id"]] if manager else []
 
 
 FINANCE_CHASE_DAYS = int(os.environ.get("FINANCE_CHASE_DAYS", "7"))          # chase a receivable once 7+ days overdue

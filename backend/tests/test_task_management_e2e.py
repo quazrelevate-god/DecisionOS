@@ -8,6 +8,8 @@ with_test_db Mongo (dropped at teardown) and asserts what was stored:
   TK-05  approval before it's marked done: complete -> sign-off -> changes -> approve
   TK-03  My team: a manager sees and opens a report's task, and may only note
   4.3    a named approver must be able to approve
+  6.7    who may change a task (item 7)
+  7.x    stuck work: reminders, the manager step, the owner alert, Escalate, the Desk
 
 Notifications are kept REAL (written to the test database) so the sign-off
 request can be asserted. Single-process, like the Sprint 12 journeys:
@@ -436,6 +438,76 @@ def test_see_all_tasks_is_opt_in_and_finance_does_not_have_it(with_test_db):
 
 
 # ---------------------------------------------------------------------------
+# Item 7 (plan 6.7) — who may change a task
+# ---------------------------------------------------------------------------
+def test_who_may_change_a_task(with_test_db):
+    async def scenario(db):
+        await _seed(db)
+        await db.users.insert_one({**SALES2, "email": f"u-sales2@{T}.test", "created_at": now_iso()})
+        with e2e_env(db, stubs=STUBS, keep=KEEP):
+            # Priya (sales) asks Kiran (sales), with Amit (her report) helping; proof needed.
+            t = await _create(SALES, title="Pack the Kapoor samples", assignee_id="u-sales2", co_assignee_ids=["u-ops"])
+            tid = t["id"]
+            await db.tasks.update_one({"id": tid}, {"$set": {"evidence_required": True}})
+
+            # Someone not on it changes nothing — not even a value it already has.
+            detail = await _refused(tasks.update_task(tid, TaskUpdateInput(status="todo"), user=PROD))
+            assert "leave a note" in detail
+            assert await _status(db, tid) == ("todo", None, 0)
+
+            # The helper moves the work, but does not finish, cancel or re-plan the task.
+            await tasks.update_task(tid, TaskUpdateInput(status="in_progress", progress=40), user=OPS)
+            assert await _status(db, tid) == ("in_progress", None, 40)
+            assert "mark this task done" in await _refused(tasks.update_task(tid, TaskUpdateInput(status="done"), user=OPS))
+            assert "cancel" in await _refused(tasks.update_task(tid, TaskUpdateInput(status="cancelled"), user=OPS))
+            await _refused(tasks.update_task(tid, TaskUpdateInput(priority="high"), user=OPS))
+            await _refused(tasks.update_task(tid, TaskUpdateInput(co_assignee_ids=[]), user=OPS))
+            assert (await _status(db, tid))[0] == "in_progress"
+
+            # The doer may not switch proof off, re-prioritise or change people.
+            assert "proof" in await _refused(tasks.update_task(tid, TaskUpdateInput(evidence_required=False), user=SALES2))
+            await _refused(tasks.update_task(tid, TaskUpdateInput(priority="high"), user=SALES2))
+            await _refused(tasks.update_task(tid, TaskUpdateInput(co_assignee_ids=[]), user=SALES2))
+            await _refused(tasks.update_task(tid, TaskUpdateInput(status="done"), user=SALES2), status=400)  # proof first
+
+            # The person who asked switches proof off and raises the priority; the doer finishes.
+            await tasks.update_task(tid, TaskUpdateInput(evidence_required=False, priority="high"), user=SALES)
+            saved = await db.tasks.find_one({"id": tid}, {"_id": 0})
+            assert saved["evidence_required"] is False and saved["priority"] == "high"
+            await tasks.update_task(tid, TaskUpdateInput(status="done"), user=SALES2)
+            assert (await _status(db, tid))[0] == "done"
+            assert "reopen" in await _refused(tasks.update_task(tid, TaskUpdateInput(status="in_progress"), user=OPS))
+            await tasks.update_task(tid, TaskUpdateInput(status="in_progress"), user=SALES)
+            assert (await _status(db, tid))[0] == "in_progress"
+
+            # See all tasks: opens it and leaves a note, changes nothing.
+            seer = {**PROD, "permissions": BASE_PERMS + ["tasks_view_all"]}
+            assert (await tasks.get_task(tid, user=seer))["id"] == tid
+            await tasks.add_task_update(tid, TaskUpdateNoteInput(text="Customer called about this"), user=seer)
+            await _refused(tasks.update_task(tid, TaskUpdateInput(status="todo"), user=seer))
+
+            # Manage Team changes who is on it, but does not drive the work.
+            admin = {**PROD, "permissions": BASE_PERMS + ["team_manage"]}
+            await _refused(tasks.update_task(tid, TaskUpdateInput(progress=90), user=admin))
+            out = await tasks.update_task(tid, TaskUpdateInput(co_assignee_ids=["u-ops", "u-prod"]), user=admin)
+            assert set(out["co_assignee_ids"]) == {"u-ops", "u-prod"}
+
+            # The named approver follows with notes (and the approval buttons), not edits.
+            appr = await _create(OWNER, title="Dispatch the sample lot", assignee_id="u-ops",
+                                 approval_required=True, approval_stage="close", approver_id="u-fin")
+            await tasks.add_task_update(appr["id"], TaskUpdateNoteInput(text="Send the photos first"), user=FIN)
+            await _refused(tasks.update_task(appr["id"], TaskUpdateInput(status="in_progress"), user=FIN))
+
+            # The doer's manager runs the task — moves and finishes it — but proof stays with the asker.
+            stock = await _create(OWNER, title="Count finished stock", assignee_id="u-ops")
+            assert "proof" in await _refused(tasks.update_task(stock["id"], TaskUpdateInput(evidence_required=True), user=SALES))
+            await tasks.update_task(stock["id"], TaskUpdateInput(status="done"), user=SALES)
+            assert (await _status(db, stock["id"]))[0] == "done"
+            return True
+    assert with_test_db(scenario) is True
+
+
+# ---------------------------------------------------------------------------
 # TK-03 — My team
 # ---------------------------------------------------------------------------
 def test_my_team_manager_sees_opens_and_notes_on_reports_work(with_test_db):
@@ -460,5 +532,85 @@ def test_my_team_manager_sees_opens_and_notes_on_reports_work(with_test_db):
             # Not their report: still refused.
             await _refused(tasks.get_task(other["id"], user=SALES))
             await _refused(tasks.task_activity(other["id"], user=SALES))
+            return True
+    assert with_test_db(scenario) is True
+
+
+# ---------------------------------------------------------------------------
+# Phase 7 (plan 7.1–7.3) — stuck work reaches the right person
+# ---------------------------------------------------------------------------
+def test_stuck_work_reaches_the_right_person(with_test_db):
+    async def scenario(db):
+        await _seed(db)
+        alerts = []
+
+        async def _zero(*a, **k):
+            return 0
+
+        async def _alert(tenant_id, msg):
+            alerts.append(msg)
+        stubs = {**STUBS, "services.finance_signals.db": db, "routers.desk.db": db,
+                 "routers.access.sweep_expired_temp_grants": _zero,
+                 "services.finance_signals.run_finance_actions": _zero,
+                 "services.finance_signals.dispatch_owner_alert": _alert}
+        with e2e_env(db, stubs=stubs, keep=KEEP):
+            from datetime import datetime, timedelta, timezone
+            import routers.desk as desk
+            import services.finance_signals as fs
+            now = datetime.now(timezone.utc)
+
+            # Amit (operations) reports to Priya (sales); Ravi (production) has no manager.
+            late = await _create(OWNER, title="Dye lot 7", assignee_id="u-ops", co_assignee_ids=["u-fin"])
+            waiting = await _create(OWNER, title="Quote for Kapoor", assignee_id="u-ops")
+            await tasks.update_task(waiting["id"], TaskUpdateInput(waiting_on={"user_id": "u-prod"}), user=OPS)
+            approval = await _create(OWNER, title="Buy the dye", assignee_id="u-ops",
+                                     approval_required=True, approval_stage="start", approver_id="u-fin")
+            manager_step = await _create(OWNER, title="Ship the samples", assignee_id="u-ops")
+            no_manager = await _create(OWNER, title="Fix loom 4", assignee_id="u-prod")
+            owner_step = await _create(OWNER, title="Collect the Kapoor payment", assignee_id="u-ops")
+            hours = {late["id"]: 1, waiting["id"]: 1, approval["id"]: 1,
+                     manager_step["id"]: 60, no_manager["id"]: 60, owner_step["id"]: 100}
+            for tid, h in hours.items():
+                await db.tasks.update_one({"id": tid}, {"$set": {
+                    "due_date": (now - timedelta(hours=h)).isoformat(), "escalation_level": 0}})
+            await db.notifications.delete_many({})
+            fs._followup_last_run.pop(T, None)
+            await fs.run_followup(T)
+
+            async def heard(tid):
+                return {n["user_id"] async for n in db.notifications.find({"entity_id": tid}, {"_id": 0, "user_id": 1})}
+
+            # Overdue: the people who can move it.
+            assert await heard(late["id"]) == {"u-ops", "u-fin"}
+            assert await heard(waiting["id"]) == {"u-ops", "u-prod"}, "the colleague it waits on hears too"
+            assert await heard(approval["id"]) == {"u-fin"}, "waiting for approval: the approver, not the locked doer"
+            # Two days: the doer's manager, not the owner — unless nobody manages the doer.
+            assert await heard(manager_step["id"]) == {"u-sales"}
+            assert await heard(no_manager["id"]) == {"u-owner"}
+            # Four days: the owner, with the owner alert.
+            assert await heard(owner_step["id"]) == {"u-owner"} and len(alerts) == 1
+            levels = {t["id"]: t["escalation_level"] async for t in db.tasks.find({"id": {"$in": list(hours)}}, {"_id": 0})}
+            assert levels == {late["id"]: 1, waiting["id"]: 1, approval["id"]: 1,
+                              manager_step["id"]: 3, no_manager["id"]: 3, owner_step["id"]: 4}, levels
+
+            # Escalate: Amit's goes to Priya (his manager); Priya has none, so hers goes to the owner.
+            await tasks.add_task_update(late["id"], TaskUpdateNoteInput(text="Dye supplier is not answering",
+                                                                        action="escalate"), user=OPS)
+            follow = await db.tasks.find_one({"parent_task_id": late["id"], "source": "escalation"}, {"_id": 0})
+            assert follow["assignee_id"] == "u-sales", follow
+            mine = await _create(SALES, title="Book the courier", assignee_id="u-sales")
+            await tasks.add_task_update(mine["id"], TaskUpdateNoteInput(text="Courier desk closed",
+                                                                        action="escalate"), user=SALES)
+            assert (await db.tasks.find_one({"parent_task_id": mine["id"]}, {"_id": 0}))["assignee_id"] == "u-owner"
+
+            # Desk Slipping for Priya: the escalation to her, and her report's work from the
+            # manager step (2+ days), not the task only an hour late.
+            cards = {c["id"]: c for c in await desk._cards_on_fire(T, SALES)}
+            assert cards[late["id"]]["kind"] == "task_escalation"
+            assert "Escalated by Amit" in cards[late["id"]]["context_line"]
+            assert cards[manager_step["id"]]["kind"] == "task_overdue"
+            assert "Reports to you" in cards[manager_step["id"]]["context_line"]
+            assert waiting["id"] not in cards and approval["id"] not in cards
+            assert no_manager["id"] not in cards, "not her report"
             return True
     assert with_test_db(scenario) is True

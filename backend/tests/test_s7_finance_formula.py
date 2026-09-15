@@ -113,8 +113,9 @@ def test_followup_escalation_ladder_and_idempotency(with_test_db):
         try:
             tid = "t-s7-11"
             now = datetime.now(timezone.utc)
-            # days = (now - due).days -> target 1/2/3/4 at <1 / <2 / <3 / else.
-            hours = {"d0": 1, "d1": 25, "d2": 49, "d3": 73}   # 0,1,2,3 days overdue
+            # days = (now - due).days -> target 1/2/3/4 at <1 / <2 / <4 / else
+            # (ASK-28 Phase 7: the manager step holds days 2-3; the owner at 4).
+            hours = {"d0": 1, "d1": 25, "d2": 49, "d3": 73, "d4": 97}   # 0,1,2,3,4 days overdue
             for k, h in hours.items():
                 await db.tasks.insert_one({
                     "id": k, "tenant_id": tid, "title": f"task {k}", "status": "todo",
@@ -134,8 +135,8 @@ def test_followup_escalation_ladder_and_idempotency(with_test_db):
             restore()
 
     levels, first_pushes, second_pushes = with_test_db(scenario)
-    assert levels == {"d0": 1, "d1": 2, "d2": 3, "d3": 4}, f"ladder wrong: {levels}"
-    assert first_pushes == 4, f"expected 4 escalations, got {first_pushes}"
+    assert levels == {"d0": 1, "d1": 2, "d2": 3, "d3": 3, "d4": 4}, f"ladder wrong: {levels}"
+    assert first_pushes == 5, f"expected 5 escalations, got {first_pushes}"
     assert second_pushes == first_pushes, "idempotency broken: re-escalated already-escalated tasks"
 
 

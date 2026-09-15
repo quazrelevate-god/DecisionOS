@@ -78,10 +78,13 @@ from services.tasks import (
     can_note_task,
     clean_co_assignees,
     completion_updates,
+    edit_refusal,
+    escalation_manager_id,
     is_start_locked,
     manages_task,
     reopen_updates,
     status_change_clears_waiting,
+    task_edit_rights,
     task_list_query,
     waiting_updates,
     _attach_reference_ids,
@@ -237,10 +240,17 @@ async def _resolve_task_handoff(user, t, task_id, action, text, step_text, inp):
     to_name = to_id = to_role = None
     notify_level, notify_prefix = 2, "[Handoff]"
     if action == "escalate":
-        owner = await db.users.find_one({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0})
-        if not owner:
-            raise HTTPException(status_code=400, detail="No owner to escalate to")
-        to_id, to_name, to_role = owner["id"], owner.get("name"), "owner"
+        # ASK-28 Phase 7 (plan 7.3): escalate to your reporting manager first;
+        # the owner only when you have none — the automatic reminders climb the
+        # same way (services/tasks.followup_level).
+        me = await db.users.find_one({"id": user["id"], "tenant_id": tenant_id}, {"_id": 0, "id": 1, "reporting_manager_id": 1})
+        mid = escalation_manager_id(me)
+        target = await db.users.find_one({"id": mid, "tenant_id": tenant_id}, {"_id": 0}) if mid else None
+        if not target:
+            target = await db.users.find_one({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0})
+        if not target:
+            raise HTTPException(status_code=400, detail="No manager or owner to escalate to")
+        to_id, to_name, to_role = target["id"], target.get("name"), target.get("role")
         notify_level, notify_prefix = 3, "[Escalation]"
     elif inp.to_id:
         member = await db.users.find_one({"id": inp.to_id, "tenant_id": tenant_id}, {"_id": 0})
@@ -554,6 +564,12 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             status_code=400,
             detail=f"Invalid status '{updates['status']}'. Use one of: {sorted(TASK_STATUSES)}",
         )
+    # ASK-28 item 7 (plan 6.7): changing a task is held to the people who run it
+    # (services/tasks.task_edit_rights) — before, any member of the company could.
+    if user.get("role") != "owner":
+        refusal = edit_refusal(t, updates, task_edit_rights(user, t, await _team_ids(user), user_perms(user)))
+        if refusal:
+            raise HTTPException(status_code=403, detail=refusal)
     # ASK-28 TK-07: "Waiting on" a colleague or a name, and since when. It sets
     # the stored status to waiting; an empty waiting_on stops waiting (back to
     # Doing). Any other status change ends the wait. Both then pass the same
@@ -628,17 +644,13 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             # ASK-28 TK-06: a person chose the doer now, so "picked automatically" no longer holds.
             if updates["assignee_id"] != t.get("assignee_id"):
                 updates["auto_assigned"] = None
-    # ASK-26: who is on the task. Changing it is an assignment decision, so it
-    # is held to the people who make those: the owner, a team manager, the
-    # task's creator, or its lead. The list replaces the stored one.
+    # ASK-26: who is on the task. The list replaces the stored one. Who may
+    # change it is checked above (item 7: the person who asked, the manager,
+    # Manage Team, the owner).
     old_co = list(t.get("co_assignee_ids") or [])
     added_co: list = []
     lead_after = updates.get("assignee_id") or t.get("assignee_id")
     if "co_assignee_ids" in updates:
-        if not (user.get("role") == "owner" or "team_manage" in user_perms(user)
-                or t.get("created_by") == user["id"] or t.get("assignee_id") == user["id"]):
-            raise HTTPException(status_code=403,
-                                detail="Only the owner, a team manager, the task's creator or its lead can change who is on it")
         updates["co_assignee_ids"] = await clean_co_assignees(user["tenant_id"], updates["co_assignee_ids"], lead_after)
         added_co = [i for i in updates["co_assignee_ids"] if i not in old_co]
     elif updates.get("assignee_id") and updates["assignee_id"] in old_co:
@@ -1138,9 +1150,12 @@ async def add_task_update(task_id: str, inp: TaskUpdateNoteInput, user: dict = D
     # ASK-28 TK-01: the person who asked for the task may leave a note on it;
     # hand-off and escalate stay with the people doing the work.
     requested = inp.action if inp.action in ("note", "handoff", "escalate") else "note"
-    # ASK-28 TK-03: the manager of someone on the task may note too.
+    # ASK-28 TK-03: the manager of someone on the task may note too. Item 7: so
+    # may the named approver and anyone with "See all tasks" — they follow the
+    # work with notes rather than edits.
     if not (_can_work_task(user, t) or (requested == "note" and (
-            can_note_task(user, t) or manages_task(t, await _team_ids(user))))):
+            can_note_task(user, t) or manages_task(t, await _team_ids(user))
+            or t.get("approver_id") == user["id"] or can_see_all_tasks(user, user_perms(user))))):
         raise HTTPException(status_code=403, detail="Only the assignee or owner can post updates")
     text = (inp.text or "").strip()
     if not text:

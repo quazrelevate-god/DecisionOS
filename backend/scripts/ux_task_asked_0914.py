@@ -206,11 +206,13 @@ with sync_playwright() as pw:
         labels = p.evaluate("""() => [...document.querySelectorAll('[role=dialog] button')]
           .map(b => b.textContent.trim()).filter(t => ['Log note', 'Hand off', 'Escalate'].includes(t))""")
     rec("requester-note-only", labels == ["Log note"], f"update actions offered: {labels} (list mocked: no non-owner has created a task for someone else)")
-    hidden = {k: p.locator(f'[data-testid="{k}-fake-asked-1"]:visible').count()
-              for k in ("status-select", "complete", "photo", "reopen")}
+    # Item 7 (plan 6.7, 2026-09-14): the person who asked runs the task — stage
+    # and Complete are theirs too (hand-off stays with the people on it).
+    shown = {k: p.locator(f'[data-testid="{k}-fake-asked-1"]:visible').count()
+             for k in ("status-select", "complete")}
     hint = p.locator('[data-testid="requester-hint-fake-asked-1"]:visible')
-    rec("requester-no-doer-controls", not any(hidden.values()) and hint.count() == 1,
-        f"visible doer controls: {hidden}; hint: {hint.inner_text() if hint.count() else None}")
+    rec("requester-runs-the-task", all(shown.values()) and hint.count() == 0,
+        f"stage and Complete shown: {shown}; follow-only hint: {hint.count()}")
     p.screenshot(path=str(OUT / "requester_note_only.png"))
     p.unroute_all(behavior="ignoreErrors")
     ctx.close()

@@ -516,17 +516,30 @@ async def _cards_on_fire(tid: str, user: dict) -> list:
         "status": {"$nin": ["done", "cancelled"]},
         "due_date": {"$lt": today, "$ne": None},
     }
+    # ASK-28 Phase 7 (plan 7.3): the same ladder as the reminders — a manager
+    # also chases their direct reports' tasks once they reach the manager step
+    # (FOLLOWUP_MANAGER_DAYS overdue), not from the first late hour.
+    from services.tasks import FOLLOWUP_MANAGER_DAYS
+    report_ids = set()
     if not is_owner:
-        q_overdue["created_by"] = uid
-    overdue = await db.tasks.find(q_overdue, {"_id": 0}).sort("due_date", 1).to_list(200)
+        report_ids = {r["id"] for r in await db.users.find(
+            {"tenant_id": tid, "reporting_manager_id": uid}, {"_id": 0, "id": 1}).to_list(500)}
+        q_overdue["$or"] = [{"created_by": uid}, {"assignee_id": {"$in": sorted(report_ids)}}]
+    overdue = [t for t in await db.tasks.find(q_overdue, {"_id": 0}).sort("due_date", 1).to_list(200)
+               if is_owner or t.get("created_by") == uid
+               or _days_between(t.get("due_date")) >= FOLLOWUP_MANAGER_DAYS]
 
     # 2) Escalations/handoffs pointed at me. The `updates` array is the
-    # source of truth; the latest entry with action in {escalate, handoff}
+    # source of truth; the latest entry that is an escalate or handoff with
     # to_id=uid (or to_role in my role keys) makes the task "awaiting me".
+    # ASK-28 Phase 7: entries are written as {kind, author_id, author_name}
+    # (add_task_update); this read looked for {action, actor_id}, so no
+    # escalation ever reached the Slipping list. Both spellings are read.
     q_addressed = {
         "tenant_id": tid,
         "status": {"$nin": ["done", "cancelled"]},
-        "updates.action": {"$in": ["escalate", "handoff"]},
+        "$or": [{"updates.kind": {"$in": ["escalate", "handoff"]}},
+                {"updates.action": {"$in": ["escalate", "handoff"]}}],
     }
     candidates = await db.tasks.find(q_addressed, {"_id": 0}).to_list(500)
     addressed = []
@@ -534,6 +547,8 @@ async def _cards_on_fire(tid: str, user: dict) -> list:
         latest = _latest_update(t)
         if not latest:
             continue
+        latest = {**latest, "action": latest.get("kind") or latest.get("action"),
+                  "actor_id": latest.get("author_id") or latest.get("actor_id")}
         if latest.get("action") not in ("escalate", "handoff"):
             continue
         addr_me = (latest.get("to_id") == uid) or (
@@ -555,7 +570,8 @@ async def _cards_on_fire(tid: str, user: dict) -> list:
         if t["id"] in seen:
             continue
         seen.add(t["id"])
-        actor = (umap.get(latest.get("actor_id") or "", {}) or {}).get("name") or "someone"
+        actor = ((umap.get(latest.get("actor_id") or "", {}) or {}).get("name")
+                 or latest.get("author_name") or "someone")
         verb = "Escalated by" if latest.get("action") == "escalate" else "Handed to you by"
         with_who = (umap.get(t.get("assignee_id") or "", {}) or {}).get("name")
         ctx_parts = [f"{verb} {actor}"]
@@ -583,6 +599,8 @@ async def _cards_on_fire(tid: str, user: dict) -> list:
         ctx_parts = [f"{overdue_days} day{'s' if overdue_days != 1 else ''} overdue"]
         if with_who and t.get("assignee_id") != uid:
             ctx_parts.append(f"With {with_who}")
+        if t.get("assignee_id") in report_ids and t.get("created_by") != uid:
+            ctx_parts.append("Reports to you")
         cards.append({
             "id": t["id"],
             "kind": "task_overdue",

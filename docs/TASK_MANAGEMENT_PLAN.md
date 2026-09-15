@@ -47,7 +47,7 @@ is assigned.
 - [x] **D5 · Expected output** — Kept, as "Expected result" under More options. *(2026-09-14)*
 - [x] **D8 · Department on a task** — Kept as the task's own field, not the doer's department: in a small company anyone can be given a Sales task and it still counts as Sales. Drives the Department filter. *(founder call 2026-09-14)*
 - [x] **D6 · Statuses** — Change labels and flags on screen, keep stored statuses; migrate data only later if ever needed. "Waiting on" takes a colleague or a typed name. *(founder go-ahead 2026-09-14, built as TK-07)*
-- [ ] **D7 · Overdue reminders for Waiting / Under review / Pending approval tasks** — Default: yes, remind the person they are waiting on or the approver. *(Phase 7)*
+- [x] **D7 · Overdue reminders for Waiting / Under review / Pending approval tasks** — Yes: remind the person they are waiting on or the approver; the manager before the owner. *(founder call 2026-09-14, built in Phase 7)*
 
 ---
 
@@ -143,13 +143,30 @@ A task has four kinds of people: **Doer** (one), **Helpers** (optional), **Asked
 - [x] **6.4 All Tasks** for the owner and anyone with "See all tasks": `GET /tasks?mine=false` returns everything for them and any task opens; desktop switcher, phone view sheet and `?view=all` follow it. Finance keeps its lane.
 - [x] **6.5 One rule list:** `services/tasks.py` (`can_see_all_tasks`, `can_assign_person`, `can_assign_team`) on the server and `frontend/src/lib/taskAccess.js` on the screens; `/auth/me` now sends `effective_permissions` (what the server applies, company role settings included) so both decide with the same answer.
 - [x] **6.6 Role × view check** — owner, sales, production, finance (a manager, Sunita → sai), desktop and phone: views, Assign to and helper lists exactly as the rule says, no refused requests, 49/49 (writes blocked); a mocked grant of both permissions to sales; real-save journeys for every refusal and grant. The approver path is covered by the Approvals checks (TK-02/05); "an owner with a permission removed" needs a test database to set owner exclusions — not run.
-- [ ] **6.7 (later, after discussion)** Who may edit a task through `PATCH /tasks/{id}` — today any signed-in member of the company can.
+- [x] **6.7 Who may change a task** *(founder calls 2026-09-14, built as ASK-28 item 7)* — before, any signed-in member of the company could change any task through `PATCH /tasks/{id}`, even one they could not open (and switch proof off). Now `services/tasks.task_edit_rights` / `frontend/src/lib/taskAccess.taskEditRights`:
+  - **Stage, progress, Waiting on:** the doer, helpers, the person who asked, the manager of someone on it, the owner.
+  - **Mark done, cancel, reopen:** the same minus helpers (founder: helpers don't finish a task). A helper sees "Kiran marks this done" where Complete was; bulk Complete skips those tasks and says so.
+  - **Who is on it (doer, team, helpers):** the person who asked, the manager, anyone with Manage Team, the owner (the doer no longer changes helpers). Bulk reassign skips the rest.
+  - **Priority:** the person who asked, the manager, the owner.
+  - **Needs proof:** only the person who asked and the owner (founder: it is decided when the task is created).
+  - **See all tasks** is for seeing, not editing (founder): it opens any task and leaves notes. **The approver** leaves notes and uses Approve / Request changes / Ask, but doesn't edit the work it signs off. **A colleague waited on** leaves notes. Hand-off and escalate stay with whoever is on the task.
+  - A field sent with the value it already has needs no right; someone with no right at all is refused whatever they send, with the reason, and nothing is saved.
+  - The Flutter app still offers Complete to helpers; the server refuses it with the reason.
 
 ## Phase 7 — "Stuck" signals cleanup (P2)
 
-- [ ] **7.1 Automatic reminders go to the right person:** day 2–3 "Manager escalation" goes to the reporting manager, not the owner; day 3+ owner alert stays.
-- [ ] **7.2 Reminders cover Waiting on / Needs approval tasks** *(needs D7)* — nudge the person waited on, or the approver.
-- [ ] **7.3 One place for stuck work:** Escalate button, automatic reminders and the Desk's Slipping list all read the same rule.
+*Built 2026-09-14 as ASK-28 Phase 7. Founder call: too much reaches the owner — the manager hears first, the owner only after several days.*
+
+| How late | Who hears |
+|---|---|
+| Overdue | The people who can move it: doer and helpers; the approver when it waits for approval; also the colleague it is waiting on |
+| 1 day | The same people again |
+| 2 days | The doer's reporting manager — the owner only when nobody manages the doer |
+| 4 days | The owner, with the owner alert (email / WhatsApp) |
+
+- [x] **7.1 Automatic reminders go to the right person:** the "Manager escalation" (2 days) goes to the doer's reporting manager, not the owner; the owner alert moved from 3 to 4 days so the manager has two days to act.
+- [x] **7.2 Reminders cover Waiting on / Needs approval tasks** *(D7: yes)* — every open stage is scanned now; waiting for approval reminds the approver (the doer is locked), Waiting on a colleague reminds them as well as the doer, Waiting on an outside name reminds the doer.
+- [x] **7.3 One place for stuck work:** `services/tasks.py` (`followup_level`, `stuck_on`, `escalation_manager_id`) is read by the reminders, the Escalate button and the Desk. **Escalate** goes to your reporting manager first, the owner only if you have none; the form names who ("This will alert your manager, Sunita…"). **Desk Slipping** shows a manager their direct reports' tasks from the manager step (2+ days, "Reports to you"), and now shows escalations and hand-offs at all: it read `action`/`actor_id` while notes are saved as `kind`/`author_id`, so none ever appeared.
 
 ---
 

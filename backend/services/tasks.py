@@ -249,6 +249,130 @@ def manages_task(t: dict, team_ids) -> bool:
     return bool(team and team.intersection(assignee_ids_of(t)))
 
 
+# ASK-28 Phase 7 (plan 7.1–7.3, founder call 2026-09-14) — stuck work, one rule.
+# How late a task is decides who hears about it, one step at a time, so the
+# owner is not the first person told:
+#   level 1  overdue          the people who can move it (see stuck_on): the
+#                             doer and helpers; the approver when it waits for
+#                             approval; also the colleague it is waiting on
+#   level 2  1 day overdue    the same people again
+#   level 3  2 days overdue   the doer's reporting manager (the owner only when
+#                             nobody manages the doer)
+#   level 4  4 days overdue   the owner, with an owner alert (email / WhatsApp)
+# The Escalate button follows the same order — your reporting manager first,
+# the owner only if you have none — and the Desk's Slipping list shows a
+# manager their reports' tasks from the manager step.
+FOLLOWUP_MANAGER_DAYS = 2
+FOLLOWUP_OWNER_DAYS = 4
+
+
+def followup_level(days_overdue: int) -> int:
+    if days_overdue < 1:
+        return 1
+    if days_overdue < FOLLOWUP_MANAGER_DAYS:
+        return 2
+    if days_overdue < FOLLOWUP_OWNER_DAYS:
+        return 3
+    return 4
+
+
+def stuck_on(t: dict) -> str:
+    """What an overdue task is waiting for: "approval" (the approver has to act
+    — before work starts, or a request to close it), "waiting" (Waiting on
+    someone), or "work"."""
+    if is_start_locked(t) or (approval_stage(t) == "close" and t.get("approval_status") == "pending"
+                              and t.get("status") == "review"):
+        return "approval"
+    if t.get("status") == "waiting":
+        return "waiting"
+    return "work"
+
+
+def escalation_manager_id(person: Optional[dict]) -> Optional[str]:
+    """Who a person escalates to: their reporting manager, or None (then the owner)."""
+    if not person:
+        return None
+    mid = person.get("reporting_manager_id")
+    return mid if mid and mid != person.get("id") else None
+
+
+# ASK-28 item 7 (plan 6.7, founder calls 2026-09-14) — who may CHANGE a task.
+# Seeing a task is wider (get_task); changing it is held to the people who run
+# it:
+#   work    stage (To do / Doing), progress, Waiting on — the doer, helpers, the
+#           person who asked, the manager of someone on it, the owner
+#   finish  mark done, cancel, reopen — the same minus helpers
+#   people  doer, team, helpers — the person who asked, the manager, the owner,
+#           and anyone with Manage Team (the reassign endpoint's rule)
+#   priority — the person who asked, the manager, the owner
+#   proof   whether proof is needed — the person who asked and the owner only
+#           (it is set when the task is created)
+# "See all tasks", the approver and a colleague waited on get notes (and the
+# approver the Approve / Request changes buttons), not edits.
+FINISHED_STATUSES = ("done", "cancelled")
+
+
+def is_task_doer(user: dict, t: dict) -> bool:
+    """The named doer; for a team task nobody picked up yet, its team."""
+    if t.get("assignee_id"):
+        return t["assignee_id"] == user.get("id")
+    return bool(t.get("assignee_role")) and t.get("assignee_role") == user.get("role")
+
+
+def task_edit_rights(user: dict, t: dict, team_ids, perms) -> dict:
+    owner = user.get("role") == "owner"
+    doer = is_task_doer(user, t)
+    helper = user.get("id") in (t.get("co_assignee_ids") or [])
+    creator = bool(t.get("created_by")) and t.get("created_by") == user.get("id")
+    runs = owner or creator or manages_task(t, team_ids)
+    return {
+        "work": runs or doer or helper,
+        "finish": runs or doer,
+        "people": runs or "team_manage" in (perms or ()),
+        "priority": runs,
+        "proof": owner or creator,
+    }
+
+
+def edit_refusal(t: dict, changes: dict, rights: dict) -> Optional[str]:
+    """Why this person may not make these changes, or None. `changes` is the
+    PATCH body as sent; a field sent with the value it already has changes
+    nothing and needs no right — but someone with no right at all is refused
+    whatever they send."""
+    if not changes:
+        return None
+    if not any(rights.values()):
+        return ("Only the people on this task, the person who asked for it, their manager "
+                "or the owner can change it. You can leave a note.")
+    old_status = t.get("status")
+    new_status = changes.get("status")
+    if new_status is not None and new_status != old_status:
+        finishing = new_status in FINISHED_STATUSES or old_status in FINISHED_STATUSES
+        if finishing and not rights["finish"]:
+            verb = ("reopen this task" if old_status in FINISHED_STATUSES
+                    else "cancel this task" if new_status == "cancelled" else "mark this task done")
+            return f"Only the doer, the person who asked for it, their manager or the owner can {verb}."
+        if not rights["work"]:
+            return "Only the people on this task can move it along."
+    if (("progress" in changes and changes["progress"] != t.get("progress")) or "waiting_on" in changes) \
+            and not rights["work"]:
+        return "Only the people on this task can move it along."
+    people_changed = (
+        ("assignee_id" in changes and changes["assignee_id"] != t.get("assignee_id"))
+        or ("assignee_role" in changes and changes["assignee_role"] != t.get("assignee_role"))
+        or ("co_assignee_ids" in changes
+            and set(changes["co_assignee_ids"] or []) != set(t.get("co_assignee_ids") or [])))
+    if people_changed and not rights["people"]:
+        return ("Only the person who asked for it, the manager, someone with Manage Team or the owner "
+                "can change who is on this task.")
+    if "priority" in changes and changes["priority"] != t.get("priority") and not rights["priority"]:
+        return "Only the person who asked for it, the manager or the owner can change the priority."
+    if "evidence_required" in changes and bool(changes["evidence_required"]) != bool(t.get("evidence_required")) \
+            and not rights["proof"]:
+        return "Only the person who asked for it or the owner can change whether proof is needed."
+    return None
+
+
 # ASK-28 TK-05 — the approval moment. The creator picks it per task:
 #   "start"  approve before work starts (the lock tasks always had; the default,
 #            and what every older approval task without a stage means)

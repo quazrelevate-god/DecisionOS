@@ -89,6 +89,21 @@ Numbers below are from the live owner company (Sharma), read-only, 2026-09-15.
 - [x] **3.4 After approving** — the popup stays open: each created task and the workflows it created or moved are links.
 - Not built (not wanted): confidence, review reasons, every decision point, "Ask the person" as a separate action (Send a note already exists).
 
+### 3.5 Sign-off on decision tasks (planned)
+
+*Yokesh, 2026-09-15: keep the decision screen simple. One choice per task, "needs approval before done". No approval before start (the decision is already approved). No proof switch, because finance tasks should always carry proof.*
+
+**Checked on dev data, 2026-09-15: proof is not automatic today.** Of 23 Finance tasks, 0 need proof (20 came from voice, 3 from Finance). `evidence_required` is only ever set in two places: the "Needs proof" box on New Task and a workflow stage's template tasks. Nothing turns it on because a task is a Finance task.
+
+- [ ] **3.5 Needs sign-off before done**: one checkbox on each task row, shown only to whoever decides, while the decision is waiting.
+  - Stored on the proposal task as `signoff`. The existing `PATCH /decisions/{id}/proposal/tasks/{key}` takes it, and the change goes on the timeline.
+  - On approval the task is created with `approval_required=True`, `approval_stage="close"` and `approver_id` = the person who approved the decision.
+  - Nothing new is needed on the task side. The close sign-off flow already exists (ASK-28 TK-05): the doer marks it done, it goes to Under review, the approver is told and closes it.
+  - Dex ticks it in advance for money work (a Finance task, or an amount at or above the company's high-value threshold, ₹50,000 by default). Whoever decides can untick it.
+- *3.5 is being built by another team (Yokesh, 2026-09-15).*
+- Not in it: approval before start, a proof switch, a per-task approver picker (the decision's approver signs off), automatic proof on Finance tasks (not needed, Yokesh 2026-09-15).
+- **Proof stays once the work is completed** (built 2026-09-15): nobody, the owner included, removes proof from a task that is done or sent for sign-off. Reopen the task to change it. Reference material stays removable.
+
 ## Phase 4 — Workflows go by themselves
 
 *Yokesh, 2026-09-15: when proposing, check what is already on the board so nothing is duplicated; tag a task with a workflow when it belongs to one; ad hoc tasks stay plain; the workflow should move automatically, not by hand. Built 2026-09-15 as ASK-32 Phase 4.*

@@ -1898,8 +1898,11 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
     const isAudio = (a) => a.kind === "voice" || (a.content_type || "").startsWith("audio/");
     const label = "mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500";
     // Same rule the server enforces: whoever added it, the task's creator, or
-    // the owner. Hiding the button is a courtesy, not the check.
-    const canRemove = (a) => !!a.id && (user?.role === "owner" || a.by === user?.id || t.created_by === user?.id);
+    // the owner — and never proof once the work is completed (done, or sent
+    // for sign-off). Hiding the button is a courtesy, not the check.
+    const proofLocked = t.status === "done" || (t.status === "review" && t.approval_status === "pending");
+    const canRemove = (a) => !!a.id && !(proofLocked && a.kind !== "reference")
+      && (user?.role === "owner" || a.by === user?.id || t.created_by === user?.id);
     const renderAtt = (a) => (
       <div key={a.url} className={`relative ${isAudio(a) && !isImg(a) ? "w-full" : ""}`}>
         {renderAttInner(a)}

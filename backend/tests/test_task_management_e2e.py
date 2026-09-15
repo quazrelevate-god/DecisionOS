@@ -196,6 +196,49 @@ def test_before_done_approver_who_completes_closes_directly(with_test_db):
     assert with_test_db(scenario) is True
 
 
+def test_proof_stays_once_the_work_is_completed(with_test_db):
+    """Yokesh 2026-09-15: proof can be removed while the work is open, never once
+    it is sent for sign-off or done — not even by the owner. Reopening frees it;
+    reference material is never locked."""
+    async def scenario(db):
+        await _seed(db)
+        with e2e_env(db, stubs=STUBS, keep=KEEP):
+            t = await _create(SALES, title="Pay the dye supplier", assignee_id="u-ops",
+                              approval_required=True, approval_stage="close", approver_id="u-fin")
+            atts = [{"id": "p1", "kind": "photo", "by": "u-ops", "filename": "receipt-1.jpg", "url": "/f/p1"},
+                    {"id": "p2", "kind": "file", "by": "u-ops", "filename": "receipt-2.pdf", "url": "/f/p2"},
+                    {"id": "r1", "kind": "reference", "by": "u-sales", "filename": "quote.pdf", "url": "/f/r1"}]
+            await db.tasks.update_one({"id": t["id"]}, {"$set": {"attachments": atts}})
+
+            async def left():
+                return [a["id"] for a in (await db.tasks.find_one({"id": t["id"]}))["attachments"]]
+
+            # Open work: the doer removes their own proof.
+            await tasks.delete_task_attachment(t["id"], "p1", user=OPS)
+            assert await left() == ["p2", "r1"]
+
+            # Sent for sign-off: nobody removes proof; reference material still goes.
+            await tasks.update_task(t["id"], TaskUpdateInput(status="done"), user=OPS)
+            assert (await _status(db, t["id"]))[:2] == ("review", "pending")
+            assert "Reopen" in await _refused(tasks.delete_task_attachment(t["id"], "p2", user=OPS))
+            await _refused(tasks.delete_task_attachment(t["id"], "p2", user=OWNER))
+            await tasks.delete_task_attachment(t["id"], "r1", user=SALES)
+            assert await left() == ["p2"]
+
+            # Done: still locked, owner included.
+            await tasks.approve_task(t["id"], user=FIN)
+            assert (await _status(db, t["id"]))[0] == "done"
+            await _refused(tasks.delete_task_attachment(t["id"], "p2", user=OWNER))
+            await _refused(tasks.delete_task_attachment(t["id"], "p2", user=OPS))
+
+            # Reopened: open work again, so the proof can change.
+            await tasks.update_task(t["id"], TaskUpdateInput(status="in_progress"), user=OPS)
+            await tasks.delete_task_attachment(t["id"], "p2", user=OPS)
+            assert await left() == []
+            return True
+    assert with_test_db(scenario) is True
+
+
 # ---------------------------------------------------------------------------
 # Plan 4.3 — the named approver must be able to approve
 # ---------------------------------------------------------------------------

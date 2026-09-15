@@ -1,6 +1,6 @@
 {
-  "count": 326,
-  "sha": "08214e3f5cdbf4b7cc7240fe217a938ac523e2d9a4aebaae08d2d8c1919f900b",
+  "count": 327,
+  "sha": "8462b8552726e1247c52b76b53cc459bb7d6e6b47d4c02acf22ebbe75363f87d",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -21,6 +21,7 @@
     "DELETE /api/revenue/invoice/{iid}",
     "DELETE /api/revenue/payment/{pid}",
     "DELETE /api/tasks/{task_id}",
+    "DELETE /api/tasks/{task_id}/attachments/{att_id}",
     "DELETE /api/tasks/{task_id}/execution-plan",
     "DELETE /api/tenant/ai-consent",
     "DELETE /api/tenant/ai-keys/{provider}",

@@ -1345,6 +1345,12 @@ async def delete_task_attachment(task_id: str, att_id: str, user: dict = Depends
     att = next((a for a in (t.get("attachments") or []) if a.get("id") == att_id), None)
     if not att:
         raise HTTPException(status_code=404, detail="Attachment not found")
+    # Yokesh 2026-09-15: once the work is completed, its proof is the record —
+    # nobody removes it, the owner included, while the task is done or waiting
+    # for sign-off. Reopen the task to change it. Reference material stays free.
+    if att.get("kind") != "reference" and (
+            t.get("status") == "done" or (t.get("status") == "review" and t.get("approval_status") == "pending")):
+        raise HTTPException(status_code=403, detail="This work is completed, so its proof stays. Reopen the task to change it.")
     allowed = user.get("role") == "owner" or att.get("by") == user["id"] or t.get("created_by") == user["id"]
     if not allowed:
         raise HTTPException(status_code=403, detail="Only the person who added it, the task's creator or the owner can remove it")

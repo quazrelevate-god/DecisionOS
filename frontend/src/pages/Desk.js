@@ -310,6 +310,10 @@ export default function Desk() {
   const { user, tenant } = useAuth();
   const m = useDeskMetrics();
   const heroRef = useRef(null);
+  // ASK-33 Phase 2 — the expanded Dex well grows to this grid's top, and while
+  // it is the workspace the greeting and the score row above it fade.
+  const kpiGridRef = useRef(null);
+  const [dexExpanded, setDexExpanded] = useState(false);
 
   // Owner sees Company/You; everyone else only ever has their own view.
   const [scope, setScope] = useState("company");
@@ -441,7 +445,7 @@ export default function Desk() {
           {/* Greeting on the LEFT, compact score+gauge on the RIGHT on the
               phone; on lg the greeting stands alone, two lines, the name
               carrying the weight (the founder's reference). */}
-          <div className="order-1 flex items-start justify-between gap-4 lg:order-none lg:block">
+          <div className="kr-dex-fade order-1 flex items-start justify-between gap-4 lg:order-none lg:block" data-dex-faded={dexExpanded ? "true" : "false"}>
             <h1 className="font-display text-2xl leading-tight lg:text-[34px] lg:font-light lg:leading-[1.15]" data-testid="desk-brief-greeting">
               {gi === -1
                 ? <span>{greeting || " "}</span>
@@ -464,7 +468,7 @@ export default function Desk() {
           {/* ASK-25 · the score row, desktop: slider over the numeral on the
               left, the gauge to the right on the same floor. items-end lands
               the gauge's diameter on the numeral's baseline (KR-8.8). */}
-          <div className="hidden lg:grid lg:grid-cols-[auto_minmax(0,1fr)] lg:items-end lg:gap-5">
+          <div className="kr-dex-fade hidden lg:grid lg:grid-cols-[auto_minmax(0,1fr)] lg:items-end lg:gap-5" data-dex-faded={dexExpanded ? "true" : "false"}>
             <div className="flex flex-col items-start gap-2.5">
               {isOwnerView && (
                 <ScopeSlider options={SCOPE_OPTIONS} value={scope} onChange={setScope} label="Score scope" testid="desk-scope" />
@@ -514,6 +518,8 @@ export default function Desk() {
           <DeskDexWell
             className="order-4 min-h-[150px] lg:order-none lg:min-h-0 lg:flex-1"
             testid="desk-insight"
+            growToRef={kpiGridRef}
+            onExpandedChange={setDexExpanded}
           />
         </div>
 
@@ -559,7 +565,7 @@ export default function Desk() {
             ASK-25 — the rows are shorter than they were because the LEFT
             column got shorter (the numeral, the gauge and the well all took a
             step down); the tiles follow, they are not sized on their own. */}
-        <div className="order-3 hidden min-w-0 grid-cols-2 gap-3 lg:order-none lg:grid lg:auto-rows-fr lg:grid-cols-3" data-testid="desk-kpi-grid">
+        <div ref={kpiGridRef} className="order-3 hidden min-w-0 grid-cols-2 gap-3 lg:order-none lg:grid lg:auto-rows-fr lg:grid-cols-3" data-testid="desk-kpi-grid">
           <StatTile
             icon={Timer}
             label="Delayed"

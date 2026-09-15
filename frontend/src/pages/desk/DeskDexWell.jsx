@@ -26,7 +26,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  Plus, Microphone, Stop, PaperPlaneRight, Paperclip, Keyboard, Waveform, X, File as FileGlyph,
+  Plus, Microphone, Stop, PaperPlaneRight, Paperclip, Keyboard, Waveform, X, Check, File as FileGlyph,
 } from "@phosphor-icons/react";
 import { useAuth } from "../../context/AuthContext";
 import { hasPerm } from "../../lib/perms";
@@ -41,6 +41,18 @@ import { DexWave } from "../../components/mobile/DexWave";
 const REFRESH_KEYS = ["captures-pending", "desk", "inbox", "tasks", "dex-inflight-count"];
 // The note walks queued -> transcribing -> structuring; these are its endings.
 const ENDINGS = ["done", "nothing", "failed", "slow"];
+/* ASK-33 Phase 2 — the stages the expanded well names, in the founder's words.
+   "sending" is the POST itself; the rest are the note's own statuses as
+   useDexCapture's poll reports them. */
+const STEP_LABEL = {
+  sending: "Sending it to Dex",
+  queued: "Queued",
+  transcribing: "Transcribing what you said",
+  structuring: "Working out who does what",
+};
+const isDesktop = () => typeof window !== "undefined" && !!window.matchMedia?.("(min-width: 1024px)").matches;
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 /* The floor's circles: the raised .kr-pop the compact well has always used
    (ASK-25), pressed out of the same sheet the well is pressed into. 40px from
@@ -96,7 +108,15 @@ function AttachmentChip({ file, onRemove, disabled }) {
   );
 }
 
-export function DeskDexWell({ className, testid }) {
+/**
+ * @param {React.RefObject} [growToRef]        ASK-33 Phase 2 — the element whose
+ *                                             top the expanded well grows to
+ *                                             (the Desk's KPI grid)
+ * @param {Function}        [onExpandedChange] told true/false as the well becomes
+ *                                             and stops being the workspace, so
+ *                                             the Desk can fade what it covers
+ */
+export function DeskDexWell({ className, testid, growToRef, onExpandedChange }) {
   const { user } = useAuth();
   // The gate every Dex capture surface uses (DexFab, DexSheet, DexCaptureBar).
   const canCapture = user?.role === "owner" || hasPerm(user, "voice_capture");
@@ -131,7 +151,6 @@ export function DeskDexWell({ className, testid }) {
   // the moment there is genuinely nothing in the field yet.
   const transcribing = !!dex.sending && !chat.draft;
   const showField = chat.mode === "type" || !!chat.draft || transcribing;
-  const waveState = dex.recording ? "listening" : chat.busy ? "thinking" : "idle";
   const canSend = !!chat.draft.trim() || chat.pendingFiles.length > 0;
   const intent = dex.recording ? "stop" : canSend ? "send" : "mic";
 
@@ -145,6 +164,100 @@ export function DeskDexWell({ className, testid }) {
     endingRef.current = stage;
     refresh();
   }, [stage, refresh]);
+
+  /* ASK-33 Phase 2 — THE EXPANSION, desktop only.
+     On SEND, and only on send, the well becomes the workspace: its pane lifts
+     out of the flow, anchored to the well's floor, and grows until its top
+     meets the top of the KPI grid beside it (growToRef — that grid is the
+     constraint), while the Desk fades the greeting and the score row it passes
+     over. The well's own box never changes size, so nothing else on the page
+     moves. One long ease-out drives the growth and the fade (index.css
+     .kr-dex-grow / .kr-dex-fade), so it settles rather than stops, and
+     collapsing is the same move run backwards. Under prefers-reduced-motion the
+     transitions are off and the expanded state is simply painted. Below lg none
+     of this happens — the phone's expanded surface is the sheet (Phase 4). */
+  const wellRef = useRef(null);
+  // { from, to, phase }: "start" paints the resting height, "open" is grown,
+  // "closing" runs back down and then returns the pane to the flow.
+  const [grow, setGrow] = useState(null);
+  const [steps, setSteps] = useState([]);
+  const [sentText, setSentText] = useState("");
+  const growing = !!grow;
+  const growPhase = grow?.phase;
+
+  const measure = useCallback(() => {
+    const well = wellRef.current;
+    const grid = growToRef?.current;
+    if (!well || !grid) return null;
+    const rest = well.offsetHeight;
+    const wb = well.getBoundingClientRect();
+    const gb = grid.getBoundingClientRect();
+    // UI-SCALE: rects are in visual px, offsetHeight in the element's own px.
+    const k = wb.height ? rest / wb.height : 1;
+    return { from: rest, to: Math.round(rest + Math.max(0, (wb.top - gb.top) * k)) };
+  }, [growToRef]);
+
+  const expand = () => {
+    if (!isDesktop()) return;
+    setSteps([]);
+    // Already the workspace (a second capture sent from it): stay open.
+    if (grow && grow.phase !== "closing") return;
+    const m = measure();
+    if (!m) return;
+    setGrow({ ...m, phase: prefersReducedMotion() ? "open" : "start" });
+  };
+
+  const collapse = useCallback(() => {
+    if (prefersReducedMotion()) { setGrow(null); return; }
+    setGrow((g) => (g ? { ...g, phase: "closing" } : g));
+  }, []);
+
+  // Two frames at the resting height give the transition a value to leave.
+  useEffect(() => {
+    if (growPhase !== "start") return undefined;
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => setGrow((g) => (g?.phase === "start" ? { ...g, phase: "open" } : g)));
+    });
+    return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
+  }, [growPhase]);
+
+  // Back in the flow once the shrink lands — with a fallback, should the
+  // transitionend never arrive.
+  useEffect(() => {
+    if (growPhase !== "closing") return undefined;
+    const t = setTimeout(() => setGrow(null), 900);
+    return () => clearTimeout(t);
+  }, [growPhase]);
+  const onPaneTransitionEnd = (e) => {
+    if (e.target === e.currentTarget && e.propertyName === "height" && growPhase === "closing") setGrow(null);
+  };
+
+  // The grid stays the constraint at any size: re-measure on resize, and let go
+  // entirely if the window drops below lg.
+  useEffect(() => {
+    if (!growing) return undefined;
+    const onResize = () => {
+      if (!isDesktop()) { setGrow(null); return; }
+      const m = measure();
+      if (m) setGrow((g) => (g ? { ...g, ...m } : g));
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [growing, measure]);
+
+  const expanded = growing && growPhase !== "closing";
+  useEffect(() => { onExpandedChange?.(expanded); }, [expanded, onExpandedChange]);
+
+  // The REAL stages the note walks, as the poll reports them — not a spinner.
+  useEffect(() => {
+    if (!growing || !stage || ENDINGS.includes(stage)) return;
+    setSteps((s) => (s.includes(stage) ? s : [...s, stage]));
+  }, [growing, stage]);
+
+  const waveState = dex.recording
+    ? "listening"
+    : (chat.busy || (expanded && !ENDINGS.includes(stage))) ? "thinking" : "idle";
 
   /* ASK-33 Phase 1, INTERIM — the well has no outcome screen yet (Phases 2-3
      give it one on desktop, Phase 4 on the phone). Until then Dex's reply to a
@@ -168,13 +281,18 @@ export function DeskDexWell({ className, testid }) {
     // No ending recorded means the send itself failed (ask()'s catch).
     if (endingRef.current === "failed" || !endingRef.current) toast.error(reply.text);
     else toast(reply.text);
-  }, [chat.log]);
+    // ASK-33 Phase 2 — nothing more to show in the workspace yet (Phase 3 gives
+    // the endings a screen of their own), so the well settles back down.
+    collapse();
+  }, [chat.log, collapse]);
 
   const send = () => {
     if (!canSend || dex.sending || chat.busy) return;
     awaitingReplyRef.current = true;
     endingRef.current = null;
     setMenuOpen(false);
+    setSentText(chat.draft.trim() || chat.pendingFiles.map((f) => f.name).join(", "));
+    expand();
     chat.ask(chat.draft);
   };
 
@@ -230,7 +348,7 @@ export function DeskDexWell({ className, testid }) {
   /* The line under "Dex". Attached files take its place rather than adding a
      row, so the well never changes height. The row's py-2 / -my-2 pair gives
      each remove its 44px target without moving anything around it. */
-  const prompt = chat.pendingFiles.length > 0 ? (
+  const prompt = growing ? null : chat.pendingFiles.length > 0 ? (
     <ul aria-label="Attached files" className="-mb-2 -mt-0.5 flex min-w-0 gap-1.5 overflow-x-auto py-2 [scrollbar-width:none]">
       {chat.pendingFiles.map((f) => (
         <AttachmentChip key={f.id} file={f} onRemove={() => chat.removeFile(f.id)} disabled={chat.busy} />
@@ -243,6 +361,35 @@ export function DeskDexWell({ className, testid }) {
         : "Ask an owner to turn on Decision Desk capture for you."}
     </p>
   );
+
+  /* ASK-33 Phase 2 — the workspace while the proposal builds: what was sent,
+     then each stage the note has reached, the current one live. */
+  const shownSteps = ["sending", ...steps];
+  const body = growing ? (
+    <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-y-auto animate-in fade-in-0 duration-300 motion-reduce:animate-none" aria-live="polite">
+      {sentText && (
+        <p className="line-clamp-3 text-[15px] leading-snug text-foreground">&ldquo;{sentText}&rdquo;</p>
+      )}
+      <ol className="mt-4 space-y-2.5" aria-label="What Dex is doing">
+        {shownSteps.map((s, i) => {
+          const current = i === shownSteps.length - 1;
+          return (
+            <li key={s} className={cn("flex items-center gap-2.5 text-sm", current ? "font-medium text-foreground" : "text-foreground/55")}>
+              {current ? (
+                <span aria-hidden="true" className="relative grid h-4 w-4 shrink-0 place-items-center">
+                  <span className="absolute inset-0 animate-ping rounded-full bg-kr-ink/20 motion-reduce:animate-none" />
+                  <span className="h-2 w-2 rounded-full bg-kr-ink" />
+                </span>
+              ) : (
+                <Check size={14} weight="bold" aria-hidden="true" className="shrink-0" />
+              )}
+              {STEP_LABEL[s] || s}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  ) : null;
 
   const floor = (
     <>
@@ -399,9 +546,17 @@ export function DeskDexWell({ className, testid }) {
       compact
       label="Dex"
       prompt={prompt}
+      body={body}
       floor={floor}
       className={className}
       testid={testid}
+      expanded={expanded}
+      wellRef={wellRef}
+      paneClassName={grow && growPhase !== "start" ? "kr-dex-grow" : undefined}
+      paneStyle={grow
+        ? { position: "absolute", left: 0, right: 0, bottom: 0, zIndex: 10, height: growPhase === "open" ? grow.to : grow.from }
+        : undefined}
+      onPaneTransitionEnd={onPaneTransitionEnd}
     />
   );
 }

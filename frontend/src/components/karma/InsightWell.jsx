@@ -35,17 +35,34 @@ import { cn } from "@/lib/utils";
  * @param {string}          [label]   the eyebrow — "Dex"
  * @param {React.ReactNode} [prompt]  the one line under it (sits where the
  *                                    headline did, so the well keeps its shape)
+ * @param {React.ReactNode} [body]    ASK-33 Phase 2 — what the well holds while
+ *                                    it is the workspace (between the prompt's
+ *                                    place and the floor)
  * @param {React.ReactNode} [floor]   the row on the well's floor
  * @param {boolean}         compact   ASK-25 — the Desk's tightened well: 16px
  *                                    pad and 40px controls, in the height the
  *                                    shorter KPI rows leave it.
+ * @param {boolean}         [expanded]            marks the well data-expanded
+ * @param {React.Ref}       [wellRef]             the outer box, for measuring
+ * @param {string}          [paneClassName]       extra classes on the pane
+ * @param {object}          [paneStyle]           inline style on the pane (the
+ *                                                expansion's height)
+ * @param {Function}        [onPaneTransitionEnd]
  */
-export function InsightWell({ label = "Dex", prompt, floor, compact = false, className, testid }) {
+export function InsightWell({
+  label = "Dex", prompt, body, floor, compact = false, className, testid,
+  expanded = false, wellRef, paneClassName, paneStyle, onPaneTransitionEnd,
+}) {
   return (
-    <div className={cn("kr-well", className)} data-testid={testid}>
-      <div className={cn("kr-well__pane flex h-full flex-col", compact ? "p-4 lg:px-[18px]" : "p-5")}>
+    <div ref={wellRef} className={cn("kr-well", className)} data-testid={testid} data-expanded={expanded ? "true" : undefined}>
+      <div
+        className={cn("kr-well__pane flex h-full flex-col", compact ? "p-4 lg:px-[18px]" : "p-5", paneClassName)}
+        style={paneStyle}
+        onTransitionEnd={onPaneTransitionEnd}
+      >
         <span className="text-xs font-semibold tracking-wide text-foreground/75">{label}</span>
         {prompt}
+        {body}
         {floor && (
           <div className={cn("mt-auto flex items-center gap-2", compact ? "pt-3" : "pt-5 lg:pt-7")}>
             {floor}

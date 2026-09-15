@@ -1,6 +1,6 @@
 {
-  "count": 327,
-  "sha": "8462b8552726e1247c52b76b53cc459bb7d6e6b47d4c02acf22ebbe75363f87d",
+  "count": 328,
+  "sha": "7cb6a91a35b0c8c970b4b7324a6cbeaecfb929ebc86ddde91b86a68c7d2d9b00",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -140,6 +140,7 @@
     "GET /api/tenant/usage",
     "GET /api/users",
     "GET /api/users/{uid}/temp-grants",
+    "GET /api/users/{user_id}/offboarding",
     "GET /api/voice-notes",
     "GET /api/voice-notes/{note_id}",
     "GET /api/voice-notes/{note_id}/audio",

@@ -292,11 +292,25 @@ async def update_role_permissions(key: str, inp: RolePermissionsInput,
         if r.get("key") == key:
             r["permissions"] = perms
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"roles": roles}})
+    # 2026-09-15: people with their own access list never see the role's; on
+    # request they follow the role from now on (an empty list = the role's).
+    members_updated = 0
+    if inp.apply_to_members:
+        res = await db.users.update_many(
+            {"tenant_id": user["tenant_id"], "role": key, "permissions": {"$nin": [[], None]}},
+            {"$set": {"permissions": [], "updated_at": now_iso()}},
+        )
+        members_updated = getattr(res, "modified_count", 0)
+        await db.memberships.update_many(
+            {"tenant_id": user["tenant_id"], "role": key},
+            {"$set": {"permissions": [], "updated_at": now_iso()}},
+        )
     await log_activity(
         user["tenant_id"], user["id"], "role_permissions_updated",
-        f"{user['name']} updated permissions on role '{key}' to {len(perms)} perm(s)",
+        f"{user['name']} updated permissions on role '{key}' to {len(perms)} perm(s)"
+        + (f"; {members_updated} member(s) now follow it" if members_updated else ""),
     )
-    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    return {**(await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})), "members_updated": members_updated}
 
 
 # FIX-005-C (RBAC-25): DPDP AI-consent tracking endpoints.

@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { hasPerm } from "../lib/perms";
+import { hasPerm, PERMISSIONS, defaultPermsForRole } from "../lib/perms";
 import { toast } from "sonner";
-import { Buildings, Package, Plus, Trash, UsersThree, Kanban, ListChecks, ShieldCheck, Copy, WhatsappLogo } from "@phosphor-icons/react";
+import { Buildings, Package, Plus, Trash, UsersThree, Kanban, ListChecks, ShieldCheck, Copy, WhatsappLogo, Check } from "@phosphor-icons/react";
 import { GlassSelect } from "./karma/GlassSelect";
 
 // Mobile PWA (2026-09-14) — the glass field (glass.js DRAWER_FIELD), not a
@@ -32,6 +32,12 @@ export function CompanyDetails() {
   const [roles, setRoles] = useState([]);
   const [roleInput, setRoleInput] = useState("");
   const [roleBusy, setRoleBusy] = useState(false);
+  // 2026-09-15 — the owner sets what each role can open (Access under a role).
+  const isOwner = user?.role === "owner";
+  const [openRole, setOpenRole] = useState(null);
+  const [members, setMembers] = useState([]);
+  const loadMembers = () => api.get("/users").then((r) => setMembers(r.data || [])).catch(() => {});
+  useEffect(() => { if (isOwner) loadMembers(); }, [isOwner]); // eslint-disable-line react-hooks/exhaustive-deps
   // WE-02 (2026-08-16): workflows state removed. Pipeline editing lives
   // in the Operating Model editor (single source of truth).
   const [opTasks, setOpTasks] = useState([]);
@@ -226,23 +232,36 @@ export function CompanyDetails() {
           <h3 className="font-medium">Team Roles</h3>
         </div>
         <p className="text-xs text-muted-foreground mb-2">
-          Owner is always present. A role can't be deleted while members are still assigned to it — reassign them first.
+          Owner is always present. {isOwner ? "Access sets what people in a role can open. " : ""}A role can't be deleted while members are still assigned to it — reassign them first.
         </p>
         <div className="space-y-2" data-testid="roles-manage-list">
           {roles.map((r) => (
-            <div key={r.key} data-testid={`role-row-${r.key}`} className="border border-nm-edge/40 p-2 flex items-center gap-2">
-              <input data-testid={`role-label-${r.key}`} className={inp} value={r.label} disabled={!canManage || roleBusy}
-                onChange={(e) => setRoleLabel(r.key, e.target.value)}
-                onBlur={(e) => canManage && renameRole(r.key, e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } }}
-                placeholder="Role name" />
-              <span className="label-mono text-muted-foreground shrink-0 hidden sm:inline">{r.key}</span>
-              {canManage && (
-                <button onClick={() => deleteRole(r.key)} disabled={roleBusy} data-testid={`role-delete-${r.key}`}
-                  className="border border-nm-edge/40 p-2 hover:bg-kr-accent hover:text-white transition-colors shrink-0" title="Delete role">
-                  <Trash size={14} weight="bold" />
-                </button>
-              )}
+            <div key={r.key} data-testid={`role-row-${r.key}`} className="border border-nm-edge/40 p-2">
+              <div className="flex items-center gap-2">
+                <input data-testid={`role-label-${r.key}`} className={inp} value={r.label} disabled={!canManage || roleBusy}
+                  onChange={(e) => setRoleLabel(r.key, e.target.value)}
+                  onBlur={(e) => canManage && renameRole(r.key, e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } }}
+                  placeholder="Role name" />
+                <span className="label-mono text-muted-foreground shrink-0 hidden sm:inline">{r.key}</span>
+                {isOwner && (
+                  <button type="button" onClick={() => setOpenRole(openRole === r.key ? null : r.key)} aria-expanded={openRole === r.key}
+                    data-testid={`role-access-toggle-${r.key}`}
+                    className="flex items-center gap-1 border border-nm-edge/40 px-2.5 py-2 text-xs font-medium hover:bg-accent transition-colors shrink-0">
+                    <ShieldCheck size={13} weight="bold" aria-hidden="true" /> Access
+                  </button>
+                )}
+                {canManage && (
+                  <button onClick={() => deleteRole(r.key)} disabled={roleBusy} data-testid={`role-delete-${r.key}`}
+                    className="border border-nm-edge/40 p-2 hover:bg-kr-accent hover:text-white transition-colors shrink-0" title="Delete role">
+                    <Trash size={14} weight="bold" />
+                  </button>
+                )}
+              </div>
+              {isOwner && openRole === r.key && (() => {
+                const saved = (tenant?.roles || []).find((x) => x.key === r.key) || r;
+                return <RoleAccessEditor key={JSON.stringify(saved.permissions || [])} role={saved} members={members} onSaved={loadMembers} />;
+              })()}
             </div>
           ))}
           {roles.length === 0 && <p className="text-sm text-muted-foreground">No roles yet — add one below.</p>}
@@ -334,6 +353,76 @@ export function CompanyDetails() {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/* 2026-09-15 — what a role can open. People in the role get this unless they
+   have their own access list (Team › Edit access, "Use the role's access"
+   unticked); the owner can make those people follow the role too. */
+function RoleAccessEditor({ role, members, onSaved }) {
+  const { refreshTenant } = useAuth();
+  const custom = Array.isArray(role.permissions) && role.permissions.length > 0;
+  const [draft, setDraft] = useState(custom ? role.permissions : defaultPermsForRole(role.key));
+  const [applyAll, setApplyAll] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const inRole = members.filter((m) => m.role === role.key);
+  const ownAccess = inRole.filter((m) => Array.isArray(m.permissions) && m.permissions.length > 0);
+  const toggle = (k) => setDraft((d) => (d.includes(k) ? d.filter((x) => x !== k) : [...d, k]));
+
+  const save = async (perms) => {
+    setBusy(true);
+    try {
+      const { data } = await api.patch(`/tenant/roles/${role.key}/permissions`, { permissions: perms, apply_to_members: applyAll });
+      await refreshTenant();
+      const n = data?.members_updated || 0;
+      toast.success(`Access for ${role.label} saved${n ? ` — ${n} ${n === 1 ? "person now follows" : "people now follow"} it` : ""}`);
+      setApplyAll(false);
+      onSaved?.();
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Couldn't save access");
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="mt-2 rounded-2xl bg-white/60 p-3 ring-1 ring-inset ring-slate-900/[0.06]" data-testid={`role-access-${role.key}`}>
+      <p className="text-xs text-muted-foreground">
+        {inRole.length} {inRole.length === 1 ? "person" : "people"} in this role · {custom ? "custom access" : "built-in default"} · owners always have everything
+      </p>
+      <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+        {PERMISSIONS.map((p) => {
+          const on = draft.includes(p.key);
+          return (
+            <button key={p.key} type="button" aria-pressed={on} onClick={() => toggle(p.key)} disabled={busy}
+              data-testid={`role-perm-${role.key}-${p.key}`}
+              className={`flex min-h-10 items-center justify-between gap-2 rounded-xl px-3 py-1.5 text-left text-xs font-medium ring-1 ring-inset transition-colors ${on ? "bg-neutral-900 text-white ring-transparent" : "bg-white/80 text-slate-700 ring-slate-900/[0.06] hover:bg-white"}`}>
+              <span>{p.label}</span>
+              {on && <Check size={12} weight="bold" aria-hidden="true" />}
+            </button>
+          );
+        })}
+      </div>
+      {ownAccess.length > 0 && (
+        <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs text-slate-700">
+          <input type="checkbox" checked={applyAll} onChange={(e) => setApplyAll(e.target.checked)} className="mt-0.5 accent-neutral-900"
+            data-testid={`role-apply-all-${role.key}`} />
+          <span>
+            Also make {ownAccess.length === 1 ? `${ownAccess[0].name}, who has their own access,` : `the ${ownAccess.length} people who have their own access`} follow this role
+          </span>
+        </label>
+      )}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" onClick={() => save(draft)} disabled={busy} data-testid={`role-access-save-${role.key}`}
+          className="bg-kr-ink px-4 py-2 text-xs font-medium text-white transition-all disabled:opacity-50">
+          {busy ? "Saving…" : "Save access"}
+        </button>
+        {custom && (
+          <button type="button" onClick={() => save([])} disabled={busy} data-testid={`role-access-default-${role.key}`}
+            className="border border-nm-edge/40 px-4 py-2 text-xs font-medium hover:bg-accent transition-colors disabled:opacity-50">
+            Use the built-in default
+          </button>
+        )}
+      </div>
     </div>
   );
 }

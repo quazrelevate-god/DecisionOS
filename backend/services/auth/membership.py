@@ -154,6 +154,16 @@ async def find_membership(db, user_id: str, tenant_id: str,
     return await db[COLLECTION].find_one(q, {"_id": 0})
 
 
+async def legacy_access_allowed(db, user: dict, tenant_id: str) -> bool:
+    """Accounts from before memberships fall back to the user's own tenant_id and
+    role — but never someone who HAS a membership row for that workspace. A
+    removed, suspended or pending row is the answer; before 2026-09-15 a removed
+    member still signed in through this fallback."""
+    if not (tenant_id and user.get("tenant_id") == tenant_id and user.get("role")):
+        return False
+    return not await db[COLLECTION].find_one({"user_id": user.get("id"), "tenant_id": tenant_id}, {"_id": 0, "status": 1})
+
+
 async def list_memberships_for_user(db, user_id: str,
                                       statuses: Optional[set] = None) -> List[Dict[str, Any]]:
     """Every tenant this user belongs to (filtered by status). Used by

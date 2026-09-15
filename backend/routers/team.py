@@ -149,9 +149,26 @@ async def list_users(user: dict = Depends(get_current_user)):
     from services.auth.membership import list_memberships_for_tenant
     memberships = await list_memberships_for_tenant(db, user["tenant_id"])
     m_by_uid = {m["user_id"]: m for m in memberships if m.get("status") != "removed"}
+    # 2026-09-15: someone removed from this workspace is gone from the list. They
+    # used to come back as "active": no live row looked like a legacy member.
+    removed_ids = {m["user_id"] for m in memberships if m.get("status") == "removed"} - set(m_by_uid)
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "roles": 1, "owner_exclusions": 1}) or {}
+    role_map = {r["key"]: list(r["permissions"]) for r in (tenant.get("roles") or [])
+                if r.get("key") and isinstance(r.get("permissions"), list) and r.get("permissions")}
     out = []
     for u in users:
+        if u.get("id") in removed_ids:
+            continue
         m = m_by_uid.get(u.get("id"))
+        # What they can actually open (role settings and temporary grants
+        # included), so approver lists and profiles show the truth.
+        src = {**u, "_role_perms_map": role_map, "_owner_exclusions": list(tenant.get("owner_exclusions") or []),
+               "_temp_grants": list((m or {}).get("temp_grants") or [])}
+        if m:
+            src["role"] = m.get("role") or u.get("role")
+            if isinstance(m.get("permissions"), list):
+                src["permissions"] = m["permissions"]
+        u["effective_permissions"] = sorted(user_perms(src))
         if m:
             u["invite_status"] = m.get("status")   # pending | active | suspended
             u["invited_at"] = m.get("invited_at")
@@ -165,6 +182,37 @@ async def list_users(user: dict = Depends(get_current_user)):
     return out
 
 
+
+
+@router.get("/users/{user_id}/offboarding")
+async def offboarding_summary(user_id: str, user: dict = Depends(require_role("owner"))):
+    """2026-09-15 — what someone holds before they are removed, so the owner
+    sees what will be handed over: open work they do or help on, approvals and
+    decisions waiting on them, the people who report to them, their contacts."""
+    tid = user["tenant_id"]
+    target = await db.users.find_one({"id": user_id, "tenant_id": tid},
+                                     {"_id": 0, "id": 1, "name": 1, "reporting_manager_id": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="Member not found")
+    open_ = {"$nin": ["done", "cancelled"]}
+    suggested = None
+    if target.get("reporting_manager_id"):
+        from services.auth.membership import find_membership, LIVE_STATUSES, legacy_access_allowed
+        mgr = await db.users.find_one({"id": target["reporting_manager_id"], "tenant_id": tid},
+                                      {"_id": 0, "id": 1, "tenant_id": 1, "role": 1})
+        if mgr and (await find_membership(db, mgr["id"], tid, statuses=LIVE_STATUSES)
+                    or await legacy_access_allowed(db, mgr, tid)):
+            suggested = mgr["id"]
+    return {
+        "tasks_doing": await db.tasks.count_documents({"tenant_id": tid, "assignee_id": user_id, "status": open_}),
+        "tasks_helping": await db.tasks.count_documents({"tenant_id": tid, "co_assignee_ids": user_id, "status": open_}),
+        "tasks_approving": await db.tasks.count_documents({"tenant_id": tid, "approver_id": user_id, "status": open_}),
+        "decisions_waiting": await db.decisions.count_documents(
+            {"tenant_id": tid, "approver_id": user_id, "status": {"$in": ["pending", "pending_approval"]}}),
+        "reports": await db.users.count_documents({"tenant_id": tid, "reporting_manager_id": user_id}),
+        "contacts": await db.contacts.count_documents({"tenant_id": tid, "assigned_id": user_id}),
+        "suggested_replacement_id": suggested,
+    }
 
 
 @router.post("/users/{user_id}/deprovision")
@@ -194,10 +242,15 @@ async def deprovision_member(user_id: str, inp: DeprovisionInput,
         )
     # Guard: replacement (if provided) must be a live member.
     if inp.reassign_to_user_id:
-        from services.auth.membership import find_membership, LIVE_STATUSES
+        from services.auth.membership import find_membership, LIVE_STATUSES, legacy_access_allowed
         rep = await find_membership(
             db, inp.reassign_to_user_id, user["tenant_id"], statuses=LIVE_STATUSES,
         )
+        if not rep:
+            # 2026-09-15: an account from before memberships is a live member too.
+            rep_user = await db.users.find_one({"id": inp.reassign_to_user_id, "tenant_id": user["tenant_id"]},
+                                               {"_id": 0, "id": 1, "tenant_id": 1, "role": 1})
+            rep = rep_user if rep_user and await legacy_access_allowed(db, rep_user, user["tenant_id"]) else None
         if not rep:
             raise HTTPException(
                 status_code=400,

@@ -90,6 +90,7 @@ async def get_current_user(
         find_membership as _find_membership,
         project_membership_onto_user as _project,
         LIVE_STATUSES as _LIVE_STATUSES,
+        legacy_access_allowed as _legacy_access_allowed,
     )
     claimed_tenant = payload.get("tenant_id")
     if not claimed_tenant:
@@ -104,7 +105,9 @@ async def get_current_user(
         # fields on the user doc until the backfill migration runs.
         # If those exist AND match the JWT claim, trust them as a
         # fallback so a mid-migration boot doesn't lock everyone out.
-        if user.get("tenant_id") == claimed_tenant and user.get("role"):
+        # ...unless a membership row exists for this workspace (removed,
+        # suspended, pending): then that row is the answer.
+        if await _legacy_access_allowed(db, user, claimed_tenant):
             set_usage_tenant(user.get("tenant_id"))
             return user
         raise HTTPException(

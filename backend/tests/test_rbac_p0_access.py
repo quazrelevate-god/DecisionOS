@@ -107,3 +107,128 @@ def test_temporary_grants_and_role_permissions(with_test_db):
             assert next(r for r in out["roles"] if r["key"] == "operations")["permissions"] == ["inbox", "tasks", "workflows"]
             return True
     assert with_test_db(scenario) is True
+
+
+# ---------------------------------------------------------------------------
+# Remove a member (2026-09-15) and the role permission editor
+# ---------------------------------------------------------------------------
+async def _member(db, uid, role, name, **extra):
+    await db.users.insert_one({"id": uid, "tenant_id": T, "role": role, "name": name,
+                               "email": f"{uid}@{T}.test", "created_at": now_iso(), **extra})
+    await db.memberships.insert_one({"id": f"m-{uid}", "user_id": uid, "tenant_id": T, "role": role,
+                                     "permissions": extra.get("permissions") or [], "status": "active",
+                                     "created_at": now_iso()})
+
+
+def test_remove_member_hands_over_work_and_ends_access(with_test_db):
+    from models.team import DeprovisionInput
+    from services.auth.membership import legacy_access_allowed
+
+    async def scenario(db):
+        await db.tenants.insert_one({"id": T, "company_name": "Weave Co", "plan": "business", "created_at": now_iso(),
+                                     "roles": [{"key": k, "label": k.title()} for k in ("sales", "finance", "operations")]})
+        await _member(db, "u-owner", "owner", "Rajesh (owner)")
+        # Sunita leaves: she does and approves work, decides, and manages Sai.
+        await _member(db, "u-sunita", "finance", "Sunita (finance)", reporting_manager_id="u-owner",
+                      permissions=["inbox", "tasks", "finance", "approvals", "decisions_approve"])
+        # Kiran takes over: may approve tasks, may not decide decisions.
+        await _member(db, "u-kiran", "finance", "Kiran (finance)", permissions=["inbox", "tasks", "finance", "approvals"])
+        await _member(db, "u-sai", "finance", "Sai (finance)", reporting_manager_id="u-sunita")
+        tasks = [
+            {"id": "t-open", "assignee_id": "u-sunita", "status": "in_progress"},
+            {"id": "t-done", "assignee_id": "u-sunita", "status": "done"},
+            {"id": "t-help", "assignee_id": "u-sai", "co_assignee_ids": ["u-sunita"], "status": "todo"},
+            {"id": "t-appr", "assignee_id": "u-sai", "approval_required": True, "approver_id": "u-sunita", "status": "blocked"},
+        ]
+        for t in tasks:
+            await db.tasks.insert_one({"tenant_id": T, "title": t["id"], "created_at": now_iso(), **t})
+        await db.decisions.insert_one({"id": "d-1", "tenant_id": T, "title": "Pay the dye supplier",
+                                       "status": "pending_approval", "approver_id": "u-sunita"})
+        await db.contacts.insert_one({"id": "c-1", "tenant_id": T, "name": "Kumar Fabrics", "assigned_id": "u-sunita"})
+        with e2e_env(db):
+            s = await team.offboarding_summary("u-sunita", user=OWNER)
+            assert (s["tasks_doing"], s["tasks_helping"], s["tasks_approving"], s["decisions_waiting"], s["reports"], s["contacts"]) \
+                == (1, 1, 1, 1, 1, 1)
+            assert s["suggested_replacement_id"] == "u-owner"
+
+            report = await team.deprovision_member("u-sunita", DeprovisionInput(reassign_to_user_id="u-kiran"), user=OWNER)
+            assert report["ok"] and report["approvals_moved"] == 1 and report["decisions_moved"] == 1 and report["reports_moved"] == 1
+            t = {d["id"]: d async for d in db.tasks.find({"tenant_id": T}, {"_id": 0})}
+            assert t["t-open"]["assignee_id"] == "u-kiran", "open work goes to the replacement"
+            assert t["t-done"]["assignee_id"] == "u-sunita", "finished work keeps who did it"
+            assert "u-sunita" not in t["t-help"]["co_assignee_ids"]
+            assert t["t-appr"]["approver_id"] == "u-kiran", "Kiran may approve tasks"
+            assert (await db.decisions.find_one({"id": "d-1"}))["approver_id"] == "u-owner", "Kiran may not decide -> owner"
+            assert (await db.users.find_one({"id": "u-sai"}))["reporting_manager_id"] == "u-kiran"
+            assert (await db.contacts.find_one({"id": "c-1"}))["assigned_id"] == "u-kiran"
+
+            # Gone from the list, and no way back in through the old account fields.
+            listed = {u["id"] for u in await team.list_users(user=OWNER)}
+            assert "u-sunita" not in listed and {"u-owner", "u-kiran", "u-sai"} <= listed
+            sunita = await db.users.find_one({"id": "u-sunita"}, {"_id": 0})
+            assert await legacy_access_allowed(db, sunita, T) is False
+            # A true pre-membership account still gets in.
+            await db.users.insert_one({"id": "u-old", "tenant_id": T, "role": "sales", "name": "Old account"})
+            assert await legacy_access_allowed(db, {"id": "u-old", "tenant_id": T, "role": "sales"}, T) is True
+            return True
+    assert with_test_db(scenario) is True
+
+
+def test_remove_works_for_accounts_from_before_memberships(with_test_db):
+    """Demo and older accounts have no membership row: they can take work over,
+    be removed (and then not sign in), and the last such owner stays."""
+    from models.team import DeprovisionInput
+    from services.auth.membership import legacy_access_allowed
+
+    async def scenario(db):
+        await db.tenants.insert_one({"id": T, "company_name": "Weave Co", "plan": "business", "created_at": now_iso(),
+                                     "roles": [{"key": k, "label": k.title()} for k in ("sales", "finance")]})
+        for uid, role, name, mgr in (("u-owner", "owner", "Rajesh", None), ("u-sunita", "finance", "Sunita", None),
+                                     ("u-priya", "sales", "Priya", "u-sunita")):
+            await db.users.insert_one({"id": uid, "tenant_id": T, "role": role, "name": name, "email": f"{uid}@t1.test",
+                                       "reporting_manager_id": mgr, "created_at": now_iso()})
+        await db.tasks.insert_one({"id": "t-1", "tenant_id": T, "title": "Quote", "assignee_id": "u-priya", "status": "todo"})
+        with e2e_env(db):
+            s = await team.offboarding_summary("u-priya", user=OWNER)
+            assert s["suggested_replacement_id"] == "u-sunita", "an older account can be suggested"
+            report = await team.deprovision_member("u-priya", DeprovisionInput(reassign_to_user_id="u-sunita"), user=OWNER)
+            assert report["ok"] and report["membership_removed"]
+            assert (await db.tasks.find_one({"id": "t-1"}))["assignee_id"] == "u-sunita"
+            priya = await db.users.find_one({"id": "u-priya"}, {"_id": 0})
+            assert await legacy_access_allowed(db, priya, T) is False, "removed: no way back in"
+            assert "u-priya" not in {u["id"] for u in await team.list_users(user=OWNER)}
+            # The only owner (an older account) is not removed.
+            await _refused(team.deprovision_member("u-owner", DeprovisionInput(), user={**OWNER, "id": "u-other-owner"}), 400)
+            return True
+    assert with_test_db(scenario) is True
+
+
+def test_role_access_editor_reaches_people_who_follow_the_role(with_test_db):
+    async def scenario(db):
+        await db.tenants.insert_one({"id": T, "company_name": "Weave Co", "plan": "business", "created_at": now_iso(),
+                                     "roles": [{"key": k, "label": k.title()} for k in ("sales", "finance", "operations")]})
+        await _member(db, "u-owner", "owner", "Rajesh (owner)")
+        await _member(db, "u-priya", "sales", "Priya (sales)")                                   # follows the role
+        await _member(db, "u-anil", "sales", "Anil (sales)", permissions=["inbox", "tasks"])     # own list
+        with e2e_env(db):
+            role_perms = ["inbox", "tasks", "people", "approvals"]
+            out = await tenant_settings.update_role_permissions("sales", RolePermissionsInput(permissions=role_perms), user=OWNER)
+            assert out["members_updated"] == 0
+            eff = {u["id"]: u["effective_permissions"] for u in await team.list_users(user=OWNER)}
+            assert eff["u-priya"] == sorted(role_perms), "follows the role"
+            assert eff["u-anil"] == ["inbox", "tasks"], "own list wins"
+
+            out = await tenant_settings.update_role_permissions(
+                "sales", RolePermissionsInput(permissions=role_perms, apply_to_members=True), user=OWNER)
+            assert out["members_updated"] == 1
+            assert (await db.users.find_one({"id": "u-anil"}))["permissions"] == []
+            eff = {u["id"]: u["effective_permissions"] for u in await team.list_users(user=OWNER)}
+            assert eff["u-anil"] == sorted(role_perms)
+
+            # A member saved with "Use the role's access" (an empty list) follows it too.
+            await team.update_user("u-anil", UserUpdateInput(permissions=["inbox"]), user=OWNER)
+            await team.update_user("u-anil", UserUpdateInput(permissions=[]), user=OWNER)
+            eff = {u["id"]: u["effective_permissions"] for u in await team.list_users(user=OWNER)}
+            assert eff["u-anil"] == sorted(role_perms)
+            return True
+    assert with_test_db(scenario) is True

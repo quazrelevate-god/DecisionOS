@@ -50,18 +50,18 @@ Owners and people with **Manage team** see all tabs. Everyone else sees only Pro
 **What works:** an org tree by role and manager, search, and a "Currently out" strip. **Add member** asks for name, email, title, mobile, sign-in method, Team (role), Reports to and 16 permission toggles, and shows a preview of the menus they'll see. It checks the seat limit and whether the person is being made an owner. A mobile number gives a 7-day invite link.
 
 **Findings**
-- [ ] **P0: No way to remove or deactivate someone.** The backend already has `POST /users/{id}/deprovision`, which revokes access and reassigns their tasks, and `/uninvite`, but nothing in the app calls them. Before building on it, check what happens to decisions waiting on that person.
-- [ ] **P1:** Changing someone's role keeps their old permission list instead of taking the new role's defaults (`Team.js:146`).
+- [x] **P0: No way to remove or deactivate someone.** *Fixed 2026-09-15: the owner opens a profile → Remove from company. It shows what the person holds (open tasks, tasks they help on, approvals, decisions waiting on them, reports, contacts) and asks who takes over. Open work, contacts and reports go to that person; approvals and decisions go to them when they're allowed, otherwise to the owner; finished tasks keep who did them. A pending invite gets Cancel invite instead. Also fixed: removed people still showed in the member list, and could still sign in through the old-account fallback.* Was: The backend already has `POST /users/{id}/deprovision`, which revokes access and reassigns their tasks, and `/uninvite`, but nothing in the app calls them. Before building on it, check what happens to decisions waiting on that person.
+- [x] **P1:** Changing someone's role keeps their old permission list instead of taking the new role's defaults (`Team.js:146`). *Fixed 2026-09-15: someone who follows their role gets the new role's access.*
 - [ ] **P1:** Name and email can't be edited.
 - [ ] **P1:** People who sign in with a password get no invite or hand-off. "Get invite link" also shows for people who are already active.
-- [ ] **P1:** The Reports to help text only mentions leave. It should say it also decides who approves their tasks and decisions and where their overdue work goes.
+- [x] **P1:** *(Fixed 2026-09-15.)* The Reports to help text only mentions leave. It should say it also decides who approves their tasks and decisions and where their overdue work goes.
 - [ ] **P1:** On the phone, the Team tile is hidden without Manage team, but the page is open to everyone.
 - [ ] **P2:** Owner promote and demote use the browser's plain confirm box instead of the app's own dialog.
 - [ ] **P2:** `/people` duplicates Team, uses the old design and has no menu link. Remove it.
 
 ## 4. Roles and permissions
 
-- [ ] **P0: Role permissions can't be managed.**
+- [x] **P0: Role permissions can't be managed.** *Fixed 2026-09-15: Settings › Business › Team roles › Access (owner only) sets what each role can open, with "Use the built-in default" and an option to make people who have their own access follow the role. In Add/Edit member, "Use the role's access" is on by default, so people follow their role unless you untick it. The member list now returns each person's real access, so approver lists and profiles match the server.* Was:
   - There's no screen to set a role's permissions (the API exists: `PATCH /tenant/roles/{key}/permissions`).
   - Add member always saves a personal list, which permanently overrides the role (`Team.js:123,175`, `permissions.py:58-61`) ✔.
   - Result: changing a role never reaches anyone added through the app.

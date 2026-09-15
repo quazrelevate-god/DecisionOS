@@ -61,6 +61,8 @@ class RoleLabelInput(BaseModel):
 
 class RolePermissionsInput(BaseModel):
     permissions: List[str]
+    # 2026-09-15: also make everyone in the role follow it (clears their own lists).
+    apply_to_members: Optional[bool] = False
 
 
 class AiConsentGrantInput(BaseModel):

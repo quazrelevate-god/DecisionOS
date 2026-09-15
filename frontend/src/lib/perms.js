@@ -33,6 +33,14 @@ export function defaultPermsForRole(role) {
   return ROLE_DEFAULT_PERMS[role] || BASE;
 }
 
+// 2026-09-15 — what a role gives: the owner's setting for it (Settings › Team
+// roles › Access), else the built-in default. Same order as the server.
+export function roleDefaultPerms(role, tenantRoles) {
+  const r = (tenantRoles || []).find((x) => x.key === role);
+  if (r && Array.isArray(r.permissions) && r.permissions.length) return r.permissions.filter((k) => PERMISSION_KEYS.includes(k));
+  return defaultPermsForRole(role);
+}
+
 export function userPerms(user) {
   if (!user) return [];
   if (user.role === "owner") return PERMISSION_KEYS;

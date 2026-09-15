@@ -10,7 +10,7 @@ import { formatPhone } from "../lib/format";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { PERMISSIONS, defaultPermsForRole, hasPerm, userPerms } from "../lib/perms";
+import { PERMISSIONS, hasPerm, roleDefaultPerms, userPerms } from "../lib/perms";
 import { toast } from "sonner";
 import {
   AirplaneTakeoff, Camera, Check, Copy, EnvelopeSimple, Eye, LinkSimple, MagnifyingGlass,
@@ -121,10 +121,14 @@ function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onI
   const startRole = defaultRole && roleOptions.some((r) => r.key === defaultRole) ? defaultRole : roleOptions[0]?.key || "";
   const blankForm = () => ({
     name: "", email: "", title: "", password: "", phone: "", passwordless: false,
-    role: startRole, permissions: defaultPermsForRole(startRole), reporting_manager_id: "",
+    role: startRole, permissions: roleDefaultPerms(startRole, roleOptions), reporting_manager_id: "",
+    // 2026-09-15 — a new member follows their role's access unless unticked.
+    follow_role: true,
   });
   const [form, setForm] = useState(blankForm);
   const roleName = (key) => roleOptions.find((r) => r.key === key)?.label || key;
+  const rolePerms = roleDefaultPerms(form.role, roleOptions);
+  const shownPerms = form.follow_role ? rolePerms : form.permissions;
 
   const openChange = (o) => {
     setOpen(o);
@@ -133,7 +137,8 @@ function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onI
       setForm({
         name: initial.name, email: initial.email, title: initial.title || "", password: "",
         phone: initial.phone || "", passwordless: false, role: initial.role,
-        permissions: Array.isArray(initial.permissions) && initial.permissions.length ? [...initial.permissions] : defaultPermsForRole(initial.role),
+        permissions: Array.isArray(initial.permissions) && initial.permissions.length ? [...initial.permissions] : roleDefaultPerms(initial.role, roleOptions),
+        follow_role: !(Array.isArray(initial.permissions) && initial.permissions.length),
         reporting_manager_id: initial.reporting_manager_id || "",
       });
     } else {
@@ -144,8 +149,9 @@ function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onI
   const setRole = (role) => setForm((f) => ({
     ...f, role,
     permissions: role === "owner" ? PERMISSIONS.map((p) => p.key)
+      : f.follow_role ? roleDefaultPerms(role, roleOptions)
       : (editing && f.role !== "owner") ? f.permissions
-      : defaultPermsForRole(role),
+      : roleDefaultPerms(role, roleOptions),
   }));
   const togglePerm = (key) => setForm((f) => ({ ...f, permissions: f.permissions.includes(key) ? f.permissions.filter((k) => k !== key) : [...f.permissions, key] }));
 
@@ -163,7 +169,7 @@ function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onI
     try {
       if (editing) {
         await api.patch(`/users/${initial.id}`, {
-          role: form.role, permissions: form.permissions, phone: form.phone,
+          role: form.role, permissions: form.follow_role ? [] : form.permissions, phone: form.phone,
           reporting_manager_id: form.reporting_manager_id, title: form.title.trim(),
         });
         toast.success(`${initial.name}'s access updated`);
@@ -173,7 +179,8 @@ function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onI
       }
       const base = {
         name: form.name, email: form.email, title: form.title.trim() || null, role: form.role,
-        permissions: form.permissions, phone: form.phone, reporting_manager_id: form.reporting_manager_id || null,
+        // An empty list means "the role's access" on the server.
+        permissions: form.follow_role ? [] : form.permissions, phone: form.phone, reporting_manager_id: form.reporting_manager_id || null,
       };
       const res = await api.post("/users", form.passwordless ? base : { ...base, password: form.password });
       toast.success(`${form.name} added`);
@@ -264,7 +271,7 @@ function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onI
                   ]} />
               </Field>
             </div>
-            <p className="text-xs text-neutral-500">The reporting manager approves their leave, and the tree lines them up under that person.</p>
+            <p className="text-xs text-neutral-500">The reporting manager approves their leave, and their tasks and decisions when nobody else is picked; overdue work reaches them first. The tree lines them up under that person.</p>
           </section>
 
           <section>
@@ -278,19 +285,36 @@ function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onI
               </div>
             ) : (
               <>
+                <label className={`mb-3 flex cursor-pointer items-start gap-3 px-4 py-3 ${DRAWER_CARD}`} data-testid="member-follow-role">
+                  <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-neutral-900" checked={!!form.follow_role}
+                    data-testid="member-follow-role-toggle"
+                    onChange={(e) => {
+                      const follow = e.target.checked;
+                      setForm((f) => ({ ...f, follow_role: follow, permissions: follow ? f.permissions : [...roleDefaultPerms(f.role, roleOptions)] }));
+                    }} />
+                  <span className="min-w-0 text-sm text-neutral-800">
+                    <span className="font-semibold">Use the {roleName(form.role)} role's access</span>
+                    <span className="mt-0.5 block text-xs text-neutral-500">
+                      {form.follow_role
+                        ? "When the owner changes this role's access in Settings › Team roles, it reaches them too."
+                        : "Their own access, chosen below. Changes to the role won't reach them."}
+                    </span>
+                  </span>
+                </label>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" data-testid="permission-list">
                   {PERMISSIONS.map((p) => {
-                    const on = form.permissions.includes(p.key);
+                    const on = shownPerms.includes(p.key);
                     // RBAC P0 (2026-09-15) — same rule as the server: someone who isn't
                     // an owner gives only access they hold, the person already has, or
                     // their role's defaults (not to themselves).
                     const selfEdit = editing && initial?.id === me?.id;
                     const locked = me?.role !== "owner" && !on && !userPerms(me).includes(p.key)
                       && !(initial?.permissions || []).includes(p.key)
-                      && (selfEdit || !defaultPermsForRole(form.role).includes(p.key));
+                      && (selfEdit || !rolePerms.includes(p.key));
                     return (
-                      <button key={p.key} type="button" data-testid={`perm-${p.key}`} aria-pressed={on} disabled={locked}
-                        title={locked ? "Only an owner can give access you don't have" : undefined} onClick={() => togglePerm(p.key)}
+                      <button key={p.key} type="button" data-testid={`perm-${p.key}`} aria-pressed={on} disabled={locked || form.follow_role}
+                        title={form.follow_role ? "Set by the role — untick “Use the role's access” to choose" : locked ? "Only an owner can give access you don't have" : undefined}
+                        onClick={() => togglePerm(p.key)}
                         className={`flex min-h-11 items-center justify-between gap-2 rounded-2xl px-3.5 py-2 text-left text-[13px] font-medium ring-1 ring-inset transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${on ? "bg-neutral-900 text-white ring-transparent" : "bg-white/70 text-slate-700 ring-slate-900/[0.06] hover:bg-white"}`}>
                         <span>{p.label}</span>
                         <span aria-hidden="true" className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${on ? "bg-white text-neutral-900" : "ring-1 ring-inset ring-slate-900/20"}`}>
@@ -304,7 +328,7 @@ function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onI
                   <p className={DRAWER_LABEL}>They will see these menus</p>
                   <div className="flex flex-wrap gap-1.5">
                     {MENU_PREVIEW.map((m) => {
-                      const visible = !m.perm || form.permissions.includes(m.perm);
+                      const visible = !m.perm || shownPerms.includes(m.perm);
                       return (
                         <span key={m.label} data-testid={`preview-${m.label}`}
                           className={`${CHIP} ${visible ? "bg-neutral-900 text-white ring-transparent" : `${QUIET_CHIP} line-through opacity-60`}`}>
@@ -769,9 +793,124 @@ function MemberProfileDialog({
               </button>
             </div>
           )}
+
+          {/* 2026-09-15 — off-boarding: the owner removes someone (or cancels a
+              pending invite) and picks who takes over their work. */}
+          {isOwner && !isMe && <RemoveMemberSection u={u} members={members} onDone={onSaved} />}
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* 2026-09-15 — remove someone from the company, or cancel their pending invite.
+   Shows what they hold, asks who takes it over, then POST /deprovision: their
+   sign-in ends, open work / contacts / reports go to that person, and approvals
+   and decisions go to them when allowed, else to the owner. History stays. */
+function RemoveMemberSection({ u, members, onDone }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [to, setTo] = useState(null);
+  const pending = u.invite_status === "pending";
+  const summaryQ = useQuery({
+    queryKey: ["offboarding", u.id],
+    queryFn: () => api.get(`/users/${u.id}/offboarding`).then((r) => r.data),
+    enabled: open && !pending,
+  });
+  const s = summaryQ.data;
+  const chosen = to ?? (s?.suggested_replacement_id || "");
+  const others = (members || []).filter((m) => m.id !== u.id && m.invite_status !== "pending");
+  const first = u.name.split(" ")[0];
+
+  const cancelInvite = async () => {
+    setBusy(true);
+    try {
+      await api.post(`/users/${u.id}/uninvite`);
+      toast.success(`Invite for ${u.name} cancelled`);
+      onDone();
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Couldn't cancel the invite");
+    } finally { setBusy(false); }
+  };
+  const remove = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/users/${u.id}/deprovision`, { reassign_to_user_id: chosen || null });
+      const who = others.find((m) => m.id === chosen)?.name;
+      const moved = (data.tasks_reassigned || 0) + (data.approvals_moved || 0) + (data.decisions_moved || 0);
+      toast.success(`${u.name} removed${who && moved ? ` — ${moved} item${moved === 1 ? "" : "s"} handed to ${who}` : ""}`);
+      onDone();
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Couldn't remove them");
+    } finally { setBusy(false); }
+  };
+
+  if (pending) {
+    return (
+      <div className="border-t border-slate-900/[0.06] pt-4">
+        <button type="button" onClick={cancelInvite} disabled={busy} data-testid={`cancel-invite-${u.id}`}
+          className={`inline-flex h-10 items-center rounded-pill px-4 text-sm font-medium text-rose-700 transition-colors hover:bg-white disabled:opacity-50 ${GLASS_PILL}`}>
+          {busy ? "Cancelling…" : "Cancel invite"}
+        </button>
+      </div>
+    );
+  }
+  const rows = s ? [
+    ["Open tasks they do", s.tasks_doing],
+    ["Open tasks they help on (they come off)", s.tasks_helping],
+    ["Tasks waiting for their approval", s.tasks_approving],
+    ["Decisions waiting on them", s.decisions_waiting],
+    ["People who report to them", s.reports],
+    ["Contacts assigned to them", s.contacts],
+  ] : [];
+  return (
+    <div className="border-t border-slate-900/[0.06] pt-4" data-testid={`remove-member-${u.id}`}>
+      {!open ? (
+        <button type="button" onClick={() => setOpen(true)} data-testid={`remove-member-open-${u.id}`}
+          className={`inline-flex h-10 items-center rounded-pill px-4 text-sm font-medium text-rose-700 transition-colors hover:bg-white ${GLASS_PILL}`}>
+          Remove from company
+        </button>
+      ) : (
+        <div className={`space-y-3 px-4 py-4 ${DRAWER_CARD}`}>
+          <p className="text-sm font-semibold text-neutral-900">Remove {u.name}?</p>
+          <p className="text-xs leading-relaxed text-neutral-600">
+            {first} can no longer sign in. Their history stays. Nothing is deleted.
+          </p>
+          {summaryQ.isLoading ? (
+            <div className="ds-skeleton h-24 rounded-xl" aria-hidden="true" />
+          ) : summaryQ.isError ? (
+            <p className="text-xs text-rose-700">Couldn't load what they hold. Close and try again.</p>
+          ) : (
+            <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm" data-testid={`offboarding-summary-${u.id}`}>
+              {rows.map(([label, n]) => (
+                <div key={label} className="contents">
+                  <dt className="text-neutral-600">{label}</dt>
+                  <dd className="text-right font-semibold tabular-nums text-neutral-900">{n}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          <Field label="Hand their work to">
+            <GlassSelect testid={`remove-member-to-${u.id}`} ariaLabel="Who takes over" value={chosen} onChange={setTo}
+              options={[{ value: "", label: "Nobody (tasks left unassigned)" }, ...others.map((m) => ({ value: m.id, label: m.name }))]} />
+          </Field>
+          <p className="text-xs leading-relaxed text-neutral-500">
+            Open tasks, contacts and the people who report to {first} go to the person you pick. Approvals and decisions go to them
+            when they're allowed to approve, otherwise to the owner.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={remove} disabled={busy || summaryQ.isLoading} data-testid={`remove-member-confirm-${u.id}`}
+              className="inline-flex h-10 items-center rounded-pill bg-rose-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:opacity-50">
+              {busy ? "Removing…" : `Remove ${first}`}
+            </button>
+            <button type="button" onClick={() => { setOpen(false); setTo(null); }} disabled={busy}
+              className={`inline-flex h-10 items-center rounded-pill px-4 text-sm font-medium text-neutral-800 hover:bg-white ${GLASS_PILL}`}>
+              Keep them
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -756,6 +756,14 @@ export default function Workflows({ embedded = false }) {
                             {w.amount != null && <span className="shrink-0 font-mono text-xs font-semibold tabular-nums">{money(w.amount, tenant?.currency)}</span>}
                           </div>
                         )}
+                        {/* ASK-32 4.4 — the decision this card came from. */}
+                        {w.decision_id && w.decision_title && (
+                          <a href={`/inbox?decision=${encodeURIComponent(w.decision_id)}`} draggable={false}
+                            onClick={(e) => e.stopPropagation()} data-testid={`wf-card-decision-${w.id}`}
+                            className="mt-1 block truncate text-[11px] text-muted-foreground underline-offset-2 hover:underline lg:pl-[23px]">
+                            From decision: {w.decision_title}
+                          </a>
+                        )}
 
                         {stageTasks.length > 0 ? (
                           <div className="mt-2.5 space-y-1 min-h-0 flex-1 overflow-hidden" data-testid={`wf-card-tasks-${w.id}`}>

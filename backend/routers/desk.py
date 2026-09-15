@@ -470,30 +470,60 @@ async def _cards_needs_decision(tid: str, user: dict) -> list:
     else:
         q["approver_id"] = uid
     rows = await db.decisions.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
-    creator_ids = [d.get("created_by") for d in rows if d.get("created_by")]
-    umap = await _users_lookup(tid, creator_ids)
+    # ASK-32 2.4 — decisions I raised that wait on someone else: I can follow
+    # them here ("Waiting on Sunita"), I just cannot decide them.
+    mine = {d["id"] for d in rows}
+    sent = [d for d in await db.decisions.find(
+        {"tenant_id": tid, "status": {"$in": ["pending", "pending_approval"]}, "created_by": uid},
+        {"_id": 0}).sort("created_at", -1).to_list(100) if d["id"] not in mine]
+    people = [d.get("created_by") for d in rows + sent if d.get("created_by")]
+    people += [d.get("approver_id") for d in rows + sent if d.get("approver_id")]
+    umap = await _users_lookup(tid, people)
     cards = []
-    for d in rows:
+    # ASK-32: oldest first by the date it was captured. This sorted the TEXT
+    # "Waiting N days", so "Waiting 1 day" came before "Waiting 13 days".
+    ordered = [(d, False) for d in sorted(rows, key=lambda r: r.get("created_at") or "")]
+    ordered += [(d, True) for d in sorted(sent, key=lambda r: r.get("created_at") or "")]
+    for d, following in ordered:
         creator = (umap.get(d.get("created_by") or "", {}) or {}).get("name") or "Unknown"
         waiting_days = _days_between(d.get("created_at"))
-        proposed = len(d.get("proposed_tasks") or [])
         ctx_parts = [f"Waiting {waiting_days} day{'s' if waiting_days != 1 else ''}"]
-        ctx_parts.append(f"From {creator}")
-        if proposed:
-            ctx_parts.append(f"Unblocks {proposed} task{'s' if proposed != 1 else ''}")
+        if following:
+            decider = (umap.get(d.get("approver_id") or "", {}) or {}).get("name")
+            ctx_parts.append(f"Waiting on {decider or 'an owner'}")
+        else:
+            ctx_parts.append(f"From {creator}")
+        # ASK-32 Phase 1: a new decision PROPOSES its work; an older one created
+        # its tasks blocked and unblocks them. (`proposed_tasks` was never written.)
+        prop = d.get("proposal") or {}
+        n_tasks, n_wf = len(prop.get("tasks") or []), len(prop.get("workflows") or [])
+        if prop:
+            made = [f"{n_tasks} task{'s' if n_tasks != 1 else ''}"] if n_tasks else []
+            if n_wf:
+                made.append(f"{n_wf} workflow{'s' if n_wf != 1 else ''}")
+            if made:
+                ctx_parts.append("On approval: " + ", ".join(made))
+        elif d.get("task_ids"):
+            n = len(d["task_ids"])
+            ctx_parts.append(f"Unblocks {n} task{'s' if n != 1 else ''}")
+        if d.get("repeat_of"):
+            ctx_parts.append("Possible repeat")
+        amount = d.get("amount")
+        if amount is None:
+            amounts = [w.get("amount") for w in prop.get("workflows") or [] if isinstance(w.get("amount"), (int, float))]
+            amount = sum(amounts) if amounts else None
         cards.append({
             "id": d["id"],
             "kind": "decision",
             "title": d.get("title") or d.get("summary", "")[:80],
             "context_line": " · ".join(ctx_parts),
-            "amount": d.get("amount"),
-            "amount_formatted": _format_amount(d.get("amount")),
-            "cta": "review",
+            "amount": amount,
+            "amount_formatted": _format_amount(amount),
+            # "review": mine to decide · "follow": I raised it, someone else decides.
+            "cta": "follow" if following else "review",
             "target_id": d["id"],
             "target_kind": "decision",
         })
-    # Sort by waiting_days desc via created_at asc (oldest = most waiting)
-    cards.sort(key=lambda c: c["context_line"], reverse=False)
     return cards
 
 
@@ -673,8 +703,11 @@ async def desk_chip(chip: str = "needs_decision", user: dict = Depends(get_curre
         raise HTTPException(status_code=400, detail="Invalid chip")
 
     # Counters (always return the full map so header subline is one call)
+    # ASK-32 2.4 — the Decisions count is what waits on ME; decisions I raised
+    # for someone else are listed but not counted.
+    decision_cards = await _cards_needs_decision(tid, user)
     counters = {
-        "needs_decision": len(await _cards_needs_decision(tid, user)),
+        "needs_decision": sum(1 for c in decision_cards if c.get("cta") == "review"),
         "on_fire": len(await _cards_on_fire(tid, user)),
         "due_today": len(await _cards_due_today(tid, user)),
         "important": len(await _cards_important(tid, user)),

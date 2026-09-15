@@ -298,9 +298,10 @@ def test_decision_approve_and_reject_lifecycle(with_test_db):
     import services.ai.generators as gen
     import services.workflow_engine as eng
     import services.ai.brain_context as bctx
+    import services.decision_flow as dflow  # ASK-32: approve/reject live here now
 
     async def scenario(db):
-        restore = _use_db(db, dec, core, core_deps, enrich, tasks_svc, wfs, gen, eng, bctx)
+        restore = _use_db(db, dec, core, core_deps, enrich, tasks_svc, wfs, gen, eng, bctx, dflow)
         try:
             tid = "t1"
             owner = _u("owner", "o1")
@@ -322,20 +323,24 @@ def test_decision_approve_and_reject_lifecycle(with_test_db):
             bc_appr = await db.brain_context.count_documents(
                 {"tenant_id": tid, "kind": "decision", "source_id": "dec1", "outcome": "approved"})
 
-            # --- REJECT: cascade-delete everything spawned, no orphans ---
+            # --- REJECT (ASK-32 Phase 1): an older decision that made work at
+            # capture — waiting tasks are cancelled, untouched auto-created work
+            # removed, work already under way kept. Nothing is deleted blindly. ---
             await db.decisions.insert_one({"id": "dec2", "tenant_id": tid, "title": "Hire temp",
                                            "status": "pending_approval", "summary": "seasonal"})
             await db.tasks.insert_one({"id": "tk2", "tenant_id": tid, "decision_id": "dec2",
-                                       "status": "todo", "title": "Post listing"})
+                                       "status": "in_progress", "title": "Post listing"})
+            await db.tasks.insert_one({"id": "tk3", "tenant_id": tid, "decision_id": "dec2",
+                                       "status": "blocked", "title": "Interview"})
             await db.workflows.insert_one({"id": "wf2", "tenant_id": tid, "decision_id": "dec2",
                                            "type": "purchase_payment", "stage": "requested",
                                            "stage_version": 0, "stages": _PP_STAGES})
-            await db.calendar_events.insert_one({"id": "cal2", "tenant_id": tid, "decision_id": "dec2"})
+            await db.calendar_events.insert_one({"id": "cal2", "tenant_id": tid, "decision_id": "dec2", "source": "voice"})
             await db.inbox.insert_one({"id": "ib2", "tenant_id": tid, "ref_type": "decision",
                                        "ref_id": "dec2", "status": "open"})
             await dec.reject_decision("dec2", user=owner)
             d2 = await db.decisions.find_one({"id": "dec2"}, {"_id": 0, "status": 1})
-            orphan_tasks = await db.tasks.count_documents({"tenant_id": tid, "decision_id": "dec2"})
+            orphan_tasks = {t["id"]: t["status"] async for t in db.tasks.find({"tenant_id": tid, "decision_id": "dec2"}, {"_id": 0})}
             orphan_wfs = await db.workflows.count_documents({"tenant_id": tid, "decision_id": "dec2"})
             orphan_cal = await db.calendar_events.count_documents({"tenant_id": tid, "decision_id": "dec2"})
             ib = await db.inbox.find_one({"id": "ib2"}, {"_id": 0, "status": 1})
@@ -361,7 +366,9 @@ def test_decision_approve_and_reject_lifecycle(with_test_db):
     assert bc_appr == 1, "approval writes a decision row to brain memory"
     # reject
     assert rej_status == "rejected"
-    assert orphan_t == 0 and orphan_w == 0 and orphan_c == 0, "reject must leave NO orphans"
+    assert orphan_t == {"tk2": "in_progress", "tk3": "cancelled"}, \
+        f"reject keeps work under way and cancels waiting tasks, deleting none: {orphan_t}"
+    assert orphan_w == 0 and orphan_c == 0, "untouched auto-created workflow and calendar entry are removed"
     assert ib_status == "dismissed", "reject dismisses the decision's inbox item"
     assert missing == 404
 

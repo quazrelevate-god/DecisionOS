@@ -338,13 +338,15 @@ def test_voice_to_decision_to_execution(with_test_db):
             assert dec_id, "voice note did not materialise a decision"
             dec = await db.decisions.find_one({"id": dec_id})
             assert dec["status"] == "pending_approval", dec["status"]
-            tk = await db.tasks.find_one({"tenant_id": "t1", "decision_id": dec_id})
-            assert tk is not None and tk["status"] == "blocked", "task not created blocked"
+            # ASK-32 Phase 1: the task is only PROPOSED until the decision is approved.
+            assert [t["title"] for t in dec["proposal"]["tasks"]] == ["Pack and ship the Kapoor order"]
+            assert await db.tasks.count_documents({"tenant_id": "t1", "decision_id": dec_id}) == 0, \
+                "nothing may be created before approval"
 
-            # approve -> task actionable
+            # approve -> the task is created, ready to work
             await decisions.approve_decision(dec_id, user=owner())
-            tk = await db.tasks.find_one({"id": tk["id"]})
-            assert tk["status"] == "todo"
+            tk = await db.tasks.find_one({"tenant_id": "t1", "decision_id": dec_id})
+            assert tk is not None and tk["status"] == "todo" and tk["created_by"] == "u-owner"
 
             # generate an execution plan, tick every step, save as accepted -> task done
             await tasks_router.generate_execution_plan(tk["id"], user=owner())

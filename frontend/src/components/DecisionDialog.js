@@ -51,12 +51,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
 import {
   ChatCircleText, User, WhatsappLogo, Microphone, PaperPlaneTilt,
-  CheckCircle, ArrowRight, LinkSimple, Check, X, WarningCircle,
+  CheckCircle, ArrowRight, LinkSimple, Check, X, WarningCircle, Play,
 } from "@phosphor-icons/react";
+import { Link } from "react-router-dom";
 import {
   CHIP, QUIET_CHIP, DRAWER_CARD, DRAWER_FIELD, DRAWER_LABEL,
   GLASS_ICON_BTN, GLASS_PILL, GLASS_SHEET, INK_PILL, MAROON_PILL,
 } from "./karma/glass";
+import { GlassSelect } from "./karma/GlassSelect";
+import { useAuth } from "../context/AuthContext";
+import { userPerms } from "../lib/perms";
+import { canAssignPerson } from "../lib/taskAccess";
 
 /* ── helpers shared with the Desk's decision cards ───────────────────────── */
 export function raisedByLabel(d) {
@@ -75,6 +80,9 @@ function extractAmount(d) {
   if (d.amount != null && Number(d.amount) > 0) {
     return `₹${Number(d.amount).toLocaleString("en-IN")}`;
   }
+  // ASK-32 — the money in the workflows the decision proposes.
+  const wfAmounts = (d.proposal?.workflows || []).map((w) => Number(w.amount)).filter((n) => n > 0);
+  if (wfAmounts.length) return `₹${wfAmounts.reduce((a, b) => a + b, 0).toLocaleString("en-IN")}`;
   const text = `${d.title || ""} ${d.summary || ""}`;
   const m = text.match(/₹\s?([\d,]+(?:\.\d+)?)/) || text.match(/Rs\.?\s?([\d,]+(?:\.\d+)?)/i);
   if (m) return `₹${m[1]}`;
@@ -119,6 +127,8 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
   const [confirmReject, setConfirmReject] = useState(false);
+  const { user } = useAuth();
+  const [changing, setChanging] = useState(false);
   // Focus lands on the close when the card opens, not on the card itself:
   // Radix focuses the content, and the content's focus ring is the app's
   // lavender outline drawn round the whole popup.
@@ -136,6 +146,36 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
   const wfLabel = useMemo(() => workflowLabel(d), [d]);
   const tasks = d?.tasks || [];
   const blocked = tasks.filter((t) => t.status === "blocked");
+  /* ASK-32 Phase 1 — a waiting decision PROPOSES its work; none of it exists
+     until it is approved. Older decisions created their tasks blocked, so they
+     keep reading the real tasks. */
+  const proposal = d?.proposal || null;
+  const proposing = canDecide && !!proposal;
+  const rows = proposing ? (proposal.tasks || []) : tasks;
+  const extras = proposing ? [
+    /* ASK-32 Phase 4 — a workflow already on the board is named as such, with
+       the stage it moves to; a new one says where it starts. */
+    ...(proposal.workflows || []).map((w) => {
+      const stage = (k) => String(k || "").replace(/_/g, " ");
+      return {
+        key: w.key, kind: "workflows",
+        label: w.mode === "existing" ? `${w.pipeline_label || "Workflow"}: ${w.title} (already on the board)` : `New ${w.pipeline_label || "workflow"}: ${w.title}`,
+        sub: [w.counterparty, Number(w.amount) > 0 ? `₹${Number(w.amount).toLocaleString("en-IN")}` : null,
+          w.mode === "existing"
+            ? (w.move_to ? `moves from ${stage(w.stage)} to ${stage(w.move_to)}` : `stays at ${stage(w.stage)}`)
+            : (w.stage ? `starts at ${stage(w.stage)}` : null)].filter(Boolean).join(" · "),
+      };
+    }),
+    ...(proposal.meetings || []).map((m) => ({ key: m.key, kind: "meetings", label: `Meeting: ${m.title}`, sub: [m.when, m.date].filter(Boolean).join(" · ") })),
+    ...(proposal.reminders || []).map((r) => ({ key: r.key, kind: "reminders", label: `Reminder: ${r.title}`, sub: `For ${d?.created_by_name || "the person who raised it"}` })),
+    ...(proposal.memory_notes || []).map((n) => ({ key: n.key, kind: "memory_notes", label: `Company note: ${n.text}`, sub: n.tag })),
+  ] : [];
+  const nWorkflows = (proposal?.workflows || []).length;
+  const createsText = [
+    rows.length ? `${rows.length} task${rows.length === 1 ? "" : "s"}` : null,
+    nWorkflows ? `${nWorkflows} workflow${nWorkflows === 1 ? "" : "s"}` : null,
+    extras.length - nWorkflows > 0 ? `${extras.length - nWorkflows} more item${extras.length - nWorkflows === 1 ? "" : "s"}` : null,
+  ].filter(Boolean).join(", ");
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["decision", decisionId] });
@@ -146,14 +186,107 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
     qc.invalidateQueries({ queryKey: ["notifications"] });
   };
 
+  /* ASK-32 Phase 2 — only the person it waits on (or an owner) decides it or
+     hands it to someone else; anyone else who can open it sees who decides. */
+  const mayDecide = canDecide && (user?.role === "owner" || d?.approver_id === user?.id
+    || (!d?.approver_id && userPerms(user).includes("decisions_approve")));
+  const waitingOn = d?.approver_id && d.approver_id === user?.id ? "Waiting on you"
+    : d?.approver_name ? `Waiting on ${d.approver_name}` : "Waiting on an owner";
+  const approversQ = useQuery({
+    queryKey: ["decision-approvers", decisionId],
+    queryFn: () => api.get(`/decisions/${decisionId}/approvers`).then((r) => r.data),
+    enabled: !!decisionId && open && changing,
+  });
+  const changeM = useMutation({
+    mutationFn: (approverId) => api.post(`/decisions/${decisionId}/approver`, { approver_id: approverId }),
+    onSuccess: (res) => {
+      toast.success(`Sent to ${res?.data?.approver_name || "them"} to decide`);
+      setChanging(false);
+      invalidate();
+    },
+    onError: (e) => toast.error(e.response?.data?.detail || "Could not change who decides"),
+  });
+
+  /* ASK-32 Phase 3 (DD5) — before approving, whoever decides can change who
+     does a task, when it is due, or drop an item. The server holds the same
+     rules (and who may be given a task). */
+  const editable = proposing && mayDecide;
+  const [editBusy, setEditBusy] = useState(false);
+  const [audioUrl, setAudioUrl] = useState(null);
+  const membersQ = useQuery({
+    queryKey: ["users"],
+    queryFn: () => api.get("/users").then((r) => r.data),
+    enabled: !!open && editable,
+  });
+  const people = (membersQ.data || []).filter((m) => canAssignPerson(user, m))
+    .map((m) => ({ value: m.id, label: m.id === user?.id ? `${m.name} (you)` : m.name }));
+  const editTask = async (key, body) => {
+    setEditBusy(true);
+    try {
+      await api.patch(`/decisions/${decisionId}/proposal/tasks/${key}`, body);
+      invalidate();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not change it");
+    } finally { setEditBusy(false); }
+  };
+  const removeItem = async (kind, key) => {
+    setEditBusy(true);
+    try {
+      await api.delete(`/decisions/${decisionId}/proposal/${kind}/${key}`);
+      toast.success("Removed — it won't be created");
+      invalidate();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not remove it");
+    } finally { setEditBusy(false); }
+  };
+  const playAudio = async () => {
+    try {
+      const { data } = await api.get(`/voice-notes/${d.said.voice_note_id}/audio`, { responseType: "blob" });
+      setAudioUrl(URL.createObjectURL(data));
+    } catch (e) {
+      toast.error("Could not load the voice note");
+    }
+  };
+  const saidHow = d?.said
+    ? (d.said.how === "voice" ? `Voice note${d.said.language ? ` · ${d.said.language}` : ""}`
+      : d.said.how === "whatsapp" ? "WhatsApp" : "Typed")
+    : null;
+
+  /* The decision's history, drawn once per layout (see the two mounts below). */
+  const historyCard = (sfx) => ((d?.timeline || []).length > 0 ? (
+    <Card label="Prior activity" testid={`decision-history-card${sfx}`}>
+      <div className="space-y-2.5" data-testid={`decision-history${sfx}`}>
+        {(d.timeline || []).map((e, i) => (
+          <div key={`${e.ts}-${i}`}
+            className={`border-l-2 pl-3 text-sm ${e.kind === "comment" ? "border-slate-900/60 text-slate-800" : "border-slate-900/15 text-slate-600"}`}>
+            <p className="flex items-center gap-1.5">
+              {e.kind === "comment" && <ChatCircleText size={13} weight="bold" aria-hidden="true" className="shrink-0" />}
+              {e.label}
+            </p>
+            <p className="text-xs text-slate-500">{e.actor || "System"} · {timeAgo(e.ts)}</p>
+          </div>
+        ))}
+      </div>
+    </Card>
+  ) : null);
+
   const approveM = useMutation({
     mutationFn: () => api.post(`/decisions/${decisionId}/approve`),
-    onSuccess: () => { toast.success("Approved — tasks unblocked"); invalidate(); onClose && onClose(); },
-    onError: (e) => toast.error(e.response?.data?.detail || "Could not approve"),
+    onSuccess: (res) => {
+      const c = res?.data?.created_on_approval;
+      const made = c ? [
+        c.task_ids ? `${c.task_ids} task${c.task_ids === 1 ? "" : "s"}` : null,
+        c.workflow_ids ? `${c.workflow_ids} workflow${c.workflow_ids === 1 ? "" : "s"}` : null,
+      ].filter(Boolean) : [];
+      toast.success(made.length ? `Approved — ${made.join(" and ")} created` : "Approved");
+      // ASK-32 Phase 3 — stay open: the popup now shows what was created, with links.
+      invalidate();
+    },
+    onError: (e) => { toast.error(e.response?.data?.detail || "Could not approve"); invalidate(); },
   });
   const rejectM = useMutation({
     mutationFn: () => api.post(`/decisions/${decisionId}/reject`),
-    onSuccess: () => { toast.success("Rejected — spawned tasks removed"); invalidate(); onClose && onClose(); },
+    onSuccess: () => { toast.success(proposing ? "Rejected — nothing was created" : "Rejected"); invalidate(); onClose && onClose(); },
     onError: (e) => toast.error(e.response?.data?.detail || "Could not reject"),
   });
   const busy = approveM.isPending || rejectM.isPending;
@@ -238,7 +371,6 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
                         <LinkSimple size={12} weight="bold" aria-hidden="true" /> Part of: {wfLabel}
                       </span>
                     )}
-                    {d.dtype && <span className={`${CHIP} ${QUIET_CHIP} capitalize`}>{String(d.dtype).replace(/_/g, " ")}</span>}
                     {d.status && d.status !== "pending_approval" && (
                       <span className={`${CHIP} ${statusChip} capitalize`} data-testid="decision-status-chip">
                         {d.status.replace(/_/g, " ")}
@@ -265,17 +397,54 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
                     {d.summary
                       ? <p className="text-[15px] leading-relaxed text-slate-800" data-testid="decision-summary">{d.summary}</p>
                       : <p className="text-sm text-slate-500">No summary was recorded.</p>}
-                    {blocked.length > 0 && canDecide && (
+                    {canDecide && (proposing ? !!createsText : blocked.length > 0) && (
                       <p className="mt-3 flex items-center gap-2 rounded-2xl bg-white/70 px-3.5 py-2.5 text-xs font-medium text-slate-700 ring-1 ring-inset ring-slate-900/[0.05]"
                         data-testid="decision-unblocks">
                         <LinkSimple size={13} weight="bold" aria-hidden="true" />
-                        Unblocks {blocked.length} task{blocked.length === 1 ? "" : "s"} in this workflow
+                        {proposing
+                          ? `Approving creates ${createsText}`
+                          : `Unblocks ${blocked.length} task${blocked.length === 1 ? "" : "s"} in this workflow`}
                         <ArrowRight size={12} weight="bold" aria-hidden="true" className="ml-auto" />
+                      </p>
+                    )}
+                    {canDecide && d.repeat_of && (
+                      <p className="mt-3 flex items-center gap-2 rounded-2xl bg-amber-50 px-3.5 py-2.5 text-xs font-medium text-amber-800 ring-1 ring-inset ring-amber-100"
+                        data-testid="decision-repeat">
+                        <WarningCircle size={13} weight="bold" aria-hidden="true" />
+                        Looks like a repeat of &ldquo;{d.repeat_of.title}&rdquo;, which is still waiting.
                       </p>
                     )}
                   </Card>
 
-                  {canDecide && (
+                  {/* ASK-32 Phase 3 — what was said, so the task list can be checked against it. */}
+                  {d.said && (d.said.text || d.said.has_audio || (d.said.files || []).length > 0) && (
+                    <Card label="What was said" right={saidHow} testid="decision-said-card">
+                      {d.said.text
+                        ? <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-slate-800" data-testid="decision-said">&ldquo;{d.said.text}&rdquo;</p>
+                        : <p className="text-sm text-slate-500">No words — only a file was sent.</p>}
+                      {d.said.has_audio && (audioUrl
+                        ? <audio controls autoPlay src={audioUrl} className="mt-3 w-full" data-testid="decision-said-audio" />
+                        : (
+                          <button type="button" onClick={playAudio} data-testid="decision-play"
+                            className={`mt-3 flex h-10 items-center gap-2 rounded-pill px-4 text-sm font-medium text-slate-800 hover:bg-white ${GLASS_PILL}`}>
+                            <Play size={14} weight="fill" aria-hidden="true" /> Play the voice note
+                          </button>
+                        ))}
+                      {(d.said.files || []).length > 0 && (
+                        <p className="mt-3 text-xs text-slate-500" data-testid="decision-said-files">
+                          Sent with it: {d.said.files.map((f) => f.name).join(", ")}
+                        </p>
+                      )}
+                    </Card>
+                  )}
+
+                  {canDecide && !mayDecide && (
+                    <Card label="Who decides" testid="decision-waiting-card">
+                      <p className="text-sm text-slate-700">{waitingOn}. You'll be told when it's decided.</p>
+                    </Card>
+                  )}
+
+                  {mayDecide && (
                     <Card label="Your call" testid="decision-actions-card">
                       <div className="flex flex-wrap gap-2.5" data-testid="decision-actions">
                         <button
@@ -303,35 +472,24 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
                       </div>
                       {confirmReject && (
                         <p className="mt-3 text-xs text-rose-700" data-testid="decision-reject-warning">
-                          This removes {tasks.length} spawned task{tasks.length === 1 ? "" : "s"} and any linked workflows. Click Confirm reject again to proceed, or Approve to change your mind.
+                          {proposing
+                            ? "Nothing it proposes will be created."
+                            : "Tasks still waiting on it are cancelled; work already under way stays."}{" "}
+                          Click Confirm reject again to proceed, or Approve to change your mind.
                         </p>
                       )}
                     </Card>
                   )}
 
-                  {(d.timeline || []).length > 0 && (
-                    <Card label="Prior activity" testid="decision-history-card">
-                      <div className="space-y-2.5" data-testid="decision-history">
-                        {(d.timeline || []).map((e, i) => (
-                          <div key={`${e.ts}-${i}`}
-                            className={`border-l-2 pl-3 text-sm ${e.kind === "comment" ? "border-slate-900/60 text-slate-800" : "border-slate-900/15 text-slate-600"}`}>
-                            <p className="flex items-center gap-1.5">
-                              {e.kind === "comment" && <ChatCircleText size={13} weight="bold" aria-hidden="true" className="shrink-0" />}
-                              {e.label}
-                            </p>
-                            <p className="text-xs text-slate-500">{e.actor || "System"} · {timeAgo(e.ts)}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </Card>
-                  )}
+                  {/* Desktop: history under the decision. Phone: after the work (below). */}
+                  <div className="hidden lg:block">{historyCard("")}</div>
                 </div>
 
                 {/* RIGHT — what happens next, and the note back */}
                 <div className="flex min-w-0 flex-col gap-4">
                   <Card
                     label="What happens next"
-                    right={`${tasks.length} task${tasks.length === 1 ? "" : "s"}`}
+                    right={`${rows.length} task${rows.length === 1 ? "" : "s"}`}
                     testid="decision-timeline-section"
                   >
                     <ol className="space-y-3" data-testid="decision-timeline">
@@ -345,35 +503,133 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
                       <li className="flex gap-3">
                         <TimelineDot tone={canDecide ? "blue" : "green"} check={!canDecide} />
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-slate-800">
-                            {canDecide ? "Waiting on your decision"
-                              : d.status === "approved" ? "You approved"
-                              : d.status === "rejected" ? "You rejected"
+                          <p className="text-sm font-medium text-slate-800" data-testid="decision-waiting-on">
+                            {canDecide ? waitingOn
+                              : d.status === "approved" ? `Approved${d.decided_by_name ? ` by ${d.decided_by_name}` : ""}`
+                              : d.status === "rejected" ? `Rejected${d.decided_by_name ? ` by ${d.decided_by_name}` : ""}`
                               : "Decided"}
                           </p>
-                          {canDecide && <p className="text-xs text-slate-500">Everything below is blocked</p>}
+                          {canDecide && (
+                            <p className="text-xs text-slate-500">
+                              {proposing ? "Nothing below is created until it's approved" : "Everything below is blocked"}
+                            </p>
+                          )}
+                          {mayDecide && !changing && (
+                            <button type="button" onClick={() => setChanging(true)} data-testid="decision-change-approver"
+                              className="mt-1 text-xs font-medium text-slate-700 underline underline-offset-2 hover:text-slate-900">
+                              Change who decides
+                            </button>
+                          )}
+                          {mayDecide && changing && (
+                            <div className="mt-2 flex items-center gap-2" data-testid="decision-approver-picker">
+                              <div className="min-w-0 flex-1">
+                                <GlassSelect
+                                  value=""
+                                  onChange={(v) => v && changeM.mutate(v)}
+                                  ariaLabel="Who decides"
+                                  testid="decision-approver-select"
+                                  placeholder={approversQ.isLoading ? "Loading…" : "Pick who decides"}
+                                  disabled={changeM.isPending}
+                                  options={(approversQ.data || [])
+                                    .filter((p) => p.id !== d.approver_id)
+                                    .map((p) => ({ value: p.id, label: `${p.name}${p.id === user?.id ? " (you)" : ""}` }))}
+                                />
+                              </div>
+                              <button type="button" onClick={() => setChanging(false)}
+                                className="text-xs text-slate-500 hover:text-slate-800">Cancel</button>
+                            </div>
+                          )}
                         </div>
                       </li>
-                      {tasks.length === 0 && (
+                      {rows.length === 0 && extras.length === 0 && (
                         <li className="flex gap-3">
                           <TimelineDot tone="muted" />
-                          <p className="text-xs text-slate-500">No follow-up tasks spawned yet.</p>
+                          <p className="text-xs text-slate-500">No follow-up tasks.</p>
                         </li>
                       )}
-                      {tasks.map((t) => (
-                        <li key={t.id} className="flex gap-3" data-testid={`decision-timeline-task-${t.id}`}>
+                      {rows.map((t) => (
+                        <li key={t.id || t.key} className="flex gap-3" data-testid={`decision-timeline-task-${t.id || t.key}`}>
                           <TimelineDot
                             tone={t.status === "done" ? "green" : t.status === "in_progress" ? "blue" : "muted"}
                             check={t.status === "done"}
                           />
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm text-slate-800">{t.title}</p>
-                            <p className="text-xs text-slate-500">
-                              {/* E3-13: auto-assigned to a person, else the role pool, else unassigned */}
-                              {t.assignee_name ? `Goes to ${t.assignee_name}`
-                                : t.assignee_role ? `Goes to the ${t.assignee_role} team`
-                                : "Unassigned"}
-                            </p>
+                            {proposing || !t.id
+                              ? <p className="text-sm text-slate-800">{t.title}</p>
+                              : (
+                                <Link to={`/my-work?task=${t.id}`} onClick={() => onClose && onClose()}
+                                  data-testid={`decision-task-link-${t.id}`}
+                                  className="text-sm text-slate-800 underline-offset-2 hover:underline">{t.title}</Link>
+                              )}
+                            {editable ? (
+                              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                                <div className="min-w-[10rem] flex-1">
+                                  <GlassSelect
+                                    value={t.assignee_id || ""}
+                                    onChange={(v) => v && editTask(t.key, { assignee_id: v })}
+                                    ariaLabel={`Who does ${t.title}`}
+                                    testid={`decision-task-person-${t.key}`}
+                                    placeholder={t.assignee_role ? `Pick who does this (${t.assignee_role} team)` : "Pick who does this"}
+                                    variant="field"
+                                    disabled={editBusy}
+                                    triggerClassName={`h-9 rounded-pill px-3 text-xs ${t.assignee_id ? `text-slate-700 ${GLASS_PILL}` : "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200"}`}
+                                    options={people.some((p) => p.value === t.assignee_id) || !t.assignee_id
+                                      ? people
+                                      : [{ value: t.assignee_id, label: t.assignee_name || "Current person" }, ...people]}
+                                  />
+                                </div>
+                                <input type="date" value={(t.due_date || "").slice(0, 10)} disabled={editBusy}
+                                  onChange={(e) => editTask(t.key, { due_date: e.target.value })}
+                                  aria-label={`Due date for ${t.title}`} data-testid={`decision-task-due-${t.key}`}
+                                  className={`h-9 rounded-pill px-3 text-xs text-slate-700 ${GLASS_PILL}`} />
+                                <button type="button" onClick={() => removeItem("tasks", t.key)} disabled={editBusy}
+                                  aria-label={`Remove ${t.title}`} data-testid={`decision-task-remove-${t.key}`}
+                                  className={GLASS_ICON_BTN}>
+                                  <X size={14} weight="bold" aria-hidden="true" />
+                                </button>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-slate-500">
+                                {/* E3-13: auto-assigned to a person, else the role pool, else unassigned */}
+                                {t.assignee_name ? `Goes to ${t.assignee_name}`
+                                  : t.assignee_role ? `Goes to the ${t.assignee_role} team`
+                                  : "Unassigned"}
+                                {t.due_date ? ` · due ${new Date(t.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : ""}
+                                {t.priority && t.priority !== "medium" ? ` · ${t.priority} priority` : ""}
+                              </p>
+                            )}
+                            {(t.workflow_title || t.workflow_summary?.title) && (
+                              <p className="mt-0.5 text-xs text-slate-500" data-testid={`decision-task-workflow-${t.id || t.key}`}>
+                                Part of {t.workflow_title || t.workflow_summary.title}
+                              </p>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                      {extras.map((x) => (
+                        <li key={x.key} className="flex gap-3" data-testid={`decision-timeline-extra-${x.key}`}>
+                          <TimelineDot tone="muted" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm text-slate-800">{x.label}</p>
+                            {x.sub && <p className="text-xs text-slate-500">{x.sub}</p>}
+                          </div>
+                          {editable && (
+                            <button type="button" onClick={() => removeItem(x.kind, x.key)} disabled={editBusy}
+                              aria-label={`Remove ${x.label}`} data-testid={`decision-extra-remove-${x.key}`}
+                              className={`${GLASS_ICON_BTN} shrink-0`}>
+                              <X size={14} weight="bold" aria-hidden="true" />
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                      {/* ASK-32 Phase 4 — after approving: the workflows it created or moved, as links. */}
+                      {!proposing && d.status === "approved" && (d.workflows || []).map((w) => (
+                        <li key={w.id} className="flex gap-3" data-testid={`decision-workflow-${w.id}`}>
+                          <TimelineDot tone="green" check />
+                          <div className="min-w-0 flex-1">
+                            <a href={`/my-work?view=workflows&type=${encodeURIComponent(w.type || "")}&focus=${encodeURIComponent(w.id)}`}
+                              className="text-sm text-slate-800 underline-offset-2 hover:underline">{w.title}</a>
+                            <p className="text-xs capitalize text-slate-500">{String(w.stage || "").replace(/_/g, " ")}</p>
                           </div>
                         </li>
                       ))}
@@ -414,6 +670,8 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
                     </div>
                     <p className="mt-2 text-xs text-slate-500">Or tap the mic — speaking is faster than typing.</p>
                   </Card>
+                  {/* ASK-32 Phase 3 — on a phone the work to check comes first; the history follows it. */}
+                  <div className="lg:hidden">{historyCard("-m")}</div>
                 </div>
               </div>
             </div>

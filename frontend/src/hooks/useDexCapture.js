@@ -60,6 +60,10 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
   const [levels, setLevels] = useState(() => new Array(BARS).fill(0));
   // { noteId, status, transcript, language, decision, tasks[] } | null
   const [understanding, setUnderstanding] = useState(null);
+  /* ASK-32 1.6 — files attached for the NEXT capture. Uploading used to be the
+     end of it ("File uploaded to Dex") and nothing ever read the file; now the
+     ids ride along with the note, and the pipeline reads them. */
+  const [attachments, setAttachments] = useState([]);
   // Held in a ref so changing the handler never re-creates startRecording and
   // orphans a live MediaRecorder.
   const onTranscriptRef = useRef(onTranscript);
@@ -160,7 +164,14 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
       if (!live()) return;
       try {
         const note = (await api.get(`/voice-notes/${noteId}`)).data || {};
-        if (note.transcript) { setSending(false); onTranscriptRef.current?.(note.transcript); return; }
+        // ASK-32 1.6 — the note is HELD: the id goes back with the words, so
+        // sending the reviewed text structures this same note (one decision).
+        if (note.transcript) { setSending(false); onTranscriptRef.current?.(note.transcript, noteId); return; }
+        if (note.status === "transcribed") {
+          setSending(false);
+          toast.error("I didn't catch that — try again");
+          return;
+        }
         if (note.status === "failed" || note.error) {
           setSending(false);
           toast.error(note.error || "Could not transcribe that");
@@ -195,9 +206,15 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
           transcript: note.transcript || seed.transcript || "",
           language: note.detected_language_name || null,
           summary: note.execution_summary || null,
+          said: note.summary || null,
           error: note.error || null,
         };
 
+        // ASK-32 1.4 — nothing to act on: no decision was made, say so.
+        if (note.status === "done" && !note.decision_id) {
+          if (live()) setUnderstanding({ ...base, status: "nothing" });
+          return;
+        }
         if (note.status === "done" && note.decision_id) {
           // The decision carries the structure: title, summary, and the tasks it
           // produced. That IS the echo §5.6 wants — extracted fields, not a
@@ -207,7 +224,10 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
           try {
             decision = (await api.get(`/decisions/${note.decision_id}`)).data || null;
           } catch { /* the note is done even if the decision read fails */ }
-          const ids = (decision?.task_ids || []).slice(0, 4);
+          // ASK-32 Phase 1 — a waiting decision PROPOSES its tasks; none exist yet.
+          const proposed = decision?.status === "pending_approval" ? decision?.proposal?.tasks : null;
+          const ids = proposed ? [] : (decision?.task_ids || []).slice(0, 4);
+          if (proposed) tasks = proposed;
           if (ids.length) {
             const got = await Promise.all(
               ids.map((id) => api.get(`/tasks/${id}`).then((r) => r.data).catch(() => null))
@@ -241,13 +261,14 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
 
   const sendText = useCallback(async () => {
     const body = text.trim();
-    if (!body) return null;
+    if (!body && !attachments.length) return null;
     setSending(true);
     try {
-      const res = await api.post("/voice-notes/text", { text: body });
+      const res = await api.post("/voice-notes/text", { text: body, file_ids: attachments.map((a) => a.id) });
       if (watch && res.data?.id) follow(res.data.id, { transcript: body });
       else toast.success("Captured — Dex is structuring it now");
       setText("");
+      setAttachments([]);
       onCaptured?.();
       return res.data;
     } catch (e) {
@@ -256,7 +277,7 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
     } finally {
       setSending(false);
     }
-  }, [text, watch, follow, onCaptured]);
+  }, [text, attachments, watch, follow, onCaptured]);
 
   /* KM-54 — THE "I CAN'T STOP IT" BUG.
      Founder: "if I press the mic icon I can't be able to stop; only after
@@ -341,6 +362,11 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
             else toast.error("I didn't catch that — try again");
             return;
           }
+          /* ASK-32 1.6 — with onTranscript the recording is HELD: transcribed and
+             kept, not structured. Sending the reviewed words then structures
+             this same note; before, sending posted a second capture and every
+             spoken decision became two. */
+          if (onTranscriptRef.current) fd.append("hold", "1");
           const res = await api.post("/voice-notes", fd, {
             headers: { "Content-Type": "multipart/form-data" },
           });
@@ -444,16 +470,18 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
     fd.append("file", f);
     setSending(true);
     try {
-      await api.post("/files", fd, { headers: { "Content-Type": "multipart/form-data" } });
-      toast.success("File uploaded to Dex");
-      onCaptured?.();
+      const { data } = await api.post("/files", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      const id = data?.id || data?.file?.id;
+      if (id) setAttachments((a) => [...a, { id, name: f.name }]);
+      toast.success("Attached — type what Dex should do with it, then press Note");
     } catch (err) {
       toast.error(err.response?.data?.detail || "Upload failed");
     } finally {
       setSending(false);
       e.target.value = "";
     }
-  }, [onCaptured]);
+  }, []);
+  const removeAttachment = useCallback((id) => setAttachments((a) => a.filter((x) => x.id !== id)), []);
 
   /** Drop the understanding card and stop following the note. */
   const clearUnderstanding = useCallback(() => {
@@ -474,8 +502,9 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
   return {
     text, setText,
     sending, recording, recordSecs, levels, levelsRef,
-    understanding, clearUnderstanding, reset,
+    understanding, clearUnderstanding, reset, follow,
     sendText, startRecording, stopRecording, uploadFile,
+    attachments, removeAttachment,
     fileRef,
   };
 }

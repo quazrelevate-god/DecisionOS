@@ -129,10 +129,13 @@ function Bubble({ m, index }) {
  * @param {object}   dex     the shared useDexCapture instance from Layout
  */
 export function DexChat({ open, onClose, dex, chat, channel }) {
-  const { log, busy, mode, setMode, ask, attach } = chat;
+  const { log, busy, mode, setMode, ask, attach, pendingFiles = [] } = chat;
   const [plusOpen, setPlusOpen] = React.useState(false);
   const endRef = React.useRef(null);
   const photoRef = React.useRef(null);
+  // ASK-32 1.6 — Attach clicked `dex.fileRef`, which no input in this sheet
+  // was ever bound to, so it did nothing. It has its own picker now.
+  const fileRef = React.useRef(null);
   // Mobile PWA (2026-09-14): Back closes the conversation instead of the page.
   useBackDismiss(open, (o) => { if (!o) onClose?.(); });
 
@@ -151,7 +154,7 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
     mode === "type"
       ? { key: "type", icon: Microphone, label: "Speak", onClick: () => { setMode("voice"); setPlusOpen(false); } }
       : { key: "type", icon: Keyboard, label: "Type", onClick: () => { setMode("type"); setPlusOpen(false); } },
-    { key: "file", icon: Paperclip, label: "Attach", onClick: () => { dex?.fileRef?.current?.click(); setPlusOpen(false); } },
+    { key: "file", icon: Paperclip, label: "Attach", onClick: () => { fileRef.current?.click(); setPlusOpen(false); } },
     { key: "photo", icon: Camera, label: "Photo", onClick: () => { photoRef.current?.click(); setPlusOpen(false); } },
   ];
 
@@ -221,13 +224,19 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                   </p>
                   <p className="mt-1 text-xs text-white/45">
                     {channel === "decide"
-                      ? "Dex turns it into tasks and puts it in Needs your decision."
+                      ? "Dex lines up the tasks for approval. Nothing is created until it's approved."
                       : "Dex answers from your data. Nothing is created."}
                   </p>
                 </div>
               )}
               {log.map((m, i) => <Bubble key={m.id} m={{ ...m, onAsk: ask }} index={i} />)}
               {busy && <Bubble m={{ role: "dex", text: "Thinking…", pending: true }} index={log.length} />}
+              {pendingFiles.length > 0 && (
+                <p data-testid="dex-attached" className="self-end rounded-pill bg-white/15 px-3 py-1 text-[11px] text-white/85">
+                  <Paperclip size={11} weight="bold" className="mr-1 inline" aria-hidden="true" />
+                  {pendingFiles.map((f) => f.name).join(", ")}
+                </p>
+              )}
               <div ref={endRef} />
             </div>
 
@@ -303,6 +312,14 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
             capture="environment"
             className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; attach(f, "Photo"); }}
+          />
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+            className="hidden"
+            data-testid="dex-attach-input"
+            onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; attach(f, "File"); }}
           />
         </motion.div>
       )}

@@ -613,6 +613,15 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
     if is_start_locked(t):
         if any(k in updates for k in ("status", "progress")):
             raise HTTPException(status_code=403, detail="This task is awaiting approval before work can begin.")
+    # ASK-32 1.2 — a task an older decision created blocked waits for that
+    # decision: nobody starts it before the decision is approved.
+    if (t.get("status") == "blocked" and t.get("decision_id") and not t.get("approval_required")
+            and any(k in updates for k in ("status", "progress"))):
+        dec = await db.decisions.find_one({"id": t["decision_id"], "tenant_id": user["tenant_id"]},
+                                          {"_id": 0, "status": 1, "title": 1})
+        if dec and dec.get("status") in ("pending", "pending_approval"):
+            raise HTTPException(status_code=403,
+                                detail=f"This task starts when the decision “{dec.get('title') or 'it came from'}” is approved.")
     # ASK-28 TK-05: approval before closing — "done" from someone who can't approve
     # becomes a sign-off request (Under review, pending); from an approver it closes.
     signoff_requested = False

@@ -172,6 +172,15 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
     const el = listRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
     const measure = () => {
+      /* ASK-32 — below lg the card is NOT height-constrained, so measuring it
+         only ever returned the rows already drawn: a list that first loaded
+         with one row stayed at one row, and "That's all of them" sat under a
+         column holding three. On a phone every row is shown (the caller
+         already caps the list). */
+      if (typeof window !== "undefined" && window.matchMedia && !window.matchMedia("(min-width: 1024px)").matches) {
+        setFit(Math.max(1, rows.length));
+        return;
+      }
       const rs = el.querySelectorAll("[data-row]");
       let rowH = 0;
       /* offsetHeight, not getBoundingClientRect: under the page's CSS zoom
@@ -189,7 +198,10 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
     return () => ro.disconnect();
   }, [rows.length]);
   const shown = rows.slice(0, fit);
-  const remaining = Math.max(0, (count ?? rows.length) - shown.length);
+  /* ASK-32 2.4 — the Decisions count is what waits on ME, but the column also
+     lists what I raised for someone else, so the overflow note counts the rows
+     themselves when there are more of those than the count. */
+  const remaining = Math.max(0, Math.max(count ?? 0, rows.length) - shown.length);
   const more = loading ? "" : remaining > 0 ? `${remaining} more${moreSuffix}` : rows.length > 0 ? "That's all of them" : "";
 
   return (

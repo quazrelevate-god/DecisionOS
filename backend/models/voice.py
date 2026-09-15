@@ -15,6 +15,12 @@ class TextNoteInput(BaseModel):
     file_ids: Optional[List[str]] = None
 
 
+class SubmitNoteInput(BaseModel):
+    """ASK-32 1.6 — send a held (transcribed, reviewed) recording on to Dex."""
+    text: Optional[str] = ""
+    file_ids: Optional[List[str]] = None
+
+
 # ---- Consolidated in Epic 8 Sprint 5 ----
 class ClarifyInput(BaseModel):
     text: str

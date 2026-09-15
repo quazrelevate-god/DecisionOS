@@ -240,26 +240,33 @@ async def execute_capture(d: dict, user: dict):
         "audio_path": None, "transcript": d.get("text") or d.get("summary") or "", "language": "auto",
         "status": "queued", "source": "whatsapp", "wa_from": d.get("wa_from"),
         "raised_by_name": d.get("wa_from"), "created_at": now_iso(),
+        "review_approved": True,  # ASK-32 2.3: approved below, so nobody is told it waits
     })
     await process_voice_note(note_id)
-    vn = await db.voice_notes.find_one({"id": note_id}, {"_id": 0, "decision_id": 1})
+    vn = await db.voice_notes.find_one({"id": note_id}, {"_id": 0, "decision_id": 1, "outcome": 1})
     decision_id = (vn or {}).get("decision_id")
     if decision_id:
-        overrides = {}
-        if d.get("assignee_id"):
-            overrides["assignee_id"] = d["assignee_id"]
-        if d.get("priority"):
-            overrides["priority"] = d["priority"]
-        if d.get("due_date"):
-            overrides["due_date"] = d["due_date"]
-        if overrides:
-            overrides["updated_at"] = now_iso()
-            overrides["last_action"] = "Set by reviewer"
-            # FIX-001-C: all writes below scope by tenant_id so a leaked/guessed
-            # decision_id can never touch another tenant's tasks or decision.
-            await db.tasks.update_many({"tenant_id": tenant_id, "decision_id": decision_id}, {"$set": overrides})
-        # Reviewer approved the capture → release the decision's blocked tasks.
-        await db.decisions.update_one({"id": decision_id, "tenant_id": tenant_id}, {"$set": {"status": "approved"}})
-        await db.tasks.update_many({"tenant_id": tenant_id, "decision_id": decision_id, "status": "blocked"},
-                                   {"$set": {"status": "todo", "updated_at": now_iso(), "last_action": "Approved via capture"}})
-    return {"type": "decision", "id": decision_id}
+        # The reviewer's choices apply to the tasks the decision proposes...
+        dec = await db.decisions.find_one({"id": decision_id, "tenant_id": tenant_id}, {"_id": 0, "proposal": 1})
+        proposal = (dec or {}).get("proposal") or {}
+        if proposal.get("tasks") and (d.get("assignee_id") or d.get("priority") or d.get("due_date")):
+            member = None
+            if d.get("assignee_id"):
+                member = await db.users.find_one({"id": d["assignee_id"], "tenant_id": tenant_id}, {"_id": 0, "id": 1, "role": 1})
+            for t in proposal["tasks"]:
+                if member:
+                    t["assignee_id"], t["assignee_role"], t["assignee_how"] = member["id"], member.get("role"), "reviewer"
+                if d.get("priority"):
+                    t["priority"] = d["priority"]
+                if d.get("due_date"):
+                    t["due_date"] = d["due_date"]
+            # FIX-001-C: tenant-scoped write.
+            await db.decisions.update_one({"id": decision_id, "tenant_id": tenant_id}, {"$set": {"proposal.tasks": proposal["tasks"]}})
+        # ...and approving the capture approves the decision through the one
+        # approve path (ASK-32 1.8): it creates the work, writes the timeline,
+        # moves procurement and records the outcome. The reviewer was already
+        # authorised by POST /captures/{id}/approve.
+        from services.decision_flow import approve_decision_flow
+        await approve_decision_flow(user, decision_id, authorized=True)
+    return {"type": "decision", "id": decision_id,
+            **({"nothing_to_decide": True} if (vn or {}).get("outcome") == "nothing_to_decide" else {})}

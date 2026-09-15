@@ -20,7 +20,9 @@ export function notifLink(n) {
   // the task is guaranteed to be — My Tasks only holds tasks you do.
   if (n?.entity_type === "task" && n?.entity_id && n?.type === "approval") return `/my-work?view=approvals&task=${n.entity_id}`;
   if (n?.entity_type === "task" && n?.entity_id) return `/my-work?task=${n.entity_id}`;
-  if (n?.entity_type === "decision" && n?.entity_id) return `/?decision=${n.entity_id}`;
+  // ASK-32 1.7 — straight to the Desk, which opens the decision from ?decision=.
+  // "/" redirected to /inbox and dropped the parameter, so nothing opened.
+  if (n?.entity_type === "decision" && n?.entity_id) return `/inbox?decision=${n.entity_id}`;
   // ASK-6 (2026-09-12): leave notifications now land on the Decision Desk,
   // where the approvals queue lives (ASK-7). The ?leave=<id> query param
   // is preserved so LeaveApprovals can highlight the target card the same

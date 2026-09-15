@@ -15,18 +15,22 @@ import api from "../lib/api";
 // so it lives here and Layout hands it to all three.
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
+/* ASK-32 1.4 — a failed capture says why, in words a person can act on. */
+function captureError(error) {
+  const e = String(error || "");
+  if (e.includes("ai_consent_required")) {
+    return "AI is switched off for your company, so Dex couldn't read that. Turn on AI in Settings, then try again.";
+  }
+  return "That didn't go through. Please try again.";
+}
+
 /* KM-54 — `channel` is which door the founder came through, and it decides
    what a typed line MEANS. Nothing here guesses.
      "ask"    -> POST /ask            : read-only analytics, creates nothing
-     "decide" -> POST /voice-notes/text: structured into a decision, its tasks
-                                         and an inbox item, so it lands in
-                                         "Needs your decision" on the Desk
-   This is the gap the founder found. The chat only ever had the ask path —
-   KM-26 rebuilt Dex on this hook and retired DexSheet, which was the one
-   component that still called sendText() — so on the phone there was no way at
-   all to type a decision. Voice worked (it posts to /voice-notes) and typing
-   silently did not, which is exactly the "it's not showing up in Needs your
-   decision" report. */
+     "decide" -> POST /voice-notes/text: a decision waiting for approval, which
+                                         lands in Decisions on the Desk. Its
+                                         tasks and workflows are only created
+                                         when it is approved (ASK-32 Phase 1). */
 export function useDexConversation({ dex, open, channel = "ask", onCommitted } = {}) {
   const [log, setLog] = useState([]);
   const [ctxId, setCtxId] = useState(null);
@@ -35,6 +39,10 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted } =
   // "type"  -> the bar is a text field, the FAB is a send button.
   const [mode, setMode] = useState("voice");
   const [draft, setDraft] = useState("");
+  // ASK-32 1.6 — files attached to the next decision, and the held recording
+  // the draft came from (its words are reviewed here, then sent on as ONE note).
+  const [pendingFiles, setPendingFiles] = useState([]);
+  const heldNoteRef = useRef(null);
   const seenRef = useRef(null);
 
   const push = useCallback((m) => setLog((l) => [...l, { id: uid(), ...m }]), []);
@@ -43,18 +51,13 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted } =
   // text field you did not ask for. The transcript is deliberately KEPT — the
   // founder can close, act on an answer and come back to it.
   useEffect(() => {
-    if (!open) { setMode("voice"); setDraft(""); }
+    if (!open) { setMode("voice"); setDraft(""); heldNoteRef.current = null; }
   }, [open]);
 
   /* KM-54 — SWITCHING DOORS STARTS A NEW TRANSCRIPT.
-     Caught in testing: capture a decision, close, reopen through Ask, and the
-     log still showed "Logged, I'm turning that into a decision" underneath a
-     header now reading ASK. Two different conversations with two different
-     consequences, stacked in one thread, each mislabelled by the other's
-     header.
      Only a change BETWEEN doors clears it — the null the channel takes while
      Dex is closed is ignored, so reopening the same door still brings your
-     answers back, which is what the note above is protecting. */
+     answers back. */
   const lastChannelRef = useRef(channel);
   useEffect(() => {
     if (!channel) return;
@@ -62,42 +65,77 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted } =
       setLog([]);
       setCtxId(null);
       setDraft("");
+      setPendingFiles([]);
+      heldNoteRef.current = null;
     }
     lastChannelRef.current = channel;
   }, [channel]);
 
-  // A finished capture becomes a turn in the transcript rather than its own
-  // card. Keyed on noteId so a poll updating the same note in place cannot
-  // stack duplicates.
+  /* A finished capture becomes a turn in the transcript. Keyed on note + outcome
+     so a poll updating the same note in place cannot stack duplicates.
+     ASK-32 Phase 1: the reply says what Dex UNDERSTOOD and that it is waiting
+     for a decision — nothing is created yet — or that there was nothing to
+     decide, or why it failed. */
   useEffect(() => {
     const u = dex?.understanding;
-    if (!u || u.status !== "done") return;
-    if (seenRef.current === u.noteId) return;
-    seenRef.current = u.noteId;
-    const title = u.decision?.title || u.summary || u.transcript;
-    push({
-      role: "dex",
-      text: title
-        ? `Got it — ${title}${u.tasks?.length ? `\n${u.tasks.length} task${u.tasks.length > 1 ? "s" : ""} created.` : ""}`
-        : "Captured.",
-    });
+    if (!u || !["done", "nothing", "failed", "slow"].includes(u.status)) return;
+    const seenKey = `${u.noteId}:${u.status}`;
+    if (seenRef.current === seenKey) return;
+    seenRef.current = seenKey;
+    let text;
+    if (u.status === "nothing") {
+      text = `Nothing to decide in that${u.said ? ` — ${u.said}` : ""}.\nIf it was a question, ask Dex instead.`;
+    } else if (u.status === "failed") {
+      text = captureError(u.error);
+    } else if (u.status === "slow") {
+      text = "Still working on it. It will show up in Decisions on the Desk.";
+    } else {
+      const d = u.decision || {};
+      const p = d.proposal || {};
+      const title = d.title || u.transcript || "your decision";
+      const lines = [`Ready for a decision — ${title}`];
+      // ASK-32 Phase 2 — say who decides when it is not the person who said it.
+      if (d.approver_name && d.approver_id && d.approver_id !== d.created_by) lines.push(`Sent to ${d.approver_name} to decide.`);
+      const nTasks = (p.tasks || u.tasks || []).length;
+      if (nTasks) {
+        const names = [...new Set((p.tasks || []).map((t) => t.assignee_name || (t.assignee_role ? `${t.assignee_role} team` : null)).filter(Boolean))];
+        lines.push(`${nTasks} task${nTasks > 1 ? "s" : ""}${names.length ? ` for ${names.slice(0, 3).join(", ")}` : ""}`);
+      }
+      if ((p.workflows || []).length) {
+        lines.push(p.workflows.map((w) => `${w.pipeline_label || "Workflow"}: ${w.title}`).slice(0, 2).join("\n"));
+      }
+      if (d.repeat_of) lines.push(`Looks like a repeat of “${d.repeat_of.title}”.`);
+      lines.push(d.status === "pending_approval" ? "Nothing is created until it's approved." : "");
+      text = lines.filter(Boolean).join("\n");
+    }
+    push({ role: "dex", text });
     dex.clearUnderstanding?.();
   }, [dex, dex?.understanding, push]);
 
+  /** ASK-32 1.6 — a finished recording fills the draft and remembers its note. */
+  const setDraftFromVoice = useCallback((text, noteId) => {
+    setDraft(text);
+    heldNoteRef.current = noteId || null;
+  }, []);
+
   const ask = useCallback(async (question) => {
     const text = String(question || "").trim();
-    if (!text || busy) return;
-    push({ role: "user", text });
+    const withFiles = channel === "decide" && pendingFiles.length > 0;
+    if ((!text && !withFiles) || busy) return;
+    push({ role: "user", text: text || pendingFiles.map((f) => f.name).join(", ") });
     setDraft("");
     setBusy(true);
     try {
       if (channel === "decide") {
-        /* The response is only an acknowledgement: /voice-notes/text queues the
-           structuring as a background task, so the decision and its tasks are
-           built after this returns. Saying where it will appear is more useful
-           than a spinner waiting on work that is deliberately not synchronous. */
-        await api.post("/voice-notes/text", { text });
-        push({ role: "dex", text: "Logged. I'm turning that into a decision and its tasks — it'll show up under \u201cNeeds your decision\u201d." });
+        const file_ids = pendingFiles.map((f) => f.id);
+        const held = heldNoteRef.current;
+        const { data } = held
+          ? await api.post(`/voice-notes/${held}/submit`, { text, file_ids })
+          : await api.post("/voice-notes/text", { text, file_ids });
+        heldNoteRef.current = null;
+        setPendingFiles([]);
+        push({ role: "dex", text: "Reading it now…" });
+        if (data?.id && dex?.follow) dex.follow(data.id, { transcript: text });
         onCommitted?.();
         return;
       }
@@ -115,7 +153,7 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted } =
     } finally {
       setBusy(false);
     }
-  }, [busy, channel, ctxId, onCommitted, push]);
+  }, [busy, channel, ctxId, dex, onCommitted, pendingFiles, push]);
 
   const attach = useCallback(async (file, label = "File") => {
     if (!file) return;
@@ -124,45 +162,46 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted } =
     try {
       const fd = new FormData();
       fd.append("file", file);
-      await api.post("/files", fd, { headers: { "Content-Type": "multipart/form-data" } });
-      push({ role: "dex", text: "Filed. I'll pull what matters out of it." });
+      const { data } = await api.post("/files", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      const id = data?.id || data?.file?.id;
+      if (channel === "decide" && id) {
+        setPendingFiles((p) => [...p, { id, name: file.name }]);
+        push({ role: "dex", text: "Attached. Say or type what to do with it — or press send and I'll read it." });
+      } else {
+        push({ role: "dex", text: "Saved to your files. Open Decide if you want Dex to act on it." });
+      }
     } catch (err) {
       push({ role: "dex", text: err.response?.data?.detail || "That upload didn't go through." });
     } finally {
       setBusy(false);
     }
-  }, [push]);
+  }, [channel, push]);
+
+  const canSendFiles = channel === "decide" && pendingFiles.length > 0;
 
   /** What the FAB does right now — the single source for its icon and action.
-      KM-51 — A DRAFT NOW OUTRANKS THE MODE. It used to read "send" only in type
-      mode, so after a voice capture the button went straight back to a mic and
-      there was nothing to press to send what you had just said. A draft is a
-      draft however it got there: recording wins (stop), then any draft (send),
-      then the mode decides. */
+      KM-51 — A DRAFT NOW OUTRANKS THE MODE: recording wins (stop), then any
+      draft or attached file (send), then the mode decides. */
   const fabIntent =
     dex?.recording ? "stop"
-    : draft.trim() ? "send"
+    : (draft.trim() || canSendFiles) ? "send"
     : mode === "type" ? "keyboard"
     : "mic";
 
-  /* KM-51 — THREE PRESSES, THREE JOBS, and stop no longer sends.
-     Before: stopping a recording uploaded it, the server structured it, and an
-     answer arrived for something never confirmed. Founder: "I can't stop the
-     recording... it takes it as a query and gives the answer, but I don't want
-     it like that." So stop STOPS. The transcript comes back into the draft as a
-     preview, the button becomes a send arrow, and the second press is what
-     commits it — the same two-step typing already had. */
+  /* KM-51 — THREE PRESSES, THREE JOBS, and stop no longer sends. Stop STOPS;
+     the transcript comes back into the draft as a preview, the button becomes a
+     send arrow, and the second press is what commits it. */
   const submit = useCallback(() => {
     if (dex?.recording) { dex.stopRecording?.(); return; }
     /* Transcription is still in flight. Without this the button falls through
        to "start recording" and you are taping over the thing you just said. */
     if (dex?.sending) return;
-    if (draft.trim()) { ask(draft); return; }
+    if (draft.trim() || canSendFiles) { ask(draft); return; }
     if (mode === "type") return;      // empty field: nothing to send
     dex?.startRecording?.();
-  }, [ask, draft, dex, mode]);
+  }, [ask, canSendFiles, draft, dex, mode]);
 
-  return { log, busy, mode, setMode, draft, setDraft, ask, attach, submit, fabIntent };
+  return { log, busy, mode, setMode, draft, setDraft, setDraftFromVoice, ask, attach, submit, fabIntent, pendingFiles };
 }
 
 export default useDexConversation;

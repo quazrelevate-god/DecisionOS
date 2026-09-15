@@ -302,7 +302,8 @@ export default function Layout({ children }) {
     onRecordingChange: (on, secs) => setDexRecording({ on, secs }),
     onCaptured: refreshAfterCapture,
     // Stopping a recording now yields TEXT for review, not a committed capture.
-    onTranscript: (text) => draftSinkRef.current?.(text),
+    // ASK-32 1.6 — the held note's id comes back with the words.
+    onTranscript: (text, noteId) => draftSinkRef.current?.(text, noteId),
     /* Ask-mode audio goes to /transcribe: text back, nothing persisted. Only
        Decide-mode audio becomes a decision. */
     channel: dexChannel === "ask" ? "dictate" : "capture",
@@ -324,7 +325,7 @@ export default function Layout({ children }) {
     channel: dexChannel === "decide" ? "decide" : "ask",
     onCommitted: refreshAfterCapture,
   });
-  draftSinkRef.current = chat.setDraft;
+  draftSinkRef.current = chat.setDraftFromVoice;
   const [langOpen, setLangOpen] = useState(false);
   // KR-5: the global search moved into a ⌘K dialog; same /brain?q= handoff.
   const [globalQuery, setGlobalQuery] = useState("");

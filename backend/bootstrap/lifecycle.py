@@ -417,6 +417,22 @@ async def _bootstrap():
         except Exception as e:
             logger.exception(f"drop_ghost_workflow_collections migration: {e}")  # WE-02
 
+        # ASK-32 2.1 (2026-09-15): waiting decisions captured before routing
+        # existed get the approver the routing rule picks now (capturer ->
+        # their manager -> the owner). Several owners: left with every owner.
+        try:
+            from services.decision_flow import name_waiting_approvers
+            _nres = await _apply_migration(
+                db,
+                "name_waiting_decision_approvers_v1",
+                name_waiting_approvers,
+                description="ASK-32 2.1: name who decides on waiting decisions that have no approver",
+            )
+            if _nres == "applied":
+                logger.info("Migration applied: name_waiting_decision_approvers_v1")
+        except Exception as e:
+            logger.exception(f"name_waiting_decision_approvers migration: {e}")  # ASK-32
+
         # WE-08 (2026-08-16): the FIX-001-B behaviour that used to be
         # hardcoded in the advance endpoint (procurement -> Finance
         # auto-expense) is now a `create_expense` side-effect bound to

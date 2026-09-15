@@ -175,7 +175,20 @@ export function DexFab({ onOpen, recording = false, seconds = 0, onStop, intent 
          Only stop is moved: starting on pointerdown would fire while scrolling
          past, and starting a recording by accident is worse than a tap that
          needs a full press. */
-      onPointerDown={recording ? (e) => { e.preventDefault(); stoppedRef.current = true; onStop?.(); } : undefined}
+      /* ASK-32 1.6 — the swallow flag ends with the finger. The click that
+         belongs to this pointerdown is dispatched right after pointerup, before
+         any timer, so clearing the flag on a zero-delay timer after pointerup
+         swallows exactly that click and never the NEXT tap. When the click
+         never comes (the button re-renders from Stop to Send under the
+         finger), the flag used to stay set and eat the Send after a recording;
+         a short fallback covers a pointerup that lands elsewhere. */
+      onPointerDown={recording ? (e) => {
+        e.preventDefault();
+        stoppedRef.current = true;
+        setTimeout(() => { stoppedRef.current = false; }, 600);
+        onStop?.();
+      } : undefined}
+      onPointerUp={() => { if (stoppedRef.current) setTimeout(() => { stoppedRef.current = false; }, 0); }}
       onClick={(e) => {
         // The click that follows the pointerdown we already acted on.
         if (stoppedRef.current) { stoppedRef.current = false; e.preventDefault(); return; }

@@ -156,6 +156,11 @@ async def enrich_task(t: Optional[dict]) -> Optional[dict]:
         t["workflow_summary"] = wf_map.get(t["workflow_id"]) or None
     else:
         t["workflow_summary"] = None
+    # ASK-32 4.4 — the decision a task came from, for a link back.
+    t["decision_title"] = None
+    if t.get("decision_id") and t.get("tenant_id"):
+        dec = await db.decisions.find_one({"id": t["decision_id"], "tenant_id": t["tenant_id"]}, {"_id": 0, "title": 1})
+        t["decision_title"] = (dec or {}).get("title")
     return t
 
 
@@ -179,7 +184,12 @@ async def enrich_tasks(tasks: List[dict]) -> List[dict]:
     # WE-11: single batch fetch for every workflow the tasks reference
     # (one round trip covers a whole MyWork list).
     wf_map = await _fetch_workflow_summaries(tenant_id, wf_ids) if tenant_id else {}
+    # ASK-32 4.4 — the decisions the tasks came from, one batch.
+    dec_ids = list({t["decision_id"] for t in tasks if t.get("decision_id")})
+    dec_map = {x["id"]: x.get("title") async for x in db.decisions.find(
+        {"id": {"$in": dec_ids}, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "title": 1})} if dec_ids and tenant_id else {}
     for t in tasks:
+        t["decision_title"] = dec_map.get(t.get("decision_id"))
         t["assignee_name"] = umap.get(t.get("assignee_id"))
         t["co_assignees"] = [{"id": i, "name": umap.get(i)} for i in (t.get("co_assignee_ids") or [])]
         t["approver_name"] = umap.get(t.get("approver_id"))

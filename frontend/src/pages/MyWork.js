@@ -1,6 +1,6 @@
 import { Fragment, useRef, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import api from "../lib/api";
 import { timeAgo, fullTime } from "../lib/format";
@@ -1559,6 +1559,11 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
   const signoffSentBack = apprStage === "close" && t.approval_status === "rejected" && !isTerminal(t);
   const needsMyApproval = canApprove && (awaitingApproval || signoffPending);
   const lockedForAssignee = awaitingApproval && !canApprove;
+  /* ASK-32 1.2 — a task an older decision created blocked waits for that
+     decision (new decisions create their tasks only when approved). Nobody
+     starts it before then; the server refuses too. */
+  const waitingDecision = t.status === "blocked" && !!t.decision_id && !t.approval_required;
+  const workLocked = awaitingApproval || waitingDecision;
   const overdue = isOverdue(t);
   const terminal = isTerminal(t);
   // ASK-25 — what the card face draws.
@@ -1794,6 +1799,22 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
         </div>
       )}
 
+      {waitingDecision && (
+        <div className={`mt-4 flex items-start gap-3 p-4 ${DRAWER_CARD}`} data-testid={`decision-locked${sfx}-${t.id}`}>
+          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-600 ${GLASS_PILL}`}>
+            <LockKey size={16} weight="bold" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-neutral-900">Waiting for a decision</p>
+            <p className="mt-0.5 text-xs text-slate-600">This task starts when the decision it came from is approved. Status and progress are locked until then.</p>
+            <Link to={`/inbox?decision=${t.decision_id}`} data-testid={`decision-locked-open${sfx}-${t.id}`}
+              className="mt-1.5 inline-block text-xs font-medium text-neutral-900 underline underline-offset-2">
+              Open the decision
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* ASK-28 TK-05 — approval before closing, seen by everyone but the
           approver. Both banners wear the same glass card as "Awaiting
           approval"; the sent-back one carries the rose of the chip. */}
@@ -1884,7 +1905,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
     );
   };
 
-  const reopenBlock = (sfx) => (isTerminal(t) && !awaitingApproval && rights.finish ? (
+  const reopenBlock = (sfx) => (isTerminal(t) && !workLocked && rights.finish ? (
     <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2" data-testid={`reopen-actions${sfx}-${t.id}`}>
       <button type="button" onClick={reopen} data-testid={`reopen${sfx}-${t.id}`}
         className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-slate-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
@@ -2053,7 +2074,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
           No transition utility: the track's children swap fills, and the
           selected segment also swaps against .kr-pressed's shadow, which is
           not interpolable against an outset pair. */}
-      {!terminal && !awaitingApproval && rights.work && (
+      {!terminal && !workLocked && rights.work && (
         <div className="kr-pressed grid grid-cols-2 gap-1 rounded-pill p-1" role="group"
              aria-label="Task status" data-testid={`status-pills-m-${t.id}`}>
           {M_STATUS_PILLS.map((sp) => {
@@ -2085,7 +2106,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
         </div>
       )}
       {/* ASK-28 TK-07 — Waiting on, under the two stages. */}
-      {!terminal && !awaitingApproval && (
+      {!terminal && !workLocked && (
         <WaitingOn t={t} members={members} onPatched={onPeoplePatched} readOnly={!rights.work} />
       )}
 
@@ -2176,10 +2197,21 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       </div>
     )}
 
+    {/* ASK-32 4.4 — the decision this task came from. */}
+    {t.decision_id && t.decision_title && (
+      <div>
+        <Link to={`/inbox?decision=${t.decision_id}`} data-testid={`decision-link-${t.id}`}
+          className="inline-flex max-w-full items-center gap-1 text-xs text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline">
+          <span className="shrink-0">From decision:</span>
+          <span className="min-w-0 truncate font-medium">{t.decision_title}</span>
+        </Link>
+      </div>
+    )}
+
     {/* ASK-27 — STATUS: the status pill on the left, a rule, and the %
         control on the right. "Set % manually" is no longer behind a
         disclosure toggle — the bar beside it is the control. */}
-    {!terminal && !awaitingApproval && (
+    {!terminal && !workLocked && (
       !rights.work ? (
         /* ASK-28 TK-01 / item 7 — someone following the task (See all tasks,
            the approver, a colleague waited on) sees where the work is, not the
@@ -2231,7 +2263,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
 
     {evidenceNotice("")}
 
-    {!isTerminal(t) && !awaitingApproval && !signoffPending && rights.work && (
+    {!isTerminal(t) && !workLocked && !signoffPending && rights.work && (
       <div className="flex items-center gap-4">
         {/* FUP-49: don't disable -- always click-through, handler shows
             a clear toast if evidence is missing. Silent-disabled
@@ -2309,7 +2341,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
         one control that records what happened inert on phones. Shared here,
         both triggers open the same visible form. */}
     <div className="space-y-6 px-4 pb-6 lg:px-7 lg:pb-8">
-      {!awaitingApproval && onThisTask && (
+      {!workLocked && onThisTask && (
         <ExecutionPlan t={t} onChange={onChange} onPatched={applyPatched} members={members} roleOptions={roleOptions} />
       )}
       {/* ASK-28 TK-01 — the person who asked for this task isn't on it: the
@@ -2373,7 +2405,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
     {/* Mobile PWA (2026-09-14) — the phone's action bar. Sticky at the foot
         of the drawer's scroller, above the home indicator, so Complete is
         always one thumb away instead of mid-scroll above the plan. */}
-    {!isTerminal(t) && !awaitingApproval && !signoffPending && rights.work && (
+    {!isTerminal(t) && !workLocked && !signoffPending && rights.work && (
       <div data-testid={`task-actions-m-${t.id}`}
         className="sticky bottom-0 z-10 border-t border-white/70 bg-[hsl(0_0%_93%/0.92)] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl lg:hidden">
         <div className="flex items-center gap-2">

@@ -414,6 +414,19 @@
         min-width: 0;
     }
 
+    /* KM-48 — the SECOND documented exception to the 44px floor, and the
+       reasoning is the same shape as the one above. A segmented filter track
+       puts three or four segments side by side across the full 343px row, so
+       each one is 80-110px WIDE; the floor was making each 44px tall as well,
+       which stacked the two filter bars on /my-work to 104px of a 812px screen
+       before a single task was visible. 36px keeps every segment far above the
+       24x24 that WCAG 2.5.8 asks and well inside a thumb, because the target
+       here is a wide bar rather than a small square — the floor exists to stop
+       tiny icon buttons, and these are not that. Width is untouched. */
+    .kr-seg-compact {
+        min-height: 0;
+    }
+
     /* A control that opted into a taller tier keeps it. */
     .min-h-touch-md { min-height: var(--control-h-md) !important; }
     .min-h-touch-lg { min-height: var(--control-h-lg) !important; }
@@ -522,6 +535,33 @@
     .app-fab-right {
         right: calc(max(0px, (100vw - var(--app-shell)) / 2) + 1rem);
     }
+
+    /* KM-53 — the Dex plus moves to the right and lines up ON the FAB.
+       Founder: "place the plus icon in dex mode from left to right side, top
+       of the mic/keyboard icon, center aligned to the below mic icon."
+       It sits in flow inside a container padded 1rem, so reaching the FAB's
+       centre line means undoing that padding and adding the difference between
+       the two radii:
+
+           FAB centre from the viewport edge   shellOffset + 1rem + 2rem
+           plus centre if left alone           1rem + 1.375rem
+           margin-right that reconciles them   shellOffset + 0.625rem
+
+       Written as a margin rather than absolute positioning so the button keeps
+       its place in the column and the menu above it still measures from a real
+       box. shellOffset is the same expression .app-fab-right uses, so the two
+       stay paired at every width the shell can take — not only on a phone,
+       where it happens to collapse to zero. */
+    .app-plus-on-fab {
+        margin-right: calc(max(0px, (100vw - var(--app-shell)) / 2) + 0.625rem);
+    }
+}
+
+/* Under 360px the FAB shrinks to 3.75rem, so its centre moves 2px inward. */
+@media (max-width: 359px) {
+    .app-plus-on-fab {
+        margin-right: calc(max(0px, (100vw - var(--app-shell)) / 2) + 0.5rem);
+    }
 }
 @media (min-width: 481px) and (max-width: 1023.98px) {
     .app-shell {
@@ -535,6 +575,46 @@
    under the bar — the founder's "shouldn't be interfering with the fab behind".
    7.5rem clears the taller bar with a real gap rather than a hairline. */
 .pb-dock { padding-bottom: calc(7.5rem + env(safe-area-inset-bottom, 0px)); }
+
+/* Mobile PWA (2026-09-14) — the dock, the Dex button, their pickers, the
+   vignette and the install prompt step aside while a modal dialog, sheet or
+   drawer is open. They sit at z 10000, above Radix's z-50 overlays, so they
+   covered the bottom ~5.5rem of every sheet: New Task's Create button, the
+   task drawer's last actions, the filter sheet's Done. More (AllAppsPanel)
+   grows out of the dock and marks itself data-keeps-chrome, so it keeps it. */
+@media (max-width: 1023.98px) {
+    body:has([role="dialog"][data-state="open"]:not([data-keeps-chrome])) [data-mobile-chrome],
+    body:has([role="alertdialog"][data-state="open"]) [data-mobile-chrome] {
+        opacity: 0 !important;
+        visibility: hidden;
+        pointer-events: none;
+    }
+}
+
+/* UI-SCALE · .ui-scale — the app scales with the screen. hooks/useUiScale
+   writes --ui-scale (a stepped table by viewport width, 0.9…1.3) to <html>
+   and puts this class on <body>, which is zoomed by it, so everything —
+   type, spacing, controls, cards, the header, the dock, every dialog and
+   sheet — grows and shrinks together and the layout REFLOWS at the new
+   size (zoom changes used values; a transform would only paint bigger).
+   Desktop only: below lg the phone tree has its own breakpoints and the hook
+   writes 1 anyway. vh is NOT divided by zoom, so desktop vh sizes divide by
+   var(--ui-scale) themselves (the shell in Layout, dialog max-heights). */
+@media (min-width: 1024px) {
+    .ui-scale { zoom: var(--ui-scale, 1); }
+
+    /* Radix poppers (dropdown menus, popovers, tooltips) position their
+       wrapper with a translate that floating-ui computed in VISUAL px; inside
+       the zoomed body that translate is applied in local px and lands
+       scale× too far right and down (measured 47px / 65px at 1.2). So the
+       wrapper cancels the zoom (its translate is now 1:1 with the screen) and
+       its content puts the zoom back — body × 1/s × s — so the menu itself is
+       drawn at the page's scale, just placed correctly. Dialogs and sheets
+       need none of this: they centre with a percentage translate of their
+       own size, which zoom scales consistently. */
+    .ui-scale [data-radix-popper-content-wrapper] { zoom: calc(1 / var(--ui-scale, 1)); }
+    .ui-scale [data-radix-popper-content-wrapper] > * { zoom: var(--ui-scale, 1); }
+}
 
 @layer base {
     * {
@@ -694,8 +774,12 @@
        same reason: 73 call sites take the new surface in one edit. Karma's
        card is a white object on the greige canvas, 28px radius, separated by
        TONE — no shadow, the faint hairline as the glare floor. */
+    /* Mobile PWA (2026-09-14) — the last pages still on this recipe
+       (Notifications, Work Coach, Calendar's panels, the desktop contact
+       profile, skeletons) join the glass: a white glass card with a lit rim
+       instead of a greige block with a hairline. One rule, every call site. */
     .card-brutal {
-        @apply bg-nm-raised border border-nm-edge/40 rounded-cardlg;
+        @apply rounded-[1.4rem] border-0 bg-white/70 ring-1 ring-inset ring-white/80 shadow-[0_10px_30px_-14px_hsl(0_0%_10%/0.22)] backdrop-blur-xl;
     }
     /* KR-2 — .shadow-hover keeps its NAME (dozens of call sites) but its
        body inverts NM-4's rule: shadows no longer exist, so THE CARD MOVES.
@@ -973,13 +1057,16 @@
     /* A field is the one thing that is genuinely concave — you type INTO it.
        Kept separate from nm-inset because inputs also need the focus ring and
        must not inherit a card's padding assumptions. */
+    /* Mobile PWA (2026-09-14) — the glass field (glass.js DRAWER_FIELD) for the
+       forms still on this recipe: a white field with an inset hairline and a
+       neutral focus ring, not a square outline with the lavender one. */
     .nm-field {
-        @apply rounded-control bg-nm-raised border border-kr-outline/70
-               outline-none transition-shadow;
+        @apply rounded-2xl border-0 bg-white/80 ring-1 ring-inset ring-slate-900/[0.06]
+               shadow-[inset_0_1px_2px_hsl(216_30%_25%/0.08)] outline-none transition-shadow;
     }
     .nm-field:focus,
     .nm-field:focus-within {
-        @apply ring-2 ring-primary/40;
+        @apply ring-2 ring-neutral-900/25;
     }
 }
 
@@ -1320,100 +1407,88 @@ html[data-dex="1"] .app-sky__art { opacity: 0; }
    picture: the phone loads a 9 KB WebP, desktop a 1,044 KB PNG. A browser
    does not fetch a background whose media query does not match, so each
    viewport pulls exactly one of them — the phone never sees the 1 MB file. */
+/* KM-39 — THE SET WAS REPLACED, and the shape of the change matters more than
+   the filenames. The old artwork was a MIXTURE: some rooms shipped a portrait
+   phone crop (941x1672) alongside a landscape desktop crop (1654x951), which
+   is what --sky-art-lg exists to serve. The new set is uniform — one 800x1200
+   portrait picture per room, 9-16 KB each, no desktop variant anywhere.
+
+   So every --sky-art-lg is gone, and with it the -pos-lg / -opacity-lg
+   overrides that only made sense against a landscape companion image. Desktop
+   now falls through `var(--sky-art-lg, var(--sky-art, none))` to the portrait
+   file. That is a real trade and worth naming: measured at 1440x900, `cover`
+   shows 34% of an 800x1200 picture's height — desktop sees a horizontal band,
+   not the composition. Acceptable here because these are abstract washes with
+   no subject to cut in half; it would not be for artwork with a horizon or a
+   focal point.
+
+   /crm has no file in the new set, so its line is commented out rather than
+   left pointing at a 404. It falls back to its gradient, which is exactly what
+   the mechanism above promises.
+
+   Every opacity below was RE-MEASURED against the new pictures. The old values
+   were swept against the old ones and carried no meaning once the images
+   changed — a fade tuned to a dark core that has moved is just a dimmer
+   picture. */
 html[data-page="inbox"] {
     --sky-art:    url("/sky/inbox.webp");
+    /* KM-49 — /inbox has a desktop plate. The phone picture is 800x1200
+       portrait, and `cover` on a landscape viewport shows 34% of its height
+       (see the note at the top of this table); the landscape source shows the
+       whole composition instead. The browser never fetches a background whose
+       media query does not match, so the phone still pulls only the 17 KB
+       WebP and never sees the 1 MB PNG.
+       ASK-25 briefly stood the plate down (opacity 0) so the redesigned Desk
+       sat on the amber gradient it was drawn on; 2026-09-14 the founder asked
+       for the inbox picture back under the frost cards, so the plate is on
+       again at full opacity. */
     --sky-art-lg: url("/sky/inbox-lg.png");
-
-    /* KM-16 — 60%, not centre. This artwork has dark grey cores where the
-       orange one had none, and at `center` one of them sat directly under the
-       greeting: the muted half ("Rajesh.") measured 1.73:1 against a 3.0
-       large-text threshold — close to unreadable.
-       The value is swept, not guessed. Sampling the darkest pixel inside the
-       greeting's own box across background-position-x from 0 to 100%: centre
-       is the WORST region of the whole range (1.73), 55% is the first to clear
-       (3.67), and 60% gives 5.15 with the score area at 15.31 / 5.84. Past
-       ~75% everything scores higher still, but only because the crop has
-       panned onto the pale right edge and the glow has left the hero — which
-       is not a fix, it is a deletion. 60% is the smallest pan that clears the
-       core while keeping the picture.
-       Desktop is landscape and has no such collision, so it stays centred. */
-    --sky-art-pos:    60% center;
-    --sky-art-pos-lg: center;
 }
 
 html[data-page="my-work"] {
     --sky-art: url("/sky/my-work.webp");
-    /* At centre "Your day, simplified" reads 3.86 on the phone. Panning to 74%
-       clears it (5.02) — and was the first thing tried, and was wrong: at 74%
-       the crop has run onto the pale right edge and the picture is 12.2 mean
-       chroma of a possible 51.9. Fading it at CENTRE clears the same text at
-       .6 while keeping 30.2, two and a half times as much of the artwork.
-       Same trap KM-16 names on /inbox: a pan that scores well by removing the
-       thing it was asked to keep. Desktop clears at .75, so .6 covers both. */
-    --sky-art-opacity: .6;
+    /* The founder's desktop plate, same arrangement as /inbox (KM-49): the
+       phone keeps its portrait WebP, >= 1024px loads the landscape file, and
+       neither viewport fetches the other's picture. */
+    --sky-art-lg: url("/sky/my-work-lg.webp");
 }
+/* ASK-31 — My Work's picture in grayscale, on the founder's call, to sit with
+   the black-and-gray task drawer. A filter on the art layer rather than a
+   re-exported file: the originals in public/sky stay untouched and this is
+   one rule to undo. Phone and desktop plates both take it. */
+html[data-page="my-work"] .app-sky__art {
+    filter: grayscale(1);
+}
+
 /* The file is named for the UI label, "Ops"; the route is /operating-score. */
 html[data-page="operating-score"] {
     --sky-art: url("/sky/ops.webp");
-    /* The one room no pan can fix: this picture's dark core sits under the
-       score hero at EVERY horizontal position (best 4.01 at 0%, and only
-       because the artwork has left the screen — chroma 3.8 of a possible 85).
-       So it keeps the founder's centred framing and fades instead. At .4 the
-       hero clears with the picture still clearly present.
-       ONE FAILURE SURVIVES AND IT IS NOT THE ARTWORK'S: the green "Needs work"
-       label is rgb(64 119 64) at 14px, whose ceiling on this canvas is 4.42
-       against a 4.5 requirement — it fails on the plain gradient too. Fixing
-       it means changing that green, not this background. */
-    --sky-art-opacity: .4;
 }
+
 html[data-page="finance"] {
-    --sky-art:    url("/sky/finance.webp");
-    --sky-art-lg: url("/sky/finance-lg.webp");
-    /* KM-34 — the only room whose picture is a WASH rather than a scene. The
-       founder's brief was "blur it entirely, not as subtle, but more blurred
-       and a little bit brighten it", and the blur is BAKED INTO THE FILE
-       (Gaussian r=58 at the source's 941px, brightness 1.12, then downscaled)
-       rather than applied as a CSS filter. Two reasons: a `filter: blur(24px)`
-       on a fixed full-viewport layer re-rasterises on every scroll frame on a
-       phone, and a picture with no high frequencies left in it compresses to
-       nothing — 4.4 KB at 470px wide, against 10 KB for the sharp rooms.
-       Upscaling it costs nothing visually because there is no detail to lose.
-
-       Full strength, no pan — but the SECONDARY text moves instead. The title
-       clears easily (6.02 at 30px against a 3.0 threshold); the 14px subtitle
-       did not, reading 2.91 over the blue-grey band the header sits across.
-       The rooms before this one answered that with --sky-art-opacity, and here
-       that costs too much: clearing 4.5 needs opacity .5, which is half of the
-       picture the founder chose, spent on one line of 14px type. Darkening the
-       line is the cheaper trade and the more honest one — text over a PICTURE
-       has to carry its own contrast, because a picture makes no promise about
-       what is behind any given word. Measured after: 5.6:1.
-
-       This lands on <html>, the same element that declares the shadcn aliases,
-       so --muted-foreground re-substitutes on its own — no alias block needed
-       (contrast .kr-glass and .kr-dark-band, which are nested scopes and do
-       need one). */
+    --sky-art: url("/sky/finance.webp");
+    /* KM-34 — the secondary text on this room is darkened rather than the
+       picture faded; see the note on --text-secondary below. Kept through the
+       artwork swap because it is a property of putting 14px type on ANY
+       picture, not of the particular picture. Re-verified against the new one. */
     --text-secondary: 30 5% 24%;
 }
-html[data-page="crm"] {
-    --sky-art: url("/sky/crm.webp");
-    /* The best-behaved of the four: clears at full strength, centred, on the
-       phone (6.31) — no pan, no fade. Desktop is the opposite: "Your
-       relationships —" reads 2.01 centred and no pan fixes it, but nudging to
-       0% (which barely changes what is on screen, the slack being 138px) lets
-       it clear at .5 rather than the .3 that centring would demand. */
-    --sky-art-pos-lg: 0%;
-    --sky-art-opacity-lg: .5;
-}
+
 html[data-page="team"] {
     --sky-art: url("/sky/team.webp");
-    /* "Employees · access · reports" reads 2.81 centred on the phone. Pan to
-       74% and fade at centre score the same amount of visible artwork here
-       (22.7 vs 21.7 of a possible 57.1), so this follows /my-work and keeps
-       the composition centred rather than cropping to an edge.
-       Phone clears at .4, desktop at .5; .4 covers both. */
-    --sky-art-opacity: .4;
 }
+
+/* KM-39 — /workflows joins the table. It was the one room in the dock with a
+   page of its own (KM-31) and no sky of its own, so it fell back to the bare
+   gradient while every neighbour carried a picture. */
+html[data-page="workflows"] {
+    --sky-art: url("/sky/workflows.webp");
+}
+
+/* /crm has no file in the new set, so its line stays commented and the room
+   keeps its gradient rather than firing a request that 404s. Drop a crm.webp
+   in and uncomment to bring it back. */
+/* html[data-page="crm"]             { --sky-art: url("/sky/crm.webp"); } */
 /* html[data-page="settings"]        { --sky-art: url("/sky/settings.webp"); } */
 /* html[data-page="journal"]         { --sky-art: url("/sky/journal.webp"); } */
 /* html[data-page="calendar"]        { --sky-art: url("/sky/calendar.webp"); } */
@@ -1479,36 +1554,207 @@ html[data-page="team"] {
         background-size: 100% 100%;
     }
     /* The signup glow is a blob in its own margin box, not a full-bleed
-       background. It is already a deliberate crop of the picture, so
-       squeezing it would distort a shape rather than preserve one. */
+       background, so the portrait squeeze above must not reach it — stretching
+       to 100% 100% would distort a shape rather than preserve one.
+       KM-40 — and it holds `contain` here too, not the `cover` it used to
+       restore: the signup picture is shown whole at every orientation, which
+       is the promise the rule above makes. */
     .app-sky__art--aside {
-        background-size: cover;
+        background-size: contain;
     }
 
-    /* Portrait shows the WHOLE frame, which means every dark core the crop
-       used to throw away is now somewhere on screen — and on four of the five
-       rooms it landed under text. Measured at 375x812, worst case per room,
-       with the value that clears AA in brackets:
+    /* KM-39 — THE PORTRAIT FADES ARE GONE, because the pictures they were
+       fighting are gone. KM-22 measured the old set here and found that
+       portrait, showing the WHOLE frame, put a dark core under text on four of
+       five rooms — inbox 2.59:1 on the wordmark, crm 2.24, ops 4.14, team 4.05
+       — so each got an opacity cap (.72 / .66 / .28 / .28).
 
-         inbox   2.59:1 on the wordmark  (needs <= .75)
-         crm     2.24:1 on the wordmark  (needs <= .70)
-         ops     4.14:1 on the caption   (needs <= .31)
-         team    4.05:1 on the caption   (needs <= .30)
-         my-work 4.66:1                  already clear at .6
+       The new set has no such cores. Re-measured the same way, worst case in
+       the header band at 375x812, every room clears at FULL strength:
 
-       These are portrait-only overrides: landscape still crops, so the
-       landscape numbers are the ones KM-18 already signed off and nothing
-       here touches them. Each value sits a step below its threshold rather
-       than on it, because the artwork is the founder's and the next one
-       dropped into the same slot will not have the same dark cores. */
-    html[data-page="inbox"]           { --sky-art-opacity: .72; }
-    html[data-page="crm"]             { --sky-art-opacity: .66; }
-    html[data-page="operating-score"] { --sky-art-opacity: .28; }
-    html[data-page="team"]            { --sky-art-opacity: .28; }
+                   title (needs 3.0)   subtitle (needs 4.5)
+         my-work        13.18                 5.03
+         workflows      12.75                 4.87
+         team           12.64                 4.82
+         inbox          12.59                 4.81
+         ops            12.45                 4.75
+         finance        11.97                 4.57
+
+       Desktop is looser still (titles 13.5-14.7, subtitles 5.15-5.59), so
+       nothing is capped there either. Keeping the old numbers would not have
+       been safe-by-default — it would just be dimming the founder's new
+       artwork to defend against dark cores that are not in it. */
+}
+
+/* KM-46 · .kr-navplate — the header's shelf, cut to the founder's own curve.
+   They supplied it as decisionos-curve.html; the geometry below is lifted from
+   that file's <path id="panel"> and nothing else was taken from it — no glow,
+   no colour, no stroke.
+
+       viewBox 0 0 2172 126
+       M485.5 2  C582.4 2 561.6 107 658.5 107  H1507
+                 C1603.9 107 1583.1 2 1680 2   L1680 0  H485.5 Z
+
+   WHAT MAKES THIS CURVE ITS OWN. The two control points on each S CROSS —
+   582.4 sits to the RIGHT of 561.6. A conventional ogee keeps them in order and
+   eases evenly; crossing them holds the line flat for longer and then drops it
+   harder, which is the snap in the founder's drawing. Reproducing the endpoints
+   with tidy control points would have produced a different, softer curve that
+   looked approximately right and was not theirs, so the numbers are transcribed
+   rather than redrawn.
+
+   READ OFF THE PATH, as proportions of the source box:
+       S-curve run   658.5 - 485.5 = 173   of 2172 wide
+       dip depth     107 - 2       = 105   of 126 tall
+       shelf at the edges  y = 2           — it fades to nothing, so there is
+                                             no band layer at all: the shelf
+                                             EXISTS only where it bulges
+       flat middle   1507 - 658.5  = 848.5, centred (its midpoint 1082.75
+                                             against the box centre 1086)
+
+   HOW A CURVE THAT MUST NOT STRETCH LIVES IN A BOX THAT DOES. Stretching one
+   full-width SVG across the header is the trap KM-36 documents — the S would
+   scale its curvature with the viewport and steepen on a laptop. So the mask is
+   three layers: the two caps hold a fixed size derived from the plate's HEIGHT
+   (cap width = height x 173/126, which keeps the founder's aspect exactly), and
+   only the middle rectangle stretches. Nothing curved is ever scaled.
+
+   THE POSITIONING IS NOT AN OFFSET, which is the part that bites. A percentage
+   in mask-position puts x% of the IMAGE at x% of the BOX, so for a fixed-width
+   layer it resolves to p x (box - image), not p x box. Aligning the left cap's
+   inner edge to the dip's left edge is therefore:
+       0.5(C - cap) + offset = 0.5C - 0.5mid - cap
+       offset = -(mid + cap) / 2
+   and its mirror on the right. Written out because "nudge it until it lines up"
+   is how this silently breaks at the next viewport width.
+
+   --navplate-w is measured off the real nav in Layout rather than assumed: the
+   pill labels are translated, so the dip has to be as wide as whatever language
+   is loaded. The founder's own flat is 39% of the box, which would leave the
+   pills overhanging it below about 1500px. */
+.kr-navplate {
+    position: relative;
+    z-index: 0;          /* its own stacking context, so the -1 plate stays in */
+}
+.kr-navplate::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    /* KM-49 — .32, up from .25. The icon buttons went back to being outlined
+       and unfilled (founder's call), so the shelf is now the only thing giving
+       them a ground to sit on, and a touch more black is what makes an
+       unfilled circle read as a control rather than an outline floating on the
+       sky. Reading "black colour transparency a little bit more" as MORE
+       BLACK — the opposite reading would wash the row out just as the fills
+       came off it, which is the wrong direction for the same sentence. */
+    /* 2026-09-14, founder — THE SHELF IS BLACK NOW, not a 32% tint: "i need
+       the black color, selected milk white, rest no circle in bg just
+       letters". The founder's reference is a solid dark rail with the
+       selected item cut out in milk white; the translucency that let the sky
+       show through the shelf is gone with it. Only the dip is painted — the
+       wordmark and the account block sit on the bare sky either side, as
+       they always did, and keep their ink.
+       2026-09-14, founder — "use the color of the create task button": the
+       INK_PILL recipe (karma/glass.js), a 24%→6% vertical gradient with a
+       lit top edge, so the shelf, the Desk board and the filled buttons are
+       one material. */
+    background: linear-gradient(180deg, hsl(0 0% 24%), hsl(0 0% 6%));
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / .16);
+
+    --kr-plate-h: 88px;                                       /* the header */
+    --kr-plate-cap: calc(var(--kr-plate-h) * 173 / 126);      /* their aspect */
+    --kr-plate-mid: var(--navplate-w, 640px);
+
+    -webkit-mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="173" height="126" viewBox="0 0 173 126" preserveAspectRatio="none"><path d="M0 0H173V107C76.1 107 96.9 2 0 2Z" fill="black"/></svg>'), linear-gradient(#000, #000), url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="173" height="126" viewBox="0 0 173 126" preserveAspectRatio="none"><path d="M0 0H173V2C76.1 2 96.9 107 0 107Z" fill="black"/></svg>');
+            mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="173" height="126" viewBox="0 0 173 126" preserveAspectRatio="none"><path d="M0 0H173V107C76.1 107 96.9 2 0 2Z" fill="black"/></svg>'), linear-gradient(#000, #000), url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="173" height="126" viewBox="0 0 173 126" preserveAspectRatio="none"><path d="M0 0H173V2C76.1 2 96.9 107 0 107Z" fill="black"/></svg>');
+    /* 84.92% = 107/126 — the dip's floor, straight off the path */
+    -webkit-mask-size:
+        var(--kr-plate-cap) 100%,
+        var(--kr-plate-mid) 84.92%,
+        var(--kr-plate-cap) 100%;
+            mask-size:
+        var(--kr-plate-cap) 100%,
+        var(--kr-plate-mid) 84.92%,
+        var(--kr-plate-cap) 100%;
+    -webkit-mask-position:
+        calc(50% - (var(--kr-plate-mid) + var(--kr-plate-cap)) / 2) top,
+        center top,
+        calc(50% + (var(--kr-plate-mid) + var(--kr-plate-cap)) / 2) top;
+            mask-position:
+        calc(50% - (var(--kr-plate-mid) + var(--kr-plate-cap)) / 2) top,
+        center top,
+        calc(50% + (var(--kr-plate-mid) + var(--kr-plate-cap)) / 2) top;
+    -webkit-mask-repeat: no-repeat, no-repeat, no-repeat;
+            mask-repeat: no-repeat, no-repeat, no-repeat;
+    /* union, not the `exclude` the dark band uses — these three are one shape */
+    -webkit-mask-composite: source-over;
+            mask-composite: add;
 }
 
 .app-sky__art--aside {
-    --sky-art: url("/sky/inbox.webp");
+    /* ── THE SIGNUP GLOW'S PICTURE ─────────────────────────────────────────
+       TO CHANGE IT: replace frontend/public/sky/signup.webp. That is the
+       whole procedure — no CSS edit, no rebuild step, no restart. public/ is
+       copied verbatim into the build, so a refresh shows the new one.
+
+       KM-40 — it has its OWN file now. It used to point at /sky/inbox.webp,
+       which meant the signup page could not be changed without changing the
+       Desk's sky, and changing the Desk's sky silently changed signup. One
+       picture serving two rooms is a coupling nobody asked for; signup.webp
+       starts life as a copy of inbox.webp, so nothing moved on the way in.
+
+       IF A NEW PICTURE LANDS WRONG, these are the two knobs, in order:
+         --sky-art-pos      phone   (default centre)
+         --sky-art-pos-lg   desktop (below)
+       At 1280 the box is 794x1066 and `cover` scales an 800x1200 picture by
+       KM-41 — TWO PICTURES, TWO FITS, because the box changes shape and the
+       mask changes with it. This is the whole contract for the layer:
+
+         phone    signup.webp     portrait   drawn `contain`  — shown whole
+         desktop  signup-lg.webp  landscape  drawn `cover`    — filled, cropped
+
+       The box is derived from the viewport rather than fixed, and both
+       derivations were verified against the DOM, not assumed:
+           desktop   width 0.62vw, height 1.24vh  ->  ratio = 0.50 x (vw/vh)
+           phone     width 0.86vw, height 0.60vh  ->  ratio = 1.43 x (vw/vh)
+       Measured: 1280x860 gives a 794x1066 box (0.744 vs 0.50 x 1.488 = 0.744);
+       375x812 gives 323x487 (0.662 vs 1.43 x 0.462 = 0.662). Both exact.
+
+       WHY THE PHONE CAN BE `contain` AND DESKTOP CANNOT. Not taste — the two
+       masks differ. The phone mask is a RADIAL, so it fades on every axis and
+       an unfilled edge simply disappears into it; and the phone picture is
+       0.667 against a 0.662 box, so there is barely an edge to hide. The
+       desktop mask is a linear-gradient(90deg): it fades left-to-right ONLY
+       and has no vertical falloff, so a picture that does not reach the top
+       and bottom of the box shows two hard horizontal seams. Desktop must be
+       filled, and filling means cropping.
+
+       TO CHANGE EITHER: replace the file. For the phone, author near ratio
+       0.66 (800x1200 is the shipped one) and it is shown unmodified. For
+       desktop, author 16:9 — the box only ever reveals a portrait-ish slice of
+       it, so put the interest right-of-centre and vertically centred. */
+    --sky-art:    url("/sky/signup.webp");
+    /* KM-53 — ?v=2 is a CACHE BUSTER, not a path.
+       The founder replaced this picture and it kept showing the old one on
+       Railway while localhost was correct. The file on the server IS the new
+       one — verified byte-for-byte, 1,085,280 bytes, identical to git. What
+       was stale was the CLIENT: server.js serves everything outside index.html
+       with `max-age=31536000`, and the filename never changed, so every
+       browser and every installed PWA that had loaded the page once was
+       entitled to keep the old bytes for a year without ever asking.
+       /static bundles do not have this problem because webpack renames them on
+       every build; hand-placed art in /sky keeps its name forever, so the name
+       has to carry the version instead. Bump this when the file is replaced.
+       server.js now also stops sending a year on /sky, which fixes the NEXT
+       swap — this query string is what fixes the one already cached. */
+    --sky-art-lg: url("/sky/signup-lg.webp?v=2");
+    /* PHONE FIT — contain, not cover: show all of it, crop none of it, and
+       here that is nearly free. The phone box measures ratio 0.662 and
+       signup.webp is 800x1200 = 0.667, a 0.8% mismatch, so `contain` draws
+       essentially the whole picture with no visible gap. Desktop is a
+       different shape and takes `cover`; see the lg block below. */
+    background-size: contain;
     /* PHONE: above the pane, held to the right. The first cut put it BELOW,
        which looked fine and measured badly — the footer line sat on the glow
        at 2.09:1 against a 4.5 requirement. Above the pane the only free band
@@ -1538,12 +1784,153 @@ html[data-page="team"] {
            976 — and fully lit by 1212. */
         -webkit-mask-image: linear-gradient(90deg, transparent 0%, transparent 42%, #000 72%);
         mask-image: linear-gradient(90deg, transparent 0%, transparent 42%, #000 72%);
-        /* 37%, not centre: inside this box `cover` scales the picture by
-           1.043, so the glow's core (image x 827) lands at viewport 1160 —
-           the middle of the strip the mask actually reveals. At centre it
-           landed at 1038 and was masked away, which is how the first attempt
-           rendered a white page. */
-        --sky-art-pos-lg: 37% center;
+        /* KM-42 — ON DESKTOP THE PICTURE IS THE PAGE, not a glow in the
+           margin. Founder: "I want the desktop image to be placed exactly on
+           the ui no white bleed ... I want the whole image should be seen".
+
+           So the box stops being the right half and becomes the viewport, the
+           mask goes entirely, and the fit is `cover` — which is the "subtle
+           zooming cropping may be allowed" that was explicitly permitted, and
+           the only way to have no bleed AND no distortion at the same time.
+           At 1280x860 the 1672x941 picture scales by 0.914 to 1528x860: the
+           FULL height, 84% of the width. On a 16:9 monitor the picture's own
+           ratio and the viewport's coincide and the crop goes to nothing.
+
+           inset: 0 rather than the -12% the sky layers use — that bleed exists
+           so a drifting gradient never exposes an edge, and this layer neither
+           drifts nor has an edge to expose. Zero keeps `cover` mapped to the
+           viewport exactly, so the crop is only ever the aspect difference.
+
+           The mask is removed rather than widened: every value in the old
+           linear-gradient was chosen to hide a box that covered half the
+           screen, and a full-bleed picture has nothing to hide. Position
+           returns to centre for the same reason — the 37% pan existed to drag
+           a glow into a narrow revealed strip that no longer exists. */
+        inset: 0;
+        -webkit-mask-image: none;
+                mask-image: none;
+        background-size: cover;
+        background-position: center;
+    }
+
+    /* KM-42 — THE CARD BLENDS INTO THE PICTURE. Scoped to the signup stage,
+       because .kr-well is app-wide (Ledger, Operating Score, InsightWell) and
+       those sit on a pale canvas where the recipe is already right.
+
+       What had to go is the pane's neumorphic pair, specifically
+       `inset -7px -7px 14px hsl(0 0% 100% / .62)`. A white inner highlight is
+       invisible against an off-white ground — that is the whole trick of
+       neumorphism — but over a photograph it reads as exactly what the founder
+       called it: white bleeding in from the sides. Neumorphism needs a ground
+       it can be lighter AND darker than, and a picture is not one.
+
+       So the card becomes honest glass instead: a thinner wash, a stronger
+       blur so the photograph behind reads as depth rather than clutter, one
+       hairline to catch the edge, and a wide soft drop shadow to lift it off
+       the image. Nothing white touches the inside. */
+    /* KM-43 — NOTHING ON THIS PAGE IS GREY. Founder marked the wordmark, the
+       phase rail, Sign in, the step chip, the field and the Enter key: every
+       one of them is .kr-pop or .kr-pressed, and every one was rendering as a
+       milky grey blob on the photograph.
+
+       The grey is not a colour anyone chose — it is neumorphism's shadow pair
+       compositing. Both recipes model depth with a blue-grey cast
+       (hsl(230 22% 34%)) on one side and white on the other, which reads as
+       moulded plastic against the app's near-white canvas and as dirty glass
+       against a photo, because the picture behind supplies the midtone the
+       shadow was meant to be read against.
+
+       So on this page the pair is dropped and the same two states are drawn in
+       glass instead: white washes, white hairlines, and a soft cast shadow for
+       the raised one. Depth still reads — raised is brighter and lifted, sunken
+       is dimmer and ringed — but nothing introduces a grey of its own, and the
+       photograph shows through all of it. Scoped to .signup-stage; the
+       neumorphic recipes are correct everywhere they sit on the pale canvas. */
+    /* THE :not() IS NOT DECORATION — without it this rule breaks the primary
+       button. `.signup-stage .kr-pop` scores (0,2,0) against Tailwind's
+       `.bg-kr-ink` at (0,1,0), and Tailwind v3 emits plain CSS with no native
+       @layer, so specificity decides and the black Continue pill came out
+       white-on-white. Anything carrying its own bg-* utility keeps it; only
+       the edge and the lift are applied unconditionally. */
+    .signup-stage .kr-pop ,
+    .login-stage .kr-pop {
+        border: 1px solid hsl(0 0% 100% / .70);
+        box-shadow: 0 6px 18px -8px hsl(230 30% 18% / .38);
+    }
+    .signup-stage .kr-pop:not([class*="bg-"]) ,
+    .login-stage .kr-pop:not([class*="bg-"]) {
+        background: hsl(0 0% 100% / .58);
+    }
+    .signup-stage .kr-pop:not([class*="bg-"]):hover ,
+    .login-stage .kr-pop:not([class*="bg-"]):hover {
+        background: hsl(0 0% 100% / .70);
+        box-shadow: 0 10px 24px -10px hsl(230 30% 18% / .44);
+    }
+    /* Sunken: a hairline and a whisper of white, no cast. The field carries
+       `bg-transparent` as a utility and would beat any background set here, so
+       the trough is drawn entirely by its ring — which is why this reads the
+       same on the input, the step chip and the Enter key. */
+    .signup-stage .kr-pressed ,
+    .login-stage .kr-pressed {
+        border: 1px solid hsl(0 0% 100% / .55);
+        box-shadow: inset 0 1px 2px hsl(230 30% 18% / .10);
+    }
+    .signup-stage .kr-pressed:not([class*="bg-"]) ,
+    .login-stage .kr-pressed:not([class*="bg-"]) {
+        background: hsl(0 0% 100% / .20);
+    }
+    /* The live phase pill sits INSIDE the rail, so it needs to out-read a
+       surface that is already white-on-white. */
+    .signup-stage .kr-pressed .kr-pop:not([class*="bg-"]) ,
+    .login-stage .kr-pressed .kr-pop:not([class*="bg-"]) {
+        background: hsl(0 0% 100% / .82);
+        box-shadow: 0 2px 8px -3px hsl(230 30% 18% / .40);
+    }
+
+    /* KM-66 follow-up — every button on signup / login rises 2px on hover.
+       Applies to .kr-pop (which is what every neumorphic button on both
+       stages carries), animates with the same 200ms curve the shadow
+       already fades in on, and covers both bg-less popovers and any
+       bg-kr-ink action button. Framer-motion buttons that set their own
+       inline transform (whileHover, animate) override this CSS transform,
+       so the two Continue-style motion buttons still elevate via their
+       own whileHover — no double-lift. */
+    .signup-stage .kr-pop ,
+    .login-stage .kr-pop {
+        transition: transform 200ms ease-out,
+                    box-shadow 200ms ease-out,
+                    background-color 200ms ease-out,
+                    border-color 200ms ease-out;
+    }
+    .signup-stage .kr-pop:hover ,
+    .login-stage .kr-pop:hover {
+        transform: translateY(-2px);
+    }
+    /* Exception: any .kr-pop nested inside .kr-pressed is a "selected pill
+       in a trough" (the phase rail's live phase); lifting it out of the
+       trough would break that reading. */
+    .signup-stage .kr-pressed .kr-pop:hover ,
+    .login-stage .kr-pressed .kr-pop:hover {
+        transform: none;
+    }
+
+    .signup-stage .kr-well__pane ,
+
+    .login-stage .kr-well__pane {
+        /* .40/.28, not .34/.22. The pane's own note says the floor of this
+           wash IS the contrast floor of everything printed on it, and that
+           floor was set against a drifting gradient. A photograph goes darker
+           than any gradient does: at .34/.22 the supporting line under the
+           question measured 4.37 against a 4.5 requirement, on the cool grey
+           of the window in the picture. Six points of white clears it without
+           the card ceasing to be glass — the picture still reads through. */
+        background: linear-gradient(160deg,
+            hsl(0 0% 100% / .40),
+            hsl(0 0% 100% / .28));
+        -webkit-backdrop-filter: blur(30px) saturate(1.4);
+                backdrop-filter: blur(30px) saturate(1.4);
+        border: 1px solid hsl(0 0% 100% / .38);
+        box-shadow: 0 28px 70px -28px hsl(230 30% 18% / .50);
     }
 }
 
@@ -1690,6 +2077,29 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
     .app-sky::before, .app-sky::after { animation: none; }
     .kr-page-in { animation: none; opacity: 1; transform: none; }
     html.theme-x .app-canvas { animation: none; filter: none; }
+
+    /* KM-66 — the new-item ring still has to MARK the item; only the pulse
+       goes. A static hairline for the same five seconds says the same thing
+       without moving. */
+    .kr-new-glow::after {
+        animation: none;
+        box-shadow: 0 0 0 1px hsl(var(--kr-gold) / .55);
+    }
+}
+
+/* Ops — the notch in the Team execution card's top edge: the cut the "How is
+   this calculated?" pill sits in (the founder's cut reference). A mask, not a
+   shape painted on top, so the sky shows through the cut. Sized to the pill
+   (FormulaToggle, 44px, centred on the edge): its lower 22px plus a 10px gap,
+   380px across with smooth shoulders. Below lg (the 448px phone column) the card is too narrow for a
+   cut beside its 2rem corners, so the pill sits above the card there. */
+@media (min-width: 1024px) {
+    .kr-notch {
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='380' height='32' viewBox='0 0 380 32'%3E%3Cpath d='M0 0C27 0 31 32 58 32H322C349 32 353 0 380 0Z'/%3E%3C/svg%3E") center top / 380px 32px no-repeat, linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='380' height='32' viewBox='0 0 380 32'%3E%3Cpath d='M0 0C27 0 31 32 58 32H322C349 32 353 0 380 0Z'/%3E%3C/svg%3E") center top / 380px 32px no-repeat, linear-gradient(#000 0 0);
+        mask-composite: exclude;
+    }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -2216,9 +2626,36 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
             inset 0 -1px 0 hsl(0 0% 100% / .45);
     }
 
+    /* 2026-09-14, founder · .kr-lane — one visible container per workflow
+       stage on desktop. ASK-18 had cleared the columns' fill and left only
+       .kr-frost's blur, which on the pale grayscale sky drew a lane you could
+       barely see, with the cards blending into it. The lane is glass again,
+       carried by DEPTH rather than fill: a white rim with a top-lip highlight,
+       a hairline dark edge so it holds on near-white, a long soft drop shadow
+       underneath and a tight white glow around the rim. The cards inside stay
+       brighter and more lifted, so it reads board → lane → card. */
+    .kr-lane {
+        border-radius: var(--radius-tile);
+        background: linear-gradient(180deg,
+            hsl(0 0% 100% / .50),
+            hsl(0 0% 100% / .24));
+        -webkit-backdrop-filter: blur(20px) saturate(1.2);
+        backdrop-filter: blur(20px) saturate(1.2);
+        border: 1px solid hsl(0 0% 100% / .80);
+        box-shadow:
+            inset 0 1px 0 hsl(0 0% 100% / .95),
+            0 0 0 1px hsl(0 0% 0% / .05),
+            0 2px 4px hsl(0 0% 0% / .05),
+            0 24px 48px -24px hsl(0 0% 0% / .28),
+            0 0 24px -4px hsl(0 0% 100% / .70);
+    }
+
     .kr-bento {
         position: relative;
-        border-radius: var(--radius-tile);
+        /* ASK-15 (2026-09-13): softer than a chip but tighter than a card.
+           Was --radius-tile (24px); 16px reads as a distinct rectangle rather
+           than a rounded blob on a wall of tiles. */
+        border-radius: var(--radius-xl);
         background: linear-gradient(152deg,
             hsl(214 44% 99% / .90),
             hsl(214 26% 95% / .76));
@@ -2243,7 +2680,73 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         transition: box-shadow 220ms cubic-bezier(.22,1,.36,1),
                     transform 220ms cubic-bezier(.22,1,.36,1);
     }
-    .kr-bento:hover {
+    /* ASK-21 — THE LIFT IS FOR TILES, NEVER FOR A DIALOG SURFACE, and the
+       exclusion is load-bearing rather than tidy. This rule sets `transform`
+       outright, so on any element whose position depends on a transform it
+       does not add a 3px lift — it REPLACES the positioning. Four dialogs
+       wear .kr-bento over Radix's centred panel (translate(-50%,-50%)), and
+       `.kr-bento:hover` at specificity (0,2,0) beats Tailwind's
+       `-translate-x-1/2` at (0,1,0) — media queries add none, so `lg:` does
+       not rescue it either. Measured on the New Task panel: moving the cursor
+       onto it threw the box 256px right and 437px down, which is the "it
+       jumps off" the founder has now reported twice.
+       Excluding the dialog roles fixes every current and future call site
+       without each one having to remember an opt-out class. */
+    /* ASK-27 · .kr-progress-range — the task drawer's "Set % manually" bar is
+       a range input drawn as the reference's progress bar: a soft grey track,
+       the filled part in blue up to --pct (set inline), and a small white
+       thumb so it reads as something you can drag. Firefox paints the fill
+       itself via ::-moz-range-progress; WebKit needs the gradient. */
+    .kr-progress-range {
+        -webkit-appearance: none;
+        appearance: none;
+        height: 18px;
+        background: transparent;
+    }
+    .kr-progress-range::-webkit-slider-runnable-track {
+        height: 10px;
+        border-radius: 9999px;
+        /* ASK-30 — black on gray: the filled part runs a dark gradient. */
+        background: linear-gradient(90deg, hsl(0 0% 34%) 0%, hsl(0 0% 8%) var(--pct, 0%), hsl(0 0% 83%) var(--pct, 0%) 100%);
+        box-shadow: inset 0 1px 2px hsl(0 0% 0% / .16);
+    }
+    .kr-progress-range::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 18px;
+        height: 18px;
+        margin-top: -4px;
+        border-radius: 9999px;
+        background: #fff;
+        border: 2px solid hsl(0 0% 10%);
+        box-shadow: 0 2px 6px hsl(0 0% 0% / .28);
+    }
+    .kr-progress-range::-moz-range-track {
+        height: 10px;
+        border-radius: 9999px;
+        background: hsl(0 0% 83%);
+    }
+    .kr-progress-range::-moz-range-progress {
+        height: 10px;
+        border-radius: 9999px;
+        background: linear-gradient(90deg, hsl(0 0% 34%), hsl(0 0% 8%));
+    }
+    .kr-progress-range::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
+        border-radius: 9999px;
+        background: #fff;
+        border: 2px solid hsl(0 0% 10%);
+    }
+    /* ASK-28 — locked to the checklist: no thumb, so it reads as a bar. */
+    .kr-progress-range:disabled::-webkit-slider-thumb { opacity: 0; }
+    .kr-progress-range:disabled::-moz-range-thumb { opacity: 0; }
+    .kr-progress-range:focus-visible {
+        outline: 2px solid hsl(0 0% 10% / .4);
+        outline-offset: 4px;
+        border-radius: 9999px;
+    }
+
+    .kr-bento:not([role="dialog"]):not([role="alertdialog"]):hover {
         transform: translateY(-3px);
         box-shadow:
             inset 0 1px 0 hsl(0 0% 100% / .90),
@@ -2338,10 +2841,20 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
        preview pane reports document.hidden and stops compositing content
        scrolled into view for the first time, so the capture was stale while
        the DOM was correct all along.) */
-    html[data-page="finance"] .kr-frost,
-    html[data-page="finance"] .kr-frost-min {
+    html[data-page="finance"] .kr-frost:not(.kr-keep-blur),
+    html[data-page="finance"] .kr-frost-min:not(.kr-keep-blur) {
         -webkit-backdrop-filter: none;
-        backdrop-filter: none;
+                backdrop-filter: none;
+    }
+    /* KM-50 — AND OVERLAYS OPT OUT, because the budget argument does not apply
+       to them. The rule above exists because /finance had ELEVEN blurred
+       surfaces in one viewport; an overlay is ONE surface, on top of
+       everything, and only one is open at a time. Without this the More panel
+       lost its blur — but only when opened from /finance, which is exactly the
+       kind of bug that reads as random. Founder found it; it was mine. */
+    .kr-keep-blur {
+        -webkit-backdrop-filter: blur(20px) saturate(1.5) !important;
+                backdrop-filter: blur(20px) saturate(1.5) !important;
     }
 
     .kr-glass--blue  { --kr-glass-from: 214 45% 58%; --kr-glass-to: 28 55% 50%; }
@@ -2483,6 +2996,54 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
        This and .kr-pop are the deliberate exceptions to KR-2's shadow kill
        — that rule retired DROP shadows on resting surfaces; depth modelled
        from a fixed light is a different material claim. */
+    /* ASK-25 · .kr-desk-board — the Desk's lower half is ONE BLACK CONTAINER
+       (2026-09-14, founder: "instead of glass or frost glass we go with the
+       black container"). The ink token, the tile radius, white type; the
+       columns and rows inside are parted by white hairlines drawn in
+       Desk.js, and the three-row stack sits on it as white cards. The
+       frost .kr-desk-card this replaces is gone — the black is opaque, so
+       there is nothing behind it to blur and no reason to keep the recipe. */
+    .kr-desk-board {
+        border-radius: var(--radius-tile);
+        /* 2026-09-14, founder — PRESSED LIKE THE DEX WELL, IN BLACK
+           ("similar to dex-today's pressed style for black colour"). The
+           well's recipe (.kr-well__pane) is a 7px/14px pair of inset shadows,
+           dark from the top-left and light from the bottom-right, on a
+           translucent wash. Re-cut for ink: the ground sits ONE STEP above
+           pure black (9%, --kr-desk-ink) so the dark inset has something to
+           be darker than, the shadow is full black and reaches further in
+           than the well's (10px/22px against 7px/14px), and the light is a
+           14% white catch on the lower-right edges — the founder could not
+           see the .9/.10 cut at the well's own reach on a ground this dark. */
+        --kr-desk-ink: 240 4% 9%;
+        background: hsl(var(--kr-desk-ink));
+        box-shadow:
+            inset 10px 10px 22px hsl(0 0% 0% / 1),
+            inset -8px -8px 18px hsl(0 0% 100% / .14);
+        color: #fff;
+        padding: 1rem;
+        min-width: 0;
+    }
+    @media (min-width: 1024px) {
+        .kr-desk-board {
+            /* The tile radius on top, square below — it runs to the floor. */
+            padding: 1.125rem 1.25rem 1.375rem;
+            border-radius: var(--radius-tile) var(--radius-tile) 0 0;
+        }
+    }
+
+    /* The three-row stack's cards are the old dark band's glass: the section
+       hue at a whisper over the ink, no blur (the board is opaque — nothing
+       behind it to blur). .kr-desk--* already dial the tint to .10/.05; this
+       covers .kr-glass--warm (Leave), which otherwise keeps the light page's
+       .60/.42 and would read as a pale slab on the black. */
+    .kr-desk-board .kr-glass {
+        --kr-glass-a1: .10;
+        --kr-glass-a2: .05;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+
     .kr-well {
         position: relative;
         border-radius: var(--radius-tile);
@@ -2547,6 +3108,81 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
             inset -4px -4px 9px hsl(0 0% 100% / .72);
     }
 
+    /* ── KM-64 · .kr-chip-on — "this one is chosen", said out loud ─────────
+       Founder, with two screenshots of a B2C chip side by side: "the
+       difference is subtle, I want a distinct difference when pressed."
+
+       WHY IT WENT QUIET. On the app's canvas .kr-pressed above carries a real
+       dual inset and reads clearly. On the signup and login stages it is
+       OVERRIDDEN to `hsl(0 0% 100% / .20)` and a single 1px shadow, because
+       there the same class also draws every text field's trough — a heavy
+       inset on an input would look like damage. So selection and "this is a
+       box you type in" were sharing one recipe, and the one that had to stay
+       quiet won.
+
+       Selection gets its own recipe instead of strengthening the shared one,
+       which would have dented every field on both stages.
+
+       INK, not a stronger dent. Depth is what .kr-pressed says, and depth is
+       exactly what a photograph behind translucent white erodes: the founder
+       could not see it because there was very little of it left. A filled
+       chip does not depend on the backdrop at all. The inset is kept so the
+       grammar still reads as pushed-in rather than as a different component,
+       and it matches the interview's recording state, which took the same
+       treatment for the same reason in KM-62.
+
+       17.9:1 against white text, against roughly 1.2:1 before. */
+    .kr-chip-on {
+        border: 1px solid hsl(var(--kr-ink));
+        background: hsl(var(--kr-ink));
+        color: #fff;
+        box-shadow:
+            inset 0 2px 5px hsl(230 30% 8% / .55),
+            inset 0 -1px 0 hsl(0 0% 100% / .10),
+            0 1px 0 hsl(0 0% 100% / .45);
+    }
+    /* The label inherits, but anything inside carrying its own muted token
+       would not — so the scope is re-stated. Same alias trap as .kr-frost. */
+    .kr-chip-on * { color: inherit; }
+
+    /* ── KM-66 · .kr-new-glow — "this one is new", for five seconds ────────
+       When a refinement returns, the founder needs to find what changed in a
+       list they have already read. A gold ring, three slow cycles, gone.
+
+       DRAWN ON AN ::after, NOT ON THE ELEMENT'S OWN box-shadow. Every target
+       already has one that means something: .kr-pressed's inset is what makes
+       a pill read as content rather than a control (KM-62), and animating
+       box-shadow on the element would REPLACE it for five seconds — the pill
+       would quietly turn into a button and back. The overlay ring adds to
+       what is there instead of taking its place. `border-radius: inherit`
+       makes it fit a pill and a tile without either knowing about it.
+
+       GOLD, not --kr-accent. Accent is this product's alert grammar; nothing
+       has gone wrong here, something has been added. */
+    @keyframes kr-new-glow {
+        0%, 100% {
+            box-shadow:
+                0 0 0 1px hsl(var(--kr-gold) / .50),
+                0 0 10px 2px hsl(var(--kr-gold) / .18);
+        }
+        55% {
+            box-shadow:
+                0 0 0 1px hsl(var(--kr-gold) / .10),
+                0 0 4px 0 hsl(var(--kr-gold) / .03);
+        }
+    }
+    .kr-new-glow { position: relative; }
+    .kr-new-glow::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        pointer-events: none;
+        /* 3 x 1.6s = 4.8s, inside the 5s the class is held for, so it ends on
+           a full ring rather than being cut mid-fade. */
+        animation: kr-new-glow 1.6s ease-in-out 3;
+    }
+
     .kr-pop:active {
         transform: translateY(1px);
         box-shadow:
@@ -2596,3 +3232,31 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
 }
 .dex-breathe { animation: dexBreathe 4.2s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .dex-breathe { animation: none; } }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   KM-59 — THE LOGIN PICTURE, ON ITS OWN FILES.
+   Founder: "use the signup-lg image as background but copy it and use it as a
+   separate dedicated image so that I can replace it in future."
+
+   TO CHANGE IT: replace frontend/public/sky/login.webp (phone) or
+   login-lg.webp (desktop). That is the whole procedure — public/ is copied
+   verbatim into the build, so a refresh shows the new one.
+
+   Both start life as byte copies of the signup pair, so nothing moved on the
+   way in; they are separate so that changing one page's picture can never
+   change the other's. That coupling is not hypothetical — KM-40 records
+   signup borrowing /sky/inbox.webp and the Desk's sky changing underneath it.
+
+   Only the two URLs are re-pointed. Everything else — two pictures, two fits,
+   the phone's radial mask, the desktop full-bleed, the box arithmetic
+   verified against the DOM — is inherited from .app-sky__art--aside, because
+   maintaining that geometry twice is how the two drift apart.
+
+   (0,2,0) against the modifier's (0,1,0), so this wins wherever it lands in
+   the file and at every breakpoint, including inside the lg block.
+   ═════════════════════════════════════════════════════════════════════════ */
+.login-stage .app-sky__art--aside {
+    --sky-art: url("/sky/login.webp");
+    --sky-art-lg: url("/sky/login-lg.webp");
+}

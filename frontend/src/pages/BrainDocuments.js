@@ -80,7 +80,7 @@ function UploadDialog({ onClose, onUploaded }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-4" data-testid="brain-doc-upload-dialog">
-      <div className="w-full max-w-lg bg-brand-paper border border-border shadow-md max-h-[90vh] overflow-y-auto">
+      <div className="w-full max-w-lg bg-brand-paper border border-border shadow-md max-h-[calc(90vh/var(--ui-scale,1))] overflow-y-auto">
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
           <p className="font-medium">Add a document</p>
           <button onClick={onClose} data-testid="brain-doc-upload-close" className="w-8 h-8 flex items-center justify-center hover:bg-accent">

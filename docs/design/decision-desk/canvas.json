@@ -1,0 +1,81 @@
+{
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "Karma material"
+    },
+    {
+      "id": "page-2",
+      "name": "IA sketches (structure only)"
+    }
+  ],
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "Desk — Decisions on the well's column, 1440×900",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "page": "page-1",
+      "is_interactive": true
+    },
+    {
+      "file": "RoleDegradation.dc.html",
+      "title": "Previous pass — band version (three access levels)",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 760,
+      "page": "page-1"
+    },
+    {
+      "file": "DirectionB.dc.html",
+      "title": "Direction B — One queue",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "page": "page-2"
+    },
+    {
+      "file": "DirectionC.dc.html",
+      "title": "Direction C — The morning read",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "page": "page-2"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "note-a",
+      "x": 0,
+      "y": -300,
+      "w": 720,
+      "page": "page-1",
+      "text": "THE DESK, ONE SCREEN\n\nHero trimmed: KPI rows 188 (was 215), numeral 72, the well tighter — the height goes to the bottom cards.\n\nBelow, the columns follow the hero's own 29/45 grid: Decisions sits exactly on the Dex well's column, and the right 45 splits 1.35 : 1 between Task approvals and the Due today / Leave / Slipping stack. Four rows on each big card; every row opens in a popup (the open icon) — no inline approve/reject, since rejecting a decision deletes its tasks and belongs on the decision page.\n\nStill 1440×900 with no scroll. The Company/You control is live."
+    },
+    {
+      "id": "note-degrade",
+      "x": 1560,
+      "y": -300,
+      "w": 720,
+      "page": "page-1",
+      "text": "THE TEST\n\nSame page, three access levels. Each section is tied to a permission (decisions_approve, approvals, leave_approve, finance/ledger), so the row shortens with less access rather than leaving a hole: owner 6·2·2·2, manager 6·3·3, sales 1·1.\n\nWorth arguing with: sales gets a fourth tile — 'Follow-ups, this week' — which is the brief's open question 4 answered from their own tasks."
+    },
+    {
+      "id": "note-sketches",
+      "x": 0,
+      "y": -220,
+      "w": 720,
+      "page": "page-2",
+      "text": "STRUCTURE ONLY. These two were drawn before the Karma material was lifted, so ignore their styling; they're here for the layout argument alone.\n\nB, One queue: no sections, one list ranked by what it blocks. Loses per-kind counts and makes the access story invisible.\n\nC, The morning read: Dex writes the day as prose and the named things are the controls. Lives or dies on answer quality, which ASK-23 says isn't there yet."
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "page-1"
+  }
+}

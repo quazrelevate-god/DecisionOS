@@ -130,31 +130,37 @@ async def _t_list_workflows(user: dict) -> dict:
 async def _t_propose_task(user: dict, title: str = "", description: str = "",
                           assignee_role: str = "", assignee_name: str = "",
                           priority: str = "medium") -> dict:
-    """Propose a task for the human to approve. Creates a pending_approval decision with a
-    blocked task -- released only when the owner approves (reuses the existing approval flow).
+    """Propose a task for the human to approve. Creates a pending_approval decision that
+    PROPOSES the task (ASK-32 4.5, same shape as a capture): nothing is created until it is
+    approved, it names who decides, and that person is told.
     Auto-assigns to a PERSON via E3-13 (named person, else least-loaded role member)."""
     if not title.strip():
         return {"error": "title is required"}
     tid = user["tenant_id"]
-    did, task_id = new_id(), new_id()
+    did = new_id()
     prio = priority if priority in ("low", "medium", "high") else "medium"
     # E3-13: resolve the assignee to an actual person (named -> least-loaded active role member).
-    from services.voice import resolve_assignee
+    from services.voice import resolve_assignee, summarize_proposal
+    from services.decision_flow import notify_decision_waiting, route_approver
     assigned = await resolve_assignee(tid, role=(assignee_role or "operations"),
                                       assignee_name=(assignee_name or ""))
-    await db.decisions.insert_one({
+    proposal = {"tasks": [{
+        "key": new_id(), "title": title.strip()[:120], "description": description.strip()[:500],
+        "assignee_id": assigned["assignee_id"], "assignee_role": assigned["role"] or "operations",
+        "assignee_how": assigned["how"], "priority": prio, "due_date": None, "task_type": None,
+    }], "workflows": [], "meetings": [], "reminders": [], "memory_notes": []}
+    approver_id, route = await route_approver(tid, user["id"])
+    decision = {
         "id": did, "tenant_id": tid, "title": f"[AI proposed] {title.strip()[:80]}",
         "summary": description.strip()[:300], "items": [], "workflow_events": [],
         "dtype": "directive", "status": "pending_approval", "source": "agent",
-        "created_by": user["id"], "created_at": now_iso(), "task_ids": [task_id],
-        "proposed_by_agent": True,
-    })
-    await db.tasks.insert_one({
-        "id": task_id, "tenant_id": tid, "decision_id": did, "title": title.strip()[:120],
-        "description": description.strip()[:500],
-        "assignee_role": assigned["role"] or "operations", "assignee_id": assigned["assignee_id"],
-        "priority": prio, "status": "blocked", "created_at": now_iso(), "source": "agent",
-    })
+        "created_by": user["id"], "created_at": now_iso(), "task_ids": [], "workflow_ids": [],
+        "proposed_by_agent": True, "proposal": proposal, "execution_summary": summarize_proposal(proposal),
+        "approver_id": approver_id, "approver_route": route,
+        "timeline": [{"ts": now_iso(), "label": "Proposed by Dex in chat", "actor": user.get("name") or "Dex", "kind": "created"}],
+    }
+    await db.decisions.insert_one(decision)
+    await notify_decision_waiting(tid, decision, sender_name="Dex")
     logger.info(f"agent proposed task '{title[:40]}' -> decision {did} (pending; assignee {assigned['how']})")
     return {"proposed": True, "decision_id": did, "status": "pending_approval",
             "assigned_to": assigned["assignee_id"], "assignment": assigned["how"],

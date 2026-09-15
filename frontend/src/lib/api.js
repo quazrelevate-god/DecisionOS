@@ -1,7 +1,16 @@
 import axios from "axios";
 import { toast } from "sonner";
 
-export const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+/* DEPLOY-3 — an EMPTY backend url is now the correct production value, and
+   the `|| ""` is what makes it usable. The app is served by a node process
+   that proxies /api to the backend itself (frontend/server.js), so the browser
+   only ever talks to its own origin — which is the whole fix for Safari
+   dropping the backend's cookie as third-party. With no override this
+   resolves to a relative "/api". Set REACT_APP_BACKEND_URL to an absolute
+   origin only when pointing at a backend that is genuinely elsewhere, as the
+   local dev server does. Without the fallback an unset var stringifies to
+   "undefined/api" and every call 404s. */
+export const API = `${process.env.REACT_APP_BACKEND_URL || ""}/api`;
 
 const api = axios.create({ baseURL: API, withCredentials: true });
 

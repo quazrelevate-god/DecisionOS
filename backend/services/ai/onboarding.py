@@ -120,6 +120,7 @@ async def generate_blueprint(
     profile: Dict[str, Any],
     transcript: List[Dict[str, str]],
     refinement: str = "",
+    previous: Optional[Dict[str, Any]] = None,
     welcome_lang_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Design the founder's operating system from the interview transcript.
@@ -133,14 +134,50 @@ async def generate_blueprint(
             f"{welcome_lang_name} (native script). Keep all other fields (departments, workflow names, "
             f"task titles, categories, approval names) in English."
         )
+    # KM-61 — A REFINEMENT IS AN EDIT, NOT A REDO.
+    #
+    # The refinement used to arrive as a loose sentence appended to a prompt
+    # that otherwise regenerated the blueprint from the transcript, with the
+    # existing draft nowhere in sight. The model was therefore free to return a
+    # different company: the founder typed "add a support team department" and
+    # got their other departments deleted and an unrelated one invented. Not a
+    # bad model — it was never told there was anything to preserve.
+    #
+    # So when a previous draft exists it goes in verbatim, and the instruction
+    # changes from "design this" to "return this with one change applied".
     refine_block = ""
     if (refinement or "").strip():
-        refine_block = ("\n\nFounder's follow-up refinement (they added this after seeing the first draft — "
-                        f"reflect it faithfully):\n{refinement.strip()}")
+        if previous:
+            import json as _json
+            prev_json = _json.dumps({
+                "departments": previous.get("departments") or [],
+                "workflows": previous.get("workflows") or [],
+                "operational_tasks": previous.get("operational_tasks") or [],
+                "approval_rules": previous.get("approval_rules") or [],
+                "products": previous.get("products") or [],
+            }, ensure_ascii=False, indent=2)
+            refine_block = (
+                "\n\nThe founder has already approved this draft of their operating system:\n"
+                f"{prev_json}\n\n"
+                "They now ask for ONE change:\n"
+                f"{refinement.strip()}\n\n"
+                "Return the SAME operating system with only that change applied. Keep every "
+                "existing department, workflow, task and approval rule exactly as written — same "
+                "keys, same labels, same order — unless the founder's request specifically "
+                "changes it. Add what they asked for; remove nothing they did not ask you to "
+                "remove; do not rename or reword anything else. If their request is an addition, "
+                "the result must be a strict superset of what is above."
+            )
+        else:
+            refine_block = ("\n\nFounder's follow-up refinement (they added this after seeing the first draft — "
+                            f"reflect it faithfully):\n{refinement.strip()}")
     prompt = (
         f"{profile_block(profile)}\n\n{team_size_hint(profile.get('team_size') or '')}\n\n"
         f"Interview transcript:\n{qa_block(transcript)}{refine_block}\n\n"
-        "Design this company's operating system now — sized to their team band, worded in their industry."
+        + ("Apply the founder's single change to the approved draft above and return the whole "
+           "operating system, unchanged except for that."
+           if (refinement or "").strip() and previous else
+           "Design this company's operating system now — sized to their team band, worded in their industry.")
     )
     chat = claude_chat(
         task="onboarding.blueprint", session_id=f"bp-{new_id()}",

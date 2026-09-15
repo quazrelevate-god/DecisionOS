@@ -1,1 +1,9 @@
-.App { min-height: 100vh; }
+/* UI-SCALE — vh is not divided by the body's zoom, so the root divides it
+   itself or the document scrolls by the scale factor on every page. */
+.App { min-height: calc(100vh / var(--ui-scale, 1)); }
+/* Mobile PWA (2026-09-14) — a phone's 100vh includes the collapsing address
+   bar, so it sat taller than the 100dvh shell and the document scrolled a
+   little behind the app. Below lg the root follows the dynamic viewport. */
+@media (max-width: 1023.98px) {
+    .App { min-height: 100dvh; }
+}

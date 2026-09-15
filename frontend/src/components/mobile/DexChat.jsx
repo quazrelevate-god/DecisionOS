@@ -1,9 +1,10 @@
 import * as React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  Plus, X, Paperclip, Camera, Keyboard, CircleNotch, Sparkle,
+  Plus, X, Paperclip, Camera, Keyboard, Microphone, CircleNotch, Sparkle,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import { useBackDismiss } from "@/hooks/useBackDismiss";
 
 // KM-23 · DexChat — Dex as a conversation, over the page you were on.
 //
@@ -65,7 +66,20 @@ function Bubble({ m, index }) {
         className={cn(
           "max-w-[85%] rounded-3xl px-4 py-3 text-sm leading-relaxed",
           mine
-            ? "kr-frost-min rounded-br-lg text-foreground"
+            /* KM-51 — SOLID white, not the translucent frost. Founder: "the
+               chat colour for the AI side is black and the human user side is
+               transparent white, I want it in solid white." They are right that
+               it read as unfinished: the pair only works as a pair, and a
+               translucent bubble opposite an opaque one looks like one of them
+               failed to load rather than like two speakers. */
+            /* bg-[#fff]/text-kr-ink, not bg-white/text-foreground, for the
+               reason the Dex nav pill needed the same: index.css carries a
+               legacy `.dark .bg-white { background-color: hsl(var(--card)) }`,
+               and this sheet opens over /brain, which runs dark. "Solid white"
+               asked for through `bg-white` would have quietly become a dark
+               card there — the exact complaint, in a second place. The literal
+               colours are immune to it and identical everywhere else. */
+            ? "rounded-br-lg bg-[#fff] text-kr-ink shadow-[0_2px_10px_-4px_hsl(230_30%_18%/.35)]"
             : "rounded-bl-lg bg-kr-ink text-white shadow-[0_8px_24px_-12px_hsl(216_28%_18%/.6)]"
         )}
       >
@@ -114,11 +128,16 @@ function Bubble({ m, index }) {
  * @param {Function} onClose
  * @param {object}   dex     the shared useDexCapture instance from Layout
  */
-export function DexChat({ open, onClose, dex, chat }) {
-  const { log, busy, mode, setMode, ask, attach } = chat;
+export function DexChat({ open, onClose, dex, chat, channel }) {
+  const { log, busy, mode, setMode, ask, attach, pendingFiles = [] } = chat;
   const [plusOpen, setPlusOpen] = React.useState(false);
   const endRef = React.useRef(null);
   const photoRef = React.useRef(null);
+  // ASK-32 1.6 — Attach clicked `dex.fileRef`, which no input in this sheet
+  // was ever bound to, so it did nothing. It has its own picker now.
+  const fileRef = React.useRef(null);
+  // Mobile PWA (2026-09-14): Back closes the conversation instead of the page.
+  useBackDismiss(open, (o) => { if (!o) onClose?.(); });
 
   React.useEffect(() => {
     if (log.length) endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -127,8 +146,15 @@ export function DexChat({ open, onClose, dex, chat }) {
   /* The three ways in that are not the microphone. "Type" flips the DOCK into
      a text field rather than opening a field here — same bar, different mode. */
   const ACTIONS = [
-    { key: "type", icon: Keyboard, label: "Type", onClick: () => { setMode(mode === "type" ? "voice" : "type"); setPlusOpen(false); } },
-    { key: "file", icon: Paperclip, label: "Attach", onClick: () => { dex?.fileRef?.current?.click(); setPlusOpen(false); } },
+    /* KM-51 — THE ICON FOLLOWS WHAT THE BUTTON WILL DO, not what mode you are
+       in. It was always a keyboard, so in type mode it offered "Type" while
+       actually switching back to voice — the founder could not tell it was the
+       mic toggle until they pressed it. Now it shows a microphone and says
+       Speak while typing, and a keyboard and says Type while not. */
+    mode === "type"
+      ? { key: "type", icon: Microphone, label: "Speak", onClick: () => { setMode("voice"); setPlusOpen(false); } }
+      : { key: "type", icon: Keyboard, label: "Type", onClick: () => { setMode("type"); setPlusOpen(false); } },
+    { key: "file", icon: Paperclip, label: "Attach", onClick: () => { fileRef.current?.click(); setPlusOpen(false); } },
     { key: "photo", icon: Camera, label: "Photo", onClick: () => { photoRef.current?.click(); setPlusOpen(false); } },
   ];
 
@@ -162,8 +188,18 @@ export function DexChat({ open, onClose, dex, chat }) {
 
           <div className="relative flex min-h-0 flex-1 flex-col pt-safe">
             <div className="flex items-center justify-between px-4 py-3">
+              {/* KM-54 — the header states WHICH Dex. The two doors have
+                  different consequences (one answers, one creates a decision
+                  and its tasks), so the surface has to keep saying which one
+                  you are in — the choice was made on the previous screen and
+                  is otherwise invisible by the time you start typing. */}
               <span className="flex items-center gap-2 text-sm font-semibold text-white drop-shadow">
                 <Sparkle size={14} weight="fill" className="text-[hsl(var(--kr-gold))]" /> Dex
+                {channel && (
+                  <span className="rounded-pill bg-white/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/85">
+                    {channel === "decide" ? "Decide" : "Ask"}
+                  </span>
+                )}
               </span>
               <button
                 type="button"
@@ -181,32 +217,52 @@ export function DexChat({ open, onClose, dex, chat }) {
             <div className="flex min-h-0 flex-1 flex-col justify-end gap-2.5 overflow-y-auto px-4 pb-3">
               {log.length === 0 && (
                 <div className="pb-6 text-center">
-                  <p className="text-sm text-white/70 drop-shadow">Hold the mic and say it plainly.</p>
-                  <p className="mt-1 text-xs text-white/45">Or use + to type, attach a file, or take a photo.</p>
+                  <p className="text-sm text-white/70 drop-shadow">
+                    {channel === "decide"
+                      ? "Say or type the decision."
+                      : "Ask about anything in your workspace."}
+                  </p>
+                  <p className="mt-1 text-xs text-white/45">
+                    {channel === "decide"
+                      ? "Dex lines up the tasks for approval. Nothing is created until it's approved."
+                      : "Dex answers from your data. Nothing is created."}
+                  </p>
                 </div>
               )}
               {log.map((m, i) => <Bubble key={m.id} m={{ ...m, onAsk: ask }} index={i} />)}
               {busy && <Bubble m={{ role: "dex", text: "Thinking…", pending: true }} index={log.length} />}
+              {pendingFiles.length > 0 && (
+                <p data-testid="dex-attached" className="self-end rounded-pill bg-white/15 px-3 py-1 text-[11px] text-white/85">
+                  <Paperclip size={11} weight="bold" className="mr-1 inline" aria-hidden="true" />
+                  {pendingFiles.map((f) => f.name).join(", ")}
+                </p>
+              )}
               <div ref={endRef} />
             </div>
 
             {/* KM-26 · the plus, and only the plus.
-                It sits on the DOCK's baseline at the left edge, so it is clear
-                of the bar (which is now the composer) and clear of the newest
-                line of the transcript above it. Its actions lift upward, never
-                over what you are reading.
+                It sits on the DOCK's baseline, clear of the bar (which is now
+                the composer) and clear of the newest line of the transcript
+                above it. Its actions lift upward, never over what you are
+                reading.
                 The bottom padding clears the DOCK, which is 64px tall sitting
                 on its own safe-area offset — measured, because `pb-safe-4` put
                 the plus straight on top of the bar (plus 768-812 against a dock
-                at 732-796) and half of it off the bottom of the screen. */}
-            <div className="relative px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
+                at 732-796) and half of it off the bottom of the screen.
+
+                KM-53 — it moved from the left edge to the FAB's centre line, on
+                the founder's call. `items-end` puts it on the right and
+                `.app-plus-on-fab` (index.css, beside .app-fab-right) does the
+                centring; the menu follows it over so the pills still hang off
+                the button that opened them rather than across the screen. */}
+            <div className="relative flex flex-col items-end px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
               <AnimatePresence>
                 {plusOpen && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="absolute bottom-full left-4 mb-3 flex flex-col gap-2"
+                    className="absolute bottom-full right-4 mb-3 flex flex-col items-end gap-2"
                   >
                     {ACTIONS.map((a, i) => {
                       const Icon = a.icon;
@@ -237,7 +293,7 @@ export function DexChat({ open, onClose, dex, chat }) {
                 aria-label={plusOpen ? "Hide options" : "More ways to talk to Dex"}
                 aria-expanded={plusOpen}
                 onClick={() => setPlusOpen((v) => !v)}
-                className="kr-frost grid h-11 w-11 place-items-center rounded-full"
+                className="app-plus-on-fab kr-frost grid h-11 w-11 place-items-center rounded-full"
               >
                 <motion.span animate={{ rotate: plusOpen ? 45 : 0 }} transition={SPRING} className="grid place-items-center">
                   <Plus size={19} weight="bold" />
@@ -256,6 +312,14 @@ export function DexChat({ open, onClose, dex, chat }) {
             capture="environment"
             className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; attach(f, "Photo"); }}
+          />
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+            className="hidden"
+            data-testid="dex-attach-input"
+            onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; attach(f, "File"); }}
           />
         </motion.div>
       )}

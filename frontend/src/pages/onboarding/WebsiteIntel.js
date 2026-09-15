@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, Globe, MagnifyingGlass, CheckCircle, PencilSimple } from "@phosphor-icons/react";
+import { ArrowRight, ArrowLeft, Globe, MagnifyingGlass, CheckCircle } from "@phosphor-icons/react";
 import api from "../../lib/api";
 import { INDUSTRIES } from "../../lib/format";
 
@@ -20,7 +20,7 @@ const Eyebrow = ({ children }) => (
   <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{children}</p>
 );
 
-export function WebsiteIntel({ companyName, onDone }) {
+export function WebsiteIntel({ companyName, onDone, onBack }) {
   const [stage, setStage] = useState("ask"); // ask | scanning | confirm | manual
   const [url, setUrl] = useState("");
   const [scanLine, setScanLine] = useState(0);
@@ -28,6 +28,8 @@ export function WebsiteIntel({ companyName, onDone }) {
   const [industry, setIndustry] = useState("");
   const [model, setModel] = useState("");
   const scanTimer = useRef(null);
+  // Why the scan gave up, or "" when the founder chose manual themselves.
+  const [failure, setFailure] = useState("");
 
   useEffect(() => {
     if (stage !== "scanning") { clearInterval(scanTimer.current); return; }
@@ -47,7 +49,21 @@ export function WebsiteIntel({ companyName, onDone }) {
         setStage("confirm");
         return;
       }
-    } catch (e) { console.debug("website-intel scan failed — falling back to manual", e); }
+      /* KM-63 — SAY WHY. Founder: "once I click Read my website it takes some
+         time and then straightaway moves to this manual config page."
+
+         It always did — the fallback is intended — but it happened in total
+         silence, so a scan that failed was indistinguishable from a button
+         that was broken. Reproduced with their own input: amazon.com answers
+         202 with an empty body (bot mitigation), the extractor gets zero
+         characters, and the form moves on without a word. example.com returns
+         a full summary through the same code, so nothing is wrong with the
+         scanner — it is just that some sites refuse to be read. */
+      setFailure(data.reason || "unreadable");
+    } catch (e) {
+      console.debug("website-intel scan failed — falling back to manual", e);
+      setFailure("unreachable");
+    }
     setStage("manual");
   };
 
@@ -62,6 +78,19 @@ export function WebsiteIntel({ companyName, onDone }) {
     });
   };
 
+  /* KM-62 — Back, on every reversible stage. Founder: "add back functionality
+     by adding a button to go back and edit their response for every step."
+     From the first stage it leaves the phase entirely and returns to Basics;
+     from a result it returns to the address, so a mistyped URL can be redone
+     without starting the signup again. `scanning` is excluded on purpose —
+     there is a request in flight and nothing yet to go back to. */
+  const backTarget = stage === "ask" ? "phase" : stage === "scanning" ? null : "ask";
+  const goBack = () => {
+    if (!backTarget) return;
+    if (backTarget === "phase") onBack?.();
+    else setStage("ask");
+  };
+
   return (
     <div className="kr-well mx-auto w-full max-w-2xl" data-testid="signup-website">
       <div className="kr-well__pane rounded-[1.75rem] p-6 sm:p-9">
@@ -73,7 +102,7 @@ export function WebsiteIntel({ companyName, onDone }) {
               Does {companyName} live on the web?
             </h1>
             <p className="mb-7 text-sm text-muted-foreground">Drop your website — our AI reads it so you don&apos;t have to explain yourself twice.</p>
-            <div className="kr-pressed flex items-center gap-3 rounded-2xl px-5 py-4 focus-within:ring-2 focus-within:ring-[hsl(var(--kr-gold))]">
+            <div className="kr-pressed flex items-center gap-3 rounded-2xl px-5 py-4 focus-within:ring-1 focus-within:ring-foreground/40">
               <Globe size={24} weight="bold" className="shrink-0 text-muted-foreground" />
               <input
                 autoFocus
@@ -150,7 +179,7 @@ export function WebsiteIntel({ companyName, onDone }) {
                 <div>
                   <label className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Industry</label>
                   <select data-testid="signup-intel-industry" value={industry} onChange={(e) => setIndustry(e.target.value)}
-                    className="kr-pressed mt-1.5 h-11 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--kr-gold))]">
+                    className="kr-pressed mt-1.5 h-11 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-1 focus:ring-foreground/40">
                     {INDUSTRIES.map((i) => <option key={i} value={i}>{i}</option>)}
                   </select>
                 </div>
@@ -158,8 +187,13 @@ export function WebsiteIntel({ companyName, onDone }) {
                   <label className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">You sell to</label>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {MODELS.map((m) => (
+                      /* KM-64 — .kr-chip-on, not .kr-pressed: on this stage the
+                         pressed recipe is reduced to a 1px whisper so it can
+                         double as the input trough, which left the chosen chip
+                         all but indistinguishable. See index.css. */
                       <button key={m} data-testid={`signup-model-${m}`} onClick={() => setModel(m)}
-                        className={`flex h-9 items-center rounded-pill px-4 text-xs font-medium ${model === m ? "kr-pressed" : "kr-pop"}`}>
+                        aria-pressed={model === m}
+                        className={`flex h-9 items-center rounded-pill px-4 text-xs font-medium ${model === m ? "kr-chip-on" : "kr-pop"}`}>
                         {m}
                       </button>
                     ))}
@@ -171,21 +205,39 @@ export function WebsiteIntel({ companyName, onDone }) {
                   <label className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">What you offer</label>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {intel.products.map((p) => (
-                      <span key={p.name} className="kr-pop rounded-pill px-3 py-1.5 text-xs">{p.name}</span>
+                      /* KM-65 — sunken, not raised. These are things we FOUND
+                         on the website, not things to press; .kr-pop is the
+                         recipe every button on this screen uses, so a row of
+                         them read as five more controls. */
+                      <span key={p.name} className="kr-pressed rounded-pill px-3 py-1.5 text-xs">{p.name}</span>
                     ))}
                   </div>
                 </div>
               )}
             </div>
+            {/* KM-62 — "Not quite, let me fix it" is gone, and its absence is
+                the fix. Founder: "there is a button to let user configure the
+                data on their own, but the irony is it again shows the same
+                editable data fields which was already there in the previous
+                page."
+
+                They are right, and it was worse than redundant: the manual
+                stage DISCARDS the scan. finish(false) sends no summary, no
+                description and no products, so a founder who pressed "fix it"
+                to change one dropdown silently threw away everything the scan
+                had learned about them — and then handed the interview a
+                thinner profile to work from.
+
+                The two fields above are already live and already saved by
+                "That's us". The manual stage stays reachable from "No website
+                — set it manually", where it is the only path and nothing has
+                been scanned to lose. */}
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <button onClick={() => finish(true)} data-testid="signup-intel-confirm"
                 className="kr-pop flex h-12 items-center gap-2 rounded-pill bg-kr-ink px-7 text-sm font-medium text-white">
                 That&apos;s us <ArrowRight size={16} weight="bold" />
               </button>
-              <button onClick={() => setStage("manual")} data-testid="signup-intel-edit"
-                className="kr-pop flex h-12 items-center gap-1.5 rounded-pill px-6 text-sm font-medium text-muted-foreground">
-                <PencilSimple size={14} weight="bold" /> Not quite — let me fix it
-              </button>
+
             </div>
           </motion.div>
         )}
@@ -196,12 +248,29 @@ export function WebsiteIntel({ companyName, onDone }) {
             <h1 className="mb-2 font-display text-3xl leading-[1.04] sm:text-4xl">
               Place {companyName} on the map.
             </h1>
-            <p className="mb-7 text-sm text-muted-foreground">Just the industry and who you sell to — Dex will ask about your operations in the interview.</p>
+            {failure ? (
+              <div className="kr-frost-min mb-6 rounded-2xl px-4 py-3" data-testid="signup-scan-failed">
+                <p className="text-sm">
+                  {failure === "blocked"
+                    ? <>We couldn&apos;t read <strong>{url.trim()}</strong> — its server turned us away. Big sites often block automated readers.</>
+                    : failure === "unreachable"
+                      ? <>We couldn&apos;t reach <strong>{url.trim()}</strong>. Check the address, or carry on below.</>
+                      : failure === "thin"
+                        ? <>There wasn&apos;t enough text on <strong>{url.trim()}</strong> for us to learn from — a lot of sites render their words with JavaScript we can&apos;t see.</>
+                        : <>We couldn&apos;t make sense of <strong>{url.trim()}</strong> this time.</>}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  No harm done — tell us these two things and Dex will ask the rest in the interview.
+                </p>
+              </div>
+            ) : (
+              <p className="mb-7 text-sm text-muted-foreground">Just the industry and who you sell to — Dex will ask about your operations in the interview.</p>
+            )}
             <div className="space-y-5">
               <div>
                 <label className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Industry</label>
                 <select autoFocus data-testid="signup-manual-industry" value={industry} onChange={(e) => setIndustry(e.target.value)}
-                  className="kr-pressed mt-1.5 h-12 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--kr-gold))]">
+                  className="kr-pressed mt-1.5 h-12 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-1 focus:ring-foreground/40">
                   <option value="">Select industry…</option>
                   {INDUSTRIES.map((i) => <option key={i} value={i}>{i}</option>)}
                 </select>
@@ -211,7 +280,8 @@ export function WebsiteIntel({ companyName, onDone }) {
                 <div className="mt-1.5 flex flex-wrap gap-2">
                   {MODELS.map((m) => (
                     <button key={m} data-testid={`signup-manual-model-${m}`} onClick={() => setModel(m)}
-                      className={`flex h-10 items-center rounded-pill px-4 text-xs font-medium ${model === m ? "kr-pressed" : "kr-pop"}`}>
+                      aria-pressed={model === m}
+                      className={`flex h-10 items-center rounded-pill px-4 text-xs font-medium ${model === m ? "kr-chip-on" : "kr-pop"}`}>
                       {m}
                     </button>
                   ))}
@@ -225,6 +295,13 @@ export function WebsiteIntel({ companyName, onDone }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {backTarget && (
+        <button onClick={goBack} data-testid="signup-website-back"
+          className="kr-pop mt-8 flex h-9 items-center gap-1.5 rounded-pill px-4 text-xs font-medium text-muted-foreground">
+          <ArrowLeft size={14} weight="bold" /> Back
+        </button>
+      )}
       </div>
     </div>
   );

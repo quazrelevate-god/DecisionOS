@@ -1,12 +1,13 @@
-import { useRef, useState, useEffect } from "react";
+import { Fragment, useRef, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import api from "../lib/api";
 import { timeAgo, fullTime } from "../lib/format";
 import { PageHeader, Chip, EmptyState, SkeletonCard, StickyHeader } from "../components/common";
 import { useAuth } from "../context/AuthContext";
 import { userPerms } from "../lib/perms";
+import { canAssignPerson, canAssignTeam, canSeeAllTasks, taskEditRights } from "../lib/taskAccess";
 import { opModel } from "../lib/operatingModel";
 import { toast } from "sonner";
 // WE-14 (2026-08-16): TaskBoard import retired -- the Board sub-tab
@@ -14,20 +15,46 @@ import { toast } from "sonner";
 // New-task launcher.
 import { NewTaskDialog } from "./Tasks";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "../components/ui/sheet";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel } from "../components/ui/dropdown-menu";
 import Workflows from "./Workflows";
-import Leave from "./Leave";
+// ASK-25 — the Approvals view: every approval that is not a decision. Task
+// sign-offs render in the SAME grid and cards as the task list (a card
+// opened there carries Approve / Request changes / Ask clarification
+// natively); leave uses the LeaveCard the register uses.
+import { LeaveCard } from "./Leave";
+import { ScopeSlider } from "../components/karma";
+// ASK-6 (2026-09-12): Leave no longer embedded here. Register lives on
+// Team, approvals live on Desk, config lives on Settings > Operations.
+// Import retired. If a follow-up ever needs the Request Leave dialog
+// on this page, it can be pulled from pages/Leave.js as a named export.
 import {
   CheckCircle, Camera, Microphone, Stop, ChatCircleText,
-  Sparkle, Plus, Trash, Robot, PencilSimple, ListChecks, CaretDown, CaretUp,
-  ArrowBendUpRight, WarningCircle, ChatText, ArrowRight, Kanban, ListChecks as ListIcon,
+  Sparkle, Plus, Trash, PencilSimple, ListChecks, CaretDown, CaretUp,
+  ArrowBendUpRight, WarningCircle, ChatText, ArrowRight, Kanban,
   Paperclip, UserCircle, ShieldCheck, Tag, ClockCounterClockwise,
-  ArrowClockwise, XCircle, LockKey, X, AirplaneTakeoff, MagnifyingGlassPlus, Eye,
+  ArrowClockwise, XCircle, LockKey, X, MagnifyingGlassPlus,
   File, FileArrowUp, Lightbulb, Info,
   FlowArrow,  // WE-11 stage chip
   SlidersHorizontal,  // KR-14.6 · mobile MyWork filter icon (reference)
   Buildings, CalendarBlank, // KR-14.22 · mobile expanded task card
+  DotsThreeVertical, // MW-02 · overflow menu on the summary row
+  Check, Clock, ArrowFatLinesUp, // ASK-25 · card checkbox, Overdue + Escalation pills
+  ChartBar, UserPlus, // ASK-27 · % control, add a person
+  Hourglass, // ASK-28 TK-07 · Waiting on
 } from "@phosphor-icons/react";
+import { AvatarStack, PersonAvatar } from "../components/karma/PersonAvatar";
+import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel, AlertDialogAction } from "../components/ui/alert-dialog";
+import { motion, useReducedMotion } from "framer-motion";
+import {
+  DRAWER_LABEL, DRAWER_CARD, GLASS_PILL, GLASS_ICON_BTN, INK_PILL, MAROON_PILL,
+  DRAWER_FIELD, DRAWER_TRACK, GLASS_SHEET,
+  CHIP as PILL, QUIET_CHIP as QUIET_PILL,
+  GLASS_MENU, GLASS_MENU_ITEM, GLASS_MENU_LABEL,
+} from "../components/karma/glass";
+// 2026-09-14, founder — every dropdown on this page is the app's own glass
+// list; none of them opens the operating system's picker.
+import { GlassSelect } from "../components/karma/GlassSelect";
 
 // RD-2 (2026-08-17): the toolbar control. Was uppercase + wide tracking +
 // hard black border — eight of these in a row read as a control panel. Now a
@@ -74,21 +101,44 @@ import {
 const SEG = "flex h-10 items-center justify-center gap-1.5 px-4 text-xs font-medium leading-tight lg:text-sm";
 const SEG_ON = "kr-pressed font-semibold text-foreground";
 const SEG_OFF = "kr-pop text-foreground/70";
+// ASK-25 — the Approvals view's Tasks sub-tab lenses. ALL is everything this
+// person may sign off (an owner: the whole tenant); MINE is only what was
+// routed to them by name (approver_id).
+const APPR_SCOPES = [{ key: "all", label: "All approvals" }, { key: "mine", label: "My approvals" }];
 const SECTION_BTN = "flex h-10 items-center justify-center gap-1.5 rounded-pill px-4 text-xs font-medium leading-tight lg:text-sm";
 
+/* ASK-11 (2026-09-13): terminal states removed from the desktop status
+   dropdown. Complete and Cancel each have their own button, and the
+   Complete button carries the evidence-required guard the dropdown
+   route did not. Two routes to the same ending, one of them silent, is
+   what the founder called out. Same call the mobile progress pills
+   made earlier (see KM-6 comment below): a terminal state chosen via
+   a control that lives inside the task deletes the control's own
+   container, and there is no evidence check on the way. STATUS_LABEL
+   below keeps "Completed" and "Cancelled" -- those are still needed
+   for read-only rendering of a task already in either state. */
+/* ASK-28 TK-07 (plan Phase 3, D6) — three STAGES on screen over the statuses
+   that stay stored: To do (todo, blocked) → Doing (in_progress, waiting,
+   review) → Done, or Cancelled. "Waiting on someone" and "Needs approval" are
+   FLAGS drawn beside the stage (the waiting and approval pills), so the
+   picker offers only the two stages a person moves a task between; waiting is
+   set from its own control, approval from the approval flow. */
 const STATUS_OPTIONS = [
-  { key: "todo", label: "Not Started" },
-  { key: "in_progress", label: "In Progress" },
-  { key: "waiting", label: "Waiting" },
-  { key: "review", label: "Under Review" },
-  { key: "done", label: "Completed" },
-  { key: "cancelled", label: "Cancelled" },
+  { key: "todo", label: "To do" },
+  { key: "in_progress", label: "Doing" },
 ];
 const STATUS_LABEL = {
-  todo: "Not Started", in_progress: "In Progress", waiting: "Waiting",
-  review: "Under Review", done: "Completed", cancelled: "Cancelled", blocked: "Pending Approval",
+  todo: "To do", blocked: "To do", in_progress: "Doing", waiting: "Doing",
+  review: "Doing", done: "Done", cancelled: "Cancelled",
 };
-const PROGRESS_OPTIONS = [0, 25, 50, 75, 100];
+const STAGE_OF = { todo: "todo", blocked: "todo", in_progress: "in_progress", waiting: "in_progress", review: "in_progress", done: "done", cancelled: "cancelled" };
+const stageOf = (status) => STAGE_OF[status] || "todo";
+// Whole days a task has been waiting (0 on the day it started), or null.
+const waitDays = (t) => {
+  const since = t.waiting_on?.since ? new Date(t.waiting_on.since).getTime() : NaN;
+  return Number.isNaN(since) ? null : Math.max(0, Math.floor((Date.now() - since) / 86400000));
+};
+const waitAgo = (d) => (d === null ? "" : d === 0 ? "today" : d === 1 ? "1 day" : `${d} days`);
 
 /* KM-6 — the bar is a PROGRESS track now, not a status dropdown in disguise.
    Completed and Cancelled are gone from it, and that was a correctness fix
@@ -99,142 +149,316 @@ const PROGRESS_OPTIONS = [0, 25, 50, 75, 100];
    What remains is the four states a task actually passes THROUGH, in order,
    each carrying its own colour: yellow at rest, warming through orange as the
    work heats up, lime when it is out for review. */
+// ASK-28 TK-07 — the phone's segmented bar holds the two stages; Waiting on
+// has its own control below it, and review is reached through approval.
 const M_STATUS_PILLS = [
-  { key: "todo",        label: "Not Started", on: "bg-yellow-200 text-yellow-900" },
-  { key: "in_progress", label: "In Progress", on: "bg-orange-500 text-white" },
-  { key: "waiting",     label: "Waiting",     on: "bg-orange-300 text-orange-950" },
-  { key: "review",      label: "Review",      on: "bg-lime-600 text-white" },
+  { key: "todo",        label: "To do", on: "bg-yellow-200 text-yellow-900" },
+  { key: "in_progress", label: "Doing", on: "bg-orange-500 text-white" },
 ];
 const isTerminal = (t) => t.status === "done" || t.status === "cancelled";
-const isOverdue = (t) => t.due_date && new Date(t.due_date) < new Date() && !isTerminal(t);
+/* ASK-29 — a due date with no time ("2026-09-14") is due for that whole day.
+   new Date() parses it as UTC midnight, which is 05:30 in India, so a task due
+   "Today" read as Overdue by breakfast. Compare calendar days instead; a date
+   that carries a time still compares as an instant. */
+const todayYmd = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+const ymdOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const isOverdue = (t) => {
+  if (!t.due_date || isTerminal(t)) return false;
+  const due = String(t.due_date);
+  if (due.length <= 10) return due < todayYmd();
+  return new Date(due) < new Date();
+};
+// ASK-25 — a task waiting for a sign-off: the Approvals view's predicate,
+// shared with the Desk's Task approvals card so the two never disagree.
+const isPendingApproval = (t) => !!t.approval_required && t.approval_status === "pending" && !isTerminal(t);
+// ASK-25 F4 — the Desk's "Due today" card lands here. Same calendar rule as
+// ASK-29's isOverdue: a date-only due string IS a local day, a timestamp is
+// read in local time and compared by calendar day.
+const isDueToday = (t) => {
+  if (!t.due_date || isTerminal(t)) return false;
+  const due = String(t.due_date);
+  return (due.length <= 10 ? due : ymdOf(new Date(due))) === todayYmd();
+};
 
-function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) {
+function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel, noteOnly = false }) {
+  const { user } = useAuth();
+  // ASK-28 Phase 7 — Escalate goes to your reporting manager first, the owner
+  // only if you have none (the server decides; this names who it will be).
+  const managerId = members.find((m) => m.id === user?.id)?.reporting_manager_id;
+  const escalateTo = managerId && managerId !== user?.id ? members.find((m) => m.id === managerId) : null;
   const [text, setText] = useState("");
   const [action, setAction] = useState("note");
   const [toId, setToId] = useState("");
   const [toRole, setToRole] = useState("");
   const [busy, setBusy] = useState(false);
-  const inp = "w-full nm-field px-2.5 py-2 text-sm";
 
   const submit = async () => {
     if (!text.trim()) return toast.error("Write what you found");
     if (action === "handoff" && !toId && !toRole) return toast.error("Pick a person or team to hand off to");
     setBusy(true);
     try {
-      await api.post(`/tasks/${taskId}/updates`, {
+      const { data } = await api.post(`/tasks/${taskId}/updates`, {
         text, step_id: stepId || null, action,
         to_id: toId || null, to_role: toId ? null : (toRole || null),
       });
-      toast.success(action === "note" ? "Update logged" : action === "escalate" ? "Escalated to owner" : "Handed off");
+      const sentTo = (data?.updates || []).slice(-1)[0]?.to_name;
+      toast.success(action === "note" ? "Update logged"
+        : action === "escalate" ? `Escalated to ${sentTo || escalateTo?.name || "your manager"}` : "Handed off");
       onDone();
     } catch (e) { toast.error(e.response?.data?.detail || "Could not post update"); }
     finally { setBusy(false); }
   };
 
+  // ASK-28 TK-01 — the person who asked for a task can leave a note on it;
+  // handing off and escalating stay with the people doing the work (the
+  // server holds the same line).
   const ACTIONS = [
     { key: "note", label: "Log note", icon: ChatText },
     { key: "handoff", label: "Hand off", icon: ArrowBendUpRight },
     { key: "escalate", label: "Escalate", icon: WarningCircle },
-  ];
+  ].filter((a) => !noteOnly || a.key === "note");
 
   return (
-    <div className="nm-btn p-3 space-y-2 bg-nm-sunken/40" data-testid={`update-form-${taskId}`}>
-      <textarea rows={2} value={text} onChange={(e) => setText(e.target.value)} data-testid={`update-text-${taskId}`}
-        placeholder="What did you find? e.g. Logistics can't commit to a date — supplier issue" className={inp} />
-      <div className="flex gap-1">
-        {ACTIONS.map((a) => (
-          <button key={a.key} onClick={() => setAction(a.key)} data-testid={`update-action-${a.key}-${taskId}`}
-            className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium nm-tile transition-colors ${action === a.key ? CTRL_ON : CTRL_OFF}`}>
-            <a.icon size={13} weight="bold" /> {a.label}
-          </button>
-        ))}
+    /* ASK-28 — the form that opens from "Log update or hand off" (and from a
+       step's ⋮) was still the retired neumorphic kit: an nm-btn slab with
+       square nm-field inputs and a tiny 12px pill row, inside a drawer that
+       is otherwise frosted glass. It now speaks the drawer's language: a
+       glass card, a soft white field, the three kinds of update as a
+       segmented track whose chosen segment lifts out as a glass pill (no
+       transition — outset and inset shadows do not interpolate, MW-08),
+       glass select pills for the hand-off target, and the navy Post. */
+    <div className={`${DRAWER_CARD} space-y-3 p-4`} data-testid={`update-form-${taskId}`}>
+      <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} data-testid={`update-text-${taskId}`}
+        placeholder="What did you find? e.g. Logistics can't commit to a date — supplier issue"
+        className={`${DRAWER_FIELD} resize-none leading-relaxed`} />
+      <div className={`flex gap-1 rounded-pill p-1 ${DRAWER_TRACK}`} role="group" aria-label="Kind of update">
+        {ACTIONS.map((a) => {
+          const on = action === a.key;
+          return (
+            <button key={a.key} type="button" onClick={() => setAction(a.key)} aria-pressed={on}
+              data-testid={`update-action-${a.key}-${taskId}`}
+              className={`flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-pill px-2 text-sm font-medium ${
+                on ? `${GLASS_PILL} text-slate-900` : "text-slate-500 hover:text-slate-800"
+              }`}>
+              <a.icon size={15} weight="bold" aria-hidden="true" /> <span className="truncate">{a.label}</span>
+            </button>
+          );
+        })}
       </div>
       {action === "handoff" && (
         <div className="space-y-2">
-          <select className={inp} value={toId} onChange={(e) => setToId(e.target.value)} data-testid={`update-member-${taskId}`}>
-            <option value="">— Hand off to a team member —</option>
-            {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
-          </select>
-          <select className={inp} value={toRole} onChange={(e) => setToRole(e.target.value)} disabled={!!toId}>
-            <option value="">…or to a whole team {toId ? "(member selected)" : ""}</option>
-            {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
-          </select>
+          <GlassSelect value={toId} onChange={setToId} ariaLabel="Hand off to a team member"
+            testid={`update-member-${taskId}`}
+            options={[
+              { value: "", label: "Hand off to a team member" },
+              ...members.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` })),
+            ]} />
+          <GlassSelect value={toRole} onChange={setToRole} disabled={!!toId} ariaLabel="Or hand off to a whole team"
+            testid={`update-team-${taskId}`}
+            options={[
+              { value: "", label: `…or to a whole team${toId ? " (member selected)" : ""}` },
+              ...roleOptions.map((r) => ({ value: r.key, label: r.label })),
+            ]} />
         </div>
       )}
-      {action === "escalate" && <p className="text-xs text-muted-foreground">This will alert the owner and create a follow-up for them.</p>}
+      {action === "escalate" && (
+        <p className="px-1 text-sm text-slate-500" data-testid={`escalate-to-${taskId}`}>
+          {escalateTo
+            ? `This will alert your manager, ${escalateTo.name}, and create a follow-up for them.`
+            : "You have no reporting manager, so this will alert the owner and create a follow-up for them."}
+        </p>
+      )}
       <div className="flex gap-2">
-        <button onClick={submit} disabled={busy} data-testid={`update-submit-${taskId}`}
-          className="kr-lift flex-1 rounded-pill bg-kr-ink py-2 text-xs font-medium text-white transition-all disabled:opacity-50">
+        <button type="button" onClick={submit} disabled={busy} data-testid={`update-submit-${taskId}`}
+          className={`flex h-11 flex-1 items-center justify-center rounded-pill text-sm font-medium disabled:opacity-50 ${INK_PILL}`}>
           {busy ? "Posting…" : "Post"}
         </button>
-        <button onClick={onCancel} className="px-3 py-1.5 text-xs font-medium nm-btn hover:bg-accent">Cancel</button>
+        <button type="button" onClick={onCancel}
+          className={`flex h-11 items-center rounded-pill px-5 text-sm font-medium text-slate-700 transition-colors hover:bg-white ${GLASS_PILL}`}>
+          Cancel
+        </button>
       </div>
     </div>
   );
 }
 
-const UPDATE_ICON = { note: ChatText, handoff: ArrowBendUpRight, escalate: WarningCircle };
+// ASK-29 — how each kind of event draws on the Activity timeline: its glyph,
+// the dot on the line, and the glyph's tone. Unknown kinds get the default.
+const TIMELINE_KIND = {
+  // ASK-30 — grayscale: the kinds are told apart by glyph, and the ones that
+  // change where a task stands (status, done, escalate, rejected) get the
+  // darkest dot.
+  task_created:    { icon: Plus, dot: "bg-neutral-400", tone: "text-neutral-500" },
+  task_status:     { icon: Clock, dot: "bg-neutral-900", tone: "text-neutral-900" },
+  task_progress:   { icon: ChartBar, dot: "bg-neutral-500", tone: "text-neutral-600" },
+  task_people:     { icon: UserPlus, dot: "bg-neutral-600", tone: "text-neutral-700" },
+  task_assigned:   { icon: UserPlus, dot: "bg-neutral-600", tone: "text-neutral-700" },
+  task_note:       { icon: ChatText, dot: "bg-neutral-400", tone: "text-neutral-600" },
+  task_reply:      { icon: ChatText, dot: "bg-neutral-400", tone: "text-neutral-600" },
+  task_handoff:    { icon: ArrowBendUpRight, dot: "bg-neutral-600", tone: "text-neutral-700" },
+  task_escalate:   { icon: WarningCircle, dot: "bg-neutral-900", tone: "text-neutral-900" },
+  task_approved:   { icon: ShieldCheck, dot: "bg-neutral-600", tone: "text-neutral-700" },
+  task_rejected:   { icon: XCircle, dot: "bg-neutral-900", tone: "text-neutral-900" },
+  task_clarify:    { icon: ChatText, dot: "bg-neutral-500", tone: "text-neutral-600" },
+  task_plan:       { icon: ListChecks, dot: "bg-neutral-600", tone: "text-neutral-700" },
+  task_step:       { icon: CheckCircle, dot: "bg-neutral-500", tone: "text-neutral-700" },
+  task_attachment: { icon: Paperclip, dot: "bg-neutral-400", tone: "text-neutral-500" },
+  task_done:       { icon: CheckCircle, dot: "bg-neutral-900", tone: "text-neutral-900", strong: true },
+  default:         { icon: Clock, dot: "bg-neutral-400", tone: "text-neutral-500" },
+};
 
-function TaskTrail({ t, members, roleOptions, onChange }) {
+/* ASK-27 — the task drawer's material (DRAWER_LABEL, DRAWER_CARD, GLASS_PILL,
+   INK_PILL, MAROON_PILL, the drawer fields…) lives in components/karma/glass.js
+   now, shared with New Task, the selection bar and Reassign. */
+
+/* ASK-27 — "Set % manually" with no toggle in front of it: the bar IS the
+   control. It used to be a <select> hidden behind a disclosure; the founder
+   took the toggle out, so the value is dragged (or arrow-keyed) along the bar
+   in 5% steps and saved once, when the hand lets go — not on every step. */
+/* ASK-28 — and it is only adjustable when the task has NO checklist. With an
+   Execution Guide, progress is the share of its steps ticked: the bar shows
+   that number, the thumb goes away, and the label says where it comes from.
+   The server holds the same rule (PATCH ignores a manual value on a task
+   with steps), so the number cannot drift from the list. */
+function ProgressControl({ value, onCommit, testid, valueTestid, checklist }) {
+  const [pct, setPct] = useState(value);
+  const locked = !!checklist;
+  // The release handler reads the LATEST value from a ref, not from the render
+  // it was bound in: a release that lands before React re-renders would
+  // otherwise compare the old value with itself and skip the save (measured:
+  // bar at 70%, no PATCH sent).
+  const latest = useRef(value);
+  const committed = useRef(value);
+  useEffect(() => { setPct(value); latest.current = value; committed.current = value; }, [value]);
+  const commit = () => {
+    if (latest.current === committed.current) return;
+    committed.current = latest.current;
+    onCommit(latest.current);
+  };
+  const shown = locked ? value : pct;
+  return (
+    <div className="min-w-0 flex-1" data-progress-source={locked ? "checklist" : "manual"}>
+      <div className="mb-2 flex items-center gap-2.5 text-sm text-slate-600">
+        <span className={`grid h-8 w-8 place-items-center rounded-full text-neutral-800 ${GLASS_PILL}`}>
+          <ChartBar size={16} weight="bold" aria-hidden="true" />
+        </span>
+        {locked
+          ? <span>From checklist · {checklist.done} of {checklist.total} steps</span>
+          : "Set % manually"}
+      </div>
+      <div className="flex items-center gap-3">
+        <input type="range" min={0} max={100} step={5} value={shown}
+          disabled={locked}
+          onChange={(e) => { if (locked) return; latest.current = Number(e.target.value); setPct(latest.current); }}
+          onPointerUp={locked ? undefined : commit} onKeyUp={locked ? undefined : commit} onBlur={locked ? undefined : commit}
+          aria-label={locked ? "Progress, from the Execution Guide" : "Progress"} aria-valuetext={`${shown}%`}
+          title={locked ? "Progress follows the Execution Guide — tick its steps to move it" : undefined}
+          data-testid={testid}
+          className={`kr-progress-range min-w-0 flex-1 ${locked ? "cursor-default" : "cursor-pointer"}`}
+          style={{ "--pct": `${shown}%` }} />
+        <span className="w-10 shrink-0 text-right text-sm tabular-nums text-slate-600" data-testid={valueTestid}>{shown}%</span>
+      </div>
+    </div>
+  );
+}
+
+function TaskTrail({ t, members, roleOptions, onChange, openTrigger = 0, noteOnly = false }) {
   const [open, setOpen] = useState(false);
+  // MW-09 fix: the mobile "Log update or hand off" button on the collapsed
+  // card can nudge this counter; each nudge opens the UpdateForm here.
+  // useEffect (not a lazy initializer) so a second tap while the form is
+  // closed reopens it.
+  useEffect(() => {
+    if (openTrigger > 0) setOpen(true);
+  }, [openTrigger]);
   const updates = t.updates || [];
-  const hasUpdates = updates.length > 0;
+  /* ASK-29 — the timeline is the task's whole activity log (status, progress,
+     people, approvals, checklist, attachments, completion) merged with the
+     notes and hand-offs on its trail, newest first, from
+     GET /tasks/{id}/activity. The founder found status moves printed under
+     the drawer's title instead; they belong here. Keyed on updated_at and the
+     trail length — every change to a task moves updated_at — so any edit
+     refetches it. Until it answers, or if it fails, the trail still shows. */
+  const activityQ = useQuery({
+    queryKey: ["task-activity", t.id, t.updated_at, updates.length],
+    queryFn: () => api.get(`/tasks/${t.id}/activity`).then((r) => r.data),
+    staleTime: 15000,
+  });
+  const fallback = [...updates].reverse().map((u) => ({
+    id: u.id, kind: `task_${u.kind}`, text: u.text, actor_name: u.author_name,
+    to_name: u.to_name, step_text: u.step_text, created_at: u.created_at,
+  }));
+  const entries = Array.isArray(activityQ.data) ? activityQ.data : fallback;
+  const hasUpdates = entries.length > 0;
   // U7-05.EXP: when there is no activity, the heavy "ACTIVITY &
   // HANDOFFS" header + right-aligned button read as an empty section
   // to fill. Softer treatment when empty: single line with the action
   // inline. Full section header only when there's actual activity to
   // frame.
   return (
-    <div className="mt-4 border-t border-nm-edge/40 pt-4" data-testid={`task-trail-${t.id}`}>
-      {hasUpdates ? (
-        <div className="flex items-center justify-between mb-2">
-          <span className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm">
-            <ChatCircleText size={16} weight="bold" aria-hidden="true" className="text-muted-foreground" /> Activity &amp; Handoffs
-          </span>
-          {!open && (
-            <button onClick={() => setOpen(true)} data-testid={`add-update-${t.id}`}
-              className="flex items-center gap-1 text-xs font-medium nm-btn px-2 py-1 hover:bg-accent transition-colors">
-              <Plus size={12} weight="bold" /> Update / Escalate
-            </button>
-          )}
-        </div>
-      ) : (
-        !open && (
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <span className="label-mono text-muted-foreground flex items-center gap-1.5">
-              <ChatCircleText size={12} weight="bold" /> No activity yet
-            </span>
-            <button onClick={() => setOpen(true)} data-testid={`add-update-${t.id}`}
-              className="flex items-center gap-1 text-xs font-medium hover:underline">
-              <Plus size={12} weight="bold" /> Log update or hand off
-            </button>
-          </div>
-        )
+    /* ASK-27 — the reference's order: an ACTIVITY label with its clock, the
+       trail (or a quiet "No activity yet"), a rule, then "Log update or hand
+       off" alone across the full width. It used to sit ABOVE the trail and
+       share its row with "View details", which is now in the ⋯ menu. The
+       ASK-9 weight holds: this is still the primary action, in the same navy
+       as Complete. */
+    <div className="border-t border-slate-900/[0.07] pt-5" data-testid={`task-trail-${t.id}`}>
+      <p className={`${DRAWER_LABEL} flex items-center gap-2`}>
+        <Clock size={16} weight="regular" aria-hidden="true" className="text-slate-500" /> Activity
+      </p>
+      {!hasUpdates && !open && (
+        <p className="pl-6 text-sm text-slate-500">{activityQ.isLoading ? "Loading activity…" : "No activity yet"}</p>
       )}
-      {updates.length > 0 && (
-        <ul className="space-y-2 mb-2" data-testid={`trail-list-${t.id}`}>
-          {updates.map((u) => {
-            const Icon = UPDATE_ICON[u.kind] || ChatText;
+      {hasUpdates && (
+        /* A single line down the left (the ::before), a dot on it per event
+           coloured by kind, and beside each dot the glyph, the line of text,
+           and who did it, when. Newest at the top. */
+        <ol className="relative ml-1.5 space-y-4 pl-7 before:absolute before:bottom-2 before:left-[5px] before:top-2 before:w-px before:bg-slate-900/[0.12] before:content-['']"
+          data-testid={`trail-list-${t.id}`}>
+          {entries.map((e, i) => {
+            const meta = TIMELINE_KIND[e.kind] || TIMELINE_KIND.default;
+            const Icon = meta.icon;
             return (
-              <li key={u.id} className="flex items-start gap-2 nm-tile p-2.5">
-                <Icon size={15} weight="bold" className={`mt-0.5 shrink-0 ${u.kind === "escalate" ? "text-kr-accent" : "text-muted-foreground"}`} />
-                <div className="min-w-0 flex-1">
-                  {u.step_text && <p className="label-mono text-muted-foreground">On: {u.step_text}</p>}
-                  <p className="text-sm">{u.text}</p>
-                  <p className="label-mono text-muted-foreground mt-1">
-                    {u.author_name}
-                    {u.to_name && <> <ArrowRight size={10} weight="bold" className="inline" /> {u.to_name}</>}
-                    {" · "}{new Date(u.created_at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                  </p>
+              <li key={e.id || `${e.kind}-${i}`} className="relative" data-kind={e.kind}>
+                <span aria-hidden="true"
+                  className={`absolute -left-7 top-1.5 h-[11px] w-[11px] rounded-full ring-4 ring-[hsl(0_0%_93%)] ${meta.dot}`} />
+                <div className="flex items-start gap-2">
+                  <Icon size={15} weight="bold" aria-hidden="true" className={`mt-0.5 shrink-0 ${meta.tone}`} />
+                  <div className="min-w-0 flex-1">
+                    {e.step_text && <p className="truncate text-xs text-slate-500">On: {e.step_text}</p>}
+                    <p className={`break-words text-sm leading-snug ${meta.strong ? "font-medium text-slate-900" : "text-slate-700"}`}>{e.text}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {e.actor_name || "Someone"}
+                      {e.to_name && <> <ArrowRight size={10} weight="bold" className="inline" aria-hidden="true" /> {e.to_name}</>}
+                      {e.created_at && <> · <time dateTime={e.created_at} title={fullTime(e.created_at)}>{timeAgo(e.created_at)}</time></>}
+                    </p>
+                  </div>
                 </div>
               </li>
             );
           })}
-        </ul>
+        </ol>
       )}
       {open && (
-        <UpdateForm taskId={t.id} stepId={null} members={members} roleOptions={roleOptions}
-          onDone={() => { setOpen(false); onChange(); }} onCancel={() => setOpen(false)} />
+        <div className="mt-3">
+          <UpdateForm taskId={t.id} stepId={null} members={members} roleOptions={roleOptions} noteOnly={noteOnly}
+            onDone={() => { setOpen(false); onChange(); }} onCancel={() => setOpen(false)} />
+        </div>
+      )}
+      {!open && (
+        <div className="mt-5 border-t border-slate-900/[0.07] pt-5">
+          <button
+            onClick={() => setOpen(true)}
+            data-testid={`add-update-${t.id}`}
+            className={`flex h-14 w-full items-center justify-center gap-2.5 rounded-pill text-base font-medium ${INK_PILL}`}
+          >
+            {/* ASK-28 TK-01 — the person who asked can only leave a note. */}
+            <Plus size={18} weight="bold" aria-hidden="true" /> {noteOnly ? "Leave a note" : "Log update or hand off"}
+          </button>
+        </div>
       )}
     </div>
   );
@@ -260,7 +484,7 @@ function TaskTrail({ t, members, roleOptions, onChange }) {
    comfortably tappable because they are the only things in that column. */
 function StepRow({
   step, index, count, editing, inpClass,
-  onEdit, onRemove, onMove,
+  onEdit, onRemove, onMove, highlight = false,
 }) {
   const rowRef = useRef(null);
   const start = useRef(null);
@@ -307,7 +531,17 @@ function StepRow({
   const killPct = Math.min(1, Math.abs(dx) / ((rowRef.current?.offsetWidth || 300) / 3));
 
   return (
-    <div ref={rowRef} className="relative" data-testid={`exec-step-row-${index}`}>
+    /* ASK-29 — `highlight` is the step that was just moved: a blue glow that
+       fades out over ~0.7s once it is released, so the eye can follow it to
+       its new place. Both states are two-layer shadows, so the change
+       interpolates instead of snapping. */
+    <div ref={rowRef}
+      className={`relative rounded-[1.1rem] transition-shadow duration-700 ${
+        highlight
+          ? "shadow-[0_0_0_2.5px_hsl(0_0%_8%/0.7),0_0_28px_4px_hsl(0_0%_0%/0.22)]"
+          : "shadow-[0_0_0_0_hsl(0_0%_8%/0),0_0_0_0_hsl(0_0%_0%/0)]"
+      }`}
+      data-testid={`exec-step-row-${index}`} data-highlight={highlight ? "true" : "false"}>
       {/* The delete ground, revealed BY the swipe rather than drawn over it. */}
       {dx !== 0 && (
         <div aria-hidden="true"
@@ -330,6 +564,13 @@ function StepRow({
           touchAction: "pan-y",
         }}
       >
+        {/* ASK-29 — delete this one step: a red-tinted circle on the left. The
+            sideways swipe still works; this is the way you can see. */}
+        <button type="button" onClick={() => onRemove(index)}
+          data-testid={`exec-remove-${index}`} aria-label={`Delete step ${index + 1}`} title="Delete step"
+          className="grid h-9 w-9 shrink-0 place-items-center self-center rounded-full bg-red-50/90 text-red-600 ring-1 ring-inset ring-red-200/80 transition-colors hover:bg-red-100">
+          <Trash size={14} weight="bold" aria-hidden="true" />
+        </button>
         <textarea
           value={step.text}
           onChange={(e) => onEdit(index, e.target.value)}
@@ -366,15 +607,19 @@ function StepRow({
   );
 }
 
-function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
+function ExecutionPlan({ t, onChange, onPatched, members = [], roleOptions = [] }) {
   const plan = t.execution_plan;
   const [steps, setSteps] = useState(plan?.steps || []);
   const [editing, setEditing] = useState(!plan || plan.status === "draft");
   const [busy, setBusy] = useState(false);
   const [newStep, setNewStep] = useState("");
-  const [ask, setAsk] = useState({});
   const [updStep, setUpdStep] = useState(null);
   const [viewStep, setViewStep] = useState(null);
+  // ASK-29 — the step last moved glows for a moment; see StepRow.
+  const [movedId, setMovedId] = useState(null);
+  const glowTimer = useRef(null);
+  useEffect(() => () => clearTimeout(glowTimer.current), []);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     setSteps(t.execution_plan?.steps || []);
@@ -385,12 +630,18 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
   const done = steps.filter((s) => s.done).length;
   const progress = total ? Math.round((done / total) * 100) : 0;
 
+  /* ASK-28 — the AI draft is BACK. ASK-27 took out the whole AI side of the
+     guide; the founder had only asked for the per-step star (Ask AI on one
+     step) to go. Ask Dex and Regenerate return as they were. `onPatched`
+     writes the returned task into the cache at once, so the drawer's
+     progress bar follows the checklist without waiting for a refetch. */
   const generate = async () => {
     setBusy(true);
     try {
       const { data } = await api.post(`/tasks/${t.id}/execution-plan/generate`);
       setSteps(data.execution_plan.steps);
       setEditing(true);
+      onPatched?.(data);
       toast.success("AI drafted an execution plan — review & customize");
       onChange();
     } catch (e) { toast.error(e.response?.data?.detail || "Could not generate plan"); }
@@ -402,7 +653,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
     setEditing(true);
   };
 
-  const cancelAIPlan = async () => {
+  const clearPlan = async () => {
     setBusy(true);
     try {
       await api.delete(`/tasks/${t.id}/execution-plan`);
@@ -419,6 +670,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
       steps: nextSteps.map((s) => ({ id: s.id, text: s.text, done: !!s.done })), status,
     });
     setSteps(data.execution_plan.steps);
+    onPatched?.(data);
     onChange();
     return data;
   };
@@ -450,6 +702,9 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
     const ns = [...steps];
     [ns[i], ns[j]] = [ns[j], ns[i]];
     setSteps(ns);
+    setMovedId(steps[i].id);
+    clearTimeout(glowTimer.current);
+    glowTimer.current = setTimeout(() => setMovedId(null), 1400);
   };
 
   const addStep = () => {
@@ -458,53 +713,54 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
     setNewStep("");
   };
 
-  const askAI = async (s) => {
-    setAsk((a) => ({ ...a, [s.id]: { loading: true } }));
-    try {
-      const { data } = await api.post(`/tasks/${t.id}/steps/ask`, { step_text: s.text });
-      setAsk((a) => ({ ...a, [s.id]: { data } }));
-    } catch { setAsk((a) => ({ ...a, [s.id]: { error: true } })); }
-  };
-
-  const inp = "flex-1 nm-field px-2.5 py-2 text-sm";
+  // ASK-28 — the step editor's fields in the drawer's glass, not nm-field.
+  const inp = "flex-1 rounded-2xl bg-white/80 px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 ring-1 ring-inset ring-slate-900/[0.06] shadow-[inset_0_1px_2px_hsl(216_30%_25%/0.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25";
 
   if (!plan && !steps.length) {
-    /* KM-5 — the two plan-building options SIDE BY SIDE with the "or" between
-       them, in the app's neumorphic material. The "Break this into steps?"
-       prompt is gone on the founder's call: two buttons labelled "Add
-       manually" and "Ask Dex" already state the question, and a line of prose
-       above them asked it twice. Equal width, same weight — they are two
-       routes to the same place, not a primary and a fallback. */
+    /* ASK-28 — the two routes in are back (KM-5's shape: side by side, equal
+       weight, "or" between), on the drawer's glass under the guide's name. */
     return (
-      <div className="mt-4 flex items-center gap-3" data-testid={`exec-plan-empty-${t.id}`}>
-        <button onClick={startManual} disabled={busy} data-testid={`manual-plan-${t.id}`}
-          className="kr-pop flex h-11 flex-1 items-center justify-center gap-1.5 rounded-pill px-3 text-xs font-medium text-foreground disabled:opacity-50">
-          <PencilSimple size={13} weight="bold" aria-hidden="true" /> Add manually
-        </button>
-        <span className="shrink-0 text-xs text-muted-foreground">or</span>
-        <button onClick={generate} disabled={busy} data-testid={`generate-plan-${t.id}`}
-          className="kr-pop flex h-11 flex-1 items-center justify-center gap-1.5 rounded-pill px-3 text-xs font-semibold text-foreground disabled:opacity-50">
-          <Sparkle size={13} weight="bold" aria-hidden="true" /> {busy ? "Thinking…" : "Ask Dex"}
-        </button>
+      <div className={`${DRAWER_CARD} p-4`} data-testid={`exec-plan-empty-${t.id}`}>
+        <span className="mb-3 flex items-center gap-2.5 px-1 text-[15px] font-semibold text-slate-800">
+          <ListChecks size={20} weight="regular" aria-hidden="true" className="text-slate-600" /> AI Execution Guide
+        </span>
+        <div className="flex items-center gap-3">
+          <button onClick={startManual} disabled={busy} data-testid={`manual-plan-${t.id}`}
+            className={`flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-pill px-3 text-sm font-medium text-slate-800 transition-colors hover:bg-white disabled:opacity-50 ${GLASS_PILL}`}>
+            <PencilSimple size={15} weight="bold" aria-hidden="true" /> Add manually
+          </button>
+          <span className="shrink-0 text-sm text-slate-500">or</span>
+          <button onClick={generate} disabled={busy} data-testid={`generate-plan-${t.id}`}
+            className={`flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-pill px-3 text-sm font-semibold text-slate-800 transition-colors hover:bg-white disabled:opacity-50 ${GLASS_PILL}`}>
+            <Sparkle size={15} weight="bold" aria-hidden="true" className="text-neutral-900" /> {busy ? "Thinking…" : "Ask Dex"}
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="mt-4 border-t border-nm-edge/40 pt-4" data-testid={`exec-plan-${t.id}`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm">
-          <ListChecks size={16} weight="bold" aria-hidden="true" className="text-muted-foreground" /> AI Execution Guide
+    /* ASK-27 — the guide is its own glass card: the list glyph and name on the
+       left, "N% complete" on the right, and no second progress bar — the
+       drawer's Status section already carries one (ASK-28: and takes its
+       number from this list). */
+    <div className={`${DRAWER_CARD} p-4`} data-testid={`exec-plan-${t.id}`}>
+      <div className="mb-3 flex items-center justify-between px-1">
+        <span className="flex items-center gap-2.5 text-[15px] font-semibold text-slate-800">
+          <ListChecks size={20} weight="regular" aria-hidden="true" className="text-slate-600" /> AI Execution Guide
         </span>
-        <span className="label-mono" data-testid={`exec-progress-${t.id}`}>{progress}%</span>
-      </div>
-      <div className="h-2 overflow-hidden rounded-pill nm-inset mb-3">
-        <div className="h-full rounded-pill bg-foreground/70 transition-all" style={{ width: `${progress}%` }} />
+        <span className="text-sm text-slate-500"><span data-testid={`exec-progress-${t.id}`}>{progress}%</span> complete</span>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         {steps.map((s, i) => (
-          <div key={s.id} data-testid={`exec-step-${t.id}-${i}`}>
+          /* ASK-29 — `layout` makes a reorder travel: when a step and its
+             neighbour swap, framer-motion animates each from its old place to
+             its new one (keyed on the step's id, so it knows which is which).
+             Off under prefers-reduced-motion. */
+          <motion.div key={s.id} data-testid={`exec-step-${t.id}-${i}`}
+            layout={reduceMotion ? false : "position"}
+            transition={{ type: "spring", stiffness: 520, damping: 42, mass: 0.8 }}>
             {editing ? (
               /* KM-5 — the four buttons are gone; the row IS the control.
                  Tap to expand and edit, long-press to drag-reorder with live
@@ -518,6 +774,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                 onEdit={editStep}
                 onRemove={removeStep}
                 onMove={moveStep}
+                highlight={movedId === s.id}
               />
             ) : (
               /* KM-5 · ACCEPTED PLAN ROW — rebuilt.
@@ -541,37 +798,35 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                  TARGETS while the drawn glyph inside each is small — the
                  founder's "shrink the icons" without shrinking what a thumb
                  has to hit. */
-              <div className="kr-pop flex h-12 items-center gap-1 rounded-control pl-2 pr-1">
+              /* ASK-27 — the reference's row: an open ring to tick, the step on
+                 one line, and a ⋮ on the right that opens the update / hand-off
+                 form for that step. The star (Ask AI) is gone. */
+              <div className={`flex h-14 items-center gap-1 rounded-2xl pl-2 pr-1 ${GLASS_PILL}`}>
                 <button onClick={() => toggle(i)} data-testid={`exec-toggle-${t.id}-${i}`}
                   aria-pressed={s.done}
                   aria-label={s.done ? "Mark step not done" : "Mark step done"}
-                  className="grid h-11 w-8 shrink-0 place-items-center">
-                  <span className={`grid h-5 w-5 place-items-center rounded-full ${
-                    s.done ? "bg-kr-ink text-white" : "border border-kr-ink/35 text-transparent"
+                  className="grid h-11 w-10 shrink-0 place-items-center">
+                  <span className={`grid h-6 w-6 place-items-center rounded-full transition-colors ${
+                    s.done ? "bg-[linear-gradient(180deg,hsl(0_0%_24%),hsl(0_0%_6%))] text-white" : "border-[1.5px] border-neutral-400/80 text-transparent"
                   }`}>
-                    <CheckCircle size={12} weight="bold" aria-hidden="true" />
+                    <Check size={13} weight="bold" aria-hidden="true" />
                   </span>
                 </button>
 
                 <button onClick={() => setViewStep(s)} data-testid={`exec-view-${t.id}-${i}`}
-                  className={`min-w-0 flex-1 truncate text-left text-sm ${
-                    s.done ? "text-muted-foreground line-through" : ""
+                  className={`min-w-0 flex-1 truncate text-left text-[15px] ${
+                    s.done ? "text-slate-400 line-through" : "text-slate-700"
                   }`}>
                   {s.text}
                 </button>
 
-                <button onClick={() => askAI(s)} data-testid={`exec-ask-${t.id}-${i}`}
-                  aria-label="Ask AI about this step" title="Ask AI"
-                  className="grid h-11 w-8 shrink-0 place-items-center text-foreground/70">
-                  <Sparkle size={14} weight="bold" aria-hidden="true" />
-                </button>
                 <button onClick={() => setUpdStep(updStep === s.id ? null : s.id)} data-testid={`exec-update-${t.id}-${i}`}
-                  aria-label="Log an update or hand off" title="Update"
+                  aria-label="Log an update or hand off on this step" title="Update or hand off"
                   aria-expanded={updStep === s.id}
-                  className={`grid h-11 w-8 shrink-0 place-items-center ${
-                    updStep === s.id ? "text-foreground" : "text-foreground/70"
+                  className={`grid h-11 w-10 shrink-0 place-items-center rounded-full hover:text-slate-900 ${
+                    updStep === s.id ? "text-slate-900" : "text-slate-500"
                   }`}>
-                  <ArrowBendUpRight size={14} weight="bold" aria-hidden="true" />
+                  <DotsThreeVertical size={18} weight="bold" aria-hidden="true" />
                 </button>
               </div>
             )}
@@ -581,27 +836,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                   onDone={() => { setUpdStep(null); onChange(); }} onCancel={() => setUpdStep(null)} />
               </div>
             )}
-            {ask[s.id] && (
-              <div className="ml-7 mt-1.5 mb-2 nm-tile bg-nm-sunken p-2.5 text-xs" data-testid={`exec-ask-result-${t.id}-${i}`}>
-                {ask[s.id].loading ? <p className="font-mono">AI is thinking…</p>
-                  : ask[s.id].error ? <p className="text-kr-accent">Couldn't fetch a suggestion.</p>
-                  : (
-                    <>
-                      <p className="flex items-start gap-1.5"><Robot size={13} weight="bold" className="text-brand-blue mt-0.5 shrink-0" /><span>{ask[s.id].data.suggestion}</span></p>
-                      {(ask[s.id].data.objections || []).length > 0 && (
-                        <div className="mt-2 space-y-1.5">
-                          <p className="label-mono text-muted-foreground">If they push back:</p>
-                          {ask[s.id].data.objections.map((o, k) => (
-                            <p key={`${o.objection}-${k}`}><span className="font-semibold">“{o.objection}”</span> — {o.response}</p>
-                          ))}
-                        </div>
-                      )}
-                      <button onClick={() => setAsk((a) => ({ ...a, [s.id]: undefined }))} className="mt-2 label-mono underline">dismiss</button>
-                    </>
-                  )}
-              </div>
-            )}
-          </div>
+          </motion.div>
         ))}
       </div>
 
@@ -612,7 +847,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
         <div className="mt-3 flex items-center gap-2">
           <input value={newStep} onChange={(e) => setNewStep(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addStep()}
             placeholder="Add your own step…" data-testid={`exec-newstep-${t.id}`}
-            className="nm-field h-11 min-w-0 flex-1 rounded-pill px-4 text-sm" />
+            className="h-11 min-w-0 flex-1 rounded-pill bg-white/80 px-4 text-sm text-slate-800 placeholder:text-slate-400 ring-1 ring-inset ring-slate-900/[0.06] shadow-[inset_0_1px_2px_hsl(216_30%_25%/0.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25" />
           <button onClick={addStep} data-testid={`exec-add-${t.id}`} aria-label="Add step"
             className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground">
             <Plus size={15} weight="bold" aria-hidden="true" />
@@ -629,17 +864,19 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                 343px. Its icon is translucent red — present enough to read as
                 the destructive one, quiet enough not to compete with the two
                 controls you actually came here to press. */}
+            {/* ASK-28 — Accept, Regenerate (AI, back) and the clear-plan circle,
+                as KM-7 laid them out, in the drawer's material. */}
             <button onClick={() => save("accepted")} disabled={busy} data-testid={`exec-accept-${t.id}`}
-              className="kr-lift flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-pill bg-kr-ink px-3 text-xs font-medium text-white disabled:opacity-50">
-              <CheckCircle size={14} weight="bold" aria-hidden="true" /> Accept plan
+              className={`flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-pill px-3 text-sm font-medium disabled:opacity-50 ${INK_PILL}`}>
+              <CheckCircle size={15} weight="bold" aria-hidden="true" /> Accept plan
             </button>
             <button onClick={generate} disabled={busy} data-testid={`exec-regenerate-${t.id}`}
-              className="kr-pop flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-pill px-3 text-xs font-medium text-foreground disabled:opacity-50">
-              <ArrowClockwise size={14} weight="bold" aria-hidden="true" /> Regenerate
+              className={`flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-pill px-3 text-sm font-medium text-slate-800 transition-colors hover:bg-white disabled:opacity-50 ${GLASS_PILL}`}>
+              <ArrowClockwise size={15} weight="bold" aria-hidden="true" /> {busy ? "Thinking…" : "Regenerate"}
             </button>
-            <button onClick={cancelAIPlan} disabled={busy} data-testid={`exec-cancel-plan-${t.id}`}
-              aria-label="Cancel plan" title="Cancel plan"
-              className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-danger-600/60 disabled:opacity-50">
+            <button onClick={clearPlan} disabled={busy} data-testid={`exec-cancel-plan-${t.id}`}
+              aria-label="Clear plan" title="Clear plan"
+              className={`${GLASS_ICON_BTN} text-danger-600/70`}>
               <XCircle size={16} weight="bold" aria-hidden="true" />
             </button>
           </>
@@ -650,8 +887,8 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                the redesign replaced, and py-2 left it sitting a few pixels
                short of its neighbours. */
             <button onClick={() => setEditing(true)} data-testid={`exec-edit-${t.id}`}
-              className="kr-pop flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-foreground">
-              <PencilSimple size={15} weight="bold" aria-hidden="true" /> Customize steps
+              className={`flex h-11 items-center gap-2 rounded-pill px-5 text-sm font-medium text-slate-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
+              <PencilSimple size={16} weight="bold" aria-hidden="true" /> Customize steps
             </button>
           )
         )}
@@ -764,14 +1001,14 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
   const isAudio = (a) => a.kind === "voice" || (a.content_type || "").startsWith("audio/");
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) { setZoom(null); setConfirmDel(false); } onOpenChange(o); }}>
-      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-2xl max-h-[90vh] overflow-y-auto" data-testid={`task-detail-${t.id}`}>
+      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-2xl max-h-[calc(90vh/var(--ui-scale,1))] overflow-y-auto" data-testid={`task-detail-${t.id}`}>
         <DialogHeader>
           <DialogTitle className="font-heading tracking-tight text-base pr-6">{t.title}</DialogTitle>
         </DialogHeader>
         {zoom ? (
           <div className="space-y-3">
             <button onClick={() => setZoom(null)} data-testid={`detail-zoom-back-${t.id}`} className="flex items-center gap-1 text-xs font-medium nm-btn px-2 py-1 hover:bg-accent"><X size={14} weight="bold" /> Back to details</button>
-            <img src={zoom} alt="proof full" className="w-full h-auto max-h-[70vh] object-contain nm-tile" />
+            <img src={zoom} alt="proof full" className="w-full h-auto max-h-[calc(70vh/var(--ui-scale,1))] object-contain nm-tile" />
           </div>
         ) : (
           <div className="space-y-5">
@@ -914,18 +1151,19 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
   const doneCount = tasks.filter(isTerminal).length;
   return (
     <div
-      /* KR-11 — the plan's call: a worklist has no hero moment, so My Work's
-         Karma-dark ingredient is this bar rather than a full band. Ink pill,
-         floating, only present while a selection exists. */
-      className="sticky top-2 z-20 mb-4 flex flex-wrap items-center gap-3 rounded-pill bg-kr-ink px-5 py-3 text-white shadow-none"
+      /* KR-11 made this bar My Work's one Karma-dark ingredient. 2026-09-14,
+         founder: it joins the drawer's material and turns WHITE — a white
+         glass strip, Complete as the black ink pill, Reassign as a glass
+         pill, Clear as a quiet text button. */
+      className="sticky top-2 z-20 mb-4 flex flex-wrap items-center gap-2.5 rounded-pill bg-white/90 py-2 pl-5 pr-2 text-neutral-900 ring-1 ring-inset ring-black/[0.05] shadow-[0_12px_32px_-14px_hsl(0_0%_0%/0.28)] backdrop-blur-xl"
       data-testid="bulk-action-bar"
     >
-      <div className="flex items-center gap-2 min-w-0 flex-1">
-        <ListChecks size={16} weight="bold" className="shrink-0" />
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <ListChecks size={17} weight="bold" aria-hidden="true" className="shrink-0 text-neutral-700" />
         <p className="text-sm font-semibold">
           {selectedIds.length} selected
           {openCount > 0 && doneCount > 0 && (
-            <span className="label-mono text-muted-foreground ml-2">
+            <span className="ml-2 text-xs font-normal text-neutral-500">
               · {openCount} open · {doneCount} done
             </span>
           )}
@@ -935,33 +1173,307 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
         type="button"
         onClick={onComplete}
         disabled={busy || openCount === 0}
-        className="kr-lift inline-flex items-center gap-1.5 rounded-pill bg-white px-3.5 py-2 text-xs font-medium text-kr-ink disabled:opacity-40"
+        className={`inline-flex h-10 items-center gap-1.5 rounded-pill px-4 text-sm font-medium disabled:opacity-40 ${INK_PILL}`}
         data-testid="bulk-complete"
       >
-        <CheckCircle size={13} weight="bold" />
+        <CheckCircle size={15} weight="bold" aria-hidden="true" />
         Complete{openCount ? ` ${openCount}` : ""}
       </button>
+      {/* Reassign: the secondary action, a white glass pill with dark text
+          (~15:1). ASK-10's contrast fix for the dark bar no longer applies
+          now the bar itself is white. */}
       <button
         type="button"
         onClick={openReassign}
         disabled={busy}
-        className="inline-flex items-center gap-1.5 bg-nm px-3 py-1.5 text-xs font-medium nm-btn hover:bg-accent disabled:opacity-40"
+        className={`inline-flex h-10 items-center gap-1.5 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}
         data-testid="bulk-reassign"
       >
-        <ArrowBendUpRight size={13} weight="bold" />
+        <ArrowBendUpRight size={15} weight="bold" aria-hidden="true" />
         Reassign
       </button>
+      {/* Clear: quiet text on white (neutral-600, ~7:1), still a 40px target. */}
       <button
         type="button"
         onClick={onClear}
         disabled={busy}
-        className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-40"
+        className="inline-flex h-10 items-center gap-1 rounded-pill px-3.5 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-900/5 hover:text-neutral-900 disabled:opacity-40"
         data-testid="bulk-clear"
       >
-        <X size={12} weight="bold" /> Clear
+        <X size={13} weight="bold" aria-hidden="true" /> Clear
       </button>
     </div>
   );
+}
+
+/* ASK-25 — the card face's vocabulary, on the founder's reference card.
+   One pill recipe for every chip, each meaning in its own soft tint: a light
+   wash, a hairline ring in the same hue, and text dark enough to read on it
+   (every pair below clears 4.5:1). Nothing bright — the stripe is the only
+   saturated colour on the card, and it is the priority.
+   PILL and QUIET_PILL now live in components/karma/glass (as CHIP and
+   QUIET_CHIP) so the leave cards wear the same chip. */
+const PRIO_STRIPE = { high: "bg-red-500", medium: "bg-blue-500", low: "bg-neutral-500" };
+const PRIO_LABEL = { high: "High", medium: "Medium", low: "Low" };
+/* `arc` is how far through the flow a status sits — the ring's fill — and
+   deliberately NOT t.progress: an In Progress task at 0% would otherwise draw
+   an empty ring and read as Not Started. Waiting shares In Progress's point
+   in the flow; its amber is what says it has paused. */
+const STATUS_TONE = {
+  todo:        { pill: QUIET_PILL, ring: "#64748b", arc: 0 },
+  // ASK-28 TK-07 — the chip shows the STAGE, so each stored status wears its
+  // stage's tone; waiting and approval speak through their own pills.
+  blocked:     { pill: QUIET_PILL, ring: "#64748b", arc: 0 },
+  in_progress: { pill: "bg-blue-50 text-blue-700 ring-blue-100", ring: "#3b82f6", arc: 0.72 },
+  waiting:     { pill: "bg-blue-50 text-blue-700 ring-blue-100", ring: "#3b82f6", arc: 0.72 },
+  review:      { pill: "bg-blue-50 text-blue-700 ring-blue-100", ring: "#3b82f6", arc: 0.72 },
+  done:        { pill: "bg-emerald-50 text-emerald-700 ring-emerald-100", ring: "#059669", arc: 1 },
+  cancelled:   { pill: "bg-stone-100 text-stone-600 ring-stone-200/70", ring: "#78716c", arc: 0 },
+};
+
+function StatusRing({ status, tone }) {
+  if (tone.arc >= 1) {
+    return (
+      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" className="shrink-0">
+        <circle cx="7" cy="7" r="6.5" fill={tone.ring} />
+        <path d="M4.3 7.2l1.8 1.8 3.6-3.8" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  const r = 5.25;
+  const c = 2 * Math.PI * r;
+  const untouched = tone.arc === 0 && status !== "cancelled";
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" className="shrink-0">
+      {/* Not Started is a dashed track: nothing filled, and visibly so. */}
+      <circle cx="7" cy="7" r={r} fill="none" stroke={tone.ring} strokeWidth="2.5"
+        strokeOpacity={untouched ? 0.6 : 0.22} strokeDasharray={untouched ? "2.1 1.6" : undefined} />
+      {tone.arc > 0 && (
+        <circle cx="7" cy="7" r={r} fill="none" stroke={tone.ring} strokeWidth="2.5" strokeLinecap="round"
+          strokeDasharray={`${c * tone.arc} ${c}`} transform="rotate(-90 7 7)" />
+      )}
+      {status === "cancelled" && <path d="M3.8 10.2l6.4-6.4" stroke={tone.ring} strokeWidth="1.6" strokeLinecap="round" />}
+    </svg>
+  );
+}
+
+/* ASK-26 — everyone on a task: the lead (assignee_id) first, then the people
+   added alongside them (co_assignee_ids). A role queue with nobody named yet
+   keeps the team glyph. Names come from /users so a photo set on Team shows
+   up here; the task's own enriched names are the fallback for anyone no
+   longer in that list. */
+function cardPeople(t, members, roleOptions) {
+  const coNames = Object.fromEntries((t.co_assignees || []).map((c) => [c.id, c.name]));
+  const person = (id, fallback) => {
+    const m = members.find((x) => x.id === id);
+    return { id, name: m?.name || fallback || "Member", avatar_url: m?.avatar_url };
+  };
+  const co = (t.co_assignee_ids || [])
+    .filter((id) => id && id !== t.assignee_id)
+    .map((id) => person(id, coNames[id]));
+  if (t.assignee_id) return [person(t.assignee_id, t.assignee_name || "Assignee"), ...co];
+  if (t.assignee_role) {
+    const label = roleOptions.find((r) => r.key === t.assignee_role)?.label || t.assignee_role;
+    return [{ id: `role:${t.assignee_role}`, kind: "team", name: `${label} team` }, ...co];
+  }
+  return co;
+}
+
+/* ASK-26 — who is on the task, at the top of the drawer, and the one place
+   to change it after the task exists. The lead keeps the lead's jobs —
+   approvals, hand-offs and Reassign all act on assignee_id — so the lead is
+   shown, not removable here; everyone else can be added or taken off. The
+   server re-checks who may do this (owner, team_manage, the creator, the
+   lead). ASK-27: every person is a raised glass pill, as in the founder's
+   reference; the ones you can take off carry an ×. */
+function AssigneesEditor({ t, members, roleOptions, canEdit, onPatched }) {
+  const { user } = useAuth();
+  const [busy, setBusy] = useState(false);
+  // ASK-28 TK-06 — the rest of who is on a task, in words: who asked for it,
+  // who approves it and when, and how a team task found its doer.
+  const teamLabel = (key) => roleOptions.find((r) => r.key === key)?.label || key;
+  const people = cardPeople(t, members, roleOptions);
+  const co = (t.co_assignee_ids || []).filter((id) => id && id !== t.assignee_id);
+  // ASK-28 TK-08 — only people this person may give work to.
+  const addable = members.filter((m) => m.id !== t.assignee_id && !co.includes(m.id) && canAssignPerson(user, m));
+  const save = async (next, done) => {
+    setBusy(true);
+    try {
+      const { data } = await api.patch(`/tasks/${t.id}`, { co_assignee_ids: next });
+      onPatched(data);
+      toast.success(done);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not change who is on this task");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const showAdd = canEdit && !!t.assignee_id && addable.length > 0;
+  return (
+    <section data-testid={`task-people-${t.id}`}>
+      <p className={DRAWER_LABEL}>Assigned to</p>
+      {/* People on the left, "Add a person" beside them on desktop — the
+          reference's two columns. Below lg the drawer is too narrow for that,
+          so the picker drops under the people. */}
+      <div className={`grid gap-3 ${showAdd ? "lg:grid-cols-2" : ""}`}>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {people.length === 0 && <span className="text-sm text-slate-500">Nobody yet</span>}
+          {people.map((p) => {
+            const lead = !!t.assignee_id && p.id === t.assignee_id;
+            const removable = canEdit && !lead && p.kind !== "team";
+            const pill = `inline-flex h-12 max-w-full items-center gap-2.5 rounded-pill pl-1.5 pr-4 ${GLASS_PILL}`;
+            const body = (
+              <>
+                {p.kind === "team"
+                  ? <AvatarStack people={[p]} size={34} />
+                  : <PersonAvatar name={p.name} src={p.avatar_url} size={34} ring={false} />}
+                <span className="truncate text-[15px] font-medium text-slate-800">{p.name}</span>
+                {lead && co.length > 0 && <span className="text-xs text-slate-500">lead</span>}
+                {removable && <X size={13} weight="bold" aria-hidden="true" className="text-slate-400" />}
+              </>
+            );
+            return removable ? (
+              <button key={p.id} type="button" disabled={busy}
+                onClick={() => save(co.filter((x) => x !== p.id), `Removed ${p.name}`)}
+                aria-label={`Remove ${p.name} from this task`}
+                data-testid={`task-people-remove-${p.id}`}
+                className={`${pill} transition-colors hover:bg-white disabled:opacity-50`}>
+                {body}
+              </button>
+            ) : (
+              <span key={p.id} className={pill}>{body}</span>
+            );
+          })}
+        </div>
+        {showAdd && (
+          <GlassSelect value="" placeholder="Add a person" icon={UserPlus} disabled={busy}
+            ariaLabel="Add a person to this task" testid={`task-people-add-${t.id}`}
+            onChange={(id) => {
+              if (id) save([...co, id], `Added ${members.find((m) => m.id === id)?.name || "a member"}`);
+            }}
+            options={addable.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` }))} />
+        )}
+      </div>
+      {(t.auto_assigned?.role && t.assignee_id) || t.created_by_name || t.approval_required ? (
+        <div className="mt-3 flex flex-col gap-1.5 text-sm" data-testid={`task-roles-${t.id}`}>
+          {t.auto_assigned?.role && t.assignee_id && (
+            <p className="text-slate-500" data-testid={`task-auto-assigned-${t.id}`}>
+              Picked automatically: fewest open tasks in {teamLabel(t.auto_assigned.role)}
+            </p>
+          )}
+          {t.created_by_name && (
+            <p data-testid={`task-asked-by-${t.id}`}>
+              <span className="text-slate-500">Asked by </span>
+              <span className="font-medium text-slate-800">{t.created_by === user?.id ? "You" : t.created_by_name}</span>
+            </p>
+          )}
+          {t.approval_required && (
+            <p data-testid={`task-approver-${t.id}`}>
+              <span className="text-slate-500">{t.approval_stage === "close" ? "Approval before it's marked done: " : "Approval before work starts: "}</span>
+              <span className="font-medium text-slate-800">
+                {t.approver_id ? (t.approver_id === user?.id ? "You" : (t.approver_name || "the approver")) : "anyone with approval access"}
+              </span>
+            </p>
+          )}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+/* ASK-28 TK-07 — "Waiting on": the flag that replaced the Waiting status. Pick
+   a colleague (they are told, and can open the task and answer with a note) or
+   type a name — a supplier, a customer — and it records since when. While
+   waiting, the box says who and how long, with Stop waiting; moving the task
+   to To do or Doing ends the wait too. `readOnly` shows the box without the
+   controls (the person who asked, a manager, the colleague waited on). */
+function WaitingOn({ t, members = [], onPatched, readOnly = false }) {
+  const { user } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [who, setWho] = useState("");
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const w = t.waiting_on;
+  const save = async (payload, done) => {
+    setBusy(true);
+    try {
+      const { data } = await api.patch(`/tasks/${t.id}`, { waiting_on: payload });
+      onPatched?.(data);
+      toast.success(done);
+      setOpen(false);
+      setWho("");
+      setName("");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not change what this task is waiting on");
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (t.status === "waiting") {
+    const d = waitDays(t);
+    return (
+      <div data-testid={`task-waiting-${t.id}`}
+        className="flex flex-wrap items-center gap-3 rounded-2xl bg-amber-50 px-4 py-3 ring-1 ring-amber-100">
+        <Hourglass size={18} weight="bold" aria-hidden="true" className="shrink-0 text-amber-700" />
+        <p className="min-w-0 flex-1 text-sm text-amber-900">
+          <span className="font-semibold">Waiting on {w?.user_id === user?.id ? "you" : (w?.name || "someone")}</span>
+          {w?.since && <span className="text-amber-800/80"> · since {dueLabel(w.since)} ({waitAgo(d)})</span>}
+        </p>
+        {!readOnly && (
+          <button type="button" disabled={busy} onClick={() => save({}, "No longer waiting — back to Doing")}
+            data-testid={`task-waiting-stop-${t.id}`}
+            className={`h-10 shrink-0 rounded-pill px-4 text-sm font-medium text-slate-800 transition-colors hover:bg-white disabled:opacity-50 ${GLASS_PILL}`}>
+            Stop waiting
+          </button>
+        )}
+      </div>
+    );
+  }
+  if (readOnly) return null;
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} data-testid={`task-waiting-start-${t.id}`}
+        className={`inline-flex h-10 items-center gap-2 rounded-pill px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-white ${GLASS_PILL}`}>
+        <Hourglass size={16} weight="regular" aria-hidden="true" /> Waiting on someone…
+      </button>
+    );
+  }
+  const people = members.filter((m) => m.id !== user?.id);
+  const canSave = !busy && (!!who || !!name.trim());
+  return (
+    <div data-testid={`task-waiting-form-${t.id}`} className="space-y-3 rounded-2xl p-4 ring-1 ring-slate-900/10">
+      <p className={DRAWER_LABEL}>Waiting on</p>
+      <GlassSelect value={who} onChange={(v) => { setWho(v); if (v) setName(""); }} ariaLabel="A colleague"
+        testid={`task-waiting-person-${t.id}`}
+        options={[{ value: "", label: "A colleague" }, ...people.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` }))]} />
+      <input value={name} maxLength={80} data-testid={`task-waiting-name-${t.id}`} aria-label="Or type a name"
+        onChange={(e) => { setName(e.target.value); if (e.target.value) setWho(""); }}
+        placeholder="Or type a name, e.g. Kumar Fabrics (supplier)"
+        className={`h-12 w-full rounded-pill px-5 text-[15px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 ${GLASS_PILL}`} />
+      <div className="flex gap-2">
+        <button type="button" disabled={!canSave} data-testid={`task-waiting-save-${t.id}`}
+          onClick={() => save(who ? { user_id: who } : { name: name.trim() }, "Marked as waiting")}
+          className={`h-11 rounded-pill px-5 text-sm font-medium disabled:opacity-40 ${INK_PILL}`}>
+          Save
+        </button>
+        <button type="button" onClick={() => { setOpen(false); setWho(""); setName(""); }}
+          data-testid={`task-waiting-cancel-${t.id}`}
+          className={`h-11 rounded-pill px-5 text-sm font-medium text-slate-700 hover:bg-white ${GLASS_PILL}`}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// "Mon, 29 Sep" — the reference's form; the year only when it is not this one.
+function dueLabel(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const wd = d.toLocaleDateString(undefined, { weekday: "short" });
+  const mo = d.toLocaleDateString(undefined, { month: "short" });
+  const yr = d.getFullYear() !== new Date().getFullYear() ? ` ${d.getFullYear()}` : "";
+  return `${wd}, ${d.getDate()} ${mo}${yr}`;
 }
 
 /**
@@ -974,12 +1486,35 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
  * `open`/`onToggleOpen` are optional — omit them and the card falls back to
  * local state, so any future call site outside the grid still works.
  *
- * `tier` ("high" | "medium" | "low") scales the title only. The founder's
- * rule: bigger for high, smaller after, but "don't reduce too much" — so the
- * floor is 14px, not 12.
+ * ASK-25 — priority is read from the task (TIER_OF) and drawn as the stripe
+ * in every view, so `tier` and `hidePrio` are gone. ASK-26 retired
+ * `showAssignee` too: the faces on the card and the Assigned section in the
+ * drawer show everyone on the task, for everyone.
  */
-function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members = [], roleOptions = [], scores, showAssignee = false, highlight = false, selected = false, onToggleSelect, open, onToggleOpen, tier }) {
+export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions = [], scores, highlight = false, selected = false, onToggleSelect, open, onToggleOpen, drawerOnly = false }) {
   const { user } = useAuth();
+  // MW-01 fix: the queryClient is used to write PATCH responses straight
+  // into the cache before onChange() invalidates. The old flow was
+  // PATCH -> onChange (invalidate) -> refetch, and the refetch raced the
+  // server's read-after-write consistency window and returned the PRE-
+  // change value, which overwrote the UI. Writing the response into the
+  // cache first means the card shows the new status immediately; the
+  // subsequent invalidate + refetch just confirms it.
+  const qc = useQueryClient();
+  const applyPatched = (patched) => {
+    if (!patched?.id) return;
+    // The tasks list query is keyed by `mine` (boolean). We update both
+    // possible cache entries because a user can flip between "my tasks"
+    // and "all tasks" without a refetch in between, and both should hold
+    // the fresh row when they land back.
+    for (const mineFlag of [true, false]) {
+      qc.setQueryData(["tasks", mineFlag], (rows) => {
+        if (!Array.isArray(rows)) return rows;
+        return rows.map((r) => (r.id === patched.id ? { ...r, ...patched } : r));
+      });
+    }
+    qc.setQueryData(["task", patched.id], (prev) => ({ ...(prev || {}), ...patched }));
+  };
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
   const [lightbox, setLightbox] = useState(null);
@@ -995,6 +1530,11 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
   const controlled = open !== undefined;
   const expanded = controlled ? open : selfExpanded;
   const setExpanded = controlled ? () => onToggleOpen?.() : setSelfExpanded;
+  const toggleCard = () => (controlled ? onToggleOpen?.() : setSelfExpanded((v) => !v));
+  // MW-20 — is this event really from the card, or did it reach us through
+  // the drawer's portal? React bubbles portal events along the COMPONENT
+  // tree; `contains` asks the DOM, where the portal is not a descendant.
+  const fromCard = (e) => e.currentTarget.contains(e.target);
   // U7-05 polish: replaced window.prompt() for reject + clarify with real
   // dialogs -- prompt is anti-pattern that blocks browser thread and
   // returns null in embed contexts (FUP-49 hit this pattern for confirm).
@@ -1002,6 +1542,7 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
   const [reasonText, setReasonText] = useState("");
   const [reasonBusy, setReasonBusy] = useState(false);
   const fileRef = useRef(null);
+  const closeRef = useRef(null);   // MW-17 — focus target when the drawer opens
   const evidenceRef = useRef(null);
   const mediaRef = useRef(null);
   const chunksRef = useRef([]);
@@ -1009,13 +1550,76 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
   const proofAtts = (t.attachments || []).filter((a) => a.kind !== "reference");
   const hasEvidence = proofAtts.length > 0;
   const canApprove = t.approval_required && (user?.role === "owner" || user?.id === t.approver_id || (!t.approver_id && userPerms(user).includes("approvals")));
-  const awaitingApproval = t.approval_required && t.approval_status !== "approved";
+  // ASK-28 TK-05 — when the approval happens. Before work starts locks the work
+  // until approved; before it's marked done leaves the work open and waits
+  // only once the doer completes it (status Under review, approval pending).
+  const apprStage = t.approval_required ? (t.approval_stage === "close" ? "close" : "start") : null;
+  const awaitingApproval = apprStage === "start" && t.approval_status !== "approved";
+  const signoffPending = apprStage === "close" && t.approval_status === "pending" && !isTerminal(t);
+  const signoffSentBack = apprStage === "close" && t.approval_status === "rejected" && !isTerminal(t);
+  const needsMyApproval = canApprove && (awaitingApproval || signoffPending);
   const lockedForAssignee = awaitingApproval && !canApprove;
+  /* ASK-32 1.2 — a task an older decision created blocked waits for that
+     decision (new decisions create their tasks only when approved). Nobody
+     starts it before then; the server refuses too. */
+  const waitingDecision = t.status === "blocked" && !!t.decision_id && !t.approval_required;
+  const workLocked = awaitingApproval || waitingDecision;
   const overdue = isOverdue(t);
   const terminal = isTerminal(t);
+  // ASK-25 — what the card face draws.
+  const prio = TIER_OF(t);
+  const tone = STATUS_TONE[t.status] || STATUS_TONE.todo;
+  const people = cardPeople(t, members, roleOptions);
+  // ASK-26 — who may change the people on a task. PATCH holds the same rule.
+  // ASK-28 TK-01 — someone who asked for this task but isn't on it: they can
+  // note, not hand off or escalate. Mirrors can_note_task / _can_work_task.
+  const onThisTask = user?.role === "owner" || t.assignee_id === user?.id
+    || (t.co_assignee_ids || []).includes(user?.id)
+    || (!!t.assignee_role && t.assignee_role === user?.role);
+  // ASK-28 TK-07 — and the colleague this task is waiting on: they answer with
+  // a note, they don't drive the task.
+  const waitedOnMe = !!user?.id && t.waiting_on?.user_id === user.id;
+  // ASK-28 item 7 (plan 6.7) — what this person may CHANGE, the server's rule
+  // (taskEditRights): the doer, helpers, the person who asked, the manager and
+  // the owner move the work; only the doer (not helpers), the asker, the
+  // manager and the owner finish, cancel or reopen it. Hand-off and escalate
+  // still belong to whoever is on the task (onThisTask); everyone else who can
+  // open it — See all tasks, the approver, a colleague waited on — leaves notes.
+  const rights = taskEditRights(user, t, members);
+  const noteOnly = !onThisTask;
+  const canEditPeople = rights.people;
+  const onPeoplePatched = (data) => { applyPatched(data); onChange(); };
+  // ASK-28 — progress comes from the checklist whenever the task has one.
+  const planSteps = t.execution_plan?.steps || [];
+  const planDone = planSteps.filter((s) => s.done).length;
+  const checklist = planSteps.length
+    ? { done: planDone, total: planSteps.length, pct: Math.round((planDone / planSteps.length) * 100) }
+    : null;
+  // ASK-28 — delete, from the bottom of the drawer, behind a confirmation.
+  // Owner-only, because DELETE /tasks/{id} is (require_role("owner")).
+  const canDelete = user?.role === "owner";
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const deleteTask = async () => {
+    setDeleting(true);
+    try {
+      await api.delete(`/tasks/${t.id}`);
+      for (const mineFlag of [true, false]) {
+        qc.setQueryData(["tasks", mineFlag], (rows) => (Array.isArray(rows) ? rows.filter((r) => r.id !== t.id) : rows));
+      }
+      setConfirmDelete(false);
+      if (expanded) setExpanded();
+      toast.success("Task deleted");
+      onChange();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not delete the task");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const approveTask = async () => {
-    try { await api.post(`/tasks/${t.id}/approve`); toast.success("Task approved"); onChange(); }
+    try { await api.post(`/tasks/${t.id}/approve`); toast.success(apprStage === "close" ? "Approved — task closed" : "Task approved"); onChange(); }
     catch (e) { toast.error(e.response?.data?.detail || "Could not approve"); }
   };
 
@@ -1112,32 +1716,740 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
       return toast.error("This task requires proof — add a photo, voice note, or file before completing.");
     }
     try {
-      await api.patch(`/tasks/${t.id}`, { status: "done" });
-      toast.success("Task completed — reopen from the card if needed.");
+      // MW-01 fix: consume the PATCH response and write it into the
+      // cache before onChange() invalidates. Same pattern in every
+      // status/progress mutation below.
+      const { data } = await api.patch(`/tasks/${t.id}`, { status: "done" });
+      applyPatched(data);
+      // ASK-28 TK-05 — approval before closing: completing asks the approver.
+      if (data?.approval_status === "pending" && data?.status === "review") {
+        toast.success(`Sent for approval — ${t.approver_name || "the approver"} will close it.`);
+      } else {
+        toast.success("Task completed — reopen from the card if needed.");
+      }
       onChange();
     } catch (e) { toast.error(e.response?.data?.detail || "Could not complete task"); }
   };
 
   const reopen = async () => {
-    await api.patch(`/tasks/${t.id}`, { status: "in_progress", progress: 0 });
+    const { data } = await api.patch(`/tasks/${t.id}`, { status: "in_progress", progress: 0 });
+    applyPatched(data);   // MW-01 fix
     toast.success("Task reopened — back in your work");
     onChange();
   };
 
   const setStatus = async (status) => {
     try {
-      await api.patch(`/tasks/${t.id}`, { status });
+      const { data } = await api.patch(`/tasks/${t.id}`, { status });
+      applyPatched(data);   // MW-01 fix
       toast.success(`Status: ${STATUS_LABEL[status] || status}`);
       onChange();
     } catch (e) { toast.error(e.response?.data?.detail || "Could not update status"); }
   };
   const setProgress = async (progress) => {
-    await api.patch(`/tasks/${t.id}`, { progress: Number(progress) });
+    const { data } = await api.patch(`/tasks/${t.id}`, { progress: Number(progress) });
+    applyPatched(data);   // MW-01 fix
     onChange();
   };
 
   const isOp = t.task_type === "operational" || !!t.op_category;
-  const selCls = "nm-field px-2 py-1 text-xs font-mono";
+
+  /* Mobile PWA (2026-09-14) — the drawer blocks both bodies render.
+     They were written once, inside the desktop body (`hidden lg:block`), so a
+     phone never saw the approval step, its banners, the proof notice, the
+     attachments or Reopen: the Approvals view opened on a phone and nothing in
+     it could be approved. Each is a render function taking a testid suffix —
+     "" for the desktop body (ids unchanged) and "-m" for the phone body. */
+  const approvalBlocks = (sfx) => (
+    <>
+      {needsMyApproval && (
+        <div className={`mt-4 p-4 ${DRAWER_CARD}`} data-testid={`approval-actions${sfx}-${t.id}`} data-stage={apprStage}>
+          <p className={DRAWER_LABEL}>Needs your approval</p>
+          <p className="text-sm text-slate-700">{apprStage === "close"
+            ? `${t.assignee_name || "The assignee"} marked this task complete. Check the work — approving closes it.`
+            : `This task needs your approval before ${t.assignee_name || "the assignee"} can start work.`}</p>
+          {t.approval_status === "rejected" && t.rejection_reason && <p className="mt-1.5 text-xs text-slate-500">Previously requested: {t.rejection_reason}</p>}
+          <div className="mt-3.5 flex flex-wrap gap-2">
+            <button onClick={approveTask} data-testid={`approve${sfx}-${t.id}`}
+              className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-pill px-5 text-sm font-medium ${INK_PILL}`}>
+              <CheckCircle size={16} weight="bold" aria-hidden="true" /> Approve
+            </button>
+            <button onClick={rejectTask} data-testid={`reject${sfx}-${t.id}`}
+              className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
+              <WarningCircle size={16} weight="bold" aria-hidden="true" /> Request changes
+            </button>
+            <button onClick={clarifyTask} data-testid={`clarify${sfx}-${t.id}`}
+              className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
+              <ChatText size={16} weight="bold" aria-hidden="true" /> Ask clarification
+            </button>
+          </div>
+        </div>
+      )}
+
+      {lockedForAssignee && (
+        <div className={`mt-4 flex items-start gap-3 p-4 ${DRAWER_CARD}`} data-testid={`approval-locked${sfx}-${t.id}`}>
+          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-600 ${GLASS_PILL}`}>
+            <LockKey size={16} weight="bold" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-neutral-900">{t.approval_status === "rejected" ? "Changes requested" : "Awaiting approval"}</p>
+            <p className="mt-0.5 text-xs text-slate-600">You can start once {t.approver_name || "the approver"} approves this task. Status, progress and the execution plan are locked until then.</p>
+            {t.approval_status === "rejected" && t.rejection_reason && <p className="mt-1.5 text-xs text-slate-500">Note: {t.rejection_reason}</p>}
+          </div>
+        </div>
+      )}
+
+      {waitingDecision && (
+        <div className={`mt-4 flex items-start gap-3 p-4 ${DRAWER_CARD}`} data-testid={`decision-locked${sfx}-${t.id}`}>
+          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-600 ${GLASS_PILL}`}>
+            <LockKey size={16} weight="bold" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-neutral-900">Waiting for a decision</p>
+            <p className="mt-0.5 text-xs text-slate-600">This task starts when the decision it came from is approved. Status and progress are locked until then.</p>
+            <Link to={`/inbox?decision=${t.decision_id}`} data-testid={`decision-locked-open${sfx}-${t.id}`}
+              className="mt-1.5 inline-block text-xs font-medium text-neutral-900 underline underline-offset-2">
+              Open the decision
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* ASK-28 TK-05 — approval before closing, seen by everyone but the
+          approver. Both banners wear the same glass card as "Awaiting
+          approval"; the sent-back one carries the rose of the chip. */}
+      {signoffPending && !canApprove && (
+        <div className={`mt-4 flex items-start gap-3 p-4 ${DRAWER_CARD}`} data-testid={`approval-signoff${sfx}-${t.id}`}>
+          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-600 ${GLASS_PILL}`}>
+            <ShieldCheck size={16} weight="bold" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-neutral-900">Waiting for approval</p>
+            <p className="mt-0.5 text-xs text-slate-600">Marked complete. {t.approver_name || "The approver"} will check the work and close it. Moving the status back takes the request away.</p>
+          </div>
+        </div>
+      )}
+      {signoffSentBack && (
+        <div className={`mt-4 flex items-start gap-3 p-4 ${DRAWER_CARD}`} data-testid={`approval-changes${sfx}-${t.id}`}>
+          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-rose-700 ${GLASS_PILL}`}>
+            <WarningCircle size={16} weight="bold" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-neutral-900">Changes requested</p>
+            <p className="mt-0.5 text-xs text-slate-600">{t.rejection_reason ? `${t.approver_name || "The approver"}: ${t.rejection_reason}` : `${t.approver_name || "The approver"} sent this back.`} Complete it again when it's fixed — it goes back for approval.</p>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  const evidenceNotice = (sfx) => (t.evidence_required && !isTerminal(t) && !awaitingApproval ? (
+    <div className={`mt-3 flex items-start gap-2.5 p-3 ${DRAWER_CARD}`} data-testid={`evidence-required${sfx}-${t.id}`}>
+      {hasEvidence
+        ? <CheckCircle size={16} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0 text-emerald-600" />
+        : <Info size={16} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0 text-amber-600" />}
+      <p className="text-xs leading-relaxed text-slate-700">{hasEvidence
+        ? "Proof attached — you can mark this task complete."
+        : "This task requires proof before it can be completed. Add a photo, voice note, or file."}</p>
+    </div>
+  ) : null);
+
+  const attachmentBlocks = (sfx) => {
+    const beUrl = process.env.REACT_APP_BACKEND_URL;
+    const atts = t.attachments || [];
+    const refs = atts.filter((a) => a.kind === "reference");
+    const proof = atts.filter((a) => a.kind !== "reference");
+    if (!refs.length && !proof.length) return null;
+    const insights = t.reference_insights || [];
+    const isImg = (a) => a.kind === "photo" || (a.content_type || "").startsWith("image/");
+    const isAudio = (a) => a.kind === "voice" || (a.content_type || "").startsWith("audio/");
+    const label = "mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500";
+    const renderAtt = (a) => (
+      isImg(a)
+        ? <button key={a.url} type="button" onClick={() => setLightbox(`${beUrl}${a.url}`)}
+            className="group relative h-20 w-20 overflow-hidden rounded-xl ring-1 ring-slate-900/[0.06]" title="View the full image"
+            data-testid={`att-photo${sfx}-${t.id}-${a.url}`}>
+            <img src={`${beUrl}${a.url}`} alt={a.filename || "attachment"} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+            <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/20 group-hover:opacity-100">
+              <MagnifyingGlassPlus size={20} weight="bold" aria-hidden="true" className="text-white" />
+            </span>
+          </button>
+        : isAudio(a)
+          ? <audio key={a.url} controls preload="none" src={`${beUrl}${a.url}`} className="h-9 max-w-full" data-testid={`att-voice${sfx}-${t.id}-${a.url}`} />
+          : <a key={a.url} href={`${beUrl}${a.url}`} target="_blank" rel="noreferrer" data-testid={`att-file${sfx}-${t.id}-${a.url}`}
+              className="inline-flex max-w-[180px] items-center gap-1.5 rounded-pill bg-white/80 px-2.5 py-1.5 text-xs text-slate-700 ring-1 ring-inset ring-slate-900/[0.06] transition-colors hover:bg-white">
+              <File size={13} weight="bold" aria-hidden="true" /> <span className="truncate">{a.filename || "file"}</span>
+            </a>
+    );
+    return (
+      <>
+        {refs.length > 0 && (
+          <div className={`mt-3 p-3 ${DRAWER_CARD}`} data-testid={`reference-block${sfx}-${t.id}`}>
+            <p className={label}><Paperclip size={13} weight="bold" aria-hidden="true" /> Reference material · {refs.length}</p>
+            <div className="flex flex-wrap items-center gap-2">{refs.map(renderAtt)}</div>
+            {insights.length > 0 && (
+              <div className="mt-2 flex items-start gap-1.5" data-testid={`reference-insight${sfx}-${t.id}`}>
+                <Lightbulb size={13} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0 text-amber-500" />
+                <p className="line-clamp-2 text-xs text-slate-500">{insights[insights.length - 1].summary}</p>
+              </div>
+            )}
+          </div>
+        )}
+        {proof.length > 0 && (
+          <div className={`mt-3 p-3 ${DRAWER_CARD}`} data-testid={`proof-block${sfx}-${t.id}`}>
+            <p className={label}><Paperclip size={13} weight="bold" aria-hidden="true" /> Proof of work · {proof.length}</p>
+            <div className="flex flex-wrap items-center gap-2">{proof.map(renderAtt)}</div>
+          </div>
+        )}
+      </>
+    );
+  };
+
+  const reopenBlock = (sfx) => (isTerminal(t) && !workLocked && rights.finish ? (
+    <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2" data-testid={`reopen-actions${sfx}-${t.id}`}>
+      <button type="button" onClick={reopen} data-testid={`reopen${sfx}-${t.id}`}
+        className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-slate-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
+        <ArrowClockwise size={16} weight="bold" aria-hidden="true" /> Reopen
+      </button>
+      <span className="text-xs text-slate-500">Completed by mistake? Reopen brings it back to your active work.</span>
+    </div>
+  ) : null);
+
+  /* 2026-09-14, founder — the drawer is a value of its own so a caller that
+     only wants the DRAWER (the Decision Desk's Task approvals column: "open
+     the drawer in the decision desk itself, don't go to My Work") can render
+     it without the tile. `drawerOnly` returns just this; the tile below
+     embeds the same element where the Sheet always was. Declared last, so
+     everything the drawer reads is already in scope. */
+  const drawer = (
+    <>
+    {/* ASK-15 (2026-09-13): task detail slides in from the right as a
+        Sheet, not an inline expand — kept as one drawer holding BOTH the
+        mobile and desktop bodies so the two `hidden`/`lg:hidden` gates
+        decide which one renders at each breakpoint. */}
+    <Sheet open={expanded} onOpenChange={(o) => { if (!o && expanded) setExpanded(); }}>
+      <SheetContent side="right"
+        hideClose
+        /* 2026-09-14, founder — FULL SCREEN below lg: a task opens as its
+           own screen on a phone, not a side drawer like the desktop's. That
+           retires MW-15's 8% scrim strip; the ways out are the header close,
+           the phone's Back gesture (useBackDismiss in ui/sheet) and Escape.
+           sm:max-w-none cancels the right variant's sm:max-w-sm, so landscape
+           phones and tablets (still the phone shell) stay full screen too.
+           rounded-[0px], not rounded-none: index.css softens .rounded-none
+           to 0.5rem app-wide, which left 8px corners on a full screen. */
+        /* ASK-27 — the founder's frosted sheet, with a rounded leading edge
+           and a long soft shadow onto the page, from lg up. ASK-30: its wash
+           is a light neutral gray now, not blue-white — just dark enough that
+           the white pills sit visibly on top of it. */
+        className="w-full max-w-none overflow-hidden rounded-[0px] border-l-0 p-0 sm:max-w-none lg:max-w-2xl lg:rounded-l-[2rem] bg-[linear-gradient(165deg,hsl(0_0%_95%),hsl(0_0%_90.5%))] lg:shadow-[-30px_0_80px_-30px_hsl(0_0%_0%/0.45)]"
+        data-testid={`task-drawer-${t.id}`}
+        /* MW-17 — the drawer supplies its own close, so send focus there on
+           open. Without this Radix focuses the stock close. */
+        onOpenAutoFocus={(e) => { e.preventDefault(); closeRef.current?.focus(); }}>
+        <div className="h-full overflow-y-auto">
+        {/* ASK-27 — the close is INSIDE the sheet now, at every width. It
+            was a tab hanging off the left edge, which the founder read as
+            detached from the card. It sits at the header's right as a
+            glass button with a soft blue halo, so it is the easiest thing
+            in the drawer to find; MW-15's rule (one close, reachable at
+            every width) holds without the tab. ASK-28: the ⋯ beside it is
+            gone on the founder's call — Delete now sits at the bottom of
+            the drawer and attachments already show in its body. */}
+        <SheetHeader className="sticky top-0 z-10 flex-row items-start gap-3 space-y-0 bg-[hsl(0_0%_95%/0.85)] px-5 pb-4 pt-[max(1.25rem,env(safe-area-inset-top))] text-left backdrop-blur-xl lg:px-7 lg:pt-6">
+          <div className="min-w-0 flex-1 pt-1.5">
+            <SheetTitle className="text-left text-[22px] font-semibold leading-tight tracking-tight text-slate-900">{t.title}</SheetTitle>
+            {/* The due date sits under the title on desktop (the phone body
+                has its own info card for it). ASK-29: the "Status → waiting
+                2 min ago" line that used to share this row is gone — every
+                change is on the Activity timeline at the bottom instead. */}
+            {t.due_date && (
+              <p className="mt-1.5 hidden items-center gap-1 text-[13px] text-slate-500 lg:flex" data-testid={`task-meta-${t.id}`}>
+                <CalendarBlank size={13} weight="bold" aria-hidden="true" /> Due {dueLabel(t.due_date)}
+              </p>
+            )}
+          </div>
+          <SheetClose
+            ref={closeRef}
+            data-testid={`task-drawer-close-${t.id}`}
+            aria-label="Close task"
+            title="Close"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/90 text-slate-900 ring-1 ring-inset ring-white shadow-[0_8px_22px_-8px_hsl(0_0%_0%/0.45),0_0_0_4px_hsl(0_0%_0%/0.07)] backdrop-blur-md transition-shadow hover:bg-white hover:shadow-[0_10px_26px_-8px_hsl(0_0%_0%/0.5),0_0_0_4px_hsl(0_0%_0%/0.13)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40">
+            <X size={18} weight="bold" aria-hidden="true" />
+          </SheetClose>
+        </SheetHeader>
+    {/* KR-14.22 · MOBILE EXPANDED BODY — reference-driven layout for the
+        task expanded view on phones. Uses the same handlers/state as the
+        desktop body below; the desktop body is `hidden lg:block` from
+        here on. */}
+    <div className="px-4 pb-5 space-y-5 pt-4 lg:hidden" data-testid={`task-body-m-${t.id}`}>
+      {/* KR-14.23 — a single accent status pill leads the body. The
+          summary row above already shows the full meta row (status +
+          due + context), so repeating it here made the pill look
+          doubled on tasks that had all three fields. */}
+      <div>
+        <span className={`inline-flex rounded-pill px-2.5 py-0.5 text-xs font-medium ${
+          overdue && !terminal ? "bg-kr-accent text-white"
+          : "bg-orange-50 text-kr-accent"
+        }`}>
+          {STATUS_LABEL[t.status] || t.status}
+        </span>
+      </div>
+
+      {/* The approval step leads on a phone: when a task waits on you, that
+          is the one thing to do here. */}
+      {approvalBlocks("-m")}
+
+      <AssigneesEditor t={t} members={members} roleOptions={roleOptions}
+        canEdit={canEditPeople} onPatched={onPeoplePatched} />
+
+      {/* Description card (orange) */}
+      {t.description && (
+        <div className="flex items-start gap-3 rounded-cardlg bg-orange-50/70 p-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-tile bg-orange-100 text-kr-accent">
+            <File size={18} weight="regular" />
+          </span>
+          <p className="text-sm leading-relaxed">{t.description}</p>
+        </div>
+      )}
+
+      {/* Info card — the top row (workflow / due date) only renders when
+          there is something to show; the created-ago footnote only gets a
+          top border when the top row is present. Prevents the hollow
+          curve above a lone "Created X ago" line. */}
+      {(t.workflow_summary?.title || t.due_date || t.created_at) && (() => {
+        const hasTop = !!(t.workflow_summary?.title || t.due_date);
+        return (
+          <div className={`p-3 ${DRAWER_CARD}`}>
+            {hasTop && (
+              <div className="flex items-center gap-2">
+                {t.workflow_summary?.title && (
+                  <>
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-violet-50 text-violet-500">
+                      <Buildings size={14} weight="regular" />
+                    </span>
+                    <span className="min-w-0 truncate text-sm">{t.workflow_summary.title}</span>
+                  </>
+                )}
+                {t.workflow_summary?.title && t.due_date && (
+                  <span className="mx-1 h-5 w-px shrink-0 bg-slate-900/10" />
+                )}
+                {t.due_date && (
+                  <>
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-green-50 text-green-600">
+                      <ClockCounterClockwise size={14} weight="regular" />
+                    </span>
+                    <span className="min-w-0 truncate text-sm">
+                      Due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+            {t.created_at && (
+              <div className={`flex items-center gap-1 text-xs text-muted-foreground ${hasTop ? "mt-3 border-t border-slate-900/[0.06] pt-2" : ""}`}>
+                <span aria-hidden="true" className="h-1 w-1 rounded-full bg-muted-foreground/60" />
+                Created {timeAgo(t.created_at)}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {evidenceNotice("-m")}
+
+      {/* KM-5 · STATUS — ONE ROW, A SEGMENTED BAR.
+          KM-6 note: `blocked` (pending approval) still matches no segment —
+          it is a gate the approver controls, not a state the assignee sets.
+          KM-3 put five pills in a flex-wrap, which at 343px could not hold
+          them and broke onto a second line — and five states genuinely do
+          not fit one row, so "Waiting" goes on the founder's call. Four
+          remain and they are the states work actually moves through.
+          It is a segmented bar now rather than five loose chips: a single
+          .kr-pressed track with four equal segments, and the selected one
+          fills with ITS OWN status colour, so choosing a status visibly
+          moves the coloured pill along the track. Not Started stays the
+          default and has no segment — it is the absence of a choice, and
+          tapping the active segment returns to it.
+          No transition utility: the track's children swap fills, and the
+          selected segment also swaps against .kr-pressed's shadow, which is
+          not interpolable against an outset pair. */}
+      {!terminal && !workLocked && rights.work && (
+        <div className="kr-pressed grid grid-cols-2 gap-1 rounded-pill p-1" role="group"
+             aria-label="Task status" data-testid={`status-pills-m-${t.id}`}>
+          {M_STATUS_PILLS.map((sp) => {
+            const on = stageOf(t.status) === sp.key;
+            return (
+              <button
+                key={sp.key}
+                type="button"
+                onClick={() => setStatus(sp.key)}
+                aria-pressed={on}
+                data-testid={`status-pill-m-${sp.key}-${t.id}`}
+                /* Mobile PWA (2026-09-14) — two equal halves of the row, at
+                   the 13px index.css gives every small label on a phone, each
+                   a full 40px touch target. The 10px type was sized for the
+                   four segments TK-07 retired. */
+                className={`flex h-10 min-w-0 items-center justify-center rounded-pill px-2 text-[13px] leading-tight ${
+                  /* KM-6 — the selected segment is RAISED, not a flat
+                     swatch: .kr-pop supplies the lift and the colour
+                     utility overrides its white ground (utilities layer
+                     beats components), so the moving pill reads as a
+                     physical thing sitting in the track. */
+                  on ? `kr-pop ${sp.on} font-semibold` : "text-foreground/60"
+                }`}
+              >
+                <span className="truncate">{sp.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {/* ASK-28 TK-07 — Waiting on, under the two stages. */}
+      {!terminal && !workLocked && (
+        <WaitingOn t={t} members={members} onPatched={onPeoplePatched} readOnly={!rights.work} />
+      )}
+
+      {/* ASK-27 — the Execution Guide is NOT rendered here any more. MW-16
+          already renders it (and the trail) once, below both bodies, for
+          every width — this second copy put the guide and its buttons on
+          the phone twice. */}
+
+      {/* Mobile PWA (2026-09-14) — Complete and the attach controls live in
+          the sticky bar at the foot of the drawer (task-actions-m), so they
+          stay one thumb away however far the plan and activity run.
+          2026-09-14, founder — no "Cancel this task" link: it read as a
+          second way to delete the task beside the Delete task pill at the
+          bottom, so the pill is the one way out, as on desktop. */}
+      {attachmentBlocks("-m")}
+      {reopenBlock("-m")}
+
+      {/* ASK-27 — the phone footer ("No activity yet" + its own "Log update
+          or hand off") is gone: TaskTrail below renders both, full width, at
+          every size, so the phone drawer showed each of them twice. */}
+    </div>
+
+    {/* EXPANDED BODY (desktop) — ASK-27 layout, top to bottom as in the
+        founder's reference: the context card, Assigned to, Status with the
+        % control beside it, then Complete and Attach. The Execution Guide
+        and Activity follow below both bodies (MW-16). */}
+    <div id={`task-card-body-${t.id}`} className="hidden space-y-6 px-7 pb-6 pt-2 lg:block">
+    {t.description && (
+      <div className={`${DRAWER_CARD} flex items-start gap-4 p-4`} data-testid={`task-context-${t.id}`}>
+        <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[linear-gradient(160deg,hsl(0_0%_100%),hsl(0_0%_88%))] text-neutral-800 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.9)]">
+          <File size={24} weight="duotone" aria-hidden="true" />
+        </span>
+        <p className="min-w-0 whitespace-pre-line pt-1 text-[15px] leading-relaxed text-slate-600">{t.description}</p>
+      </div>
+    )}
+    {/* ASK-26 — replaces the owner-only one-name assignee line: everyone on
+        the task, for everyone who opens it. */}
+    <AssigneesEditor t={t} members={members} roleOptions={roleOptions}
+      canEdit={canEditPeople} onPatched={onPeoplePatched} />
+    {/* U7-05.4: AI-priority bars get a "why?" tooltip on the container
+        so users understand what drove the ranking. */}
+    {scores && (
+      <div title="AI ranker: higher score = more urgent to open next. Bars show what drove it -- priority signal, overdue, workflow blockage, complaints touched." data-testid={`ai-scores-${t.id}`}>
+        <PriorityScoreBars scores={scores} />
+      </div>
+    )}
+
+    {isOp && (
+      <div className="flex flex-wrap items-center gap-2" data-testid={`op-meta-${t.id}`}>
+        {t.op_category && <span className={`${PILL} ${QUIET_PILL}`}><Tag size={11} weight="bold" /> {t.op_category}</span>}
+        {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
+        {t.approval_required && (
+          /* 2026-09-14 — the card-face chip, in the leave card's tones:
+             amber while it waits, emerald once approved, rose for changes.
+             The words are ASK-28 TK-05's, which name the moment (start or
+             close). */
+          <span data-testid={`op-approval-${t.id}`} className={`${PILL} ${
+            t.approval_status === "approved" ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
+            : t.approval_status === "rejected" ? "bg-rose-50 text-rose-700 ring-rose-100"
+            : t.approval_status === "pending" ? "bg-amber-50 text-amber-800 ring-amber-100"
+            : QUIET_PILL}`}>
+            <ShieldCheck size={11} weight="bold" /> {t.approval_status === "approved" ? "Approved" : t.approval_status === "pending" ? (apprStage === "close" ? "Waiting for approval to close" : "Pending approval") : t.approval_status === "rejected" ? "Changes requested" : `${t.approver_name || "Approval"} required${apprStage === "close" ? " to close" : ""}`}
+          </span>
+        )}
+      </div>
+    )}
+
+    {/* Full workflow chip in the expanded body -- carries the full title
+        alongside the stage, since we only show the stage snippet in
+        the summary row. */}
+    {t.workflow_summary && t.workflow_summary.id && (
+      <div>
+        <a
+          href={`/my-work?view=workflows&type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
+          data-testid={`wf-chip-full-${t.id}`}
+          className="inline-flex items-center gap-1.5 nm-tile px-2.5 py-1 text-xs font-mono bg-nm-sunken hover:bg-accent transition-colors"
+          title={`Open workflow: ${t.workflow_summary.title}`}
+        >
+          <FlowArrow size={12} weight="bold" aria-hidden="true" className="text-muted-foreground" />
+          <span className="font-medium text-[10px]">
+            {(t.workflow_summary.title || "Workflow").slice(0, 40)}
+          </span>
+          <span className="text-muted-foreground">·</span>
+          <span className=" text-[10px]">
+            {(t.workflow_summary.stage || "").replace(/_/g, " ")}
+          </span>
+        </a>
+      </div>
+    )}
+
+    {/* ASK-32 4.4 — the decision this task came from. */}
+    {t.decision_id && t.decision_title && (
+      <div>
+        <Link to={`/inbox?decision=${t.decision_id}`} data-testid={`decision-link-${t.id}`}
+          className="inline-flex max-w-full items-center gap-1 text-xs text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline">
+          <span className="shrink-0">From decision:</span>
+          <span className="min-w-0 truncate font-medium">{t.decision_title}</span>
+        </Link>
+      </div>
+    )}
+
+    {/* ASK-27 — STATUS: the status pill on the left, a rule, and the %
+        control on the right. "Set % manually" is no longer behind a
+        disclosure toggle — the bar beside it is the control. */}
+    {!terminal && !workLocked && (
+      !rights.work ? (
+        /* ASK-28 TK-01 / item 7 — someone following the task (See all tasks,
+           the approver, a colleague waited on) sees where the work is, not the
+           controls that move it. */
+        <section data-testid={`task-status-${t.id}`}>
+          <p className={DRAWER_LABEL}>Status</p>
+          <p className="text-[15px] font-medium text-slate-800" data-testid={`requester-status-${t.id}`}>
+            {STATUS_LABEL[t.status] || t.status} · {checklist ? checklist.pct : (t.progress || 0)}% done
+          </p>
+          {t.status === "waiting" && <div className="mt-3"><WaitingOn t={t} readOnly /></div>}
+        </section>
+      ) : (
+      <section data-testid={`task-status-${t.id}`}>
+        <p className={DRAWER_LABEL}>Status</p>
+        <div className="flex items-stretch gap-5">
+          <GlassSelect testid={`status-select-${t.id}`} ariaLabel="Task status" icon={Clock}
+            value={stageOf(t.status)} onChange={setStatus}
+            options={STATUS_OPTIONS.map((s) => ({ value: s.key, label: s.label }))}
+            triggerClassName="w-56 shrink-0 font-medium text-slate-800" />
+          <span aria-hidden="true" className="w-px shrink-0 bg-slate-900/10" />
+          <ProgressControl value={checklist ? checklist.pct : (t.progress || 0)} onCommit={setProgress}
+            checklist={checklist}
+            testid={`progress-select-${t.id}`} valueTestid={`progress-bar-${t.id}`} />
+        </div>
+        <div className="mt-3">
+          <WaitingOn t={t} members={members} onPatched={onPeoplePatched} />
+        </div>
+      </section>
+      )
+    )}
+
+    {attachmentBlocks("")}
+
+    <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
+      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-3xl p-2" data-testid={`photo-lightbox-${t.id}`}>
+        <DialogHeader>
+          <DialogTitle className="sr-only">Proof photo</DialogTitle>
+        </DialogHeader>
+        {lightbox && <img src={lightbox} alt="proof full" className="w-full h-auto max-h-[calc(80vh/var(--ui-scale,1))] object-contain" />}
+      </DialogContent>
+    </Dialog>
+
+    {/* 2026-09-14, founder — the approval step joins the drawer's glass: a
+        DRAWER_CARD holding the ink Approve pill, with white glass pills for
+        the two ways to push back. ASK-28 TK-05 decides when it shows
+        (before work starts, or once the work is marked done) and what it
+        says for each. Shared with the phone body — see approvalBlocks. */}
+    {approvalBlocks("")}
+
+    {evidenceNotice("")}
+
+    {!isTerminal(t) && !workLocked && !signoffPending && rights.work && (
+      <div className="flex items-center gap-4">
+        {/* FUP-49: don't disable -- always click-through, handler shows
+            a clear toast if evidence is missing. Silent-disabled
+            buttons were the original bug. Item 7: a helper attaches and
+            moves the work, but the doer marks it done. */}
+        {rights.finish ? (
+          <button onClick={complete} data-testid={`complete-${t.id}`}
+            title={t.evidence_required && !hasEvidence ? "Add a voice note or file first" : "Mark as complete"}
+            className={`flex h-14 shrink-0 items-center gap-2.5 rounded-pill px-7 text-base font-medium ${t.evidence_required && !hasEvidence ? `${GLASS_PILL} text-slate-500` : INK_PILL}`}>
+            <CheckCircle size={22} weight="fill" aria-hidden="true" /> Complete
+          </button>
+        ) : (
+          <p className="max-w-[12rem] shrink-0 text-sm leading-snug text-slate-500" data-testid={`finish-hint-${t.id}`}>
+            {t.assignee_name || "The doer"} marks this done.
+          </p>
+        )}
+
+        <span aria-hidden="true" className="h-8 w-px shrink-0 bg-slate-900/10" />
+        <span className="text-[15px] text-slate-500">Attach:</span>
+        {/* ASK-27 — no camera button on desktop (the founder: a desktop is
+            not where anyone attaches with a camera). Its input stays: the
+            phone body's camera button opens it. */}
+        <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhoto} />
+        <input ref={evidenceRef} type="file" className="hidden" onChange={onEvidence} />
+        {/* ASK-28 — the two circles become two labelled pills, Document and
+            Voice, sharing the rest of the row equally (flex-1 basis-0). */}
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <button
+            onClick={() => evidenceRef.current?.click()}
+            disabled={uploading}
+            data-testid={`upload-file-${t.id}`}
+            title="Upload a document"
+            className={`flex h-12 min-w-0 flex-1 basis-0 items-center justify-center gap-2 rounded-pill text-[15px] font-medium text-slate-700 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}
+          >
+            <File size={19} weight="regular" aria-hidden="true" /> Document
+          </button>
+          <button
+            onClick={toggleVoice}
+            data-testid={`voice-${t.id}`}
+            title={recording ? "Stop and send voice reply" : "Record a voice reply"}
+            aria-label={recording ? "Stop recording and send" : undefined}
+            className={`flex h-12 min-w-0 flex-1 basis-0 items-center justify-center gap-2 rounded-pill text-[15px] font-medium transition-colors ${
+              recording ? "bg-kr-accent text-white" : `text-slate-700 hover:bg-white ${GLASS_PILL}`
+            }`}
+          >
+            {recording
+              ? <><Stop size={17} weight="fill" aria-hidden="true" /> Stop</>
+              : <><Microphone size={19} weight="regular" aria-hidden="true" /> Voice</>}
+          </button>
+        </div>
+        {recording && (
+          <button
+            onClick={cancelVoice}
+            data-testid={`voice-cancel-${t.id}`}
+            title="Discard recording"
+            aria-label="Discard recording"
+            className={GLASS_ICON_BTN}
+          >
+            <X size={18} weight="bold" aria-hidden="true" />
+          </button>
+        )}
+      </div>
+    )}
+
+    {reopenBlock("")}
+
+    </div>
+
+    {/* MW-16 — the plan and the trail live OUTSIDE both breakpoint bodies,
+        because there is only ever one of each and the mobile layout needs
+        them too. They used to sit inside the desktop body, which is
+        `hidden lg:block`: the phone's 'Log update or hand off' bumped
+        trailOpenTrigger, TaskTrail dutifully opened its form, and the form
+        rendered inside a display:none subtree — MW-09 all over again, the
+        one control that records what happened inert on phones. Shared here,
+        both triggers open the same visible form. */}
+    <div className="space-y-6 px-4 pb-6 lg:px-7 lg:pb-8">
+      {!workLocked && onThisTask && (
+        <ExecutionPlan t={t} onChange={onChange} onPatched={applyPatched} members={members} roleOptions={roleOptions} />
+      )}
+      {/* ASK-28 TK-01 — the person who asked for this task isn't on it: the
+          status, plan and completion controls belong to whoever does it
+          (the server refuses a plan from anyone else), so say what they CAN
+          do here instead of showing controls. */}
+      {!rights.work && (
+        <p className="text-sm text-slate-500" data-testid={`requester-hint-${t.id}`}>
+          {t.approver_id === user?.id
+            ? `You approve this task, so ${t.assignee_name || "the team"} does the work. Leave a note below to follow up.`
+            : waitedOnMe
+            ? `${t.assignee_name || "The team"} is waiting on you for this task. Leave a note below with what they need.`
+            : `${t.assignee_name || "Your team"} is doing this task. Leave a note below to follow up.`}
+        </p>
+      )}
+      <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} noteOnly={noteOnly} />
+
+      {/* ASK-28 — Delete sits under "Log update or hand off", full width like
+          it, and asks first in the drawer's own glass. ASK-29: the same
+          gradient pill as the navy one, in maroon with white type. */}
+      {canDelete && (
+        <>
+          <button type="button" onClick={() => setConfirmDelete(true)}
+            data-testid={`drawer-delete-task-${t.id}`}
+            className={`-mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-pill text-[15px] font-medium ${MAROON_PILL}`}>
+            <Trash size={17} weight="bold" aria-hidden="true" /> Delete task
+          </button>
+          <AlertDialog open={confirmDelete} onOpenChange={(o) => { if (!deleting) setConfirmDelete(o); }}>
+            <AlertDialogContent data-testid={`drawer-delete-dialog-${t.id}`}
+              className="max-w-md gap-5 rounded-[1.75rem] border-0 bg-[linear-gradient(165deg,hsl(0_0%_96%),hsl(0_0%_91%))] p-6 shadow-[0_30px_80px_-20px_hsl(0_0%_0%/0.45)] sm:rounded-[1.75rem]">
+              <div className="flex items-start gap-4">
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-red-50 text-red-600 ring-1 ring-inset ring-red-100">
+                  <Trash size={22} weight="duotone" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 pt-0.5">
+                  <AlertDialogTitle className="text-lg font-semibold text-slate-900">Delete this task?</AlertDialogTitle>
+                  <AlertDialogDescription className="mt-1.5 text-sm leading-relaxed text-slate-600">
+                    “{t.title}” will be deleted permanently. It can no longer be opened or accessed by anyone, and this cannot be undone.
+                  </AlertDialogDescription>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <AlertDialogCancel disabled={deleting} data-testid={`drawer-delete-cancel-${t.id}`}
+                  className={`mt-0 h-11 rounded-pill border-0 px-5 text-sm font-medium text-slate-700 hover:bg-white ${GLASS_PILL}`}>
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction disabled={deleting} data-testid={`drawer-delete-confirm-${t.id}`}
+                  /* preventDefault keeps the dialog open while the request
+                     runs; deleteTask closes it once the server agrees. */
+                  onClick={(e) => { e.preventDefault(); deleteTask(); }}
+                  className={`h-11 rounded-pill px-5 text-sm font-medium disabled:opacity-60 ${MAROON_PILL}`}>
+                  {deleting ? "Deleting…" : "Yes, delete task"}
+                </AlertDialogAction>
+              </div>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      )}
+    </div>
+
+    {/* Mobile PWA (2026-09-14) — the phone's action bar. Sticky at the foot
+        of the drawer's scroller, above the home indicator, so Complete is
+        always one thumb away instead of mid-scroll above the plan. */}
+    {!isTerminal(t) && !workLocked && !signoffPending && rights.work && (
+      <div data-testid={`task-actions-m-${t.id}`}
+        className="sticky bottom-0 z-10 border-t border-white/70 bg-[hsl(0_0%_93%/0.92)] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl lg:hidden">
+        <div className="flex items-center gap-2">
+          {rights.finish ? (
+            <button type="button" onClick={complete} data-testid={`complete-m-${t.id}`}
+              title={t.evidence_required && !hasEvidence ? "Add proof first" : "Mark as complete"}
+              className={`flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-pill px-4 text-[15px] font-medium ${t.evidence_required && !hasEvidence ? `${GLASS_PILL} text-slate-500` : INK_PILL}`}>
+              <CheckCircle size={18} weight="fill" aria-hidden="true" /> Complete
+            </button>
+          ) : (
+            <p className="min-w-0 flex-1 text-[13px] leading-snug text-slate-500" data-testid={`finish-hint-m-${t.id}`}>
+              {t.assignee_name || "The doer"} marks this done.
+            </p>
+          )}
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+            data-testid={`photo-m-${t.id}`} aria-label="Attach a photo"
+            className={`grid h-12 w-12 shrink-0 place-items-center rounded-full text-slate-700 disabled:opacity-40 ${GLASS_PILL}`}>
+            <Camera size={18} aria-hidden="true" />
+          </button>
+          <button type="button" onClick={() => evidenceRef.current?.click()} disabled={uploading}
+            data-testid={`upload-file-m-${t.id}`} aria-label="Upload a file"
+            className={`grid h-12 w-12 shrink-0 place-items-center rounded-full text-slate-700 disabled:opacity-40 ${GLASS_PILL}`}>
+            <FileArrowUp size={18} aria-hidden="true" />
+          </button>
+          <button type="button" onClick={toggleVoice} data-testid={`voice-m-${t.id}`}
+            aria-label={recording ? "Stop recording and send" : "Record a voice reply"}
+            className={`grid h-12 w-12 shrink-0 place-items-center rounded-full ${recording ? "bg-kr-accent text-white" : `text-slate-700 ${GLASS_PILL}`}`}>
+            {recording ? <Stop size={18} weight="fill" aria-hidden="true" /> : <Microphone size={18} aria-hidden="true" />}
+          </button>
+          {recording && (
+            <button type="button" onClick={cancelVoice} data-testid={`voice-cancel-m-${t.id}`} aria-label="Discard recording"
+              className={`grid h-12 w-12 shrink-0 place-items-center rounded-full text-slate-700 ${GLASS_PILL}`}>
+              <X size={18} weight="bold" aria-hidden="true" />
+            </button>
+          )}
+        </div>
+      </div>
+    )}
+        </div>
+      </SheetContent>
+    </Sheet>
+    </>
+  );
+  if (drawerOnly) return drawer;
 
   return (
     /* KR-11.2 — the red left stripe is GONE on the founder's call ("don't
@@ -1146,687 +2458,220 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
        colour bar on every late card turned a grid of them into a barcode. */
     <div id={`task-card-${t.id}`} data-testid={`mywork-task-${t.id}`}
       data-open={expanded ? "true" : "false"}
-      data-tier={tier || "medium"}
-      className={`kr-bento flex h-full min-w-0 flex-col overflow-hidden ${highlight ? "ring-2 ring-kr-ink ring-offset-2 ring-offset-background" : ""}`}>
+      data-tier={prio}
+      role="button" tabIndex={0}
+      aria-expanded={expanded}
+      aria-controls={`task-card-body-${t.id}`}
+      /* MW-20 — fromCard() is the whole fix, and it has to be a DOM test.
+         The drawer's <Sheet> is rendered inside this component, and React
+         sends synthetic events through a PORTAL along the component tree, not
+         the DOM tree — so a click anywhere in the drawer arrived here and
+         toggled the card shut (10 of 10 clicks; the drawer is the only place
+         a task can be worked, so nothing in it was usable). The same path hit
+         onKeyDown, where preventDefault() on " " meant you could not type a
+         space into an update note.
+         `contains` asks a question about the DOM, where the portal really is
+         a sibling of this card rather than a descendant, so a drawer event
+         fails it and a genuine card event passes. Cheaper and harder to
+         forget than stopPropagation on every control inside the drawer. */
+      onClick={(e) => { if (fromCard(e)) toggleCard(); }}
+      onKeyDown={(e) => {
+        if (!fromCard(e)) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          toggleCard();
+        }
+      }}
+      className={`kr-bento flex h-full min-w-0 flex-col overflow-hidden cursor-pointer ${highlight ? "ring-2 ring-kr-ink ring-offset-2 ring-offset-background" : ""}`}>
       <div className="flex flex-1 min-h-0">
         <div className="flex-1 min-w-0 flex flex-col">
 
-      {/* U7-05.2: SUMMARY ROW -- the only thing shown when card is collapsed.
-          Click-target on the whole row toggles expand. Right-side quick actions
-          stopPropagation so they don't collapse when clicked. */}
-      <div className={`group flex w-full flex-1 items-stretch transition-colors ${selected ? "bg-kr-ink/[0.05]" : ""}`}>
-        {/* U7-05.3: bulk-select checkbox. Sits outside the expand button
-            so clicking it doesn't toggle the card. Only rendered when
-            onToggleSelect is passed (skip in TaskDetailDialog and other
-            contexts where bulk doesn't apply). */}
-        {onToggleSelect && (
-          <label
-            className="flex items-center px-3 pl-4 cursor-pointer shrink-0"
-            onClick={(e) => e.stopPropagation()}
-            title={selected ? "Deselect" : "Select for bulk action"}
-          >
-            <input
-              type="checkbox"
-              checked={selected}
-              onChange={onToggleSelect}
-              data-testid={`bulk-select-${t.id}`}
-              className="w-4 h-4 rounded border-nm-edge/40 accent-kr-ink cursor-pointer"
-              aria-label={`Select task ${t.title}`}
-            />
-          </label>
-        )}
-      <button
-        type="button"
-        onClick={() => (controlled ? onToggleOpen?.() : setSelfExpanded((v) => !v))}
-        className="w-full flex-1 min-w-0 p-4 text-left"
-        aria-expanded={expanded}
-        aria-controls={`task-card-body-${t.id}`}
-        data-testid={`task-summary-${t.id}`}
-      >
-        <div className="flex items-start gap-3">
-          <CaretDown
-            size={14}
-            weight="bold"
-            className={`text-muted-foreground shrink-0 mt-1 transition-transform ${expanded ? "" : "-rotate-90"}`}
-            aria-hidden="true"
-          />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start gap-2 flex-wrap">
-              {/* KM-28 — one size, normal weight, on the founder's call. The
-                  title used to be set by priority (lg / base / sm, all bold),
-                  which turned the LIST into a chart: three type sizes and three
-                  box heights competing down the column, so scanning it meant
-                  reading shape before words. Priority is still on the card — it
-                  is the chip right beside this line — and a chip is a better
-                  place for it than the size of everything else. */}
-              <p className="min-w-[180px] flex-1 text-base font-normal leading-snug">
-                {t.title}
-              </p>
-              {/* KR-11.2 — the priority chip goes monochrome. The tile's
-                  SIZE now says high/medium/low, so a red "High" beside it was
-                  the same signal twice, and the louder of the two. It stays
-                  as a word because size is a relative cue and a lone card in
-                  a filtered view has nothing to be relative to. */}
-              {/* KM-29 — dropped when the list is already filtered to it.
-                  Under "Medium" every card says Medium: a column of the same
-                  word telling you nothing you did not just ask for, and it is
-                  exactly the space the founder wanted back. */}
-              {!hidePrio && (
-                <span data-testid={`priority-chip-${t.id}`}
-                  className="shrink-0 rounded-pill border-[0.5px] border-kr-ink/55 px-2 py-0.5 text-[11px] font-medium capitalize text-foreground/70">
-                  {t.priority || "medium"}
-                </span>
-              )}
-              {/* KM-29 — the status pill JOINS this row instead of opening a
-                  second one under it. Priority, progress and lateness are three
-                  statements of the same kind about one task; splitting them
-                  across two rows made every card a line taller for no reading
-                  benefit, which is the height the founder asked to reclaim. */}
-              {!hideStatus && (
-                <span data-testid={`status-chip-${t.id}`}
-                  className={`shrink-0 rounded-pill px-2 py-0.5 text-[11px] font-medium ${
-                    terminal ? "bg-kr-ink text-white"
-                    : awaitingApproval ? "border-[0.5px] border-kr-ink text-foreground"
-                    : "bg-nm-sunken text-muted-foreground"
-                  } ${expanded ? "hidden lg:inline-block" : ""}`}>
-                  {STATUS_LABEL[t.status] || t.status}
-                </span>
-              )}
-              {t.source === "escalation" && (
-                <span className="shrink-0 rounded-pill bg-kr-accent px-2 py-0.5 text-[11px] font-medium text-white">
-                  Escalation
-                </span>
-              )}
-              {/* KM-7 — Overdue rides WITH the priority chip, not on the meta
-                  line below it. They are the same kind of statement about the
-                  task — how urgent, how late — and splitting them across two
-                  rows made a late task three lines tall for two short words. */}
-              {overdue && !terminal && (
-                <span data-testid={`overdue-${t.id}`}
-                  className="shrink-0 rounded-pill bg-kr-accent px-2 py-0.5 text-[11px] font-medium text-white">
-                  Overdue
-                </span>
-              )}
-            </div>
-            <div className="flex items-center flex-wrap gap-2 mt-1.5 text-xs">
-              {t.due_date && !overdue && (
-                <span className="text-muted-foreground">
-                  due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short" })}
-                </span>
-              )}
-              {/* U7-05.1: stage chip becomes tiny inline pill in summary row.
-                  Icon-first, no bg fight with the title. Click still works. */}
-              {t.workflow_summary?.id && (
-                <a
-                  href={`/my-work?view=workflows&type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
-                  onClick={(e) => e.stopPropagation()}
-                  data-testid={`wf-chip-${t.id}`}
-                  className="inline-flex items-center gap-1 hover:underline"
-                  title={`Open workflow: ${t.workflow_summary.title}`}
-                >
-                  <FlowArrow size={11} weight="bold" />
-                  <span className=" text-[10px]">
-                    {(t.workflow_summary.stage || "").replace(/_/g, " ")}
-                  </span>
-                </a>
-              )}
-              {showAssignee && t.assignee_name && (
-                <span className="inline-flex items-center gap-1 text-muted-foreground">
-                  <UserCircle size={11} weight="bold" /> {t.assignee_name}
-                </span>
-              )}
-              {(t.attachment_count || 0) > 0 && (
-                <span className="inline-flex items-center gap-1 text-muted-foreground">
-                  <Paperclip size={11} weight="bold" /> {t.attachment_count}
-                </span>
-              )}
-              {t.source === "handoff" && <span className="rounded-pill border-[0.5px] border-kr-ink/55 px-1.5 py-0.5 text-[10px] font-medium">Handoff</span>}
-            </div>
-          </div>
-        </div>
-      </button>
-      </div>
+      {/* ASK-25 (2026-09-13): the card face, rebuilt on the founder's
+          reference card. The layout ASK-19 set stays — checkbox top-left,
+          chips pinned to the bottom by mt-auto — and the grid cell still owns
+          the height, so the card is the length it was.
+          - Priority is the STRIPE and nothing else: red high, blue medium,
+            grey low. The "Medium" word is gone. Colour alone is invisible to
+            a screen reader, so the stripe also says it in sr-only text.
+          - Due date is a pill at the top-right.
+          - Status leads with a progress ring; Overdue, Escalation, Handoff and
+            the workflow stage wear the same pill in their own tints.
+          - Assignees are faces at the bottom-right — photos from Team,
+            initials until one is set. */}
+      <div className={`group relative flex w-full flex-1 flex-col py-3.5 pl-5 pr-3.5 transition-colors ${selected ? "bg-kr-ink/[0.05]" : ""}`}>
+        <span aria-hidden="true" data-testid={`priority-stripe-${t.id}`} data-priority={prio}
+          className={`absolute bottom-3.5 left-2 top-3.5 w-1 rounded-full ${PRIO_STRIPE[prio]}`} />
+        <span className="sr-only">{PRIO_LABEL[prio]} priority.</span>
 
-      {/* KR-14.22 · MOBILE EXPANDED BODY — reference-driven layout for the
-          task expanded view on phones. Uses the same handlers/state as the
-          desktop body below; the desktop body is `hidden lg:block` from
-          here on. Rendered only when `expanded`. */}
-      {expanded && (
-      <div className="px-4 pb-5 space-y-5 border-t border-nm-edge/40 pt-4 lg:hidden" data-testid={`task-body-m-${t.id}`}>
-        {/* KR-14.23 — a single accent status pill leads the body. The
-            summary row above already shows the full meta row (status +
-            due + context), so repeating it here made the pill look
-            doubled on tasks that had all three fields. */}
-        <div>
-          <span className={`inline-flex rounded-pill px-2.5 py-0.5 text-xs font-medium ${
-            overdue && !terminal ? "bg-kr-accent text-white"
-            : "bg-orange-50 text-kr-accent"
-          }`}>
-            {STATUS_LABEL[t.status] || t.status}
-          </span>
-        </div>
-
-        {/* Description card (orange) */}
-        {t.description && (
-          <div className="flex items-start gap-3 rounded-cardlg bg-orange-50/70 p-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-tile bg-orange-100 text-kr-accent">
-              <File size={18} weight="regular" />
-            </span>
-            <p className="text-sm leading-relaxed">{t.description}</p>
-          </div>
-        )}
-
-        {/* Info card — the top row (workflow / due date) only renders when
-            there is something to show; the created-ago footnote only gets a
-            top border when the top row is present. Prevents the hollow
-            curve above a lone "Created X ago" line. */}
-        {(t.workflow_summary?.title || t.due_date || t.created_at) && (() => {
-          const hasTop = !!(t.workflow_summary?.title || t.due_date);
-          return (
-            <div className="rounded-cardlg border border-nm-edge/40 p-3">
-              {hasTop && (
-                <div className="flex items-center gap-2">
-                  {t.workflow_summary?.title && (
-                    <>
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-violet-50 text-violet-500">
-                        <Buildings size={14} weight="regular" />
-                      </span>
-                      <span className="min-w-0 truncate text-sm">{t.workflow_summary.title}</span>
-                    </>
-                  )}
-                  {t.workflow_summary?.title && t.due_date && (
-                    <span className="mx-1 h-5 w-px shrink-0 bg-nm-edge/60" />
-                  )}
-                  {t.due_date && (
-                    <>
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-green-50 text-green-600">
-                        <ClockCounterClockwise size={14} weight="regular" />
-                      </span>
-                      <span className="min-w-0 truncate text-sm">
-                        Due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}
-                      </span>
-                    </>
-                  )}
-                </div>
-              )}
-              {t.created_at && (
-                <div className={`flex items-center gap-1 text-xs text-muted-foreground ${hasTop ? "mt-3 border-t border-nm-edge/30 pt-2" : ""}`}>
-                  <span aria-hidden="true" className="h-1 w-1 rounded-full bg-muted-foreground/60" />
-                  Created {timeAgo(t.created_at)}
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
-        {/* KM-5 · STATUS — ONE ROW, A SEGMENTED BAR.
-            KM-6 note: `blocked` (pending approval) still matches no segment —
-            it is a gate the approver controls, not a state the assignee sets.
-            KM-3 put five pills in a flex-wrap, which at 343px could not hold
-            them and broke onto a second line — and five states genuinely do
-            not fit one row, so "Waiting" goes on the founder's call. Four
-            remain and they are the states work actually moves through.
-            It is a segmented bar now rather than five loose chips: a single
-            .kr-pressed track with four equal segments, and the selected one
-            fills with ITS OWN status colour, so choosing a status visibly
-            moves the coloured pill along the track. Not Started stays the
-            default and has no segment — it is the absence of a choice, and
-            tapping the active segment returns to it.
-            No transition utility: the track's children swap fills, and the
-            selected segment also swaps against .kr-pressed's shadow, which is
-            not interpolable against an outset pair. */}
-        {!terminal && !awaitingApproval && (
-          <div className="kr-pressed flex items-center gap-1 rounded-pill p-1" role="group"
-               aria-label="Task status" data-testid={`status-pills-m-${t.id}`}>
-            {M_STATUS_PILLS.map((sp) => {
-              const on = t.status === sp.key;
-              return (
-                <button
-                  key={sp.key}
-                  type="button"
-                  onClick={() => setStatus(sp.key)}
-                  aria-pressed={on}
-                  data-testid={`status-pill-m-${sp.key}-${t.id}`}
-                  /* text-[10px] and px-0.5: four segments share 323px of a
-                     343px row, so each label gets ~76px and "Not Started" is
-                     the one that decides the size. */
-                  className={`flex h-9 min-w-0 flex-1 basis-0 items-center justify-center rounded-pill px-0.5 text-[10px] leading-tight ${
-                    /* KM-6 — the selected segment is RAISED, not a flat
-                       swatch: .kr-pop supplies the lift and the colour
-                       utility overrides its white ground (utilities layer
-                       beats components), so the moving pill reads as a
-                       physical thing sitting in the track. */
-                    on ? `kr-pop ${sp.on} font-semibold` : "text-foreground/60"
-                  }`}
-                >
-                  <span className="truncate">{sp.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* KM-3 — THE REAL COMPONENT, not a lookalike. The two buttons that
-            used to sit here ("Add manually" / "Ask Dex") were rebuilt as
-            plain markup during the mobile pass and shipped with NO onClick at
-            all, so both were inert: Dex never drafted anything and manual
-            never opened a field. ExecutionPlan already owns that whole
-            behaviour — generate() posts to /execution-plan/generate,
-            startManual() seeds one empty step, and the editor below it adds,
-            edits, reorders, removes and persists. Rendering it restores the
-            AI draft, the manual path, and "add another step" in one move,
-            with no second copy of the logic to drift. */}
-        {!awaitingApproval && (
-          <ExecutionPlan t={t} onChange={onChange} members={members} roleOptions={roleOptions} />
-        )}
-
-        {/* Actions row — Complete + attach controls, now below the two
-            plan-building buttons above. */}
-        {!isTerminal(t) && !awaitingApproval && (
-          /* KM-6 — flex-wrap. Cancel joining this row made five controls
-             (Complete, Cancel, photo, file, voice) share 343px, and Complete
-             was truncating to "Comp…". Wrapping lets the two endings hold the
-             first line and the three attachment circles drop to the second. */
-          <div className="flex items-center gap-2">
-            {/* KM-7 — Complete and Cancel are ONE welded control, and Cancel is
-                icon-only. Five worded/round controls could not share 343px, so
-                KM-6 wrapped the row onto two lines; dropping the word "Cancel"
-                and joining the two endings into a single .kr-pop group buys
-                back enough width for the whole row to fit again.
-                Cancel keeps a real aria-label and title — an icon-only
-                destructive action with no name is not a control, it is a
-                guess. */}
-            <div className="kr-pop flex shrink-0 items-center gap-1 rounded-pill p-1"
-                 role="group" aria-label="Finish this task">
-              <button
-                onClick={complete}
-                data-testid={`complete-m-${t.id}`}
-                title={t.evidence_required && !hasEvidence ? "Add proof first" : "Mark as complete"}
-                className="flex h-9 items-center gap-1.5 rounded-pill bg-kr-ink px-3.5 text-xs font-medium text-white"
-              >
-                <CheckCircle size={13} weight="bold" aria-hidden="true" /> Complete
-              </button>
-              <button
-                onClick={() => setStatus("cancelled")}
-                data-testid={`cancel-m-${t.id}`}
-                aria-label="Cancel this task"
-                title="Cancel this task"
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-foreground/70"
-              >
-                <XCircle size={15} weight="bold" aria-hidden="true" />
-              </button>
-            </div>
-            <button
-              onClick={() => fileRef.current?.click()}
-              disabled={uploading}
-              data-testid={`photo-m-${t.id}`}
-              aria-label="Attach a photo"
-              className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground disabled:opacity-40"
+        {/* TOP ROW — checkbox, title, due date */}
+        <div className="flex min-w-0 items-start gap-2.5">
+          {onToggleSelect && (
+            /* The negative margins and matching padding grow the hit area to
+               44px tall without moving the box (MW-22: it was 26px, under the
+               phone's touch floor). The right side stays tight so a tap on
+               the title still opens the card. */
+            <label
+              className="relative -my-[13px] -ml-[13px] -mr-1 grid shrink-0 cursor-pointer place-items-center py-[13px] pl-[13px] pr-1"
+              onClick={(e) => e.stopPropagation()}
+              title={selected ? "Deselect" : "Select for bulk action"}
             >
-              <Camera size={16} weight="regular" />
-            </button>
-            <button
-              onClick={() => evidenceRef.current?.click()}
-              disabled={uploading}
-              data-testid={`upload-file-m-${t.id}`}
-              aria-label="Upload a file"
-              className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground disabled:opacity-40"
-            >
-              <FileArrowUp size={16} weight="regular" />
-            </button>
-            <button
-              onClick={toggleVoice}
-              data-testid={`voice-m-${t.id}`}
-              aria-label={recording ? "Stop recording" : "Record voice reply"}
-              className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${recording ? "bg-kr-accent text-white" : "kr-pop text-foreground"}`}
-            >
-              {recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="regular" />}
-            </button>
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="flex items-center justify-between border-t border-nm-edge/40 pt-3">
-          <span className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-nm-sunken">
-              <XCircle size={12} weight="regular" />
-            </span>
-            No activity yet
-          </span>
-          <button
-            type="button"
-            data-testid={`log-update-m-${t.id}`}
-            className="flex items-center gap-2 text-sm text-muted-foreground"
-          >
-            <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-orange-50 text-kr-accent">
-              <Plus size={12} weight="bold" />
-            </span>
-            Log update or hand off
-          </button>
-        </div>
-      </div>
-      )}
-
-      {/* EXPANDED BODY -- everything else lives here. Rendered only when open. */}
-      {expanded && (
-      <div id={`task-card-body-${t.id}`} className="hidden px-4 pb-4 space-y-3 border-t border-nm-edge/40 pt-3 lg:block">
-      {t.description && <p className="text-sm text-muted-foreground">{t.description}</p>}
-      {showAssignee && !isOp && (
-        <p className="label-mono text-muted-foreground flex items-center gap-1" data-testid={`assignee-line-${t.id}`}>
-          <UserCircle size={13} weight="bold" />
-          {t.assignee_name ? t.assignee_name : (t.assignee_role ? `${t.assignee_role} team` : "Unassigned")}
-        </p>
-      )}
-      {/* U7-05.4: AI-priority bars get a "why?" tooltip on the container
-          so users understand what drove the ranking. */}
-      {scores && (
-        <div title="AI ranker: higher score = more urgent to open next. Bars show what drove it -- priority signal, overdue, workflow blockage, complaints touched." data-testid={`ai-scores-${t.id}`}>
-          <PriorityScoreBars scores={scores} />
-        </div>
-      )}
-
-      {isOp && (
-        <div className="flex flex-wrap items-center gap-2" data-testid={`op-meta-${t.id}`}>
-          {t.op_category && <span className="inline-flex items-center gap-1 nm-tile px-2 py-0.5 text-xs font-medium"><Tag size={11} weight="bold" /> {t.op_category}</span>}
-          {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
-          {t.support_name && <span className="text-xs text-muted-foreground">+ {t.support_name}</span>}
-          {t.approval_required && (
-            <span data-testid={`op-approval-${t.id}`} className={`inline-flex items-center gap-1 nm-tile px-2 py-0.5 text-xs font-medium ${t.approval_status === "approved" ? "bg-kr-ink text-white" : t.approval_status === "rejected" ? "bg-kr-accent text-white" : "bg-nm-sunken"}`}>
-              <ShieldCheck size={11} weight="bold" /> {t.approval_status === "approved" ? "Approved" : t.approval_status === "pending" ? "Pending approval" : t.approval_status === "rejected" ? "Changes requested" : `${t.approver_name || "Approval"} required`}
-            </span>
+              <input
+                type="checkbox"
+                checked={selected}
+                onChange={onToggleSelect}
+                data-testid={`bulk-select-${t.id}`}
+                className="peer h-[18px] w-[18px] cursor-pointer appearance-none rounded-[5px] border-[1.5px] border-slate-300 bg-[#fff] transition-colors checked:border-kr-ink checked:bg-kr-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/40"
+                aria-label={`Select task ${t.title}`}
+              />
+              <Check size={12} weight="bold" aria-hidden="true"
+                className="pointer-events-none absolute hidden text-white peer-checked:block" />
+            </label>
           )}
-        </div>
-      )}
-
-      {/* Full workflow chip in the expanded body -- carries the full title
-          alongside the stage, since we only show the stage snippet in
-          the summary row. */}
-      {t.workflow_summary && t.workflow_summary.id && (
-        <div>
-          <a
-            href={`/my-work?view=workflows&type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
-            data-testid={`wf-chip-full-${t.id}`}
-            className="inline-flex items-center gap-1.5 nm-tile px-2.5 py-1 text-xs font-mono bg-nm-sunken hover:bg-accent transition-colors"
-            title={`Open workflow: ${t.workflow_summary.title}`}
-          >
-            <FlowArrow size={12} weight="bold" aria-hidden="true" className="text-muted-foreground" />
-            <span className="font-medium text-[10px]">
-              {(t.workflow_summary.title || "Workflow").slice(0, 40)}
-            </span>
-            <span className="text-muted-foreground">·</span>
-            <span className=" text-[10px]">
-              {(t.workflow_summary.stage || "").replace(/_/g, " ")}
-            </span>
-          </a>
-        </div>
-      )}
-
-      {/* U7-05.EXP polish (2026-08-17): one combined meta line
-          replacing separate "Due X" and "Updated Y" rows. Also killed
-          the "Full details" button -- opened a Dialog that duplicated
-          this expanded body (dialog was needed BEFORE the collapse
-          existed; not now). Owner delete moves to a small more-menu
-          in the actions row below. */}
-      {(t.due_date || t.updated_at) && (
-        <p className="label-mono text-muted-foreground flex items-center gap-2 flex-wrap" data-testid={`task-meta-${t.id}`}>
-          {t.due_date && (
-            <span className="flex items-center gap-1">
-              <ClockCounterClockwise size={12} weight="bold" />
-              Due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}
-            </span>
-          )}
-          {t.due_date && t.updated_at && <span className="text-muted-foreground/50">·</span>}
-          {t.updated_at && (
-            <span
-              className="flex items-center gap-1"
-              data-testid={`task-updated-${t.id}`}
-              title={fullTime(t.updated_at)}
-            >
-              {t.last_action || "Updated"} {timeAgo(t.updated_at)}
-            </span>
-          )}
-        </p>
-      )}
-
-      {/* U7-05.EXP: progress bar without the redundant "0%" label +
-          "Progress" caption. Bar visually conveys the value; a numeric
-          label was pure noise. Status change drives progress, so the
-          separate "Set progress" dropdown is gone too. */}
-      {!terminal && !awaitingApproval && (
-        <div className="space-y-2">
-          <div className="h-2 overflow-hidden rounded-pill nm-inset" title={`${t.progress || 0}% complete`} aria-label={`Progress: ${t.progress || 0}%`}>
-            <div className="h-full rounded-pill bg-foreground/70 transition-all" style={{ width: `${t.progress || 0}%` }} data-testid={`progress-bar-${t.id}`} />
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="label-mono text-muted-foreground">Status</label>
-            <select data-testid={`status-select-${t.id}`} value={t.status === "blocked" ? "todo" : t.status} onChange={(e) => setStatus(e.target.value)} className={selCls}>
-              {STATUS_OPTIONS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-            </select>
-            {/* U7-05.EXP: "Set progress" tucked behind a small toggle for
-                the rare team that manages progress separately from status.
-                Default hidden -- one less dropdown for the 95% of users. */}
-            <details className="ml-1">
-              <summary className="label-mono text-muted-foreground cursor-pointer hover:text-foreground">
-                Set % manually
-              </summary>
-              <select data-testid={`progress-select-${t.id}`} value={PROGRESS_OPTIONS.includes(t.progress) ? t.progress : 0} onChange={(e) => setProgress(e.target.value)} className={`${selCls} mt-1`}>
-                {PROGRESS_OPTIONS.map((p) => <option key={p} value={p}>{p}%</option>)}
-              </select>
-            </details>
-          </div>
-        </div>
-      )}
-
-      {(() => {
-        const beUrl = process.env.REACT_APP_BACKEND_URL;
-        const atts = t.attachments || [];
-        const refs = atts.filter((a) => a.kind === "reference");
-        const proof = atts.filter((a) => a.kind !== "reference");
-        const insights = t.reference_insights || [];
-        const isImg = (a) => a.kind === "photo" || (a.content_type || "").startsWith("image/");
-        const isAudio = (a) => a.kind === "voice" || (a.content_type || "").startsWith("audio/");
-        const renderAtt = (a) => (
-          isImg(a)
-            ? <button key={a.url} type="button" onClick={() => setLightbox(`${beUrl}${a.url}`)}
-                className="relative w-20 h-20 nm-tile overflow-hidden group" title="Click to view full image"
-                data-testid={`att-photo-${t.id}-${a.url}`}>
-                <img src={`${beUrl}${a.url}`} alt={a.filename || "attachment"} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
-                <span className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
-                  <MagnifyingGlassPlus size={20} weight="bold" className="text-white" />
-                </span>
-              </button>
-            : isAudio(a)
-              ? <audio key={a.url} controls preload="none" src={`${beUrl}${a.url}`} className="h-9" data-testid={`att-voice-${t.id}-${a.url}`} />
-              : <a key={a.url} href={`${beUrl}${a.url}`} target="_blank" rel="noreferrer" data-testid={`att-file-${t.id}-${a.url}`}
-                  className="inline-flex items-center gap-1.5 nm-tile px-2.5 py-1.5 text-xs font-mono hover:bg-accent transition-colors max-w-[180px]">
-                  <File size={13} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
-                </a>
-        );
-        return (
-          <>
-            {refs.length > 0 && (
-              <div className="nm-inset mt-3 p-3" data-testid={`reference-block-${t.id}`}>
-                <p className="label-mono text-brand-blue flex items-center gap-1.5 mb-2">
-                  <Paperclip size={13} weight="bold" /> Reference material · {refs.length}
-                </p>
-                <div className="flex flex-wrap gap-2 items-center">{refs.map(renderAtt)}</div>
-                {insights.length > 0 && (
-                  <div className="mt-2 flex items-start gap-1.5" data-testid={`reference-insight-${t.id}`}>
-                    <Lightbulb size={13} weight="fill" className="text-brand-yellow shrink-0 mt-0.5" />
-                    <p className="text-xs text-muted-foreground line-clamp-2">{insights[insights.length - 1].summary}</p>
-                  </div>
-                )}
-              </div>
-            )}
-            {proof.length > 0 && (
-              <div className="mt-3 nm-inset p-3" data-testid={`proof-block-${t.id}`}>
-                <p className="label-mono text-muted-foreground flex items-center gap-1.5 mb-2">
-                  <Paperclip size={13} weight="bold" /> Proof of work · {proof.length}
-                </p>
-                <div className="flex flex-wrap gap-2 items-center">{proof.map(renderAtt)}</div>
-              </div>
-            )}
-          </>
-        );
-      })()}
-
-      <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
-        <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-3xl p-2" data-testid={`photo-lightbox-${t.id}`}>
-          <DialogHeader>
-            <DialogTitle className="sr-only">Proof photo</DialogTitle>
-          </DialogHeader>
-          {lightbox && <img src={lightbox} alt="proof full" className="w-full h-auto max-h-[80vh] object-contain" />}
-        </DialogContent>
-      </Dialog>
-
-      {canApprove && awaitingApproval && (
-        <div className="flex flex-wrap gap-2 mt-4 nm-tile bg-caution-50/40 p-3" data-testid={`approval-actions-${t.id}`}>
-          <span className="w-full label-mono text-muted-foreground">This task needs your approval before {t.assignee_name || "the assignee"} can start work.</span>
-          {t.approval_status === "rejected" && t.rejection_reason && <span className="w-full text-xs text-muted-foreground">Previously requested: {t.rejection_reason}</span>}
-          <button onClick={approveTask} data-testid={`approve-${t.id}`} className="kr-lift flex items-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all">
-            <CheckCircle size={16} weight="bold" /> Approve
-          </button>
-          <button onClick={rejectTask} data-testid={`reject-${t.id}`} className="flex items-center gap-2 rounded-pill border border-kr-accent px-4 py-2.5 text-sm font-medium text-kr-accent transition-colors hover:bg-kr-accent/10">
-            <WarningCircle size={16} weight="bold" /> Request changes
-          </button>
-          <button onClick={clarifyTask} data-testid={`clarify-${t.id}`} className="nm-btn flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all">
-            <ChatText size={16} weight="bold" /> Ask clarification
-          </button>
-        </div>
-      )}
-
-      {lockedForAssignee && (
-        <div className="flex items-start gap-2 mt-4 nm-tile bg-nm-sunken p-3" data-testid={`approval-locked-${t.id}`}>
-          <LockKey size={18} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0 text-muted-foreground" />
-          <div>
-            <p className="text-sm font-bold uppercase tracking-tight">{t.approval_status === "rejected" ? "Changes requested" : "Awaiting approval"}</p>
-            <p className="text-xs text-muted-foreground">You can start once {t.approver_name || "the approver"} approves this task. Status, progress and the execution plan are locked until then.</p>
-            {t.approval_status === "rejected" && t.rejection_reason && <p className="mt-1 text-xs text-muted-foreground">Note: {t.rejection_reason}</p>}
-          </div>
-        </div>
-      )}
-
-      {t.evidence_required && !isTerminal(t) && !awaitingApproval && (
-        <div className={`mt-3 flex items-start gap-2 nm-tile p-2.5 ${hasEvidence ? "bg-nm-sunken" : "bg-kr-accent/8"}`} data-testid={`evidence-required-${t.id}`}>
-          {hasEvidence ? <CheckCircle size={16} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0" /> : <Info size={16} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0 text-kr-accent" />}
-          <p className="text-xs">{hasEvidence
-            ? "Proof attached — you can mark this task complete."
-            : "This task requires proof before it can be completed. Add a photo, voice note, or file below."}</p>
-        </div>
-      )}
-
-      {!isTerminal(t) && !awaitingApproval && (
-        <div className="flex flex-wrap items-center gap-2 mt-4">
-          {/* FUP-49: don't disable -- always click-through, handler shows
-              a clear toast if evidence is missing. Silent-disabled
-              buttons were the original bug. */}
-          <button onClick={complete} data-testid={`complete-${t.id}`}
-            title={t.evidence_required && !hasEvidence ? "Add a photo, voice note, or file first" : "Mark as complete"}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium nm-btn transition-all ${t.evidence_required && !hasEvidence ? "bg-nm-sunken text-muted-foreground" : "bg-kr-ink text-white"}`}>
-            <CheckCircle size={16} weight="bold" /> Complete
-          </button>
-
-          {/* U7-05.EXP: attach affordances grouped into one compact strip.
-              Was 3 separate chunky buttons ("PHOTO / UPLOAD FILE / VOICE
-              REPLY") each equal-weight to Complete -- density noise. Now
-              they share a single caption + icon-only compact buttons so
-              Complete stays visually primary and the attach set reads as
-              one concept. */}
-          <div className="flex items-center gap-1 border-l border-nm-edge/40 pl-3 ml-1">
-            <span className="label-mono text-muted-foreground mr-1 hidden sm:inline">Attach:</span>
-            <button
-              onClick={() => fileRef.current?.click()}
-              disabled={uploading}
-              data-testid={`photo-${t.id}`}
-              title="Attach a photo"
-              className="w-9 h-9 flex items-center justify-center nm-tile hover:bg-accent disabled:opacity-40"
-              aria-label="Attach a photo"
-            >
-              <Camera size={16} weight="bold" />
-            </button>
-            <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhoto} />
-            <button
-              onClick={() => evidenceRef.current?.click()}
-              disabled={uploading}
-              data-testid={`upload-file-${t.id}`}
-              title="Upload a file"
-              className="w-9 h-9 flex items-center justify-center nm-tile hover:bg-accent disabled:opacity-40"
-              aria-label="Upload a file"
-            >
-              <FileArrowUp size={16} weight="bold" />
-            </button>
-            <input ref={evidenceRef} type="file" className="hidden" onChange={onEvidence} />
-            <button
-              onClick={toggleVoice}
-              data-testid={`voice-${t.id}`}
-              title={recording ? "Stop and send voice reply" : "Record a voice reply"}
-              className={`w-9 h-9 flex items-center justify-center nm-tile transition-colors ${recording ? "bg-kr-accent text-white" : "hover:bg-accent"}`}
-              aria-label={recording ? "Stop recording" : "Record voice reply"}
-            >
-              {recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="bold" />}
-            </button>
-            {recording && (
-              <button
-                onClick={cancelVoice}
-                data-testid={`voice-cancel-${t.id}`}
-                title="Discard recording"
-                className="w-9 h-9 flex items-center justify-center nm-tile hover:bg-accent"
-                aria-label="Discard recording"
-              >
-                <X size={16} weight="bold" />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {isTerminal(t) && !awaitingApproval && (
-        <div className="flex flex-wrap gap-2 mt-4" data-testid={`reopen-actions-${t.id}`}>
-          <button onClick={reopen} data-testid={`reopen-${t.id}`} className="flex items-center gap-2 bg-nm px-4 py-2 text-sm font-medium nm-btn hover:bg-accent transition-colors">
-            <ArrowClockwise size={16} weight="bold" /> Reopen
-          </button>
-          <span className="flex items-center text-xs text-muted-foreground">Completed by mistake? Reopen brings it back to your active work.</span>
-        </div>
-      )}
-
-      {!awaitingApproval && <ExecutionPlan t={t} onChange={onChange} members={members} roleOptions={roleOptions} />}
-      <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} />
-      </div>
-      )}
-
-      {/* U7-05 dialog: reject / clarify reason (replaced window.prompt). */}
-      <Dialog open={!!reasonDialog} onOpenChange={(o) => !o && !reasonBusy && setReasonDialog(null)}>
-        <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-md" data-testid={`reason-dialog-${t.id}`}>
-          <DialogHeader>
-            <DialogTitle className="font-heading tracking-tight">
-              {reasonDialog?.kind === "reject" ? "Request changes" : "Ask for clarification"}
-            </DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground -mt-2">
-            {reasonDialog?.kind === "reject"
-              ? "Tell the assignee what needs to change before you can approve (optional)."
-              : "What do you need clarified before starting?"}
+          {/* Two lines at most. The date pill shares this row, so a title
+              gets less width than it used to; unclamped, that alone made the
+              card 14–38px taller than before (measured A/B on the same tasks),
+              and "same length as today" was the brief. The whole title is on
+              hover and at the top of the drawer. */}
+          <p data-testid={`task-summary-${t.id}`} title={t.title}
+             className="line-clamp-2 min-w-0 flex-1 text-[15px] font-semibold leading-snug text-foreground">
+            {t.title}
           </p>
+          {t.due_date && (
+            <span data-testid={`due-pill-${t.id}`} className={`${PILL} ${QUIET_PILL}`}>
+              <CalendarBlank size={11} weight="bold" aria-hidden="true" />
+              {dueLabel(t.due_date)}
+            </span>
+          )}
+        </div>
+
+        {/* BOTTOM ROW — the pills wrap on the left; the people hold the right. */}
+        <div className="mt-auto flex items-end justify-between gap-2 pt-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            {!hideStatus && (
+              <span data-testid={`status-chip-${t.id}`} className={`${PILL} ${tone.pill}`}
+                title={awaitingApproval ? "Waiting for approval before work can start" : signoffPending ? "Waiting for approval to close" : undefined}>
+                <StatusRing status={t.status} tone={tone} />
+                {STATUS_LABEL[t.status] || t.status}
+                {awaitingApproval && t.status !== "blocked" && (
+                  <LockKey size={11} weight="bold" aria-label="awaiting approval" />
+                )}
+              </span>
+            )}
+            {overdue && !terminal && (
+              <span data-testid={`overdue-${t.id}`} className={`${PILL} bg-red-50 text-red-700 ring-red-100`}>
+                <Clock size={12} weight="bold" aria-hidden="true" /> Overdue
+              </span>
+            )}
+            {/* ASK-28 TK-07 — the Waiting on flag: who or what, and for how long. */}
+            {t.status === "waiting" && !terminal && (
+              <span data-testid={`waiting-pill-${t.id}`} className={`${PILL} bg-amber-50 text-amber-800 ring-amber-100`}
+                title={t.waiting_on?.name ? `Waiting on ${t.waiting_on.name}${waitDays(t) !== null ? ` for ${waitAgo(waitDays(t))}` : ""}` : "Waiting"}>
+                <Hourglass size={12} weight="bold" aria-hidden="true" />
+                <span className="max-w-[9rem] truncate">{t.waiting_on?.name ? `Waiting on ${t.waiting_on.name}` : "Waiting"}</span>
+                {waitDays(t) !== null && (
+                  <span className="tabular-nums opacity-75">· {waitDays(t) === 0 ? "today" : `${waitDays(t)}d`}</span>
+                )}
+              </span>
+            )}
+            {/* ASK-28 TK-05 — which approval this task carries. Amber while it
+                waits on an approver; quiet while a close-stage task is still
+                being worked, so the doer knows Complete will ask first. */}
+            {apprStage && !terminal && t.approval_status !== "approved" && (
+              <span data-testid={`approval-pill-${t.id}`} data-stage={apprStage}
+                className={`${PILL} ${awaitingApproval || signoffPending ? "bg-amber-50 text-amber-800 ring-amber-100" : QUIET_PILL}`}>
+                <ShieldCheck size={12} weight="bold" aria-hidden="true" />
+                {apprStage === "start" ? "Approval to start" : signoffPending ? "Approval to close" : "Needs approval to close"}
+              </span>
+            )}
+            {t.source === "escalation" && (
+              <span data-testid={`escalation-${t.id}`} className={`${PILL} bg-orange-50 text-orange-700 ring-orange-100`}>
+                <ArrowFatLinesUp size={12} weight="bold" aria-hidden="true" /> Escalation
+              </span>
+            )}
+            {t.source === "handoff" && (
+              <span className={`${PILL} ${QUIET_PILL}`}>
+                <ArrowBendUpRight size={12} weight="bold" aria-hidden="true" /> Handoff
+              </span>
+            )}
+            {t.workflow_summary?.id && (
+              /* The only pill that is a link, so on a phone it is a 44px touch
+                 box (a[data-testid] — the MPWA-01 floor in index.css). With the
+                 tint on the link itself that box drew as a 44px-tall pill. The
+                 tint lives on the inner span instead: the link keeps the floor,
+                 the pill keeps the shape of its neighbours. */
+              <a
+                href={`/my-work?view=workflows&type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
+                onClick={(e) => e.stopPropagation()}
+                data-testid={`wf-chip-${t.id}`}
+                className="group/wf inline-flex shrink-0 items-center rounded-pill focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/40"
+                title={`Open workflow: ${t.workflow_summary.title}`}
+              >
+                <span className={`${PILL} ${QUIET_PILL} transition-colors group-hover/wf:bg-slate-500/[0.13]`}>
+                  <FlowArrow size={12} weight="bold" aria-hidden="true" />
+                  <span className="max-w-[8rem] truncate capitalize">{(t.workflow_summary.stage || "").replace(/_/g, " ")}</span>
+                </span>
+              </a>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {(t.attachment_count || 0) > 0 && (
+              <span className="inline-flex items-center gap-0.5 text-[11px] tabular-nums text-muted-foreground"
+                title={`${t.attachment_count} attached`}>
+                <Paperclip size={12} weight="bold" aria-hidden="true" /> {t.attachment_count}
+              </span>
+            )}
+            <AvatarStack people={people} size={26} testid={`assignees-${t.id}`} />
+          </div>
+        </div>
+      </div>
+
+      {drawer}
+
+      {/* U7-05 dialog: reject / clarify reason (replaced window.prompt).
+          2026-09-14, founder — on the gray glass sheet the Reassign window
+          uses: a round glass close, the glass field, a white glass Cancel and
+          the ink pill to send. */}
+      <Dialog open={!!reasonDialog} onOpenChange={(o) => !o && !reasonBusy && setReasonDialog(null)}>
+        <DialogContent className={`max-w-md gap-5 rounded-[1.75rem] p-6 sm:rounded-[1.75rem] [&>button.absolute]:hidden ${GLASS_SHEET}`} data-testid={`reason-dialog-${t.id}`}>
+          <div className="flex items-start justify-between gap-4">
+            <DialogHeader className="space-y-1.5 text-left">
+              <DialogTitle className="font-display text-xl text-neutral-900">
+                {reasonDialog?.kind === "reject" ? "Request changes" : "Ask for clarification"}
+              </DialogTitle>
+              <p className="text-sm text-neutral-600">
+                {reasonDialog?.kind === "reject"
+                  ? "Tell the assignee what needs to change before you can approve (optional)."
+                  : "What do you need clarified before starting?"}
+              </p>
+            </DialogHeader>
+            <button type="button" onClick={() => setReasonDialog(null)} disabled={reasonBusy}
+              aria-label="Close" data-testid={`reason-close-${t.id}`} className={GLASS_ICON_BTN}>
+              <X size={16} weight="bold" aria-hidden="true" />
+            </button>
+          </div>
           <textarea
             rows={4}
             value={reasonText}
             onChange={(e) => setReasonText(e.target.value)}
+            aria-label={reasonDialog?.kind === "reject" ? "What needs to change" : "Your question"}
             placeholder={reasonDialog?.kind === "reject" ? "e.g. Please add unit prices per line item." : "e.g. Which supplier's rate card do I use?"}
-            className="w-full nm-tile px-3 py-2 text-sm focus:outline-none"
+            className={`${DRAWER_FIELD} resize-none`}
             autoFocus
           />
-          <div className="flex gap-2 justify-end">
+          <div className="flex justify-end gap-2">
             <button
               type="button"
               onClick={() => setReasonDialog(null)}
               disabled={reasonBusy}
-              className="nm-tile px-4 py-2 text-sm font-medium hover:bg-accent disabled:opacity-40"
+              data-testid={`reason-cancel-${t.id}`}
+              className={`h-11 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}
             >Cancel</button>
             <button
               type="button"
               onClick={submitReason}
               disabled={reasonBusy || (reasonDialog?.kind === "clarify" && !reasonText.trim())}
-              className="kr-lift rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40"
+              data-testid={`reason-submit-${t.id}`}
+              className={`h-11 rounded-pill px-5 text-sm font-medium disabled:opacity-40 ${INK_PILL}`}
             >
               {reasonBusy ? "Sending..." : reasonDialog?.kind === "reject" ? "Request changes" : "Send question"}
             </button>
@@ -1867,47 +2712,131 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
    reason `expanded` had to be lifted out of TaskCard. */
 const TIER_OF = (t) => (t?.priority === "high" || t?.priority === "low") ? t.priority : "medium";
 
-/* KM-28 — every tile is the same span and the same floor now. The bento gave
-   `high` a double-width box and three different minimum heights, so a list of
-   tasks read as a mosaic whose tile size encoded urgency. The founder asked for
-   one height and one type size: priority is carried by the chip on the card,
-   which is where a status belongs. `high` keeps its dense-flow placement order,
-   so urgent work still surfaces first — it just stops being a different shape
-   when it gets there. */
-const TIER_SPAN = {
-  high:   "col-span-6 sm:col-span-3 lg:col-span-2",
-  medium: "col-span-6 sm:col-span-3 lg:col-span-2",
-  low:    "col-span-6 sm:col-span-3 lg:col-span-2",
-};
-/* KR-14.2 — 210/182/156 → 148/128/112. The tiles were sized for a card that
-   does not exist: a task's summary is a title, a status chip and a meta row,
-   which lands around 80px, so a third of every box was empty. The founder
-   asked for spacious and got hollow.
-   Measured on the way down: at 148 the ink sat with 46px of air above AND
-   below it — the content is vertically centred, so every pixel of excess
-   floor is paid twice. 128 leaves ~16px each side of a one-line card and
-   still clears the tallest real content (a two-line title measures 94px)
-   without clipping, because these are FLOORS — a tile grows if its card
-   needs it.
-   Ratios stay rectangular, the original ask: at 1280 a high tile is
-   799 × 128 and a medium 391 × 128. */
-const TIER_MINH = { high: "min-h-[112px]", medium: "min-h-[112px]", low: "min-h-[112px]" };
-
-function TaskBento({ list, openId, setOpenId, cardProps }) {
+/* ASK-13 (2026-09-13): one dropdown shape for Department / Priority / Status.
+   Reads a value + options list + optional counts fn and renders a labelled
+   pill trigger + menu. counts.optional: if provided, each row gets a count. */
+/* ASK-24 (2026-09-13): a filter that is NOT on its first option ("All …")
+   renders pressed, so a narrowed list is visible from the row itself.
+   Options may carry `group` (a section label is drawn where it changes) and
+   `sub` (a second line, e.g. the person's role). `searchable` adds a
+   type-to-search box — the Person list outgrows a scan past ~8 names. */
+function FilterDropdown({ testid, label, value, options, counts, onSelect, loading, searchable = false }) {
+  const [query, setQuery] = useState("");
+  const active = options.find((o) => o.key === value) || options[0];
+  const narrowed = value !== options[0].key;
+  const q = query.trim().toLowerCase();
+  const shown = q
+    ? options.filter((o) => !o.key || `${o.label} ${o.sub || ""}`.toLowerCase().includes(q))
+    : options;
   return (
-    <div className="grid grid-flow-row-dense grid-cols-6 gap-4" data-testid="mywork-bento">
+    <DropdownMenu onOpenChange={(o) => { if (!o) setQuery(""); }}>
+      <DropdownMenuTrigger asChild>
+        <button type="button" data-testid={testid} aria-pressed={narrowed}
+          className={`${narrowed ? "kr-pressed" : "kr-pop"} flex h-9 items-center gap-2 rounded-pill pl-3.5 pr-3 text-xs font-medium text-foreground`}>
+          <span className="text-muted-foreground">{label}:</span>
+          <span className={`max-w-[140px] truncate ${narrowed ? "font-semibold" : ""}`}>{active.label}</span>
+          {counts && (
+            <span className="tabular-nums opacity-55">
+              {loading ? "—" : counts(active.key)}
+            </span>
+          )}
+          <CaretDown size={11} weight="bold" aria-hidden="true" className="opacity-60" />
+        </button>
+      </DropdownMenuTrigger>
+      {/* 2026-09-14, founder — the list wears the app's glass menu, the same
+          panel GlassSelect draws, instead of the stock popover. */}
+      <DropdownMenuContent align="start" sideOffset={6}
+        className={`${GLASS_MENU} max-h-[calc(60vh/var(--ui-scale,1))] overflow-y-auto p-1.5 ${searchable ? "w-64" : "w-56"}`}>
+        {searchable && (
+          <div className="sticky -top-1.5 z-10 -mx-1.5 -mt-1.5 mb-1 bg-white/95 p-1.5">
+            {/* stopPropagation: Radix menus run typeahead on keydown, which
+                would steal every letter typed here to jump between items. */}
+            <input value={query} onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.stopPropagation()}
+              placeholder={`Search ${label.toLowerCase()}`} aria-label={`Search ${label.toLowerCase()}`}
+              data-testid={`${testid}-search`}
+              className="w-full rounded-xl bg-white/80 px-3 py-2 text-xs text-slate-800 ring-1 ring-inset ring-slate-900/[0.06] placeholder:text-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25" />
+          </div>
+        )}
+        {shown.map((o, i) => (
+          <Fragment key={o.key || "__all__"}>
+            {o.group && o.group !== shown[i - 1]?.group && (
+              <DropdownMenuLabel className={GLASS_MENU_LABEL}>
+                {o.group}
+              </DropdownMenuLabel>
+            )}
+            <DropdownMenuItem onSelect={() => onSelect(o.key)}
+              data-testid={`${testid}-${o.key || "all"}`}
+              className={`${GLASS_MENU_ITEM} justify-between gap-3`}>
+              <span className="min-w-0">
+                <span className={`block truncate ${value === o.key ? "font-semibold text-slate-900" : ""}`}>{o.label}</span>
+                {o.sub && <span className="block truncate text-[11px] text-slate-500">{o.sub}</span>}
+              </span>
+              {counts && (
+                <span className="shrink-0 tabular-nums text-xs opacity-55">
+                  {loading ? "—" : counts(o.key)}
+                </span>
+              )}
+            </DropdownMenuItem>
+          </Fragment>
+        ))}
+        {q && shown.length <= 1 && (
+          <p className="px-2 py-3 text-center text-xs text-muted-foreground">No match for “{query.trim()}”</p>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/* ASK-24 — the phone's version of FilterDropdown: the same options as a
+   labelled wrap of chips, for the bottom filter sheet. */
+function FilterChipGroup({ testid, label, value, options, counts, onSelect, loading, searchable = false }) {
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const shown = q
+    ? options.filter((o) => !o.key || `${o.label} ${o.sub || ""}`.toLowerCase().includes(q))
+    : options;
+  return (
+    <section className="flex flex-col gap-2" data-testid={testid}>
+      <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-foreground/70">{label}</p>
+      {searchable && (
+        <input value={query} onChange={(e) => setQuery(e.target.value)}
+          placeholder={`Search ${label.toLowerCase()}`} aria-label={`Search ${label.toLowerCase()}`}
+          data-testid={`${testid}-search`}
+          className="w-full nm-field px-3 py-2 text-sm" />
+      )}
+      <div className="flex flex-wrap gap-2">
+        {shown.map((o) => {
+          const on = value === o.key;
+          return (
+            <button key={o.key || "__all__"} type="button" aria-pressed={on}
+              onClick={() => onSelect(o.key)} data-testid={`${testid}-${o.key || "all"}`}
+              className={`flex min-h-9 items-center gap-1.5 rounded-pill px-3 text-[12px] ${on ? "kr-pressed font-semibold text-foreground" : "kr-pop text-foreground/75"}`}>
+              <span className="max-w-[270px] truncate">{o.label}</span>
+              {counts && <span className="tabular-nums opacity-55">{loading ? "—" : counts(o.key)}</span>}
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/* ASK-13/15 (2026-09-13): uniform 4-column grid at xl, 3 at lg, 1 below.
+   Opened cards no longer expand inline — details live in a right-side drawer
+   (see the Sheet inside TaskCard), so every cell stays the same size.
+   Mobile PWA (2026-09-14): no 2-up at sm — below lg the app is a 448px
+   column, so `sm:` fired on landscape phones and tablets and squeezed two
+   ~210px cards side by side. */
+function TaskGrid({ list, openId, setOpenId, cardProps }) {
+  return (
+    <div className="grid gap-3 lg:grid-cols-3 lg:gap-4 xl:grid-cols-4" data-testid="mywork-grid">
       {list.map((t) => {
-        const tier = TIER_OF(t);
         const isOpen = openId === t.id;
         return (
-          <div
-            key={t.id}
-            data-tier={tier}
-            className={isOpen ? "col-span-6" : `${TIER_SPAN[tier]} ${TIER_MINH[tier]}`}
-          >
+          <div key={t.id} className="min-h-[112px]">
             <TaskCard
               t={t}
-              tier={tier}
               open={isOpen}
               onToggleOpen={() => setOpenId(isOpen ? null : t.id)}
               {...cardProps(t)}
@@ -1920,56 +2849,22 @@ function TaskBento({ list, openId, setOpenId, cardProps }) {
 }
 
 /* AI PRIORITY ON → three columns, high | medium | low.
-   The ranker already sorts the whole list by score; splitting it by the
-   priority band turns "a long sorted list" into "how much is on fire, how
-   much is next, how much can wait" — which is the question the toggle is
-   asked. Within a column the ranker's order is preserved.
-   A tile opened here still takes its column's full width, so the same
-   nothing-beside-it rule holds. */
+   The ranker sorts the whole list by score; splitting it by the priority band
+   turns "a long sorted list" into "how much is on fire, how much is next, how
+   much can wait". Within a column the ranker's order is preserved. */
 const BANDS = [
-  { key: "high", label: "High priority" },
+  { key: "high", label: "High" },
   { key: "medium", label: "Medium" },
   { key: "low", label: "Low" },
 ];
 
-function TaskPriorityColumns({ list, openId, setOpenId, cardProps }) {
+function TaskPriorityColumns({ list, openId, setOpenId, cardProps, band = "high" }) {
   const grouped = BANDS.map((b) => ({ ...b, items: list.filter((t) => TIER_OF(t) === b.key) }));
-  /* KM-3 — ON A PHONE THE THREE COLUMNS BECOME THREE TABS.
-     A 3-col grid linearises to three stacked sections, so turning AI priority
-     on used to make the page THREE TIMES LONGER and buried Medium and Low
-     below two full screens of High — the opposite of what "sort by priority"
-     is for. A segmented bar shows one band at a time and names the other two,
-     so the grouping is visible at a glance and switching costs one tap.
-     Default is High: if you asked for priority order, that is the band you
-     asked to see. Desktop keeps all three columns side by side, untouched. */
-  const [band, setBand] = useState("high");
   return (
-    <>
-      <div className="kr-pressed mb-4 flex items-center gap-1 rounded-pill p-1 lg:hidden"
-           role="group" aria-label="Priority band" data-testid="mywork-priority-bands">
-        {grouped.map((b) => (
-          <button
-            key={b.key}
-            type="button"
-            onClick={() => setBand(b.key)}
-            aria-pressed={band === b.key}
-            data-testid={`priority-band-${b.key}`}
-            className={`flex h-9 flex-1 items-center justify-center gap-1.5 rounded-pill px-2 text-xs ${
-              band === b.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"
-            }`}
-          >
-            {b.label}
-            <span className="tabular-nums opacity-60">{b.items.length}</span>
-          </button>
-        ))}
-      </div>
     <div className="grid gap-4 lg:grid-cols-3" data-testid="mywork-priority-columns">
       {grouped.map((col) => (
         <section key={col.key} data-testid={`priority-col-${col.key}`}
                  className={`min-w-0 lg:block ${band === col.key ? "block" : "hidden"}`}>
-          {/* The heading is desktop-only: below lg the segmented bar above
-              already names the band and carries its count, so repeating it
-              here would label a list that has just been labelled. */}
           <div className="mb-3 hidden items-baseline gap-2 lg:flex">
             <h3 className="text-sm font-semibold">{col.label}</h3>
             <span className="font-mono text-xs tabular-nums opacity-55">{col.items.length}</span>
@@ -1986,11 +2881,6 @@ function TaskPriorityColumns({ list, openId, setOpenId, cardProps }) {
                 <TaskCard
                   key={t.id}
                   t={t}
-                  tier={col.key}
-                  /* KM-30 — the column IS the priority: the band bar names it
-                     on mobile and the column heading names it on desktop, so a
-                     chip repeating it on every card is the third time. */
-                  hidePrio
                   open={isOpen}
                   onToggleOpen={() => setOpenId(isOpen ? null : t.id)}
                   {...cardProps(t)}
@@ -2001,8 +2891,59 @@ function TaskPriorityColumns({ list, openId, setOpenId, cardProps }) {
         </section>
       ))}
     </div>
-    </>
   );
+}
+
+/* MW-19 — Completed lives HERE, not in Department. It is a state, and the
+   Department dropdown beside it lists departments; "Completed" sitting among
+   Sales and Logistics asked the reader to hold two meanings in one control. */
+/* ASK-28 TK-07 — the two stages, the two flags, then the lenses. */
+const STATUS_FILTER_OPTIONS = [
+  { key: "", label: "All statuses" },
+  { key: "todo", label: "To do" },
+  { key: "in_progress", label: "Doing" },
+  { key: "waiting", label: "Waiting on someone" },
+  { key: "approval", label: "Needs approval" },
+  { key: "overdue", label: "Overdue" },
+  // ASK-25 F4 — the Desk's "Due today" card needs somewhere to land.
+  { key: "due_today", label: "Due today" },
+  { key: "completed", label: "Done" },
+];
+// Links made before the stages keep working: Pending Approval and Under
+// Review are the Needs approval flag now.
+const STATUS_ALIASES = { blocked: "approval", review: "approval" };
+// Everything but a stage is a LENS or a FLAG: the card's stage chip still
+// says something under it, so it stays on the cards (see hideStatus).
+const STATUS_LENSES = new Set(["overdue", "due_today", "completed", "waiting", "approval"]);
+function statusMatches(t, status) {
+  if (status === "todo" || status === "in_progress") return stageOf(t.status) === status;
+  if (status === "waiting") return t.status === "waiting";
+  if (status === "approval") return t.status === "blocked" || (!!t.approval_required && t.approval_status === "pending");
+  return true; // overdue / due_today / completed are checked on their own
+}
+// ASK-28 TK-01 — My Work task lenses you reach by link (?view=…) and never
+// save as the default. Approvals is its own view (ASK-25), not a lens here.
+const URL_SCOPES = ["asked", "team"];
+// ASK-24 — a Priority filter shipped briefly and was removed on a founder
+// call (2026-09-13): the AI-priority view already splits by High/Medium/Low.
+
+/* ASK-24 — ONE predicate for every filter, so the list and every count in
+   every menu agree. A menu's counts are this with that menu's own dimension
+   swapped for the option being counted, and the others held as they are.
+   person: "" | a user id | "unassigned" | "role:<key>" (a team queue — a task
+   given to a role with no named person). */
+function matchesFilters(t, { tab, person, status }) {
+  const completedLens = tab === "completed" || status === "completed";
+  if (completedLens !== isTerminal(t)) return false;
+  if (tab !== "all" && tab !== "completed" && t.task_type !== tab) return false;
+  if (status === "overdue" && !isOverdue(t)) return false;
+  if (status === "due_today" && !isDueToday(t)) return false;
+  if (status && !statusMatches(t, status)) return false;
+  if (person === "unassigned") return !t.assignee_id && !t.assignee_role;
+  if (person && person.startsWith("role:")) return !t.assignee_id && t.assignee_role === person.slice(5);
+  // ASK-26 — a person's filter holds every task they are on, lead or not.
+  if (person) return t.assignee_id === person || (t.co_assignee_ids || []).includes(person);
+  return true;
 }
 
 export default function MyWork() {
@@ -2019,12 +2960,28 @@ export default function MyWork() {
   ];
   const [params, setParams] = useSearchParams();
   const isOwner = user?.role === "owner";
-  const focusTaskId = params.get("task");
+  // ASK-28 TK-08 (plan 6.4) — All Tasks is for the owner and anyone given
+  // "See all tasks"; every "All Tasks" decision below reads this.
+  const canSeeAll = canSeeAllTasks(user);
+  // ASK-28 TK-04 — ?task=<id>, and the older ?focus=task:<id> form the Brief
+  // and phone screens still link with, both open the task.
+  const focusParam = params.get("focus") || "";
+  const focusTaskId = params.get("task") || (focusParam.startsWith("task:") ? focusParam.slice(5) : null);
   const rawView = params.get("view");
   // "board" is no longer a top-level view — it now lives as a sub-tab inside Workflows.
+  // ASK-6: rawView === "leave" also collapses to "mywork" (the sub-view was
+  // retired; Leave lives on /team now). Deep links to ?view=leave land the
+  // reader on their task list rather than a 404; the App.js redirect for the
+  // standalone /leave route sends them onward to /team.
   const initialView = rawView === "board" ? "workflows"
-    : (rawView === "workflows" ? "workflows" : rawView === "leave" ? "leave" : "mywork");
-  const [view, setView] = useState(focusTaskId ? "mywork" : initialView);
+    : rawView === "workflows" ? "workflows"
+    // ASK-25 — ?view=approvals is where the Desk's Approvals pill and leave chip land.
+    : rawView === "approvals" ? "approvals"
+    : "mywork";
+  // ASK-28 TK-02 — ?view=approvals&task=<id> (the approval-requested
+  // notification) opens the task INSIDE Approvals, where it is guaranteed to
+  // be; any other ?task= link still lands on the task list.
+  const [view, setView] = useState(focusTaskId && initialView !== "approvals" ? "mywork" : initialView);
   // KR-11.2 — which tile is expanded. Lifted out of TaskCard so the grid can
   // give it the whole row; see TaskBento. Seeded from ?task= so a deep link
   // still lands on an opened card.
@@ -2034,6 +2991,34 @@ export default function MyWork() {
   // rawView so eslint's no-unused-vars doesn't fire on line above.
   void rawView;
   const canSeeWorkflows = isOwner || userPerms(user).includes("workflows");
+  // ASK-25 — Approvals shows for anyone who can sign something off: tasks
+  // (the "approvals" access) or leave ("leave_approve"). Owners always.
+  const canApprove = isOwner || userPerms(user).includes("approvals") || userPerms(user).includes("leave_approve");
+  const canApproveLeave = isOwner || userPerms(user).includes("leave_approve");
+  // ASK-25 — the Approvals view's own state and feeds. Sub-tab Tasks | Leave
+  // (?sub=leave is where the Desk's leave chip lands), the All/My lens on
+  // tasks, and the two feeds.
+  // ASK-28 TK-02 — tasks come from GET /tasks?view=approvals, which the
+  // SERVER limits to what this person may approve (owner: all; named
+  // approver: theirs; Approve Tasks access: theirs + unnamed). The old feed,
+  // /tasks?mine=false, is only the owner's everything or a non-owner's own
+  // lane, so a named approver outside that lane never saw the task. Fetched
+  // on every view: the switcher carries its count. The key is shared with the
+  // Desk's Task approvals card so the two never disagree.
+  const [apprSub, setApprSub] = useState(params.get("sub") === "leave" ? "leave" : "tasks");
+  // 2026-09-14, founder — the Desk's Approvals pill lands on MY approvals
+  // (?scope=mine); everything else starts on All.
+  const [apprScope, setApprScope] = useState(params.get("scope") === "mine" ? "mine" : "all");
+  const apprTasksQ = useQuery({
+    queryKey: ["tasks", "approvals"],
+    queryFn: () => api.get("/tasks?view=approvals").then((r) => r.data),
+    refetchInterval: 60000,
+  });
+  const leavesQ = useQuery({
+    queryKey: ["leaves", "approvals"],
+    queryFn: () => api.get("/leaves?scope=approvals").then((r) => r.data),
+    enabled: view === "approvals" && canApproveLeave,
+  });
   // U7-05.5: filter chips persist per-user in localStorage. Reload the page
   // and the scope + tab + aiPriority toggle come back where you left them.
   // Founder ask 2026-08-17: 'remove the uneasy UX' -- resetting to All every
@@ -2044,7 +3029,15 @@ export default function MyWork() {
     try { return JSON.parse(localStorage.getItem(prefsKey) || "{}"); }
     catch { return {}; }
   })();
-  const [scope, setScope] = useState(loadedPrefs.scope || "mine");
+  /* ASK-28 TK-01 — scope "asked" is "Asked by me": tasks I created for other
+     people. It comes from the URL (?view=asked), never from saved prefs, so a
+     reload of plain /my-work still opens where the person normally works. */
+  // URL_SCOPES (module level) lists the lenses that behave this way.
+  const savedScope = loadedPrefs.scope && !URL_SCOPES.includes(loadedPrefs.scope) ? loadedPrefs.scope : "mine";
+  // ASK-28 TK-04 — ?view=mine and ?view=all are addresses too (All Tasks is
+  // the owner's). They are also saved as the default, unlike asked and team.
+  const scopeFromUrl = (v) => (URL_SCOPES.includes(v) || v === "mine" || (v === "all" && canSeeAll) ? v : null);
+  const [scope, setScope] = useState(scopeFromUrl(rawView) || savedScope);
   const [tab, setTab] = useState(loadedPrefs.tab || "all");
   const [aiPriority, setAiPriority] = useState(Boolean(loadedPrefs.aiPriority));
   /* KM-30 — ONE progress lens, and no priority lens at all.
@@ -2058,29 +3051,59 @@ export default function MyWork() {
      It lives in component state rather than the URL because it is a reading
      posture, not a destination — you flick through it while scanning and you
      do not want twenty history entries for it. */
-  const [statusFilter, setStatusFilter] = useState("");
-  // Dismissing the bar clears it, so the list can never stay filtered by a
-  // control that is no longer on screen. An effect rather than a patch to each
-  // toggle, because the toggle exists twice — mobile and desktop — and a rule
-  // enforced in one of two places is not a rule.
+  /* ASK-24 (2026-09-13): Status and Person now live in the URL
+     (?status=&person=) so a refresh keeps them and a link can open
+     one person's tasks. `replace` keeps the reading-posture point above: no
+     history entry per tap. Department stays in the saved prefs, where it
+     already persisted. Unknown values from a hand-typed URL read as "All". */
+  const setFilterParams = (changes) => setParams((prev) => {
+    const next = new URLSearchParams(prev);
+    Object.entries(changes).forEach(([k, v]) => { if (v) next.set(k, v); else next.delete(k); });
+    return next;
+  }, { replace: true });
+  const rawStatus = STATUS_ALIASES[params.get("status") || ""] || params.get("status") || "";
+  const statusFilter = STATUS_FILTER_OPTIONS.some((o) => o.key === rawStatus) ? rawStatus : "";
+  const setStatusFilter = (v) => setFilterParams({ status: typeof v === "function" ? v(statusFilter) : v });
+  // Person only means something on All Tasks and Asked by me — on My Tasks
+  // every card is yours.
+  const personFilter = (canSeeAll && scope === "all") || scope === "asked" || scope === "team" ? (params.get("person") || "") : "";
+  const setPersonFilter = (v) => setFilterParams({ person: v });
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [viewSheetOpen, setViewSheetOpen] = useState(false);
+  /* Priority band picker for the AI-priority kanban view. Owned by the page so
+     the mobile band bar can sit in the fixed header while the columns render
+     in the body; desktop shows all three columns and ignores it. */
+  const [band, setBand] = useState("high");
+  // Dismissing AI priority resets the band. It no longer clears Status: that
+  // was so the list could never stay filtered by a control no longer on
+  // screen, and since ASK-24 Status is always on screen — the desktop row and
+  // the phone's filter sheet both carry it.
   useEffect(() => {
-    if (!aiPriority) setStatusFilter("");
+    if (!aiPriority) setBand("high");
   }, [aiPriority]);
+  // MW-19 / ASK-24 — "Completed" is a Status now. A tab of "completed" can
+  // only arrive from saved prefs written before that; move it across once.
+  useEffect(() => {
+    if (tab !== "completed") return;
+    setTab("all");
+    setStatusFilter("completed");
+  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Persist on any change. Guard on prefsKey so pre-login / test envs stay
   // no-op.
   useEffect(() => {
     if (!prefsKey) return;
     try {
-      localStorage.setItem(prefsKey, JSON.stringify({ scope, tab, aiPriority }));
+      // "asked" is a URL view, not a default to come back to (ASK-28 TK-01).
+      localStorage.setItem(prefsKey, JSON.stringify({ scope: URL_SCOPES.includes(scope) ? savedScope : scope, tab, aiPriority }));
     } catch { /* quota; ignore */ }
-  }, [prefsKey, scope, tab, aiPriority]);
+  }, [prefsKey, scope, tab, aiPriority, savedScope]);
 
   // U7-05.3: bulk selection. Set of task ids across the currently-visible
   // list. Cleared when the tab / scope / view changes so a stale selection
   // can't apply to a different filter's tasks.
   const [selected, setSelected] = useState(() => new Set());
-  useEffect(() => { setSelected(new Set()); }, [scope, tab, view]);
+  useEffect(() => { setSelected(new Set()); }, [scope, tab, view, personFilter, statusFilter]);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkReassignOpen, setBulkReassignOpen] = useState(false);
   const [bulkAssigneeId, setBulkAssigneeId] = useState("");
@@ -2091,18 +3114,66 @@ export default function MyWork() {
     return next;
   });
   const clearSelection = () => setSelected(new Set());
-  const mine = !(isOwner && scope === "all");
-  const showAssignee = isOwner && scope === "all";
-  const tasksQ = useQuery({ queryKey: ["tasks", mine], queryFn: () => api.get(`/tasks?mine=${mine}`).then((r) => r.data) });
+  const asked = scope === "asked";
+  // ASK-28 TK-03 — "My team": the work of the people who report to me. The
+  // owner keeps All Tasks; a manager (anyone named as someone's Reporting
+  // Manager) gets this instead.
+  const team = scope === "team";
+  const mine = !(canSeeAll && scope === "all");
+  // AI priority ranks the work YOU have to do; Asked by me and My team are
+  // other people's work, so the ranking and its columns are off there.
+  const aiOn = aiPriority && !asked && !team;
+  // ASK-24 — with Person set, every card would repeat the same name.
+  const showAssignee = ((canSeeAll && scope === "all") || team) && !personFilter;
+  const tasksQ = useQuery({
+    queryKey: ["tasks", asked ? "asked" : team ? "team" : mine],
+    queryFn: () => api.get(asked ? "/tasks?view=asked" : team ? "/tasks?view=team" : `/tasks?mine=${mine}`).then((r) => r.data),
+  });
+  // ASK-28 TK-02 — how many task approvals wait on me (the server already
+  // limits the feed to what I may approve), for the switcher's count. A named
+  // approver who holds no approval access still gets the view.
+  const waitingOnMe = (apprTasksQ.data || []).filter(isPendingApproval).length;
+  const showApprovalsView = canApprove || waitingOnMe > 0;
   const focusQ = useQuery({
     queryKey: ["task", focusTaskId],
     queryFn: () => api.get(`/tasks/${focusTaskId}`).then((r) => r.data),
     enabled: !!focusTaskId, retry: false,
   });
   const focusDenied = !!focusTaskId && focusQ.isError && [403, 404].includes(focusQ.error?.response?.status);
+  const focusMissing = focusDenied && focusQ.error?.response?.status === 404;
+  // ASK-28 TK-04 — a link to a task opens it, including when My Work is
+  // already open (a notification clicked from here)...
+  useEffect(() => { if (focusTaskId) setOpenId(focusTaskId); }, [focusTaskId]);
+  // ...and closing it takes the link out of the address, so a refresh doesn't
+  // reopen a task the reader has already put away.
+  useEffect(() => {
+    if (!openId && focusTaskId) setFilterParams({ task: "", focus: "" });
+  }, [openId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The chosen view lives in ?view=, so Back and Forward move between views:
+  // when the address changes, the page follows it. The first render has
+  // already read it.
+  const viewSyncMounted = useRef(false);
+  useEffect(() => {
+    if (!viewSyncMounted.current) { viewSyncMounted.current = true; return; }
+    setView(rawView === "workflows" || rawView === "board" ? "workflows" : rawView === "approvals" ? "approvals" : "mywork");
+    const s = scopeFromUrl(rawView);
+    if (s) setScope(s);
+    else if (!rawView && URL_SCOPES.includes(scope)) setScope(savedScope);
+  }, [rawView]); // eslint-disable-line react-hooks/exhaustive-deps
   const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
-  const prioritiesQ = useQuery({ queryKey: ["priorities"], queryFn: () => api.post("/tasks/prioritize").then((r) => r.data), enabled: aiPriority });
+  const prioritiesQ = useQuery({ queryKey: ["priorities"], queryFn: () => api.post("/tasks/prioritize").then((r) => r.data), enabled: aiOn });
   const members = usersQ.data || [];
+  // ASK-28 TK-03 — My team is offered to anyone who is someone's Reporting
+  // Manager. A My team link opened by someone without reports lands on My Tasks
+  // — at once for the owner (who has All Tasks instead), once the member list
+  // has loaded for anyone else.
+  const hasReports = !isOwner && !!user?.id && members.some((m) => m.reporting_manager_id === user.id);
+  useEffect(() => {
+    if (team && (isOwner || (usersQ.isSuccess && !hasReports))) {
+      setScope("mine");
+      setFilterParams({ view: "", person: "" });
+    }
+  }, [team, usersQ.isSuccess, hasReports]); // eslint-disable-line react-hooks/exhaustive-deps
   const roleOptions = [{ key: "owner", label: "Owner" }, ...(tenant?.roles || [])];
 
   const refresh = () => {
@@ -2110,17 +3181,59 @@ export default function MyWork() {
     qc.invalidateQueries({ queryKey: ["notifications"] });
   };
 
+  // ASK-28 TK-04 — every view is an address: ?view=mine | asked | team | all |
+  // approvals | workflows. Switching adds a history entry, so Back returns to
+  // the view before; the filters beside it still replace (no entry per tap).
+  const goView = (nextScope, nextView = "mywork") => {
+    if (nextScope) setScope(nextScope);
+    setView(nextView);
+    const value = nextView === "mywork" ? nextScope : nextView;
+    if ((params.get("view") || "") !== (value || "")) {
+      setParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (value) next.set("view", value); else next.delete("view");
+        return next;
+      });
+    }
+  };
+
+  // ASK-28 TK-04 — a linked task that isn't in the list on screen (a report's
+  // task, a finished one, one outside this view) still opens: its drawer is
+  // drawn from the task itself. The card face stays hidden; only the drawer
+  // (a portal) shows.
+  const focusDrawer = (shownIds, listReady) => (
+    focusTaskId && focusQ.data && listReady && openId === focusTaskId && !shownIds.includes(focusTaskId) ? (
+      <div hidden data-testid="focus-task-standalone">
+        <TaskCard t={focusQ.data} open onToggleOpen={() => setOpenId(null)} highlight
+          onChange={() => { refresh(); qc.invalidateQueries({ queryKey: ["task", focusTaskId] }); }}
+          members={members} roleOptions={roleOptions} />
+      </div>
+    ) : null
+  );
+
   useEffect(() => {
     if (!focusTaskId || !focusQ.data) return;
     const ft = focusQ.data;
+    // ASK-28 TK-02 — opened from Approvals: stay there, just bring it into view.
+    if (view === "approvals") {
+      const t0 = setTimeout(() => {
+        document.getElementById(`task-card-${focusTaskId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 400);
+      return () => clearTimeout(t0);
+    }
     setView("mywork");
-    if (isOwner && ft.assignee_id !== user?.id && scope !== "all") { setScope("all"); return; }
-    setTab(isTerminal(ft) ? "completed" : "all");
+    // ASK-28 TK-01/02 — a task opened from Asked by me or Approvals is in that
+    // list already; only My Tasks needs to widen to All Tasks for the owner.
+    if (canSeeAll && !URL_SCOPES.includes(scope) && ft.assignee_id !== user?.id && !(ft.co_assignee_ids || []).includes(user?.id) && scope !== "all") { setScope("all"); return; }
+    // ASK-24 — a deep-linked task must be visible, so drop any filter that
+    // could hide it; a finished task opens under Status: Completed.
+    setTab("all");
+    setFilterParams({ person: "", status: isTerminal(ft) ? "completed" : "" });
     const timer = setTimeout(() => {
       document.getElementById(`task-card-${focusTaskId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 400);
     return () => clearTimeout(timer);
-  }, [focusTaskId, focusQ.data, scope]);
+  }, [focusTaskId, focusQ.data, scope]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Epic 2 Sprint 6.5 (E2-51): When Desk Trends deep-links here with
   // ?filter=overdue|completed, an owner should see ALL tenant tasks
@@ -2128,9 +3241,14 @@ export default function MyWork() {
   // isn't empty just because none of them are the owner's own todos.
   useEffect(() => {
     const f = params.get("filter");
-    if (f && isOwner && scope !== "all") setScope("all");
-    if (f === "completed") setTab("completed");
-  }, [params, isOwner]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (f && canSeeAll && scope !== "all") setScope("all");
+    // ASK-24 — the Desk's ?filter= link becomes the visible Status filter, so
+    // the reader can see why the list is narrowed and clear it.
+    if (f === "completed" || f === "overdue" || f === "due_today") {
+      setTab("all");
+      setFilterParams({ filter: "", status: f });
+    }
+  }, [params, canSeeAll]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // U7-05.9: if the currently-selected tab has no items, snap back to
   // 'all' so the user doesn't see a "tab selected but no chip visible"
@@ -2146,7 +3264,7 @@ export default function MyWork() {
 
   const scoreMap = {};
   (prioritiesQ.data?.tasks || []).forEach((pt) => { if (pt.ai_scores) scoreMap[pt.id] = pt.ai_scores; });
-  const scoring = aiPriority && prioritiesQ.isFetching && !prioritiesQ.data;
+  const scoring = aiOn && prioritiesQ.isFetching && !prioritiesQ.data;
 
   const all = tasksQ.data || [];
   const countFor = (key) => {
@@ -2160,18 +3278,21 @@ export default function MyWork() {
   // to just isOverdue rows; completed forces the Completed tab.
   const urlFilter = params.get("filter");
 
-  let list;
-  if (urlFilter === "overdue") {
-    list = all.filter((t) => !isTerminal(t) && isOverdue(t));
-  } else if (urlFilter === "completed" || tab === "completed") {
-    list = all.filter(isTerminal);
-  } else if (tab === "all") {
-    list = all.filter((t) => !isTerminal(t));
-  } else {
-    list = all.filter((t) => !isTerminal(t) && t.task_type === tab);
-  }
-  if (aiPriority && tab !== "completed") {
-    if (statusFilter) list = list.filter((t) => t.status === statusFilter);
+  // MW-19 — "completed" reaches this either from the Status dropdown (desktop)
+  // or from the tab (mobile chip strip / deep link); both mean the same lens.
+  const showingCompleted = urlFilter === "completed" || tab === "completed" || statusFilter === "completed";
+
+  // ASK-24 — Department x Person x Status, all through one
+  // predicate. countWith() swaps one dimension for the option being counted,
+  // so every menu's numbers reflect the filters set in the others.
+  const filters = {
+    tab: urlFilter === "completed" ? "completed" : tab,
+    person: personFilter,
+    status: statusFilter || (STATUS_LENSES.has(urlFilter) && urlFilter !== "completed" ? urlFilter : ""),
+  };
+  const countWith = (over) => all.filter((tk) => matchesFilters(tk, { ...filters, ...over })).length;
+  let list = all.filter((tk) => matchesFilters(tk, filters));
+  if (aiOn && !showingCompleted) {
     list = [...list].sort((a, b) => (scoreMap[b.id]?.priority_score || 0) - (scoreMap[a.id]?.priority_score || 0));
   }
 
@@ -2216,20 +3337,140 @@ export default function MyWork() {
   const MCIRCLE = "grid h-9 w-9 shrink-0 place-items-center rounded-full text-foreground";
   const mobileView = (() => {
     if (view === "workflows") return "workflows";
-    if (view === "leave") return "leave";
-    if (isOwner && scope === "all") return "all";
+    // ASK-25 — in the Approvals view neither lens pill is pressed; the list
+    // controls (AI priority, filters) hide because there is no task list.
+    if (view === "approvals") return "approvals";
+    // ASK-6: leave sub-view retired; the branch that returned "leave" here
+    // was mapping to a case that no longer renders.
+    if (canSeeAll && scope === "all") return "all";
+    // ASK-28 TK-01 — Asked by me reached by link on a phone: its own view, so
+    // the My Tasks pill doesn't claim a list that isn't yours. The phone's
+    // own switcher for it comes with the mobile pass.
+    if (scope === "asked") return "asked";
+    // ASK-28 TK-03 — My team by link on a phone, same as Asked by me.
+    if (scope === "team") return "team";
     return "mine";
   })();
-  const inSegmentView = mobileView === "mine" || mobileView === "all";
+  const inSegmentView = mobileView === "mine" || mobileView === "all" || mobileView === "asked" || mobileView === "team";
+  // ASK-28 phone pass — the views this person has, for the phone's view
+  // picker: the same set the desktop switcher offers (Workflows is a page of
+  // its own on the phone, reached from More).
+  const mobileViewOptions = [
+    { key: "mine", label: t("mywork.my_tasks"), pick: () => goView("mine") },
+    { key: "asked", label: t("mywork.asked_by_me", "Asked by me"), pick: () => goView("asked") },
+    ...(hasReports ? [{ key: "team", label: t("mywork.my_team", "My team"), pick: () => goView("team") }] : []),
+    ...(canSeeAll ? [{ key: "all", label: t("mywork.all_tasks"), pick: () => goView("all") }] : []),
+    ...(showApprovalsView
+      ? [{ key: "approvals", label: t("mywork.view_approvals"), count: waitingOnMe, pick: () => goView(null, "approvals") }]
+      : []),
+  ];
+  const mobileViewLabel = mobileViewOptions.find((o) => o.key === mobileView)?.label
+    || (mobileView === "workflows" ? t("mywork.view_workflows") : t("mywork.my_tasks"));
   // The filter dropdown lists only tabs that have items — same rule the old
   // chip strip used. "Completed" appears when any completed task exists.
-  const mobileFilterTabs = WORK_TABS.filter((tb) => tb.key === "all" || countFor(tb.key) > 0);
-  const activeTabLabel = (WORK_TABS.find((tb) => tb.key === tab) || WORK_TABS[0]).label;
+  /* KM-49 — EVERY category, not just the ones with work in them. The `> 0`
+     test is right for the desktop CHIP STRIP, where an empty chip spends a slot
+     of a fixed-width row; it is wrong for a dropdown, where the list is the
+     menu and a category vanishing because its count hit zero makes the menu a
+     different shape every time you open it. Founder: "where is the all 8
+     options in that new pill, only all and completed option is there?" — that
+     is this filter, doing exactly what it was told against a dataset where the
+     other categories were empty. The counts still show, so an empty category
+     reads as empty rather than missing. */
+  // MW-19 — Department = departments that actually hold work. "All" always
+  // shows (it is the baseline and the destination the snap-back effect uses);
+  // "completed" is excluded because it is a state, and it now lives in Status.
+  const departmentOptions = WORK_TABS.filter(
+    (tb) => tb.key !== "completed" && (tb.key === "all" || countFor(tb.key) > 0)
+  );
+  // KM-49 still holds for the phone sheet: every category, counts showing.
+  // Completed is a Status there too (MW-19).
+  const mobileFilterTabs = WORK_TABS.filter((tb) => tb.key !== "completed");
+
+  /* ASK-24 — PERSON options, built from the tasks on All Tasks:
+       All people · Me · everyone holding work, busiest first, role underneath
+       · Unassigned · then Teams — tasks given to a role with no named person
+       (the cards' "Sales team" line).
+     Names come from /users (members) with the task's own assignee_name as the
+     fallback for someone no longer in the list. */
+  const roleLabel = (key) => roleOptions.find((r) => r.key === key)?.label
+    || String(key || "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+  const personOptions = (() => {
+    if (!((canSeeAll && scope === "all") || asked || team)) return [];
+    const openBy = new Map();
+    const teams = new Set();
+    let unassigned = 0;
+    all.forEach((tk) => {
+      if (tk.assignee_id) openBy.set(tk.assignee_id, (openBy.get(tk.assignee_id) || 0) + (isTerminal(tk) ? 0 : 1));
+      else if (tk.assignee_role) teams.add(tk.assignee_role);
+      else unassigned += 1;
+      // ASK-26 — a co-assignee is holding that work too: listed, and counted.
+      (tk.co_assignee_ids || []).forEach((id) => {
+        if (id && id !== tk.assignee_id) openBy.set(id, (openBy.get(id) || 0) + (isTerminal(tk) ? 0 : 1));
+      });
+    });
+    const memberOf = (id) => members.find((m) => m.id === id);
+    const nameOf = (id) => memberOf(id)?.name || all.find((tk) => tk.assignee_id === id)?.assignee_name || "Unknown";
+    const special = personFilter === "unassigned" || personFilter.startsWith("role:");
+    if (personFilter && !special && !openBy.has(personFilter) && memberOf(personFilter)) openBy.set(personFilter, 0);
+    if (personFilter.startsWith("role:")) teams.add(personFilter.slice(5));
+    // Two accounts can share a display name; the menu and the phone chips
+    // must still tell them apart, so a repeated name carries its email handle.
+    const nameCount = {};
+    openBy.forEach((_, id) => { nameCount[nameOf(id)] = (nameCount[nameOf(id)] || 0) + 1; });
+    const people = [...openBy.entries()]
+      .filter(([id]) => id !== user?.id)
+      .sort((a, b) => b[1] - a[1] || nameOf(a[0]).localeCompare(nameOf(b[0])))
+      .map(([id]) => {
+        const m = memberOf(id);
+        const handle = (m?.email || "").split("@")[0] || id.slice(0, 6);
+        return {
+          key: id, group: "People",
+          label: nameCount[nameOf(id)] > 1 ? `${nameOf(id)} (${handle})` : nameOf(id),
+          sub: m?.role ? roleLabel(m.role) : "",
+        };
+      });
+    return [
+      { key: "", label: "All people" },
+      // Asked by me never holds my own tasks, so "Me" would always read 0;
+      // My team is my reports' work, not mine.
+      ...(user?.id && !asked && !team ? [{ key: user.id, label: "Me", group: "People" }] : []),
+      ...people,
+      ...(unassigned > 0 || personFilter === "unassigned" ? [{ key: "unassigned", label: "Unassigned", group: "People" }] : []),
+      ...[...teams].sort().map((r) => ({ key: `role:${r}`, label: `${roleLabel(r)} team`, group: "Teams" })),
+    ];
+  })();
+  const peopleSearchable = personOptions.filter((o) => o.group === "People").length > 8;
+
+  // What is narrowing the list, in words — the phone caption and the
+  // no-match empty state both say it.
+  const labelIn = (opts, key) => opts.find((o) => o.key === key)?.label;
+  const filterParts = [
+    tab !== "all" && tab !== "completed" ? labelIn(WORK_TABS, tab) : null,
+    personFilter ? (labelIn(personOptions, personFilter) || "One person") : null,
+    filters.status ? labelIn(STATUS_FILTER_OPTIONS, filters.status) : null,
+  ].filter(Boolean);
+  const filtersActive = filterParts.length > 0;
+  const filterSummary = filterParts.join(" · ");
+  const clearFilters = () => {
+    setTab("all");
+    // `priority` is gone as a filter, but links made while it existed can still
+    // carry it; it is ignored on read and stripped here so Clear leaves a clean URL.
+    setFilterParams({ person: "", status: "", filter: "", priority: "" });
+  };
+  const tasksLoading = tasksQ.isLoading && !tasksQ.data;
 
   return (
-    <div>
+    /* ASK-20 (2026-09-13): on desktop the page owns its own height and only
+       the CARD GRID scrolls. Header and filter row are plain block children
+       that never move, so they need no sticky offset and no backdrop blur —
+       nothing passes behind them. */
+    <div className="lg:h-full lg:min-h-0 lg:flex lg:flex-col lg:overflow-hidden">
       {/* ─── MOBILE HEADER (below lg) ───────────────────────────────────── */}
-      <StickyHeader className="mb-2 flex flex-col gap-2.5 lg:hidden" data-testid="mywork-mobile-header">
+      {/* KM-48 — gap-2 and mb-2: one 8px rhythm for every gap in this header,
+          where it used to be 10px between rows and then whatever the body's
+          own margin happened to be under it. */}
+      <StickyHeader className="mb-2 flex flex-col gap-2 lg:hidden" data-testid="mywork-mobile-header">
         {/* Row 1 — title left, the two DESTINATIONS right.
             Workflows and Leave are the only two controls in this header that
             are not lenses on the task list — they replace the list with a
@@ -2266,28 +3507,25 @@ export default function MyWork() {
               same list, so it belongs in the same group, and being round is
               what stops it reading as a third tab. Same anatomy the desktop
               cluster uses for AI priority. */}
-          {isOwner && (
-            <div className="flex shrink-0 items-center gap-1.5"
-                 role="group" aria-label={t("mywork.title", "My Work")} data-testid="work-mobile-segment">
-              <div className="flex items-center">
-                <button type="button" onClick={() => { setScope("mine"); setView("mywork"); }}
-                  aria-pressed={mobileView === "mine"} data-testid="work-mobile-mine"
-                  className={`${MSEG} rounded-l-pill ${mobileView === "mine" ? MSEG_ON : MSEG_OFF}`}>
-                  {t("mywork.my_tasks")}
-                </button>
-                <span aria-hidden="true" className="h-5 w-px shrink-0 bg-kr-ink/15" />
-                <button type="button" onClick={() => { setScope("all"); setView("mywork"); }}
-                  aria-pressed={mobileView === "all"} data-testid="work-mobile-all"
-                  className={`${MSEG} rounded-r-pill ${mobileView === "all" ? MSEG_ON : MSEG_OFF}`}>
-                  {t("mywork.all_tasks")}
-                </button>
-              </div>
-              <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
-                triggerClassName={`${MCIRCLE} kr-pop`}
-                triggerAriaLabel={t("mywork.new_task", "New Task")}
-                triggerChildren={<Plus size={16} weight="bold" aria-hidden="true" />} />
-            </div>
-          )}
+          {/* ASK-28 phone pass — ONE view pill for everyone, naming the view
+              on screen and opening a sheet of the views this person has. The
+              owner-only My Tasks | All Tasks pair could not hold five views in
+              a 390px row, and everyone else had no way to reach Asked by me,
+              My team or Approvals on a phone at all. The count is the task
+              approvals waiting on you, as on the desktop Approvals button.
+              (ASK-3: the [+] New Task circle lives above the list, not here.) */}
+          <button type="button" onClick={() => setViewSheetOpen(true)} data-testid="work-mobile-view"
+            aria-haspopup="dialog" aria-label={`View: ${mobileViewLabel}`}
+            className="kr-pop flex h-11 min-w-0 shrink items-center gap-1.5 rounded-pill pl-4 pr-3 text-[13px] font-semibold">
+            <span className="truncate">{mobileViewLabel}</span>
+            {mobileView !== "approvals" && showApprovalsView && waitingOnMe > 0 && (
+              <span data-testid="work-mobile-view-badge"
+                className="grid h-5 min-w-[1.25rem] place-items-center rounded-full bg-kr-ink px-1.5 text-[11px] font-semibold tabular-nums text-white">
+                {waitingOnMe}
+              </span>
+            )}
+            <CaretDown size={12} weight="bold" aria-hidden="true" className="shrink-0 opacity-60" />
+          </button>
 
 
           {/* The two circles, as a pair, hard right. AI priority moved up here
@@ -2306,174 +3544,425 @@ export default function MyWork() {
               </button>
             )}
 
-            {/* KM-29 — the sliders circle is GONE, on the founder's call. It
-                opened a dropdown of task categories; that job now belongs to
-                the two segmented bars the AI-priority circle reveals, and two
-                filter affordances a thumb apart — one of them hidden inside a
-                menu — was the confusion. The categories stay reachable from the
-                desktop header, which has the width for a chip strip.
-                Leave keeps a spacer so the row's right edge does not jump as
-                you move between views. */}
-            {mobileView === "leave" && <span className="h-9 w-9 shrink-0" aria-hidden="true" />}
+            {/* KM-48 — THE CATEGORY FILTER COMES BACK, and this time it says
+                what it is doing. KM-29 removed it as an unlabelled sliders
+                circle on the grounds that two filter affordances a thumb apart
+                were confusing, and left the categories reachable only from the
+                desktop header — which silently took the feature away from the
+                phone entirely. Founder: "the filter option in the my-work page
+                which was there in old versions was removed silently."
+
+                The confusion was never that there were two filters; it was that
+                one of them was a mystery icon. As a pill carrying the current
+                selection — "All", "Finance", "Completed" — it names itself, and
+                it also absorbs the caption row that used to sit underneath
+                doing the same job with none of the control. */}
+            {/* ASK-24 — the pill now opens a bottom sheet holding all four
+                filters (Department, Person, Priority, Status); what is set is
+                named in the caption row underneath, not squeezed into this
+                pill, which Row 2 has no width for. */}
+            {inSegmentView && (
+              <button type="button" data-testid="work-mobile-category"
+                onClick={() => setFilterSheetOpen(true)}
+                aria-label={filtersActive ? `Filters: ${filterSummary}` : "Filters"}
+                aria-haspopup="dialog"
+                className={`${filtersActive ? "kr-pressed" : "kr-pop"} flex h-11 min-w-0 shrink items-center gap-1.5 rounded-pill pl-3 pr-3 text-[12px] font-medium`}>
+                <SlidersHorizontal size={14} weight="bold" aria-hidden="true" />
+                <span>Filter</span>
+                <span className="tabular-nums opacity-55">{tasksLoading ? "—" : list.length}</span>
+              </button>
+            )}
+            {/* ASK-6: leave spacer retired -- the view branch is gone. */}
           </div>
         </div>
 
-        {/* Row 3 — the active sub-filter caption. New Task and AI priority
-            both left this row in KM-2 (into the lens group and the circle
-            pair respectively), so what remains is the one thing that names
-            what the list below is currently showing. */}
-        {/* KM-29 · the two lenses, revealed by the AI-priority circle.
-            Same track, same segments, same grammar as every other segmented
-            control here — .kr-pressed rail, .kr-pop on the live one — so they
-            read as one instrument with two rows rather than two widgets that
-            happen to sit together. They scroll horizontally rather than wrap:
-            five status segments do not fit 343px, and a control row that
-            reflows to two lines as you tap through it is worse than one that
-            slides.
-            NO transition utility, for the reason stated at the top of this
-            header: these swap outset shadows for inset ones. */}
-        {inSegmentView && aiPriority && (
-          <div className="kr-pressed flex items-center gap-1 overflow-x-auto rounded-pill p-1 [scrollbar-width:none]"
-               role="group" aria-label="Filter by progress" data-testid="work-mobile-status-lens">
-            {M_STATUS_PILLS.map((sp) => (
-              <button key={sp.key} type="button"
-                onClick={() => setStatusFilter((cur) => (cur === sp.key ? "" : sp.key))}
-                aria-pressed={statusFilter === sp.key} data-testid={`work-status-${sp.key}`}
-                className={`flex h-8 shrink-0 items-center rounded-pill px-3.5 text-[12px] ${
-                  statusFilter === sp.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
-                {sp.label}
-              </button>
-            ))}
+        {/* KM-48 · ROW 3 — THE TWO LENSES, LABELLED, AS ONE BLOCK.
+            Founder: the spacing between the status bar, the priority bar and
+            the My/All row was uneven, and neither bar said what it filtered.
+
+            The unevenness had a cause worth naming: the status bar lived in
+            this fixed header while the priority bar lived in the scrolling
+            body (inside TaskPriorityColumns), so no margin could hold them at
+            a constant distance — one of them slid. Both are here now, in one
+            column with one gap, and the page owns `band` so the body can still
+            render the chosen column.
+
+            Each gets a caption because "High / Medium / Low" and "Not Started /
+            In Progress / Waiting / Review" are not self-evidently two
+            DIFFERENT axes when stacked — without the labels they read as one
+            long filter that wrapped. */}
+        {/* ASK-24 · the active filters, in words, with a one-tap Clear. */}
+        {inSegmentView && filtersActive && (
+          <div className="flex items-center gap-2 px-1" data-testid="work-mobile-filter-caption">
+            <p className="min-w-0 flex-1 truncate text-[12px] text-foreground/75">
+              <span className="text-muted-foreground">Showing </span>
+              <span className="font-semibold text-foreground">{filterSummary}</span>
+            </p>
+            <button type="button" onClick={clearFilters} data-testid="work-mobile-filter-clear"
+              className="shrink-0 text-[12px] font-medium text-foreground/70 underline underline-offset-4">
+              Clear
+            </button>
           </div>
         )}
 
-        {inSegmentView && !aiPriority && (
-          <p className="text-xs text-muted-foreground" data-testid="work-mobile-active-tab">
-            {activeTabLabel}
-            <span className="ml-1 tabular-nums opacity-70">· {countFor(tab)}</span>
-          </p>
-        )}
+        {/* ASK-28 phone pass — the view picker's sheet. */}
+        <Sheet open={viewSheetOpen} onOpenChange={setViewSheetOpen}>
+          <SheetContent side="bottom" hideClose data-testid="work-mobile-view-sheet"
+            className="flex max-h-[85dvh] flex-col gap-0 rounded-t-cardlg p-0 lg:hidden">
+            <SheetHeader className="flex-row items-center justify-between space-y-0 px-5 pb-3 pt-5 text-left">
+              <SheetTitle className="text-base">Show</SheetTitle>
+              <SheetClose asChild>
+                <button type="button" aria-label="Close" data-testid="work-mobile-view-close"
+                  className="kr-pop grid h-9 w-9 place-items-center rounded-full">
+                  <X size={14} weight="bold" aria-hidden="true" />
+                </button>
+              </SheetClose>
+            </SheetHeader>
+            <div className="flex flex-col gap-2 overflow-y-auto px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]" role="group" aria-label="View">
+              {mobileViewOptions.map((o) => {
+                const on = mobileView === o.key;
+                return (
+                  <button key={o.key} type="button" aria-pressed={on} data-testid={`work-mobile-view-${o.key}`}
+                    onClick={() => { o.pick(); setViewSheetOpen(false); }}
+                    className={`flex h-12 items-center justify-between gap-3 rounded-pill px-5 text-[15px] ${on ? "kr-pressed font-semibold" : "kr-pop font-medium"}`}>
+                    <span className="truncate">{o.label}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      {o.count > 0 && (
+                        <span className="grid h-6 min-w-[1.5rem] place-items-center rounded-full bg-kr-ink px-2 text-xs font-semibold tabular-nums text-white">
+                          {o.count}
+                        </span>
+                      )}
+                      {on && <Check size={16} weight="bold" aria-hidden="true" />}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </SheetContent>
+        </Sheet>
+
+        <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
+          <SheetContent side="bottom" hideClose data-testid="work-mobile-filter-sheet"
+            className="flex max-h-[85dvh] flex-col gap-0 rounded-t-cardlg p-0 lg:hidden">
+            <SheetHeader className="flex-row items-center justify-between space-y-0 px-5 pb-3 pt-5 text-left">
+              <SheetTitle className="text-base">Filter tasks</SheetTitle>
+              <SheetClose asChild>
+                <button type="button" aria-label="Close filters" data-testid="work-mobile-filter-close"
+                  className="kr-pop grid h-9 w-9 place-items-center rounded-full">
+                  <X size={14} weight="bold" aria-hidden="true" />
+                </button>
+              </SheetClose>
+            </SheetHeader>
+            <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 pb-4">
+              <FilterChipGroup testid="work-sheet-department" label="Department"
+                value={tab === "completed" ? "all" : tab} options={mobileFilterTabs}
+                counts={(k) => countWith({ tab: k })} onSelect={setTab} loading={tasksLoading} />
+              {personOptions.length > 0 && (
+                <FilterChipGroup testid="work-sheet-person" label="Person"
+                  value={personFilter} options={personOptions}
+                  counts={(k) => countWith({ person: k })} onSelect={setPersonFilter}
+                  loading={tasksLoading} searchable={peopleSearchable} />
+              )}
+              <FilterChipGroup testid="work-sheet-status" label="Status"
+                value={filters.status} options={STATUS_FILTER_OPTIONS}
+                counts={(k) => countWith({ status: k })} onSelect={setStatusFilter} loading={tasksLoading} />
+            </div>
+            <div className="flex items-center gap-2 border-t border-slate-900/[0.06] px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3">
+              <button type="button" onClick={clearFilters} disabled={!filtersActive}
+                data-testid="work-sheet-clear"
+                className="kr-pop h-11 flex-1 rounded-pill text-[13px] font-medium disabled:opacity-40">
+                Clear filters
+              </button>
+              <SheetClose asChild>
+                <button type="button" data-testid="work-sheet-done"
+                  className="kr-lift h-11 flex-1 rounded-pill bg-kr-ink text-[13px] font-medium text-white">
+                  Show {tasksLoading ? "" : list.length} {list.length === 1 ? "task" : "tasks"}
+                </button>
+              </SheetClose>
+            </div>
+          </SheetContent>
+        </Sheet>
+
       </StickyHeader>
 
       {/* ─── DESKTOP HEADER (lg and up) ─────────────────────────────────── */}
-      <header className="mb-7 hidden gap-4 lg:flex lg:flex-row lg:items-end lg:justify-between">
+      <header className="mb-7 hidden shrink-0 gap-4 lg:flex lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("mywork.eyebrow")}</p>
-          <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">{t("mywork.title")}</h1>
+          {/* MW-14 fix: eyebrow + title track the active view instead of
+              staying pinned to "MY WORK / Your day, simplified" while
+              the body is entirely leave requests or delivery pipelines.
+              The toggle pill below is small; the page header needs to
+              say what you are looking at above the fold. */}
+          {/* 2026-09-14, founder — no eyebrow in Workflows view: it only
+              repeated the title ("WORKFLOWS" over "Workflows"). Approvals
+              (ASK-25) had the same echo, so it goes there too; the task
+              views keep "Your day, simplified". */}
+          {view !== "workflows" && view !== "approvals" && (
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              {t("mywork.eyebrow")}
+            </p>
+          )}
+          <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">
+            {view === "workflows" ? t("mywork.view_workflows") : view === "approvals" ? t("mywork.view_approvals") : t("mywork.title")}
+          </h1>
         </div>
         <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:items-center" data-testid="mywork-controls">
-          <div className="order-2 flex flex-wrap items-center gap-2.5 lg:order-1" data-testid="mywork-actions">
-            <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
-              triggerClassName={`${SECTION_BTN} kr-lift bg-kr-ink text-white`} />
-            {/* THE CLUSTER. My Tasks and All Tasks are joined by GEOMETRY —
-                touching, outer corners round, inner corners square, a
-                hairline on the seam. No track, no fill, no tint, per the
-                founder. AI Priority sits with them as a circle: a third lens
-                on the same list, close enough to read as one group, round
-                enough not to read as a third tab. */}
-            {isOwner && (
-                <div className="flex items-center gap-2" role="group" aria-label="Task view" data-testid="mywork-lens-group">
-                  <div className="flex items-center">
-                    <button onClick={() => { setScope("mine"); setView("mywork"); }} data-testid="work-scope-mine"
-                      aria-pressed={view === "mywork" && scope === "mine" && !aiPriority}
-                      className={`${SEG} rounded-l-pill ${view === "mywork" && scope === "mine" && !aiPriority ? SEG_ON : SEG_OFF}`}>
-                      {t("mywork.my_tasks")}
-                    </button>
-                    <span aria-hidden="true" className="h-6 w-px shrink-0 bg-kr-ink/15" />
-                    <button onClick={() => { setScope("all"); setView("mywork"); }} data-testid="work-scope-all"
-                      aria-pressed={view === "mywork" && scope === "all" && !aiPriority}
-                      className={`${SEG} rounded-r-pill ${view === "mywork" && scope === "all" && !aiPriority ? SEG_ON : SEG_OFF}`}>
-                      {t("mywork.all_tasks")}
-                    </button>
-                  </div>
-
-                  {/* KR-11.6 — AI Priority is a circle now, and it lives INSIDE
-                      this cluster. It is a third lens on the same list, so it
-                      belongs with the other two; the circle is what keeps it
-                      from reading as a third tab. Icon-only, so it carries a
-                      real label and a title for anything not looking at it.
-                      Ink, not accent — the founder's call, and it also stops
-                      the toolbar's only red from sitting next to the overdue
-                      pills it has nothing to do with. */}
-                  <button onClick={() => { setAiPriority((v) => !v); setView("mywork"); }} data-testid="ai-priority-toggle"
-                    aria-pressed={view === "mywork" && aiPriority}
+          {/* ASK-14 (2026-09-13): My Tasks / All Tasks / Workflows collapse
+              into ONE segmented slider — same SEG/SEG_ON/SEG_OFF grammar the
+              mobile row already uses, so all three top-level places sit on
+              one control. AI Priority is a lens on the task list only, so it
+              rides to the LEFT of the slider and hides in Workflows view. */}
+          {(() => {
+            const segments = [];
+            // ASK-28 TK-01 — Asked by me is a place you can link to, so it
+            // lives in the URL; every other segment clears it.
+            // ASK-28 TK-04 — every segment now writes its own ?view= (goView).
+            const go = goView;
+            const askedSegment = {
+              key: "asked", label: t("mywork.asked_by_me", "Asked by me"), testid: "work-scope-asked",
+              active: view === "mywork" && scope === "asked",
+              onClick: () => go("asked"),
+            };
+            // ASK-28 TK-08 — the owner and anyone given "See all tasks" get
+            // All Tasks (a non-owner with reports keeps My team beside it).
+            if (canSeeAll) {
+              segments.push({
+                key: "mine", label: t("mywork.my_tasks"), testid: "work-scope-mine",
+                active: view === "mywork" && scope === "mine",
+                onClick: () => go("mine"),
+              });
+              segments.push(askedSegment);
+              if (hasReports) {
+                segments.push({
+                  key: "team", label: t("mywork.my_team", "My team"), testid: "work-scope-team",
+                  active: view === "mywork" && scope === "team",
+                  onClick: () => go("team"),
+                });
+              }
+              segments.push({
+                key: "all", label: t("mywork.all_tasks"), testid: "work-scope-all",
+                active: view === "mywork" && scope === "all",
+                onClick: () => go("all"),
+              });
+            } else {
+              segments.push({
+                key: "tasks", label: t("mywork.view_mywork"), testid: "work-view-mywork",
+                active: view === "mywork" && !URL_SCOPES.includes(scope),
+                onClick: () => go("mine"),
+              });
+              segments.push(askedSegment);
+              // ASK-28 TK-03 — a manager's lens on their reports' work. The
+              // owner has All Tasks, which already covers it.
+              if (hasReports) {
+                segments.push({
+                  key: "team", label: t("mywork.my_team", "My team"), testid: "work-scope-team",
+                  active: view === "mywork" && scope === "team",
+                  onClick: () => go("team"),
+                });
+              }
+            }
+            // ASK-25 — Approvals sits between the task lenses and Workflows:
+            // it is about tasks (and leave), not pipelines.
+            // ASK-28 TK-02 — also for a named approver without approval
+            // access, and it carries how many task approvals wait on you.
+            if (showApprovalsView) {
+              segments.push({
+                key: "approvals", label: t("mywork.view_approvals"), testid: "work-view-approvals",
+                count: waitingOnMe,
+                active: view === "approvals",
+                onClick: () => go(null, "approvals"),
+              });
+            }
+            if (canSeeWorkflows) {
+              segments.push({
+                key: "workflows", label: t("mywork.view_workflows"), testid: "work-view-workflows",
+                active: view === "workflows",
+                onClick: () => go(null, "workflows"),
+              });
+            }
+            return (
+              <div className="flex flex-wrap items-center gap-2.5" data-testid="mywork-lens-group">
+                {view === "mywork" && !asked && !team && (
+                  <button onClick={() => setAiPriority((v) => !v)} data-testid="ai-priority-toggle"
+                    aria-pressed={aiPriority}
                     aria-label={aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
                     title={scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
-                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground ${
-                      view === "mywork" && aiPriority ? "kr-pressed" : "kr-pop"
-                    }`}>
-                    <Sparkle size={16} weight={view === "mywork" && aiPriority ? "fill" : "bold"} aria-hidden="true"
+                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground ${aiPriority ? "kr-pressed" : "kr-pop"}`}>
+                    <Sparkle size={16} weight={aiPriority ? "fill" : "bold"} aria-hidden="true"
                       className={scoring ? "animate-pulse" : ""} />
                   </button>
-                </div>
-            )}
-          </div>
-          <div className="order-1 flex flex-wrap items-center gap-2.5 lg:order-2" data-testid="work-view-toggle">
-            {/* U7-05.11 (2026-08-17): 'Tasks' view toggle removed for
-                owner. The MY TASKS / ALL TASKS / AI PRIORITY buttons
-                already route back to view=mywork on click, so Tasks
-                sat unused next to Workflows and Leave. Non-owners keep
-                it because they don't have MY TASKS / ALL TASKS -- it's
-                their only path back to the task list from Workflows
-                or Leave. Founder ask: 'remove the Tasks got it .. lets
-                have only the my tasks, all tasks, ai priority,
-                workflow and leave'. */}
-            {!isOwner && (
-              <button onClick={() => setView("mywork")} data-testid="work-view-mywork"
-                aria-pressed={view === "mywork"}
-                className={`${SECTION_BTN} ${view === "mywork" ? "kr-pressed font-semibold" : "kr-pop text-foreground/75"}`}>
-                <ListIcon size={15} weight="regular" aria-hidden="true" /> {t("mywork.view_mywork")}
-              </button>
-            )}
-            {/* Workflows — the one control that NEVER changes depth. Held
-                pressed in BOTH states on the founder's call, so colour alone
-                carries selection: brown at rest, ink when you are in it.
-                Everything else in this row moves between raised and sunken,
-                which is what lets a permanently-sunken button read as a
-                place rather than a toggle. */}
-            {canSeeWorkflows && (
-              <button onClick={() => setView("workflows")} data-testid="work-view-workflows"
-                aria-pressed={view === "workflows"}
-                className={`${SECTION_BTN} kr-pressed ${
-                  view === "workflows" ? "font-semibold text-foreground" : "text-kr-brown"
-                }`}>
-                <FlowArrow size={16} weight="bold" aria-hidden="true" /> {t("mywork.view_workflows")}
-              </button>
-            )}
-            <button onClick={() => setView("leave")} data-testid="work-view-leave"
-              aria-pressed={view === "leave"}
-              className={`${SECTION_BTN} ${view === "leave" ? "kr-pressed font-semibold" : "kr-pop text-foreground/75"}`}>
-              <AirplaneTakeoff size={15} weight="regular" aria-hidden="true" /> {t("mywork.view_leave")}
-            </button>
-          </div>
+                )}
+                {segments.length > 0 && (
+                  <div className="flex items-center" role="group" aria-label="View" data-testid="work-view-segment">
+                    {segments.map((seg, i) => {
+                      const first = i === 0;
+                      const last = i === segments.length - 1;
+                      return (
+                        <Fragment key={seg.key}>
+                          {!first && <span aria-hidden="true" className="h-6 w-px shrink-0 bg-kr-ink/15" />}
+                          <button type="button" onClick={seg.onClick} data-testid={seg.testid}
+                            aria-pressed={seg.active}
+                            className={`${SEG} ${first ? "rounded-l-pill" : ""} ${last ? "rounded-r-pill" : ""} ${seg.active ? SEG_ON : SEG_OFF}`}>
+                            {seg.label}
+                            {/* ASK-28 TK-02 — how many are waiting on you. */}
+                            {seg.count > 0 && (
+                              <span data-testid={`${seg.testid}-count`}
+                                className="ml-1.5 inline-grid h-5 min-w-5 place-items-center rounded-full bg-kr-ink px-1.5 text-[11px] font-semibold tabular-nums leading-none text-white">
+                                {seg.count}
+                              </span>
+                            )}
+                          </button>
+                        </Fragment>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </header>
 
       {focusDenied && (
-        <div data-testid="access-restricted-banner" className="mb-6 flex items-center gap-3 rounded-control border-l-[3px] border-kr-accent bg-kr-accent/10 p-4">
+        /* ASK-28 TK-04 — say which it is (a task that no longer exists, or one
+           this person may not open), and let them put the message away. */
+        <div data-testid="access-restricted-banner" data-reason={focusMissing ? "missing" : "denied"}
+          className="mb-6 flex items-center gap-3 rounded-control border-l-[3px] border-kr-accent bg-kr-accent/10 p-4">
           <LockKey size={20} weight="bold" aria-hidden="true" className="shrink-0 text-kr-accent" />
-          <div>
-            <p className="text-sm font-semibold">{t("mywork.access_restricted")}</p>
-            <p className="text-sm text-muted-foreground">{t("mywork.access_restricted_desc")}</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">{focusMissing ? t("mywork.task_missing", "This task no longer exists") : t("mywork.access_restricted")}</p>
+            <p className="text-sm text-muted-foreground">{focusMissing
+              ? t("mywork.task_missing_desc", "It may have been deleted. Your work is below.")
+              : t("mywork.access_restricted_desc")}</p>
           </div>
+          <button type="button" onClick={() => setFilterParams({ task: "", focus: "" })} data-testid="access-restricted-dismiss"
+            className="shrink-0 rounded-pill px-3 py-1.5 text-sm font-medium text-foreground/70 transition-colors hover:bg-kr-ink/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/40">
+            Dismiss
+          </button>
         </div>
       )}
 
-      {view === "workflows" && canSeeWorkflows ? (
+      {view === "approvals" && showApprovalsView ? (
+        // ASK-25 — the approvals that are not decisions. Two sub-tabs: Tasks
+        // (the All/My lens, cards in the task grid) and Leave (the register's
+        // cards). Decisions stay on the Desk and /decisions/:id.
+        <div data-testid="approvals-hub" className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+          {(() => {
+            // The same rule as tasks.py's _can_approve_task, mirrored so the
+            // Desk's count, this list and the card's buttons all agree.
+            const canApproveTask = (t) =>
+              isOwner || (t.approver_id ? user?.id === t.approver_id : userPerms(user).includes("approvals"));
+            // ASK-28 TK-02 — oldest request first: whoever has waited longest
+            // to start is the one to unblock next.
+            const apprAll = (Array.isArray(apprTasksQ.data) ? apprTasksQ.data : [])
+              .filter((t) => isPendingApproval(t) && canApproveTask(t))
+              .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
+            const apprList = apprScope === "mine" ? apprAll.filter((t) => t.approver_id === user?.id) : apprAll;
+            const pendingLeaves = (leavesQ.data || []).filter((l) => l.status === "pending" || l.status === "info_requested");
+            const subs = [
+              { key: "tasks", label: "Tasks", icon: Check, n: apprTasksQ.data ? apprAll.length : null },
+              ...(canApproveLeave ? [{ key: "leave", label: "Leave", icon: CalendarBlank, n: leavesQ.data ? pendingLeaves.length : null }] : []),
+            ];
+            const sub = subs.some((s) => s.key === apprSub) ? apprSub : "tasks";
+            return (
+              <>
+                {/* ASK-25 — icon + label + count per sub-tab, with the All/My
+                    lens riding the same row on the right.
+                    2026-09-14, founder — both join the task drawer's material:
+                    the underline tabs on a rule are a gray glass track now, the
+                    chosen tab a white glass pill, and the lens is the same track
+                    (ScopeSlider variant="glass"). min-h pins the row so it does
+                    not jump when Leave (no lens) is chosen. */}
+                <div className="mb-5 flex min-h-[48px] flex-wrap items-center gap-3" data-testid="approvals-controls">
+                  <div role="tablist" aria-label="Approvals" className={`inline-flex items-center gap-1 rounded-pill p-1 ${DRAWER_TRACK}`} data-testid="approvals-sub">
+                    {subs.map((s) => {
+                      const on = sub === s.key;
+                      const Icon = s.icon;
+                      return (
+                        <button key={s.key} type="button" role="tab" aria-selected={on}
+                          onClick={() => setApprSub(s.key)} data-testid={`approvals-sub-${s.key}`}
+                          className={`flex h-9 items-center gap-2 rounded-pill px-4 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 ${
+                            on ? `${GLASS_PILL} font-semibold text-neutral-900` : "font-medium text-neutral-600 hover:text-neutral-900"
+                          }`}>
+                          <Icon size={16} weight={on ? "bold" : "regular"} aria-hidden="true" />
+                          {s.label}
+                          <span className={`font-mono text-xs tabular-nums ${on ? "text-neutral-500" : "text-neutral-400"}`}>{s.n ?? "–"}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {sub === "tasks" && (
+                    <ScopeSlider variant="glass" options={APPR_SCOPES} value={apprScope} onChange={setApprScope}
+                      segWidth={128} label="Which approvals" testid="approvals-scope" className="ml-auto" />
+                  )}
+                </div>
+
+                <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+                  {focusDrawer(sub === "tasks" ? apprList.map((tk) => tk.id) : [], !apprTasksQ.isLoading)}
+                  {sub === "tasks" ? (
+                    apprTasksQ.isLoading ? (
+                      <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3" aria-hidden="true">
+                        {[0, 1, 2].map((i) => <div key={i} className="ds-skeleton h-36 rounded-tile" />)}
+                      </div>
+                    ) : apprList.length === 0 ? (
+                      <div className={`p-6 text-sm text-neutral-600 ${DRAWER_CARD}`} data-testid="approvals-tasks-empty">
+                        {apprScope === "mine" && apprAll.length > 0
+                          ? "Nothing is routed to you by name — switch to All approvals to see what you can still sign off."
+                          : "Tasks that need your sign-off will appear here."}
+                      </div>
+                    ) : (
+                      <TaskGrid
+                        list={apprList}
+                        openId={openId}
+                        setOpenId={setOpenId}
+                        cardProps={(t) => ({
+                          onChange: refresh,
+                          members,
+                          roleOptions,
+                          showAssignee: true,
+                          highlight: t.id === focusTaskId,
+                        })}
+                      />
+                    )
+                  ) : (
+                    leavesQ.isLoading ? (
+                      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3" aria-hidden="true">
+                        {[0, 1, 2].map((i) => <div key={i} className="ds-skeleton h-44 rounded-tile" />)}
+                      </div>
+                    ) : pendingLeaves.length === 0 ? (
+                      <div className={`p-6 text-sm text-neutral-600 ${DRAWER_CARD}`} data-testid="approvals-leave-empty">
+                        Leave requests routed to you will appear here.
+                      </div>
+                    ) : (
+                      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3" data-testid="approvals-leave">
+                        {pendingLeaves.map((lv) => (
+                          <LeaveCard key={lv.id} lv={lv} canAct
+                            onRefresh={() => qc.invalidateQueries({ queryKey: ["leaves"] })}
+                            highlight={lv.id === params.get("leave")} />
+                        ))}
+                      </div>
+                    )
+                  )}
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      ) : view === "workflows" && canSeeWorkflows ? (
         // WE-14 (2026-08-16): "Board" sub-tab retired. The pipelines
         // view now carries inline task lists per card (WE-12), so a
         // separate role-lane kanban was a redundant lens on the same
         // data. Any /my-work?view=workflows&wf_tab=board deep link
         // now silently lands on the pipelines view -- the wf_tab
         // param is intentionally ignored below.
-        <div data-testid="workflows-hub">
+        // ASK-25 — the hub no longer scrolls as a whole: it hands its height
+        // down so each STAGE COLUMN scrolls on its own (Workflows.js).
+        <div data-testid="workflows-hub" className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
           <Workflows embedded />
         </div>
-      ) : view === "leave" ? (
-        <Leave embedded />
       ) : (
-      <div data-testid="mywork-list">
-        <div>
+      <div data-testid="mywork-list" className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+        <div className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
           {/* U7-05.9 (2026-08-17): only render tabs with something in them.
               Founder ask: 'why are we showing all the chips here, only
               open we can show that right'. Rule: 'All' always visible
@@ -2488,18 +3977,144 @@ export default function MyWork() {
               borderless pills, sentence case, indigo tint on the active one.
               The bordered-uppercase version stacked a frame on every tab and
               the count badge carried a second frame inside it. */}
-          <div className="mb-5 hidden flex-wrap gap-2 border-b border-nm-edge/40 pb-4 lg:flex" data-testid="work-tabs">
-            {WORK_TABS
-              .filter((tb) => tb.key === "all" || countFor(tb.key) > 0)
-              .map((tb) => (
-                <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`work-tab-${tb.key}`}
-                  aria-pressed={tab === tb.key}
-                  className={`flex h-8 items-center gap-1.5 rounded-pill border-[0.5px] pl-3 pr-2 text-xs transition-colors ${tab === tb.key ? "border-kr-ink font-medium text-foreground" : "border-kr-ink/55 text-foreground/65 hover:text-foreground/85"}`}>
-                  {tb.label}
-                  <span className="min-w-[17px] rounded-pill px-1 py-0.5 text-center font-mono text-[10px] leading-none tabular-nums opacity-65">{countFor(tb.key)}</span>
-                </button>
-              ))}
+          {/* ASK-3: mobile-only New Task row. Sits directly above the task
+              list, right-aligned, once the sticky header lets go. Absent
+              on desktop -- the tab strip below carries the desktop
+              instance on its right side. This row is naturally scoped
+              to `view === "mywork"` because it sits inside the mywork-
+              list branch of the view guard above. */}
+          {/* Mobile PWA (2026-09-14) — the two lenses scroll with the list now.
+              They sat in the fixed header region above the scroller, so with
+              AI priority on they took ~150px of a phone's height away from the
+              list for as long as you stayed. Captions and behaviour unchanged. */}
+          {inSegmentView && aiPriority && (
+            <div className="mb-3 flex flex-col gap-2 lg:hidden" data-testid="work-mobile-lenses">
+              <div>
+                <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-foreground/70">
+                  {t("mywork.filter_priority", "Priority")}
+                </p>
+                {/* NO transition utility: the segments swap .kr-pop's outset
+                    shadows against .kr-pressed's inset ones, which do not
+                    interpolate. */}
+                <div className="kr-pressed flex items-center gap-1 rounded-pill p-1"
+                     role="group" aria-label="Filter by priority" data-testid="mywork-priority-bands">
+                  {BANDS.map((b) => {
+                    const n = list.filter((tk) => TIER_OF(tk) === b.key).length;
+                    return (
+                      <button key={b.key} type="button" onClick={() => setBand(b.key)}
+                        aria-pressed={band === b.key} data-testid={`priority-band-${b.key}`}
+                        className={`kr-seg-compact flex h-9 flex-1 items-center justify-center gap-1.5 rounded-pill px-2 text-[12px] ${
+                          band === b.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
+                        {b.label}
+                        <span className="tabular-nums opacity-55">{n}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-foreground/70">
+                  {t("mywork.filter_status", "Status")}
+                </p>
+                {/* Scrolls rather than wraps: four status segments do not fit
+                    343px, and a control row that reflows to two lines as you tap
+                    through it is worse than one that slides. */}
+                <div className="kr-pressed relative flex items-center gap-1 overflow-x-auto rounded-pill p-1 [scrollbar-width:none]"
+                     role="group" aria-label="Filter by progress" data-testid="work-mobile-status-lens">
+                  {M_STATUS_PILLS.map((sp) => (
+                    <button key={sp.key} type="button"
+                      onClick={() => setStatusFilter((cur) => (cur === sp.key ? "" : sp.key))}
+                      aria-pressed={statusFilter === sp.key} data-testid={`work-status-${sp.key}`}
+                      className={`kr-seg-compact flex h-9 shrink-0 items-center rounded-pill px-3.5 text-[12px] ${
+                        statusFilter === sp.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
+                      {sp.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="mb-3 flex justify-end lg:hidden">
+            <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members} defaultType={tab}
+              onOpenChange={(o) => { if (o) setOpenId(null); }}
+              triggerClassName={`inline-flex items-center gap-1.5 rounded-pill px-3.5 py-2 text-xs font-medium ${INK_PILL}`} />
           </div>
+
+          {/* MW-06 fix: while the tasks query is loading, tabs render a
+              dash instead of a hard 0. The card skeleton below is
+              already loading-shaped; the tab strip should match. Only
+              the "all" tab renders during load because every other
+              tab's filter is `countFor(k) > 0` and would filter itself
+              out at 0.
+
+              ASK-3: this row is now flex-justify-between so New Task
+              sits at the right end of the tab strip on desktop -- one
+              place for filtering, one place for adding, on the same
+              rule. */}
+          {/* ASK-13 (2026-09-13): the desktop chip strip is now three dropdowns
+              — Department (was the chip strip), Priority (new, was only reachable
+              through the AI-priority view switch), and Status (new, was mobile-only
+              inside the AI-priority row). All three read the same state the
+              filters already used; New Task keeps its right-end position. */}
+          <div className="mb-5 hidden shrink-0 items-end justify-between gap-4 border-b border-nm-edge/40 pb-4 lg:flex">
+            <div className="flex flex-wrap items-center gap-2.5" data-testid="work-filters">
+              {/* MW-19 — departments only, and only ones with work in them.
+                  Listing every category meant six of nine options read 0, and
+                  picking one was silently undone: the U7-05.9 effect snaps an
+                  empty tab back to 'all', so the trigger still said
+                  'Department: All 26' with nothing explaining why. The old
+                  chip strip already hid empty categories on a founder ask;
+                  the dropdown just forgot to. 'Completed' moved to Status. */}
+              <FilterDropdown
+                testid="work-filter-department"
+                label="Department"
+                value={tab}
+                options={departmentOptions}
+                counts={(k) => countWith({ tab: k })}
+                onSelect={setTab}
+                loading={tasksLoading}
+              />
+              {/* ASK-24 — Person, on All Tasks only. */}
+              {personOptions.length > 0 && (
+                <FilterDropdown
+                  testid="work-filter-person"
+                  label="Person"
+                  value={personFilter}
+                  options={personOptions}
+                  counts={(k) => countWith({ person: k })}
+                  onSelect={setPersonFilter}
+                  loading={tasksLoading}
+                  searchable={peopleSearchable}
+                />
+              )}
+              <FilterDropdown
+                testid="work-filter-status"
+                label="Status"
+                value={filters.status}
+                options={STATUS_FILTER_OPTIONS}
+                counts={(k) => countWith({ status: k })}
+                onSelect={setStatusFilter}
+                loading={tasksLoading}
+              />
+              {filtersActive && (
+                <button type="button" onClick={clearFilters} data-testid="work-filters-clear"
+                  className="h-9 rounded-pill px-2 text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+                  Clear filters
+                </button>
+              )}
+            </div>
+            <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members} defaultType={tab}
+              onOpenChange={(o) => { if (o) setOpenId(null); }}
+              /* 2026-09-14, founder — the same black ink pill as the drawer's
+                 Complete and Log update or hand off. */
+              triggerClassName={`${SECTION_BTN} ${INK_PILL}`} />
+          </div>
+          {/* ASK-20 (2026-09-13): THE ONLY SCROLLER on desktop. Everything
+              above this — page header, lens slider, filter row — is a fixed
+              block child of the flex column, so it cannot move at all and
+              needs no sticky offset. */}
+          <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
           {/* E2-14: skeleton on first load so the tab strip doesn't
               jump when tasks land. */}
           {tasksQ.isLoading && !tasksQ.data && (
@@ -2511,14 +4126,34 @@ export default function MyWork() {
           )}
           {/* E2-13: empty state with a CTA. Sends the founder to Desk
               (where decisions become tasks) rather than a dead screen. */}
-          {!tasksQ.isLoading && list.length === 0 && (
+          {/* ASK-24 — the filters emptied the list, not the workspace: say
+              so, and offer the way back, instead of "tasks appear once
+              decisions are approved". */}
+          {!tasksQ.isLoading && list.length === 0 && filtersActive && all.length > 0 && (
+            <EmptyState
+              testid="mywork-empty-filtered"
+              title="No tasks match these filters"
+              hint={filterSummary}
+              ctaLabel="Clear filters"
+              onCta={clearFilters}
+            />
+          )}
+          {!tasksQ.isLoading && list.length === 0 && !(filtersActive && all.length > 0) && (
             <EmptyState
               testid="mywork-empty"
-              title={tab === "completed" ? t("mywork.empty_completed_title") : t("mywork.empty_title")}
-              hint={tab === "all" ? t("mywork.empty_all_hint") : t("mywork.empty_cat_hint")}
-              ctaLabel={tab === "completed" ? null : "+ Open Decision Desk"}
-              ctaTo={tab === "completed" ? null : "/inbox"}
-              secondary={tab === "completed" ? null : "Tasks appear here once decisions are approved"}
+              title={asked
+                ? (showingCompleted ? "Nothing you asked for is finished yet" : "Nothing you've asked for is open")
+                : team
+                ? (showingCompleted ? "Your team hasn't finished anything yet" : "Your team has nothing open")
+                : (showingCompleted ? t("mywork.empty_completed_title") : t("mywork.empty_title"))}
+              hint={asked
+                ? "Tasks you create for other people show up here, with their live status."
+                : team
+                ? "Work given to the people who report to you shows up here, with its live status."
+                : (tab === "all" ? t("mywork.empty_all_hint") : t("mywork.empty_cat_hint"))}
+              ctaLabel={showingCompleted || asked || team ? null : "+ Open Decision Desk"}
+              ctaTo={showingCompleted || asked || team ? null : "/inbox"}
+              secondary={showingCompleted || asked || team ? null : "Tasks appear here once decisions are approved"}
             />
           )}
           {/* U7-05.3: bulk-action bar. Sticky at top of the list so it
@@ -2537,9 +4172,14 @@ export default function MyWork() {
               onComplete={async () => {
                 setBulkBusy(true);
                 try {
-                  const targets = list.filter((tk) => selected.has(tk.id) && !isTerminal(tk));
+                  // ASK-28 item 7 — only the tasks this person may finish.
+                  const open = list.filter((tk) => selected.has(tk.id) && !isTerminal(tk));
+                  const targets = open.filter((tk) => taskEditRights(user, tk, members).finish);
+                  const skipped = open.length - targets.length;
                   await Promise.all(targets.map((tk) => api.patch(`/tasks/${tk.id}`, { status: "done" })));
-                  toast.success(`Completed ${targets.length} ${targets.length === 1 ? "task" : "tasks"}`);
+                  const msg = `Completed ${targets.length} ${targets.length === 1 ? "task" : "tasks"}`
+                    + (skipped ? ` · ${skipped} skipped: the doer marks ${skipped === 1 ? "it" : "them"} done` : "");
+                  (targets.length ? toast.success : toast.error)(msg);
                   clearSelection();
                   refresh();
                 } catch (e) {
@@ -2556,54 +4196,72 @@ export default function MyWork() {
               roleOptions,
               showAssignee,
               highlight: t.id === focusTaskId,
-              scores: aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined,
+              scores: aiOn && !showingCompleted ? scoreMap[t.id] : undefined,
               // KM-30 — the card drops the status chip when the lens already
-              // says it. Priority is handled inside TaskPriorityColumns, whose
-              // band/column names it on every card it renders.
-              hideStatus: Boolean(statusFilter),
+              // says it. Priority is handled by TaskPriorityColumns when AI
+              // Priority is on (each column already names the band).
+              // ASK-24: Overdue is not a status, so the chip still has news.
+              // A LENS narrows by a reason, not a status, so the status chip
+              // still carries information under it; a real status filter
+              // makes the chip redundant on every card.
+              hideStatus: Boolean(statusFilter) && !STATUS_LENSES.has(statusFilter),
               selected: selected.has(t.id),
               onToggleSelect: () => toggleSelected(t.id),
             });
             const shared = { list, openId, setOpenId, cardProps };
-            return aiPriority && tab !== "completed"
-              ? <TaskPriorityColumns {...shared} />
-              : <TaskBento {...shared} />;
+            return aiOn && !showingCompleted
+              ? <TaskPriorityColumns {...shared} band={band} />
+              : <TaskGrid {...shared} />;
           })()}
+          {focusDrawer(list.map((tk) => tk.id), tasksQ.isSuccess)}
+          </div>
 
-          {/* U7-05.3 dialog: bulk-reassign target picker. */}
+          {/* U7-05.3 dialog: bulk-reassign target picker. 2026-09-14, founder —
+              on the drawer's material: the light gray sheet, a glass close in
+              the corner, glass select pills under small-caps labels, a glass
+              Cancel and the black ink Reassign. */}
           <Dialog open={bulkReassignOpen} onOpenChange={(o) => !o && !bulkBusy && setBulkReassignOpen(false)}>
-            <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-md" data-testid="bulk-reassign-dialog">
-              <DialogHeader>
-                <DialogTitle className="font-heading tracking-tight">
-                  Reassign {selected.size} {selected.size === 1 ? "task" : "tasks"}
-                </DialogTitle>
-              </DialogHeader>
-              <p className="text-sm text-muted-foreground -mt-2">
-                Pick a specific team member OR hand off to a whole team.
-              </p>
-              <select
-                value={bulkAssigneeId}
-                onChange={(e) => setBulkAssigneeId(e.target.value)}
-                className="w-full nm-tile px-3 py-2 text-sm focus:outline-none"
-              >
-                <option value="">— Reassign to a team member —</option>
-                {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
-              </select>
-              <select
-                value={bulkAssigneeRole}
-                onChange={(e) => setBulkAssigneeRole(e.target.value)}
-                disabled={!!bulkAssigneeId}
-                className="w-full nm-tile px-3 py-2 text-sm focus:outline-none disabled:opacity-40"
-              >
-                <option value="">...or to a whole team {bulkAssigneeId ? "(member selected)" : ""}</option>
-                {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
-              </select>
-              <div className="flex gap-2 justify-end">
+            <DialogContent data-testid="bulk-reassign-dialog"
+              className={`max-w-md gap-5 rounded-[1.75rem] p-6 sm:rounded-[1.75rem] [&>button.absolute]:hidden ${GLASS_SHEET}`}>
+              <div className="flex items-start gap-3">
+                <DialogHeader className="min-w-0 flex-1 space-y-1.5 text-left">
+                  <DialogTitle className="text-lg font-semibold text-neutral-900">
+                    Reassign {selected.size} {selected.size === 1 ? "task" : "tasks"}
+                  </DialogTitle>
+                  <p className="text-sm text-neutral-600">Pick a specific team member, or hand off to a whole team.</p>
+                </DialogHeader>
+                <button type="button" onClick={() => setBulkReassignOpen(false)} disabled={bulkBusy}
+                  aria-label="Close" data-testid="bulk-reassign-close" className={GLASS_ICON_BTN}>
+                  <X size={16} weight="bold" aria-hidden="true" />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <p className={DRAWER_LABEL}>A team member</p>
+                  <GlassSelect value={bulkAssigneeId} onChange={setBulkAssigneeId}
+                    ariaLabel="Reassign to a team member" testid="bulk-reassign-member"
+                    options={[
+                      { value: "", label: "Choose a person" },
+                      ...members.filter((m) => canAssignPerson(user, m)).map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` })),
+                    ]} />
+                </div>
+                <div>
+                  <p className={DRAWER_LABEL}>Or a whole team</p>
+                  <GlassSelect value={bulkAssigneeRole} onChange={setBulkAssigneeRole} disabled={!!bulkAssigneeId}
+                    ariaLabel="Or hand off to a whole team" testid="bulk-reassign-team"
+                    options={[
+                      { value: "", label: bulkAssigneeId ? "A person is chosen" : "Choose a team" },
+                      ...roleOptions.filter((r) => canAssignTeam(user, r.key)).map((r) => ({ value: r.key, label: r.label })),
+                    ]} />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setBulkReassignOpen(false)}
                   disabled={bulkBusy}
-                  className="nm-tile px-4 py-2 text-sm font-medium hover:bg-accent disabled:opacity-40"
+                  data-testid="bulk-reassign-cancel"
+                  className={`h-11 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}
                 >Cancel</button>
                 <button
                   type="button"
@@ -2614,12 +4272,17 @@ export default function MyWork() {
                       const patch = bulkAssigneeId
                         ? { assignee_id: bulkAssigneeId, assignee_role: null }
                         : { assignee_id: null, assignee_role: bulkAssigneeRole };
-                      const ids = Array.from(selected);
+                      // ASK-28 item 7 — only the tasks this person may change people on.
+                      const chosen = list.filter((tk) => selected.has(tk.id));
+                      const ids = chosen.filter((tk) => taskEditRights(user, tk, members).people).map((tk) => tk.id);
+                      const skipped = selected.size - ids.length;
                       await Promise.all(ids.map((id) => api.patch(`/tasks/${id}`, patch)));
                       const label = bulkAssigneeId
                         ? (members.find((m) => m.id === bulkAssigneeId)?.name || "member")
                         : `${bulkAssigneeRole} team`;
-                      toast.success(`Reassigned ${ids.length} ${ids.length === 1 ? "task" : "tasks"} to ${label}`);
+                      const msg = `Reassigned ${ids.length} ${ids.length === 1 ? "task" : "tasks"} to ${label}`
+                        + (skipped ? ` · ${skipped} skipped: only the person who asked, the manager or the owner can` : "");
+                      (ids.length ? toast.success : toast.error)(msg);
                       clearSelection();
                       setBulkReassignOpen(false);
                       refresh();
@@ -2627,8 +4290,9 @@ export default function MyWork() {
                       toast.error(e.response?.data?.detail || "Bulk reassign failed");
                     } finally { setBulkBusy(false); }
                   }}
-                  className="kr-lift rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40"
-                >{bulkBusy ? "Reassigning..." : "Reassign"}</button>
+                  data-testid="bulk-reassign-submit"
+                  className={`h-11 rounded-pill px-5 text-sm font-medium disabled:opacity-40 ${INK_PILL}`}
+                >{bulkBusy ? "Reassigning…" : "Reassign"}</button>
               </div>
             </DialogContent>
           </Dialog>

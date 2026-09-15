@@ -101,6 +101,9 @@ export function useDeskMetrics() {
   }, [ledgerQ.data]);
 
   return {
+    // ASK-25 — the raw task list, for the Desk's Task approvals card. null
+    // while loading so the card can tell "no approvals" from "not yet".
+    tasks: Array.isArray(tasksQ.data) ? tasksQ.data : (tasksQ.isLoading ? null : []),
     greeting: summaryQ.data?.greeting || "",
     counters: summaryQ.data?.counters || null,   // {delayed, completed_yesterday, pending_decisions}
     weekly: trends?.weekly_completion_rate || null,

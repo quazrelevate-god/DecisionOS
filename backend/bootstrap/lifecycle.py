@@ -417,6 +417,22 @@ async def _bootstrap():
         except Exception as e:
             logger.exception(f"drop_ghost_workflow_collections migration: {e}")  # WE-02
 
+        # ASK-32 2.1 (2026-09-15): waiting decisions captured before routing
+        # existed get the approver the routing rule picks now (capturer ->
+        # their manager -> the owner). Several owners: left with every owner.
+        try:
+            from services.decision_flow import name_waiting_approvers
+            _nres = await _apply_migration(
+                db,
+                "name_waiting_decision_approvers_v1",
+                name_waiting_approvers,
+                description="ASK-32 2.1: name who decides on waiting decisions that have no approver",
+            )
+            if _nres == "applied":
+                logger.info("Migration applied: name_waiting_decision_approvers_v1")
+        except Exception as e:
+            logger.exception(f"name_waiting_decision_approvers migration: {e}")  # ASK-32
+
         # WE-08 (2026-08-16): the FIX-001-B behaviour that used to be
         # hardcoded in the advance endpoint (procurement -> Finance
         # auto-expense) is now a `create_expense` side-effect bound to
@@ -823,6 +839,8 @@ async def _bootstrap():
         await db.decisions.create_index([("tenant_id", 1), ("created_at", -1)])
         await db.tasks.create_index([("tenant_id", 1), ("status", 1), ("due_date", 1)])
         await db.tasks.create_index([("tenant_id", 1), ("assignee_id", 1), ("status", 1)])
+        # ASK-26: "tasks I am on" now also matches co_assignee_ids (multikey).
+        await db.tasks.create_index([("tenant_id", 1), ("co_assignee_ids", 1)])
         # BUG-13: engine-spawned template tasks are keyed by
         # (tenant_id, workflow_id, stage_key, title). on_stage_enter used a
         # find-then-insert with no unique index, so a concurrent stage re-entry
@@ -845,6 +863,8 @@ async def _bootstrap():
         await db.files.create_index([("tenant_id", 1), ("task_id", 1)])
         # High-volume collections — these were doing full scans pre-1.0.
         await db.activity.create_index([("tenant_id", 1), ("created_at", -1)])
+        # ASK-29: a task's own timeline (GET /tasks/{id}/activity).
+        await db.activity.create_index([("tenant_id", 1), ("entity_id", 1), ("created_at", -1)])
         await db.notifications.create_index([("tenant_id", 1), ("user_id", 1), ("read", 1), ("created_at", -1)])
         await db.inbox.create_index([("tenant_id", 1), ("status", 1), ("created_at", -1)])
         await db.inbox.create_index([("tenant_id", 1), ("classification", 1)])

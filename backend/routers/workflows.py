@@ -34,6 +34,13 @@ async def list_workflows(type: Optional[str] = None,
     if type:
         q["type"] = type
     wfs = await db.workflows.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
+    # ASK-32 4.4 — the decision a card came from, for a link back.
+    dec_ids = list({w["decision_id"] for w in wfs if w.get("decision_id")})
+    if dec_ids:
+        dmap = {x["id"]: x.get("title") async for x in db.decisions.find(
+            {"id": {"$in": dec_ids}, "tenant_id": user["tenant_id"]}, {"_id": 0, "id": 1, "title": 1})}
+        for w in wfs:
+            w["decision_title"] = dmap.get(w.get("decision_id"))
     # WE-12 (2026-08-16): when the client asks with_tasks=true, we
     # hydrate each card with the OPEN tasks at its current stage
     # (workflow_id + stage_key + status not-in done/cancelled), plus

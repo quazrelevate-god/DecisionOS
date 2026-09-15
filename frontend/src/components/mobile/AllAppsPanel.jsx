@@ -38,6 +38,7 @@ import {
 import { hasPerm } from "@/lib/perms";
 import { cn } from "@/lib/utils";
 import { useBodyScrollLock } from "./BottomSheet";
+import { useBackDismiss } from "@/hooks/useBackDismiss";
 
 /* KM-9 — `cached()` and `useLiveLines()` were deleted here.
    They read the React Query cache so a tile could show a live figure without
@@ -93,9 +94,26 @@ function buildTiles({ user, t, counts }) {
       label: t("nav.workflows", "Workflows"),
       icon: FlowArrow,
       size: "wide",
+      // Mobile PWA (2026-09-14): shown only to people who can open it — the
+      // tile used to send everyone else to Access Denied.
+      perm: "workflows",
       blurb: "Pipelines, stage by stage",
     },
-    { key: "leave", to: "/leave", label: t("nav.leave", "Leave"), icon: AirplaneTakeoff, size: "small" },
+    // ASK-6 (2026-09-12): the standalone Leave tile lands on /team now.
+    // Register lives on Team, approvals on the Decision Desk, per-
+    // department config on Settings > Operations. The tile itself stays
+    // because "Leave" is still the reader's mental hook for the concept
+    // -- it just navigates to the new home.
+    { key: "leave", to: "/team", label: t("nav.leave", "Leave"), icon: AirplaneTakeoff, size: "small" },
+    /* Mobile PWA (2026-09-14) — Calendar and Notifications, for everyone. A
+       non-owner's More held two tiles (GL-02), Calendar had no way in on a
+       phone, and the More badge counted notifications with no tile inside to
+       open them — this tile carries that count. */
+    { key: "calendar", to: "/calendar", label: t("nav.calendar", "Calendar"), icon: CalendarBlank, size: "small" },
+    {
+      key: "notifications", to: "/notifications", label: t("nav.notifications", "Notifications"),
+      icon: Bell, size: "small", badge: counts?.notifications || 0,
+    },
     // §5.7 listed "Send Daily Digest" as a Small tile, and §8 asked for it to sit
     // nowhere near Sign out. E2-63 (2026-08-15) then deleted
     // POST /brief/send-digest outright — "the Desk itself is the brief now, so
@@ -119,7 +137,9 @@ function buildUtility({ user, isDark, t }) {
      to feel safe. Settings is the only utility left, so it is the only one
      listed. */
   return [
-    { key: "settings", to: "/settings", label: t("nav.settings", "Settings"), icon: GearSix, ownerOnly: true },
+    // Mobile PWA (2026-09-14): for everyone. Profile, security and Sign out
+    // live in Settings, and a non-owner on a phone had no way to reach them.
+    { key: "settings", to: "/settings", label: t("nav.settings", "Settings"), icon: GearSix },
   ].filter((x) => !x.ownerOnly || user?.role === "owner");
 }
 
@@ -222,6 +242,7 @@ export function AllAppsPanel({
   const [q, setQ] = React.useState("");
 
   useBodyScrollLock(open);
+  useBackDismiss(open, (o) => { if (!o) onClose?.(); });
 
   // Reset the query each time it opens — he is usually looking for something
   // different than last time.
@@ -306,6 +327,9 @@ export function AllAppsPanel({
         />
         <DialogPrimitive.Content
           data-testid="allapps-panel"
+          /* More grows out of the dock, so the dock stays while it is open
+             (index.css hides it under every other dialog). */
+          data-keeps-chrome=""
           // §8: "Autofocus off — he usually taps, not types." Radix focuses the
           // first focusable child on open, which is the search field, and that
           // pops the keyboard over half the grid. Move focus to the panel
@@ -333,7 +357,9 @@ export function AllAppsPanel({
                arriving over the app. w-[17rem] is the dock's measured width
                (267px at a 375px viewport, four slots plus padding). */
             "fixed z-[10090] flex max-h-[68vh] w-[var(--app-dock-w,17rem)] flex-col overflow-hidden app-dock-left",
-            "bottom-[calc(1rem+4rem+0.5rem+env(safe-area-inset-bottom,0px))]",
+            /* Mobile PWA (2026-09-14): 4.5rem, the dock's real height since
+               KM-32 — at 4rem the panel sat flush on the bar with no seam. */
+            "bottom-[calc(1rem+4.5rem+0.5rem+env(safe-area-inset-bottom,0px))]",
             /* KM-3 — THE PANEL BECOMES AN INK OBJECT.
                It was `bg-background` — the page's own greige — so More opened
                a copy of the page floating over the page, with a hard
@@ -358,7 +384,10 @@ export function AllAppsPanel({
                drawing its default ring around the whole sheet. The focus trap
                still has its anchor; it just stops painting a blue rectangle
                around a menu nobody typed into. */
-            "kr-frost rounded-cardlg focus:outline-none focus-visible:outline-none",
+            /* KM-50 — kr-keep-blur: /finance strips backdrop-filter off .kr-frost
+               to stay inside the blur budget, and this panel is not part of
+               that budget — it is one overlay, on top, one at a time. */
+            "kr-frost kr-keep-blur rounded-cardlg focus:outline-none focus-visible:outline-none",
 
             // scale 0.92 -> 1 with opacity, ~180ms ease-out; reverse on close
             // [animation-duration:...] rather than duration-[180ms]: the

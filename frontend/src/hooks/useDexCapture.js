@@ -29,11 +29,29 @@ const POLL_MS = 1200;
 const POLL_TIMEOUT_MS = 90000;
 
 /**
- * @param {{onCaptured?:Function, onRecordingChange?:Function, watch?:boolean}} opts
+ * @param {{onCaptured?:Function, onRecordingChange?:Function, watch?:boolean,
+ *          onTranscript?:Function}} opts
  *        watch — poll the note until it is structured and expose `understanding`.
  *        Off by default so DexCaptureBar's behaviour is bit-for-bit unchanged.
+ *
+ *        onTranscript — KM-51. When given, stopping a recording TRANSCRIBES AND
+ *        STOPS THERE: the text is handed back and nothing is structured, nothing
+ *        is auto-sent. It exists because the phone's Dex had no review step —
+ *        `mr.onstop` uploaded, `follow()` structured, and an answer appeared for
+ *        something the founder had not confirmed saying. Their words: "only when
+ *        I press the stop button it should take that as a query", and then a
+ *        preview before it goes anywhere. A hook that both records AND commits
+ *        cannot offer that, so the commit half is now the caller's decision.
  */
-export function useDexCapture({ onCaptured, onRecordingChange, watch = false } = {}) {
+/* KM-60 — `meterState` decides whether the mic meter is allowed to write React
+   state at full rate.
+     true  (default)  every sample, as before. Correct for pages/brain, where
+                      the hook lives INSIDE the page component, so a write
+                      re-renders the orb and nothing above it.
+     false            ref only. Correct for Layout, where the same write
+                      re-renders the header, the dock, the chat, the FAB and
+                      the entire current page ~18 times a second. */
+export function useDexCapture({ onCaptured, onRecordingChange, watch = false, onTranscript, channel = "capture", meterState = true } = {}) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -42,6 +60,40 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
   const [levels, setLevels] = useState(() => new Array(BARS).fill(0));
   // { noteId, status, transcript, language, decision, tasks[] } | null
   const [understanding, setUnderstanding] = useState(null);
+  /* ASK-32 1.6 — files attached for the NEXT capture. Uploading used to be the
+     end of it ("File uploaded to Dex") and nothing ever read the file; now the
+     ids ride along with the note, and the pipeline reads them. */
+  const [attachments, setAttachments] = useState([]);
+  // Held in a ref so changing the handler never re-creates startRecording and
+  // orphans a live MediaRecorder.
+  const onTranscriptRef = useRef(onTranscript);
+  onTranscriptRef.current = onTranscript;
+  /* KM-54 — "channel" decides what a finished recording MEANS, and it is read
+     at onstop rather than captured when the recorder was built, so switching
+     Ask/Decide mid-take does the right thing.
+       "capture"  -> POST /voice-notes   : structured into a decision + tasks
+       "dictate"  -> POST /transcribe    : text back, nothing persisted */
+  const channelRef = useRef(channel);
+  channelRef.current = channel;
+  /* KM-54 — the two refs that fix the "I have to press stop three times" bug.
+     `starting` is true across the getUserMedia await, so a second tap cannot
+     open a second microphone; `cancelStart` lets a stop pressed DURING that
+     await be honoured when the stream finally arrives. */
+  const startingRef = useRef(false);
+  const cancelStartRef = useRef(false);
+  /* KM-60 — the live meter, in a REF as well as in state.
+     The interval below samples the mic every 55ms. Writing that straight to
+     React state re-rendered Layout ~18 times a second — and Layout renders the
+     header, the dock, the chat, the FAB and the whole current page. On a phone
+     that is enough main-thread work to drop taps, which is why the founder
+     could stop the recording while silent and not while speaking: the busier
+     the wave, the more work per frame, the more likely the tap was lost.
+     The ref carries the live value at full rate for anything that reads it on
+     an animation frame; the state below is throttled to a fraction of that for
+     the legacy consumers that still need a prop. */
+  const levelsRef = useRef(new Array(BARS).fill(0));
+  const meterStateRef = useRef(meterState);
+  meterStateRef.current = meterState;
 
   const mediaRef = useRef(null);
   const chunksRef = useRef([]);
@@ -100,6 +152,42 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
     };
   }, [stopMeter]);
 
+  /** KM-51 — poll one note only until its TRANSCRIPT exists, then hand it back.
+      Deliberately not `follow()`: that one waits for `status === "done"` and a
+      decision_id, i.e. for the server to have committed the thing. Here the
+      transcript is the whole point and the commit has not been authorised yet. */
+  const pollTranscript = useCallback(async (noteId) => {
+    const startedAt = Date.now();
+    const gen = ++followRef.current;
+    const live = () => aliveRef.current && followRef.current === gen;
+    const step = async () => {
+      if (!live()) return;
+      try {
+        const note = (await api.get(`/voice-notes/${noteId}`)).data || {};
+        // ASK-32 1.6 — the note is HELD: the id goes back with the words, so
+        // sending the reviewed text structures this same note (one decision).
+        if (note.transcript) { setSending(false); onTranscriptRef.current?.(note.transcript, noteId); return; }
+        if (note.status === "transcribed") {
+          setSending(false);
+          toast.error("I didn't catch that — try again");
+          return;
+        }
+        if (note.status === "failed" || note.error) {
+          setSending(false);
+          toast.error(note.error || "Could not transcribe that");
+          return;
+        }
+      } catch { /* a dropped poll is not a failure — the next one may land */ }
+      if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+        setSending(false);
+        toast.error("Transcription timed out");
+        return;
+      }
+      pollRef.current = setTimeout(step, POLL_MS);
+    };
+    step();
+  }, []);
+
   /** Poll one note until it is structured, then read the decision it produced. */
   const follow = useCallback(async (noteId, seed = {}) => {
     const startedAt = Date.now();
@@ -118,9 +206,15 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
           transcript: note.transcript || seed.transcript || "",
           language: note.detected_language_name || null,
           summary: note.execution_summary || null,
+          said: note.summary || null,
           error: note.error || null,
         };
 
+        // ASK-32 1.4 — nothing to act on: no decision was made, say so.
+        if (note.status === "done" && !note.decision_id) {
+          if (live()) setUnderstanding({ ...base, status: "nothing" });
+          return;
+        }
         if (note.status === "done" && note.decision_id) {
           // The decision carries the structure: title, summary, and the tasks it
           // produced. That IS the echo §5.6 wants — extracted fields, not a
@@ -130,7 +224,10 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
           try {
             decision = (await api.get(`/decisions/${note.decision_id}`)).data || null;
           } catch { /* the note is done even if the decision read fails */ }
-          const ids = (decision?.task_ids || []).slice(0, 4);
+          // ASK-32 Phase 1 — a waiting decision PROPOSES its tasks; none exist yet.
+          const proposed = decision?.status === "pending_approval" ? decision?.proposal?.tasks : null;
+          const ids = proposed ? [] : (decision?.task_ids || []).slice(0, 4);
+          if (proposed) tasks = proposed;
           if (ids.length) {
             const got = await Promise.all(
               ids.map((id) => api.get(`/tasks/${id}`).then((r) => r.data).catch(() => null))
@@ -164,13 +261,14 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
 
   const sendText = useCallback(async () => {
     const body = text.trim();
-    if (!body) return null;
+    if (!body && !attachments.length) return null;
     setSending(true);
     try {
-      const res = await api.post("/voice-notes/text", { text: body });
+      const res = await api.post("/voice-notes/text", { text: body, file_ids: attachments.map((a) => a.id) });
       if (watch && res.data?.id) follow(res.data.id, { transcript: body });
       else toast.success("Captured — Dex is structuring it now");
       setText("");
+      setAttachments([]);
       onCaptured?.();
       return res.data;
     } catch (e) {
@@ -179,11 +277,60 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
     } finally {
       setSending(false);
     }
-  }, [text, watch, follow, onCaptured]);
+  }, [text, attachments, watch, follow, onCaptured]);
 
+  /* KM-54 — THE "I CAN'T STOP IT" BUG.
+     Founder: "if I press the mic icon I can't be able to stop; only after
+     pressing two or three times it's stopping, and everything has so much
+     delay."
+
+     This function is async and `setRecording(true)` used to be its LAST
+     statement — after `await getUserMedia`, after building the MediaRecorder,
+     after opening an AudioContext and wiring an AnalyserNode. On a phone that
+     await is hundreds of milliseconds and, the first time or after the app has
+     been backgrounded, seconds. For that entire window the hook reported
+     `recording: false`, so the FAB still showed a microphone. A second tap
+     therefore did not read as "stop" — it fell through the intent chain to
+     `startRecording()` again and opened a SECOND stream, whose MediaRecorder
+     overwrote `mediaRef.current`. The first one was then unreachable: its
+     stream stayed live (mic hot), its AudioContext was never closed, and
+     stopping only ever stopped the newest of them. Hence three presses, and
+     hence the whole thing getting slower the longer the session ran — iOS caps
+     concurrent AudioContexts, so after a few double-starts the meter silently
+     stopped being created at all.
+
+     Two refs fix it. `startingRef` makes a start non-re-entrant, so the second
+     tap is a no-op instead of a second microphone. `recording` now flips
+     OPTIMISTICALLY, before the await, so the button becomes a stop the instant
+     it is pressed — and `cancelStartRef` means a stop pressed while the stream
+     is still being granted is remembered and applied the moment it arrives,
+     instead of being lost. */
   const startRecording = useCallback(async () => {
+    if (startingRef.current || mediaRef.current?.state === "recording") return false;
+    startingRef.current = true;
+    cancelStartRef.current = false;
+    // Optimistic: the UI must answer the tap, not the hardware.
+    setRecording(true);
+    setRecordSecs(0);
+    levelsRef.current = new Array(BARS).fill(0);
+    setLevels(levelsRef.current);
+    clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => setRecordSecs((s) => s + 1), 1000);
+
+    const abandon = () => {
+      startingRef.current = false;
+      setRecording(false);
+      clearInterval(timerRef.current);
+    };
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Stop was pressed while the browser was still granting the mic.
+      if (cancelStartRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        abandon();
+        return false;
+      }
       const mr = new MediaRecorder(stream);
       chunksRef.current = [];
       mr.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data);
@@ -196,15 +343,47 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
         fd.append("language", "auto");
         setSending(true);
         try {
+          /* KM-54 — DICTATION IS NOT CAPTURE.
+             In Ask mode the audio must not become a decision, and it must not
+             wait on one either: POST /transcribe writes a temp file, returns
+             the text in the same response and persists nothing. That also
+             removes the whole poll loop from the Ask path — no background
+             task to be scheduled, no 1.2s poll interval to sit through — which
+             is most of the "transcribing takes so much time" the founder felt.
+             Capture keeps /voice-notes, because there the structuring IS the
+             point. */
+          if (channelRef.current === "dictate") {
+            const { data } = await api.post("/transcribe", fd, {
+              headers: { "Content-Type": "multipart/form-data" },
+            });
+            setSending(false);
+            const said = (data?.text || "").trim();
+            if (said) onTranscriptRef.current?.(said);
+            else toast.error("I didn't catch that — try again");
+            return;
+          }
+          /* ASK-32 1.6 — with onTranscript the recording is HELD: transcribed and
+             kept, not structured. Sending the reviewed words then structures
+             this same note; before, sending posted a second capture and every
+             spoken decision became two. */
+          if (onTranscriptRef.current) fd.append("hold", "1");
           const res = await api.post("/voice-notes", fd, {
             headers: { "Content-Type": "multipart/form-data" },
           });
+          /* KM-51 — with onTranscript the upload is a TRANSCRIPTION request and
+             nothing more. `sending` deliberately stays true through the poll,
+             because from the founder's side one wait is still running. */
+          if (onTranscriptRef.current && res.data?.id) {
+            pollTranscript(res.data.id);
+            onCaptured?.();
+            return;
+          }
           if (watch && res.data?.id) follow(res.data.id);
           else toast.success("Voice captured — Dex is structuring it");
           onCaptured?.();
+          setSending(false);
         } catch (e) {
           toast.error(e.response?.data?.detail || "Upload failed");
-        } finally {
           setSending(false);
         }
       };
@@ -234,7 +413,17 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
             // the bar rather than hugging the floor.
             const rms = Math.sqrt(sum / data.length);
             const level = Math.min(1, Math.pow(rms * 3.2, 0.65));
-            setLevels((prev) => [...prev.slice(1), level]);
+            /* Ref first, every tick: DexWave reads this on its own rAF loop and
+               is therefore SMOOTHER than it was, not choppier, despite fewer
+               renders. */
+            const next = levelsRef.current.slice(1);
+            next.push(level);
+            levelsRef.current = next;
+            /* The /brain orb reads the newest four samples and walks them
+               outward ring by ring, so THAT surface genuinely needs every
+               sample and gets them. Layout opts out entirely and drives its
+               wave from the ref above — same motion, no renders. */
+            if (meterStateRef.current) setLevels(next);
           }, AMP_INTERVAL_MS);
           audioRef.current = { ctx, source, analyser, data, interval };
         }
@@ -245,19 +434,30 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
 
       mediaRef.current = mr;
       mr.start();
-      setLevels(new Array(BARS).fill(0));
-      setRecording(true);
-      setRecordSecs(0);
-      timerRef.current = setInterval(() => setRecordSecs((s) => s + 1), 1000);
+      startingRef.current = false;
+      /* One last look: a stop can also land between the stream arriving and
+         the recorder starting. Honour it rather than leaving a take running
+         that nothing is going to end. */
+      if (cancelStartRef.current) { try { mr.stop(); } catch { /* already gone */ } }
+      // recording / secs / levels were set before the await — see the note above.
       return true;
     } catch {
+      abandon();
+      stopMeter();
       toast.error("Microphone not available");
       return false;
     }
-  }, [watch, follow, onCaptured, stopMeter]);
+  }, [watch, follow, onCaptured, stopMeter, pollTranscript]);
 
   const stopRecording = useCallback(() => {
-    if (mediaRef.current?.state === "recording") mediaRef.current.stop();
+    /* KM-54 — a stop pressed during the getUserMedia await is REMEMBERED,
+       not dropped. Without this the tap did nothing at all and the recording
+       started a moment later anyway, which is what made it feel unstoppable. */
+    if (startingRef.current) cancelStartRef.current = true;
+    const mr = mediaRef.current;
+    // `!== "inactive"` rather than `=== "recording"`: a paused recorder still
+    // has to be stopped, and a stop on an inactive one is what used to throw.
+    if (mr && mr.state !== "inactive") { try { mr.stop(); } catch { /* already stopped */ } }
     setRecording(false);
     clearInterval(timerRef.current);
     stopMeter();
@@ -270,16 +470,18 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
     fd.append("file", f);
     setSending(true);
     try {
-      await api.post("/files", fd, { headers: { "Content-Type": "multipart/form-data" } });
-      toast.success("File uploaded to Dex");
-      onCaptured?.();
+      const { data } = await api.post("/files", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      const id = data?.id || data?.file?.id;
+      if (id) setAttachments((a) => [...a, { id, name: f.name }]);
+      toast.success("Attached — type what Dex should do with it, then press Note");
     } catch (err) {
       toast.error(err.response?.data?.detail || "Upload failed");
     } finally {
       setSending(false);
       e.target.value = "";
     }
-  }, [onCaptured]);
+  }, []);
+  const removeAttachment = useCallback((id) => setAttachments((a) => a.filter((x) => x.id !== id)), []);
 
   /** Drop the understanding card and stop following the note. */
   const clearUnderstanding = useCallback(() => {
@@ -299,9 +501,10 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
 
   return {
     text, setText,
-    sending, recording, recordSecs, levels,
-    understanding, clearUnderstanding, reset,
+    sending, recording, recordSecs, levels, levelsRef,
+    understanding, clearUnderstanding, reset, follow,
     sendText, startRecording, stopRecording, uploadFile,
+    attachments, removeAttachment,
     fileRef,
   };
 }

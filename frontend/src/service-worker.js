@@ -19,6 +19,24 @@ import { ExpirationPlugin } from 'workbox-expiration';
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 import { BackgroundSyncPlugin } from 'workbox-background-sync';
 
+// KM-57 — install and take over IMMEDIATELY.
+//
+// clients.claim() below already says "this worker should be in charge", but a
+// new worker never reached activation to run it: by default it sits in
+// `waiting` until every tab of the origin is closed, and an installed PWA is
+// rarely closed. So the routing fix above — the one that stops "/" being
+// answered from the cached SPA shell — would have shipped and then not
+// applied to the people who already had the app.
+//
+// The known cost of skipWaiting is that an open page can find itself
+// controlled by a worker whose precache no longer holds the chunk it is about
+// to lazy-load. That risk is already present here regardless: the server keeps
+// only the current build, so a redeploy removes the old hashed chunks a stale
+// tab would ask for. Taking over promptly makes the window smaller, not larger.
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+
 // Take control of already-open pages. Written as a listener rather than
 // workbox-core's clientsClaim() because that call is a top-level void call and
 // this build drops those — see the note on the precache manifest below.
@@ -55,9 +73,44 @@ self.addEventListener('install', (event) => {
 
 // SPA navigations resolve to the precached shell. /admin is excluded — it is
 // out of scope for this track and should always hit the network.
+//
+// KM-57 — "/" IS EXCLUDED TOO, and this was the whole bug. Since KM-55 the
+// root is the static marketing page, served by server.js; but this route
+// answered EVERY navigation from the precached /index.html, so on any browser
+// that had ever loaded the app the service worker returned the SPA shell and
+// the request never reached the server at all. React then booted at "/",
+// found no session, and its one-shot guard sent the founder to /login —
+// exactly the "bouncing to the login page" report.
+//
+// It also explains why my own production checks passed: curl has no service
+// worker, so it saw the correct landing page every time. The bug only exists
+// in a browser that has visited before, which is every real user and no
+// command-line probe.
+//
+// The pattern allows a query string ("/?utm=..." is still the root) but not
+// "/inbox", which must keep resolving to the shell.
 registerRoute(
   new NavigationRoute(createHandlerBoundToURL('/index.html'), {
-    denylist: [/^\/admin/, /^\/api/],
+    denylist: [/^\/(\?|$)/, /^\/admin/, /^\/api/],
+  })
+);
+
+// KM-57 — the landing page's own assets are NetworkFirst, not CacheFirst.
+// Registered ahead of the generic style/script/image routes below, which would
+// otherwise claim them and hold a 30-day copy: the founder edits this page
+// directly, and an edit that does not appear for a month is the same class of
+// problem as the stale signup art in KM-53. server.js already sends
+// no-cache/must-revalidate for /landing/, so this simply matches the origin's
+// own intent; the cache remains as an offline fallback.
+registerRoute(
+  ({ url }) => url.pathname.startsWith('/landing/'),
+  new NetworkFirst({
+    cacheName: 'decisionos-landing',
+    networkTimeoutSeconds: 4,
+    plugins: [
+      new CacheableResponsePlugin({ statuses: [0, 200] }),
+      new ExpirationPlugin({ maxEntries: 30, maxAgeSeconds: 7 * 24 * 60 * 60 }),
+    ],
   })
 );
 

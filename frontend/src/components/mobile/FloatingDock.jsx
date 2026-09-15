@@ -59,27 +59,43 @@ export function dockSlots(user, t = (k, d) => d) {
 }
 
 function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
+  /* KM-49 — THE SELECTED SLOT IS FLAT, and it is an INDICATOR rather than a
+     treatment of the whole slot. Founder: "the neumorphic styled option is not
+     nice in the bottom fab bar so make it a usual materialistic flat style menu
+     selection design."
+
+     KM-32 pressed the live slot in with a hand-rolled inset pair, on the
+     argument that depth survives a translucent bar over a moving bloom better
+     than colour does. It does — but it also made a 56px slot look dented, and
+     depth is the app's grammar for a CONTROL you push, not for where you
+     currently are. Material's answer is better here: a filled pill sitting
+     behind the icon alone, with the label plain underneath. The pill is a small
+     bright shape against dark glass, which reads at a glance without pretending
+     the bar has a surface you can press into.
+
+     It is also cheap to animate, unlike what it replaces: a flat fill
+     interpolates, so this one can carry `transition-colors` where the inset /
+     outset pair could not. */
   const content = (
     <>
-      <Icon size={22} weight={active ? "fill" : "regular"} aria-hidden="true" />
+      <span
+        aria-hidden="true"
+        className={cn(
+          "grid h-7 w-12 place-items-center rounded-full transition-colors duration-200",
+          active ? "bg-white/[.22]" : "bg-transparent"
+        )}
+      >
+        <Icon size={22} weight={active ? "fill" : "regular"} />
+      </span>
       <span className="text-[length:var(--text-label)] font-semibold leading-4">{label}</span>
     </>
   );
   // .dock-item carries the >= 56x56 sizing (§8) — see index.css for why it is
   // a class rather than Tailwind min-w/min-h utilities.
-  /* KM-32 — the live slot is PRESSED IN, not merely brighter. Colour and fill
-     weight alone made the selection easy to miss on a translucent bar over a
-     moving bloom; a held depression is the grammar every other selected control
-     in the app uses and it survives whatever is behind the glass. Hand-rolled
-     rather than .kr-pressed because that recipe is tuned for the light page —
-     on ink its white inset lip lands the wrong way round.
-     NO transition on the shadow: an outset/inset pair does not interpolate. */
   const cls = cn(
     "dock-item flex flex-col items-center justify-center gap-0.5 rounded-2xl px-1.5",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-    active
-      ? "text-white bg-white/[.07] shadow-[inset_2px_2px_6px_rgb(0_0_0/.55),inset_-1px_-1px_4px_rgb(255_255_255/.10)]"
-      : "text-white/55 transition-colors hover:text-white/80"
+    "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+    active ? "text-white" : "text-white/55 hover:text-white/80"
   );
   if (onClick) {
     return (
@@ -103,8 +119,8 @@ function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
  */
 export function FloatingDock({
   user, onMore, moreOpen = false, moreBadge = 0,
-  dexActive = false, dexLevels = [], dexMode = "voice", dexWaveState = "idle",
-  dexDraft = "", onDexDraft, onDexSubmit,
+  dexActive = false, dexLevels = [], dexLevelsRef, dexMode = "voice", dexWaveState = "idle",
+  dexDraft = "", onDexDraft, onDexSubmit, dexTranscribing = false,
 }) {
   const { t } = useTranslation();
   const location = useLocation();
@@ -140,6 +156,7 @@ export function FloatingDock({
       // On a phone the offset collapses to the original 1rem.
       className="lg:hidden fixed app-dock-left app-dock-right z-[10000] bottom-safe-4"
       data-testid="floating-dock"
+      data-mobile-chrome=""
       aria-label={t("nav.primary", "Primary")}
     >
       <div
@@ -171,20 +188,48 @@ export function FloatingDock({
             duplicated. py-2 is the "adequate spacing above and below" so the
             ribbons never touch the pill's edge. */}
         {dexActive ? (
-          dexMode === "type" ? (
+          /* KM-51 — the field also appears when there is a DRAFT, whatever the
+             mode. After a voice capture the transcript lands here as a preview:
+             the founder reads back what Dex heard, edits it if it is wrong, and
+             only then presses send. Previously voice mode could only ever draw
+             the wave, so a stopped recording had nowhere to be shown. */
+          /* KM-53 also shows the field WHILE TRANSCRIBING. Founder: "when the
+             voice is getting transcribed, in that meantime I should see
+             thinking or transcribing text in the text field, but it's just
+             blank." It was blank because the field only appeared once a draft
+             existed, and the draft is the very thing being waited for — so the
+             one moment that needed a progress signal was the one moment with
+             nothing on screen. */
+          (dexMode === "type" || dexDraft || dexTranscribing) ? (
             <input
-              autoFocus
+              /* Not while transcribing: the field mounts on its own there, and
+                 autoFocus would throw the keyboard up over a read-only box the
+                 founder is only meant to be watching. */
+              autoFocus={dexMode === "type"}
               data-testid="dock-dex-input"
               value={dexDraft}
+              /* Read-only until the transcript lands, because it ARRIVES as a
+                 setDraft that replaces the field wholesale — anything typed in
+                 the gap would vanish without trace. */
+              readOnly={dexTranscribing}
               onChange={(e) => onDexDraft?.(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onDexSubmit?.(); } }}
-              placeholder={t("dex.typePlaceholder", "Ask Dex, or state a decision…")}
+              placeholder={dexTranscribing
+                ? t("dex.transcribing", "Transcribing…")
+                : t("dex.typePlaceholder", "Ask Dex, or state a decision…")}
               aria-label="Message Dex"
-              className="min-w-0 flex-1 bg-transparent px-3 text-sm text-white placeholder:text-white/40 focus:outline-none"
+              className={cn(
+                "min-w-0 flex-1 bg-transparent px-3 text-sm text-white focus:outline-none",
+                /* A status the founder is waiting on should not wear the same
+                   grey as a hint they are meant to type over. */
+                dexTranscribing
+                  ? "animate-pulse placeholder:text-white/75"
+                  : "placeholder:text-white/40"
+              )}
             />
           ) : (
             <div className="min-w-0 flex-1 px-2 py-2" data-testid="dock-dex-wave">
-              <DexWave state={dexWaveState} levels={dexLevels} />
+              <DexWave state={dexWaveState} levels={dexLevels} levelsRef={dexLevelsRef} />
             </div>
           )
         ) : (

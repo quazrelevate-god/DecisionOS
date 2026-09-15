@@ -47,7 +47,9 @@ def _clamp100(v):
 
 
 def _is_open_task(t):
-    return t.get("status") in ("todo", "in_progress", "blocked")
+    # ASK-28 TK-07: waiting and under review are open work too (Doing).
+    from services.tasks import OPEN_STATUSES
+    return t.get("status") in OPEN_STATUSES
 
 
 def _score_execution(tasks, now):
@@ -182,7 +184,7 @@ async def _self_operating_view(tid: str, viewer: dict, now: str) -> dict:
         {"tenant_id": tid,
          "$or": [{"assignee_id": uid},
                  {"assignee_id": None, "assignee_role": urole}],
-         "status": {"$in": ["todo", "in_progress", "blocked"]}},
+         "status": {"$in": ["todo", "blocked", "in_progress", "waiting", "review"]}},  # ASK-28 TK-07
         {"_id": 0, "id": 1, "title": 1, "due_date": 1, "priority": 1,
          "status": 1, "workflow_id": 1, "stage_key": 1, "category": 1}
     ).sort([("due_date", 1)]).to_list(5)
@@ -248,7 +250,7 @@ async def compute_employee_stats(tenant_id: str, target: dict) -> dict:
         {"tenant_id": tenant_id, "$or": [{"assignee_id": uid}, {"assignee_id": None, "assignee_role": role}]},
         {"_id": 0}).to_list(3000)
     done = [t for t in tasks if t.get("status") == "done"]
-    open_tasks = [t for t in tasks if t.get("status") in ("todo", "in_progress", "blocked")]
+    open_tasks = [t for t in tasks if _is_open_task(t)]
     overdue = [t for t in open_tasks if t.get("due_date") and t["due_date"] < now]
     actionable = len(done) + len(open_tasks)
 

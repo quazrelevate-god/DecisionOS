@@ -30,6 +30,8 @@ _DB_MODULES = [
     "services.voice", "services.captures", "services.whatsapp", "services.ingestion",
     "services.inbox", "services.leave", "services.enrich", "services.notifications",
     "services.ai.generators", "services.ai.brain_context",
+    "services.decision_flow", "services.captures", "routers.voice_notes", "routers.desk",
+    "services.workflows", "services.ai.agent_tools",
 ]
 
 # fire-and-forget writers to neutralise: (module, attr, kind) where kind is

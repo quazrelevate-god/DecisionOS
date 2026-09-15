@@ -342,6 +342,11 @@ PERMISSION_KEYS = [
     "inbox", "voice_capture", "data_input", "people", "finance", "ledger",
     "workflows", "tasks", "brain", "ask", "brain_export",
     "approvals", "decisions_approve", "leave_approve", "team_manage",
+    # ASK-28 TK-08 (plan Phase 6): opt-in task access, off for every role by
+    # default (the owner has them via the all-perms shortcut).
+    #   tasks_assign_any  give tasks to anyone, not only self / own team / reports
+    #   tasks_view_all    see every task (All Tasks), not only one's own lane
+    "tasks_assign_any", "tasks_view_all",
 ]
 # FIX-004-C (RBAC-10): `brain_export` is INTENTIONALLY not in
 # ROLE_DEFAULT_PERMS or _BASE_PERMS — it's an elevated privilege

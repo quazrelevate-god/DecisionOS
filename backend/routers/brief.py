@@ -104,7 +104,7 @@ async def ceo_brief(period: str = "morning", user: dict = Depends(get_current_us
         completed_label = f"completed ({period})"
 
     if is_owner:
-        delayed = await db.tasks.count_documents({"tenant_id": tid, "status": {"$in": ["todo", "in_progress"]}, "due_date": {"$lt": now.isoformat(), "$ne": None}})
+        delayed = await db.tasks.count_documents({"tenant_id": tid, "status": {"$in": ["todo", "in_progress", "waiting", "review"]}, "due_date": {"$lt": now.isoformat(), "$ne": None}})
         completed = await db.activity.count_documents({"tenant_id": tid, "kind": "task_done", "created_at": completed_range})
         pending_dec = await db.decisions.count_documents({"tenant_id": tid, "status": "pending_approval"})
         # FIX-001-A: resolve the tenant's actual procurement pipeline dynamically instead of the textile 'purchase_payment' hardcode.
@@ -131,13 +131,15 @@ async def ceo_brief(period: str = "morning", user: dict = Depends(get_current_us
             "unmatched_payments": round(sum(_pay_remaining_amt(p) for p in unmatched), 2),
         }
     else:
-        mine = {"$or": [{"assignee_id": user["id"]}, {"assignee_role": user["role"]}]}
+        mine = {"$or": [{"assignee_id": user["id"]}, {"co_assignee_ids": user["id"]}, {"assignee_role": user["role"]}]}
 
         def mq(extra):
             return {"tenant_id": tid, **mine, **extra}
-        delayed = await db.tasks.count_documents(mq({"status": {"$in": ["todo", "in_progress"]}, "due_date": {"$lt": now.isoformat(), "$ne": None}}))
-        todo = await db.tasks.count_documents(mq({"status": "todo"}))
-        in_progress = await db.tasks.count_documents(mq({"status": "in_progress"}))
+        delayed = await db.tasks.count_documents(mq({"status": {"$in": ["todo", "in_progress", "waiting", "review"]}, "due_date": {"$lt": now.isoformat(), "$ne": None}}))
+        # ASK-28 TK-07: the counters are the stages people see — To do holds
+        # tasks waiting for approval to start, Doing holds waiting and review.
+        todo = await db.tasks.count_documents(mq({"status": {"$in": ["todo", "blocked"]}}))
+        in_progress = await db.tasks.count_documents(mq({"status": {"$in": ["in_progress", "waiting", "review"]}}))
         completed = await db.activity.count_documents({"tenant_id": tid, "kind": "task_done", "actor": user["id"], "created_at": completed_range})
         escalations = await db.tasks.count_documents(mq({"source": "escalation", "status": {"$ne": "done"}}))
         handoffs = await db.tasks.count_documents(mq({"source": "handoff", "status": {"$ne": "done"}}))
@@ -177,7 +179,7 @@ async def brief_details(key: str, period: str = "morning", user: dict = Depends(
     items: list = []
     actionable = False
     is_owner = user["role"] == "owner"
-    mine = None if is_owner else {"$or": [{"assignee_id": user["id"]}, {"assignee_role": user["role"]}]}
+    mine = None if is_owner else {"$or": [{"assignee_id": user["id"]}, {"co_assignee_ids": user["id"]}, {"assignee_role": user["role"]}]}
 
     def scope(q):
         return q if not mine else {**q, **mine}
@@ -197,7 +199,7 @@ async def brief_details(key: str, period: str = "morning", user: dict = Depends(
 
     if key == "delayed":
         tasks = await db.tasks.find(
-            scope({"tenant_id": tid, "status": {"$in": ["todo", "in_progress"]}, "due_date": {"$lt": now.isoformat(), "$ne": None}}),
+            scope({"tenant_id": tid, "status": {"$in": ["todo", "in_progress", "waiting", "review"]}, "due_date": {"$lt": now.isoformat(), "$ne": None}}),
             {"_id": 0}).sort("due_date", 1).to_list(200)
         tasks = await enrich_tasks(tasks)
         for t in tasks:
@@ -206,7 +208,8 @@ async def brief_details(key: str, period: str = "morning", user: dict = Depends(
                           "meta": t.get("priority"), "kind": "task", "due_date": t.get("due_date")})
 
     elif key in ("todo", "in_progress"):
-        tasks = await db.tasks.find(scope({"tenant_id": tid, "status": key}), {"_id": 0}).sort("created_at", -1).to_list(200)
+        stage = ["todo", "blocked"] if key == "todo" else ["in_progress", "waiting", "review"]  # ASK-28 TK-07
+        tasks = await db.tasks.find(scope({"tenant_id": tid, "status": {"$in": stage}}), {"_id": 0}).sort("created_at", -1).to_list(200)
         tasks = await enrich_tasks(tasks)
         for t in tasks:
             items.append({"id": t["id"], "title": t["title"],

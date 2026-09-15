@@ -207,13 +207,22 @@ class TestTaskCallSitesPassDecisionId:
     drop the linkage."""
 
     def test_update_task_done_passes_decision_id(self):
+        # ASK-28 TK-05: the close hooks (Brain record included) moved into
+        # _after_task_done, shared by update_task and approve_task (an
+        # approval that closes a task). Guard both ends of that hand-off.
         from routers import tasks as t
-        src = inspect.getsource(t.update_task)
+        assert "_after_task_done(" in inspect.getsource(t.update_task)
+        src = inspect.getsource(t._after_task_done)
         assert "record_context(" in src
+        assert 'kind="task_done"' in src
         assert 'decision_id=t.get("decision_id")' in src, (
-            "S4-02 regression: update_task's task_done branch must "
+            "S4-02 regression: the task_done Brain record must "
             "pass decision_id=t.get('decision_id') to record_context"
         )
+
+    def test_approval_that_closes_a_task_runs_the_close_hooks(self):
+        from routers import tasks as t
+        assert "_after_task_done(" in inspect.getsource(t.approve_task)
 
     def test_approve_task_passes_decision_id(self):
         from routers import tasks as t

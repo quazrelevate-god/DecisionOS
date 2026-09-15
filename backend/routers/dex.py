@@ -74,9 +74,17 @@ async def dex_capture(
     """
     # Deferred imports to break the server.py <-> routers.dex cycle
     # (server.py mounts this router at the bottom).
+    from core.permissions import user_perms
     from models.voice import TextNoteInput
     from routers.files import upload_file
     from routers.voice_notes import create_text_note, create_voice_note
+
+    # ASK-32 1.9 — calling the handlers directly skips their Depends, so the
+    # voice_capture check that guards creating a decision is made here too.
+    ctype = (file.content_type or "").lower() if file else ""
+    makes_decision = bool(text and not file) or ctype.startswith("audio/") or ctype == "application/octet-stream"
+    if makes_decision and user.get("role") != "owner" and "voice_capture" not in user_perms(user):
+        raise HTTPException(status_code=403, detail="You don't have access to capture decisions.")
 
     if text and not file:
         # Text path: same as POST /voice-notes/text

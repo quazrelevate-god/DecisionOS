@@ -384,7 +384,7 @@ export default function DesignLab() {
   const shown = useMemo(() => FIXTURE_NAMES.filter((f) => states.includes(f)), [states]);
 
   return (
-    <div className="min-h-screen bg-background p-6" data-testid="design-lab">
+    <div className="min-h-[calc(100vh/var(--ui-scale,1))] bg-background p-6" data-testid="design-lab">
       <header className="mb-5">
         <h1 className="font-heading text-2xl font-bold tracking-tight">Design lab</h1>
         <p className="mt-1 text-sm text-muted-foreground">

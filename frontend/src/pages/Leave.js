@@ -4,16 +4,22 @@ import { useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
-import { PageHeader, StickyHeader, Chip, EmptyState } from "../components/common";
+import { PageHeader, StickyHeader, EmptyState } from "../components/common";
 import { timeAgo } from "../lib/format";
 import { toast } from "sonner";
 import {
   AirplaneTakeoff, Plus, WarningOctagon, CheckCircle, XCircle, ChatCircleText, Gear, GearSix, Clock,
-  Sparkle, ArrowsClockwise, CalendarPlus, Eye, CircleNotch,
+  CalendarBlank,
+  // ASK-4 (2026-09-12): AI Impact Analysis retired at the leave-card level.
+  // Sparkle / ArrowsClockwise / CalendarPlus / Eye / CircleNotch were the
+  // ImpactDialog's private icon vocabulary and left with it.
 } from "@phosphor-icons/react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter,
 } from "../components/ui/dialog";
+import {
+  CHIP, QUIET_CHIP, DRAWER_FIELD, DRAWER_TRACK, GLASS_PILL, INK_PILL, MAROON_PILL,
+} from "../components/karma/glass";
 
 const LEAVE_TYPES = [
   { key: "casual", label: "Casual" },
@@ -29,12 +35,18 @@ const ABSENCE_REASONS = [
   { key: "personal", label: "Personal" },
   { key: "other", label: "Other" },
 ];
+/* 2026-09-14, founder — the leave card joins the task cards' vocabulary: every
+   chip is the ASK-25 recipe (soft tint, hairline ring in the same hue) with an
+   icon, and its actions are the task drawer's pills (components/karma/glass).
+   Waiting on a decision is amber, as a waiting task is; a question back to the
+   requester is violet, so the two open states never read alike. */
 const STATUS_META = {
-  pending: { label: "Pending", cls: "border-[0.5px] border-kr-ink text-foreground" },
-  approved: { label: "Approved", cls: "bg-kr-ink text-white" },
-  rejected: { label: "Rejected", cls: "bg-kr-accent text-white" },
-  info_requested: { label: "Info Requested", cls: "border-[0.5px] border-kr-accent text-kr-accent" },
+  pending: { label: "Pending", tone: "bg-amber-50 text-amber-800 ring-amber-100", icon: Clock },
+  approved: { label: "Approved", tone: "bg-emerald-50 text-emerald-700 ring-emerald-100", icon: CheckCircle },
+  rejected: { label: "Rejected", tone: "bg-rose-50 text-rose-700 ring-rose-100", icon: XCircle },
+  info_requested: { label: "Info Requested", tone: "bg-violet-50 text-violet-700 ring-violet-100", icon: ChatCircleText },
 };
+const LEAVE_SECONDARY = `flex h-11 items-center gap-1.5 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`;
 const inp = "w-full nm-field px-3 py-2 text-sm";
 const typeLabel = (k) => LEAVE_TYPES.find((t) => t.key === k)?.label || k;
 const fmtRange = (lv) => lv.from_date === lv.to_date ? lv.from_date : `${lv.from_date} → ${lv.to_date}`;
@@ -150,160 +162,32 @@ function AbsenceDialog({ onDone }) {
   );
 }
 
-const ACTION_META = {
-  reassign: { label: "Reassign", cls: "bg-kr-ink text-white", Icon: ArrowsClockwise },
-  extend: { label: "Extend due date", cls: "border-[0.5px] border-kr-ink text-foreground", Icon: CalendarPlus },
-  monitor: { label: "Monitor", cls: "bg-white", Icon: Eye },
-};
+/* ASK-4 (2026-09-12) — ImpactDialog + ACTION_META removed.
 
-function ImpactDialog({ leaveId, open, onOpenChange, onApplied }) {
-  const [loading, setLoading] = useState(false);
-  const [data, setData] = useState(null);
-  const [applied, setApplied] = useState({});
-  const [edits, setEdits] = useState({});
+   The founder's call: per-request AI Impact Analysis is not the useful
+   question. Asking "what does THIS leave request do to cover" in
+   isolation cannot answer what actually matters -- the combined effect
+   of every pending / approved absence on the team over a period. A
+   report has to be a report, not a per-card modal.
 
-  useEffect(() => {
-    if (!open) { setData(null); setApplied({}); setEdits({}); return; }
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await api.get(`/leaves/${leaveId}/impact`);
-        if (cancelled) return;
-        setData(res.data);
-        const e = {};
-        (res.data.tasks || []).forEach((t) => {
-          e[t.id] = { assignee_id: t.assignee_id || "", due_date: t.suggested_due_date || "" };
-        });
-        setEdits(e);
-      } catch (err) {
-        if (!cancelled) toast.error(err.response?.data?.detail || "Could not analyze impact");
-      } finally { if (!cancelled) setLoading(false); }
-    })();
-    return () => { cancelled = true; };
-  }, [open, leaveId]);
+   The retired dialog fetched GET /leaves/:id/impact and let the
+   approver reassign / extend / monitor specific tasks that the
+   requester was blocking. All of it left with the button. The global
+   version lives on the tracker as ASK-5 (Low, parked -- not yet
+   ideated), so the report can come back in one place rather than
+   twelve. Backend routes were left in place -- deleting them is a
+   separate cleanup pass once ASK-5 has landed on a shape.
 
-  const applyOne = async (t) => {
-    const e = edits[t.id] || {};
-    try {
-      if (t.action === "reassign") {
-        if (!e.assignee_id) return toast.error("Pick a teammate to reassign to");
-        await api.patch(`/tasks/${t.id}`, { assignee_id: e.assignee_id });
-      } else if (t.action === "extend") {
-        if (!e.due_date) return toast.error("Pick a new due date");
-        await api.patch(`/tasks/${t.id}`, { due_date: e.due_date });
-      } else { return; }
-      setApplied((a) => ({ ...a, [t.id]: true }));
-      toast.success(t.action === "reassign" ? "Task reassigned" : "Due date extended");
-      onApplied?.();
-    } catch (err) { toast.error(err.response?.data?.detail || "Could not apply"); }
-  };
+   Icons that left with this: Sparkle, ArrowsClockwise, CalendarPlus,
+   Eye, CircleNotch. All were private to ImpactDialog. */
 
-  const applyAll = async () => {
-    const pending = (data?.tasks || []).filter((t) => (t.action === "reassign" || t.action === "extend") && !applied[t.id]);
-    for (const t of pending) { await applyOne(t); }
-  };
-
-  const tasks = data?.tasks || [];
-  const members = data?.available_members || [];
-  const recCount = tasks.filter((t) => t.action === "reassign" || t.action === "extend").length;
-  const allApplied = recCount > 0 && tasks.filter((t) => t.action === "reassign" || t.action === "extend").every((t) => applied[t.id]);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="leave-impact-dialog">
-        <DialogHeader>
-          <DialogTitle className="font-display text-xl flex items-center gap-2">
-            <Sparkle size={18} weight="fill" aria-hidden="true" /> AI Impact Analysis
-          </DialogTitle>
-          <DialogDescription className="text-sm text-muted-foreground">
-            {data ? `What ${data.person}'s leave affects, and how to keep work on track.` : "Checking active tasks affected by this leave…"}
-          </DialogDescription>
-        </DialogHeader>
-
-        {loading && (
-          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground" data-testid="impact-loading">
-            <CircleNotch size={34} weight="bold" aria-hidden="true" className="animate-spin" />
-            <p className="text-sm mt-3">Analyzing workload &amp; suggesting cover…</p>
-          </div>
-        )}
-
-        {!loading && data && (
-          <div className="space-y-3" data-testid="impact-content">
-            {data.summary && (
-              <div className="nm-inset p-3 text-sm" data-testid="impact-summary">{data.summary}</div>
-            )}
-            {tasks.length === 0 && (
-              <EmptyState title="No tasks at risk" hint="This person has no active tasks due during their absence. You're all set." />
-            )}
-            {tasks.map((t) => {
-              const m = ACTION_META[t.action] || ACTION_META.monitor;
-              const e = edits[t.id] || {};
-              const done = applied[t.id];
-              return (
-                <div key={t.id} data-testid={`impact-task-${t.id}`} className="nm-tile p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-sm leading-tight">{t.title}</p>
-                      <p className="label-mono text-muted-foreground mt-1">
-                        {t.priority} · {(t.status || "").replace("_", " ")}{t.due_date ? ` · due ${t.due_date}` : ""}
-                      </p>
-                    </div>
-                    <Chip value={m.label} className={`${m.cls} shrink-0`} />
-                  </div>
-                  {t.reason && <p className="text-xs text-muted-foreground mt-2">{t.reason}</p>}
-
-                  {t.action === "reassign" && !done && (
-                    <div className="flex gap-2 mt-2.5">
-                      <select data-testid={`impact-assignee-${t.id}`} className={`${inp} text-sm`}
-                        value={e.assignee_id} onChange={(ev) => setEdits((s) => ({ ...s, [t.id]: { ...s[t.id], assignee_id: ev.target.value } }))}>
-                        <option value="">Select teammate…</option>
-                        {members.map((mm) => <option key={mm.id} value={mm.id}>{mm.name} · {mm.role}</option>)}
-                      </select>
-                      <button onClick={() => applyOne(t)} data-testid={`impact-apply-${t.id}`}
-                        className="kr-lift flex shrink-0 items-center gap-1 rounded-pill bg-kr-ink px-3.5 py-2 text-xs font-medium text-white transition-all">
-                        <ArrowsClockwise size={13} weight="bold" /> Reassign
-                      </button>
-                    </div>
-                  )}
-                  {t.action === "extend" && !done && (
-                    <div className="flex gap-2 mt-2.5">
-                      <input type="date" data-testid={`impact-date-${t.id}`} className={`${inp} text-sm`}
-                        value={e.due_date} onChange={(ev) => setEdits((s) => ({ ...s, [t.id]: { ...s[t.id], due_date: ev.target.value } }))} />
-                      <button onClick={() => applyOne(t)} data-testid={`impact-apply-${t.id}`}
-                        className="flex shrink-0 items-center gap-1 rounded-pill border border-kr-accent px-3.5 py-2 text-xs font-medium text-kr-accent transition-all hover:bg-kr-accent/10">
-                        <CalendarPlus size={13} weight="bold" /> Extend
-                      </button>
-                    </div>
-                  )}
-                  {done && (
-                    <p className="mt-2.5 flex items-center gap-1 text-xs font-semibold text-green-700" data-testid={`impact-done-${t.id}`}>
-                      <CheckCircle size={14} weight="fill" /> Applied
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-
-            {recCount > 0 && (
-              <DialogFooter className="pt-1">
-                <button onClick={applyAll} disabled={allApplied} data-testid="impact-apply-all"
-                  className="kr-lift flex items-center gap-2 rounded-pill bg-kr-ink px-5 py-2.5 text-sm font-medium text-white transition-all disabled:opacity-50">
-                  <Sparkle size={15} weight="fill" /> {allApplied ? "All applied" : `Apply all recommended (${recCount})`}
-                </button>
-              </DialogFooter>
-            )}
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function LeaveCard({ lv, canAct, onRefresh, highlight }) {
+// ASK-6/-7 (2026-09-12): named export so Desk and Team can render individual
+// leave requests without duplicating the card markup. The default export
+// (the Leave page) is scheduled for retirement once the register move lands.
+export function LeaveCard({ lv, canAct, onRefresh, highlight }) {
   const [action, setAction] = useState(null); // reject | info
   const [note, setNote] = useState("");
-  const [impactOpen, setImpactOpen] = useState(false);
+  // ASK-4 (2026-09-12): impactOpen state removed with the dialog itself.
   const st = STATUS_META[lv.status] || STATUS_META.pending;
 
   const decide = async (kind) => {
@@ -311,67 +195,79 @@ function LeaveCard({ lv, canAct, onRefresh, highlight }) {
       await api.post(`/leaves/${lv.id}/${kind}`, { note });
       toast.success(kind === "approve" ? "Approved" : kind === "reject" ? "Rejected" : "Info requested");
       setAction(null); setNote("");
-      if (kind === "approve") setImpactOpen(true);  // auto-run AI impact analysis
+      // ASK-4: no auto-open on approve any more -- the Impact dialog is gone.
       onRefresh();
     } catch (e) { toast.error(e.response?.data?.detail || "Action failed"); }
   };
 
+  const StatusIcon = st.icon;
   return (
-    <div data-testid={`leave-card-${lv.id}`} className={`kr-bento p-4 ${highlight ? "ring-2 ring-kr-ink ring-offset-2" : ""}`}>
-      <div className="flex items-center gap-1.5 flex-wrap mb-2">
-        <Chip value={st.label} className={st.cls} data-testid={`leave-status-${lv.id}`} />
-        <Chip value={typeLabel(lv.leave_type)} className="bg-kr-ink text-white" />
-        {lv.day_portion === "half" && <Chip value="Half day" className="bg-white" />}
-        {lv.is_emergency && <Chip value="Emergency" className="bg-black text-white" />}
+    <div data-testid={`leave-card-${lv.id}`} className={`kr-bento p-5 ${highlight ? "ring-2 ring-neutral-900/70 ring-offset-2" : ""}`}>
+      <div className="mb-3 flex flex-wrap items-center gap-1.5">
+        <span className={`${CHIP} ${st.tone}`} data-testid={`leave-status-${lv.id}`}>
+          <StatusIcon size={11} weight="bold" aria-hidden="true" /> {st.label}
+        </span>
+        <span className={`${CHIP} ${QUIET_CHIP}`} data-testid={`leave-type-${lv.id}`}>
+          <CalendarBlank size={11} weight="bold" aria-hidden="true" /> {typeLabel(lv.leave_type)}
+        </span>
+        {lv.day_portion === "half" && <span className={`${CHIP} ${QUIET_CHIP}`}>Half day</span>}
+        {lv.is_emergency && (
+          <span className={`${CHIP} bg-rose-50 text-rose-700 ring-rose-100`}>
+            <WarningOctagon size={11} weight="bold" aria-hidden="true" /> Emergency
+          </span>
+        )}
       </div>
-      <p className="font-medium text-base leading-tight">{lv.user_name}</p>
-      <p className="text-sm mt-1" data-testid={`leave-range-${lv.id}`}>{fmtRange(lv)}</p>
-      {lv.reason && <p className="text-sm text-muted-foreground mt-1">{lv.reason}</p>}
-      <p className="label-mono text-muted-foreground mt-2 flex items-center gap-1">
-        <Clock size={11} weight="bold" /> {timeAgo(lv.created_at)}{lv.approver_name ? ` · Approver: ${lv.approver_name}` : ""}
+      <p className="text-base font-semibold leading-tight text-neutral-900">{lv.user_name}</p>
+      <p className="mt-1 text-sm tabular-nums text-neutral-800" data-testid={`leave-range-${lv.id}`}>{fmtRange(lv)}</p>
+      {lv.reason && <p className="mt-1 text-sm text-neutral-500">{lv.reason}</p>}
+      <p className="mt-2.5 flex items-center gap-1.5 text-xs text-neutral-500">
+        <Clock size={12} weight="bold" aria-hidden="true" /> {timeAgo(lv.created_at)}{lv.approver_name ? ` · Approver: ${lv.approver_name}` : ""}
       </p>
       {lv.status === "info_requested" && lv.info_note && (
-        <div className="mt-2 rounded-control border-l-[3px] border-kr-accent bg-kr-accent/8 p-2.5 text-xs" data-testid={`leave-info-note-${lv.id}`}>
-          <span className="font-semibold">Info requested:</span> {lv.info_note}
+        <div className="mt-3 flex items-start gap-2 rounded-2xl bg-violet-50/80 px-3 py-2.5 text-xs text-violet-950 ring-1 ring-inset ring-violet-100" data-testid={`leave-info-note-${lv.id}`}>
+          <ChatCircleText size={14} weight="bold" aria-hidden="true" className="mt-px shrink-0 text-violet-700" />
+          <p><span className="font-semibold">Info requested:</span> {lv.info_note}</p>
         </div>
       )}
 
-      {canAct && lv.status === "approved" && (
-        <button onClick={() => setImpactOpen(true)} data-testid={`leave-impact-btn-${lv.id}`}
-          className="kr-lift mt-3 flex w-full items-center justify-center gap-1.5 rounded-pill bg-kr-ink py-2 text-xs font-medium text-white transition-all">
-          <Sparkle size={14} weight="fill" /> AI Impact Analysis
-        </button>
-      )}
-      {canAct && <ImpactDialog leaveId={lv.id} open={impactOpen} onOpenChange={setImpactOpen} onApplied={onRefresh} />}
+      {/* ASK-4 (2026-09-12): The per-card AI Impact Analysis button and
+          its ImpactDialog have been removed. The founder's call was
+          that "impact" is not a per-request question -- analysing one
+          leave in isolation can't answer what the combined leave does
+          to team cover. The team-level version is on the backlog as
+          ASK-5 (Low priority, parked). */}
 
       {canAct && lv.status !== "approved" && lv.status !== "rejected" && (
-        <div className="mt-3">
+        <div className="mt-4">
           {!action ? (
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex flex-wrap gap-2">
               <button onClick={() => decide("approve")} data-testid={`leave-approve-${lv.id}`}
-                className="kr-lift flex flex-1 items-center justify-center gap-1 rounded-pill bg-kr-ink py-2 text-xs font-medium text-white transition-all">
-                <CheckCircle size={14} weight="bold" /> Approve
+                className={`flex h-11 flex-1 items-center justify-center gap-1.5 rounded-pill px-5 text-sm font-medium ${INK_PILL}`}>
+                <CheckCircle size={16} weight="bold" aria-hidden="true" /> Approve
               </button>
-              <button onClick={() => setAction("reject")} data-testid={`leave-reject-${lv.id}`}
-                className="nm-btn flex items-center gap-1 px-3 py-2 text-xs font-medium">
-                <XCircle size={14} weight="bold" /> Reject
+              <button onClick={() => setAction("reject")} data-testid={`leave-reject-${lv.id}`} className={LEAVE_SECONDARY}>
+                <XCircle size={16} weight="bold" aria-hidden="true" /> Reject
               </button>
-              <button onClick={() => setAction("info")} data-testid={`leave-info-${lv.id}`}
-                className="flex items-center gap-1 rounded-pill border border-kr-accent px-3 py-2 text-xs font-medium text-kr-accent transition-colors hover:bg-kr-accent/10">
-                <ChatCircleText size={14} weight="bold" /> Info
+              <button onClick={() => setAction("info")} data-testid={`leave-info-${lv.id}`} className={LEAVE_SECONDARY}>
+                <ChatCircleText size={16} weight="bold" aria-hidden="true" /> Info
               </button>
             </div>
           ) : (
-            <div className="nm-inset space-y-2 p-2.5">
-              <textarea data-testid={`leave-note-${lv.id}`} className={`${inp} text-xs`} rows={2}
+            /* Reject or ask for info, inline: a gray track holding the glass
+               field. Rejecting is the one final "no", so it commits in maroon;
+               a question goes out in ink. */
+            <div className={`space-y-2.5 rounded-[1.25rem] p-3 ${DRAWER_TRACK}`}>
+              <textarea data-testid={`leave-note-${lv.id}`} className={`${DRAWER_FIELD} resize-none text-sm`} rows={2} autoFocus
+                aria-label={action === "reject" ? "Reason for rejection" : "What info do you need?"}
                 placeholder={action === "reject" ? "Reason for rejection (optional)" : "What info do you need?"}
                 value={note} onChange={(e) => setNote(e.target.value)} />
               <div className="flex gap-2">
                 <button onClick={() => decide(action === "reject" ? "reject" : "request-info")} data-testid={`leave-confirm-${lv.id}`}
-                  className="kr-lift flex-1 rounded-pill bg-kr-ink py-2 text-xs font-medium text-white transition-colors">
-                  {action === "reject" ? "Confirm Reject" : "Send Request"}
+                  className={`flex h-10 flex-1 items-center justify-center rounded-pill px-4 text-sm font-medium ${action === "reject" ? MAROON_PILL : INK_PILL}`}>
+                  {action === "reject" ? "Confirm reject" : "Send request"}
                 </button>
-                <button onClick={() => { setAction(null); setNote(""); }} className="nm-btn px-3 py-2 text-xs font-medium">Cancel</button>
+                <button onClick={() => { setAction(null); setNote(""); }} data-testid={`leave-cancel-${lv.id}`}
+                  className={`h-10 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>Cancel</button>
               </div>
             </div>
           )}
@@ -381,7 +277,12 @@ function LeaveCard({ lv, canAct, onRefresh, highlight }) {
   );
 }
 
-function ApproverConfig({ roleOptions, members }) {
+// ASK-8 (2026-09-12): exported so Settings › Operations can render it.
+// The founder's decision: routing config belongs with approval gates in
+// Settings, not on a work surface. Suggested landing per ASK-8 is
+// Settings > Operations ("Pipelines, stages, task templates and approval
+// gates" already covers this shape).
+export function ApproverConfig({ roleOptions, members }) {
   const qc = useQueryClient();
   const { tenant, refreshTenant } = useAuth();
   const [map, setMap] = useState(() => ({ ...(tenant?.leave_approvers || {}) }));

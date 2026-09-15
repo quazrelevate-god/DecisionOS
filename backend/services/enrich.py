@@ -40,6 +40,40 @@ async def enrich_decision(d: dict, tenant_id: Optional[str] = None) -> dict:
     creator = await db.users.find_one(user_q, {"_id": 0, "name": 1})
     d["tasks"] = await enrich_tasks(tasks)
     d["created_by_name"] = creator["name"] if creator else "Unknown"
+    # ASK-32 Phase 1 — who each proposed task would go to, and who must decide.
+    prop_tasks = (d.get("proposal") or {}).get("tasks") or []
+    ids = list({i for i in [t.get("assignee_id") for t in prop_tasks] + [d.get("approver_id")] if i})
+    if ids:
+        uq = {"id": {"$in": ids}}
+        if tid:
+            uq["tenant_id"] = tid
+        names = {u["id"]: u.get("name") for u in await db.users.find(uq, {"_id": 0, "id": 1, "name": 1}).to_list(len(ids))}
+        for t in prop_tasks:
+            t["assignee_name"] = names.get(t.get("assignee_id"))
+        d["approver_name"] = names.get(d.get("approver_id"))
+    tq = {"tenant_id": tid} if tid else {}
+    # ASK-32 Phase 3 — what was said: the words (typed, or heard from the voice
+    # note), whether there is a recording to play, and the files sent with it.
+    if d.get("voice_note_id"):
+        note = await db.voice_notes.find_one({"id": d["voice_note_id"], **tq}, {
+            "_id": 0, "transcript": 1, "kind": 1, "source": 1, "detected_language_name": 1,
+            "audio_path": 1, "reference_file_ids": 1})
+        if note:
+            fids = note.get("reference_file_ids") or []
+            files = [{"id": f["id"], "name": f.get("original_filename") or "File"} async for f in db.files.find(
+                {"id": {"$in": fids}, **tq}, {"_id": 0, "id": 1, "original_filename": 1})] if fids else []
+            d["said"] = {
+                "text": (note.get("transcript") or "").strip(),
+                "how": note.get("source") or ("voice" if note.get("kind") == "audio" else "text"),
+                "language": note.get("detected_language_name"), "has_audio": bool(note.get("audio_path")),
+                "voice_note_id": d["voice_note_id"], "files": files,
+            }
+    # ASK-32 Phase 4 — the workflows it created or links to, for links after deciding.
+    wf_ids = list(dict.fromkeys((d.get("workflow_ids") or []) + [
+        w.get("workflow_id") for w in (d.get("proposal") or {}).get("workflows") or [] if w.get("workflow_id")]))
+    if wf_ids:
+        d["workflows"] = [w async for w in db.workflows.find(
+            {"id": {"$in": wf_ids}, **tq}, {"_id": 0, "id": 1, "title": 1, "type": 1, "stage": 1, "counterparty": 1})]
     return d
 
 

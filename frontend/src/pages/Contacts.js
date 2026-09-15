@@ -86,7 +86,7 @@ function ContactDialog({ trigger, initial, onSaved, users, defaultType }) {
   return (
     <Dialog open={open} onOpenChange={openChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="border border-border rounded-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="border border-border rounded-xl max-h-[calc(90vh/var(--ui-scale,1))] overflow-y-auto">
         <DialogHeader><DialogTitle className="font-display text-xl">{initial ? "Edit contact" : "New contact"}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">

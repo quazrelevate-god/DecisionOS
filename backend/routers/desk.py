@@ -104,7 +104,8 @@ async def _delayed_count(tid: str, user: dict) -> int:
     q = {"tenant_id": tid, "status": {"$nin": ["done", "cancelled"]},
          "due_date": {"$lt": today, "$ne": None}}
     if user.get("role") != "owner":
-        q["assignee_id"] = user["id"]
+        # ASK-26: a task I am on alongside the lead is mine to deliver too.
+        q["$or"] = [{"assignee_id": user["id"]}, {"co_assignee_ids": user["id"]}]
     return await db.tasks.count_documents(q)
 
 
@@ -469,30 +470,60 @@ async def _cards_needs_decision(tid: str, user: dict) -> list:
     else:
         q["approver_id"] = uid
     rows = await db.decisions.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
-    creator_ids = [d.get("created_by") for d in rows if d.get("created_by")]
-    umap = await _users_lookup(tid, creator_ids)
+    # ASK-32 2.4 — decisions I raised that wait on someone else: I can follow
+    # them here ("Waiting on Sunita"), I just cannot decide them.
+    mine = {d["id"] for d in rows}
+    sent = [d for d in await db.decisions.find(
+        {"tenant_id": tid, "status": {"$in": ["pending", "pending_approval"]}, "created_by": uid},
+        {"_id": 0}).sort("created_at", -1).to_list(100) if d["id"] not in mine]
+    people = [d.get("created_by") for d in rows + sent if d.get("created_by")]
+    people += [d.get("approver_id") for d in rows + sent if d.get("approver_id")]
+    umap = await _users_lookup(tid, people)
     cards = []
-    for d in rows:
+    # ASK-32: oldest first by the date it was captured. This sorted the TEXT
+    # "Waiting N days", so "Waiting 1 day" came before "Waiting 13 days".
+    ordered = [(d, False) for d in sorted(rows, key=lambda r: r.get("created_at") or "")]
+    ordered += [(d, True) for d in sorted(sent, key=lambda r: r.get("created_at") or "")]
+    for d, following in ordered:
         creator = (umap.get(d.get("created_by") or "", {}) or {}).get("name") or "Unknown"
         waiting_days = _days_between(d.get("created_at"))
-        proposed = len(d.get("proposed_tasks") or [])
         ctx_parts = [f"Waiting {waiting_days} day{'s' if waiting_days != 1 else ''}"]
-        ctx_parts.append(f"From {creator}")
-        if proposed:
-            ctx_parts.append(f"Unblocks {proposed} task{'s' if proposed != 1 else ''}")
+        if following:
+            decider = (umap.get(d.get("approver_id") or "", {}) or {}).get("name")
+            ctx_parts.append(f"Waiting on {decider or 'an owner'}")
+        else:
+            ctx_parts.append(f"From {creator}")
+        # ASK-32 Phase 1: a new decision PROPOSES its work; an older one created
+        # its tasks blocked and unblocks them. (`proposed_tasks` was never written.)
+        prop = d.get("proposal") or {}
+        n_tasks, n_wf = len(prop.get("tasks") or []), len(prop.get("workflows") or [])
+        if prop:
+            made = [f"{n_tasks} task{'s' if n_tasks != 1 else ''}"] if n_tasks else []
+            if n_wf:
+                made.append(f"{n_wf} workflow{'s' if n_wf != 1 else ''}")
+            if made:
+                ctx_parts.append("On approval: " + ", ".join(made))
+        elif d.get("task_ids"):
+            n = len(d["task_ids"])
+            ctx_parts.append(f"Unblocks {n} task{'s' if n != 1 else ''}")
+        if d.get("repeat_of"):
+            ctx_parts.append("Possible repeat")
+        amount = d.get("amount")
+        if amount is None:
+            amounts = [w.get("amount") for w in prop.get("workflows") or [] if isinstance(w.get("amount"), (int, float))]
+            amount = sum(amounts) if amounts else None
         cards.append({
             "id": d["id"],
             "kind": "decision",
             "title": d.get("title") or d.get("summary", "")[:80],
             "context_line": " · ".join(ctx_parts),
-            "amount": d.get("amount"),
-            "amount_formatted": _format_amount(d.get("amount")),
-            "cta": "review",
+            "amount": amount,
+            "amount_formatted": _format_amount(amount),
+            # "review": mine to decide · "follow": I raised it, someone else decides.
+            "cta": "follow" if following else "review",
             "target_id": d["id"],
             "target_kind": "decision",
         })
-    # Sort by waiting_days desc via created_at asc (oldest = most waiting)
-    cards.sort(key=lambda c: c["context_line"], reverse=False)
     return cards
 
 
@@ -510,20 +541,35 @@ async def _cards_on_fire(tid: str, user: dict) -> list:
     q_overdue = {
         "tenant_id": tid,
         "assignee_id": {"$ne": uid, "$exists": True, "$nin": [None, ""]},
+        # ASK-26: if I am on it, it is my own todo (My Work), not a chase.
+        "co_assignee_ids": {"$ne": uid},
         "status": {"$nin": ["done", "cancelled"]},
         "due_date": {"$lt": today, "$ne": None},
     }
+    # ASK-28 Phase 7 (plan 7.3): the same ladder as the reminders — a manager
+    # also chases their direct reports' tasks once they reach the manager step
+    # (FOLLOWUP_MANAGER_DAYS overdue), not from the first late hour.
+    from services.tasks import FOLLOWUP_MANAGER_DAYS
+    report_ids = set()
     if not is_owner:
-        q_overdue["created_by"] = uid
-    overdue = await db.tasks.find(q_overdue, {"_id": 0}).sort("due_date", 1).to_list(200)
+        report_ids = {r["id"] for r in await db.users.find(
+            {"tenant_id": tid, "reporting_manager_id": uid}, {"_id": 0, "id": 1}).to_list(500)}
+        q_overdue["$or"] = [{"created_by": uid}, {"assignee_id": {"$in": sorted(report_ids)}}]
+    overdue = [t for t in await db.tasks.find(q_overdue, {"_id": 0}).sort("due_date", 1).to_list(200)
+               if is_owner or t.get("created_by") == uid
+               or _days_between(t.get("due_date")) >= FOLLOWUP_MANAGER_DAYS]
 
     # 2) Escalations/handoffs pointed at me. The `updates` array is the
-    # source of truth; the latest entry with action in {escalate, handoff}
+    # source of truth; the latest entry that is an escalate or handoff with
     # to_id=uid (or to_role in my role keys) makes the task "awaiting me".
+    # ASK-28 Phase 7: entries are written as {kind, author_id, author_name}
+    # (add_task_update); this read looked for {action, actor_id}, so no
+    # escalation ever reached the Slipping list. Both spellings are read.
     q_addressed = {
         "tenant_id": tid,
         "status": {"$nin": ["done", "cancelled"]},
-        "updates.action": {"$in": ["escalate", "handoff"]},
+        "$or": [{"updates.kind": {"$in": ["escalate", "handoff"]}},
+                {"updates.action": {"$in": ["escalate", "handoff"]}}],
     }
     candidates = await db.tasks.find(q_addressed, {"_id": 0}).to_list(500)
     addressed = []
@@ -531,6 +577,8 @@ async def _cards_on_fire(tid: str, user: dict) -> list:
         latest = _latest_update(t)
         if not latest:
             continue
+        latest = {**latest, "action": latest.get("kind") or latest.get("action"),
+                  "actor_id": latest.get("author_id") or latest.get("actor_id")}
         if latest.get("action") not in ("escalate", "handoff"):
             continue
         addr_me = (latest.get("to_id") == uid) or (
@@ -552,7 +600,8 @@ async def _cards_on_fire(tid: str, user: dict) -> list:
         if t["id"] in seen:
             continue
         seen.add(t["id"])
-        actor = (umap.get(latest.get("actor_id") or "", {}) or {}).get("name") or "someone"
+        actor = ((umap.get(latest.get("actor_id") or "", {}) or {}).get("name")
+                 or latest.get("author_name") or "someone")
         verb = "Escalated by" if latest.get("action") == "escalate" else "Handed to you by"
         with_who = (umap.get(t.get("assignee_id") or "", {}) or {}).get("name")
         ctx_parts = [f"{verb} {actor}"]
@@ -580,6 +629,8 @@ async def _cards_on_fire(tid: str, user: dict) -> list:
         ctx_parts = [f"{overdue_days} day{'s' if overdue_days != 1 else ''} overdue"]
         if with_who and t.get("assignee_id") != uid:
             ctx_parts.append(f"With {with_who}")
+        if t.get("assignee_id") in report_ids and t.get("created_by") != uid:
+            ctx_parts.append("Reports to you")
         cards.append({
             "id": t["id"],
             "kind": "task_overdue",
@@ -605,6 +656,7 @@ async def _cards_due_today(tid: str, user: dict) -> list:
     q = {
         "tenant_id": tid,
         "assignee_id": {"$ne": uid, "$exists": True, "$nin": [None, ""]},
+        "co_assignee_ids": {"$ne": uid},  # ASK-26: same rule as on_fire
         "status": {"$nin": ["done", "cancelled"]},
         "due_date": today,
     }
@@ -651,8 +703,11 @@ async def desk_chip(chip: str = "needs_decision", user: dict = Depends(get_curre
         raise HTTPException(status_code=400, detail="Invalid chip")
 
     # Counters (always return the full map so header subline is one call)
+    # ASK-32 2.4 — the Decisions count is what waits on ME; decisions I raised
+    # for someone else are listed but not counted.
+    decision_cards = await _cards_needs_decision(tid, user)
     counters = {
-        "needs_decision": len(await _cards_needs_decision(tid, user)),
+        "needs_decision": sum(1 for c in decision_cards if c.get("cta") == "review"),
         "on_fire": len(await _cards_on_fire(tid, user)),
         "due_today": len(await _cards_due_today(tid, user)),
         "important": len(await _cards_important(tid, user)),

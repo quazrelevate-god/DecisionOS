@@ -38,13 +38,15 @@ pytestmark = pytest.mark.skipif(
 
 
 def _patch(testdb):
+    import services.decision_flow as dflow  # ASK-32: approve/reject write from here now
+    import services.ai.generators as gen    # the procurement-pipeline lookup reads the tenant
     saved = {
         "ledger": ledger.db, "decisions": decisions.db, "osr": osr.db, "oss": oss.db,
-        "core": core.db,
+        "core": core.db, "dflow": dflow.db, "gen": gen.db,
         "rc": brain_context.record_context, "enr": enrich.enrich_decision,
         "ade": core.add_decision_event, "la": core.log_activity,
     }
-    ledger.db = decisions.db = osr.db = oss.db = core.db = testdb
+    ledger.db = decisions.db = osr.db = oss.db = core.db = dflow.db = gen.db = testdb
 
     async def _noop(*a, **k):
         return None
@@ -57,8 +59,9 @@ def _patch(testdb):
     core.log_activity = _noop
 
     def restore():
-        ledger.db, decisions.db, osr.db, oss.db, core.db = (
-            saved["ledger"], saved["decisions"], saved["osr"], saved["oss"], saved["core"])
+        ledger.db, decisions.db, osr.db, oss.db, core.db, dflow.db, gen.db = (
+            saved["ledger"], saved["decisions"], saved["osr"], saved["oss"], saved["core"],
+            saved["dflow"], saved["gen"])
         brain_context.record_context = saved["rc"]
         enrich.enrich_decision = saved["enr"]
         core.add_decision_event = saved["ade"]

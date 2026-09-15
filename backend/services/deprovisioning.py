@@ -150,6 +150,23 @@ async def deprovision_user(
     except Exception as e:
         logger.warning(f"[deprovision] task reassign failed: {e}")
 
+    # 5b. ASK-26 — off every task they were on alongside a lead. And where the
+    # replacement just became lead of a task they were already listed on,
+    # they come off that list too rather than appearing beside themselves.
+    try:
+        res = await db.tasks.update_many(
+            {"tenant_id": tenant_id, "co_assignee_ids": target_user_id},
+            {"$pull": {"co_assignee_ids": target_user_id}, "$set": {"updated_at": now_iso()}},
+        )
+        report["co_assignments_removed"] = getattr(res, "modified_count", 0)
+        if reassign_to_user_id:
+            await db.tasks.update_many(
+                {"tenant_id": tenant_id, "assignee_id": reassign_to_user_id, "co_assignee_ids": reassign_to_user_id},
+                {"$pull": {"co_assignee_ids": reassign_to_user_id}},
+            )
+    except Exception as e:
+        logger.warning(f"[deprovision] co-assignee removal failed: {e}")
+
     # 6. Reassign authored contacts.
     try:
         res = await db.contacts.update_many(

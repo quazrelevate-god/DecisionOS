@@ -13,7 +13,7 @@ from core import (
     claude_chat, _extract_json,
 )
 from emergentintegrations.llm.chat import UserMessage
-from models.voice import TextNoteInput
+from models.voice import SubmitNoteInput, TextNoteInput
 from core import model_for
 from prompts import render
 from services.ai.pii import redact_pii
@@ -31,7 +31,10 @@ from models.voice import (
 
 
 @router.post("/voice-notes")
-async def create_voice_note(background: BackgroundTasks, file: UploadFile = File(...), language: str = Form("auto"), file_ids: str = Form(""), user: dict = Depends(require_perm("voice_capture"))):
+async def create_voice_note(background: BackgroundTasks, file: UploadFile = File(...), language: str = Form("auto"), file_ids: str = Form(""), user: dict = Depends(require_perm("voice_capture")), hold: str = Form("")):
+    """hold=1 (ASK-32 1.6): transcribe only, so the words can be reviewed first;
+    POST /voice-notes/{id}/submit sends the same note on — one recording, one decision."""
+    held = str(hold).lower() in ("1", "true", "yes")
     # FIX-002-E: uploads go to obj_store with a tenant-prefixed key so they
     # survive redeploys, work across replicas, and can be tenant-deleted
     # cleanly (see FIX-001-E). Was local disk under UPLOAD_DIR.
@@ -47,8 +50,31 @@ async def create_voice_note(background: BackgroundTasks, file: UploadFile = File
         "kind": "audio", "audio_path": result["storage_path"],
         "transcript": None, "language": language,
         "reference_file_ids": ref_ids,
-        "status": "queued", "created_at": now_iso(),
+        "status": "queued", "held": held, "created_at": now_iso(),
     })
+    background.add_task(process_voice_note, note_id, hold=held)
+    return {"id": note_id, "status": "queued"}
+
+
+@router.post("/voice-notes/{note_id}/submit")
+async def submit_held_note(note_id: str, inp: SubmitNoteInput, background: BackgroundTasks,
+                           user: dict = Depends(require_perm("voice_capture"))):
+    """ASK-32 1.6 — the reviewed words of a held recording go on to be structured.
+    Only the person who recorded it, only once."""
+    note = await db.voice_notes.find_one({"id": note_id, "tenant_id": user["tenant_id"], "created_by": user["id"]},
+                                         {"_id": 0, "status": 1, "transcript": 1})
+    if not note:
+        raise HTTPException(status_code=404, detail="Recording not found")
+    text = (inp.text or "").strip()
+    ref_ids = [x for x in (inp.file_ids or []) if x]
+    if not text and not ref_ids and not (note.get("transcript") or "").strip():
+        raise HTTPException(status_code=400, detail="Say or type what Dex should do")
+    res = await db.voice_notes.update_one({"id": note_id, "tenant_id": user["tenant_id"], "status": "transcribed"}, {"$set": {
+        "status": "queued", "transcript": text or note.get("transcript") or "",
+        "edited": bool(text) and text != (note.get("transcript") or ""),
+        "reference_file_ids": ref_ids, "submitted_at": now_iso()}})
+    if not res.modified_count:
+        raise HTTPException(status_code=409, detail="This recording was already sent")
     background.add_task(process_voice_note, note_id)
     return {"id": note_id, "status": "queued"}
 
@@ -138,6 +164,29 @@ async def list_voice_notes(user: dict = Depends(get_current_user)):
         {"tenant_id": user["tenant_id"]}, {"_id": 0, "audio_path": 0}
     ).sort("created_at", -1).to_list(100)
     return notes
+
+
+@router.get("/voice-notes/{note_id}/audio")
+async def voice_note_audio(note_id: str, user: dict = Depends(get_current_user)):
+    """ASK-32 Phase 3 — play what was said: the owner, the person who recorded
+    it, or whoever decides / raised a decision made from it."""
+    from fastapi.responses import Response
+    from services.uploads import read_upload
+    note = await db.voice_notes.find_one({"id": note_id, "tenant_id": user["tenant_id"]},
+                                         {"_id": 0, "audio_path": 1, "created_by": 1})
+    if not note or not note.get("audio_path"):
+        raise HTTPException(status_code=404, detail="No recording")
+    allowed = user.get("role") == "owner" or note.get("created_by") == user["id"]
+    if not allowed:
+        allowed = await db.decisions.count_documents({"tenant_id": user["tenant_id"], "voice_note_id": note_id,
+                                                      "$or": [{"approver_id": user["id"]}, {"created_by": user["id"]}]}) > 0
+    if not allowed:
+        raise HTTPException(status_code=403, detail="You don't have access to this recording")
+    try:
+        data, ctype = await read_upload(note["audio_path"])
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="No recording")
+    return Response(content=data, media_type=ctype or "audio/webm")
 
 
 @router.get("/voice-notes/{note_id}")

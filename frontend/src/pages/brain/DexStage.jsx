@@ -140,10 +140,10 @@ function Orb({ levels, recording, thinking, scale = 1 }) {
  * @param {string}   status    the line under the orb
  * @param {node}     trailing  quiet page-level actions (Documents, new thread)
  */
-export function DexStage({ capture, onAsk, thinking, compact = false, status, trailing }) {
+export function DexStage({ capture, onAsk, thinking, compact = false, status, trailing, className }) {
   const {
     text, setText, sending, recording, recordSecs, levels,
-    sendText, startRecording, stopRecording, uploadFile, fileRef,
+    sendText, startRecording, stopRecording, uploadFile, fileRef, attachments = [],
   } = capture;
 
   const busy = sending || thinking;
@@ -155,7 +155,7 @@ export function DexStage({ capture, onAsk, thinking, compact = false, status, tr
   };
 
   return (
-    <div className="relative" data-testid="dex-stage">
+    <div className={cn("relative", className)} data-testid="dex-stage">
       {/* The page's own atmosphere. Sits behind content, never takes a
           pointer, and is the reason /brain reads as a different surface
           rather than the same app in a different card. */}
@@ -181,7 +181,7 @@ export function DexStage({ capture, onAsk, thinking, compact = false, status, tr
       <div
         className={cn(
           "flex flex-col items-center",
-          compact ? "pt-1 pb-1" : "justify-center min-h-[calc(100vh-16rem)] py-6"
+          compact ? "pt-1 pb-1" : "justify-center min-h-[calc(100vh/var(--ui-scale,1)-16rem)] py-6"
         )}
       >
         <Orb
@@ -206,6 +206,13 @@ export function DexStage({ capture, onAsk, thinking, compact = false, status, tr
 
         {/* Composer. One row, and the mic and Send share the trailing slot so
             there are never two primary buttons competing. */}
+        {/* ASK-32 1.6 — what is attached to the next note, so it is not lost. */}
+        {attachments.length > 0 && (
+          <p data-testid="dex-stage-attachments" className={cn("w-full max-w-2xl px-2 text-xs text-muted-foreground", compact ? "mt-3" : "mt-6")}>
+            <Paperclip size={12} weight="bold" className="mr-1 inline" aria-hidden="true" />
+            Attached: {attachments.map((a) => a.name).join(", ")} — type what Dex should do with it and press Note
+          </p>
+        )}
         <div
           className={cn(
             "w-full max-w-2xl flex items-end gap-1 rounded-cardlg nm-raised p-2",
@@ -231,7 +238,7 @@ export function DexStage({ capture, onAsk, thinking, compact = false, status, tr
           {/* NM-13: typed CAPTURE, kept alive. Enter asks; this logs the same
               line as a note instead. Only offered when there is something to
               log, so the composer is one control wide at rest. */}
-          {text.trim() && !recording && (
+          {(text.trim() || attachments.length > 0) && !recording && (
             <button
               type="button"
               onClick={sendText}

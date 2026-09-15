@@ -107,8 +107,21 @@ export default function Brain() {
   const clear = () => { setLog([]); setCtxId(null); };
 
   return (
-    <div className="mx-auto max-w-3xl" data-testid="brain-page">
+    /* KM-50 — THE THREAD SITS ABOVE THE COMPOSER on desktop now.
+       The note further up this file argued the other way: with the orb as the
+       page's anchor, a bottom-docked composer would be pushed off-screen the
+       moment a conversation started, so answers opened BELOW the input. That
+       reasoning held while this page was its own thing; it stopped holding once
+       the phone shipped Dex as a chat, where the transcript is above and the
+       composer is the floor. Founder: "the chat is loading below instead of
+       above the text field... load the chat above as usual just like how we use
+       in this mobile view dex page."
+       Done with flex order rather than by moving the JSX: DexStage owns the
+       capture wiring and the trailing actions, and reordering source around it
+       is how you lose a prop. `order` moves boxes and touches nothing else. */
+    <div className="mx-auto flex max-w-3xl flex-col" data-testid="brain-page">
       <DexStage
+        className="order-2"
         capture={capture}
         onAsk={ask}
         thinking={busy}
@@ -157,11 +170,11 @@ export default function Brain() {
       )}
 
       {showDocs ? (
-        <div className="mt-6" data-testid="brain-documents">
+        <div className="order-1 mb-6 lg:mb-0 lg:mt-6" data-testid="brain-documents">
           <DocumentsPanel />
         </div>
       ) : (
-        <div className="mt-6 space-y-5" data-testid="brain-conversation">
+        <div className="order-1 mb-6 space-y-5 lg:mb-6 lg:mt-0" data-testid="brain-conversation">
           {log.length === 0 && !busy && (
             /* The opener. Four real questions rather than a paragraph about
                what Dex can do — the fastest way to learn a chat surface is to

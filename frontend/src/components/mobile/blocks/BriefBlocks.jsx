@@ -134,7 +134,9 @@ export function NumbersDetailSheet({ detail, period, onClose }) {
     decision: (it) => `/inbox?focus=decision:${it.id}`,
     invoice: () => "/finance?tab=revenue",
     payment: () => "/finance?tab=revenue",
-    leave: () => "/my-work?view=leave",
+    // ASK-6 (2026-09-12): leave-related brief blocks land on Team,
+    // where the register lives now.
+    leave: () => "/team",
     complaint: (it) => (it.contact_id ? `/contacts/${it.contact_id}` : "/crm"),
   };
 

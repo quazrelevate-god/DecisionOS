@@ -1,113 +1,105 @@
-// Epic 2 Sprint A — E2-02 CRM shell v1
+// Epic 2 Sprint A — E2-02 CRM shell. The relationship page at /crm: buyers and
+// suppliers (employees moved to /team, E2-01). A card opens the 360° profile
+// at /contacts/:id.
 //
-// Unified relationship page at /crm that replaces the Customers +
-// Suppliers tabs of the old /contacts People page. Employees are
-// no longer part of this surface (moved to /team, E2-01).
-//
-// v1 responsibility:
-//   * filter chips (All / Customers / Suppliers) + owner-scope
-//     toggle ('My relationships')
-//   * search bar (name, company, phone, email)
-//   * card grid with quick actions (Add / Edit / Delete / Log
-//     complaint / 360°)
-//   * click a card → navigate to /contacts/:id (existing
-//     ContactProfile 360° preserved untouched)
-//
-// Sprint B will bring the right-pane detail with the live
-// workflow-engine feed, activity timeline, and lifecycle chip;
-// that's E2-07 / E2-08 / E2-03 respectively.
+// 2026-09-14, founder — revamped end to end on the founder's reference (its
+// background excluded, and without the cards' ⋮ menus):
+//   * a title with one line under it, and the Add contact menu beside it;
+//   * one control row — Buyers | Suppliers with counts, search, status, sort,
+//     and a grid / list switch;
+//   * glass cards: tinted initials, name and company, a type chip, the ONE
+//     signal that matters (open complaints, then money owed, then money to
+//     pay), when the relationship was last touched and who owns it;
+//   * pages of 12 cards (20 rows in the list);
+//   * the New buyer / New supplier window on the glass sheet.
+// Every dropdown is GlassSelect. The Add contact menu is a Radix menu in a
+// portal: the old hand-rolled popover hung off the right-hand button inside
+// the frosted sticky header, so it ran off the screen edge and was clipped,
+// and its click-away layer covered only the header.
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "react-i18next";
 import { hasPerm } from "../lib/perms";
 import { lex } from "../lib/lexicon";
-import { PageHeader, Chip, EmptyState, SkeletonGrid, StickyHeader } from "../components/common";
-import { typeLabel } from "../lib/format";
+import { SkeletonGrid, StickyHeader } from "../components/common";
+import { inr, money } from "../lib/format";
 import api from "../lib/api";
 import { toast } from "sonner";
 import {
-  Plus, MagnifyingGlass, PencilSimple, Trash, Phone, EnvelopeSimple,
-  MapPin, Eye, AddressBook, Truck, UsersFour, Warning as WarningIcon,
-  ArrowsDownUp, CurrencyInr, Clock, UploadSimple,
-  SlidersHorizontal,  // KR-14.14 · mobile filter icon
+  AddressBook, ArrowsDownUp, CaretDown, CaretLeft, CaretRight, Clock, Coins, CurrencyInr, Funnel,
+  ListBullets, MagnifyingGlass, Plus, SquaresFour, Storefront, Truck, UploadSimple, Warning, X,
 } from "@phosphor-icons/react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
-  DialogFooter,
-} from "../components/ui/dialog";
-import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuLabel, DropdownMenuSeparator,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
+import {
+  CHIP, QUIET_CHIP, DRAWER_FIELD, DRAWER_LABEL, DRAWER_TRACK, GLASS_ICON_BTN,
+  GLASS_MENU, GLASS_MENU_ITEM, GLASS_PILL, GLASS_SHEET, INK_PILL,
+} from "../components/karma/glass";
+import { GlassSelect } from "../components/karma/GlassSelect";
+import { cn } from "@/lib/utils";
 
 const CUSTOMER_TYPES = ["customer", "dealer"];
 const VENDOR_TYPES = ["vendor"];
-const STATUSES = ["lead", "active", "inactive"];
+const STATUSES = [
+  { key: "lead", label: "Lead" },
+  { key: "active", label: "Active" },
+  { key: "inactive", label: "Inactive" },
+];
 
-// Epic 2 Sprint 1 (E2-03): lifecycle stages. Enum differs by contact
-// type -- customers travel a sales funnel; suppliers travel a
-// procurement journey. Colours below are the visual cue on the card
-// so founder can spot at-risk / on-hold instantly.
-// RD-3 (2026-08-17): lifecycle chips re-tinted onto the semantic ramp.
-// Was a mix of black/10, black/30-on-white, brand-blue/20, brand-green/20
-// and solid brand-yellow — five different colour systems in two arrays, and
-// `brand-green` is not even a defined token (it rendered as nothing).
-// Now every stage is a tint + darker-text pair, and colour tracks meaning:
-// neutral for "not started", success for healthy, danger for at-risk,
-// caution for on-hold, muted-strikethrough-adjacent for ended.
+// E2-03: lifecycle stages. Customers travel a sales funnel, suppliers a
+// procurement journey. Each stage is a card chip tone (components/karma/glass
+// CHIP): neutral for not started or ended, emerald for healthy, rose for at
+// risk, amber for on hold.
 const CUSTOMER_STAGES = [
-  { key: "lead", label: "Lead", cls: "bg-nm-sunken text-muted-foreground" },
-  { key: "qualified", label: "Qualified", cls: "border-[0.5px] border-kr-ink text-foreground" },
-  { key: "active", label: "Active", cls: "bg-kr-ink text-white" },
-  { key: "at_risk", label: "At Risk", cls: "border-[0.5px] border-kr-accent text-kr-accent" },
-  { key: "churned", label: "Churned", cls: "bg-nm-sunken text-muted-foreground" },
+  { key: "lead", label: "Lead", tone: QUIET_CHIP },
+  { key: "qualified", label: "Qualified", tone: "bg-sky-50 text-sky-700 ring-sky-100" },
+  { key: "active", label: "Active", tone: "bg-emerald-50 text-emerald-700 ring-emerald-100" },
+  { key: "at_risk", label: "At Risk", tone: "bg-rose-50 text-rose-700 ring-rose-100" },
+  { key: "churned", label: "Churned", tone: "bg-stone-100 text-stone-600 ring-stone-200/70" },
 ];
 const SUPPLIER_STAGES = [
-  { key: "prospect", label: "Prospect", cls: "bg-nm-sunken text-muted-foreground" },
-  { key: "active", label: "Active", cls: "bg-kr-ink text-white" },
-  { key: "preferred", label: "Preferred", cls: "border-[0.5px] border-kr-ink text-foreground" },
-  { key: "on_hold", label: "On Hold", cls: "border-[0.5px] border-kr-ink/55 text-foreground/70" },
-  { key: "retired", label: "Retired", cls: "bg-nm-sunken text-muted-foreground" },
+  { key: "prospect", label: "Prospect", tone: QUIET_CHIP },
+  { key: "active", label: "Active", tone: "bg-emerald-50 text-emerald-700 ring-emerald-100" },
+  { key: "preferred", label: "Preferred", tone: "bg-violet-50 text-violet-700 ring-violet-100" },
+  { key: "on_hold", label: "On Hold", tone: "bg-amber-50 text-amber-800 ring-amber-100" },
+  { key: "retired", label: "Retired", tone: "bg-stone-100 text-stone-600 ring-stone-200/70" },
 ];
-function stagesForType(t) {
-  if (VENDOR_TYPES.includes(t)) return SUPPLIER_STAGES;
-  return CUSTOMER_STAGES;
-}
-function stageMeta(type, stage) {
-  if (!stage) return null;
-  return stagesForType(type).find((s) => s.key === stage) || null;
-}
-// RD-3: form inputs lose the mono face and the hard frame. Mono in a text
-// field made every form read as a config file; the reference uses the UI
-// grotesque in inputs and reserves mono for rendered data.
-const inp = "w-full nm-field px-3 py-2 text-sm";
+const stagesForType = (t) => (VENDOR_TYPES.includes(t) ? SUPPLIER_STAGES : CUSTOMER_STAGES);
+const stageMeta = (type, stage) => (stage ? stagesForType(type).find((s) => s.key === stage) || null : null);
 
-// Epic 2 Sprint 8 (E2-70): sort options for the CRM card grid. Founder
-// scans a lot of cards at once -- sorting by name (default), most-
-// recently-touched, outstanding balance desc, or last touched lets
-// them find who to call today without scrolling.
+// E2-70: sorting. Name by default; newest first; the biggest balance first; or
+// the relationships going cold first.
 const SORT_OPTIONS = [
-  { key: "name", label: "Name A-Z" },
+  { key: "name", label: "Name A–Z" },
   { key: "recent", label: "Recently added" },
   { key: "outstanding", label: "Outstanding (highest)" },
   { key: "touched", label: "Last touched (oldest)" },
 ];
 
-// Epic 2 Sprint 8 (E2-71): render "3 days ago" style timestamp from a
-// UTC ISO string. Small helper -- kept inline because it's the only
-// place that needs this style in the CRM card grid.
+const VIEW_KEY = "crm.view";
+const PAGE_SIZE = { grid: 12, list: 20 };
+
+// The card and list surface: white glass lifted off the page.
+const CARD = "rounded-[1.4rem] bg-white/80 ring-1 ring-inset ring-white shadow-[0_12px_32px_-16px_hsl(230_20%_25%/0.25),0_1px_2px_hsl(230_20%_25%/0.06)] backdrop-blur-xl";
+const SHEET = `gap-5 rounded-[1.75rem] p-6 sm:rounded-[1.75rem] [&>button.absolute]:hidden ${GLASS_SHEET}`;
+// The New contact window's fields: the drawer's glass field a size down, so
+// three sit in a row and the whole window fits a laptop screen unscrolled.
+const FIELD = cn(DRAWER_FIELD, "h-11 py-0 text-sm");
+const NOTES_FIELD = cn(DRAWER_FIELD, "resize-none py-2.5 text-sm");
+
+// E2-71: "3 days ago" from a UTC ISO string.
 function daysSince(iso) {
   if (!iso) return null;
   const then = new Date(iso).getTime();
   if (!then || Number.isNaN(then)) return null;
   const days = Math.floor((Date.now() - then) / 86400000);
-  if (days < 0) return null;
-  return days;
+  return days < 0 ? null : days;
 }
-
 function touchedLabel(days) {
   if (days == null) return null;
   if (days === 0) return "Touched today";
@@ -117,378 +109,410 @@ function touchedLabel(days) {
   return `Touched ${Math.floor(days / 365)}y ago`;
 }
 
-// Epic 2 Sprint 8 (E2-67): Rs 4,80,000 style Indian formatting so the
-// outstanding pill reads the way an Indian owner writes numbers.
-function formatIndianCurrency(n) {
-  if (n == null || Number.isNaN(n)) return null;
-  if (n < 1) return null; // hide sub-rupee noise
-  const rounded = Math.round(n);
-  if (rounded < 1000) return `Rs ${rounded}`;
-  // Indian grouping: last three digits, then pairs.
-  const s = String(rounded);
-  const last3 = s.slice(-3);
-  const rest = s.slice(0, -3);
-  const grouped = rest.replace(/\B(?=(\d{2})+(?!\d))/g, ",");
-  return `Rs ${grouped},${last3}`;
+// E2-67: Indian grouping for rupees (₹4,00,000), the tenant's own currency
+// otherwise; sub-unit balances are noise and stay hidden.
+function formatAmount(n, currency) {
+  const v = Number(n);
+  if (n == null || Number.isNaN(v) || v < 1) return null;
+  return !currency || currency === "INR" ? inr(v) : money(Math.round(v), currency);
 }
 
-// -----------------------------------------------------------------------------
-// Dialogs (identical shape to the old ContactsPanel — kept inline so /crm has
-// zero coupling to the old People page. When People.js is removed we don't
-// break anything.)
-// -----------------------------------------------------------------------------
-function ComplaintDialog({ contact, onSaved }) {
-  const [open, setOpen] = useState(false);
-  const [text, setText] = useState("");
-  const [severity, setSeverity] = useState("medium");
-  const save = async () => {
-    if (!text.trim()) return toast.error("Describe the complaint");
-    try {
-      await api.post("/complaints", { customer_id: contact.id, text, severity });
-      toast.success("Complaint logged");
-      setText(""); setOpen(false); onSaved && onSaved();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || "Failed");
-    }
-  };
+// A contact's initials on a soft tint picked from their name, so a face keeps
+// its colour from visit to visit.
+const AVATAR_TINTS = [
+  "bg-emerald-100 text-emerald-800", "bg-sky-100 text-sky-800", "bg-amber-100 text-amber-800",
+  "bg-violet-100 text-violet-800", "bg-rose-100 text-rose-800", "bg-teal-100 text-teal-800",
+  "bg-indigo-100 text-indigo-800", "bg-orange-100 text-orange-800", "bg-lime-100 text-lime-800",
+  "bg-slate-200 text-slate-700",
+];
+function tintFor(seed) {
+  let h = 0;
+  for (const ch of String(seed || "")) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return AVATAR_TINTS[h % AVATAR_TINTS.length];
+}
+function initialsOf(name) {
+  const parts = String(name || "").replace(/[_.-]+/g, " ").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+function Initials({ name, small = false }) {
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button data-testid={`crm-log-complaint-${contact.id}`} title="Log complaint" className="w-8 h-8 flex items-center justify-center nm-btn text-muted-foreground transition-shadow hover:text-foreground">!</button>
-      </DialogTrigger>
-      <DialogContent className="rounded-cardlg border border-nm-edge/40">
-        <DialogHeader><DialogTitle className="font-display text-xl">Log complaint — {contact.name}</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <textarea data-testid="crm-complaint-text" className={inp} rows={3} placeholder="What went wrong?" value={text} onChange={(e) => setText(e.target.value)} />
-          <select className={inp} value={severity} onChange={(e) => setSeverity(e.target.value)}>
-            {["low", "medium", "high"].map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-        <DialogFooter>
-          <button data-testid="crm-complaint-save" onClick={save} className="kr-lift rounded-pill bg-kr-ink px-5 py-2.5 text-sm font-medium text-white">Log complaint</button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <span aria-hidden="true"
+      className={`grid shrink-0 place-items-center rounded-full font-semibold ${small ? "h-9 w-9 text-xs" : "h-11 w-11 text-sm"} ${tintFor(name)}`}>
+      {initialsOf(name)}
+    </span>
   );
 }
 
-// U7-07 (2026-08-17): dialog polished for the "add contact" flow.
-// Was: 10 fields in a raw 2-col grid, `type` and `status` selects
-// on top, name buried in row 4. Now: segmented Type control (only
-// on new), name auto-focused, sectioned layout (Identity → Contact
-// → Classification), and everything the owner rarely fills on
-// first-touch (GSTIN, address, tags, owner, notes) hidden behind
-// a "More details" toggle. Editing an existing contact expands the
-// advanced section by default so nothing looks missing.
-function CrmContactDialog({ trigger, initial, onSaved, users, defaultType }) {
+/* The card's one signal — the most urgent thing about the relationship, never
+   a stack of them: open complaints, then money they owe (amber once the oldest
+   invoice passes 30 days), then money owed to them. */
+const SIGNAL_TONE = {
+  danger: "bg-rose-50 text-rose-700 ring-rose-100",
+  warn: "bg-orange-50 text-orange-700 ring-orange-100",
+  quiet: "bg-slate-500/[0.07] text-slate-600 ring-slate-500/10",
+};
+function signalFor(complaints, outstanding, currency) {
+  if (complaints > 0) {
+    return { tone: "danger", icon: Warning, text: `${complaints} open complaint${complaints === 1 ? "" : "s"}` };
+  }
+  const moneyIcon = !currency || currency === "INR" ? CurrencyInr : Coins;
+  const owed = formatAmount(outstanding?.receivables, currency);
+  if (owed) {
+    const overdue = outstanding?.oldest_days != null && outstanding.oldest_days > 30;
+    return overdue
+      ? { tone: "warn", icon: Coins, text: `${owed} owed · oldest ${outstanding.oldest_days}d` }
+      : { tone: "quiet", icon: moneyIcon, text: `${owed} owed` };
+  }
+  const due = formatAmount(outstanding?.payables, currency);
+  return due ? { tone: "quiet", icon: moneyIcon, text: `${due} to pay` } : null;
+}
+
+function SignalPill({ id, signal, compact = false }) {
+  const Icon = signal.icon;
+  return (
+    <p data-testid={`crm-signal-${id}`}
+      className={`flex min-w-0 items-center gap-2 rounded-xl font-medium tabular-nums ring-1 ring-inset ${compact ? "px-2.5 py-1.5 text-xs" : "mt-3 px-3 py-2 text-[13px]"} ${SIGNAL_TONE[signal.tone]}`}>
+      <Icon size={compact ? 13 : 14} weight="bold" aria-hidden="true" className="shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{signal.text}</span>
+      {!compact && signal.tone !== "quiet" && <CaretRight size={12} weight="bold" aria-hidden="true" className="shrink-0 opacity-70" />}
+    </p>
+  );
+}
+
+function ContactCard({ c, info, onOpen, canOpen }) {
+  return (
+    <button
+      type="button"
+      data-testid={`crm-card-${c.id}`}
+      onClick={onOpen}
+      disabled={!canOpen}
+      className={`flex flex-col p-4 text-left sm:min-h-[9.5rem] transition-[transform,box-shadow] duration-200 enabled:hover:-translate-y-0.5 enabled:hover:shadow-[0_18px_40px_-18px_hsl(230_20%_25%/0.32),0_1px_2px_hsl(230_20%_25%/0.06)] disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 motion-reduce:transition-none ${CARD}`}
+    >
+      <div className="flex w-full items-start gap-3">
+        <Initials name={c.name} />
+        <div className="min-w-0 flex-1 pt-0.5">
+          <p className="truncate text-[15px] font-semibold text-slate-900">{c.name}</p>
+          {c.company && <p className="truncate text-xs text-slate-500">{c.company}</p>}
+        </div>
+        <span data-testid={`crm-type-chip-${c.id}`} className={`mt-0.5 ${CHIP} ${QUIET_CHIP}`}>{info.typeChip}</span>
+      </div>
+      {info.signal && <SignalPill id={c.id} signal={info.signal} />}
+      <div className="mt-auto flex w-full items-center justify-between gap-3 pt-3 text-xs text-slate-500">
+        {info.touched ? (
+          <span className="flex min-w-0 items-center gap-1.5" data-testid={`crm-touched-${c.id}`}>
+            <Clock size={13} aria-hidden="true" className="shrink-0" /> <span className="truncate">{info.touched}</span>
+          </span>
+        ) : <span />}
+        {info.ownerName && <span className="truncate" data-testid={`crm-owner-${c.id}`}>Owner: {info.ownerName}</span>}
+      </div>
+    </button>
+  );
+}
+
+// The list's column template, shared by its header and every row.
+const LIST_COLS = "lg:grid-cols-[minmax(0,2.4fr)_minmax(0,1.2fr)_minmax(0,1.9fr)_minmax(0,1.1fr)_minmax(0,1fr)]";
+
+function ContactRow({ c, info, onOpen, canOpen }) {
+  return (
+    <li>
+      <button
+        type="button"
+        data-testid={`crm-row-${c.id}`}
+        onClick={onOpen}
+        disabled={!canOpen}
+        className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors enabled:hover:bg-white/80 disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 lg:gap-4 ${LIST_COLS}`}
+      >
+        <span className="flex min-w-0 items-center gap-3">
+          <Initials name={c.name} small />
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold text-slate-900">{c.name}</span>
+            {c.company && <span className="block truncate text-xs text-slate-500">{c.company}</span>}
+          </span>
+        </span>
+        <span className="hidden flex-wrap items-center gap-1 lg:flex">
+          <span className={`${CHIP} ${QUIET_CHIP}`}>{info.typeChip}</span>
+          {info.stage && <span data-testid={`crm-stage-${c.id}`} className={`${CHIP} ${info.stage.tone}`}>{info.stage.label}</span>}
+        </span>
+        <span className="hidden min-w-0 lg:block">
+          {info.signal ? <SignalPill id={c.id} signal={info.signal} compact /> : <span className="text-xs text-slate-400">—</span>}
+        </span>
+        <span className="hidden truncate text-xs text-slate-600 lg:block">{info.ownerName || "—"}</span>
+        <span className="text-right text-xs text-slate-500">{info.touched?.replace(/^Touched /, "") || "—"}</span>
+      </button>
+    </li>
+  );
+}
+
+function ViewToggle({ view, onChange }) {
+  const options = [["grid", SquaresFour, "Grid view"], ["list", ListBullets, "List view"]];
+  return (
+    <div role="group" aria-label="Layout" data-testid="crm-view-toggle"
+      className={`hidden shrink-0 items-center gap-1 rounded-pill p-1 sm:flex ${DRAWER_TRACK}`}>
+      {options.map(([key, Icon, label]) => {
+        const on = view === key;
+        return (
+          <button key={key} type="button" onClick={() => onChange(key)} aria-pressed={on} aria-label={label} title={label}
+            data-testid={`crm-view-${key}`}
+            className={`grid h-10 w-10 place-items-center rounded-pill transition-colors ${on ? `${GLASS_PILL} text-slate-900` : "text-slate-500 hover:text-slate-800"}`}>
+            <Icon size={18} weight={on ? "fill" : "regular"} aria-hidden="true" />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function Pager({ page, pages, total, pageSize, onPage }) {
+  if (pages <= 1) return null;
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(total, page * pageSize);
+  const first = Math.max(1, Math.min(page - 2, pages - 4));
+  const numbers = Array.from({ length: Math.min(5, pages) }, (_, i) => first + i);
+  return (
+    <nav aria-label="Pages" data-testid="crm-pager" className="mt-6 flex flex-wrap items-center justify-between gap-3">
+      <p className="text-xs text-slate-500" data-testid="crm-pager-range">{from}–{to} of {total}</p>
+      <div className="flex items-center gap-1.5">
+        <button type="button" onClick={() => onPage(page - 1)} disabled={page <= 1} aria-label="Previous page"
+          data-testid="crm-page-prev" className={GLASS_ICON_BTN}>
+          <CaretLeft size={15} weight="bold" aria-hidden="true" />
+        </button>
+        {numbers.map((n) => (
+          <button key={n} type="button" onClick={() => onPage(n)} aria-current={n === page ? "page" : undefined}
+            data-testid={`crm-page-${n}`}
+            className={`h-11 min-w-11 rounded-pill px-3 text-sm font-medium tabular-nums transition-colors ${n === page ? INK_PILL : `${GLASS_PILL} text-slate-700 hover:bg-white`}`}>
+            {n}
+          </button>
+        ))}
+        <button type="button" onClick={() => onPage(page + 1)} disabled={page >= pages} aria-label="Next page"
+          data-testid="crm-page-next" className={GLASS_ICON_BTN}>
+          <CaretRight size={15} weight="bold" aria-hidden="true" />
+        </button>
+      </div>
+    </nav>
+  );
+}
+
+/* U7-07 — one primary "Add contact" with the ways to add behind it. A Radix
+   menu, portalled and collision-aware, aligned to the button's right edge so
+   it opens back into the page. Modal, Radix's default: measured here, the
+   non-modal mode did not close on an outside click, while the modal one closes
+   on an outside click and on Escape. The dialog opens a tick after the menu has
+   closed, so the menu handing focus back does not fight the dialog's trap. */
+function AddContactMenu({ canManage, canImport, csvBusy, onPick, customerLabel, vendorLabel }) {
   const [open, setOpen] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const blank = { type: defaultType || "customer", name: "", company: "", phone: "", email: "", address: "", tax_id: "", tags: "", status: "lead", assigned_id: "", notes: "", birthday: "", lifecycle_stage: "" };
-  const [form, setForm] = useState(blank);
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const item = (key, Icon, title, hint, testid, disabled = false) => (
+    <DropdownMenuItem key={key} disabled={disabled} data-testid={testid} onSelect={() => onPick(key)}
+      className={`${GLASS_MENU_ITEM} items-start gap-3 px-3 py-2.5`}>
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-900/[0.05] text-slate-700 ring-1 ring-inset ring-slate-900/[0.04]">
+        <Icon size={18} weight="regular" aria-hidden="true" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-slate-900">{title}</span>
+        <span className="mt-0.5 block text-xs leading-snug text-slate-500">{hint}</span>
+      </span>
+    </DropdownMenuItem>
+  );
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <button type="button" data-testid="crm-add-menu" aria-label="Add contact"
+          className={`flex h-11 shrink-0 items-center gap-2 rounded-pill px-3.5 text-sm font-medium sm:h-12 sm:px-5 ${INK_PILL}`}>
+          <Plus size={16} weight="bold" aria-hidden="true" />
+          <span className="hidden sm:inline">Add contact</span>
+          <CaretDown size={12} weight="bold" aria-hidden="true"
+            className={`hidden opacity-70 transition-transform duration-200 motion-reduce:transition-none sm:block ${open ? "rotate-180" : ""}`} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" sideOffset={8} collisionPadding={12}
+        className={`${GLASS_MENU} w-[min(20rem,calc(100vw-1.5rem))] p-1.5`} data-testid="crm-add-menu-list">
+        {canManage && item("customer", AddressBook, `New ${customerLabel}`, "A retail account, a regular buyer or a dealer", "crm-add-customer")}
+        {canManage && item("vendor", Truck, `New ${vendorLabel}`, "A supplier, vendor or raw-material source", "crm-add-supplier")}
+        {canManage && canImport && <DropdownMenuSeparator className="mx-2 my-1 h-px bg-slate-900/[0.06]" />}
+        {canImport && item("import", UploadSimple, csvBusy ? "Uploading…" : "Import from spreadsheet", "Bulk-add via CSV or Excel", "crm-import-csv", csvBusy)}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
-  const openChange = (o) => {
-    setOpen(o);
-    if (o) {
-      setForm(initial
-        ? { ...initial, tags: (initial.tags || []).join(", "), assigned_id: initial.assigned_id || "", company: initial.company || "", phone: initial.phone || "", email: initial.email || "", address: initial.address || "", tax_id: initial.tax_id || "", notes: initial.notes || "", birthday: initial.birthday || "", lifecycle_stage: initial.lifecycle_stage || "" }
-        : { ...blank, type: defaultType || "customer" });
-      // Expand advanced when editing (details may already exist);
-      // collapse when creating fresh (name + phone is enough to start).
-      setShowAdvanced(!!initial);
-    }
-  };
+const TYPE_META = {
+  customer: { icon: AddressBook, hint: "Someone who buys from you — a retail account or a regular." },
+  dealer: { icon: Storefront, hint: "A dealer or distributor who resells what you sell." },
+  vendor: { icon: Truck, hint: "Someone you buy from — a supplier or a raw-material source." },
+};
+const blankContact = (type) => ({
+  type, name: "", company: "", phone: "", email: "", address: "", tax_id: "", tags: "",
+  status: "lead", assigned_id: "", notes: "", lifecycle_stage: "",
+});
 
-  // E2-03: reset stage when type changes so we never end up with a
-  // 'churned' supplier (invalid combo).
+function Field({ label, htmlFor, required = false, wide = false, hint, children }) {
+  return (
+    <div className={`min-w-0 ${wide ? "sm:col-span-2 lg:col-span-3" : ""}`}>
+      {htmlFor ? (
+        <label htmlFor={htmlFor} className="mb-1.5 block text-xs font-medium text-slate-600">
+          {label}{required && <span className="text-rose-600"> *</span>}
+        </label>
+      ) : (
+        <p className="mb-1.5 text-xs font-medium text-slate-600">{label}</p>
+      )}
+      {children}
+      {hint && <p className="mt-1 text-[11px] text-slate-500">{hint}</p>}
+    </div>
+  );
+}
+
+function FormSection({ label, children }) {
+  return (
+    <section>
+      <p className={DRAWER_LABEL}>{label}</p>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
+    </section>
+  );
+}
+
+/* U7-07 → 2026-09-14 — the New buyer / New supplier window on the glass sheet.
+   Opened with a type (`type`); the switch inside can still change it, and a
+   stage that does not exist for the new type is cleared (E2-03 — never a
+   "churned" supplier). Everything shows at once, in sections: who they are,
+   how to reach them, where they stand, the rest. */
+function CrmContactDialog({ type, onClose, onSaved, users, labels }) {
+  const [form, setForm] = useState(() => blankContact(type || "customer"));
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (type) setForm(blankContact(type)); }, [type]);
+
+  const set = (key) => (e) => { const v = e.target.value; setForm((f) => ({ ...f, [key]: v })); };
   const applyType = (t) => {
     const valid = new Set(stagesForType(t).map((s) => s.key));
     setForm((f) => ({ ...f, type: t, lifecycle_stage: valid.has(f.lifecycle_stage) ? f.lifecycle_stage : "" }));
   };
+  const typeName = labels[form.type] || "Contact";
+  const Icon = TYPE_META[form.type]?.icon || AddressBook;
 
   const save = async () => {
-    if (!form.name.trim()) return toast.error("Name is required");
-    const payload = {
-      type: form.type, name: form.name, company: form.company, phone: form.phone, email: form.email,
-      address: form.address, tax_id: form.tax_id, status: form.status,
-      assigned_id: form.assigned_id || null, notes: form.notes, birthday: form.birthday,
-      tags: form.tags ? form.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
-      lifecycle_stage: form.lifecycle_stage || "",  // E2-03
-    };
+    if (!form.name.trim()) { toast.error("Name is required"); return; }
+    setBusy(true);
     try {
-      if (initial) await api.patch(`/contacts/${initial.id}`, payload);
-      else await api.post("/contacts", payload);
-      toast.success(initial ? "Contact updated" : "Contact added");
-      setOpen(false);
+      await api.post("/contacts", {
+        type: form.type, name: form.name.trim(), company: form.company, phone: form.phone, email: form.email,
+        address: form.address, tax_id: form.tax_id, status: form.status,
+        assigned_id: form.assigned_id || null, notes: form.notes, birthday: "",
+        tags: form.tags ? form.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
+        lifecycle_stage: form.lifecycle_stage || "",
+      });
+      toast.success(`${typeName} added`);
       onSaved();
+      onClose();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Save failed");
+    } finally {
+      setBusy(false);
     }
   };
 
-  const TYPE_TABS = [
-    { key: "customer", label: typeLabel("customer") },
-    { key: "dealer", label: typeLabel("dealer") },
-    { key: "vendor", label: typeLabel("vendor") },
-  ];
-
-  const dialogTitle = initial
-    ? `Edit ${initial.name}`
-    : `New ${typeLabel(form.type).toLowerCase()}`;
-
   return (
-    <Dialog open={open} onOpenChange={openChange}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-xl" data-testid="crm-contact-dialog">
-        <DialogHeader>
-          <DialogTitle className="font-display text-xl">{dialogTitle}</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-5">
-          {/* Type — segmented control; only shown when creating. Editing
-              locks the type since changing it silently resets lifecycle. */}
-          {!initial && (
-            <div>
-              <p className="label-mono text-muted-foreground mb-2">Type</p>
-              <div className="flex nm-tile" data-testid="crm-contact-type">
-                {TYPE_TABS.map((tab, i) => {
-                  const active = form.type === tab.key;
-                  return (
-                    <button
-                      key={tab.key}
-                      type="button"
-                      onClick={() => applyType(tab.key)}
-                      data-testid={`crm-contact-type-${tab.key}`}
-                      className={`flex-1 py-2 text-sm font-medium transition-colors ${
-                        active ? "bg-kr-ink text-white" : "nm-btn"
-                      } ${i < TYPE_TABS.length - 1 ? "border-r border-nm-edge/40" : ""}`}
-                    >
-                      {tab.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Identity */}
-          <div className="space-y-2">
-            <p className="label-mono text-muted-foreground">Identity</p>
-            <input
-              className={inp}
-              placeholder="Name *"
-              value={form.name}
-              onChange={set("name")}
-              data-testid="crm-contact-name"
-              autoFocus
-            />
-            <input
-              className={inp}
-              placeholder="Company (optional)"
-              value={form.company}
-              onChange={set("company")}
-            />
-          </div>
-
-          {/* Contact */}
-          <div className="space-y-2">
-            <p className="label-mono text-muted-foreground">Contact</p>
-            <div className="grid grid-cols-2 gap-2">
-              <input className={inp} placeholder="Phone" value={form.phone} onChange={set("phone")} />
-              <input className={inp} placeholder="Email" value={form.email} onChange={set("email")} />
-            </div>
-          </div>
-
-          {/* Classification: status + lifecycle stage */}
-          <div className="space-y-2">
-            <p className="label-mono text-muted-foreground">Classification</p>
-            <div className="grid grid-cols-2 gap-2">
-              <select className={inp} value={form.status} onChange={set("status")}>
-                {STATUSES.map((s) => <option key={s} value={s}>Status · {s}</option>)}
-              </select>
-              <select
-                className={inp}
-                value={form.lifecycle_stage || ""}
-                onChange={set("lifecycle_stage")}
-                data-testid="crm-contact-lifecycle"
-              >
-                <option value="">Stage · unset</option>
-                {stagesForType(form.type).map((s) => (
-                  <option key={s.key} value={s.key}>Stage · {s.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Advanced — collapsed by default when creating */}
-          <div>
-            <button
-              type="button"
-              onClick={() => setShowAdvanced((v) => !v)}
-              className="text-xs font-medium text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors"
-              data-testid="crm-contact-advanced-toggle"
-            >
-              <span className={`transition-transform ${showAdvanced ? "rotate-90" : ""}`}>▸</span>
-              More details {showAdvanced ? "" : "· GSTIN, address, tags, owner, notes"}
-            </button>
-            {showAdvanced && (
-              <div className="mt-3 space-y-2 pl-2 border-l-2 border-nm-edge/40">
-                <input className={inp} placeholder="GSTIN / Tax ID" value={form.tax_id} onChange={set("tax_id")} />
-                <input className={inp} placeholder="Address" value={form.address} onChange={set("address")} />
-                <input className={inp} placeholder="Tags (comma separated)" value={form.tags} onChange={set("tags")} />
-                {users && users.length > 0 && (
-                  <select className={inp} value={form.assigned_id} onChange={set("assigned_id")}>
-                    <option value="">Owner — unassigned</option>
-                    {users.map((u) => <option key={u.id} value={u.id}>Owner · {u.name}</option>)}
-                  </select>
-                )}
-                <textarea className={inp} rows={2} placeholder="Notes" value={form.notes} onChange={set("notes")} />
-              </div>
-            )}
-          </div>
+    <Dialog open={!!type} onOpenChange={(o) => { if (!o && !busy) onClose(); }}>
+      <DialogContent data-testid="crm-contact-dialog" className={`max-h-[calc(90dvh/var(--ui-scale,1))] max-w-3xl overflow-y-auto ${SHEET}`}>
+        <div className="flex items-start gap-3.5">
+          <span aria-hidden="true"
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/85 text-slate-700 ring-1 ring-inset ring-slate-900/[0.06] shadow-[0_6px_16px_-8px_hsl(216_30%_25%/0.35)]">
+            <Icon size={22} weight="regular" />
+          </span>
+          <DialogHeader className="min-w-0 flex-1 space-y-1 text-left">
+            <DialogTitle className="text-lg font-semibold text-neutral-900">New {typeName.toLowerCase()}</DialogTitle>
+            <DialogDescription className="text-sm text-neutral-600">{TYPE_META[form.type]?.hint}</DialogDescription>
+          </DialogHeader>
+          <button type="button" onClick={onClose} disabled={busy} aria-label="Close" data-testid="crm-contact-close" className={GLASS_ICON_BTN}>
+            <X size={16} weight="bold" aria-hidden="true" />
+          </button>
         </div>
 
-        <DialogFooter>
-          <button
-            type="button"
-            onClick={() => setOpen(false)}
-            className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
+        <div role="group" aria-label="Contact type" data-testid="crm-contact-type" className={`flex gap-1 rounded-pill p-1 ${DRAWER_TRACK}`}>
+          {["customer", "dealer", "vendor"].map((key) => {
+            const on = form.type === key;
+            const TypeIcon = TYPE_META[key].icon;
+            return (
+              <button key={key} type="button" onClick={() => applyType(key)} aria-pressed={on} data-testid={`crm-contact-type-${key}`}
+                className={`flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-pill px-2 text-sm font-medium ${on ? `${GLASS_PILL} text-slate-900` : "text-slate-500 hover:text-slate-800"}`}>
+                <TypeIcon size={15} weight={on ? "fill" : "regular"} aria-hidden="true" className="shrink-0" />
+                <span className="truncate">{labels[key]}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="space-y-4">
+          <FormSection label="Who they are">
+            <Field label="Name" htmlFor="crm-contact-name" required>
+              <input id="crm-contact-name" data-testid="crm-contact-name" autoFocus className={FIELD}
+                placeholder={form.type === "vendor" ? "e.g. Surat Yarn Mills" : "e.g. Anand Fabrics"} value={form.name} onChange={set("name")} />
+            </Field>
+            <Field label="Company" htmlFor="crm-contact-company">
+              <input id="crm-contact-company" data-testid="crm-contact-company" className={FIELD}
+                placeholder="Registered name (optional)" value={form.company} onChange={set("company")} />
+            </Field>
+            <Field label="Phone" htmlFor="crm-contact-phone">
+              <input id="crm-contact-phone" data-testid="crm-contact-phone" type="tel" inputMode="tel" className={FIELD}
+                placeholder="+91 98765 43210" value={form.phone} onChange={set("phone")} />
+            </Field>
+            <Field label="Email" htmlFor="crm-contact-email">
+              <input id="crm-contact-email" data-testid="crm-contact-email" type="email" className={FIELD}
+                placeholder="name@company.com" value={form.email} onChange={set("email")} />
+            </Field>
+            <Field label="GSTIN / Tax ID" htmlFor="crm-contact-tax">
+              <input id="crm-contact-tax" data-testid="crm-contact-tax" className={FIELD}
+                placeholder="22AAAAA0000A1Z5" value={form.tax_id} onChange={set("tax_id")} />
+            </Field>
+            <Field label="Tags" htmlFor="crm-contact-tags">
+              <input id="crm-contact-tags" data-testid="crm-contact-tags" className={FIELD}
+                placeholder="Comma separated, e.g. wholesale" value={form.tags} onChange={set("tags")} />
+            </Field>
+          </FormSection>
+
+          <FormSection label="Where they stand">
+            <Field label="Status">
+              <GlassSelect testid="crm-contact-status" ariaLabel="Status" value={form.status} triggerClassName="h-11 text-sm"
+                onChange={(v) => setForm((f) => ({ ...f, status: v }))}
+                options={STATUSES.map((s) => ({ value: s.key, label: s.label }))} />
+            </Field>
+            <Field label="Stage">
+              <GlassSelect testid="crm-contact-lifecycle" ariaLabel="Lifecycle stage" value={form.lifecycle_stage} triggerClassName="h-11 text-sm"
+                onChange={(v) => setForm((f) => ({ ...f, lifecycle_stage: v }))}
+                options={[{ value: "", label: "Not set" }, ...stagesForType(form.type).map((s) => ({ value: s.key, label: s.label }))]} />
+            </Field>
+            {users && users.length > 0 && (
+              <Field label="Owner">
+                <GlassSelect testid="crm-contact-owner" ariaLabel="Owner" value={form.assigned_id} triggerClassName="h-11 text-sm"
+                  onChange={(v) => setForm((f) => ({ ...f, assigned_id: v }))}
+                  options={[{ value: "", label: "Unassigned" }, ...users.map((u) => ({ value: u.id, label: u.name }))]} />
+              </Field>
+            )}
+          </FormSection>
+
+          <FormSection label="More">
+            <Field label="Address" htmlFor="crm-contact-address" wide>
+              <input id="crm-contact-address" data-testid="crm-contact-address" className={FIELD}
+                placeholder="Street, city, PIN" value={form.address} onChange={set("address")} />
+            </Field>
+            <Field label="Notes" htmlFor="crm-contact-notes" wide>
+              <textarea id="crm-contact-notes" data-testid="crm-contact-notes" rows={2} className={NOTES_FIELD}
+                placeholder="Anything worth remembering about them" value={form.notes} onChange={set("notes")} />
+            </Field>
+          </FormSection>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} disabled={busy} data-testid="crm-contact-cancel"
+            className={`h-11 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}>
             Cancel
           </button>
-          <button
-            onClick={save}
-            data-testid="crm-contact-save"
-            className="kr-lift rounded-pill bg-kr-ink px-5 py-2.5 text-sm font-medium text-white transition-all"
-          >
-            {initial ? "Save changes" : "Add contact"}
+          <button type="button" onClick={save} disabled={busy} data-testid="crm-contact-save"
+            className={`h-11 rounded-pill px-6 text-sm font-medium disabled:opacity-50 ${INK_PILL}`}>
+            {busy ? "Adding…" : `Add ${typeName.toLowerCase()}`}
           </button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-// U7-07 (2026-08-17): dropdown menu for the "+ Add contact" pill.
-// Was: <details>/<summary> with cramped `label-mono` subtitles that
-// read as jumbled uppercase labels ("BUYER / RETAIL, ACCOUNT / DEALER").
-// Now: proper controlled menu with icons per option, wider (300px),
-// normal-case helper text, subtle hover, and a divider before Import
-// to separate "create new" from "bulk import". Closes via a full-
-// viewport backdrop click, Escape, and after any option is picked.
-// Backdrop pattern (not document.mousedown) avoids a race with React
-// 18 Strict Mode's dev-only double-invocation of effect setup, which
-// was closing the menu on the same click that opened it.
-/* KM-27 — `compact` renders the trigger as a plain black circle with no label.
-   The founder's ask: drop the "+ Add contact" pill, put a black plus at the
-   right end of the SEARCH row, and let that row rise toward the title. The menu
-   itself is unchanged — only the button that opens it. */
-function AddContactMenu({ canManage, canImport, csvBusy, onImport, customerLabel, vendorLabel, compact = false }) {
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open]);
-
-  const pick = (fn) => () => {
-    setOpen(false);
-    // Give React a tick to unmount the popover before we click the
-    // hidden dialog trigger — avoids the Radix focus-scope colliding
-    // with our closing menu.
-    setTimeout(fn, 0);
-  };
-
-  return (
-    <div className="relative" data-testid="crm-add-menu">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label={compact ? "Add contact" : undefined}
-        className={compact
-          ? "relative z-40 grid h-11 w-11 shrink-0 place-items-center rounded-full bg-kr-ink text-white"
-          : "kr-lift relative z-40 flex items-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-semibold text-white transition-all"}
-      >
-        <Plus size={compact ? 18 : 16} weight="bold" />
-        {!compact && (
-          <>
-            {" Add contact"}
-            <span className={`text-white/70 transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
-          </>
-        )}
-      </button>
-      {open && (
-        <>
-          {/* Backdrop — catches any outside click and closes the menu.
-              Fully transparent, sits below the menu (z-30) and below
-              the toggle (z-40) so re-clicking the toggle also closes. */}
-          <div
-            className="fixed inset-0 z-20"
-            onClick={() => setOpen(false)}
-            aria-hidden="true"
-          />
-          <div
-            role="menu"
-            className="kr-bento absolute left-0 top-full z-30 mt-2 min-w-[300px] p-1"
-          >
-          {canManage && (
-            <button
-              type="button"
-              role="menuitem"
-              onClick={pick(() => document.querySelector('[data-testid="crm-add-customer"]')?.click())}
-              className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-accent border-b border-nm-edge/40 transition-colors"
-            >
-              <div className="w-9 h-9 flex items-center justify-center nm-inset text-primary shrink-0">
-                <AddressBook size={16} weight="bold" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold text-sm leading-tight">New {customerLabel}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Buyer, retail account, or dealer</p>
-              </div>
-            </button>
-          )}
-          {canManage && (
-            <button
-              type="button"
-              role="menuitem"
-              onClick={pick(() => document.querySelector('[data-testid="crm-add-supplier"]')?.click())}
-              className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-accent transition-colors ${canImport ? "border-b border-nm-edge/40" : ""}`}
-            >
-              <div className="w-9 h-9 flex items-center justify-center nm-inset text-foreground shrink-0">
-                <Truck size={16} weight="bold" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold text-sm leading-tight">New {vendorLabel}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Supplier, vendor, or raw-material source</p>
-              </div>
-            </button>
-          )}
-          {canImport && (
-            <button
-              type="button"
-              role="menuitem"
-              onClick={pick(onImport)}
-              disabled={csvBusy}
-              data-testid="crm-import-csv"
-              className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <div className="w-9 h-9 flex items-center justify-center nm-inset text-foreground shrink-0">
-                <UploadSimple size={16} weight="bold" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold text-sm leading-tight">{csvBusy ? "Uploading…" : "Import from spreadsheet"}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Bulk-add via CSV or Excel</p>
-              </div>
-            </button>
-          )}
-          </div>
-        </>
-      )}
-    </div>
   );
 }
 
@@ -496,53 +520,52 @@ function AddContactMenu({ canManage, canImport, csvBusy, onImport, customerLabel
 // Main CRM page
 // -----------------------------------------------------------------------------
 export default function CRM() {
-  // MPWA-10: rebuilt below lg (§8); desktop tree untouched.
   const { user, tenant } = useAuth();
   const { t } = useTranslation();
   const L = lex(tenant);
+  const currency = tenant?.currency;
   const qc = useQueryClient();
   const navigate = useNavigate();
-
-  // U7-07 (2026-08-17): scope simplified to Buyers | Suppliers only.
-  // Founder ask: 'remove all section, just Buyer / suppliers enough'.
-  // Killed 'all', 'mine', 'complaints' scopes. Complaints visible via
-  // the red pill on each card (already shipped in Batch 1) so users
-  // still spot them without a dedicated tab. Default scope = customers
-  // (buyers) since that's the primary business focus for most tenants.
   const [searchParams] = useSearchParams();
 
+  // U7-07: two scopes, Buyers and Suppliers. Complaints show on the cards.
   const [scope, setScope] = useState("customers"); // customers | suppliers
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
-  // Epic 2 Sprint 8 (E2-70): sort state persists via URL param so a
-  // deep-link to /crm?sort=outstanding lands on the same view.
-  const [sort, setSort] = useState(searchParams.get("sort") || "name");
+  // E2-70: a deep link like /crm?sort=outstanding lands on that order.
+  const [sort, setSort] = useState(() => (SORT_OPTIONS.some((o) => o.key === searchParams.get("sort")) ? searchParams.get("sort") : "name"));
+  // Grid or list is a per-viewer convenience, remembered in this browser.
+  const [view, setViewState] = useState(() => {
+    try { return localStorage.getItem(VIEW_KEY) === "list" ? "list" : "grid"; } catch { return "grid"; }
+  });
+  const setView = (v) => {
+    setViewState(v);
+    try { localStorage.setItem(VIEW_KEY, v); } catch { /* storage unavailable */ }
+  };
+  const [page, setPage] = useState(1);
+  const [adding, setAdding] = useState(null); // "customer" | "vendor" while the New window is open
 
   const canManage = user?.role === "owner" || user?.role === "sales";
   const can360 = hasPerm(user, "finance");
+  const canImport = hasPerm(user, "data_input");
 
   const { data, isLoading } = useQuery({
     queryKey: ["crm-contacts", status, q],
     queryFn: () => api.get(`/contacts?type=&status=${status}&q=${encodeURIComponent(q)}`).then((r) => r.data),
   });
   const { data: users } = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
-  // Epic 2 Sprint 6.5 (E2-52) + Sprint 8 (E2-69): always fetch open
-  // complaints so we can (a) filter to 'With complaints', (b) render
-  // the red complaint dot on any card with N>=1 open complaints.
+  // E2-52 / E2-69: open complaints, counted per contact for the red signal.
   const { data: openComplaints } = useQuery({
     queryKey: ["complaints-open"],
     queryFn: () => api.get("/complaints?status=open").then((r) => r.data),
   });
-  // Epic 2 Sprint 8 (E2-67): per-contact outstanding totals for the
-  // Rs pill on each card. Server aggregates so we don't ship every
-  // invoice to the client.
+  // E2-67: per-contact balances, aggregated on the server.
   const { data: outstandingMap } = useQuery({
     queryKey: ["crm-outstanding"],
     queryFn: () => api.get("/crm/outstanding").then((r) => r.data),
-    staleTime: 30_000,  // this doesn't change second-to-second
+    staleTime: 30_000,
   });
 
-  // Epic 2 Sprint 8 (E2-69): {contact_id: N open complaints}
   const complaintCountByContact = useMemo(() => {
     const map = {};
     (openComplaints || []).forEach((c) => {
@@ -550,21 +573,12 @@ export default function CRM() {
     });
     return map;
   }, [openComplaints]);
-
-  // U7-07: was a useEffect that force-flipped scope to 'complaints' when
-  // Desk Trends deep-linked here with ?complaint=open. Complaints scope
-  // no longer exists; the red pill on each card is the visual signal
-  // (already shipped in Batch 1). Deep-link kept working -- lands on
-  // Buyers with all cards visible; users spot the red pills.
+  const userName = useMemo(() => Object.fromEntries((users || []).map((u) => [u.id, u.name])), [users]);
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["crm-contacts"] });
 
-  // Epic 2 Sprint 8 (E2-72): bulk CSV/XLSX import for contacts. The
-  // extraction pipeline is already wired end-to-end -- POST /ingest/csv
-  // runs the AI mapper, creates an `ingestion` in status='review', and
-  // auto-adds it to the inbox. All we do here is give founders a fast
-  // entry point from CRM and drop them at the existing Review UI.
-  const canImport = hasPerm(user, "data_input");
+  // E2-72: bulk CSV/XLSX import. POST /ingest/csv runs the AI mapper and puts
+  // the ingestion in the inbox for review; this is only the entry point.
   const csvInputRef = useRef(null);
   const [csvBusy, setCsvBusy] = useState(false);
   const onCsvChosen = async (e) => {
@@ -576,14 +590,12 @@ export default function CRM() {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const { data: ing } = await api.post("/ingest/csv", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const { data: ing } = await api.post("/ingest/csv", fd, { headers: { "Content-Type": "multipart/form-data" } });
       const rows = ing.row_count ?? 0;
       const detected = (ing.records?.contacts || []).length;
       toast.success(
         `${rows} row${rows === 1 ? "" : "s"} read${detected ? ` · ${detected} contact${detected === 1 ? "" : "s"} detected` : ""} — opening Inbox for review`,
-        { id: label }
+        { id: label },
       );
       navigate("/finance?tab=inbox");
     } catch (err) {
@@ -593,27 +605,23 @@ export default function CRM() {
     }
   };
 
-  // Epic 2 Sprint 8 (E2-68): per-scope counts for the chip labels.
-  // Computed off the FULL list (not scope-filtered) so numbers match
-  // however the founder is currently filtered.
+  const pickAdd = (key) => {
+    // A tick later: the menu closes and hands focus back first.
+    if (key === "import") setTimeout(() => csvInputRef.current?.click(), 0);
+    else setTimeout(() => setAdding(key), 0);
+  };
+
+  // E2-68: counts come off the whole list, so they hold whichever scope is on.
   const scopeCounts = useMemo(() => {
     const list = data || [];
     return {
-      all: list.length,
       customers: list.filter((c) => CUSTOMER_TYPES.includes(c.type)).length,
       suppliers: list.filter((c) => VENDOR_TYPES.includes(c.type)).length,
-      mine: list.filter((c) => c.assigned_id === user?.id).length,
-      complaints: (openComplaints || []).filter((c) => c.customer_id).length,
     };
-  }, [data, user?.id, openComplaints]);
+  }, [data]);
 
   const contacts = useMemo(() => {
-    let list = data || [];
-    // U7-07: only customers/suppliers scopes now. Others removed.
-    if (scope === "customers") list = list.filter((c) => CUSTOMER_TYPES.includes(c.type));
-    else if (scope === "suppliers") list = list.filter((c) => VENDOR_TYPES.includes(c.type));
-    // Epic 2 Sprint 8 (E2-70): sort AFTER filter so the user sees
-    // the biggest debtor (say) inside the current scope.
+    const list = (data || []).filter((c) => (scope === "suppliers" ? VENDOR_TYPES : CUSTOMER_TYPES).includes(c.type));
     const outMap = outstandingMap || {};
     const sorted = [...list];
     if (sort === "name") {
@@ -621,435 +629,155 @@ export default function CRM() {
     } else if (sort === "recent") {
       sorted.sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
     } else if (sort === "outstanding") {
-      sorted.sort((a, b) => {
-        const oa = outMap[a.id] || {};
-        const ob = outMap[b.id] || {};
-        const va = (oa.receivables || 0) + (oa.payables || 0);
-        const vb = (ob.receivables || 0) + (ob.payables || 0);
-        return vb - va;
-      });
+      const total = (c) => (outMap[c.id]?.receivables || 0) + (outMap[c.id]?.payables || 0);
+      sorted.sort((a, b) => total(b) - total(a));
     } else if (sort === "touched") {
-      // Oldest first -- these are the relationships going cold.
-      sorted.sort((a, b) => String(a.updated_at || a.created_at || "")
-        .localeCompare(String(b.updated_at || b.created_at || "")));
+      sorted.sort((a, b) => String(a.updated_at || a.created_at || "").localeCompare(String(b.updated_at || b.created_at || "")));
     }
     return sorted;
-  }, [data, scope, user?.id, openComplaints, sort, outstandingMap]);
+  }, [data, scope, sort, outstandingMap]);
 
-  const remove = async (id) => {
-    if (!window.confirm("Delete this contact permanently?")) return;
-    try {
-      await api.delete(`/contacts/${id}`);
-      toast.success("Contact deleted");
-      refresh();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || "Delete failed");
-    }
-  };
+  // Any change to what is listed starts again from the first page.
+  useEffect(() => { setPage(1); }, [scope, status, q, sort, view]);
+  const pageSize = PAGE_SIZE[view];
+  const pages = Math.max(1, Math.ceil(contacts.length / pageSize));
+  const currentPage = Math.min(page, pages);
+  const visible = contacts.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  // U7-07 (2026-08-17): only 2 scopes -- Buyers, Suppliers. Founder ask:
-  // 'remove all section, just Buyer / suppliers enough'. Counts still
-  // shown next to labels for one-glance scan. Complaints visible via
-  // the red pill on each card (Batch 1); no dedicated scope for it.
+  const describe = (c) => ({
+    typeChip: CUSTOMER_TYPES.includes(c.type) ? L.customer_singular : L.vendor_singular,
+    stage: stageMeta(c.type, c.lifecycle_stage),
+    signal: signalFor(complaintCountByContact[c.id] || 0, outstandingMap?.[c.id], currency),
+    touched: touchedLabel(daysSince(c.updated_at || c.created_at)),
+    ownerName: c.assigned_id ? userName[c.assigned_id] : null,
+  });
+  const openProfile = (c) => () => { if (can360) navigate(`/contacts/${c.id}`); };
+
   const SCOPES = [
     { key: "customers", label: L.customer_plural, icon: AddressBook, count: scopeCounts.customers },
     { key: "suppliers", label: L.vendor_plural, icon: Truck, count: scopeCounts.suppliers },
   ];
-
+  const scopeLabel = SCOPES.find((s) => s.key === scope)?.label || "";
+  const filtering = !!q || !!status;
+  const typeLabels = { customer: L.customer_singular, dealer: "Dealer", vendor: L.vendor_singular };
 
   return (
-    <div>
-      {/* KM-27 — the search row and the Buyers|Suppliers segment move INSIDE
-          the header. They were scrolling away with the list, which is exactly
-          backwards: they are the controls that act ON the list, so they should
-          be the last things to leave. Now the whole block pins and only the
-          cards move.
-          `gap-2.5`/`mb-2` rather than `gap-4`/`mb-5`: with three rows stacked,
-          the old spacing pushed the first card most of a thumb further down for
-          nothing. */}
-      <StickyHeader className="mb-2 flex flex-col gap-2.5 lg:mb-7 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          {/* KR-14.14 — eyebrow is hidden on mobile per the reference. */}
-          <p className="hidden text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground lg:block">{t("crm.eyebrow", { customers: L.customer_plural.toLowerCase(), suppliers: L.vendor_plural.toLowerCase() })}</p>
-          <h1 className="font-display text-3xl sm:text-4xl lg:mt-1.5">{t("crm.title")}</h1>
-        </div>
-        {/* U7-07 (2026-08-17): three equal-weight header CTAs (Add
-            Buyer / Add Supplier / Import CSV) collapsed to ONE primary
-            "+ Add contact" with a small popover menu. Founder ask:
-            HRM-minimalism -- one primary action, secondary paths tucked.
-            Hidden input for CSV lives once at the page root and is
-            triggered from the menu item. */}
-        {/* Desktop keeps the labelled pill. On mobile the same menu is opened
-            by the black plus at the end of the search row below. */}
-        {(canManage || canImport) && (
-          <div className="hidden items-center gap-2 lg:flex">
-            {canImport && (
-              <input
-                ref={csvInputRef}
-                type="file"
-                accept=".csv,.xlsx,.xls"
-                onChange={onCsvChosen}
-                className="hidden"
-                data-testid="crm-import-csv-input"
-              />
-            )}
-            <CrmContactDialog
-              users={users}
-              defaultType="customer"
-              onSaved={refresh}
-              trigger={
-                <button data-testid="crm-add-customer" className="hidden" aria-hidden="true" />
-              }
-            />
-            <CrmContactDialog
-              users={users}
-              defaultType="vendor"
-              onSaved={refresh}
-              trigger={
-                <button data-testid="crm-add-supplier" className="hidden" aria-hidden="true" />
-              }
-            />
-            <AddContactMenu
-              canManage={canManage}
-              canImport={canImport}
-              csvBusy={csvBusy}
-              onImport={() => csvInputRef.current?.click()}
-              customerLabel={L.customer_singular}
-              vendorLabel={L.vendor_singular}
-            />
-          </div>
-        )}
-        {/* KR-14.14 · MOBILE — full-width search + sliders filter circle
-            (opens a dropdown with the status/sort selects). Followed by a
-            segmented [Buyers | Suppliers] pill. Hidden from lg up where the
-            desktop layout below takes over. */}
-        <div className="mb-4 flex items-center gap-2 lg:hidden">
-          <div className="relative flex-1">
-            <MagnifyingGlass size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-            <input
-              data-testid="crm-search-mobile"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder={t("crm.search_ph")}
-              className="h-11 w-full rounded-pill border border-nm-edge/40 bg-white/70 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-kr-ink/20"
-            />
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button type="button" data-testid="crm-mobile-filter"
-                aria-label={t("crm.filter", "Filter")}
-                className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.06)]">
-                <SlidersHorizontal size={18} weight="regular" aria-hidden="true" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" sideOffset={8} className="min-w-[13rem]">
-              <DropdownMenuLabel>{t("crm.all_statuses")}</DropdownMenuLabel>
-              <DropdownMenuItem onSelect={() => setStatus("")}
-                className={`justify-between ${status === "" ? "font-medium" : ""}`}>
-                <span>{t("crm.all_statuses")}</span>
-              </DropdownMenuItem>
-              {STATUSES.map((s) => (
-                <DropdownMenuItem key={s} onSelect={() => setStatus(s)}
-                  className={`justify-between capitalize ${status === s ? "font-medium" : ""}`}>
-                  <span>{s}</span>
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel>Sort</DropdownMenuLabel>
-              {SORT_OPTIONS.map((o) => (
-                <DropdownMenuItem key={o.key} onSelect={() => setSort(o.key)}
-                  className={`justify-between ${sort === o.key ? "font-medium" : ""}`}>
-                  <span>{o.label}</span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+    <div data-testid="crm-page">
+      {canImport && (
+        <input ref={csvInputRef} type="file" accept=".csv,.xlsx,.xls" onChange={onCsvChosen}
+          className="hidden" data-testid="crm-import-csv-input" />
+      )}
+      <CrmContactDialog type={adding} onClose={() => setAdding(null)} onSaved={refresh} users={users} labels={typeLabels} />
 
-          {/* KM-27 — the black plus that replaced the "+ Add contact" pill.
-              It rides at the end of the search row so the row can sit directly
-              under the title instead of below a CTA of its own. */}
+      {/* KM-27 — the controls pin with the title: they act ON the list, so
+          they are the last things to scroll away. */}
+      <StickyHeader className="mb-5 lg:mb-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="font-display text-3xl sm:text-4xl">{t("crm.title")}</h1>
+            <p className="mt-1.5 text-sm text-muted-foreground sm:text-base" data-testid="crm-subtitle">
+              {t("crm.subtitle", {
+                customers: L.customer_plural.toLowerCase(),
+                suppliers: L.vendor_plural.toLowerCase(),
+                defaultValue: "Manage your {{customers}} and {{suppliers}} in one place.",
+              })}
+            </p>
+          </div>
           {(canManage || canImport) && (
-            <AddContactMenu
-              compact
-              canManage={canManage}
-              canImport={canImport}
-              csvBusy={csvBusy}
-              onImport={() => csvInputRef.current?.click()}
-              customerLabel={L.customer_singular}
-              vendorLabel={L.vendor_singular}
-            />
+            <AddContactMenu canManage={canManage} canImport={canImport} csvBusy={csvBusy} onPick={pickAdd}
+              customerLabel={L.customer_singular} vendorLabel={L.vendor_singular} />
           )}
         </div>
 
-        {/* KR-14.14 · MOBILE — Buyers | Suppliers as a single segmented pill,
-            the active half filled ink. Hidden from lg up. */}
-        {/* KM-5 — Buyers | Suppliers as a neumorphic segmented bar. Was a
-            welded pair of hairline pills with a solid ink fill on the active
-            one; every other page-level "pick one of these two" control in the
-            app is now a .kr-pressed track with a raised .kr-pop segment, and
-            this was the last one still painting selection as a fill.
-            No transition utility — the segments swap between an outset and an
-            inset shadow pair, which do not interpolate. */}
-        <div className="kr-pressed mb-4 flex items-center gap-1 rounded-pill p-1 lg:hidden"
-             role="group" aria-label="Contact type" data-testid="crm-scope-mobile">
-          {SCOPES.map((s) => {
-            const active = scope === s.key;
-            return (
-              <button
-                key={s.key}
-                type="button"
-                onClick={() => setScope(s.key)}
-                aria-pressed={active}
-                data-testid={`crm-scope-mobile-${s.key}`}
-                className={`flex h-10 flex-1 items-center justify-center gap-2 rounded-pill text-sm ${
-                  active ? "kr-pop font-semibold text-foreground" : "text-foreground/60"
-                }`}
-              >
-                {s.label}
+        <div className="mt-4 flex flex-col gap-3 lg:mt-6 lg:flex-row lg:items-center" data-testid="crm-controls">
+          <div role="group" aria-label="Contact type" data-testid="crm-scope-chips"
+            className={`flex shrink-0 items-center gap-1 rounded-pill p-1 ${DRAWER_TRACK}`}>
+            {SCOPES.map((s) => {
+              const on = scope === s.key;
+              return (
+                <button key={s.key} type="button" onClick={() => setScope(s.key)} aria-pressed={on} data-testid={`crm-scope-${s.key}`}
+                  className={`flex h-10 flex-1 items-center justify-center gap-2 rounded-pill px-4 text-sm font-medium transition-colors lg:flex-none ${on ? INK_PILL : "text-slate-600 hover:text-slate-900"}`}>
+                  <s.icon size={16} weight={on ? "fill" : "regular"} aria-hidden="true" />
+                  <span>{s.label}</span>
+                  <span data-testid={`crm-scope-count-${s.key}`}
+                    className={`min-w-[1.5rem] rounded-pill px-1.5 py-0.5 text-center text-[11px] font-semibold tabular-nums ${on ? "bg-white/20 text-white" : "bg-slate-900/[0.06] text-slate-600"}`}>
+                    {s.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className={`relative flex h-12 min-w-0 flex-1 items-center rounded-pill ${GLASS_PILL}`}>
+            <MagnifyingGlass size={17} weight="bold" aria-hidden="true" className="pointer-events-none absolute left-4 text-slate-500" />
+            <input type="search" data-testid="crm-search" value={q} onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Escape" && q) { e.preventDefault(); setQ(""); } }}
+              placeholder={t("crm.search_ph")} aria-label={t("crm.search_ph")}
+              className="h-full w-full min-w-0 rounded-pill bg-transparent pl-11 pr-11 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 [&::-webkit-search-cancel-button]:hidden" />
+            {q && (
+              <button type="button" onClick={() => setQ("")} aria-label="Clear search" data-testid="crm-search-clear"
+                className="absolute right-2 grid h-8 w-8 place-items-center rounded-full text-slate-500 transition-colors hover:bg-slate-900/5 hover:text-slate-900">
+                <X size={14} weight="bold" aria-hidden="true" />
               </button>
-            );
-          })}
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <GlassSelect testid="crm-status-filter" ariaLabel="Status" icon={Funnel} value={status} onChange={setStatus}
+              options={[{ value: "", label: t("crm.all_statuses") }, ...STATUSES.map((s) => ({ value: s.key, label: s.label }))]}
+              triggerClassName="h-12 min-w-0 flex-1 text-sm lg:w-44 lg:flex-none" />
+            <GlassSelect testid="crm-sort" ariaLabel="Sort" icon={ArrowsDownUp} value={sort} onChange={setSort}
+              options={SORT_OPTIONS.map((o) => ({ value: o.key, label: o.label }))}
+              triggerClassName="h-12 min-w-0 flex-1 text-sm lg:w-52 lg:flex-none" align="end" />
+            <ViewToggle view={view} onChange={setView} />
+          </div>
         </div>
       </StickyHeader>
 
-
-      {/* U7-07 (2026-08-17): HRM-style segmented tabs -- Buyers | Suppliers.
-          KR-14.14 — DESKTOP ONLY (hidden below lg); the mobile scope pill
-          above renders the same choice. */}
-      <div className="mb-5 hidden lg:block" data-testid="crm-scope-chips">
-        <div className="flex border-b border-nm-edge/40">
-          {SCOPES.map((s) => {
-            const active = scope === s.key;
-            return (
-              <button
-                key={s.key}
-                onClick={() => setScope(s.key)}
-                data-testid={`crm-scope-${s.key}`}
-                className={`flex h-9 items-center gap-2 rounded-pill border-[0.5px] px-4 text-sm ${active ? "border-kr-ink font-medium text-foreground" : "border-kr-ink/55 text-foreground/65 hover:text-foreground/85"}`}
-              >
-                {s.icon && <s.icon size={16} weight={active ? "fill" : "regular"} />}
-                <span>{s.label}</span>
-                <span
-                  className="min-w-[18px] rounded-pill px-1 py-0.5 text-center font-mono text-[11px] tabular-nums opacity-65"
-                  data-testid={`crm-scope-count-${s.key}`}
-                >
-                  {s.count}
-                </span>
-              </button>
-            );
-          })}
+      {isLoading && !data ? (
+        <SkeletonGrid count={6} lines={3} />
+      ) : contacts.length === 0 ? (
+        <div className={`flex flex-col items-center px-6 py-12 text-center ${CARD}`} data-testid="crm-empty">
+          <p className="text-base font-semibold text-slate-900">{filtering ? "No matches" : t("crm.empty_title")}</p>
+          <p className="mt-1 max-w-md text-sm text-slate-500">
+            {filtering
+              ? `No ${scopeLabel.toLowerCase()} match that search or status.`
+              : canManage ? t("crm.empty_hint_manage") : t("crm.empty_hint")}
+          </p>
+          {filtering ? (
+            <button type="button" onClick={() => { setQ(""); setStatus(""); }} data-testid="crm-clear-filters"
+              className={`mt-5 h-11 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
+              Clear search and status
+            </button>
+          ) : canManage && (
+            <button type="button" onClick={() => setAdding(scope === "suppliers" ? "vendor" : "customer")} data-testid="crm-empty-add"
+              className={`mt-5 flex h-11 items-center gap-2 rounded-pill px-5 text-sm font-medium ${INK_PILL}`}>
+              <Plus size={15} weight="bold" aria-hidden="true" />
+              Add your first {(scope === "suppliers" ? L.vendor_singular : L.customer_singular).toLowerCase()}
+            </button>
+          )}
         </div>
-      </div>
-
-      {/* Filter strip — DESKTOP ONLY (hidden below lg). Mobile uses the
-          search-and-sliders row above. */}
-      <div className="mb-5 hidden flex-wrap items-center gap-2 lg:flex">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <MagnifyingGlass size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-          <input
-            data-testid="crm-search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder={t("crm.search_ph")}
-            className="nm-field w-full py-2 pl-9 pr-3 text-sm"
-          />
+      ) : view === "grid" ? (
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3 lg:gap-4" data-testid="crm-grid">
+          {visible.map((c) => (
+            <ContactCard key={c.id} c={c} info={describe(c)} onOpen={openProfile(c)} canOpen={can360} />
+          ))}
         </div>
-        <select
-          data-testid="crm-status-filter"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="nm-field px-3 py-2 text-sm capitalize"
-        >
-          <option value="">{t("crm.all_statuses")}</option>
-          {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <div className="nm-field flex items-center pl-3">
-          <ArrowsDownUp size={14} className="text-muted-foreground" />
-          <select
-            data-testid="crm-sort"
-            value={sort}
-            onChange={(e) => setSort(e.target.value)}
-            className="py-2 pl-2 pr-3 text-sm focus:outline-none bg-transparent"
-          >
-            {SORT_OPTIONS.map((o) => (
-              <option key={o.key} value={o.key}>{o.label}</option>
+      ) : (
+        <div className={`p-1.5 ${CARD}`} data-testid="crm-list">
+          <div aria-hidden="true"
+            className={`hidden gap-4 px-3 pb-2 pt-2.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 lg:grid ${LIST_COLS}`}>
+            <span>Contact</span><span>Type</span><span>Needs attention</span><span>Owner</span><span className="text-right">Last touched</span>
+          </div>
+          <ul className="divide-y divide-slate-900/[0.05]">
+            {visible.map((c) => (
+              <ContactRow key={c.id} c={c} info={describe(c)} onOpen={openProfile(c)} canOpen={can360} />
             ))}
-          </select>
+          </ul>
         </div>
-      </div>
-
-      {/* Card grid */}
-      {/* E2-14: skeleton while first page loads so the header/chips
-          don't jump when data lands. */}
-      {isLoading && !data && <SkeletonGrid count={6} lines={3} />}
-      {/* E2-13: empty state carries a specific CTA a fresh tenant can act on. */}
-      {!isLoading && contacts.length === 0 && (
-        <EmptyState
-          testid="crm-empty"
-          title={t("crm.empty_title")}
-          hint={canManage ? t("crm.empty_hint_manage") : t("crm.empty_hint")}
-          ctaLabel={canManage ? `+ Add your first ${L.customer_singular.toLowerCase()}` : null}
-          onCta={canManage ? () => document.querySelector('[data-testid="crm-add-customer"]')?.click() : null}
-          secondary={canImport ? "or click Import CSV to bulk-add" : null}
-        />
       )}
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-4 xl:grid-cols-3">
-        {contacts.map((c) => {
-          const isCustomer = CUSTOMER_TYPES.includes(c.type);
-          // Epic 2 Sprint 8 (E2-67 / E2-69 / E2-71): per-card derived data.
-          const outstanding = outstandingMap?.[c.id];
-          const receivablesTxt = formatIndianCurrency(outstanding?.receivables || 0);
-          const payablesTxt = formatIndianCurrency(outstanding?.payables || 0);
-          const complaintCount = complaintCountByContact[c.id] || 0;
-          const touched = touchedLabel(daysSince(c.updated_at || c.created_at));
-          // U7-07 (2026-08-17): card density fix. Was 11+ elements per card
-          // (5 chips + 4 action icons + 3 contact lines + owner + outstanding
-          // + touched + red badge). Now: name + one type chip + status dot
-          // + one key signal + touched. Chip row max 2 (type + lifecycle).
-          // Contact info + tags + all actions move to the profile page --
-          // card face is scan-only. Whole card click goes to profile
-          // (kills redundant 360° icon). Owner is a subtle line at bottom.
-          // Lexicon-consistent: uses L.customer_singular / L.vendor_singular
-          // so "BUYER"/"SUPPLIER" matches the tenant lexicon on both the
-          // scope chip and the card.
-          // RD-3: the .toUpperCase() was baked into the DATA, not the CSS, so
-          // the chip stayed shouting after the stylesheet went sentence case.
-          // Lexicon values arrive already capitalised ("Buyer" / "Supplier").
-          const typeChipLabel = isCustomer
-            ? L.customer_singular
-            : L.vendor_singular;
-          const stage = stageMeta(c.type, c.lifecycle_stage);
-          const statusDot =
-            c.status === "active" ? "bg-foreground/70"
-            : c.status === "lead" ? "bg-foreground/35"
-            : "bg-neutral-400";
-          const ownerName = c.assigned_id && users
-            ? users.find((u) => u.id === c.assigned_id)?.name
-            : null;
-          const isOverdue = outstanding?.oldest_days != null && outstanding.oldest_days > 30;
-
-          // The card's one "key signal" -- pick the most urgent piece of
-          // information to surface, don't stack them all.
-          let keySignal = null;
-          if (complaintCount > 0) {
-            keySignal = {
-              icon: WarningIcon,
-              text: `${complaintCount} open complaint${complaintCount === 1 ? "" : "s"}`,
-              tone: "text-kr-accent",
-            };
-          } else if (receivablesTxt) {
-            keySignal = {
-              icon: CurrencyInr,
-              text: `${receivablesTxt} owed${isOverdue ? ` · oldest ${outstanding.oldest_days}d` : ""}`,
-              tone: isOverdue ? "text-kr-accent" : "text-muted-foreground",
-            };
-          } else if (payablesTxt) {
-            keySignal = {
-              icon: CurrencyInr,
-              text: `${payablesTxt} to pay`,
-              tone: "text-muted-foreground",
-            };
-          }
-
-          return (
-            <button
-              type="button"
-              key={c.id}
-              data-testid={`crm-card-${c.id}`}
-              onClick={() => can360 && navigate(`/contacts/${c.id}`)}
-              disabled={!can360}
-              /* RD-3: `flex flex-col` is load-bearing, not cosmetic. A bare
-                 <button> centres its content in the box, so in a stretched
-                 grid row any card missing the optional key-signal line had
-                 its title pushed 16px below its neighbours'. Column flow
-                 pins content to the top; the footer then takes mt-auto so
-                 every card's meta row also lines up across the row. */
-              /* KR-12 — .kr-bento, the same tile My Work's grid and the
-                 workflow board are made of: glass wash + backdrop blur,
-                 neumorphic raised light, and a real edge so the card reads
-                 as separated from the steel-and-gold sky behind it. */
-              className="kr-bento flex flex-col p-4 text-left disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/40"
-            >
-              {/* Header: name + type + subtle status dot. Complaint red
-                  dot sits inline next to name -- softer than the floating
-                  corner badge that used to hover the card. */}
-              <div className="flex items-start justify-between gap-2 mb-1">
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-sm leading-snug flex items-center gap-2">
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot}`}
-                      aria-hidden="true"
-                      title={c.status}
-                    />
-                    <span className="truncate">{c.name}</span>
-                    {complaintCount > 0 && (
-                      <span
-                        data-testid={`crm-complaint-dot-${c.id}`}
-                        title={`${complaintCount} open complaint${complaintCount === 1 ? "" : "s"}`}
-                        /* RD-3: 16px, not 18px. An 18px badge sits taller
-                           than the title's line box and pushed this card's
-                           heading ~10px below its neighbours' in the grid. */
-                        className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-kr-accent px-1 text-[10px] font-semibold leading-none text-white"
-                      >
-                        {complaintCount}
-                      </span>
-                    )}
-                  </p>
-                  {c.company && <p className="text-xs text-muted-foreground truncate">{c.company}</p>}
-                </div>
-                {/* KR-14.14 — mobile drops the type + stage chips and shows
-                    a chevron instead (reference). Chips return from lg. */}
-                <span aria-hidden="true" className="mt-0.5 shrink-0 text-muted-foreground lg:hidden">
-                  ›
-                </span>
-                <div className="hidden shrink-0 items-center gap-1 lg:flex">
-                  <span
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide ${isCustomer ? "border-[0.5px] border-kr-ink/55 text-foreground/70" : "bg-nm-sunken text-muted-foreground"}`}
-                    data-testid={`crm-type-chip-${c.id}`}
-                  >
-                    {typeChipLabel}
-                  </span>
-                  {stage && (
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide ${stage.cls}`}
-                      data-testid={`crm-stage-${c.id}`}
-                    >
-                      {stage.label}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* One-line key signal -- complaints > receivables > payables.
-                  Absent when the relationship is healthy, keeps those cards
-                  clean. */}
-              {keySignal && (
-                <p
-                  className={`mt-3 flex items-center gap-1.5 text-sm font-medium tabular-nums ${keySignal.tone}`}
-                  data-testid={`crm-signal-${c.id}`}
-                >
-                  <keySignal.icon size={13} weight="bold" />
-                  {keySignal.text}
-                </p>
-              )}
-
-              {/* Footer meta: touched-ago + owner (if any). Small, muted,
-                  right-aligned owner. */}
-              <div className="mt-auto pt-3 border-t border-nm-edge/40 flex items-center justify-between text-xs text-muted-foreground">
-                {touched && (
-                  <span className="flex items-center gap-1" data-testid={`crm-touched-${c.id}`}>
-                    <Clock size={11} weight="bold" /> {touched}
-                  </span>
-                )}
-                {ownerName && (
-                  <span className="truncate ml-2">Owner: {ownerName}</span>
-                )}
-              </div>
-            </button>
-          );
-        })}
-      </div>
+      <Pager page={currentPage} pages={pages} total={contacts.length} pageSize={pageSize} onPage={setPage} />
     </div>
   );
 }

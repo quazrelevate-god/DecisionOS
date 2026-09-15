@@ -6,11 +6,15 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { hasPerm } from "./lib/perms";
 import { LockKey } from "@phosphor-icons/react";
 import Layout from "./components/Layout";
+import ErrorBoundary from "./components/ErrorBoundary";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import DecisionReview from "./pages/DecisionReview";
+import { useUiScale } from "./hooks/useUiScale";
 import Workflows from "./pages/Workflows";
-import Leave from "./pages/Leave";
+// ASK-6 (2026-09-12): Leave default export no longer routed. The named
+// exports (LeaveCard, ApproverConfig, dialogs) are consumed directly by
+// Desk / Team / Settings; nothing renders /leave any more.
 // E2-73 (2026-08-15): legacy Inbox.js retired. Sprint 2 shipped the
 // new Decision Desk at /inbox; the old Inbox page had no users left.
 // /inbox-legacy now redirects to /inbox so any lingering bookmarks work.
@@ -39,7 +43,6 @@ import Calendar from "./pages/Calendar";
 import OperatingScore from "./pages/OperatingScore";
 import WorkCoach from "./pages/WorkCoach";
 import Ledger from "./pages/Ledger";
-import Landing from "./pages/Landing";
 import AdminPortal from "./pages/admin/AdminPortal";
 // MPWA-04: dev-only harness for the §7 mobile components. Tree-shaken out of
 // production builds by the NODE_ENV guard on its route below.
@@ -68,7 +71,7 @@ function Protected({ children, perm, perms, ownerOnly }) {
   const { user, loading } = useAuth();
   if (loading)
     return (
-      <div className="min-h-screen flex items-center justify-center font-mono text-sm uppercase tracking-widest">
+      <div className="min-h-[calc(100vh/var(--ui-scale,1))] flex items-center justify-center font-mono text-sm uppercase tracking-widest">
         Loading…
       </div>
     );
@@ -84,20 +87,86 @@ function Home() {
   const { user, loading } = useAuth();
   if (loading)
     return (
-      <div className="min-h-screen flex items-center justify-center font-mono text-sm uppercase tracking-widest">
+      <div className="min-h-[calc(100vh/var(--ui-scale,1))] flex items-center justify-center font-mono text-sm uppercase tracking-widest">
         Loading…
       </div>
     );
   if (user) return <Navigate to={hasPerm(user, "inbox") ? "/inbox" : "/my-work"} replace />;
-  return <Landing />;
+  /* KM-58 — REACHING THIS LINE MEANS A SERVICE WORKER ANSWERED "/".
+     
+     Since KM-55 the root is a static page served by server.js, so React should
+     never render at "/" on a fresh load. If it does, the navigation was served
+     from the precached SPA shell by an old worker — KM-57 fixed that worker,
+     but a worker cannot fix itself on a device that is still being served by
+     the previous one. Founder, after two rounds of this: "no it's not loading,
+     it's getting late."
+
+     So React does what only React can do from inside that situation: tear the
+     worker and its caches down, then ask the server again. The reload is
+     guaranteed to reach the network because there is no longer a worker to
+     intercept it.
+
+     This is self-healing rather than permanent — the landing page does not
+     register a worker, and the next visit to any app route runs
+     serviceWorkerRegistration.register() again, which installs KM-57's fixed
+     one. Offline support comes back on its own.
+
+     The sessionStorage guard stays: if the built image ever lacked
+     build/landing/index.html, server.js would serve the SPA here and this
+     would reload forever. One attempt, then the login page — a wrong
+     destination beats an infinite loop. */
+  try {
+    if (!sessionStorage.getItem("dos-landing-bounce")) {
+      sessionStorage.setItem("dos-landing-bounce", "1");
+      (async () => {
+        try {
+          if ("serviceWorker" in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(regs.map((r) => r.unregister()));
+          }
+          if (typeof caches !== "undefined") {
+            const keys = await caches.keys();
+            await Promise.all(keys.map((k) => caches.delete(k)));
+          }
+        } catch {
+          // Storage or SW API unavailable — reload anyway; it may already be fine.
+        }
+        window.location.replace("/");
+      })();
+      return null;
+    }
+  } catch {
+    // Private mode with storage disabled: bounce anyway, unguarded.
+    window.location.replace("/");
+    return null;
+  }
+  return <Navigate to="/login" replace />;
 }
 
 function App() {
+  // UI-SCALE — the whole app zooms with the screen (see hooks/useUiScale).
+  useUiScale();
   return (
     <div className="App">
       <AuthProvider>
         <BrowserRouter>
+          {/* MW-10 fix: ErrorBoundary around the routed page area so a
+              single broken component costs one page rather than the
+              whole product (MW-08 was the canonical example -- a
+              ReferenceError in UpdateForm was unmounting the entire
+              React tree). If the boundary itself is what needs replacing
+              on route change, wrap in a keyed remount at the page level
+              in a follow-up. */}
+          <ErrorBoundary>
           <Routes>
+            {/* KM-55 — the one place that answers "where does a signed-in user
+                belong?". "/" used to do it, but "/" is the marketing site now.
+                The static landing bounces authenticated visitors HERE rather
+                than working it out itself: the answer depends on hasPerm and
+                userPerms, which fall back to per-role defaults, and a vanilla-JS
+                copy of that on the landing page would drift the first time a
+                role's defaults changed. */}
+            <Route path="/app" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/admin" element={<AdminPortal />} />
@@ -120,8 +189,16 @@ function App() {
             <Route path="/brief" element={<Navigate to="/inbox?scope=morning" replace />} />
             <Route path="/journal" element={<Protected ownerOnly><Journal /></Protected>} />
             <Route path="/my-work" element={<Protected><MyWork /></Protected>} />
-            {/* KM-31 — a real page, reached from the More menu. */}
-            <Route path="/leave" element={<Protected><Leave /></Protected>} />
+            {/* ASK-6 (2026-09-12): /leave retired. Register moves to Team,
+                approvals move to the Decision Desk, per-department config
+                moves to Settings > Operations. Deep links land readers on
+                /team, which is now the home for the leave register. */}
+            <Route path="/leave" element={<Navigate to="/team" replace />} />
+            {/* ASK-25 F3 — the approvals that aren't decisions (task sign-offs
+                and leave) live as a view inside My Work, beside My Tasks /
+                All Tasks / Workflows. The standalone path stays as a deep
+                link that lands there. */}
+            <Route path="/approvals" element={<Navigate to="/my-work?view=approvals" replace />} />
             <Route path="/settings" element={<Protected><Settings /></Protected>} />
             <Route path="/review" element={<Navigate to="/ingest" replace />} />
             <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
@@ -195,6 +272,7 @@ function App() {
             )}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </ErrorBoundary>
         </BrowserRouter>
         <Toaster position="top-right" />
       </AuthProvider>

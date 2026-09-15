@@ -34,11 +34,13 @@ router = APIRouter(prefix="/api")
 
 
 async def _decision_participants(tenant_id: str, d: dict) -> set:
-    """Everyone involved with a decision: creator, task assignees, and owners."""
+    """Everyone involved with a decision: creator, the named approver, task assignees, and owners."""
     from services.notifications import _owner_ids
     ids = set(await _owner_ids(tenant_id))
     if d.get("created_by"):
         ids.add(d["created_by"])
+    if d.get("approver_id"):  # ASK-32: the person who has to decide can open it
+        ids.add(d["approver_id"])
     async for t in db.tasks.find({"decision_id": d["id"]}, {"_id": 0, "assignee_id": 1}):
         if t.get("assignee_id"):
             ids.add(t["assignee_id"])
@@ -47,7 +49,9 @@ async def _decision_participants(tenant_id: str, d: dict) -> set:
 
 # Request models consolidated into models/ (Epic 8 Sprint 5).
 from models.decisions import (
+    DecisionApproverInput,
     DecisionCommentInput,
+    DecisionProposalTaskInput,
 )
 
 
@@ -178,108 +182,63 @@ async def add_decision_task(decision_id: str, inp: TaskCreateInput, user: dict =
 
 @router.post("/decisions/{decision_id}/approve")
 async def approve_decision(decision_id: str, user: dict = Depends(require_perm("decisions_approve"))):
-    from core import add_decision_event, log_activity
+    """ASK-32 Phase 1: only while pending, only by the named approver or an
+    owner; creates what the decision proposed (services.decision_flow)."""
+    from services.decision_flow import approve_decision_flow
     from services.enrich import enrich_decision
-    # FIX-001-C: ensure_owned wraps the read + 404 in one call.
-    d = await ensure_owned(db.decisions, decision_id, user["tenant_id"], projection=None)
-    # FIX-001-C: all writes below now include tenant_id in the filter.
-    await db.decisions.update_one(tenant_filter(decision_id, user["tenant_id"]),
-                                  {"$set": {"status": "approved", "decided_at": now_iso()}})
-    await db.tasks.update_many(
-        {"tenant_id": user["tenant_id"], "decision_id": decision_id, "status": "blocked"},
-        {"$set": {"status": "todo"}})
-    await add_decision_event(decision_id, "Approved — tasks unblocked", user["name"], "approved")
-    # Auto-advance any Procurement workflows spawned by this decision from their
-    # initial "requested" stage to the pipeline's approval_stage.
-    # WE-07 (2026-08-16): routed through services/workflow_engine.advance()
-    # with override=True + a reason -- the decision-approval flow is
-    # allowed to bypass check_stage_ready (the initial stage almost
-    # never has template tasks to satisfy) but the override + reason
-    # land in wf.history + audit_log so the "why did this workflow
-    # advance without user input?" answer is one grep away.
-    from services.workflows import tenant_procurement_pipeline, procurement_initial_stage
-    from services.workflow_engine import advance as _engine_advance
-    from services.workflow_engine import WorkflowAdvanceError
-    proc = await tenant_procurement_pipeline(user["tenant_id"])
-    wf_advanced = 0
-    if proc and proc.get("approval_stage"):
-        init_stage = procurement_initial_stage(proc)
-        appr_stage = proc["approval_stage"]
-        if init_stage and appr_stage != init_stage:
-            _reason = f"Auto-advanced by decision approval ({user['name']})"
-            async for wf in db.workflows.find({
-                "tenant_id": user["tenant_id"], "decision_id": decision_id,
-                "type": proc["key"], "stage": init_stage,
-            }, {"_id": 0, "id": 1}):
-                try:
-                    await _engine_advance(
-                        user["tenant_id"], wf["id"],
-                        user["id"], user.get("name") or "",
-                        user.get("role") or "",
-                        target_stage=appr_stage,
-                        note=_reason,
-                        override=True, reason=_reason,
-                    )
-                    wf_advanced += 1
-                except WorkflowAdvanceError as _e:
-                    # Best-effort: never let a decision approval fail
-                    # because one linked workflow could not advance.
-                    from core import logger as _lg
-                    _lg.warning(
-                        f"[WE-07] decision-approve auto-advance skipped "
-                        f"for workflow {wf.get('id')}: {_e}"
-                    )
-    if wf_advanced:
-        await add_decision_event(decision_id, f"{wf_advanced} procurement workflow(s) advanced to {proc.get('approval_stage')}", user["name"], "workflow")
-    # FIX-001-C: read spawned tasks with tenant filter too (defense-in-depth).
-    for t in await db.tasks.find({"tenant_id": user["tenant_id"], "decision_id": decision_id}, {"_id": 0}).to_list(100):
-        who = None
-        if t.get("assignee_id"):
-            m = await db.users.find_one({"id": t["assignee_id"], "tenant_id": user["tenant_id"]}, {"_id": 0, "name": 1})
-            who = (m or {}).get("name")
-        who = who or t.get("assignee_role") or "team"
-        await add_decision_event(decision_id, f"Task assigned to {who}: {t['title']}", user["name"], "assigned")
-    await log_activity(user["tenant_id"], user["id"], "decision_approved", f"Approved '{d['title']}' — tasks unblocked", "decision", decision_id)
-    await brain_context.record_context(
-        tenant_id=user["tenant_id"], kind="decision", title=d.get("title") or "Decision approved",
-        outcome="approved", why=d.get("summary") or d.get("description") or "",
-        tags=d.get("tags") or [], source_type="decision", source_id=decision_id,
-        actor_id=user["id"], actor_name=user.get("name") or "",
-        department=user.get("role") or "", visibility="public",
-    )
+    d = await approve_decision_flow(user, decision_id)
     # FIX-003-B (S2-05): explicit tenant_id for defense-in-depth.
-    return await enrich_decision(
-        await db.decisions.find_one(tenant_filter(decision_id, user["tenant_id"]), {"_id": 0}),
-        tenant_id=user["tenant_id"],
-    )
+    return await enrich_decision(d, tenant_id=user["tenant_id"])
 
 
 @router.post("/decisions/{decision_id}/reject")
 async def reject_decision(decision_id: str, user: dict = Depends(require_perm("decisions_approve"))):
-    from core import add_decision_event, log_activity
+    """ASK-32 Phase 1: nothing proposed is created; work already under way on an
+    older decision is never deleted (services.decision_flow)."""
+    from services.decision_flow import reject_decision_flow
     from services.enrich import enrich_decision
-    d = await ensure_owned(db.decisions, decision_id, user["tenant_id"], projection=None)
-    await db.decisions.update_one(tenant_filter(decision_id, user["tenant_id"]),
-                                  {"$set": {"status": "rejected", "decided_at": now_iso()}})
-    # Remove everything this decision spawned so it disappears from all tasks & processes.
-    tasks_del = await db.tasks.delete_many({"tenant_id": user["tenant_id"], "decision_id": decision_id})
-    wf_del = await db.workflows.delete_many({"tenant_id": user["tenant_id"], "decision_id": decision_id})
-    await db.calendar_events.delete_many({"tenant_id": user["tenant_id"], "decision_id": decision_id})
-    await db.inbox.update_many({"tenant_id": user["tenant_id"], "ref_type": "decision", "ref_id": decision_id}, {"$set": {"status": "dismissed"}})
-    await add_decision_event(decision_id, f"Rejected — removed {tasks_del.deleted_count} task(s), {wf_del.deleted_count} workflow(s)", user["name"], "rejected")
-    await log_activity(user["tenant_id"], user["id"], "decision_rejected", f"Rejected '{d['title']}' — removed {tasks_del.deleted_count} task(s), {wf_del.deleted_count} workflow(s)", "decision", decision_id)
-    await brain_context.record_context(
-        tenant_id=user["tenant_id"], kind="decision", title=d.get("title") or "Decision rejected",
-        outcome="rejected", why=d.get("summary") or d.get("description") or "",
-        tags=d.get("tags") or [], source_type="decision", source_id=decision_id,
-        actor_id=user["id"], actor_name=user.get("name") or "",
-        department=user.get("role") or "", visibility="public",
-    )
-    # FIX-003-B (S2-05): explicit tenant_id for defense-in-depth.
-    return await enrich_decision(
-        await db.decisions.find_one(tenant_filter(decision_id, user["tenant_id"]), {"_id": 0}),
-        tenant_id=user["tenant_id"],
-    )
+    d = await reject_decision_flow(user, decision_id)
+    return await enrich_decision(d, tenant_id=user["tenant_id"])
+
+
+@router.patch("/decisions/{decision_id}/proposal/tasks/{key}")
+async def edit_decision_proposal_task(decision_id: str, key: str, inp: DecisionProposalTaskInput,
+                                      user: dict = Depends(get_current_user)):
+    """ASK-32 Phase 3 — before approving: who does a proposed task, and when it is due."""
+    from services.decision_flow import edit_proposal_task
+    from services.enrich import enrich_decision
+    d = await edit_proposal_task(user, decision_id, key, assignee_id=inp.assignee_id, due_date=inp.due_date)
+    return await enrich_decision(d, tenant_id=user["tenant_id"])
+
+
+@router.delete("/decisions/{decision_id}/proposal/{kind}/{key}")
+async def remove_decision_proposal_item(decision_id: str, kind: str, key: str, user: dict = Depends(get_current_user)):
+    """ASK-32 Phase 3 — before approving: drop a proposed task, workflow, meeting, reminder or note."""
+    from services.decision_flow import remove_proposal_item
+    from services.enrich import enrich_decision
+    d = await remove_proposal_item(user, decision_id, kind, key)
+    return await enrich_decision(d, tenant_id=user["tenant_id"])
+
+
+@router.get("/decisions/{decision_id}/approvers")
+async def decision_approvers(decision_id: str, user: dict = Depends(get_current_user)):
+    """ASK-32 2.5 — the people this decision can be handed to (anyone who may decide)."""
+    from services.decision_flow import decision_deciders
+    d = await db.decisions.find_one({"id": decision_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "id": 1, "created_by": 1, "approver_id": 1})
+    if not d:
+        raise HTTPException(status_code=404, detail="Not found")
+    if user["id"] not in await _decision_participants(user["tenant_id"], d):
+        raise HTTPException(status_code=403, detail="You don't have access to this decision")
+    return await decision_deciders(user["tenant_id"])
+
+
+@router.post("/decisions/{decision_id}/approver")
+async def change_decision_approver(decision_id: str, inp: DecisionApproverInput, user: dict = Depends(get_current_user)):
+    """ASK-32 2.5 — an owner, or the person it waits on, hands it to someone else who may decide."""
+    from services.decision_flow import change_approver_flow
+    from services.enrich import enrich_decision
+    d = await change_approver_flow(user, decision_id, inp.approver_id)
+    return await enrich_decision(d, tenant_id=user["tenant_id"])
 
 
 @router.post("/decisions/{decision_id}/comment")

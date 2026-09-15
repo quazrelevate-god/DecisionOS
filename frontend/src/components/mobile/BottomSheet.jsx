@@ -59,8 +59,27 @@ function startTrackingScroll() {
   );
 }
 
+// Mobile PWA (2026-09-14) — below lg the page scrolls <main data-app-scroller>,
+// not the document (Layout), so pinning the body locked nothing: a drag on the
+// More panel's scrim scrolled the page behind it. When the app scroller is the
+// one scrolling, freeze it instead — overflow hidden keeps its scrollTop, so
+// there is nothing to restore. The body pin stays for the document case.
+function appScroller() {
+  const el = document.querySelector("[data-app-scroller]");
+  if (!el) return null;
+  const oy = getComputedStyle(el).overflowY;
+  return oy === "auto" || oy === "scroll" ? el : null;
+}
+
 function lockBodyScroll() {
   if (lockState.depth++ > 0) return;
+  const scroller = appScroller();
+  if (scroller) {
+    lockState.scroller = scroller;
+    lockState.prevOverflow = scroller.style.getPropertyValue("overflow-y");
+    scroller.style.setProperty("overflow-y", "hidden", "important");
+    return;
+  }
   const body = document.body;
   lockState.y = lockState.lastY;
   lockState.prev = {
@@ -82,6 +101,13 @@ function lockBodyScroll() {
 function unlockBodyScroll() {
   if (--lockState.depth > 0) return;
   lockState.depth = 0;
+  if (lockState.scroller) {
+    const s = lockState.scroller;
+    s.style.removeProperty("overflow-y");
+    if (lockState.prevOverflow) s.style.setProperty("overflow-y", lockState.prevOverflow);
+    lockState.scroller = null;
+    return;
+  }
   const body = document.body;
   const prev = lockState.prev || {};
   for (const p of ["position", "top", "left", "right", "width"]) {

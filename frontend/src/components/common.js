@@ -1,6 +1,8 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
 import { cn } from "../lib/utils";
+import { INK_PILL } from "./karma/glass";
 import { useHeaderSlot } from "./mobile/HeaderSlot";
 
 /**
@@ -179,20 +181,23 @@ export function EmptyState({ title, hint, ctaLabel, onCta, ctaTo, secondary, tes
         <div className="mt-6 flex flex-col items-center gap-2">
           {onCta ? (
             <button
+              type="button"
               onClick={onCta}
               data-testid={testid ? `${testid}-cta` : "empty-state-cta"}
-              className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors"
+              className={`inline-flex h-11 items-center gap-2 rounded-pill px-5 text-sm font-medium ${INK_PILL}`}
             >
               {ctaLabel}
             </button>
           ) : (
-            <a
-              href={ctaTo}
+            /* Mobile PWA (2026-09-14) — a router Link, not <a href>: the
+               anchor reloaded the whole app in the installed PWA. */
+            <Link
+              to={ctaTo}
               data-testid={testid ? `${testid}-cta` : "empty-state-cta"}
-              className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors"
+              className={`inline-flex h-11 items-center gap-2 rounded-pill px-5 text-sm font-medium ${INK_PILL}`}
             >
               {ctaLabel}
-            </a>
+            </Link>
           )}
           {secondary && (
             <span className="text-xs text-muted-foreground">{secondary}</span>
@@ -234,7 +239,7 @@ export function SkeletonCard({ lines = 3, className = "" }) {
     <div
       aria-hidden="true"
       data-testid="skeleton-card"
-      className={`card-brutal p-5 ${className}`}
+      className={`rounded-[1.25rem] bg-white/60 p-5 ring-1 ring-inset ring-white/80 ${className}`}
     >
       <div className="flex flex-col gap-3">
         <SkeletonLine width="40%" className="h-4" />

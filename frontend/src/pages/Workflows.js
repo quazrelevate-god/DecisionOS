@@ -47,12 +47,29 @@ import {
   SlidersHorizontal,  // KR-14.6 · mobile pipeline filter
   CaretDown,  // KR-14.21 · mobile stage collapse
   ListBullets,  // KM-31 · the standalone page's pipeline picker
+  X,  // the New Workflow dialog's close, as on New Task
 } from "@phosphor-icons/react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter,
 } from "../components/ui/dialog";
+import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
+/* ASK-2 fix (2026-09-12): the delete-card handler used to sit behind
+   window.confirm. Some browsers and embed contexts silently return false
+   from window.confirm with no visible UI, so the click looked like a
+   silent no-op even though RBAC and the DELETE endpoint were fine. This
+   is the same class of bug FUP-49 fixed on My Work's Complete button.
+   Switching to Radix AlertDialog gives us an in-app confirm that renders
+   the same in every context. */
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
+  AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
+} from "../components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../components/ui/dropdown-menu";
 import { StickyHeader } from "../components/common";
+import {
+  DRAWER_FIELD, GLASS_MENU, GLASS_MENU_ITEM, INK_PILL,
+} from "../components/karma/glass";
+import { GlassSelect } from "../components/karma/GlassSelect";
 
 function _initials(name) {
   if (!name) return "?";
@@ -61,8 +78,11 @@ function _initials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-const FIELD = "w-full nm-field px-3 py-2 text-sm";
-
+/* 2026-09-14, founder — the New card window (New Distribution, New
+   Production…) is styled on New Task (pages/Tasks.js): the frosted .kr-bento
+   card with a round close, the same sunken fields under plain labels, the
+   buyer or supplier as a GlassSelect (never the operating system's list),
+   and the black ink Create. */
 function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -75,28 +95,41 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
     queryFn: () => api.get(`/contacts?type=${contactType}`).then((r) => r.data),
     enabled: open,
   });
-  const pickContact = (e) => {
-    const id = e.target.value;
+  const pickContact = (id) => {
     const c = (contacts || []).find((x) => x.id === id);
     setForm({ ...form, contact_id: id, counterparty: c ? (c.company || c.name) : form.counterparty });
   };
+  const [titleError, setTitleError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const blank = { title: "", detail: "", amount: "", counterparty: "", contact_id: "" };
   const create = async () => {
-    if (!form.title.trim()) return;
+    if (!form.title.trim()) { setTitleError(t("workflows.title_required", "Give the workflow a title")); return; }
+    setBusy(true);
     try {
       await api.post("/workflows", {
-        type, title: form.title, detail: form.detail, counterparty: form.counterparty,
+        type, title: form.title.trim(), detail: form.detail, counterparty: form.counterparty,
         contact_id: form.contact_id || null, amount: form.amount ? Number(form.amount) : null,
       });
       toast.success(t("workflows.created"));
-      setForm({ title: "", detail: "", amount: "", counterparty: "", contact_id: "" });
+      setForm(blank);
+      setTitleError("");
       setOpen(false);
       onCreated();
     } catch {
       toast.error(t("workflows.create_failed"));
+    } finally {
+      setBusy(false);
     }
   };
+  /* The New Task dialog's field and label recipes, verbatim (pages/Tasks.js):
+     a sunken .kr-pressed groove with a hairline that goes to full ink on
+     focus — thin and black, not the 2px brand outline — and a plain sans
+     label above every field. `border-solid` is load-bearing: .kr-pressed sets
+     `border: 0`, which also resets the style to none. */
+  const inp = "w-full kr-pressed rounded-control border border-solid border-kr-ink/25 px-3.5 py-2.5 text-sm text-foreground placeholder:text-foreground/40 transition-colors focus:border-kr-ink focus:outline-none focus-visible:outline-none";
+  const lbl = "block text-xs font-medium text-muted-foreground";
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setTitleError(""); }}>
       <DialogTrigger asChild>
         <button data-testid="new-workflow-button"
           /* KM-31 — neumorphic, not a black slab. It is this page's own
@@ -105,30 +138,90 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
           <Plus size={16} weight="bold" aria-hidden="true" /> {t("workflows.new")}
         </button>
       </DialogTrigger>
-      <DialogContent className="rounded-cardlg border border-nm-edge/40">
-        <DialogHeader>
+      {/* The New Task dialog's shell (pages/Tasks.js): a frosted .kr-bento
+          sheet, full-screen on the phone, a centred card from lg with its
+          own round close. The card takes its natural height under the same
+          viewport ceiling New Task uses (divided by the UI scale: CSS zoom
+          leaves viewport units alone). */}
+      <DialogContent
+        className="kr-bento flex flex-col border-0 [&>button.absolute]:hidden
+                   left-0 top-0 h-full max-h-none w-full max-w-none translate-x-0 translate-y-0
+                   [border-radius:0]
+                   [padding-top:max(1rem,env(safe-area-inset-top))]
+                   [padding-bottom:max(1rem,env(safe-area-inset-bottom))]
+                   lg:left-[50%] lg:top-[50%] lg:h-auto lg:max-h-[calc(100dvh/var(--ui-scale,1)-2rem)] lg:overflow-y-auto lg:max-w-2xl
+                   lg:-translate-x-1/2 lg:-translate-y-1/2
+                   lg:[border-radius:var(--radius-card)]
+                   lg:[padding-block:1.5rem]
+                   data-[state=open]:[--tw-enter-translate-x:0] data-[state=open]:[--tw-enter-translate-y:0]
+                   data-[state=closed]:[--tw-exit-translate-x:0] data-[state=closed]:[--tw-exit-translate-y:0]
+                   lg:data-[state=open]:[--tw-enter-translate-x:-50%] lg:data-[state=open]:[--tw-enter-translate-y:-48%]
+                   lg:data-[state=closed]:[--tw-exit-translate-x:-50%] lg:data-[state=closed]:[--tw-exit-translate-y:-48%]"
+      >
+        <DialogHeader className="shrink-0 pr-11">
+          <DialogPrimitiveClose
+            data-testid="wf-dialog-close"
+            aria-label="Close"
+            className="kr-pop absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full text-foreground/70">
+            <X size={15} weight="bold" aria-hidden="true" />
+          </DialogPrimitiveClose>
           <DialogTitle className="font-display text-xl">{t("workflows.dlg_title", { type: typeLabel })}</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
             {t("workflows.dlg_desc", { type: typeLabel.toLowerCase() })}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
-          <input data-testid="wf-title-input" className={FIELD} placeholder={t("workflows.title_ph")} value={form.title} onChange={set("title")} />
+
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-0.5">
           <div>
-            <label className="text-xs text-muted-foreground">{contactLabel}</label>
-            <select data-testid="wf-contact-select" className={`${FIELD} mt-1`} value={form.contact_id} onChange={pickContact}>
-              <option value="">{t("workflows.select_contact", { label: contactLabel.toLowerCase() })}</option>
-              {(contacts || []).map((c) => <option key={c.id} value={c.id}>{c.company || c.name}</option>)}
-            </select>
+            <label className="sr-only" htmlFor="wf-title">{t("workflows.title_ph")}</label>
+            <input id="wf-title" data-testid="wf-title-input" autoFocus className={inp}
+              placeholder={t("workflows.title_ph")} value={form.title}
+              aria-invalid={titleError ? "true" : undefined}
+              aria-describedby={titleError ? "wf-title-error" : undefined}
+              onChange={(e) => { setForm({ ...form, title: e.target.value }); if (titleError) setTitleError(""); }}
+              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); create(); } }} />
+            {titleError && (
+              <p id="wf-title-error" data-testid="wf-title-error" className="mt-1.5 text-xs font-medium text-kr-accent">{titleError}</p>
+            )}
           </div>
-          <input data-testid="wf-counterparty-input" className={FIELD} placeholder={t("workflows.counterparty_ph")} value={form.counterparty} onChange={set("counterparty")} />
-          <input className={FIELD} type="number" placeholder={t("workflows.amount_ph")} value={form.amount} onChange={set("amount")} />
-          <textarea className={FIELD} rows={2} placeholder={t("workflows.detail_ph")} value={form.detail} onChange={set("detail")} />
+
+          <div className="kr-form-row">
+            <div>
+              <label className={lbl} htmlFor="wf-contact">{contactLabel}</label>
+              {/* 2026-09-14, founder — GlassSelect, as on New Task: the field
+                  keeps this form's look, the list is the app's glass, never
+                  the operating system's. */}
+              <GlassSelect id="wf-contact" testid="wf-contact-select" variant="field" triggerClassName={`${inp} mt-1`}
+                ariaLabel={contactLabel} value={form.contact_id} onChange={pickContact}
+                options={[
+                  { value: "", label: t("workflows.select_contact", { label: contactLabel.toLowerCase() }) },
+                  ...(contacts || []).map((c) => ({ value: c.id, label: c.company || c.name })),
+                ]} />
+            </div>
+            <div>
+              <label className={lbl} htmlFor="wf-amount">{t("workflows.amount_ph")}</label>
+              <input id="wf-amount" data-testid="wf-amount-input" className={`${inp} mt-1`} type="number" inputMode="decimal"
+                placeholder="0" value={form.amount} onChange={set("amount")} />
+            </div>
+          </div>
+
+          <div>
+            <label className={lbl} htmlFor="wf-counterparty">{t("workflows.counterparty_ph")}</label>
+            <input id="wf-counterparty" data-testid="wf-counterparty-input" className={`${inp} mt-1`}
+              placeholder={t("workflows.counterparty_ph")} value={form.counterparty} onChange={set("counterparty")} />
+          </div>
+
+          <div>
+            <label className={lbl} htmlFor="wf-detail">{t("workflows.detail_ph")}</label>
+            <textarea id="wf-detail" data-testid="wf-detail-input" className={`${inp} mt-1`} rows={3}
+              placeholder={t("workflows.detail_ph")} value={form.detail} onChange={set("detail")} />
+          </div>
         </div>
-        <DialogFooter>
-          <button data-testid="wf-create-submit" onClick={create}
-            className="kr-lift rounded-pill bg-kr-ink px-5 py-2.5 text-sm font-medium text-white transition-all">
-            {t("workflows.create")}
+
+        <DialogFooter className="shrink-0">
+          <button data-testid="wf-create-submit" onClick={create} disabled={busy}
+            className={`flex h-11 w-full items-center justify-center rounded-pill px-6 text-sm font-medium disabled:opacity-50 sm:w-auto ${INK_PILL}`}>
+            {busy ? t("workflows.creating", "Creating…") : t("workflows.create")}
           </button>
         </DialogFooter>
       </DialogContent>
@@ -145,7 +238,16 @@ function OverrideReasonDialog({ open, onOpenChange, wfTitle, blockedReason, targ
   useEffect(() => { if (!open) setReason(""); }, [open]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="rounded-cardlg border border-nm-edge/40" data-testid="wf-override-dialog">
+      {/* ASK-1 (2026-09-12): surface + button grammar redesigned.
+          Before, DialogContent was rounded-cardlg with an nm-edge/40
+          hairline -- the retired neumorphic material the rest of the
+          redesign moved off. Now on the same white-frost surface the
+          BuildReveal panels use: 95% white ground, backdrop-blur, soft
+          shadow. */}
+      <DialogContent
+        className="rounded-2xl border border-white/60 bg-white/95 shadow-[0_10px_32px_-12px_hsl(230_18%_15%/0.35)] backdrop-blur-xl"
+        data-testid="wf-override-dialog"
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 font-display text-xl">
             <WarningCircle size={18} weight="bold" aria-hidden="true" className="text-kr-accent" />
@@ -160,18 +262,30 @@ function OverrideReasonDialog({ open, onOpenChange, wfTitle, blockedReason, targ
         </DialogHeader>
         <div className="space-y-2">
           <label className="text-xs text-muted-foreground">Reason for override</label>
-          <textarea data-testid="wf-override-reason" className={`${FIELD} font-mono`} rows={3}
+          {/* ASK-1: font-mono removed. The user is typing prose ("Bill is
+              delayed but the customer confirmed by phone"), which read
+              as code in mono. 2026-09-14: the soft glass field every
+              other textarea on the page now uses. */}
+          <textarea data-testid="wf-override-reason" className={`${DRAWER_FIELD} resize-none`} rows={3}
             placeholder="e.g. Bill is delayed but the customer confirmed by phone, moving on"
             value={reason} onChange={(e) => setReason(e.target.value)} />
         </div>
+        {/* ASK-1: Override + Cancel used to carry near-equal weight -- one
+            was a raised ink pill, the other a neumorphic tile. Founder's
+            ask: Override should read as the consequential action. Now
+            Override wears the destructive treatment (red pill, same
+            grammar Radix AlertDialogAction uses on Delete Card in ASK-2),
+            and Cancel recedes to a ghost link that stays reachable
+            without competing for the eye. */}
         <DialogFooter>
-          <button data-testid="wf-override-cancel" onClick={() => onOpenChange(false)} className="nm-btn px-4 py-2.5 text-sm font-medium">
+          <button data-testid="wf-override-cancel" onClick={() => onOpenChange(false)}
+            className="inline-flex items-center rounded-pill px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
             Cancel
           </button>
           <button data-testid="wf-override-confirm"
             onClick={() => { if (reason.trim()) onConfirm(reason.trim()); }}
             disabled={!reason.trim()}
-            className="kr-lift rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all disabled:opacity-50">
+            className="kr-lift rounded-pill bg-danger-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-danger-600/90 disabled:opacity-50">
             Override
           </button>
         </DialogFooter>
@@ -206,13 +320,14 @@ function StandaloneHeader({ show, title, pipelines, activeKey, counts, onPick, n
               <CaretDown size={12} weight="bold" aria-hidden="true" className="shrink-0 opacity-60" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" sideOffset={8} className="min-w-[14rem]">
+          {/* 2026-09-14, founder — the app's glass list, not the stock popover. */}
+          <DropdownMenuContent align="start" sideOffset={8} className={`${GLASS_MENU} min-w-[14rem] p-1.5`}>
             {pipelines.map((pip) => (
               <DropdownMenuItem key={pip.key} onSelect={() => onPick(pip.key)}
                 data-testid={`workflows-pipeline-${pip.key}`}
-                className={`flex items-center justify-between gap-3 ${activeKey === pip.key ? "font-medium" : ""}`}>
+                className={`${GLASS_MENU_ITEM} justify-between gap-3 ${activeKey === pip.key ? "font-semibold text-slate-900" : ""}`}>
                 <span>{pip.label}</span>
-                <span className="tabular-nums text-xs text-muted-foreground">
+                <span className="tabular-nums text-xs text-slate-500">
                   {counts.filter((w) => w.type === pip.key).length}
                 </span>
               </DropdownMenuItem>
@@ -283,6 +398,10 @@ export default function Workflows({ embedded = false }) {
     setOpenStages((s) => ({ ...s, [key]: !s[key] }));
   }, []);
   const [busyId, setBusyId] = useState(null);
+  // ASK-2 fix: workflow card queued for delete-confirmation. Set from the
+  // trash-icon click; cleared by the AlertDialog's Cancel / after delete.
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const refresh = useCallback(() => {
     qc.invalidateQueries({ queryKey: ["workflows", activeKey, "with_tasks"] });
@@ -336,14 +455,22 @@ export default function Workflows({ embedded = false }) {
     }
   };
 
-  const del = async (wf) => {
-    if (!window.confirm(t("workflows.delete_confirm", { title: wf.title }))) return;
+  // ASK-2 fix: `del` no longer calls window.confirm (silently no-ops in
+  // some browser + embed contexts). It just queues the workflow for the
+  // AlertDialog; the actual delete runs from `confirmDelete` below.
+  const del = (wf) => setPendingDelete(wf);
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
     try {
-      await api.delete(`/workflows/${wf.id}`);
+      await api.delete(`/workflows/${pendingDelete.id}`);
       toast.success(t("workflows.deleted"));
       refresh();
+      setPendingDelete(null);
     } catch (e) {
       toast.error(e.response?.data?.detail || t("workflows.delete_failed"));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -359,7 +486,13 @@ export default function Workflows({ embedded = false }) {
   const total = (data || []).length;
 
   return (
-    <div data-testid="workflows-page">
+    /* ASK-25 — THE COLUMNS SCROLL, NOT THE PAGE. From lg the page is a flex
+       column that fills the frame Layout (or My Work's hub) hands it; the
+       header keeps its height and the board takes the rest, and inside the
+       board each stage's card list is the scroller. Founder: "entire page is
+       scrollable instead, that particular column must be scrollable." The
+       phone is untouched — it stacks and scrolls the document as before. */
+    <div data-testid="workflows-page" className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
       <StandaloneHeader
         show={!embedded}
         title={t("workflows.title")}
@@ -456,13 +589,16 @@ export default function Workflows({ embedded = false }) {
           full-width section, cards flow beneath in one column. Drag-to-move
           still works within a section. From lg the original horizontal
           kanban with fixed 300px columns returns unchanged. */}
-      {/* KM-31 — the well is DESKTOP-ONLY now. It is what drew the square
-          outline the founder saw around the stage cards: on desktop the columns
-          are transparent and need a ground to sit in, but on mobile each stage
-          is now its own glass card, so the well was a box drawn around boxes.
-          The stages stack straight onto the sky instead. */}
-      <div className="flex flex-col gap-3 lg:kr-glass-well lg:gap-0 lg:p-4 lg:overflow-x-auto" data-testid="workflow-board">
-        <div className="flex flex-col gap-4 lg:min-w-max lg:flex-row lg:items-stretch">
+      {/* ASK-18 (2026-09-13): the well is back on desktop — the founder
+          wanted the sunken tray look for the whole board, just not the
+          per-column white cards. Columns clear their own background below
+          (bg-none) so only the outer well reads as a container. */}
+      <div className="flex flex-col gap-3 lg:kr-glass-well lg:min-h-0 lg:flex-1 lg:gap-0 lg:p-4 lg:overflow-x-auto" data-testid="workflow-board">
+        {/* 2026-09-14 — lg:pb-6 is room for the lanes' drop shadow (.kr-lane).
+            The board scrolls, so it clips at its padding edge, and with ASK-25
+            stretching every lane to the board's floor that shadow would end
+            in a hard line along the bottom. */}
+        <div className="flex flex-col gap-4 lg:h-full lg:min-h-0 lg:min-w-max lg:flex-row lg:items-stretch lg:pb-6">
           {stages.map((stg) => {
             const cards = (data || []).filter((w) => w.stage === stg.key);
             const draggedWf = dragId ? (data || []).find((w) => w.id === dragId) : null;
@@ -490,18 +626,20 @@ export default function Workflows({ embedded = false }) {
                 }}
                 onDragLeave={() => setOverStage((s) => (s === stg.key ? null : s))}
                 onDrop={(e) => onDrop(e, stg.key)}
-                /* No fill at rest — the board's inset well is the ground, and
-                   a grey panel per column was a box inside a box. The column
-                   only paints while a drag is live, and then only to say
-                   "this one accepts" or "this one does not".
-                   KR-14.21 — mobile paints the stage as an nm-tile card so
-                   the collapsed rows read as stacked cards; desktop keeps
-                   the transparent column look. */
-                /* KM-31 — the mobile stage was .nm-tile: a solid white slab
+                /* While a drag is live the column also says "this one accepts"
+                   or "this one does not".
+                   KM-31 — the mobile stage was .nm-tile: a solid white slab
                    sitting on the sky like a sticker. It is .kr-frost now — the
                    same light glass the Desk's "today's read" wears — so the
-                   bloom reads through it. Desktop keeps the transparent column. */
-                className={`flex w-full flex-col rounded-tile transition-all kr-frost p-2 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:w-[300px] lg:shrink-0 ${
+                   bloom reads through it.
+                   2026-09-14, founder — desktop drops the transparent column
+                   it had kept since ASK-18: with only the blur left, the lane
+                   blended into the board and the cards into the lane. It wears
+                   .kr-lane (index.css), glass drawn by depth and a rim glow,
+                   padded so the cards sit inside it rather than on its edge.
+                   lg:min-h-0 is ASK-25's: the lane shrinks to the board so its
+                   card list scrolls inside it. */
+                className={`flex w-full flex-col rounded-tile transition-all kr-frost p-2 lg:kr-lane lg:p-2.5 lg:w-[300px] lg:shrink-0 lg:min-h-0 ${
                   isTarget ? "bg-kr-accent/10 ring-2 ring-kr-accent/60"
                   : dropOk ? "ring-1 ring-dashed ring-foreground/30"
                   : dragId && !isSource ? "opacity-40"
@@ -509,30 +647,37 @@ export default function Workflows({ embedded = false }) {
                 }`}
               >
                 {/* Header row — clickable on mobile to toggle collapse. On
-                    desktop it stays a plain non-interactive label. */}
+                    desktop it stays a plain non-interactive label.
+                    ASK-16 (2026-09-13): desktop centres the label + count
+                    over the column width; mobile keeps the caret on the
+                    right where the tap target sits. */}
                 <button
                   type="button"
                   onClick={() => toggleStage(stg.key)}
                   data-testid={`stage-toggle-${stg.key}`}
                   aria-expanded={isOpen}
-                  className="flex items-center justify-between gap-2 px-1.5 pb-1 pt-1 text-left lg:pointer-events-none"
+                  className="flex items-center justify-between gap-2 px-1.5 pb-2 pt-1 text-left lg:justify-center lg:pointer-events-none"
                 >
-                  <p className="truncate text-sm font-semibold">{stg.label}</p>
-                  <span className="flex items-center gap-2">
+                  <span className="inline-flex items-baseline gap-2">
+                    <span className="truncate text-sm font-semibold">{stg.label}</span>
                     <span className="font-mono text-sm tabular-nums opacity-50">{cards.length}</span>
-                    <CaretDown
-                      size={13}
-                      weight="bold"
-                      aria-hidden="true"
-                      className={`text-muted-foreground transition-transform lg:hidden ${isOpen ? "rotate-180" : ""}`}
-                    />
                   </span>
+                  <CaretDown
+                    size={13}
+                    weight="bold"
+                    aria-hidden="true"
+                    className={`text-muted-foreground transition-transform lg:hidden ${isOpen ? "rotate-180" : ""}`}
+                  />
                 </button>
 
                 {/* KR-14.21 · MOBILE — when expanded, cards render as a
                     HORIZONTAL scroller (`-mx-2 overflow-x-auto flex-row`).
                     Desktop keeps the original vertical stack. */}
-                <div className={`min-h-[140px] flex-1 gap-3 p-1.5 lg:min-h-[320px] lg:flex lg:flex-col ${
+                {/* ASK-25 — from lg this list is the column's own scroller:
+                    min-h-0 lets it shrink to the board's height and
+                    overflow-y-auto scrolls the cards inside it, so a long
+                    stage never lengthens the page. */}
+                <div className={`min-h-[140px] flex-1 gap-3 p-1.5 lg:min-h-0 lg:overflow-y-auto lg:flex lg:flex-col ${
                   /* KM-31 — a COLUMN on mobile, not a horizontal scroller.
                      With the card now full-width, a row scroller would show one
                      card and hide the rest behind a swipe nobody is told about;
@@ -579,7 +724,7 @@ export default function Workflows({ embedded = false }) {
                            the height floors rather than fixes, so a short card
                            is short. The scroller keeps its fixed 256px track
                            from lg up, where several columns are side by side. */
-                        className={`kr-bento group cursor-grab p-3 active:cursor-grabbing w-full min-h-[220px] lg:w-64 lg:h-[260px] lg:shrink-0 flex flex-col overflow-hidden text-left lg:h-auto lg:w-auto lg:shrink lg:overflow-visible lg:p-3.5 ${
+                        className={`kr-bento group cursor-grab p-3 active:cursor-grabbing w-full min-h-[220px] lg:w-64 lg:h-[260px] lg:shrink-0 flex flex-col overflow-hidden text-left lg:h-auto lg:w-auto lg:overflow-visible lg:p-3.5 ${
                           dragging ? "opacity-40" : ""
                         } ${busyId === w.id ? "opacity-60" : ""} ${
                           w.id === focusWf ? "ring-2 ring-kr-ink ring-offset-2" : ""
@@ -591,6 +736,14 @@ export default function Workflows({ embedded = false }) {
                           <p className="min-w-0 flex-1 text-sm font-semibold leading-snug line-clamp-2 text-left">{w.title}</p>
                           {user?.role === "owner" && (
                             <button onClick={() => del(w)} data-testid={`delete-workflow-${w.id}`} title={t("workflows.delete_card")}
+                              /* MW-13 fix: label names the card it deletes.
+                                 Before, every Delete button on the board
+                                 was announced as the same phrase "Delete
+                                 card"; screen-reader users had five
+                                 identical Delete buttons with nothing to
+                                 distinguish them. w.title is already to
+                                 hand where this button renders. */
+                              aria-label={`${t("workflows.delete_card")}: ${w.title}`}
                               className="shrink-0 text-muted-foreground transition-colors hover:text-kr-accent">
                               <Trash size={14} weight="bold" aria-hidden="true" />
                             </button>
@@ -602,6 +755,14 @@ export default function Workflows({ embedded = false }) {
                             {w.counterparty && <span className="truncate text-xs text-muted-foreground">{w.counterparty}</span>}
                             {w.amount != null && <span className="shrink-0 font-mono text-xs font-semibold tabular-nums">{money(w.amount, tenant?.currency)}</span>}
                           </div>
+                        )}
+                        {/* ASK-32 4.4 — the decision this card came from. */}
+                        {w.decision_id && w.decision_title && (
+                          <a href={`/inbox?decision=${encodeURIComponent(w.decision_id)}`} draggable={false}
+                            onClick={(e) => e.stopPropagation()} data-testid={`wf-card-decision-${w.id}`}
+                            className="mt-1 block truncate text-[11px] text-muted-foreground underline-offset-2 hover:underline lg:pl-[23px]">
+                            From decision: {w.decision_title}
+                          </a>
                         )}
 
                         {stageTasks.length > 0 ? (
@@ -637,6 +798,12 @@ export default function Workflows({ embedded = false }) {
                           <button onClick={() => advance(w)} data-testid={`advance-workflow-${w.id}`}
                             disabled={busyId === w.id}
                             title={`Move to ${labelOf(nextKey)}`}
+                            /* MW-13 fix: label names the card being
+                               advanced. Two Advance buttons on the same
+                               board were previously announced with the
+                               same phrase ("Advance to Delivered"); the
+                               card title disambiguates them. */
+                            aria-label={`Advance to ${labelOf(nextKey)}: ${w.title}`}
                             /* KM-31 — .nm-btn was the retired flat outline. The
                                advance button is the one thing on the card that
                                DOES something, so it wears the app's raised
@@ -670,6 +837,37 @@ export default function Workflows({ embedded = false }) {
         targetLabel={overrideCtx ? labelOf(overrideCtx.targetStage) : ""}
         onConfirm={confirmOverride}
       />
+
+      {/* ASK-2 fix: in-app Delete confirmation. Replaces window.confirm,
+          which silently returned false in some browser + embed contexts
+          and made the click look like a silent no-op. Radix AlertDialog
+          gives a real focus-trapped modal with keyboard dismissal. */}
+      <AlertDialog
+        open={!!pendingDelete}
+        onOpenChange={(v) => { if (!v && !deleting) setPendingDelete(null); }}
+      >
+        <AlertDialogContent data-testid="delete-workflow-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this card?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDelete?.title
+                ? <><span className="font-semibold text-foreground">{pendingDelete.title}</span> will be removed from this pipeline. This can't be undone.</>
+                : "This can't be undone."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={deleting}
+              data-testid="delete-workflow-confirm-action"
+              className="bg-danger-600 text-white hover:bg-danger-600/90"
+            >
+              {deleting ? "Deleting…" : "Delete card"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

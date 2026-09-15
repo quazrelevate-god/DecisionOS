@@ -189,17 +189,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  /* ---------- early access form (front-end only for now) ---------- */
-  const earlyForm = document.getElementById('early-form');
-  const formNote = document.getElementById('form-note');
-  if (earlyForm) {
-    earlyForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const name = earlyForm.name.value.trim().split(' ')[0];
-      formNote.textContent = `Thanks${name ? ', ' + name : ''} — we'll reach out shortly.`;
-      earlyForm.reset();
-    });
-  }
 
 });
 
@@ -265,45 +254,6 @@ document.addEventListener('DOMContentLoaded', () => {
     Inertia.sub(draw);
   }
 
-  /* ---------- early-access modal ---------- */
-  const modal = document.getElementById('access-modal');
-  const opener = document.getElementById('open-access');
-  if (modal && opener) {
-    let lastFocus = null;
-    const open = () => {
-      lastFocus = document.activeElement;
-      modal.hidden = false;
-      requestAnimationFrame(() => modal.classList.add('is-open'));
-      document.body.classList.add('modal-open');
-      modal.querySelector('input').focus();
-    };
-    const close = () => {
-      modal.classList.remove('is-open');
-      document.body.classList.remove('modal-open');
-      setTimeout(() => { modal.hidden = true; }, 350);
-      if (lastFocus) lastFocus.focus();
-    };
-    opener.addEventListener('click', open);
-    modal.querySelectorAll('[data-close]').forEach(el => el.addEventListener('click', close));
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !modal.hidden) close();
-    });
-    // Keep tabbing inside the dialog while it is open.
-    modal.addEventListener('keydown', (e) => {
-      if (e.key !== 'Tab') return;
-      const f = modal.querySelectorAll('button, input');
-      const first = f[0], last = f[f.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-    });
-    const form = document.getElementById('access-form');
-    form.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const first = form.name.value.trim().split(' ')[0];
-      document.getElementById('modal-note').textContent = `Thanks${first ? ', ' + first : ''} — we'll be in touch shortly.`;
-      form.reset();
-    });
-  }
 });
 
 /* ---------- scroll-progress driver: roadmap rail ---------- */

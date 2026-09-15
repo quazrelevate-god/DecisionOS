@@ -2,7 +2,14 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
-import { Wordmark } from "../components/Wordmark";
+/* KM-43 — the app's wordmark, not the PNG lockup. Founder: "use the black
+   version of decision os logo in the signup page which is used inside the
+   inbox page and everywhere in mobile pwa". KarmaLogo is text — "Decision" at
+   full ink, "OS" dropped to 55% — which is what the app shell has worn since
+   KR-8.2. The PNG (Wordmark.jsx) keeps Landing and Login, the two marketing
+   surfaces that still carry the registered artwork. */
+import { KarmaLogo } from "../components/karma/Logo";
+import { Check } from "@phosphor-icons/react";
 import { BasicsFlow } from "./onboarding/BasicsFlow";
 import { WebsiteIntel } from "./onboarding/WebsiteIntel";
 import { VoiceInterview } from "./onboarding/VoiceInterview";
@@ -74,16 +81,32 @@ export default function Signup() {
      isolate` for exactly this reason; dropping that class in KM-20 dropped
      the stacking context with it, and the glow rendered as a white page. */
   return (
-    <div className="relative isolate flex min-h-screen flex-col bg-white text-foreground">
-      {/* The Desk's glow, held to the margin — right of the pane on a
-          desktop, below it on a phone. See "KM-21" in index.css. */}
+    /* KM-42 — `signup-stage` is the scoping hook for the desktop treatment,
+       and it earns its keep: .kr-well is used on Ledger, Operating Score and
+       InsightWell too, all of which sit on the app's pale canvas where the
+       neumorphic pane is correct. Only here does it sit on a photograph.
+       bg-white stays as the load fallback — the picture covers it once it
+       arrives, and a white flash beats a black one. */
+    <div className="signup-stage relative isolate flex min-h-[calc(100vh/var(--ui-scale,1))] flex-col bg-white text-foreground">
+      {/* The artwork. On a phone it is a glow held above the pane; on desktop
+          (>= 1024) it goes full-bleed and becomes the page itself. See
+          "KM-21" / "KM-42" in index.css. */}
       <div className="app-sky__art app-sky__art--aside" aria-hidden="true" />
 
       {/* Top bar — floating glass rather than a ruled band. */}
+      {/* KM-50 — ON A PHONE THIS IS JUST THE WORDMARK, CENTRED. Founder: "the
+          top navbar is not nice so remove it and show only the DecisionOS logo
+          in the center top." They are right about the cause — at 375px the
+          glass pill had to carry a wordmark, a four-step rail and a Sign in
+          button, and the rail's labels are lg-only precisely because they do
+          not fit, so the phone was showing a bar of four unlabelled dots. A
+          progress rail nobody can read is chrome, not orientation; the step
+          number and its caption inside the card already say where you are.
+          Desktop is untouched — it has the width the rail was designed for. */}
       <header className="px-4 pt-4 lg:px-8 lg:pt-6">
-        <div className="kr-frost mx-auto flex w-full max-w-5xl items-center justify-between gap-4 rounded-pill px-4 py-2.5 lg:px-6">
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-center gap-4 rounded-pill px-4 py-2.5 lg:kr-frost lg:justify-between lg:px-6">
           <Link to="/" className="flex shrink-0 items-center gap-2.5" data-testid="signup-logo">
-            <Wordmark size={18} />
+            <KarmaLogo size="md" />
           </Link>
 
           {/* The phase rail. Sunken track, raised pill on the live phase —
@@ -91,7 +114,27 @@ export default function Signup() {
               controls use, so progress reads as position rather than colour.
               Labels are lg-only: at 375px four words plus the wordmark plus
               Sign in cannot share a row without truncating something. */}
-          <div className="kr-pressed flex items-center gap-1 rounded-pill p-1" data-testid="signup-phase-bar">
+          {/* KM-62 — THE TRACK IS GONE. Founder: "remove the rectangular bar
+              that covers the nav items, and increase the transparency of the
+              inside pill that highlights them."
+
+              .kr-pressed drew a sunken trough behind all four phases. On the
+              app's pale canvas that reads as a segmented control; on a
+              photograph it reads as a slab laid over the picture, and it was
+              sitting inside the header's own glass pill as well — a second
+              container around a container. The phases now sit directly on the
+              header, and only the live one is drawn. */}
+          {/* KM-66 follow-up — completed phases now carry a visible done
+              state, not a slightly-darker dot that reads identically to
+              pending. Three explicit states:
+
+                Live    → gold dot, bold foreground text, glass wash pill
+                Done    → filled foreground disc with a white check, ink text
+                Pending → hairline dim dot, muted text
+
+              A user moving forward now sees "Basics" close with a check
+              rather than just fading to grey. */}
+          <div className="hidden items-center gap-1 rounded-pill lg:flex" data-testid="signup-phase-bar">
             {PHASES.map((p, i) => {
               const done = i < phaseIdx;
               const live = i === phaseIdx;
@@ -100,15 +143,32 @@ export default function Signup() {
                   key={p.key}
                   aria-current={live ? "step" : undefined}
                   title={p.label}
-                  className={`flex h-7 items-center gap-2 rounded-pill px-2 lg:px-3 ${live ? "kr-pop" : ""}`}
+                  className={`flex h-7 items-center gap-2 rounded-pill px-2 lg:px-3 ${
+                    live ? "bg-white/35 shadow-[0_1px_3px_-1px_hsl(230_30%_18%/.18)]" : ""
+                  }`}
                 >
+                  {done ? (
+                    <span
+                      aria-hidden="true"
+                      className="grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full bg-foreground text-background"
+                    >
+                      <Check size={9} weight="bold" />
+                    </span>
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                        live ? "bg-[hsl(var(--kr-gold))]" : "bg-foreground/15"
+                      }`}
+                    />
+                  )}
                   <span
-                    aria-hidden="true"
-                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                      live ? "bg-[hsl(var(--kr-gold))]" : done ? "bg-foreground/45" : "bg-foreground/15"
+                    className={`hidden text-[11px] lg:inline ${
+                      live ? "font-semibold text-foreground"
+                        : done ? "font-medium text-foreground/85"
+                        : "text-foreground/50"
                     }`}
-                  />
-                  <span className={`hidden text-[11px] lg:inline ${live ? "font-semibold text-foreground" : "text-foreground/50"}`}>
+                  >
                     {p.label}
                   </span>
                 </div>
@@ -119,7 +179,7 @@ export default function Signup() {
           <Link
             to="/login"
             data-testid="signup-signin-link"
-            className="kr-pop flex h-9 shrink-0 items-center rounded-pill px-4 text-xs font-medium"
+            className="kr-pop hidden h-9 shrink-0 items-center rounded-pill px-4 text-xs font-medium lg:flex"
           >
             Sign in
           </Link>
@@ -135,11 +195,19 @@ export default function Signup() {
               <BasicsFlow form={form} setForm={setForm} onDone={() => setPhase("website")} />
             )}
             {phase === "website" && (
-              <WebsiteIntel companyName={form.company_name.trim()} onDone={(w) => { setWorld(w); setPhase("interview"); }} />
+              <WebsiteIntel companyName={form.company_name.trim()} onBack={() => setPhase("basics")} onDone={(w) => { setWorld(w); setPhase("interview"); }} />
             )}
             {phase === "interview" && (
               <VoiceInterview
                 profile={interviewProfile}
+                /* KM-62 — Back at the interview's first question returns here
+                   rather than being inert. Not offered from the reveal screen:
+                   VoiceInterview posts /interview/start on mount, so stepping
+                   back into it would mint a NEW session and discard every
+                   answer already given. The reveal has its own way to change
+                   things — "Missing something? Tell Dex" edits the draft in
+                   place, which is the safe version of the same intent. */
+                onBack={() => setPhase("website")}
                 onComplete={(sid, lang) => { setSessionId(sid); setLanguageCode(lang || "en-IN"); setPhase("build"); }}
                 onSkip={(sid, lang) => { setSessionId(sid); setLanguageCode(lang || "en-IN"); setPhase("build"); }}
               />
@@ -151,8 +219,16 @@ export default function Signup() {
         </AnimatePresence>
       </main>
 
-      <footer className="px-4 pb-5 lg:px-8">
-        <p className="mx-auto max-w-5xl text-center text-[11px] text-muted-foreground">
+      {/* KM-42 — the footer line gets a ground. Measured on the full-bleed
+          picture it read 1.38:1 against a 4.5 requirement: 11px muted type
+          printed straight onto a photograph, and the photograph is dark
+          exactly there. A glass chip is the fix rather than a colour change —
+          it matches the header's own floating pill, and .kr-frost carries the
+          darkened --text-secondary re-scope, so the text gets a lighter ground
+          AND darker ink from one class. `w-fit` keeps the chip the width of
+          the sentence instead of a bar across the page. */}
+      <footer className="flex justify-center px-4 pb-5 lg:px-8">
+        <p className="kr-frost w-fit max-w-full rounded-pill px-4 py-1.5 text-center text-[11px] text-muted-foreground">
           No credit card · 2 minutes · built around how you actually run
         </p>
       </footer>

@@ -65,7 +65,7 @@ async def business_calendar(days: int = 45, user: dict = Depends(get_current_use
 
     # Task deadlines (open)
     tasks = await db.tasks.find(
-        {"tenant_id": tid, "status": {"$in": ["todo", "in_progress", "blocked"]}, "due_date": {"$ne": None}},
+        {"tenant_id": tid, "status": {"$in": ["todo", "blocked", "in_progress", "waiting", "review"]}, "due_date": {"$ne": None}},  # ASK-28 TK-07
         {"_id": 0}).to_list(500)
     for t in tasks:
         add(t.get("due_date"), "task", t.get("title", "Task"),

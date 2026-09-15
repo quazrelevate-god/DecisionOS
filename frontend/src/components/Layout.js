@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useCallback, useEffect, useState, useMemo, useRef } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -12,6 +12,7 @@ import { timeAgo } from "../lib/format";
 import { notifMeta, notifLink } from "../lib/notif";
 import { Chip } from "./common";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { GLASS_MENU } from "./karma/glass";
 import {
   Brain as BrainIcon,
   AddressBook,
@@ -104,6 +105,11 @@ const NAV = [
 // founder discarded the PNG lockup for this design system. Wordmark.jsx
 // survives untouched for Landing/Login, which keep the registered artwork.
 
+/* MW-18 — routes that opt OUT of the shell's 1400px cap. Keep this short and
+   make a page earn its place: the cap exists because most pages are composed
+   against it, and a page that goes edge-to-edge has to be built for it. */
+const WIDE_ROUTES = ["/my-work"];
+
 export default function Layout({ children }) {
   const { user, tenant, logout } = useAuth();
   const { t } = useTranslation();
@@ -113,6 +119,28 @@ export default function Layout({ children }) {
     if (n.perms) return n.perms.some((p) => hasPerm(user, p));
     return !n.perm || hasPerm(user, n.perm);
   }), [user]);
+  /* KM-46 — the dip is as wide as the nav actually is. A fixed centre width
+     would drift the moment a translation makes "Decision Desk" longer or
+     shorter, and the S-curves would then start somewhere other than the end of
+     the pills. Padded a little either side so the curve leaves the last pill
+     rather than clipping it. */
+  const navRef = useRef(null);
+  const [navW, setNavW] = useState(0);
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    /* KM-49 — +36, i.e. 18px of flat each side, down from 24. The vertical gap
+       around the pills is 17.4px, so this makes the shelf's padding uniform on
+       all four sides; at 24 the flat ran on past the last pill and the founder
+       read it as stretched. The curve still starts outside the group either
+       way — this only decides how much flat precedes it. */
+    const measure = () => setNavW(Math.round(el.getBoundingClientRect().width) + 36);
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    measure();
+    return () => ro.disconnect();
+  }, []);
+
   const navigate = useNavigate();
   const location = useLocation();
   const { isDark, toggle: toggleTheme } = useTheme();
@@ -239,15 +267,65 @@ export default function Layout({ children }) {
      that now renders the voice UI is the dock, not a sheet. Layout is the only
      common parent of the FAB (which starts it), the bar (which draws it) and
      the sheet (which still shows what Dex heard afterwards). */
+  /* KM-51 — the transcript sink. useDexCapture is created BEFORE
+     useDexConversation (it is the conversation's input), so the setter it needs
+     to hand a transcript to does not exist yet. A ref filled on the next line
+     down breaks the cycle without reordering two hooks that genuinely depend on
+     each other in that direction. */
+  /* KM-54 — `qc` and this helper are declared BEFORE the Dex hooks on purpose.
+     Both are consts, so they sit in the temporal dead zone until their own line
+     runs, and the options object passed to useDexCapture is evaluated the
+     moment that call is reached. Referencing either from further down the file
+     therefore threw "Cannot access 'qc' before initialization" and rendered a
+     blank app — a runtime fault the production build compiles happily, which is
+     why it was caught in the browser rather than by the compiler.
+
+     A capture lands in several places, so several caches go stale at once.
+     Layout used to invalidate only captures-pending, which is why a new
+     decision took up to 30 seconds (Desk's own refetchInterval) to surface
+     instead of arriving with the acknowledgement that created it. */
+  const qc = useQueryClient();
+  const refreshAfterCapture = useCallback(() => {
+    ["captures-pending", "desk", "inbox", "tasks", "dex-inflight-count"].forEach(
+      (k) => qc.invalidateQueries({ queryKey: [k] })
+    );
+  }, [qc]);
+
+  const draftSinkRef = useRef(null);
+  /* KM-54 — which door Dex was opened by: "ask" or "decide". null means the
+     picker has not been used, and the FAB shows the two doors instead of
+     opening anything. */
+  const [dexChannel, setDexChannel] = useState(null);
+  const [dexPicker, setDexPicker] = useState(false);
   const dex = useDexCapture({
     watch: true,
     onRecordingChange: (on, secs) => setDexRecording({ on, secs }),
-    onCaptured: () => qc.invalidateQueries({ queryKey: ["captures-pending"] }),
+    onCaptured: refreshAfterCapture,
+    // Stopping a recording now yields TEXT for review, not a committed capture.
+    // ASK-32 1.6 — the held note's id comes back with the words.
+    onTranscript: (text, noteId) => draftSinkRef.current?.(text, noteId),
+    /* Ask-mode audio goes to /transcribe: text back, nothing persisted. Only
+       Decide-mode audio becomes a decision. */
+    channel: dexChannel === "ask" ? "dictate" : "capture",
+    /* KM-60 — the meter does NOT write state here. This hook lives in Layout,
+       so every sample re-rendered the entire shell and the page inside it ~18
+       times a second while recording. That is the main-thread pressure behind
+       "I can't stop the recording, but I can when I go quiet": a tap has to
+       wait its turn, and the busier the wave the longer the queue. The dock's
+       wave now reads dex.levelsRef on its own animation frame instead — the
+       same motion, none of the renders. */
+    meterState: false,
   });
   /* KM-26 — one conversation, three surfaces: the dock hosts the input, the
      FAB submits it, the transcript shows it. None of them can own the state, so
      it lives in the hook and Layout hands it to all three. */
-  const chat = useDexConversation({ dex, open: dexOpen });
+  const chat = useDexConversation({
+    dex,
+    open: dexOpen,
+    channel: dexChannel === "decide" ? "decide" : "ask",
+    onCommitted: refreshAfterCapture,
+  });
+  draftSinkRef.current = chat.setDraftFromVoice;
   const [langOpen, setLangOpen] = useState(false);
   // KR-5: the global search moved into a ⌘K dialog; same /brain?q= handoff.
   const [globalQuery, setGlobalQuery] = useState("");
@@ -271,7 +349,7 @@ export default function Layout({ children }) {
   const bellCount = (notif?.notifications || []).filter(
     (n) => !n.read && NEEDS_HIM.test(n.kind || "")
   ).length;
-  const qc = useQueryClient();
+
   // KM-1 — the return value is deliberately not destructured. Its only reader
   // was `counts.myWork`, a prop AllAppsPanel never looked at; the poll itself
   // stays because it keeps /brief?period=morning warm in the cache, which is
@@ -306,45 +384,49 @@ export default function Layout({ children }) {
           <button data-testid="notif-bell"
             aria-label={count > 0 ? `Notifications, ${count} need you` : "Notifications"}
             className={mobile
-              ? "relative flex items-center justify-center border border-border hover:bg-accent transition-colors w-12 h-12"
-              : "relative h-10 w-10 rounded-full border border-kr-outline grid place-items-center text-foreground/80 transition-colors hover:bg-white/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"}>
+              /* Mobile PWA (2026-09-14) — the phone bell joins the glass: a
+                 white glass circle instead of the retired square outline. */
+              ? "relative grid h-12 w-12 place-items-center rounded-full bg-white/75 text-slate-800 ring-1 ring-inset ring-slate-900/[0.05] shadow-[0_6px_16px_-8px_hsl(216_30%_25%/0.35),inset_0_1px_0_hsl(0_0%_100%/0.9)] transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25"
+              : "relative h-10 w-10 rounded-full border border-kr-ink/55 grid place-items-center text-foreground/90 transition-colors hover:bg-white/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"}>
             <Bell size={mobile ? 22 : 18} weight="regular" />
             {count > 0 && (
               <span data-testid="notif-count" className={mobile
-                ? "absolute -top-2 -right-2 grid h-5 min-w-5 place-items-center rounded-full bg-kr-accent px-1 text-[10px] font-bold leading-none text-white"
+                ? "absolute -top-1 -right-1 grid h-5 min-w-5 place-items-center rounded-full bg-kr-accent px-1 text-[10px] font-bold leading-none text-white"
                 : "absolute -top-1.5 -right-1.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-kr-accent px-1 text-[10px] font-bold leading-none text-white"}>
                 {mobile ? Math.min(9, count) : (unread > 99 ? "99+" : unread)}
               </span>
             )}
           </button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-80 p-0 border border-border shadow-md" data-testid="notif-dropdown">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-            <p className="text-sm font-bold uppercase tracking-tight">{t("header.notifications")}</p>
-            {unread > 0 && <span className="label-mono text-brand-600">{unread} {t("header.new")}</span>}
+        {/* 2026-09-14, founder — the top bar's dropdowns wear the app's glass
+            list: the white glass panel, hairline rules, rounded rows. */}
+        <PopoverContent align="end" className={`${GLASS_MENU} w-80 p-0`} data-testid="notif-dropdown">
+          <div className="flex items-center justify-between border-b border-slate-900/[0.06] px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{t("header.notifications")}</p>
+            {unread > 0 && <span className="text-xs font-medium text-slate-700">{unread} {t("header.new")}</span>}
           </div>
-          <div className="max-h-96 overflow-y-auto divide-y divide-black/10">
-            {items.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">{t("header.all_caught_up")}</p>}
+          <div className="max-h-96 space-y-0.5 overflow-y-auto p-1.5">
+            {items.length === 0 && <p className="p-6 text-center text-sm text-slate-500">{t("header.all_caught_up")}</p>}
             {items.map((n) => {
               const meta = notifMeta(n);
               return (
                 <button key={n.id} data-testid={`notif-item-${n.id}`} onClick={() => openNotif(n)}
-                  className={`w-full text-left px-4 py-3 flex items-start gap-2 hover:bg-black/[0.03] transition-colors ${n.read ? "opacity-60" : ""}`}>
-                  {!n.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-brand-600 shrink-0" />}
+                  className={`flex w-full items-start gap-2 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-slate-900/[0.05] ${n.read ? "opacity-60" : ""}`}>
+                  {!n.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-neutral-900" />}
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Chip value={meta.label} className={`${meta.cls} text-[9px]`} />
-                      <span className="label-mono text-muted-foreground">{timeAgo(n.created_at)}</span>
+                      <span className="text-[11px] text-slate-500">{timeAgo(n.created_at)}</span>
                     </div>
-                    <p className="text-sm font-semibold mt-1 truncate">{n.work_title || n.message}</p>
-                    {n.sender_name && <p className="label-mono text-muted-foreground truncate">{n.sender_name}</p>}
+                    <p className="mt-1 truncate text-sm font-semibold text-slate-900">{n.work_title || n.message}</p>
+                    {n.sender_name && <p className="truncate text-[11px] text-slate-500">{n.sender_name}</p>}
                   </div>
                 </button>
               );
             })}
           </div>
           <button onClick={() => navigate("/notifications")} data-testid="notif-view-all"
-            className="w-full px-4 py-3 border-t border-border text-sm font-medium hover:bg-accent transition-colors">
+            className="w-full border-t border-slate-900/[0.06] px-4 py-3 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-900/[0.04]">
             {t("header.view_all")}
           </button>
         </PopoverContent>
@@ -384,7 +466,7 @@ export default function Layout({ children }) {
      with the theme instead of snapping — see .app-sky::before. */
   return (
     <HeaderSlotContext.Provider value={isMobileShell ? headerSlot : null}>
-    <div className="app-sky flex h-[100dvh] flex-col overflow-hidden bg-nm text-foreground lg:h-auto lg:min-h-screen lg:overflow-visible">
+    <div className="app-sky flex h-[100dvh] flex-col overflow-hidden bg-nm text-foreground lg:h-[calc(100vh/var(--ui-scale,1))]">
       {/* The page-artwork layer. Empty and invisible until a room sets
           --sky-art (see "PAGE ARTWORK" in index.css); position:fixed keeps it
           out of this flex column. It is a real element rather than a third
@@ -410,13 +492,38 @@ export default function Layout({ children }) {
           floating directly on the bloom, scrolling away with the page. The
           frosted sticky strip (KR-5) is deleted, not softened: any fill at
           all reads as a bar. */}
-      <header className="hidden lg:grid h-[76px] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 bg-transparent">
+      {/* KM-46 — the shelf lives on the HEADER, not the nav: it runs edge to
+          edge and only dips behind the pills, so the logo and the account block
+          sit on the same surface as the navigation. --navplate-w is the dip's
+          width, measured from the real nav below rather than assumed — the pill
+          labels are translated, so it has to fit whatever language is loaded. */}
+      {/* KM-47 — THE PILLS SIT IN THE DIP, NOT IN THE HEADER, and that is what
+          the padding-bottom is for. Measured before: 18px of plate above the
+          pills and 6.5px below them, because the row was centred in the 76px
+          header while the dip's floor is at 84.92% of it. Centring content in a
+          box whose bottom has been curved away is centring it in the wrong box.
+
+          88px, not 76: making the gaps merely EQUAL at the old height gives
+          12.25px top and bottom, which puts the pills almost against the page
+          edge. The founder's own curve file is 126 units tall for a ~44px pill —
+          proportionally far airier than 76 was. 88 lands between: 17.4px around
+          the pills and a 13px floor left under the dip.
+
+          pb-[13px] is derived, not nudged: with items-center the row's top is
+          (88 - P - 40) / 2, and setting that equal to the gap below the pills
+          (74.73 - 40 - top) solves to P = 13.26. */}
+      <header
+        className="kr-navplate hidden lg:grid h-[88px] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 pb-[13px] bg-transparent"
+        style={navW ? { "--navplate-w": `${navW}px` } : undefined}
+      >
         <div className="flex items-center justify-self-start">
           <KarmaLogo />
         </div>
 
         <PillNav
           testid="header-pill-nav"
+          plate
+          navRef={navRef}
           items={navMain.map((n) => ({
             to: n.to,
             end: n.to === "/",
@@ -435,7 +542,7 @@ export default function Layout({ children }) {
             aria-label={t("header.search_ph", "Find anything…")}
             title={`${t("header.search_ph", "Find anything…")} (⌘K)`}
             onClick={() => setSearchOpen(true)}
-            className="h-10 w-10 rounded-full border border-kr-outline grid place-items-center text-foreground/80 transition-colors hover:bg-white/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
+            className="h-10 w-10 rounded-full border border-kr-ink/55 grid place-items-center text-foreground/90 transition-colors hover:bg-white/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
           >
             <MagnifyingGlass size={18} weight="regular" />
           </button>
@@ -461,16 +568,17 @@ export default function Layout({ children }) {
                 </span>
               </button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-64 p-0">
-              <div className="px-3 py-3 border-b border-border" data-testid="current-user">
-                <p className="text-sm font-semibold truncate">{user?.name}</p>
-                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+            {/* 2026-09-14, founder — the glass list, like every other dropdown. */}
+            <PopoverContent align="end" className={`${GLASS_MENU} w-64 p-0`}>
+              <div className="border-b border-slate-900/[0.06] px-4 py-3" data-testid="current-user">
+                <p className="truncate text-sm font-semibold text-slate-900">{user?.name}</p>
+                <p className="truncate text-xs text-slate-500">{user?.email}</p>
               </div>
-              <div className="px-3 py-2.5 border-b border-border">
-                <p className="text-xs text-muted-foreground">Workspace</p>
-                <p data-testid="tenant-name" className="text-sm font-medium truncate">{tenant?.name}</p>
+              <div className="border-b border-slate-900/[0.06] px-4 py-2.5">
+                <p className="text-xs text-slate-500">Workspace</p>
+                <p data-testid="tenant-name" className="truncate text-sm font-medium text-slate-800">{tenant?.name}</p>
                 {tenant?.industry && (
-                  <p className="text-xs text-muted-foreground truncate">{tenant.industry}</p>
+                  <p className="truncate text-xs text-slate-500">{tenant.industry}</p>
                 )}
               </div>
               <div className="p-1.5">
@@ -478,7 +586,7 @@ export default function Layout({ children }) {
                   <button
                     onClick={() => navigate("/settings")}
                     data-testid="nav-settings"
-                    className="w-full flex items-center gap-2 px-2.5 py-2 text-sm rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                    className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-900/[0.06] hover:text-slate-900"
                   >
                     <GearSix size={15} /> {t("nav.settings", "Settings")}
                   </button>
@@ -486,7 +594,7 @@ export default function Layout({ children }) {
                 <button
                   onClick={doLogout}
                   data-testid="logout-button"
-                  className="w-full flex items-center gap-2 px-2.5 py-2 text-sm rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-900/[0.06] hover:text-slate-900"
                 >
                   <SignOut size={15} /> {t("header.sign_out")}
                 </button>
@@ -535,7 +643,21 @@ export default function Layout({ children }) {
           an unbounded height, so main never becomes a scrollport and the page
           scrolls the document exactly as before. The clip only exists if the
           height constraint reaches all the way down. */}
-      <div className="flex min-h-0 flex-1 flex-col min-w-0 app-shell lg:max-w-[1400px] lg:w-full lg:mx-auto">
+      {/* MW-18 — THE CAP IS BACK, and it is lifted per route rather than
+          deleted. Dropping lg:max-w-[1400px] to satisfy a My Work ask changed
+          a GLOBAL container: at 1920 every page went edge to edge, and the
+          pages that were composed against a cap fell apart — Finance KPI
+          tiles ~610px wide with the value and its arrow 550px apart, a
+          1,856px Capture bar holding three small buttons, Team member cards
+          with the name and '6 permissions' at opposite ends. Nothing
+          overflowed; it just made the eye travel.
+          My Work wants the width (a 4-column card grid genuinely uses it), so
+          it opts in by route and everything else keeps the composition it was
+          designed for. */}
+      <div className={cn(
+        "flex min-h-0 flex-1 flex-col min-w-0 app-shell lg:w-full lg:mx-auto",
+        !WIDE_ROUTES.some((p) => location.pathname.startsWith(p)) && "lg:max-w-[1400px]"
+      )}>
         {/* Mobile top app bar — MPWA-03.
             Two controls, not four; min-h + top inset so nothing sits under the
             status bar in iOS standalone. Untouched by KR-5 beyond what the
@@ -600,10 +722,15 @@ export default function Layout({ children }) {
             const y = e.currentTarget.scrollTop;
             setBrandGone((was) => (was ? y > 2 : y > 4));
           }}
-          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-dock app-canvas lg:overflow-x-clip lg:overflow-y-visible lg:pb-8"
+          /* ASK-20 — lg:pb-0, not lg:pb-8. The bottom breathing room already
+             comes from the content wrapper's own lg:p-8; main's copy of it was
+             doubling to 64px, which read as dead space once main stopped being
+             the scroller and its box could no longer scroll that padding away. */
+          data-app-scroller=""
+          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-dock app-canvas lg:overflow-x-clip lg:pb-0"
         >
           <AnnouncementBanner />
-          <div className="p-4 lg:p-8 px-gutter-safe">{children}</div>
+          <div className="p-4 lg:p-8 px-gutter-safe lg:h-full lg:min-h-0 lg:flex lg:flex-col">{children}</div>
         </main>
       </div>
 
@@ -626,16 +753,26 @@ export default function Layout({ children }) {
         moreBadge={bellCount}
         dexActive={dexOpen}
         dexLevels={dex.levels}
+        /* KM-60 — the live meter, read on the wave's own animation frame.
+           `dexLevels` stays for the state-shaped API; this is what actually
+           drives the motion, and it costs Layout no renders. */
+        dexLevelsRef={dex.levelsRef}
         dexMode={chat.mode}
         dexWaveState={dex.recording ? "listening" : chat.busy ? "thinking" : "idle"}
         dexDraft={chat.draft}
         onDexDraft={chat.setDraft}
         onDexSubmit={chat.submit}
+        /* KM-53 — the gap between "stop" and the transcript coming back.
+           `dex.sending` covers the upload and the transcript poll; `!chat.draft`
+           narrows it to the window where there is genuinely nothing to show,
+           so the placeholder never sits on top of text that has already
+           arrived. */
+        dexTranscribing={!!dex.sending && !chat.draft}
       />
       {/* KM-11 — the vignette. Rendered always so it can transition rather
           than pop in, and gated by a data attribute. Sits below the dock's
           z-index so the bar stays fully lit while the edges fall away. */}
-      <div className="kr-vignette lg:hidden" data-on={dex.recording ? "1" : "0"}
+      <div className="kr-vignette lg:hidden" data-on={dex.recording ? "1" : "0"} data-mobile-chrome=""
            data-testid="dex-vignette" aria-hidden="true" />
 
       {/* KM-23 — the FAB opens the CONVERSATION again, and this time it is a
@@ -644,11 +781,20 @@ export default function Layout({ children }) {
           type into and attach to, so there is something worth opening. Voice
           still starts one tap in, from the mic inside it. */}
       <DexFab
-        onOpen={() => (dexOpen ? chat.submit() : setDexOpen(true))}
+        /* Closed, the FAB no longer opens Dex — it asks WHICH Dex. Open, it is
+           the composer's send/mic/stop exactly as before. */
+        onOpen={() => (dexOpen ? chat.submit() : setDexPicker((v) => !v))}
         recording={dex.recording}
         seconds={dex.recordSecs}
         onStop={() => dex.stopRecording()}
         intent={dexOpen ? chat.fabIntent : "sparkle"}
+        picker={dexPicker && !dexOpen}
+        onPick={(kind) => {
+          setDexPicker(false);
+          if (!kind) return;              // tapped the scrim
+          setDexChannel(kind);
+          setDexOpen(true);
+        }}
       />
       <AllAppsPanel
         open={allAppsOpen}
@@ -671,7 +817,16 @@ export default function Layout({ children }) {
           message inside it rather than a window of its own. (The poll that
           caused the re-open is separately fenced — see the dismiss token in
           useDexCapture.) */}
-      <DexChat open={dexOpen} onClose={() => setDexOpen(false)} dex={dex} chat={chat} />
+      {/* KM-54 — closing clears the channel, so the next tap on the FAB asks
+          which Dex you want rather than silently reusing the last answer. A
+          door you chose two hours ago is not a door you chose. */}
+      <DexChat
+        open={dexOpen}
+        onClose={() => { setDexOpen(false); setDexChannel(null); }}
+        dex={dex}
+        chat={chat}
+        channel={dexChannel}
+      />
       {/* The Language tile opens the existing switcher in a thumb-reachable
           sheet rather than duplicating the language list. */}
       <BottomSheet

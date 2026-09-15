@@ -15,17 +15,26 @@ class TaskCreateInput(BaseModel):
     description: Optional[str] = ""
     assignee_role: Optional[str] = None
     assignee_id: Optional[str] = None
+    # ASK-26: the people on the task alongside the lead (assignee_id). The
+    # lead stays the one approvals, hand-offs and reassign act on.
+    co_assignee_ids: Optional[List[str]] = None
     priority: Optional[str] = "medium"
     due_in_days: Optional[int] = None
     # Operational-task fields (all optional; used by the My Work "New Task" form)
     task_type: Optional[str] = None
     op_category: Optional[str] = None
-    support_id: Optional[str] = None
+    # ASK-28 TK-06: "supporting employee" (support_id) is gone — helpers
+    # (co_assignee_ids) are the one way to put more people on a task. Older
+    # app builds that still send support_id are not refused: unknown fields
+    # are ignored.
     due_date: Optional[str] = None   # ISO date e.g. "2026-06-15"
     due_time: Optional[str] = None   # "HH:MM"
     expected_output: Optional[str] = None
     approval_required: Optional[bool] = False
     approver_id: Optional[str] = None
+    # ASK-28 TK-05: when the approval happens — "start" (before work starts, the
+    # default) or "close" (before it's marked done). Ignored without approval.
+    approval_stage: Optional[str] = None
     progress: Optional[int] = None
     evidence_required: Optional[bool] = False
     reference_file_ids: Optional[List[str]] = None
@@ -50,9 +59,14 @@ class TaskUpdateInput(BaseModel):
     status: Optional[str] = None
     assignee_id: Optional[str] = None
     assignee_role: Optional[str] = None
+    # ASK-26: the whole list, replacing the stored one ([] clears it).
+    co_assignee_ids: Optional[List[str]] = None
     priority: Optional[str] = None
     progress: Optional[int] = None
     evidence_required: Optional[bool] = None
+    # ASK-28 TK-07: "Waiting on" — {"user_id": ...} (a colleague) or
+    # {"name": "Kumar Fabrics"} (free text); {} stops waiting.
+    waiting_on: Optional[dict] = None
 
 
 class TaskReassignInput(BaseModel):

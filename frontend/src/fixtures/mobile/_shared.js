@@ -43,7 +43,12 @@ export const series = (...points) => points.map((v, i) => ({ x: i, v }));
  */
 export function buildWrites() {
   return [
-    { match: /^\/voice-notes(\/text)?$/, data: { id: "vn_fixture", status: "queued" } },
+    // ASK-32 1.6 — a held recording is sent as /voice-notes/{id}/submit and
+    // followed by the same id, so that write answers with it too.
+    { match: /^\/voice-notes(\/text|\/[^/]+\/submit)?$/, data: { id: "vn_fixture", status: "queued" } },
+    // ASK-33 — the Desk well attaches a file by the id this returns; without
+    // one there is nothing to send with the note and no chip to show.
+    { match: /^\/files$/, data: { id: "file_fixture", filename: "attachment" } },
   ];
 }
 

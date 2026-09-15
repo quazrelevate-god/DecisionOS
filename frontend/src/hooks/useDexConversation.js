@@ -165,17 +165,31 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted } =
       const { data } = await api.post("/files", fd, { headers: { "Content-Type": "multipart/form-data" } });
       const id = data?.id || data?.file?.id;
       if (channel === "decide" && id) {
-        setPendingFiles((p) => [...p, { id, name: file.name }]);
+        /* ASK-33 — the entry also keeps the File and its type, so the Desk
+           well can draw a preview chip. DexChat still reads only the name. */
+        setPendingFiles((p) => [...p, { id, name: file.name, type: file.type || "", file }]);
         push({ role: "dex", text: "Attached. Say or type what to do with it — or press send and I'll read it." });
       } else {
         push({ role: "dex", text: "Saved to your files. Open Decide if you want Dex to act on it." });
       }
+      // An upload that came back without an id attached nothing on the decide
+      // channel, whatever it said above; the caller must not treat it as done.
+      return channel === "decide" && !id ? { ok: false, message: "That upload didn't go through." } : { ok: true, id };
     } catch (err) {
-      push({ role: "dex", text: err.response?.data?.detail || "That upload didn't go through." });
+      const detail = err.response?.data?.detail;
+      const message = typeof detail === "string" && detail ? detail : "That upload didn't go through.";
+      push({ role: "dex", text: message });
+      // ASK-33 — the Desk well has no transcript to print this in, so the
+      // reason is also handed back to the caller. DexChat ignores it.
+      return { ok: false, message };
     } finally {
       setBusy(false);
     }
   }, [channel, push]);
+
+  /** ASK-33 — take a file back off the next decision (the Desk well's chip).
+      The upload itself stays in files, as a sent one always has. */
+  const removeFile = useCallback((id) => setPendingFiles((p) => p.filter((f) => f.id !== id)), []);
 
   const canSendFiles = channel === "decide" && pendingFiles.length > 0;
 
@@ -201,7 +215,7 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted } =
     dex?.startRecording?.();
   }, [ask, canSendFiles, draft, dex, mode]);
 
-  return { log, busy, mode, setMode, draft, setDraft, setDraftFromVoice, ask, attach, submit, fabIntent, pendingFiles };
+  return { log, busy, mode, setMode, draft, setDraft, setDraftFromVoice, ask, attach, removeFile, submit, fabIntent, pendingFiles };
 }
 
 export default useDexConversation;

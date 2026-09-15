@@ -15,110 +15,144 @@
 // The Dex button is the same material inverted: .kr-pop, shadows outside
 // instead of in. A pit and a bump lit from the same corner read as one
 // surface; lit from different corners they read as a mistake.
+//
+// ASK-33 (2026-09-15) — THE WELL IS DEX'S DECIDE DOOR. "Today's read" — the
+// headline lib/deskInsight ranked out of the Desk's metrics, its "Chase it"
+// pill and the Brain shortcut to /brain — is retired from the Desk. The
+// container keeps its exact geometry and material (the pit, the pad, the
+// label, the floor line); only what sits in it changed: the "Dex" label, one
+// line under it, and a floor the caller supplies (pages/desk/DeskDexWell:
+// [+] · composer · mic). The retired markup is kept, commented out, at the
+// foot of this file, and the ranker stays in lib/deskInsight.js for possible
+// reuse. /brain is still one click away in the desktop sidebar (nav-brain).
 import * as React from "react";
-import { Brain, ArrowRight } from "@phosphor-icons/react";
-import { Link } from "react-router-dom";
+// ASK-33 — only the retired markup used these:
+// import { Brain, ArrowRight } from "@phosphor-icons/react";
+// import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 /**
- * @param {{headline: string, lines: string[], to: string, cta: string, tone: string}|null} insight
- * @param {boolean} loading
+ * @param {string}          [label]   the eyebrow — "Dex"
+ * @param {React.ReactNode} [prompt]  the one line under it (sits where the
+ *                                    headline did, so the well keeps its shape)
+ * @param {React.ReactNode} [floor]   the row on the well's floor
+ * @param {boolean}         compact   ASK-25 — the Desk's tightened well: 16px
+ *                                    pad and 40px controls, in the height the
+ *                                    shorter KPI rows leave it.
  */
-/**
- * @param {boolean} compact  ASK-25 — the Desk's tightened well: 16px pad,
- *                           an 18px headline, 40px controls. Everything the
- *                           well says is still said; it just says it in the
- *                           height the shorter KPI rows leave it.
- */
-export function InsightWell({ insight, loading = false, compact = false, className, testid }) {
+export function InsightWell({ label = "Dex", prompt, floor, compact = false, className, testid }) {
   return (
     <div className={cn("kr-well", className)} data-testid={testid}>
       <div className={cn("kr-well__pane flex h-full flex-col", compact ? "p-4 lg:px-[18px]" : "p-5")}>
-        <span className="text-xs font-semibold tracking-wide text-foreground/75">
-          Dex · today&rsquo;s read
-        </span>
-
-        {loading || !insight ? (
-          <div className="mt-4 space-y-2" aria-hidden="true">
-            <div className="ds-skeleton h-5 w-4/5 rounded-control" />
-            <div className="ds-skeleton h-3.5 w-3/5 rounded-control" />
+        <span className="text-xs font-semibold tracking-wide text-foreground/75">{label}</span>
+        {prompt}
+        {floor && (
+          <div className={cn("mt-auto flex items-center gap-2", compact ? "pt-3" : "pt-5 lg:pt-7")}>
+            {floor}
           </div>
-        ) : (
-          <>
-            <p
-              className={cn("font-semibold leading-snug", compact ? "mt-1.5 text-lg" : "mt-2 text-lg xl:text-xl")}
-              data-testid="desk-insight-headline"
-            >
-              {insight.headline}
-            </p>
-
-            {insight.lines.length > 0 && (
-              /* KM-1 — the supporting lines are candidates[1..2] from
-                 lib/deskInsight (slice(1,3)), i.e. the same facts the KPI tiles
-                 print: overdue cash -> "To collect", overdue tasks ->
-                 "Delayed", complaints -> "Complaints", weakest -> "Score mix".
-                 On a phone those tiles now sit directly ABOVE this box, so the
-                 bullets restate the grid in prose one thumb-flick away — the
-                 exact duplication NM-14 deleted once already.
-                 They also made the box breathe with the news: 172px at the
-                 floor with none, ~242px with two. A dashboard element that
-                 changes height depending on how bad the week is never looks the
-                 same twice. Hidden below lg, it is a stable 172-178px.
-                 The HEADLINE stays at every width — it is the one thing here
-                 that is a READ rather than a readout. */
-              <ul className="mt-3 hidden space-y-1.5 lg:block">
-                {insight.lines.map((l) => (
-                  /* foreground/70, not text-muted-foreground: the token is
-                     tuned for an opaque card, and over glass on the bloom's
-                     hot point it measured 4.34:1 — under AA. */
-                  <li key={l} className="flex gap-2 text-xs leading-relaxed text-foreground/70">
-                    <span aria-hidden="true" className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-current" />
-                    {l}
-                  </li>
-                ))}
-              </ul>
-            )}
-
-          </>
         )}
-
-        {/* KR-8.10 — the floor of the well: the action on the left, Dex on
-            the right, both 44px tall so they sit on one line rather than
-            merely near each other. pt-7 is the founder's "proper space at
-            the top of the Chase it" — the bullets were crowding it.
-            The row renders even while the insight is loading, because the
-            way into Dex should not depend on Dex having finished thinking. */}
-        <div className={cn("mt-auto flex items-center justify-between gap-3", compact ? "pt-3" : "pt-5 lg:pt-7")}>
-          {insight && (
-            /* Borderless too — a hairline pill next to a shadow-modelled
-               well would be two different materials in one box. */
-            <Link
-              to={insight.to}
-              data-testid="desk-insight-cta"
-              className={cn("kr-pop inline-flex w-fit items-center gap-2 rounded-pill px-4 text-xs font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60", compact ? "h-10" : "h-11")}
-            >
-              {insight.cta}
-              <ArrowRight size={12} weight="bold" aria-hidden="true" className="kr-arrow transition-transform duration-200" />
-            </Link>
-          )}
-
-          {/* The raised twin of the well it sits in. Icon-only, so it carries
-              a real label for anything not looking at it. 44px, not the 40px
-              the StatTile arrows use — those are presentational spans inside
-              a link, this is the tap target. */}
-          <Link
-            to="/brain"
-            aria-label="Ask Dex"
-            title="Ask Dex"
-            data-testid="desk-insight-dex"
-            className={cn("kr-pop ml-auto grid shrink-0 place-items-center rounded-full text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60", compact ? "h-10 w-10" : "h-11 w-11")}
-          >
-            <Brain size={19} weight="duotone" aria-hidden="true" />
-          </Link>
-        </div>
       </div>
     </div>
   );
 }
 
 export default InsightWell;
+
+// ─── ASK-33 · RETIRED — "today's read", kept for possible reuse ─────────────
+// The Desk no longer passes an insight; this is the markup that rendered one,
+// commented out rather than deleted. Its data came from lib/deskInsight.js.
+//
+// /**
+//  * @param {{headline: string, lines: string[], to: string, cta: string, tone: string}|null} insight
+//  * @param {boolean} loading
+//  */
+// export function InsightWell({ insight, loading = false, compact = false, className, testid }) {
+//   return (
+//     <div className={cn("kr-well", className)} data-testid={testid}>
+//       <div className={cn("kr-well__pane flex h-full flex-col", compact ? "p-4 lg:px-[18px]" : "p-5")}>
+//         <span className="text-xs font-semibold tracking-wide text-foreground/75">
+//           Dex · today&rsquo;s read
+//         </span>
+//
+//         {loading || !insight ? (
+//           <div className="mt-4 space-y-2" aria-hidden="true">
+//             <div className="ds-skeleton h-5 w-4/5 rounded-control" />
+//             <div className="ds-skeleton h-3.5 w-3/5 rounded-control" />
+//           </div>
+//         ) : (
+//           <>
+//             <p
+//               className={cn("font-semibold leading-snug", compact ? "mt-1.5 text-lg" : "mt-2 text-lg xl:text-xl")}
+//               data-testid="desk-insight-headline"
+//             >
+//               {insight.headline}
+//             </p>
+//
+//             {insight.lines.length > 0 && (
+//               /* KM-1 — the supporting lines are candidates[1..2] from
+//                  lib/deskInsight (slice(1,3)), i.e. the same facts the KPI tiles
+//                  print: overdue cash -> "To collect", overdue tasks ->
+//                  "Delayed", complaints -> "Complaints", weakest -> "Score mix".
+//                  On a phone those tiles now sit directly ABOVE this box, so the
+//                  bullets restate the grid in prose one thumb-flick away — the
+//                  exact duplication NM-14 deleted once already.
+//                  They also made the box breathe with the news: 172px at the
+//                  floor with none, ~242px with two. A dashboard element that
+//                  changes height depending on how bad the week is never looks the
+//                  same twice. Hidden below lg, it is a stable 172-178px.
+//                  The HEADLINE stays at every width — it is the one thing here
+//                  that is a READ rather than a readout. */
+//               <ul className="mt-3 hidden space-y-1.5 lg:block">
+//                 {insight.lines.map((l) => (
+//                   /* foreground/70, not text-muted-foreground: the token is
+//                      tuned for an opaque card, and over glass on the bloom's
+//                      hot point it measured 4.34:1 — under AA. */
+//                   <li key={l} className="flex gap-2 text-xs leading-relaxed text-foreground/70">
+//                     <span aria-hidden="true" className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-current" />
+//                     {l}
+//                   </li>
+//                 ))}
+//               </ul>
+//             )}
+//
+//           </>
+//         )}
+//
+//         {/* KR-8.10 — the floor of the well: the action on the left, Dex on
+//             the right, both 44px tall so they sit on one line rather than
+//             merely near each other. pt-7 is the founder's "proper space at
+//             the top of the Chase it" — the bullets were crowding it.
+//             The row renders even while the insight is loading, because the
+//             way into Dex should not depend on Dex having finished thinking. */}
+//         <div className={cn("mt-auto flex items-center justify-between gap-3", compact ? "pt-3" : "pt-5 lg:pt-7")}>
+//           {insight && (
+//             /* Borderless too — a hairline pill next to a shadow-modelled
+//                well would be two different materials in one box. */
+//             <Link
+//               to={insight.to}
+//               data-testid="desk-insight-cta"
+//               className={cn("kr-pop inline-flex w-fit items-center gap-2 rounded-pill px-4 text-xs font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60", compact ? "h-10" : "h-11")}
+//             >
+//               {insight.cta}
+//               <ArrowRight size={12} weight="bold" aria-hidden="true" className="kr-arrow transition-transform duration-200" />
+//             </Link>
+//           )}
+//
+//           {/* The raised twin of the well it sits in. Icon-only, so it carries
+//               a real label for anything not looking at it. 44px, not the 40px
+//               the StatTile arrows use — those are presentational spans inside
+//               a link, this is the tap target. */}
+//           <Link
+//             to="/brain"
+//             aria-label="Ask Dex"
+//             title="Ask Dex"
+//             data-testid="desk-insight-dex"
+//             className={cn("kr-pop ml-auto grid shrink-0 place-items-center rounded-full text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60", compact ? "h-10 w-10" : "h-11 w-11")}
+//           >
+//             <Brain size={19} weight="duotone" aria-hidden="true" />
+//           </Link>
+//         </div>
+//       </div>
+//     </div>
+//   );
+// }

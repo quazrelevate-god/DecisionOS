@@ -4,7 +4,8 @@
 // LAYOUT (ASK-25 · the Decision Desk redesign, 2026-09-13):
 //   light zone · LEFT   the two-line greeting, the Company/You slider, the
 //                       score numeral with the ArcGauge beside it, and the
-//                       Dex well on the column's floor
+//                       Dex well on the column's floor — ASK-33: the Decide
+//                       door, where a decision is spoken or typed
 //   light zone · RIGHT  the 3×2 StatTile grid, one glass tile among five
 //   THE DESK           three frost columns on the same ground, no dark band:
 //                       Decisions (on the well's own column) | Task approvals
@@ -33,17 +34,23 @@ import { inrCompact } from "../lib/format";
 import { selfScore } from "../lib/karmaScore";
 import { isDemoTenant, demoDelta } from "./_operatingScoreDemo";
 import {
-  ArcGauge, StatTile, InsightWell, ScopeSlider,
+  ArcGauge, StatTile, ScopeSlider,
   BigNumeral, KDeltaChip, MiniBars, CircleDots, TinySpark,
 } from "../components/karma";
 import { useDeskMetrics } from "./desk/useDeskMetrics";
+// ASK-33 — the well on the left column's floor is Dex's Decide door. It owns
+// the capture hooks and hosts the repurposed InsightWell container itself.
+import { DeskDexWell } from "./desk/DeskDexWell";
 // 2026-09-14, founder — the Task approvals column opens My Work's task
 // drawer HERE, on the Desk, instead of sending the founder to My Work.
 import { TaskCard } from "./MyWork";
 // 2026-09-14, founder — a decision opens as a POPUP here too, on the glass,
 // at 70% of the screen, instead of leaving for /decisions/:id.
 import { DecisionDialog } from "../components/DecisionDialog";
-import { deskInsight } from "../lib/deskInsight";
+// ASK-33 — "today's read" is retired from the Desk. Its call site below is
+// commented out, not deleted, and lib/deskInsight.js — the ranker — is kept,
+// untouched, for possible reuse.
+// import { deskInsight } from "../lib/deskInsight";
 import {
   ArrowSquareOut, CaretRight, Timer,
   ChatCircleText, Gauge as GaugeIcon, Receipt, HandCoins, TrendUp,
@@ -395,13 +402,17 @@ export default function Desk() {
       : youScore;
   const scoreReady = shownScore != null;
 
+  // ASK-33 — RETIRED CALL SITE. The well no longer prints Dex's read of the
+  // day; it takes decisions (pages/desk/DeskDexWell). Kept here, commented,
+  // with lib/deskInsight.js untouched, in case the ranker finds another home.
+  //
   // KR-8.7 — Dex's lead for the well. A ranker over metrics the page has
   // already fetched, so it adds a request count of zero and cannot contradict
   // a tile. ASK-25 — the well shows the HEADLINE only: the supporting lines
   // restated the tiles beside it (KM-1 made that case on the phone), and the
   // height they cost is what the Desk below needed.
-  const insightFull = deskInsight(m, isOwnerView ? (counters?.needs_decision ?? 0) : 0);
-  const insight = insightFull ? { ...insightFull, lines: [] } : null;
+  // const insightFull = deskInsight(m, isOwnerView ? (counters?.needs_decision ?? 0) : 0);
+  // const insight = insightFull ? { ...insightFull, lines: [] } : null;
 
   const greeting = m.greeting;
   const gi = greeting.lastIndexOf(",");
@@ -497,11 +508,10 @@ export default function Desk() {
 
           {/* KM-1 — order-4 puts the well AFTER the KPI grid on a phone.
               ASK-25 — on lg it takes the column's remaining height, so its
-              floor and the tile grid's floor are the same line. */}
-          <InsightWell
-            insight={insight}
-            loading={!insight}
-            compact
+              floor and the tile grid's floor are the same line.
+              ASK-33 — the same box, classes and testid; what it holds is
+              Dex's Decide composer instead of today's read. */}
+          <DeskDexWell
             className="order-4 min-h-[150px] lg:order-none lg:min-h-0 lg:flex-1"
             testid="desk-insight"
           />

@@ -125,6 +125,15 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
   const assignable = members.filter((m) => canAssignPerson(user, m));
   const helperChoices = assignable.filter((m) => m.id !== personId && !form.co_assignee_ids.includes(m.id));
   const approvers = members.filter((m) => m.role === "owner" || userPerms(m).includes("approvals"));
+  // Yokesh 2026-09-15 — nobody picked: the server names your reporting manager
+  // when they may approve tasks, else the owner. Say who that will be.
+  const myManagerId = user?.reporting_manager_id || members.find((m) => m.id === user?.id)?.reporting_manager_id;
+  const myManager = myManagerId ? members.find((m) => m.id === myManagerId) : null;
+  const firstOwner = members.find((m) => m.role === "owner");
+  const defaultApproverLabel = user?.role === "owner" ? "You"
+    : myManager && approvers.some((a) => a.id === myManager.id) ? `${myManager.name} · your manager`
+    : myManager ? "Your manager, or the owner if they can't approve"
+    : firstOwner ? `${firstOwner.name} · owner` : "The owner";
   const pickAssign = (v) => {
     const pid = v.startsWith("u:") ? v.slice(2) : "";
     // Choosing someone already listed as a helper makes them the doer instead
@@ -531,7 +540,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                     <GlassSelect id="task-approver" testid="task-approver-select" variant="field" triggerClassName={`${inp} mt-1`}
                       value={form.approver_id} onChange={(v) => setForm({ ...form, approver_id: v })}
                       options={[
-                        { value: "", label: "Anyone with approval access" },
+                        { value: "", label: defaultApproverLabel },
                         ...approvers.map((m) => ({ value: m.id, label: `${m.name} · ${roleLabel(m.role)}` })),
                       ]} />
                   </div>

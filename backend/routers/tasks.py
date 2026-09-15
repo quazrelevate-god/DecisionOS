@@ -195,6 +195,24 @@ async def _member_can_approve(tenant_id: str, member: dict) -> bool:
     return "approvals" in user_perms({**member, "_role_perms_map": role_map})
 
 
+async def _default_task_approver(user: dict) -> Optional[str]:
+    """Yokesh 2026-09-15 — a task that needs approval always names who approves.
+    Nobody picked: the creator's reporting manager when the manager may approve
+    tasks, else the owner (the creator when they are an owner; with several
+    owners, the first one)."""
+    tid = user["tenant_id"]
+    mid = user.get("reporting_manager_id")
+    if user.get("role") != "owner" and mid and mid != user["id"]:
+        manager = await db.users.find_one({"id": mid, "tenant_id": tid},
+                                          {"_id": 0, "id": 1, "role": 1, "permissions": 1})
+        if manager and await _member_can_approve(tid, manager):
+            return manager["id"]
+    if user.get("role") == "owner":
+        return user["id"]
+    owner = await db.users.find_one({"tenant_id": tid, "role": "owner"}, {"_id": 0, "id": 1}, sort=[("created_at", 1)])
+    return (owner or {}).get("id")
+
+
 async def _team_ids(user: dict) -> list:
     """ASK-28 TK-03 — my direct reports: people whose Reporting Manager is me."""
     rows = await db.users.find({"tenant_id": user["tenant_id"], "reporting_manager_id": user["id"]},
@@ -506,6 +524,8 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
             approver_id = approver["id"]
     progress = max(0, min(100, inp.progress)) if isinstance(inp.progress, int) else 0
     needs_approval = bool(inp.approval_required)
+    if needs_approval and not approver_id:
+        approver_id = await _default_task_approver(user)
     # ASK-28 TK-05: approval before work starts locks the task now; approval
     # before closing leaves it open to work and asks only when it is completed.
     stage = (inp.approval_stage if inp.approval_stage in APPROVAL_STAGES else "start") if needs_approval else None

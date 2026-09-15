@@ -196,6 +196,42 @@ def test_before_done_approver_who_completes_closes_directly(with_test_db):
     assert with_test_db(scenario) is True
 
 
+def test_nobody_picked_the_manager_approves_else_the_owner(with_test_db):
+    """Yokesh 2026-09-15: a task that needs approval always names who approves.
+    Picked: that person. Nobody picked: the creator's reporting manager when the
+    manager may approve tasks, else the owner (an owner approves their own)."""
+    async def scenario(db):
+        await _seed(db)
+        # Ravi (production) reports to Sunita (finance, may approve).
+        await db.users.update_one({"id": "u-prod"}, {"$set": {"reporting_manager_id": "u-fin"}})
+        prod = {**PROD, "reporting_manager_id": "u-fin"}
+        with e2e_env(db, stubs=STUBS, keep=KEEP):
+            t = await _create(prod, title="Buy a spare motor", assignee_id="u-prod",
+                              approval_required=True, approval_stage="start")
+            assert t["approver_id"] == "u-fin", "the manager who may approve"
+            assert await db.notifications.count_documents({"entity_id": t["id"]}) == 1
+            assert await db.notifications.count_documents({"entity_id": t["id"], "user_id": "u-fin"}) == 1
+            # Only the named approver (or the owner) approves now.
+            await _refused(tasks.approve_task(t["id"], user=SALES))
+            await tasks.approve_task(t["id"], user=FIN)
+            assert (await _status(db, t["id"]))[:2] == ("todo", "approved")
+
+            # Amit (operations) reports to Priya (sales, may not approve) -> the owner.
+            t2 = await _create(OPS, title="Change the dye supplier", approval_required=True, approval_stage="close")
+            assert t2["approver_id"] == "u-owner"
+            # No manager at all -> the owner; an owner creating it approves it.
+            assert (await _create(SALES, title="Discount for Kapoor", assignee_id="u-sales",
+                                  approval_required=True))["approver_id"] == "u-owner"
+            assert (await _create(OWNER, title="New loom", assignee_id="u-prod",
+                                  approval_required=True))["approver_id"] == "u-owner"
+            # Picked beats the default; no approval, no approver.
+            assert (await _create(prod, title="Pay the transporter", approval_required=True,
+                                  approver_id="u-owner"))["approver_id"] == "u-owner"
+            assert (await _create(prod, title="Sweep the floor", assignee_id="u-prod"))["approver_id"] is None
+            return True
+    assert with_test_db(scenario) is True
+
+
 def test_proof_stays_once_the_work_is_completed(with_test_db):
     """Yokesh 2026-09-15: proof can be removed while the work is open, never once
     it is sent for sign-off or done — not even by the owner. Reopening frees it;
@@ -260,7 +296,8 @@ def test_named_approver_without_approval_access_is_refused(with_test_db):
 
             # The owner always counts; someone outside the company is dropped, not refused.
             assert (await _create(SALES, title="a", approval_required=True, approver_id="u-owner"))["approver_id"] == "u-owner"
-            assert (await _create(SALES, title="b", approval_required=True, approver_id="u-nobody"))["approver_id"] is None
+            # Someone outside the company is dropped, and the default rule names who approves.
+            assert (await _create(SALES, title="b", approval_required=True, approver_id="u-nobody"))["approver_id"] == "u-owner"
             return True
     assert with_test_db(scenario) is True
 

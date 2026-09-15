@@ -1,0 +1,634 @@
+# ASK-33 — Dex becomes the Decide door, on the Desk and on the phone
+
+**Branch:** `karma-redesign` · **Built on:** `bb0a9e8` (2026-09-15, current tip of `origin/karma-redesign`)
+**Depends on:** `9dcb046` — ASK-32, and `docs/DECISION_DESK_PLAN.md` (Yokesh, 2026-09-15)
+**Scope:** Frontend only — the Dex well on `/inbox` at every width, and the Dex FAB on the mobile PWA
+**Status:** Awaiting backend developer sign-off, then ready to build
+
+---
+
+## Part 1 — For the backend developer
+
+*This part is the whole review. Two minutes.*
+
+### Bottom line: ASK-33 requests no backend changes
+
+Three things were on the table that would have touched the backend. All three have been withdrawn:
+
+| Originally proposed | Outcome | Why |
+|---|---|---|
+| Stop the AI reading attached files on the **decide** channel | **Withdrawn.** Plan item 5.4 / ASK-32 1.6 stays exactly as built. | A visiting card attached to "set up a meeting with this company" is precisely the case the feature exists for. The AI must read it. |
+| Filter self-raised decisions out of the Decisions column | **Withdrawn.** No change to the column, the query, or `approver_route`. | Already handled — plan item 2.4 puts a capturer's own decision on their Desk as "Waiting on Sunita", not counted in their Decisions number. What was being seen was stale data in the running app. |
+| Change where a decision gets approved | **Withdrawn.** Approval keeps the existing endpoints and rules. | The new composer is a second *entry point* to the same flow, not a second flow. |
+
+**What remains is the unbuilt Phase 5 of your own plan, plus a UI rearrangement.** No endpoint, schema, permission, routing rule or AI pipeline is altered.
+
+### ASK-33 builds Phase 5 of `DECISION_DESK_PLAN.md`
+
+Your Phases 1–4 are shipped. Phase 5 is unticked and is almost entirely frontend:
+
+| Plan item | ASK-33 | Note |
+|---|---|---|
+| **5.1** Result after capture, desktop **and** phone | **Phases 3 and 4** | Both halves, both surfaces |
+| **5.2** Failures say why, with Retry | **Phases 3 and 4** | Your own data: 14 of 15 failures were `ai_consent_required` and no screen said so |
+| **5.3** My captures — processing / ready / failed / decided | **Out of scope** | Its own ticket later; it is a new view, not a state of an existing one |
+| **5.4** Files and photos are read | **Already done** — unchanged by ASK-33 | |
+
+### Why this matters, in your own numbers
+
+From the live-company table in your plan: **15 of 92 captures failed**, and **23 of 79 decisions had nothing to do**. Roughly two captures in five land on a path that currently has no screen. ASK-33 gives all three outcomes a face on both surfaces.
+
+### What ASK-33 consumes — please don't break these
+
+- `POST /voice-notes`, `POST /voice-notes/{id}/submit`, `POST /voice-notes/text`, `POST /transcribe`, `POST /files`
+- The BackgroundTask walk `queued → transcribing → structuring → done`, polled every 1200ms, 90s timeout
+- The `proposal {tasks, workflows, meetings, reminders, memory_notes}` shape from 1.1
+- Approve / reject guards from 1.3, approver routing from 2.1, the `decisions_approve` permission from 2.2
+- The `/inbox?decision=<id>` deep link from 1.7
+- The `ask` / `decide` channel split, and `dictate` vs `capture` in `useDexCapture`
+- Attachments riding with the note **and being read** (1.6 / 5.4)
+
+### Two questions for you
+
+1. **Field names for the three outcomes.** Item 1.4 built `outcome: nothing_to_decide` on the voice note, and "a failed capture says why". ASK-33 renders both. Please confirm the exact fields the client receives for: the success case, the nothing-to-decide case (including the answer text to show), and the failure case (including a machine-readable reason such as `ai_consent_required` so we can link straight to Settings).
+2. **The summary counts.** Phase 3 renders "2 tasks, 1 workflow" — the same string item 1.1 already puts on the Desk card. Can the client count these from the proposal payload, or should it use whatever 1.1 uses? We would rather reuse than recount.
+
+### Sign-off
+
+- [ ] Confirmed: no backend change is being requested
+- [ ] Confirmed: the dependency list above is accurate and stable
+- [ ] Answered: outcome field names
+- [ ] Answered: summary counts
+- [ ] Noted: DD5 and DD6 are still unticked in "Decisions to confirm", though Phases 3.3 and 4.1 that implement them are ticked — worth closing
+
+---
+
+## Part 2 — What we decided
+
+### The idea in one line
+
+**Decide lives in the well. Ask lives in the Dex icon.** One rule, both surfaces. The Dex well on `/inbox` becomes the place you state a decision — speak or type, attach files, see what came of it, review it — and the Dex FAB on the phone becomes Ask-only.
+
+### The one cost of this, recorded deliberately
+
+On the phone, decision capture now requires being on `/inbox`. In a meeting on `/crm`, the founder taps the Desk in the dock first, then speaks — one extra tap and a page change. This was chosen knowingly, in exchange for the two doors collapsing into one clear rule. Revisit if it bites in real use.
+
+### Four things already exist and get reused, not rebuilt
+
+1. **The channels are built.** KM-54 shipped `channel = "ask" | "decide"` across `Layout.js`, `DexFab`, `DexChat` and `useDexConversation`. ASK-33 removes the *picker*, not the channels — both are still needed, just reached from different places.
+2. **The field-that-becomes-a-wave is built.** `FloatingDock.jsx` swaps an input for `<DexWave>` on `(dexMode === "type" || dexDraft || dexTranscribing)`. Port it; don't redraw it.
+3. **The review UI is built.** ASK-32 Phase 3 shipped plain task rows with who/due/priority, change-person, change-due-date, remove-item, what-was-said with voice playback, and links to what was created. `DecisionDialog` already opens as a popup on the Desk at 70% of screen.
+4. **The phone's expanded surface is built.** `DexSheet.jsx` has idle / recording / understanding states (MPWA-12e §5.6) and already takes a `channel` prop.
+
+### Agreed behaviour — the well, at every width
+
+At rest the well keeps today's exact geometry on both breakpoints. Only the contents change: the `Dex` label, one muted prompt line, and a composer row on the floor — `[+]` · composer · `[mic]`. "Today's read" is commented out, not deleted.
+
+**Desktop:** send expands the well in place, up to the top of the KPI tile grid, and the three outcomes render inside it.
+
+**Mobile:** the well is the **input**; `DexSheet` is the **output**. Send opens the existing sheet in decide mode, and the same three outcomes render in its understanding state. Nothing new is drawn, and the desktop expansion is not ported.
+
+### Agreed behaviour — the mobile FAB
+
+The two-door picker is removed. A tap opens Dex in **Ask** mode directly.
+
+### Explicitly out of scope
+
+- The backend, in every respect
+- The Decisions column, its query, and approver routing
+- Plan item 5.3, "My captures" — its own ticket
+- The `mobile/` Flutter app
+- `/brain` itself, beyond remaining reachable
+
+---
+
+## Part 3 — The prompt
+
+*Paste everything between the lines into the Claude Code session, after running `git pull`.*
+
+---
+
+```
+ASK-33 — Dex becomes the Decide door, on the Desk and on the phone
+
+Five phases. ONE per commit. Stop after each and wait for my go.
+
+BEFORE ANYTHING: `git pull`. Build on bb0a9e8, the current tip of
+origin/karma-redesign.
+
+THIS IS A FRONTEND-ONLY TICKET. No endpoint, schema, permission, routing
+rule or AI pipeline changes. If you believe a backend change is required,
+STOP and tell me — do not make it.
+
+THE RULE THIS TICKET ESTABLISHES
+  Decide lives in the Dex well on /inbox, at every width.
+  Ask lives in the Dex icon — /brain on desktop, the FAB on the phone.
+One rule, both surfaces. The two-door picker exists because that rule did
+not exist; it goes away because now it does.
+
+READ FIRST
+  · docs/DECISION_DESK_PLAN.md — the whole file. Phases 1-4 are SHIPPED;
+    this ticket builds its Phase 5 (items 5.1, 5.2) and leaves 5.3 out.
+    The live-data table is why: 15 of 92 captures failed and 23 of 79
+    decisions had nothing to do.
+  · pages/Desk.js — the ASK-25 header comment, the hero layout, and where
+    InsightWell sits at BOTH breakpoints (order-4 min-h-[150px] on the
+    phone, lg:flex-1 in the desktop column)
+  · components/karma/InsightWell.jsx — the container being repurposed
+  · components/mobile/FloatingDock.jsx ~190-235 — the composer to PORT
+  · components/mobile/DexSheet.jsx — the phone's three states
+  · components/mobile/DexFab.jsx — the KM-54 picker being removed
+  · components/DecisionDialog.js — ASK-32 Phase 3 shipped the review UI
+    here. Read it BEFORE Phase 3 and tell me what it already covers.
+  · hooks/useDexCapture.js — KM-51 onTranscript, KM-60 meterState,
+    ASK-32 1.6 attachments
+  · hooks/useDexConversation.js — the ask/decide channels
+  · components/Layout.js ~290-340 and ~796-845 — the FAB, the picker and
+    the sheet wiring
+
+============================== PHASE 1 · the composer row, BOTH breakpoints
+
+REMOVE "today's read". COMMENT OUT the deskInsight wiring in Desk.js and
+InsightWell — do not delete it, do not touch lib/deskInsight.js. Leave a
+comment saying ASK-33 retired the call site and the ranker is kept for
+possible reuse.
+
+THE RESTING STATE — same geometry as today, at BOTH breakpoints. The well
+keeps lg:flex-1 on desktop and order-4 min-h-[150px] on the phone. Only
+the contents change:
+  · the "Dex" label at the top
+  · one muted line: "Tell Dex what you decided — speak or type."
+  · the composer row on the floor
+Do NOT resize, reflow or restyle the well at rest on either breakpoint. A
+screenshot of the resting Desk should differ from today's only in the text
+inside this box.
+
+THE FLOOR ROW. Today it is two controls:
+  desk-insight-cta — the "Chase it →" Link (kr-pop pill, h-10)
+  desk-insight-dex — the circular Brain Link to /brain (kr-pop, h-10 w-10)
+
+It becomes, left to right:
+  [+]   [ ————— composer, flex-1 ————— ]   [mic]
+
+  · [+]  a kr-pop circle, 40px like the others. Tapping it reveals TWO
+         circles stacked ABOVE it — attach a file, and toggle type/voice
+         mode. They animate in; they are not always on screen.
+  · composer  the old "Chase it" pill stretched to fill the row. Type
+         mode: a text input. Voice mode: <DexWave>. PORT the exact swap
+         from FloatingDock, including its KM-51 and KM-53 reasoning — the
+         field also appears when a draft exists or while transcribing, and
+         is readOnly while transcribing.
+  · [mic] the Brain circle becomes the mic, toggling record/stop.
+
+WIDTH IS THE RISK ON THE PHONE. At 360px the row is two 40px circles, two
+gaps and the field. Confirm the field still takes a readable sentence and
+that nothing overlaps; if it cannot, raise it with me rather than
+shrinking a touch target below 44px.
+
+THIS WELL IS THE DECIDE DOOR. useDexCapture on the capture/decide channel;
+useDexConversation with channel="decide". On desktop, /brain stays in the
+sidebar (nav-brain) so removing the brain shortcut strands nothing.
+
+ATTACHMENTS — behaviour UNCHANGED from plan item 1.6 / 5.4. Any file type.
+The ids ride with the note and the AI READS THEM; deliberate, do not
+alter. The only new thing is presentation: each attached file shows as a
+small removable preview chip in the well.
+
+PERFORMANCE — read KM-60 first. This hook lives inside the Desk component,
+which renders an ArcGauge, six StatTiles and three columns. Writing mic
+levels to React state ~18x/sec re-renders all of it. Use meterState:false
+and pass levelsRef to DexWave, exactly as Layout.js does for the dock.
+
+NOTHING RESIZES IN THIS PHASE, on either breakpoint.
+
+=================================================== PHASE 2 · the expansion
+
+DESKTOP ONLY. On SEND — and only on send — the well becomes the workspace.
+
+  · It grows until its TOP meets the TOP of the right-hand StatTile grid
+    (data-testid="desk-kpi-grid"). That grid is the constraint.
+  · Everything above it in the left column fades out as it grows:
+    desk-brief-greeting, desk-scope, desk-score, desk-gauge.
+  · The motion carries inertia — it settles, it does not jump. The fade
+    and the growth are one orchestrated move.
+  · While the proposal builds, the new space holds a thinking state.
+    Surface the REAL stages the note walks — queued, transcribing,
+    structuring — from useDexCapture's poll. Do not run a generic spinner
+    over a known state machine.
+  · It collapses back to resting size when the decision is finished, and
+    on Later, restoring the faded elements in reverse.
+  · prefers-reduced-motion: no growth, no fade; the expanded state is
+    simply painted. Follow the convention at index.css:1972.
+  · Below lg NOTHING here applies. The phone's expanded surface is
+    DexSheet — Phase 4.
+
+============================================ PHASE 3 · the three outcomes, desktop
+
+This is DECISION_DESK_PLAN items 5.1 and 5.2 for the desktop. A capture
+has THREE possible endings and today only one of them has a screen.
+
+FIRST, BEFORE WRITING ANYTHING: open components/DecisionDialog.js and
+report back what ASK-32 Phase 3 already covers — plain task rows, change
+the person, change the due date, remove an item, what-was-said with voice
+playback, and links to what was created after approving. I expect the
+review UI is DONE and that this phase only has to summarise and hand off
+to it. Confirm before building a second review surface.
+
+OUTCOME A · READY
+  · The expanded well shows a summary in the shape of plan item 5.1 —
+    "Decision ready for Sunita · 2 tasks, 1 workflow" — plus a small grid
+    of counts (tasks, people assigned, approvals, meetings).
+  · Derive the counts client-side. Item 1.1 already renders "On approval:
+    1 task, 1 workflow" on the Desk card — reuse that logic rather than
+    writing a second counter. If neither is possible, STOP and tell me;
+    do not request a new backend field.
+  · A REVIEW action opens the EXISTING DecisionDialog on this page.
+  · A LATER action collapses the well. The decision stays undecided and
+    remains reachable through the Decisions column and /inbox?decision=
+    <id>, both unchanged — verify that path, do not rebuild it.
+
+OUTCOME B · NOTHING TO DECIDE — plan item 1.4 / DD3
+  · No tasks, workflows, meetings, reminders or notes, so no decision
+    card exists. The note carries the nothing-to-decide outcome.
+  · The expanded well shows Dex's ANSWER, plainly, with a single way out
+    that collapses the well. No approve, no review, no empty grid.
+  · This is not an error state and must not look like one.
+
+OUTCOME C · FAILED — plan item 5.2
+  · Show WHY, in the founder's words, with a Retry.
+  · 14 of the 15 real failures were AI consent not given. For that reason
+    specifically: "AI is off for this company — turn on AI consent in
+    Settings", linking straight to the right Settings tab. Other reasons
+    print their own message.
+  · Retry re-sends the same capture. Do not make the founder say it again.
+
+Ask me for the exact outcome field names before wiring these — a question
+is outstanding with the backend developer. If the answer has not arrived,
+build against a clearly-marked adapter function with one place to change,
+and say so.
+
+================================= PHASE 4 · the phone — one door, and the sheet
+
+FOUR-A · THE FAB BECOMES ASK-ONLY
+Remove the two-door picker from DexFab. A tap opens Dex in ASK mode
+directly — no picker, no scrim, no second tap.
+  · Delete the PICKS array and the picker branch; remove dexPicker and
+    its Escape handler from Layout.js; set the channel to "ask" on open.
+  · The CHANNELS STAY. useDexCapture keeps dictate/capture and
+    useDexConversation keeps ask/decide — the well needs decide. Only the
+    picker goes.
+  · REWRITE the KM-54 comment rather than deleting it. It records a
+    founder decision and the reasoning that produced it; replace it with
+    an ASK-33 note saying the doors collapsed because Decide now has a
+    permanent home in the well, and that the consequence — decision
+    capture on the phone requires being on /inbox — was accepted
+    knowingly. That comment is how the next person understands the
+    trade-off instead of re-litigating it.
+  · DexSheet's CHIPS are currently a mix of questions and decisions —
+    "Tell Suresh to ship the indigo lot before Friday" is a decision.
+    With the sheet now reached only by Ask, every chip must be a
+    QUESTION. Move the decision-shaped ones out; they belong in the
+    well's placeholder, not here.
+  · The voice_capture permission check stays exactly as it is.
+
+FOUR-B · THE WELL SENDS, THE SHEET SHOWS
+On the phone the well is the INPUT and DexSheet is the OUTPUT. Do NOT
+port the desktop expansion, and do NOT redesign the sheet.
+  · Sending from the well opens the existing DexSheet with channel
+    "decide" — it already takes a channel prop (Layout.js ~841).
+  · Its UNDERSTANDING state expresses the SAME three outcomes as
+    Phase 3:
+      A · READY — the structure echo it already renders, plus the 5.1
+          line "Decision ready for Sunita · 2 tasks, 1 workflow". The
+          existing Looks right / Fix affordances stay. Review opens the
+          decision the way the phone already opens one.
+      B · NOTHING TO DECIDE — Dex's answer, one way out. Not an error,
+          not an empty structure echo.
+      C · FAILED — the reason and a Retry, with the AI consent case
+          linking to Settings.
+  · SHARE the copy and the outcome adapter with Phase 3. Two surfaces
+    printing two different sentences for the same failure is the thing
+    this phase exists to prevent.
+
+Everything else in components/mobile/* stays as it is. FloatingDock,
+DexChat, DexWave and BottomSheet are read and copied from, not modified,
+unless an outcome above genuinely requires it — and if one does, tell me
+which and why before changing it.
+
+===================================== PHASE 5 · mobile visual QA and repair
+
+Look at what you built on a phone, find what it broke, and fix it. This
+phase is allowed to change layout; the four before it were not.
+
+RUN THE HARNESS
+  · `npm run audit:mobile` — every in-scope route at 390x844 AND
+    360x640. /inbox is a primary route, so the well's new contents WILL
+    move this baseline. That is expected; read the diffs, do not
+    regenerate.
+  · `npm run verify:dex` — the sheet's three states, driven with
+    Chromium's fake audio device.
+  · `npm run verify:nav` — the dock and the FAB, which Phase 4 changed.
+  · `npm run verify:brief` — the Desk.
+
+THEN LOOK. Screenshot /inbox and the Dex sheet in every outcome state at
+390x844 and 360x640, light and dark, and check by eye:
+
+  · NO horizontal scroll anywhere. The audit tracks this at warn level;
+    treat it as a failure on the surfaces this ticket touched.
+  · The composer row at 360: two 40px circles plus the field, nothing
+    overlapping, the field still usable, the mic never clipped.
+  · Nothing overlaps in the sheet: the waveform must not run under the
+    stop button; outcome text must not collide with the actions; the
+    summary counts must not collide at 360.
+  · Nothing is clipped. Long text wraps or scrolls in its own container.
+    A truncated failure reason is a bug — that message is the whole
+    point of Outcome C.
+  · Touch targets hold at 44px minimum (min-h-touch, MPWA-01 §5.1);
+    56px for anything that commits (Approve, Retry).
+  · Safe areas hold: the sheet clears the home indicator, scroll
+    containers keep the dock clearance index.css already defines (KM-32,
+    7.5rem). Use the numbers already there; do not invent new ones.
+  · The sheet never exceeds the viewport at 360x640 WITH THE KEYBOARD
+    OPEN in type mode. That is the tightest case and the most likely to
+    be broken.
+  · The FAB with no picker: it must not look like a dead button. Check
+    its pressed and recording states still read correctly.
+  · Dark mode, specifically on the outcome states — a failure message is
+    exactly the kind of thing that gets a light-mode-only colour.
+
+FIX WHAT YOU FIND by resizing, wrapping, stacking or scrolling within the
+existing design language — the radius scale, the touch tiers, the surface
+recipes. Do not introduce a new breakpoint; `sm:` and `md:` are banned
+inside .app-shell (tailwind.config.js lines 1-40), so use `xs:` (400) or
+restructure.
+
+REPORT what you found and what you changed, with before/after
+screenshots. If something needs a design decision rather than a repair,
+STOP and show me instead of guessing.
+
+============================================================== ALL FIVE PHASES
+
+DO NOT
+  · change anything in the backend
+  · change the Decisions column, its query, or approver routing
+  · change how the AI treats attachments
+  · remove the ask/decide CHANNELS — only the picker goes
+  · build plan item 5.3 ("My captures") — separate ticket
+  · redesign DexSheet, or port the desktop expansion to the phone
+  · build a second review UI when DecisionDialog already has one
+  · touch the mobile/ Flutter app
+  · delete lib/deskInsight.js
+  · remove an existing data-testid. New nodes get new ones:
+    desk-dex-composer, desk-dex-plus, desk-dex-mic, desk-dex-attach,
+    desk-dex-mode, desk-dex-summary, desk-dex-review,
+    dex-outcome-ready, dex-outcome-nothing, dex-outcome-failed,
+    dex-outcome-retry
+  · add a dependency
+
+DONE WHEN (per phase)
+  1. eslint clean on every file touched
+  2. npm run build succeeds
+  3. npm run audit:mobile — Phase 1 should NOT move either baseline
+     beyond the text inside the well, so investigate any larger diff.
+     Phases 2-5 move things ON PURPOSE: report the failures and do NOT
+     regenerate the baseline in the same run. I approve first.
+  4. Desktop, 1440, end to end: speak, stop, read the transcript back,
+     edit it, send, watch the expansion, get Outcome A, review, approve,
+     watch it collapse. Then by typing. Then with a file attached,
+     confirming the AI DID read the file.
+  5. Force Outcome B (say something with nothing to act on) and Outcome C
+     (turn AI consent off) on desktop and confirm both have a real screen
+     and a way out.
+  6. Press Later instead of approving, reload, reopen from the Decisions
+     column.
+  7. Phone, 390x844 and 360x640: the FAB opens Ask with no picker; the
+     well captures a decision; the sheet shows all three outcomes;
+     nothing overlaps or clips; keyboard-up tested.
+  8. npm run verify:dex and npm run verify:nav pass.
+```
+
+---
+
+## Appendix — what was read to write this
+
+Current tip `bb0a9e8` of `origin/karma-redesign`, verified 2026-09-15. Nothing pushed after it.
+
+- `docs/DECISION_DESK_PLAN.md` — the full plan, the live-company data table, the unbuilt Phase 5
+- ASK-32 (`9dcb046`) commit body, Phases 1–4
+- `bb0a9e8` commit body
+- `frontend/src/pages/Desk.js` — hero layout, well placement at both breakpoints
+- `frontend/src/components/karma/InsightWell.jsx`
+- `frontend/src/components/mobile/FloatingDock.jsx` — the composer
+- `frontend/src/components/mobile/DexSheet.jsx` — the three states, the contextual chips
+- `frontend/src/components/mobile/DexFab.jsx` — the KM-54 two-door picker
+- `frontend/src/components/Layout.js` — the FAB/picker/sheet wiring, `meterState:false`
+- `frontend/src/hooks/useDexCapture.js`, `useDexConversation.js`
+- `frontend/scripts/audit-mobile.mjs` — the in-scope route list and widths
+- `frontend/scripts/verify-dex.mjs` — the three-state gate
+
+---
+
+## Progress
+
+*Written 2026-09-16 before a context compaction, so the working state does not
+depend on a conversation summary. Branch `karma-redesign`, built on `bb0a9e8`.*
+
+### Committed (local only — NOT pushed; Railway deploys on push)
+
+| Phase | Commit | What |
+|---|---|---|
+| 1 | `e40aff4` | The Desk's Dex well becomes the Decide composer ([+] · composer · mic, chips, still-at-rest wave, [+] inline swap below lg) |
+| 2 | `db09b42` | On send, the desktop well grows to the KPI grid's top; real stages; reduced motion painted |
+| 3 | `e638b86` | The three endings on desktop (ready / nothing / failed), Review → existing DecisionDialog, Retry; carries two fixes below |
+
+Phase 4 is **not started**. After these three commits the branch is 3 ahead of
+`origin/karma-redesign` (plus the commit that adds this section).
+
+### The two fixes carried by `e638b86` (Phase 3)
+
+**[+] pointer-events fix — a Phase 1 defect.** The shut [+] reveal's two
+circles had `pointer-events-none`, but the absolutely positioned `<div>` that
+holds them did not, and it keeps their layout size. On desktop that box sits
+over the area above [+] — exactly where an outcome's actions (Got it, Review,
+Later, Retry) render — and on a phone (inline swap) it sits over the composer's
+left edge, so a tap there never reached the text field. Fix in
+`pages/desk/DeskDexWell.jsx`: the container is `pointer-events-none`, and
+`POP_OPEN` adds `pointer-events-auto` so the circles opt back in only while
+open. Found by a real Playwright pointer click; a scripted `element.click()`
+walks straight past overlays and had passed.
+
+**Chip-slot fix — a Phase 2 gap exposed by Phase 3.** Phase 2 set
+`prompt = growing ? null : …`, hiding the whole prompt slot (attachment chips
+included) while the well is expanded. That was harmless while the well always
+collapsed at an ending; Phase 3 keeps it open on an outcome, so a file attached
+for the next capture became invisible. Fix: chips render whenever
+`chat.pendingFiles` is non-empty; only the prompt line gives way while expanded.
+
+### Fixes inside `e40aff4` (Phase 1) that the diff does not explain
+
+- **[+] containment invariant** (founder, 2026-09-15): the reveal must stay
+  inside the well at every width. Phone well is 150px and [+] sits ~73px from
+  its top, so a vertical stack of two 44px circles escapes onto the KPI strip
+  → **below lg the circles swap inline into the composer's slot** (the pill
+  fades); **from lg they stack upward** (~147px of room above [+] for 96px).
+- **Still-at-rest wave.** At rest the composer draws DexWave's ink hairline
+  once; `<DexWave>` mounts only while listening or thinking. The animated idle
+  wave made the mobile audit hang forever (see "Harness facts") and ran a frame
+  loop all day on a Desk left open.
+- **No `before:` pseudo hit areas.** Below lg the app's own rule
+  (`index.css` `--control-h-sm`, on `button`, `a[data-testid]`, inputs) already
+  makes the circles 44px; the extra `before:-inset-0.5` stuck 2px out and the
+  audit counted horizontal overflow (3 new findings per /inbox route at 390,
+  3 more at 360). Removed.
+
+### Phase 5 list (accumulated — do not lose)
+
+1. **Composer field grows to at most TWO lines** so the founder can read back
+   the sentence before sending. It is a resize, so it belongs to Phase 5.
+   Keep [+] visible while typing (attach mid-compose is the read-the-file flow).
+   Today at 360px the field holds ~150px of text at the phone's forced 16px —
+   about half of "Tell Suresh to ship the indigo lot before Friday".
+2. **Dark mode on the well and on every outcome state** — not yet looked at.
+3. **Outcome C with a non-consent reason** prints the backend's raw
+   `str(exception)`; only the consent message has been checked for wrapping.
+   Check a long technical reason wraps/scrolls in its container, and whether it
+   needs friendlier copy (may be a copy decision — stop and ask if so).
+4. **Phone inline swap hides the typed draft** while [+] is open (the pill
+   fades under the two circles). Check it reads acceptably by eye.
+5. **Attachment chips on the phone**: the remove button becomes 44×44 via the
+   global rule, so a chip grows to its 176px max quickly — check spacing and the
+   horizontal scroll of several chips at 360.
+6. **Touch tiers when outcomes reach the phone** (Phase 4 sheet): 44px minimum,
+   56px for commit actions (Approve, Retry). Desktop outcome buttons are h-10.
+7. **Harness**: `npm run verify:dex` has no npm script (the file
+   `scripts/verify-dex.mjs` exists) — run it with `node`, or add the script
+   with approval.
+
+Resolved and therefore NOT on the list: the [+] overlapping the KPI strip on
+the phone (fixed in Phase 1 by the inline swap).
+
+### Phase 4 — the split about to be done
+
+- **Heads-up first:** `DexSheet` is **not mounted anywhere**. Layout mounts
+  `DexChat`; the `channel` prop the ticket cites at `Layout.js ~841` is
+  DexChat's. Phase 4 targets DexChat unless the founder says otherwise.
+- **4-B ADDITIVE first.** The well (below lg) opens the existing phone sheet
+  in the decide channel and the sheet's understanding state renders the SAME
+  three endings from `lib/dexOutcome.js` (shared adapter and copy — also switch
+  `useDexConversation.captureError`, whose consent sentence currently differs:
+  "AI is switched off for your company…"). The two-door picker is still there,
+  so nothing is taken away. Replaces the Phase 1 interim toast on phones.
+  Commit.
+- **4-A DESTRUCTIVE second.** Remove the KM-54 picker from DexFab and its
+  `dexPicker` + Escape handler from Layout; the FAB opens Dex in **ask**
+  directly. Channels stay. Rewrite (not delete) the KM-54 comment as the ASK-33
+  note (decide capture on the phone now requires /inbox — accepted knowingly).
+  Move decision-shaped DexChat/DexSheet chips out (questions only). Keep the
+  `voice_capture` permission check exactly as is. Commit.
+- **HARD STOP:** if at any point the phone loses Dex — the FAB no longer opens
+  Ask, or the well no longer reaches a sheet that shows Decide outcomes, on
+  390×844 or 360×640 — stop, do not commit, and report.
+
+### Standing constraints (every phase)
+
+- Audits scoped: `npm run audit:mobile -- --base-url http://localhost:3007 --only inbox`
+  (add `--skip-desktop` / `--skip-mobile` when one side is enough). The FULL
+  audit runs exactly once, at the end of Phase 4, together with the production
+  build and the route-by-route comparison against the inherited numbers.
+- **Never regenerate `.audit-desktop-baseline`** during Phases 2–4 without the
+  founder's go (it is gitignored, per working copy).
+- **Never touch `backend/.env` or a real database.** Verify against fixtures:
+  `?fixture=busy` in the app and `npm run fixture-api` (fixture server on
+  **:8000**; the dev server "frontend-alt" is on **:3007**; both are in the
+  untracked `.claude/launch.json`).
+- Per-phase gates: `git diff --name-only` scope check · eslint on touched
+  files · the scoped audit · look at /inbox at 1440, 390 and 360.
+- One commit per phase; no push. Never commit `.bridge-write-test`, `.claude/`,
+  `New decisionos logo.png`, `frontend/public/sky-v1/`.
+
+### Inherited audit numbers (record, do not fix)
+
+- Full mobile audit on unchanged code at `bb0a9e8`: **307 failing + 34
+  warnings across 24 routes** (88 touch-target-min-44, 124 text-below-13px,
+  23 horizontal-overflow, 38 non-indian-inr-grouping, 12 block-variety,
+  10 density-floor, 12 progress-element; warn 4 horizontal-scroll-strip,
+  30 uppercase-text). Two clean runs matched rule by rule.
+- Scoped `--only inbox` (covers /inbox, ?scope=morning, ?scope=week and
+  /finance?tab=inbox): **40 failing + 2 warnings** on clean code and unchanged
+  through Phases 1, 2 and 3.
+- Desktop, against the baseline regenerated on clean code: **6 diffs**, all
+  /inbox — lg-1024 14,924 px (1.475%), xl-1280 16,823 px (1.183%) — identical
+  in Phases 1–3 (the audit captures the resting state).
+
+### Things the diff will not tell you
+
+- **The local database is PRODUCTION.** `backend/.env` MONGO_URL is a Railway
+  TCP proxy with `DB_NAME=founder-os-58` (the live company). The plan's "local
+  database is dev data" line is false for this working copy. For a real
+  end-to-end run change `DB_NAME` ONLY to `dos_uicheck_ask33`, revert after,
+  never commit `.env`. Real-backend checks (done-when 4–6: real speech +
+  approve, Outcome C by turning consent off, Later → reload → reopen) have NOT
+  been run.
+- **Outcome field names are unconfirmed.** `lib/dexOutcome.js` reads them from
+  `backend/services/voice.py` at `bb0a9e8`: done + `outcome: "decision"` +
+  `decision_id` + `execution_summary`; done + `outcome: "nothing_to_decide"` +
+  `summary` (Dex's answer); `status: "failed"` + `error` (consent refusal
+  carries `ai_consent_required`). `readNote()` is the one place to change.
+  `useDexCapture.follow()` reports done-without-decision as status `"nothing"`,
+  and `useDexConversation` clears the understanding in the same render the
+  ending arrives, so the well reads the outcome in that render.
+- **AI consent has no UI.** Settings tabs are business / operations / money /
+  account; `/settings#ai-consent` (used by Outcome C and by `lib/api.js`'s own
+  consent toast) is a dead anchor. Backend endpoints exist:
+  `GET/POST /tenant/ai-consent` (`routers/tenant_settings.py` ~301/311).
+  `AI_CONSENT_HREF` is the constant to change. Needs a founder decision.
+- **The regenerated desktop baseline's /inbox is itself odd:** the clean
+  capture shows the Decisions column overflowing its card (six rows at lg, the
+  "N more waiting" floor and Review pill out of view, the right-hand stack
+  stretched and cut off); the Phase 1+ capture shows the board fitted. So the
+  6 desktop diffs include the board, not only the well. Both captures are
+  deterministic. Recommend regenerating after Phase 4, with approval.
+- **Harness facts that cost hours:**
+  - `audit-mobile.mjs` freezes the page clock (`ctx.clock.setFixedTime`) while
+    `settle()`'s `waitForVectorsStable` / `waitForTextStable` time out via
+    `Date.now()` — which never advances. Any perpetual animation on a route
+    hangs the mobile audit forever (CPU near idle). Wrap runs in a watchdog:
+    `perl -e 'alarm 360; exec @ARGV' node scripts/audit-mobile.mjs …`.
+  - Don't `pkill chromium_headless_shell` in one chain while another Playwright
+    job runs — it kills that job's browser too. Run browser jobs in series.
+  - A hidden Browser pane draws no frames: rAF and CSS transitions pause, so
+    the expansion looks stuck on its first frame. Trust headless Playwright.
+  - eslint: the repo's eslint 9 CLI crashes on the react-app config. Use the
+    build's own eslint 8 with a legacy config whose only content is
+    `{"root": true, "extends": ["<frontend>/node_modules/eslint-config-react-app/index.js"]}`:
+    `NODE_ENV=development BABEL_ENV=development node node_modules/react-scripts/node_modules/eslint/bin/eslint.js --no-eslintrc -c <that file> --resolve-plugins-relative-to node_modules/eslint-config-react-app <files>`.
+  - zsh: quote `--include='*.js'`; a `$VAR` holding several paths is not
+    word-split (list paths explicitly); `curl … | grep -q` under `pipefail`
+    reports a false negative (download to a file, then grep).
+- **Fixtures added for verification (dev-only):** POST `/files` and
+  `/voice-notes/{id}/submit` answer with ids; every new capture replays the
+  stage walk; sessionStorage `dos_fixture_capture` = `nothing` | `consent` |
+  `failed` forces the other endings (default is a ready decision for Sunita
+  Rao with a two-task, one-workflow proposal).
+- **Scratch verification scripts** (not committed; session scratchpad
+  `…/scratchpad/ask33/`): `verify-well.mjs` (Phase 1, fake mic, 1440/390/360),
+  `verify-p23.mjs 2|3` (expansion; endings, with real pointer clicks),
+  `diff-bbox.mjs` (desktop diff confinement), `hang-probe.mjs`. Rebuild from
+  this section if the scratchpad is gone.
+- **Layout facts:** `sm:`/`md:` are banned inside `.app-shell`; phones get 44px
+  controls and 16px inputs from `index.css` (`@media (max-width: 1023.98px)`,
+  `--control-h-sm`). The app has a desktop CSS zoom (UI-SCALE), so
+  `getBoundingClientRect` is in visual px while `offsetHeight` is local px —
+  the expansion's `measure()` converts with that ratio. The ticket's
+  `index.css:1972` reduced-motion pointer is stale (it is a CRM sky rule); the
+  file's convention is per-class `@media (prefers-reduced-motion: reduce)`
+  blocks.
+- **Counts:** DecisionDialog's "Approving creates …" wording moved verbatim to
+  `lib/decisionProposal.js` (checked against the original for 7 combinations);
+  the Desk card's "On approval: N tasks" string is built server-side in
+  `desk.py`, so there was no client counter to reuse there. People/approvals
+  follow `services/voice.summarize_proposal`.
+- **Retry** re-sends via `POST /voice-notes/text` with the last text and
+  file ids, even when the original was a held voice note.
+- The Phase 1 interim toast (Dex's reply text) is still how a phone sees an
+  ending until 4-B lands.

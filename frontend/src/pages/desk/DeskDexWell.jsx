@@ -31,7 +31,7 @@ import {
 } from "@phosphor-icons/react";
 import api from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
-import { captureOutcome, decisionCounts, failureReason, isReading, readyLine, OUTCOME_COPY } from "../../lib/dexOutcome";
+import { captureOutcome, decisionCounts, failureReason, isReading, readyLine, stageLabel, OUTCOME_COPY } from "../../lib/dexOutcome";
 import { toastDexOutcome } from "../../lib/dexOutcomeToast";
 import { hasPerm } from "../../lib/perms";
 import { cn } from "../../lib/utils";
@@ -40,22 +40,16 @@ import { useDexConversation } from "../../hooks/useDexConversation";
 import { InsightWell } from "../../components/karma";
 import { DexWave } from "../../components/mobile/DexWave";
 // ASK-34 item 5 — the same picture the founder met at signup (BuildReveal).
-import { DexForge } from "../onboarding/DexForge";
+import { DexForgeFit } from "../onboarding/DexForge";
 
 // A capture lands in several caches at once — the same set Layout refreshes
 // after the phone's Dex (refreshAfterCapture).
 const REFRESH_KEYS = ["captures-pending", "desk", "inbox", "tasks", "dex-inflight-count"];
 // The note walks queued -> transcribing -> structuring; these are its endings.
 const ENDINGS = ["done", "nothing", "failed", "slow"];
-/* ASK-33 Phase 2 — the stages the expanded well names, in the founder's words.
-   "sending" is the POST itself; the rest are the note's own statuses as
-   useDexCapture's poll reports them. */
-const STEP_LABEL = {
-  sending: "Sending it to Dex",
-  queued: "Queued",
-  transcribing: "Transcribing what you said",
-  structuring: "Working out who does what",
-};
+/* ASK-33 Phase 2 named the stages here; ASK-34 A3 moved the words to
+   lib/dexOutcome (STAGE_COPY) when the phone's DexChat started printing the
+   same four. */
 const isDesktop = () => typeof window !== "undefined" && !!window.matchMedia?.("(min-width: 1024px)").matches;
 const prefersReducedMotion = () =>
   typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -73,59 +67,9 @@ const CIRCLE =
    The expanded well showed the stages as text alone. DexForge is the picture
    the founder already met once, at signup, while Dex built their company out
    of what they had just said — the same moment, so the product reads as one
-   thing rather than two.
-   IT IS SCALED, NOT RESIZED. The forge was drawn as a full-page hero: a fixed
-   19rem bed with a 160px tile grid inside 12px of padding, so it cannot reflow
-   to a smaller box — and the box it gets here is whatever the expanded well has
-   left beside the stage list, which changes with the viewport and again with
-   the page's UI-SCALE zoom. So the space is MEASURED and the forge is scaled to
-   it. A transform costs no layout, which is the point: the forge can never
-   dictate the well's height or spill out of it. */
-const FORGE_W = 304;   // 19rem
-const FORGE_H = 184;   // h-40 grid + p-3 either side
-function ForgeStage({ label }) {
-  const boxRef = useRef(null);
-  const [scale, setScale] = useState(0);
-  useLayoutEffect(() => {
-    const el = boxRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return undefined;
-    // offsetWidth/Height, not a rect: under UI-SCALE a rect is reported in
-    // visual px while the forge's own box is in CSS px (see measure(), below).
-    const fit = () => {
-      const s = Math.min(el.offsetWidth / FORGE_W, el.offsetHeight / FORGE_H, 1);
-      setScale(s > 0 && Number.isFinite(s) ? s : 0);
-    };
-    const ro = new ResizeObserver(fit);
-    ro.observe(el);
-    fit();
-    return () => ro.disconnect();
-  }, []);
-  return (
-    /* aria-hidden: the stages beside it already say what is happening, in the
-       live region, and a second announcement of the same moment is noise. */
-    <div
-      ref={boxRef}
-      data-testid="desk-dex-forge"
-      aria-hidden="true"
-      className="relative min-h-0 min-w-0 flex-1 overflow-hidden"
-    >
-      {/* CENTRED BY POSITION, NOT BY ALIGNMENT. The forge's unscaled box is
-          WIDER than the space it is given — that is the whole reason it is
-          being scaled — and an over-wide grid item is clamped to the start of
-          its area rather than centred, so `place-items-center` hung it 44px
-          off to the right and the bed was clipped at the well's edge.
-          left/top 50% puts its corner on the centre, translate(-50%,-50%)
-          moves its own centre there, and the scale then runs about that same
-          point. */}
-      <div
-        className="absolute left-1/2 top-1/2 transition-opacity duration-300"
-        style={{ width: FORGE_W, transform: `translate(-50%, -50%) scale(${scale})`, opacity: scale ? 1 : 0 }}
-      >
-        <DexForge label={label} />
-      </div>
-    </div>
-  );
-}
+   thing rather than two. ASK-34 A3 puts the same picture in the phone's
+   DexChat, so the scale-to-fit wrapper it needs lives beside the forge itself
+   (DexForgeFit) rather than being written twice. */
 
 /** One attached file: a preview (the image itself, or a file glyph), its name,
  *  and a remove. Removing only drops it from the next note; the upload stays
@@ -654,13 +598,19 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
                   ) : (
                     <Check size={14} weight="bold" aria-hidden="true" className="shrink-0" />
                   )}
-                  {STEP_LABEL[s] || s}
+                  {stageLabel(s)}
                 </li>
               );
             })}
           </ol>
         </div>
-        {!prefersReducedMotion() && <ForgeStage label="Dex is building what you decided" />}
+        {!prefersReducedMotion() && (
+          <DexForgeFit
+            testid="desk-dex-forge"
+            label="Dex is building what you decided"
+            className="min-h-0 min-w-0 flex-1"
+          />
+        )}
       </div>
       )}
     </div>

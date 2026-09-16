@@ -34,6 +34,23 @@ export const AI_CONSENT_CODE = "ai_consent_required";
    where lib/api.js's own 451 toast now points. */
 export const AI_CONSENT_HREF = "/settings?tab=business#ai-consent";
 
+/* ASK-34 · THE STAGES, IN THE FOUNDER'S WORDS — one copy for both surfaces.
+   The note walks queued -> transcribing -> structuring (ASK-32's poll); these
+   are its real statuses named plainly, plus "sending", the POST itself, which
+   the client knows about and the server never reports. It lives here with the
+   rest of Dex's words because the Desk well and the phone's DexChat both print
+   it, and the whole point of this file is that a capture reads the same
+   sentence whichever surface it ends on. Never a prettier word than the truth:
+   if the pipeline gains a status, it gets a line here, and an unmapped one
+   prints its own raw name rather than being hidden. */
+export const STAGE_COPY = {
+  sending: "Sending it to Dex",
+  queued: "Queued",
+  transcribing: "Transcribing what you said",
+  structuring: "Working out who does what",
+};
+export const stageLabel = (s) => STAGE_COPY[s] || s;
+
 export const OUTCOME_COPY = {
   ready: (who, creates) => `Decision ready for ${who}${creates ? ` · ${creates}` : ""}`,
   nothing: "Nothing to decide in that",

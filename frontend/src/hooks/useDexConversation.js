@@ -183,7 +183,11 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
           : await api.post("/voice-notes/text", { text, file_ids });
         heldNoteRef.current = null;
         setPendingFiles([]);
-        push({ role: "dex", text: "Reading it now…" });
+        /* ASK-34 A3 — `reading: true` MARKS this turn as the one the phone
+           draws its thinking state in (DexChat). A flag, not a string match on
+           the copy: the surface should not have to recognise a sentence to know
+           what a message is. */
+        push({ role: "dex", text: "Reading it now…", reading: true });
         if (data?.id) sentRef.current.set(data.id, { text, file_ids });
         if (follow && data?.id && dex?.follow) {
           seenRef.current = null;
@@ -301,7 +305,7 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
     const fresh = [];
     if (said) fresh.push({ id: uid(), role: "user", text: said });
     if (noteId) {
-      fresh.push({ id: uid(), role: "dex", text: "Reading it now…" });
+      fresh.push({ id: uid(), role: "dex", text: "Reading it now…", reading: true });
     } else {
       const f = failureReason(error);
       fresh.push({ id: uid(), role: "dex", text: f.message, outcome: { kind: "failed", ...f, retry: payload } });

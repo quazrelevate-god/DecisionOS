@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Sparkle } from "@phosphor-icons/react";
 
@@ -99,6 +100,56 @@ export function DexForge({ label = "Assembling your workspace" }) {
           transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut", repeatDelay: 0.5 }}
           aria-hidden="true"
         />
+      </div>
+    </div>
+  );
+}
+
+/* ASK-34 · DexForgeFit — the forge in a box smaller than it was drawn for.
+   BuildReveal gives it a full-page hero and it fits; every other call site is a
+   fraction of one — the Desk well's workspace beside the stage list, and the
+   phone's reading bubble in DexChat — and the forge cannot reflow into them: the
+   bed is a fixed 19rem holding a fixed 160px tile grid. So the BOX is measured
+   and the forge is scaled to it, by transform, which costs no layout: it can
+   never push its container taller or spill out of one.
+   Shared rather than copied, because the two call sites are the same picture at
+   two sizes and a second copy would drift (and the ASK-34 phone work would have
+   been the drift).
+   CENTRED BY POSITION, NOT BY ALIGNMENT: the unscaled box is wider than the
+   space — that is the reason it is being scaled — and an over-wide grid or flex
+   item is clamped to the start of its area rather than centred, which hangs the
+   bed off to one side and clips it. left/top 50% puts its corner on the centre,
+   translate(-50%,-50%) moves its own centre there, and the scale runs about that
+   same point.
+   offsetWidth/Height, not a rect: under the app's UI-SCALE zoom a rect is
+   reported in visual px while the forge's own box is in CSS px. */
+const FORGE_W = 304;   // 19rem
+const FORGE_H = 184;   // the h-40 grid + p-3 either side
+
+export function DexForgeFit({ label, className, testid = "dex-forge-fit" }) {
+  const boxRef = useRef(null);
+  const [scale, setScale] = useState(0);
+  useLayoutEffect(() => {
+    const el = boxRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const fit = () => {
+      const s = Math.min(el.offsetWidth / FORGE_W, el.offsetHeight / FORGE_H, 1);
+      setScale(s > 0 && Number.isFinite(s) ? s : 0);
+    };
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    fit();
+    return () => ro.disconnect();
+  }, []);
+  return (
+    /* aria-hidden: the stages beside or under it already say what is happening,
+       in a live region, and announcing the same moment twice is noise. */
+    <div ref={boxRef} data-testid={testid} aria-hidden="true" className={`relative overflow-hidden ${className || ""}`}>
+      <div
+        className="absolute left-1/2 top-1/2 transition-opacity duration-300"
+        style={{ width: FORGE_W, transform: `translate(-50%, -50%) scale(${scale})`, opacity: scale ? 1 : 0 }}
+      >
+        <DexForge label={label} />
       </div>
     </div>
   );

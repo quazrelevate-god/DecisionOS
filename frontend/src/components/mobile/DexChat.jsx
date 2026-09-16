@@ -2,10 +2,14 @@ import * as React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, PresenceContext, motion } from "framer-motion";
 import {
-  Plus, X, Paperclip, Camera, Keyboard, Microphone, CircleNotch, Sparkle, WarningCircle,
+  Plus, X, Paperclip, Camera, Keyboard, Microphone, CircleNotch, Check, Sparkle, WarningCircle,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
-import { OUTCOME_COPY } from "@/lib/dexOutcome";
+import { ENDING_STATUSES, OUTCOME_COPY, isReading, stageLabel } from "@/lib/dexOutcome";
+// ASK-34 A3 — the same picture the founder met at signup, and the same one the
+// desktop well draws while it reads. DexForgeFit scales it to the box it is
+// given; see the note beside it.
+import { DexForgeFit } from "@/pages/onboarding/DexForge";
 import { DexFailureNotice } from "./DexFailureNotice";
 import { useBackDismiss } from "@/hooks/useBackDismiss";
 
@@ -147,6 +151,12 @@ function Bubble({ m, index }) {
       <div
         className={cn(
           "max-w-[85%] rounded-3xl px-4 py-3 text-sm leading-relaxed",
+          /* A bubble is normally as wide as its words. The reading turn holds a
+             picture that is sized as a FRACTION of the message area, so it needs
+             that area to be a real width rather than one derived from its own
+             content — without this the bubble shrank to the stage text and took
+             the forge down with it (measured: a 120px bed in a 152px bubble). */
+          m.reading && "w-[85%]",
           mine
             /* KM-51 — SOLID white, not the translucent frost. Founder: "the
                chat colour for the AI side is black and the human user side is
@@ -170,7 +180,60 @@ function Bubble({ m, index }) {
             <Sparkle size={10} weight="fill" className="text-[hsl(var(--kr-gold))]" /> Dex
           </span>
         )}
-        {m.pending ? (
+        {m.reading ? (
+          /* ASK-34 A3 — THE PHONE'S THINKING STATE.
+             The desktop's is the expanded well; ASK-33 Phase 4-B made this
+             sheet the phone's output surface instead, deliberately, and its
+             thinking state was one spinner and four words. It is the forge
+             now — the picture the founder met at signup while Dex built their
+             company out of what they had just said.
+             IN THE PENDING TURN ITSELF, not under the transcript: a panel
+             below the log would be a second thing saying what this bubble
+             already says, and it would sit on the newest line, the plus and
+             the dock — the exact reason ASK-33 Phase 4 put endings in bubbles
+             rather than pinning them. Inside the bubble it scrolls with the
+             conversation and cannot reach any of them.
+             INK IS THE RIGHT GROUND for it: the forge's own note says every
+             Dex surface in this app is ink and that is why the bed is, and the
+             Dex side of this transcript already is.
+             `aspect-[304/184]` is the forge's own ratio, so the box it is
+             scaled into is always exactly its shape and the fit is edge to
+             edge at any width — 0.89 at 390, 0.81 at 360. */
+          <div className="min-w-0">
+            <span className="flex items-center gap-2 text-white/70">
+              <CircleNotch size={14} className="animate-spin motion-reduce:animate-none" /> {m.text}
+            </span>
+            {!m.reduceMotion && (
+              <DexForgeFit
+                testid="dex-chat-forge"
+                label="Dex is building what you decided"
+                className="mt-3 aspect-[304/184] w-full"
+              />
+            )}
+            {/* THE REAL STAGES STAY, and stay the truth: these are the note's
+                own statuses as the poll reports them (ASK-32), in the words
+                lib/dexOutcome holds for both surfaces. The animation is the
+                picture beside them, never a replacement for them. */}
+            <ol className="mt-3 space-y-2" aria-label="What Dex is doing">
+              {m.stages.map((s, i) => {
+                const current = i === m.stages.length - 1;
+                return (
+                  <li key={s} className={cn("flex items-center gap-2.5 text-[13px]", current ? "font-medium text-white" : "text-white/55")}>
+                    {current ? (
+                      <span aria-hidden="true" className="relative grid h-3.5 w-3.5 shrink-0 place-items-center">
+                        <span className="absolute inset-0 animate-ping rounded-full bg-white/25 motion-reduce:animate-none" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                      </span>
+                    ) : (
+                      <Check size={13} weight="bold" aria-hidden="true" className="shrink-0" />
+                    )}
+                    {stageLabel(s)}
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        ) : m.pending ? (
           <span className="flex items-center gap-2 text-white/70">
             <CircleNotch size={14} className="animate-spin" /> {m.text}
           </span>
@@ -242,6 +305,25 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
   React.useEffect(() => {
     if (log.length) endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [log, busy]);
+
+  /* ASK-34 A3 — the stages the note has actually reached, accumulated as the
+     poll reports them rather than assumed from a known order: if the pipeline
+     ever skips one, printing it as done would be a lie. "sending" is seeded
+     because this bubble only exists once the POST has returned, so that step is
+     already behind us — the same first line the desktop well draws.
+     Cleared when the note ends, so the next capture starts from nothing. */
+  const reading = isReading(dex);
+  const stage = dex?.understanding?.status;
+  const [stages, setStages] = React.useState([]);
+  React.useEffect(() => {
+    if (!stage || ENDING_STATUSES.includes(stage)) return;
+    setStages((s) => (s.includes(stage) ? s : [...s, stage]));
+  }, [stage]);
+  React.useEffect(() => { if (!reading) setStages([]); }, [reading]);
+  // Read at render: the forge is not drawn at all under prefers-reduced-motion,
+  // and the stage text stands alone.
+  const reduceMotion = typeof window !== "undefined"
+    && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
   /* The three ways in that are not the microphone. "Type" flips the DOCK into
      a text field rather than opening a field here — same bar, different mode. */
@@ -348,6 +430,13 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                   key={m.id}
                   m={{
                     ...m,
+                    /* Only the LAST reading turn is live: an older one from a
+                       capture that has already ended is just the sentence it
+                       was. `m.reading` marks the turn (useDexConversation);
+                       `reading` is whether a note is being followed right now. */
+                    reading: m.reading && reading && i === log.length - 1,
+                    stages: ["sending", ...stages],
+                    reduceMotion,
                     onAsk: ask,
                     onReview,
                     onDismiss: onClose,

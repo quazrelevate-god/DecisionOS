@@ -25,10 +25,20 @@ async def seed_demo():
         return
     logger.info("Seeding Sharma demo workspace...")
     tid = new_id()
+    # 2026-09-16 — the demo workspace agrees to AI processing, the way a real
+    # signup does (the signup click IS the consent event, routers/auth.py).
+    # Without this the tenant had no ai_consent record at all, so every AI call
+    # in a freshly seeded workspace raised 451 and the Decision Desk answered
+    # every capture with "Nothing to decide in that" — the first thing anyone
+    # saw on a new install, a new dev machine, or a demo.
+    from services.ai_consent import build_grant_payload as _grant
+    demo_consent = _grant(actor_user_id="demo-seed", actor_email=DEMO_EMAIL,
+                          ip="127.0.0.1", ua="DecisionOS demo seed")
     await db.tenants.insert_one(
         {
             "id": tid,
             "name": "Sharma Textiles Pvt Ltd",
+            "ai_consent": demo_consent,
             "created_at": now_iso(),
             "industry": "Textile Manufacturing",
             "company_size": "11-50",

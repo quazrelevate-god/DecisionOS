@@ -93,6 +93,13 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
         return data, violations, ok
 
     data, violations, repaired = None, ["no response"], False
+    # 2026-09-16 — a caller has to be able to tell "the AI read this and found
+    # nothing" from "the AI never ran". The Decision Desk reported the second as
+    # the first: with AI consent off, every capture came back "Nothing to decide
+    # in that" while the log said ai_consent_required. Degrading to an empty
+    # extraction stays (an enrichment caller wants that), but the reason now
+    # rides back on the result as `ai_error`.
+    ai_error = None
     try:
         data, violations, ok = await _attempt(prompt)
         # Auto-repair: one bounded re-ask on parse-fail or missing/invalid fields,
@@ -103,8 +110,9 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
             data2, violations2, ok2 = await _attempt(repair_instruction(violations))
             if data2 is not None and (ok2 or len(violations2) < len(violations)):
                 data, violations = data2, violations2  # accept if fixed or strictly better
-    except Exception as e:  # total LLM failure self-records in the adapter; degrade safely
+    except Exception as e:  # the adapter self-records; degrade safely BUT say so
         logger.error(f"AI extract call failed: {e}")
+        ai_error = str(e)
 
     clean = coerce_extract(data, transcript)
     # E3-02.2: replace the model's raw self-reported confidence with a calibrated
@@ -116,6 +124,8 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
     clean["confidence"] = cal
     clean["review_reasons"] = reasons
     clean["needs_review"] = needs_review
+    # Empty because the model said so, or empty because it never answered?
+    clean["ai_error"] = ai_error
     return clean
 
 

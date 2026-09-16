@@ -46,12 +46,40 @@ ten captures, 10/10. A meeting, a vendor switch, a policy, a discount and a
 Tanglish directive raise decisions; two status remarks, a greeting, a question
 and a musing raise none.
 
-### Still open from the same run
+## A capture that could not be read says why (2026-09-16)
 
-- **A capture the AI could not read says "Nothing to decide in that."** With AI
-  processing off the server logs `ai_consent_required`, the capture is marked
-  done with no proposal, and the Desk reports it as a benign outcome. It is the
-  first thing a new workspace hits, because consent starts off. Next.
+The same browser run turned up the worse half of the same symptom: with AI
+processing off, every capture came back **"Nothing to decide in that"** while the
+server log said `AI extract call failed: 451 ai_consent_required`. Three faults
+stacked into one misleading sentence.
+
+1. **A freshly seeded workspace had no consent record at all.** A real signup
+   grants it — the signup click IS the consent event (`routers/auth.py`) — but
+   the demo workspace in `bootstrap/seed.py` was inserted without one. So every
+   new install, every dev machine and every demo had the AI switched off, and
+   the Decision Desk was the first thing anyone tried. (Checked: all 22 tenants
+   in the dev database do have consent, so a workspace in use was never
+   affected — only fresh ones.) The seeder now agrees to AI processing the way a
+   signup does, recorded through `build_grant_payload` with a real actor.
+2. **`ai_extract` swallowed the refusal.** It caught the 451, logged it, and
+   returned a clean, empty extraction — so no caller could tell "the AI read
+   this and found nothing" from "the AI never ran". It still degrades to an
+   empty result (an enrichment caller wants that), but the reason now rides back
+   on the result as `ai_error`.
+3. **So the capture was recorded as a success.** The only place a capture was
+   marked `failed` was the outer handler, never reached. The pipeline now checks
+   consent **before** speech-to-text and before the model — nothing is spent on
+   a call that cannot work — and marks the capture failed with the reason for any
+   AI failure: consent, a provider outage, a rate limit, a bad key, a timeout.
+   The meeting pipeline does the same, so a recording is not spent either.
+
+The screen needed no work: `dexOutcome.js` already mapped the code to *"AI is off
+for this company — an owner has to turn on AI consent before Dex can read
+anything"* with **Open Settings** and **Retry**. It was simply unreachable.
+Confirmed on screen, and in `backend/scripts/ux_capture_ai_off_0916.py` (10/10 on
+a freshly seeded throwaway workspace).
+
+### Still open from the same run
 - **An approved meeting is half a to-do.** Approving writes a real
   `calendar_events` row (it does show on /calendar) *and* a companion task
   titled "Meeting with X (Tomorrow at 4:00 PM)" on the capturer with no due

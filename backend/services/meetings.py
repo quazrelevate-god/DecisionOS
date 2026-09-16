@@ -18,6 +18,16 @@ async def process_meeting(meeting_id: str):
         return
     tid = m["tenant_id"]
     try:
+        # 2026-09-16 — the same check the capture pipeline makes: with AI
+        # processing off every call below raises 451, so say so instead of
+        # spending speech-to-text on a meeting that cannot be summarised.
+        from services.ai_consent import has_active_consent, consent_error_detail
+        _tenant = await db.tenants.find_one({"id": tid}, {"_id": 0, "ai_consent": 1})
+        if not has_active_consent(_tenant):
+            await db.meetings.update_one({"id": meeting_id}, {"$set": {
+                "status": "failed", "error": consent_error_detail(_tenant),
+                "title": "AI processing is off"}})
+            return
         await db.meetings.update_one({"id": meeting_id}, {"$set": {"status": "transcribing"}})
         transcript = m.get("transcript")
         if not transcript and m.get("audio_path"):

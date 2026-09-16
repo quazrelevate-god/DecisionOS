@@ -521,6 +521,22 @@ async def process_voice_note(note_id: str, hold: bool = False):
     from services.files import _read_reference_text
     from services.inbox import add_inbox_item
     try:
+        # 2026-09-16 — say it up front. Every AI call behind this point raises
+        # 451 ai_consent_required when the workspace has not agreed to AI
+        # processing, and the pipeline used to swallow that and record the
+        # capture as "nothing to decide" — so a workspace with AI switched off
+        # was told its decisions were empty. Checked here, before speech-to-text
+        # and before the model, so nothing is spent on a call that cannot work
+        # and the Desk can say what is actually wrong.
+        from services.ai_consent import has_active_consent, consent_error_detail
+        _tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "ai_consent": 1})
+        if not has_active_consent(_tenant):
+            await db.voice_notes.update_one({"id": note_id}, {"$set": {
+                "status": "failed", "error": consent_error_detail(_tenant), "processed_at": now_iso()}})
+            await log_activity(tenant_id, note["created_by"], "capture_ai_off",
+                               "A capture could not be read: AI processing is off for this workspace",
+                               "voice_note", note_id)
+            return
         await db.voice_notes.update_one({"id": note_id}, {"$set": {"status": "transcribing"}})
         transcript = note.get("transcript")
         detected_code = note.get("detected_language")
@@ -558,6 +574,16 @@ async def process_voice_note(note_id: str, hold: bool = False):
         extracted = await ai_extract(transcript or "", session_id=f"extract-{note_id}", allowed_roles=sorted(troles),
                                      members=members, pipelines=om["pipelines"], task_categories=om["task_categories"],
                                      extra_context=extra_context)
+        # The AI never answered (provider down, rate limit, bad key, consent
+        # revoked mid-flight): that is a failure with a reason, not a capture
+        # with nothing in it. The Desk shows the reason and offers Retry.
+        if extracted.get("ai_error"):
+            await db.voice_notes.update_one({"id": note_id}, {"$set": {
+                "status": "failed", "error": str(extracted["ai_error"])[:500], "processed_at": now_iso()}})
+            await log_activity(tenant_id, note["created_by"], "capture_ai_failed",
+                               f"A capture could not be read: {str(extracted['ai_error'])[:120]}",
+                               "voice_note", note_id)
+            return
         proposal = await build_proposal(tenant_id, extracted, troles, members, cat_keys, om["pipelines"])
 
         # ASK-32 1.4 — a question, a greeting or "no directive" is not a decision.

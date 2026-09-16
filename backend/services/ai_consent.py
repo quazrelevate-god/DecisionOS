@@ -114,6 +114,24 @@ def require_ai_consent(tenant: Optional[Dict[str, Any]]) -> None:
     )
 
 
+def consent_error_detail(tenant: Optional[Dict[str, Any]] = None) -> str:
+    """The reason string a BACKGROUND job records when it cannot run for want of
+    consent.
+
+    A request path raises the 451 and the app reads it off the response. A
+    capture is processed in the background, so there is no response to read: the
+    reason has to be written onto the job. Shaped like the 451 on purpose, so the
+    one place that turns a reason into words for the founder
+    (frontend/src/lib/dexOutcome.js, which looks for "ai_consent_required")
+    recognises both without a second code path.
+    """
+    try:
+        require_ai_consent(tenant)
+    except HTTPException as e:
+        return f"451: {e.detail}"
+    return ""
+
+
 def build_grant_payload(
     *,
     actor_user_id: str,

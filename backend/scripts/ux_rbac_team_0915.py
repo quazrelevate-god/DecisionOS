@@ -23,6 +23,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from ux_login import demo_login  # noqa: E402
+from ux_team_nav import open_member  # noqa: E402
 from playwright.sync_api import sync_playwright  # noqa: E402
 
 BASE = "http://localhost:3000"
@@ -90,10 +91,7 @@ def no_sideways_scroll(p):
 
 
 def open_profile(p, uid):
-    p.goto(f"{BASE}/team")
-    wait_id(p, f"team-member-{uid}", 20000)
-    p.locator(f'[data-testid="team-member-{uid}"]').first.click()
-    return wait_id(p, f"profile-dialog-{uid}")
+    return open_member(p, BASE, uid, wait_id)
 
 
 with sync_playwright() as pw:
@@ -132,8 +130,15 @@ with sync_playwright() as pw:
     p.screenshot(path=str(OUT / "owner_desktop_remove_panel.png"))
     p.locator(f'[data-testid="remove-member-confirm-{MEERA}"]').first.click()
     rec("toast-removed", wait_text(p, "Meera Iyer removed"), "toast")
-    p.wait_for_timeout(1500)
-    rec("gone-from-tree", p.locator(f'[data-testid="team-member-{MEERA}"]').count() == 0, "no card")
+    # The list refetches after the removal and this backend is slow, so wait for
+    # the card to go rather than guessing how long that takes.
+    gone = False
+    for _ in range(30):
+        if p.locator(f'[data-testid="team-member-{MEERA}"]').count() == 0:
+            gone = True
+            break
+        p.wait_for_timeout(500)
+    rec("gone-from-tree", gone, "no card, without reloading the page")
     users = api(p, "/users")["body"] or []
     by_id = {u["id"]: u for u in users}
     rec("gone-from-list", MEERA not in by_id, f"{len(users)} members")

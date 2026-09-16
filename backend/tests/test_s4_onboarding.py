@@ -261,7 +261,10 @@ def test_website_intel_ssrf_block_and_fallback(with_test_db):
 
     blocked, fb = with_test_db(scenario)
     assert all(code == 400 for code, _ in blocked), f"every internal URL must be refused 400: {blocked}"
-    assert fb == {"fetched": False}, "an unreachable URL degrades gracefully so onboarding continues"
+    # KM-63 (acb1dba) added the reason the scan gave up; the shape grew, the
+    # contract didn't: onboarding carries on without the site.
+    assert fb.get("fetched") is False, "an unreachable URL degrades gracefully so onboarding continues"
+    assert fb.get("reason") == "unreachable", f"and says why it gave up: {fb}"
 
 
 # ---------------------------------------------------------------------------

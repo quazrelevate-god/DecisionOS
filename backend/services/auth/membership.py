@@ -164,6 +164,46 @@ async def legacy_access_allowed(db, user: dict, tenant_id: str) -> bool:
     return not await db[COLLECTION].find_one({"user_id": user.get("id"), "tenant_id": tenant_id}, {"_id": 0, "status": 1})
 
 
+async def accept_pending_membership(db, user_id: str, tenant_id: Optional[str] = None):
+    """Signing in IS accepting the invite: flip a pending membership to active.
+
+    2026-09-16 — nothing else moved a row off "pending". Since 59e9684 a pending
+    row also blocks the legacy fallback in get_current_user, so an invited member
+    came through the OTP flow with a token and was refused on their very next
+    request ("You no longer have access to this workspace"). The accept has to
+    happen at the moment they prove the phone, which is here.
+
+    Suspended and removed rows are left alone — those are decisions someone made
+    about the member, not a state they can log their way out of.
+
+    ``tenant_id`` names the workspace being entered; without it, a member holding
+    exactly one pending invite is accepted into that one and anything more
+    ambiguous is left for the invite link to resolve.
+
+    The seat is recounted, not reserved: an invite is handed out before the seat
+    is held, so a workspace that filled up in the meantime must not lock out
+    someone who was already invited. recount keeps tenant.seats_used truthful,
+    which over-blocks the NEXT add — the safe direction.
+    """
+    if not tenant_id:
+        pending = await list_memberships_for_user(db, user_id, statuses={STATUS_PENDING})
+        if len(pending) != 1:
+            return None
+        tenant_id = pending[0]["tenant_id"]
+    res = await db[COLLECTION].update_one(
+        {"user_id": user_id, "tenant_id": tenant_id, "status": STATUS_PENDING},
+        {"$set": {"status": STATUS_ACTIVE, "accepted_at": now_iso(), "updated_at": now_iso()}},
+    )
+    if not getattr(res, "modified_count", 0):
+        return None
+    try:
+        from services.plans import recount_seats
+        await recount_seats(db, tenant_id)
+    except Exception:
+        pass   # billing bookkeeping must never stand between a member and login
+    return await find_membership(db, user_id, tenant_id)
+
+
 async def list_memberships_for_user(db, user_id: str,
                                       statuses: Optional[set] = None) -> List[Dict[str, Any]]:
     """Every tenant this user belongs to (filtered by status). Used by

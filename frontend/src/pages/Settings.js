@@ -719,9 +719,12 @@ export default function Settings() {
         </div>
         </header>
         <div className="max-w-2xl">
-          {/* RBAC P2 (2026-09-16): Language and Theme for everyone, and the hand-over. */}
+          {/* RBAC P2 (2026-09-16): Language for everyone, and the hand-over.
+              The Appearance card went with the theme switch (ASK-33 Phase 5,
+              2eed722: the app is light-only) — it was dropped from the owner's
+              Account tab but left standing here, which threw "ThemeCard is not
+              defined" and broke the whole page for everyone but an owner. */}
           <LanguageCard />
-          <div className="mt-6"><ThemeCard /></div>
           <div className="mt-6"><ProfileCard /></div>
           <div className="mt-6"><AiConsentCard /></div>
           <div className="mt-6"><SecurityCard /></div>

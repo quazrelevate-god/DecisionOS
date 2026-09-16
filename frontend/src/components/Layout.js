@@ -278,13 +278,19 @@ export default function Layout({ children }) {
   // event rather than threading a callback through every page: the alternative is
   // a prop on Layout -> page -> list -> EmptyState, four levels deep, for one
   // button. 12i uses the same event across the rest of the empty states.
-  /* ASK-33 Phase 4 — the Desk's Dex well sends the same event WITH a detail, to
-     hand a sent decision to the sheet. See handoffRef, below the Dex hooks. */
-  const handoffRef = useRef(null);
+  /* ASK-35 2.7 — ASK-33 Phase 4-B's HAND-OFF IS GONE. The Desk's Dex well had
+     no workspace below lg, so it sent the capture and passed it here with
+     { channel: "decide", … }; it expands in place now, so nothing dispatches
+     that channel and `handoffRef`, the decide branch of this listener and the
+     setDexChannel("decide") call have all gone with it. What is left is the
+     plain open — MPWA-12f's empty states, which want the ASK sheet.
+     DexChat's `channel` prop and its Decide copy are deliberately LEFT: they
+     cost nothing while unused and they are the cheapest way back if the sheet
+     ever takes a decision again. */
   /* ASK-33.1 — the Desk well asks, before it sends, whether the Dex behind the
      sheet is still reading a note; a second capture would retire that poll and
-     leave a failure with nowhere to land. Answered on the event, like the
-     hand-off itself. */
+     leave a failure with nowhere to land. It STAYS: the Ask sheet can still be
+     busy, and the well must still be able to refuse a send. */
   const dexReadingRef = useRef(null);
   useEffect(() => {
     const onState = (e) => { if (e.detail) e.detail.reading = !!dexReadingRef.current?.(); };
@@ -292,10 +298,7 @@ export default function Layout({ children }) {
     return () => window.removeEventListener("dos:dex-state", onState);
   }, []);
   useEffect(() => {
-    const open = (e) => {
-      if (e.detail?.channel === "decide") { handoffRef.current?.(e); return; }
-      setDexOpen(true);
-    };
+    const open = () => setDexOpen(true);
     window.addEventListener("dos:open-dex", open);
     return () => window.removeEventListener("dos:open-dex", open);
   }, []);
@@ -389,22 +392,6 @@ export default function Layout({ children }) {
   draftSinkRef.current = chat.setDraftFromVoice;
   dexChatRef.current = chat;
   dexReadingRef.current = () => isReading(dex) || chat.busy;
-  /* ASK-33 Phase 4 — THE WELL SENDS, THE SHEET SHOWS.
-     Below lg the Desk's Dex well sends a decision itself, then hands it here on
-     dos:open-dex with { channel: "decide", noteId, text, files, error }. The
-     hand-off is acknowledged — preventDefault — only once the capture is in
-     this transcript, this Dex is following its note, and the sheet has been
-     told to open. Anything short of that stays unacknowledged, and the well
-     keeps the capture: it polls the note itself and reports the ending. A
-     capture that is sent, unpolled and unreported is worse than a duplicate
-     toast. */
-  handoffRef.current = (e) => {
-    if (!isMobileShell) return;          // the sheet is lg:hidden; nothing would show it
-    if (!chat.adopt(e.detail)) return;   // nothing to take, or still reading another note
-    setDexChannel("decide");
-    setDexOpen(true);
-    e.preventDefault();
-  };
   const [langOpen, setLangOpen] = useState(false);
   // KR-5: the global search moved into a ⌘K dialog; same /brain?q= handoff.
   const [globalQuery, setGlobalQuery] = useState("");

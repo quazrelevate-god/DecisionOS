@@ -877,9 +877,23 @@ export default function Desk() {
               ASK-33 — the same box, classes and testid; what it holds is
               Dex's Decide composer instead of today's read. */}
           <DeskDexWell
-            className="order-4 min-h-[150px] lg:order-none lg:min-h-0 lg:flex-1"
+            /* ASK-35 2.2 — `max-lg:flex max-lg:flex-col` is what stops the
+               composer row moving when the workspace opens. The pane is
+               `h-full`, and a percentage height against a parent that has only
+               a MIN-height computes to auto — so on a phone the pane was
+               content-sized (133px) inside a 150px well, sitting 17px clear of
+               its own floor, and the moment it went position:absolute it
+               anchored to the well's real bottom and took the composer 17px
+               down with it. As a column flex parent the well stretches the pane
+               to its full box at rest, so the two agree before and after. On
+               desktop `lg:flex-1` already gives the well a definite height and
+               nothing changes. */
+            className="order-4 min-h-[150px] max-lg:flex max-lg:flex-col lg:order-none lg:min-h-0 lg:flex-1"
             testid="desk-insight"
             growToRef={kpiGridRef}
+            /* ASK-35 2.2 — below lg the well grows to the top of the HERO,
+               covering the greeting, the score cluster and the KPI strip. */
+            growToPhoneRef={heroRef}
             onExpandedChange={setDexExpanded}
             onReview={(id) => setOpenDecisionId(id)}
           />
@@ -889,7 +903,14 @@ export default function Desk() {
             2×2 grid. Each card: label on the LEFT, icon + numeral aligned
             to the RIGHT. Score-mix and Spend are dropped per the founder;
             the four kept are Delayed, Complaints, Overdue, Net profit. */}
-        <div className="order-3 grid grid-cols-2 gap-2 lg:hidden" data-testid="desk-kpi-strip">
+        {/* ASK-35 2.3 — the pane grows over this now, so it fades with the
+            greeting above it. Anything it covers fades; anything it does not,
+            does not. */}
+        <div
+          className="kr-dex-fade order-3 grid grid-cols-2 gap-2 lg:hidden"
+          data-dex-faded={dexExpanded ? "true" : "false"}
+          data-testid="desk-kpi-strip"
+        >
           {[
             { icon: Timer, label: "Delayed",
               value: String(m.counters ? m.counters.delayed : m.work?.overdue ?? "…"),

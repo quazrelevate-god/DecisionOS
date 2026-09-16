@@ -109,6 +109,8 @@ function AttachmentChip({ file, onRemove, disabled }) {
 }
 
 /**
+ * @param {React.RefObject} [growToPhoneRef]   ASK-35 2.2 — the same, below lg:
+ *                                             the Desk's hero
  * @param {React.RefObject} [growToRef]        ASK-33 Phase 2 — the element whose
  *                                             top the expanded well grows to
  *                                             (the Desk's KPI grid)
@@ -119,7 +121,7 @@ function AttachmentChip({ file, onRemove, disabled }) {
  *                                             decision in the Desk's existing
  *                                             DecisionDialog
  */
-export function DeskDexWell({ className, testid, growToRef, onExpandedChange, onReview }) {
+export function DeskDexWell({ className, testid, growToRef, growToPhoneRef, onExpandedChange, onReview }) {
   const { user } = useAuth();
   // The gate every Dex capture surface uses (DexFab, DexCaptureBar). This used to
   // list DexSheet too; DexSheet was removed from Layout in 97c2bfc (KM-23) and is
@@ -197,17 +199,31 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
     refresh();
   }, [stage, refresh]);
 
-  /* ASK-33 Phase 2 — THE EXPANSION, desktop only.
+  /* ASK-33 Phase 2 — THE EXPANSION. ASK-35 G2: ON BOTH SURFACES NOW.
      On SEND, and only on send, the well becomes the workspace: its pane lifts
-     out of the flow, anchored to the well's floor, and grows until its top
-     meets the top of the KPI grid beside it (growToRef — that grid is the
-     constraint), while the Desk fades the greeting and the score row it passes
+     out of the flow, anchored to the well's floor, and grows upward until its
+     top meets a target beside or above it, while the Desk fades what it passes
      over. The well's own box never changes size, so nothing else on the page
      moves. One long ease-out drives the growth and the fade (index.css
      .kr-dex-grow / .kr-dex-fade), so it settles rather than stops, and
      collapsing is the same move run backwards. Under prefers-reduced-motion the
-     transitions are off and the expanded state is simply painted. Below lg none
-     of this happens — the phone's expanded surface is the sheet (Phase 4). */
+     transitions are off and the expanded state is simply painted.
+
+     ON SEND, AND ON NOTHING ELSE. This is the whole reason KM-23 exists and it
+     is the one rule that must not bend: the workspace opens from send() and
+     from no other path. Never from `dex.understanding` becoming truthy, never
+     from a poll result, never from any capture state — the poll re-populates
+     that state after an ending, so a workspace keyed off it re-opens itself
+     once the founder has dismissed it, which IS the ghost card KM-23 deleted.
+     onRetry goes through the same setOutcome/expand pair while the pane is
+     already open; it never opens one.
+
+     WHAT IT GROWS TO, PER SURFACE. Desktop takes the top of the KPI grid beside
+     it (growToRef), which on that layout is the top of the hero. The phone has
+     no grid beside it — the strip is above the well — so its honest equivalent
+     is the top of the HERO itself (growToPhoneRef): the workspace covers the
+     greeting, the score cluster and the 2x2 KPI strip, exactly as the desktop
+     one covers the greeting, the slider, the numeral and the gauge. */
   const wellRef = useRef(null);
   // { from, to, phase }: "start" paints the resting height, "open" is grown,
   // "closing" runs back down and then returns the pane to the flow.
@@ -220,7 +236,9 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
 
   const measure = useCallback(() => {
     const well = wellRef.current;
-    const grid = growToRef?.current;
+    // ASK-35 2.2 — the target is the surface's own: the KPI grid on desktop,
+    // the hero on a phone.
+    const grid = (isDesktop() ? growToRef : growToPhoneRef)?.current;
     if (!well || !grid) return null;
     const rest = well.offsetHeight;
     const wb = well.getBoundingClientRect();
@@ -228,10 +246,9 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
     // UI-SCALE: rects are in visual px, offsetHeight in the element's own px.
     const k = wb.height ? rest / wb.height : 1;
     return { from: rest, to: Math.round(rest + Math.max(0, (wb.top - gb.top) * k)) };
-  }, [growToRef]);
+  }, [growToRef, growToPhoneRef]);
 
   const expand = () => {
-    if (!isDesktop()) return;
     setSteps([]);
     // Already the workspace (a second capture sent from it): stay open.
     if (grow && grow.phase !== "closing") return;
@@ -244,6 +261,26 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
     if (prefersReducedMotion()) { setGrow(null); return; }
     setGrow((g) => (g ? { ...g, phase: "closing" } : g));
   }, []);
+
+  /* ASK-35 2.2 — RE-MEASURE ONCE THE PANE IS OUT OF THE FLOW. expand() measures
+     inside the send handler, when the composer may still be two lines tall with
+     the words about to be sent: the well is 157 there and 150 a frame later,
+     once ask() has cleared the draft — so the pane was built 7px too tall and
+     its top overshot the target by exactly that. Measured again after the lift,
+     the well is its resting self (the pane is absolute, so nothing of the
+     conversation is in its box) and the number is right whatever the field was
+     doing. Two frames, because that is when the flow has settled. */
+  useEffect(() => {
+    if (!growing) return undefined;
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => {
+        const m = measure();
+        if (m) setGrow((g) => (g && g.to !== m.to ? { ...g, to: m.to } : g));
+      });
+    });
+    return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
+  }, [growing, measure]);
 
   // Two frames at the resting height give the transition a value to leave.
   useEffect(() => {
@@ -266,12 +303,13 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
     if (e.target === e.currentTarget && e.propertyName === "height" && growPhase === "closing") setGrow(null);
   };
 
-  // The grid stays the constraint at any size: re-measure on resize, and let go
-  // entirely if the window drops below lg.
+  /* The target stays the constraint at any size: re-measure on resize. ASK-35
+     G2 removed the "let go entirely below lg" branch — crossing the breakpoint
+     now just swaps which element measure() reads, and dropping the workspace on
+     a resize would throw away a capture the founder is still watching. */
   useEffect(() => {
     if (!growing) return undefined;
     const onResize = () => {
-      if (!isDesktop()) { setGrow(null); return; }
       const m = measure();
       if (m) setGrow((g) => (g ? { ...g, ...m } : g));
     };
@@ -318,12 +356,12 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
   }, [readyId, readyDecision, collapse]);
 
   /* ASK-33 Phase 1 — Dex's reply to a send, as a toast, where the well has no
-     screen for it. Phase 3 gave the desktop that screen (the workspace) and
-     Phase 4 gives the phone the sheet, so below lg this now runs only for a
-     capture the well KEPT because nothing took the hand-off (see send). The
-     words and actions are the sheet's own late toasts' (lib/dexOutcomeToast).
-     The "reading it now" acknowledgement is skipped because it lands while the
-     note is still being followed. */
+     screen for it. ASK-35 G2: both surfaces have that screen now, so this is
+     the LATE ENDING path and only that — the founder collapsed the workspace
+     before the note finished, and the answer still has to reach them rather
+     than being dropped on the floor. The words and actions are the sheet's own
+     late toasts' (lib/dexOutcomeToast). The "reading it now" acknowledgement is
+     skipped because it lands while the note is still being followed. */
   const awaitingReplyRef = useRef(false);
   const seenLogRef = useRef(0);
   const understandingRef = useRef(null);
@@ -358,31 +396,20 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
       if (!endingRef.current) setOutcome({ kind: "failed", ...failureReason(reply.text) });
       return;
     }
-    // Below lg: a capture the well kept (see send).
+    // The workspace was dismissed before the ending arrived: say it in a toast.
     toastEndingRef.current(reply);
   }, [chat.log]);
 
-  /* ASK-33 Phase 4 — THE WELL SENDS, THE SHEET SHOWS. Below lg the well has no
-     workspace: an ending is read in the phone's Dex sheet (DexChat, in Layout).
-     So the well sends the capture itself — the held recording, the words, the
-     files, exactly as on desktop — without following it, and hands what it sent
-     to the sheet on dos:open-dex. Layout cancels the event to say it has it, and
-     only once the capture is in the sheet's transcript and its note is being
-     followed there. */
-  const handToSheet = (sent) => !window.dispatchEvent(new CustomEvent("dos:open-dex", {
-    cancelable: true,
-    detail: {
-      channel: "decide",
-      noteId: sent.ok ? sent.noteId : null,
-      text: sent.text,
-      files: sent.files,
-      error: sent.ok ? null : sent.message,
-    },
-  }));
+  /* ASK-35 G2 — THE HAND-OFF IS GONE. ASK-33 Phase 4-B had the well send the
+     capture and pass it to DexChat, because below lg the well had no workspace
+     to show an ending in. It has one now (see THE EXPANSION), so the phone
+     reads its own answer where it asked the question — and `handToSheet`, the
+     `dos:open-dex` decide dispatch and THE GUARD that existed for the case
+     nothing took the hand-off all go with it. The Ask sheet is untouched.
 
-  /* ASK-33.1 — below lg the capture being read may be the SHEET's (a hand-off),
-     and this well cannot see that hook. Layout answers on an event, the same way
-     it takes the hand-off. */
+     ASK-33.1 — the capture being read may still be the ASK SHEET's, and this
+     well cannot see that hook. Layout answers on an event. It stays: the sheet
+     can still be busy on /ask and must still be able to refuse a send. */
   const sheetReading = () => {
     const ev = new CustomEvent("dos:dex-state", { detail: { reading: false } });
     window.dispatchEvent(ev);
@@ -397,35 +424,22 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
        founder's words, and released the moment the first note ends. */
     if (isReading(dex) || sheetReading()) { toast(OUTCOME_COPY.stillReading); return; }
     endingRef.current = null;
-    if (isDesktop()) {
-      awaitingReplyRef.current = true;
-      setSentText(chat.draft.trim() || chat.pendingFiles.map((f) => f.name).join(", "));
-      setOutcome(null);
-      expand();
-      chat.ask(chat.draft);
-      return;
+    /* ASK-35 2.1 — ONE PATH, BOTH SURFACES. This is the only place the
+       workspace opens. */
+    awaitingReplyRef.current = true;
+    setSentText(chat.draft.trim() || chat.pendingFiles.map((f) => f.name).join(", "));
+    setOutcome(null);
+    expand();
+    /* ASK-35 2.4 — below lg the page scrolls, so the well may be half off the
+       screen when the founder sends from it. Bring the whole workspace into
+       view; on desktop the Desk is one screen and there is nothing to scroll. */
+    if (!isDesktop()) {
+      requestAnimationFrame(() => wellRef.current?.scrollIntoView({
+        behavior: prefersReducedMotion() ? "auto" : "smooth",
+        block: "end",
+      }));
     }
-    awaitingReplyRef.current = false;
-    const sent = await chat.ask(chat.draft, { follow: false });
-    if (!sent) return;
-    if (handToSheet(sent)) {
-      // A send that failed goes to the sheet with its files, for its Retry; left
-      // here too, they would also ride along with the next capture.
-      if (!sent.ok) sent.files.forEach((f) => chatRef.current.removeFile(f.id));
-      return;
-    }
-    /* THE GUARD — nothing took it: no sheet to show it, or the sheet is still
-       reading another note. The well keeps the capture, as Phase 1 did: it
-       follows the note itself, and the ending comes back as a toast. */
-    if (sent.ok && sent.noteId) {
-      awaitingReplyRef.current = true;
-      dex.follow(sent.noteId, { transcript: sent.text });
-    } else if (!sent.ok) {
-      toastEndingRef.current({
-        text: sent.message,
-        outcome: { kind: "failed", ...failureReason(sent.message), retry: { text: sent.text, file_ids: sent.file_ids } },
-      });
-    }
+    chat.ask(chat.draft);
   };
 
   // Outcome C — Retry re-sends the same capture; the workspace thinks again.
@@ -509,7 +523,10 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
       {readyDecision?.title && (
         <p className="mt-1 line-clamp-2 text-sm leading-snug text-foreground/70">{readyDecision.title}</p>
       )}
-      <dl className="mt-4 grid grid-cols-4 gap-2">
+      {/* ASK-35 2.6 — TWO ACROSS ON A PHONE. Four tiles in a 296px row gave
+          each label a 44px box, and "Approvals" and "Meetings" were both cut
+          at 360. The tile is the same tile; there are two of them per line. */}
+      <dl className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
         {[["Tasks", outcomeCounts.tasks], ["People", outcomeCounts.people], ["Approvals", outcomeCounts.approvals], ["Meetings", outcomeCounts.meetings]].map(([label, n]) => (
           <div key={label} className="kr-pop min-w-0 rounded-2xl px-3 py-2.5">
             <dt className="truncate text-[11px] font-medium text-foreground/60">{label}</dt>
@@ -545,8 +562,16 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
         {/* The reason is the whole point of this ending: it wraps, never truncates. */}
         <span className="min-w-0 break-words">{outcome.message}</span>
       </p>
+      {/* ASK-35 2.6 — it is the one way out of the one failure that matters,
+          and it was a 20px line of text. It keeps the underline that says it is
+          a link and takes the 44px floor below lg (MPWA-01 §5.1); on desktop it
+          stays exactly the inline link it was. */}
       {outcome.href && (
-        <Link to={outcome.href} className="mt-2 w-fit shrink-0 text-sm font-medium text-foreground underline underline-offset-4">
+        <Link
+          to={outcome.href}
+          data-testid="dex-outcome-settings"
+          className="mt-2 inline-flex w-fit shrink-0 items-center text-sm font-medium text-foreground underline underline-offset-4 max-lg:min-h-touch"
+        >
           {outcome.linkLabel}
         </Link>
       )}
@@ -577,15 +602,27 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
          branch it sits in is the one an outcome replaces, so it leaves the
          instant a result arrives. Under prefers-reduced-motion it is not drawn
          at all and the stage text stands alone. */
-      <div className="flex min-h-0 flex-1 gap-6">
-        {/* Half each. The forge is WIDTH-bound at this size — measured, the
-            box it gets is wider than 304 only past 2xl — so every pixel the
-            stages do not need is a pixel it draws with. */}
-        <div className="flex min-w-0 flex-1 flex-col">
+      /* ASK-35 2.5 — SIDE BY SIDE ON DESKTOP, STACKED ON A PHONE. At 390 the
+         two-column split gave the forge about 150px and the stages about 150px,
+         which is not a layout, it is two cramped columns. Below lg the quote and
+         the stages take the top, full width, and the forge sits under them in
+         whatever height is left — with a floor, so a long stage list cannot
+         crush it to nothing. */
+      <div className="flex min-h-0 flex-1 gap-6 max-lg:flex-col max-lg:gap-3">
+        {/* Half each on desktop. The forge is WIDTH-bound at that size —
+            measured, the box it gets is wider than 304 only past 2xl — so every
+            pixel the stages do not need is a pixel it draws with. */}
+        <div className="flex min-w-0 flex-col lg:flex-1">
+          {/* Two lines on a phone, three on desktop: the pane is the same 354px
+              tall either way, and every line the quote takes is a line the forge
+              loses. What was said is still one tap from being read in full. */}
           {sentText && (
-            <p className="line-clamp-3 text-[15px] leading-snug text-foreground">&ldquo;{sentText}&rdquo;</p>
+            <p className="line-clamp-2 text-[15px] leading-snug text-foreground lg:line-clamp-3">&ldquo;{sentText}&rdquo;</p>
           )}
-          <ol className="mt-4 space-y-2.5" aria-label="What Dex is doing">
+          {/* Tighter on a phone: four stages at 10px apart cost 110px of a
+              234px body, and every pixel they do not need is a pixel the forge
+              under them draws with. */}
+          <ol className="mt-3 space-y-1.5 lg:mt-4 lg:space-y-2.5" aria-label="What Dex is doing">
             {shownSteps.map((s, i) => {
               const current = i === shownSteps.length - 1;
               return (
@@ -608,7 +645,13 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
           <DexForgeFit
             testid="desk-dex-forge"
             label="Dex is building what you decided"
-            className="min-h-0 min-w-0 flex-1"
+            /* A floor, so a four-stage list cannot crush it to nothing — but a
+               LOW one. At 7.5rem the quote, the four stages and the forge came
+               to more than the pane holds and the body started scrolling, which
+               is the nested-scroller trap Group 1 spent its height rules
+               avoiding; the forge was cut off at the composer. 5rem fits the
+               worst case (four stages, a two-line quote) with room over. */
+            className="min-h-0 min-w-0 flex-1 max-lg:min-h-[4.5rem]"
           />
         )}
       </div>
@@ -733,7 +776,7 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
       testid={testid}
       expanded={expanded}
       wellRef={wellRef}
-      paneClassName={grow && growPhase !== "start" ? "kr-dex-grow" : undefined}
+      paneClassName={cn("max-lg:flex-1", grow && growPhase !== "start" && "kr-dex-grow")}
       paneStyle={grow
         ? { position: "absolute", left: 0, right: 0, bottom: 0, zIndex: 10, height: growPhase === "open" ? grow.to : grow.from }
         : undefined}

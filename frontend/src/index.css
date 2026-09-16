@@ -438,10 +438,17 @@
        Qualified with the element name so it matches `a[data-testid]`'s
        specificity (0,1,1) and wins on source order — a bare `.dock-item`
        (0,1,0) lost to it and the slots measured 44x44. */
+    /* ASK-37 — the WIDTH is a variable, the HEIGHT is not. The live slot
+       expands to hold its label (FloatingDock, DockItem), and on a 360px screen
+       the four fixed 56px slots left it four pixels of slack, so the label
+       spilled out of its own pill. The three icon-only slots hand back the
+       difference: they set --dock-item-min to the 44px floor MPWA-01 §5.1
+       actually requires, keeping a 44x56 target — §8's 56x56 is a preference,
+       and it is bought back by the one slot that now carries a word. */
     a.dock-item,
     button.dock-item {
         min-height: 3.5rem;
-        min-width: 3.5rem;
+        min-width: var(--dock-item-min, 3.5rem);
     }
 
     /* ---- MPWA-02 (§5.2.8) — safe area + touch behaviour ----
@@ -496,7 +503,7 @@
 /* §8: below 360px items shrink to 52px and the FAB to 60px — never below 44. */
 @media (max-width: 359.98px) {
     a.dock-item,
-    button.dock-item { min-height: 3.25rem; min-width: 3.25rem; }
+    button.dock-item { min-height: 3.25rem; min-width: var(--dock-item-min, 3.25rem); }
 }
 
 /* The dock in MPWA-03 floats this far above the home indicator. */

@@ -68,47 +68,67 @@ function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
      argument that depth survives a translucent bar over a moving bloom better
      than colour does. It does — but it also made a 56px slot look dented, and
      depth is the app's grammar for a CONTROL you push, not for where you
-     currently are. Material's answer is better here: a filled pill sitting
-     behind the icon alone, with the label plain underneath. The pill is a small
-     bright shape against dark glass, which reads at a glance without pretending
-     the bar has a surface you can press into.
+     currently are. Material's answer is better here: a filled pill behind the
+     live slot, which reads at a glance without pretending the bar has a surface
+     you can press into.
 
-     It is also cheap to animate, unlike what it replaces: a flat fill
-     interpolates, so this one can carry `transition-colors` where the inset /
-     outset pair could not. */
+     ASK-37 — ONLY THE LIVE SLOT IS NAMED. Every slot used to carry its label
+     stacked under its icon, so the bar printed four words at once and the one
+     that mattered had to be found among them. The founder's reference puts the
+     label INSIDE the active pill, beside its icon, and leaves the rest as
+     icons. Two things follow from that and both are the point:
+       · the pill is the only text in the bar, so "where am I" is answered by
+         reading rather than by comparing four brightnesses;
+       · the three inactive slots stop reserving room for words they are not
+         showing, which is where the width for the expanded one comes from.
+     The colour, the icons and the opacities are exactly what they were —
+     bg-white/[.22] on the pill, white on the live slot, white/55 on the rest,
+     `fill` for the live icon and `regular` for the others.
+
+     THE LABEL IS STILL ANNOUNCED when it is not drawn: an icon-only control is
+     nameless to a screen reader, so the name moves to aria-label rather than
+     being lost with the text. */
   const content = (
     <>
-      <span
-        aria-hidden="true"
-        className={cn(
-          "grid h-7 w-12 place-items-center rounded-full transition-colors duration-200",
-          active ? "bg-white/[.22]" : "bg-transparent"
-        )}
-      >
-        <Icon size={22} weight={active ? "fill" : "regular"} />
-      </span>
-      <span className="text-[length:var(--text-label)] font-semibold leading-4">{label}</span>
+      <Icon size={22} weight={active ? "fill" : "regular"} aria-hidden="true" />
+      {active && (
+        /* truncate + the min-w-0 above it: below 360 there is genuinely not
+           enough bar for four targets and a whole word, and a clipped label on
+           a slot you are already standing in is a better failure than a bar
+           that overflows its own pill. */
+        <span className="min-w-0 truncate text-[length:var(--text-label)] font-semibold leading-none">
+          {label}
+        </span>
+      )}
     </>
   );
-  // .dock-item carries the >= 56x56 sizing (§8) — see index.css for why it is
-  // a class rather than Tailwind min-w/min-h utilities.
+  /* .dock-item carries the >= 56x56 sizing (§8) — see index.css for why it is
+     a class rather than Tailwind min-w/min-h utilities. `min-w-0` alongside it
+     lets the ACTIVE slot give way first on a narrow screen: the pill's label
+     truncates before any of the three icon slots is squeezed under the touch
+     floor, because a clipped word is recoverable and a 40px tap target is not.
+     A flat fill and padding both interpolate, so the expansion can carry a
+     transition where KM-32's inset/outset pair could not. */
   const cls = cn(
-    "dock-item flex flex-col items-center justify-center gap-0.5 rounded-2xl px-1.5",
-    "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-    active ? "text-white" : "text-white/55 hover:text-white/80"
+    "dock-item flex min-w-0 items-center justify-center gap-1.5 rounded-pill",
+    "transition-[background-color,color,padding] duration-200 motion-reduce:transition-none",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+    active ? "bg-white/[.22] px-3 text-white" : "px-0 text-white/55 hover:text-white/80"
   );
+  const common = {
+    // The icon-only slots give their reserved width back to the live one.
+    style: active ? undefined : { "--dock-item-min": "2.75rem" },
+    "data-testid": testid,
+    "data-active": active ? "true" : undefined,
+    className: cls,
+    "aria-current": active ? "page" : undefined,
+    // Named either way: the live slot by its visible label, the rest by this.
+    "aria-label": active ? undefined : label,
+  };
   if (onClick) {
-    return (
-      <button type="button" onClick={onClick} data-testid={testid} className={cls} aria-current={active ? "page" : undefined}>
-        {content}
-      </button>
-    );
+    return <button type="button" onClick={onClick} {...common}>{content}</button>;
   }
-  return (
-    <NavLink to={to} data-testid={testid} className={cls} aria-current={active ? "page" : undefined}>
-      {content}
-    </NavLink>
-  );
+  return <NavLink to={to} {...common}>{content}</NavLink>;
 }
 
 /**

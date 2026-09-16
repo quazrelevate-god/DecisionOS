@@ -76,6 +76,11 @@ const UNDO_MS = 6000;
    the Desk's job on a phone is to say what is waiting, and the rest is one tap
    away. */
 const PHONE_ROWS = 3;
+/* The gap the phone card leaves between its last pixel and the top of the
+   floating dock. One seam, not a margin: the sheet's own dock clearance is what
+   keeps the two apart, and this is only what the row trim above holds back so
+   the list never runs up against the bar. */
+const DOCK_SEAM = 8;
 /* ASK-35 1.4 — the inner card's material, lifted from the recipe the desktop
    top nav shelf is cut from (INK_PILL / .kr-navplate::before) so the two stay
    the same black. Only the fill and the lit top edge: INK_PILL's drop shadow
@@ -138,6 +143,26 @@ const leaveRange = (lv) =>
    track with a raised thumb that slides to the chosen half). Company leads,
    per the founder's reference. */
 const SCOPE_OPTIONS = [{ key: "company", label: "Company" }, { key: "you", label: "You" }];
+
+/* ASK-40 3 — THE FEED READS NEWEST FIRST.
+   desk.py builds /desk?chip=needs_decision oldest-first on purpose
+   (_cards_needs_decision: "ASK-32: oldest first by the date it was
+   captured"), which is why a decision raised a minute ago arrived at the
+   BOTTOM of a thirty-row list. The founder's call is the other way round, and
+   backend/ is not ours to change, so the flip happens here.
+   The cards carry no timestamp — the only date on them is the sentence
+   "Waiting 6 days" inside context_line, which is a string — but they arrive in
+   two runs: everything I decide (cta "review"), then everything I merely
+   follow (cta "follow"), each already ascending by created_at. Reversing each
+   run is therefore EXACTLY newest-first, with no date parsing anywhere, and it
+   leaves the two groups where they were: what I can act on still sits above
+   what I am only watching. */
+const newestFirst = (cards) => {
+  const review = [];
+  const follow = [];
+  for (const c of cards) (c.cta === "follow" ? follow : review).push(c);
+  return [...review.reverse(), ...follow.reverse()];
+};
 
 /* ASK-25 — the row's one action: open the thing. A raised .kr-pop circle
    with the open-in-page glyph; the whole row is also the link, the circle
@@ -355,10 +380,13 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
         <div
           ref={listRef}
           /* The scroll lives HERE, inside the column, so the board's own box
-             is untouched: it does not grow and it does not scroll. A thin
-             scrollbar, because the track is 1px of grey on near-black and a
-             10px one reads as a second vertical rule beside the real ones. */
-          className={`min-h-0 flex-1 overflow-hidden ${scroll ? "lg:overflow-y-auto lg:pr-1 lg:[scrollbar-width:thin]" : ""}`}
+             is untouched: it does not grow and it does not scroll.
+             ASK-40 4 — and it shows NO BAR. `scrollbar-width: thin` was still
+             a bar, permanent on any platform that paints them, running down
+             the column's edge next to the real rule; .kr-scroll-quiet
+             (index.css) hides it and leaves the scrolling alone. The heading's
+             "N more waiting" is what says there is more. */
+          className={`min-h-0 flex-1 overflow-hidden ${scroll ? "kr-scroll-quiet lg:overflow-y-auto lg:pr-1" : ""}`}
         >
           {loading && (
             <div className="space-y-2 pt-2" aria-hidden="true">
@@ -449,21 +477,53 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, on
       const row = list.querySelector("[data-row]");
       const rowH = row?.offsetHeight || 0;
       if (!rowH) return;
-      // Whatever the card is that the list is not: the padding and the control.
-      const chrome = box.offsetHeight - list.offsetHeight;
+      /* ASK-40 — THE OLD SUM COULD ONLY EVER AGREE WITH ITSELF.
+         It was `chrome = box.offsetHeight - list.offsetHeight`, which reads as
+         "the card minus its list", i.e. the padding and the control. It is not:
+         the card is `flex-1` and therefore STRETCHED, so that subtraction is
+         the card's leftover SLACK, and (clientHeight - slack) / rowH hands back
+         the row count already on screen. Three rows in, three rows out, on
+         every screen — which is why a 360x640 phone kept three rows it had no
+         room for and this trim never once fired, and why `cramped` never fired
+         either. Worse, once the list did overflow the card the slack went
+         NEGATIVE and the sum asked for MORE rows. */
+      const cs = getComputedStyle(box);
+      const padTop = parseFloat(cs.paddingTop) || 0;
+      const padBottom = parseFloat(cs.paddingBottom) || 0;
+      const ctrl = box.querySelector("[data-more-control]");
+      const ctrlH = ctrl
+        ? ctrl.offsetHeight + (parseFloat(getComputedStyle(ctrl).marginTop) || 0)
+        : 0;
+      /* AND THE BUDGET IS THE SCREEN ABOVE THE DOCK, NOT THE CARD'S OWN BOX.
+         The sheet reserves a flat 7.5rem of dock clearance (index.css, KM-32 /
+         ASK-35 1.2) and the dock is 72px tall on a 16px inset, so the card's
+         box stops ~32px higher than the dock actually starts. Sized against the
+         box, the card gives that band back to nobody and loses a whole row for
+         it; sized against the dock, the list ends one seam above the bar, which
+         is what the eye reads as "it fits". The box is still the floor
+         and it cuts BOTH ways: on a 360x640 phone the sheet runs past the
+         bottom of the screen, so the card's box is partly UNDER the dock and
+         the box would happily size rows nobody can see. The dock's top is the
+         one line that is true in both directions. The box is the fallback only
+         while the bar is not in the DOM. */
+      const dock = document.querySelector('[data-testid="floating-dock"]');
+      const dockTop = dock ? dock.getBoundingClientRect().top : null;
+      const boxRoom = box.clientHeight - padTop - padBottom;
+      const room = dockTop == null
+        ? boxRoom
+        : dockTop - DOCK_SEAM - (box.getBoundingClientRect().top + padTop) - padBottom;
       /* Down to ZERO, not one. On a 360x640 phone the hero leaves the card
          ~54px, and forcing a row it cannot draw makes the card overflow the
          sheet — a card holding only "Show all 32" is the honest picture of
          that screen, and the list is one tap away. */
-      const next = Math.max(0, Math.min(PHONE_ROWS, Math.floor((box.clientHeight - chrome) / rowH)));
+      const next = Math.max(0, Math.min(PHONE_ROWS, Math.floor((room - ctrlH) / rowH)));
       setFit((f) => (f === next ? f : next));
       /* THE PAGE IS FIXED TO ONE SCREEN UNLESS IT GENUINELY CANNOT HOLD THE
-         SUMMARY. On a 360x640 phone the hero leaves this card ~38px — less than
-         the "Show all" control by itself — and crushing it there is a worse
-         answer than letting that one page scroll. The signal is the card's own
-         content against its own box, asked after the row count has been
-         trimmed, so it only fires when trimming was not enough. */
-      setCramped(box.scrollHeight > box.clientHeight + 1);
+         SUMMARY. On a 360x640 phone the hero leaves this card less than the
+         "Show all" control by itself, and crushing it there is a worse answer
+         than letting that one page scroll. Same budget as the trim, asked after
+         the trim, so it only fires when trimming was not enough. */
+      setCramped(list.offsetHeight + ctrlH > room + 1);
     };
     const ro = new ResizeObserver(measure);
     ro.observe(box);
@@ -538,6 +598,9 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, on
           <button
             type="button"
             data-testid="desk-phone-more"
+            /* The row trim above has to subtract this control's height, and it
+               cannot do that by name without hard-coding 44 + 8 in two files. */
+            data-more-control=""
             onClick={() => setShowAll((v) => !v)}
             className="mt-2 flex h-11 w-full items-center justify-center gap-1.5 rounded-pill bg-white/[.08] text-[13px] font-semibold text-white/85 transition-colors hover:bg-white/[.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
           >
@@ -623,7 +686,10 @@ export default function Desk() {
   });
   const counters = boardQs.find((q) => q.data?.counters)?.data?.counters || null;
   const cardsOf = (i) => boardQs[i]?.data?.cards || [];
-  const [decisionCards, fireCards, todayCards] = [cardsOf(0), cardsOf(1), cardsOf(2)];
+  const [rawDecisions, fireCards, todayCards] = [cardsOf(0), cardsOf(1), cardsOf(2)];
+  // ASK-40 3 — one place, so the desktop column and the phone tab cannot
+  // disagree about the order: everything below reads `decisionCards`.
+  const decisionCards = useMemo(() => newestFirst(rawDecisions), [rawDecisions]);
 
   // ASK-25 · Task approvals: every task waiting for sign-off that THIS person
   // may approve. ASK-28 TK-02 — read from GET /tasks?view=approvals, which the
@@ -644,7 +710,9 @@ export default function Desk() {
     () => (approvalsQ.data || []).filter((t) =>
       t.approval_required && t.approval_status === "pending"
       && t.status !== "done" && t.status !== "cancelled" && canApproveTask(t))
-      .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || ""))),
+      // ASK-40 3 — newest first, like the decisions beside it. Tasks DO carry
+      // created_at, so this one is a straight flip of the comparison.
+      .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || ""))),
     [approvalsQ.data, user] // eslint-disable-line react-hooks/exhaustive-deps
   );
   const showApprovals = user?.role === "owner" || hasPerm(user, "approvals") || approvals.length > 0;
@@ -929,12 +997,40 @@ export default function Desk() {
             </h1>
 
             {/* Compact score cluster — mobile only. */}
-            <div className="flex shrink-0 items-center gap-3 lg:hidden" aria-hidden={!scoreReady}>
-              <div className="flex items-baseline">
-                <span className="font-display text-6xl leading-none">{scoreReady ? shownScore : "—"}</span>
-                {scoreReady && <span className="ml-1 text-sm text-muted-foreground">/100</span>}
+            <div className="flex shrink-0 flex-col items-end gap-2 lg:hidden">
+              <div className="flex items-center gap-3" aria-hidden={!scoreReady}>
+                <div className="flex items-baseline">
+                  <span className="font-display text-6xl leading-none">{scoreReady ? shownScore : "—"}</span>
+                  {scoreReady && <span className="ml-1 text-sm text-muted-foreground">/100</span>}
+                </div>
+                <ArcGauge value={scoreReady ? shownScore : null} size={110} className="w-24 shrink-0 text-foreground" />
               </div>
-              <ArcGauge value={scoreReady ? shownScore : null} size={110} className="w-24 shrink-0 text-foreground" />
+              {/* ASK-40 1 — THE COMPANY/YOU SWITCH COMES TO THE PHONE.
+                  It is the desktop control, not a copy of it: the same
+                  ScopeSlider, the same SCOPE_OPTIONS, the same `scope` state
+                  the numeral above it already reads (shownScore), so tapping
+                  it here does exactly what tapping it at 1440 does and there
+                  is no second source of truth to drift. Owner only, like the
+                  desktop one — everybody else has one view and a switch with
+                  one meaning is a lie.
+                  IT COSTS NO ROW. The founder marked the empty band under the
+                  score, which is the space the greeting's second and third
+                  lines already claim on the left; putting the switch there
+                  fills it instead of pushing the page down.
+                  44px segments — var(--tabs-trigger-h) is the app's own tab
+                  height below lg, which is also the touch floor; the desktop
+                  instance keeps its 36px because a mouse is not a thumb. */}
+              {isOwnerView && (
+                <ScopeSlider
+                  options={SCOPE_OPTIONS}
+                  value={scope}
+                  onChange={setScope}
+                  segWidth={80}
+                  segHeight="var(--tabs-trigger-h)"
+                  label="Score scope"
+                  testid="desk-scope-m"
+                />
+              )}
             </div>
           </div>
 
@@ -1238,10 +1334,12 @@ export default function Desk() {
             tone="needs"
             title="Decisions"
             count={decisionCount}
-            /* desk.py sorts the feed oldest-waiting first; "what each
-               unblocks" is in the context line but is not the order yet
-               (ASK-25 open question 1). Say what is true. */
-            note="longest waiting first"
+            /* ASK-40 3 — the note follows the order. It said "longest waiting
+               first", which is what desk.py still sends; newestFirst() turns
+               that round on the way in, so the heading has to say the new
+               truth. "What each unblocks" is in the context line but is still
+               not the order (ASK-25 open question 1). */
+            note="newest first"
             loading={decisionsLoading}
             empty={SECTIONS[0].empty}
             rows={decisionRows}

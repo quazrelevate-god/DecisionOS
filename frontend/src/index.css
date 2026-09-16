@@ -1441,13 +1441,18 @@ html[data-dex="1"] .app-sky__art { opacity: 0; }
    changed — a fade tuned to a dark core that has moved is just a dimmer
    picture. */
 html[data-page="inbox"] {
-    --sky-art:    url("/sky/inbox.webp");
+    /* ASK-40 5 — the founder replaced the phone picture with their own PNG
+       (public/sky/inbox.png). Same procedure as every other sky: the file is
+       the change, this line just names it. It is 382 KB against the WebP's
+       17 KB, which a phone pays once and then caches; say so here rather than
+       leave the old figure below claiming 17. */
+    --sky-art:    url("/sky/inbox.png");
     /* KM-49 — /inbox has a desktop plate. The phone picture is 800x1200
        portrait, and `cover` on a landscape viewport shows 34% of its height
        (see the note at the top of this table); the landscape source shows the
        whole composition instead. The browser never fetches a background whose
-       media query does not match, so the phone still pulls only the 17 KB
-       WebP and never sees the 1 MB PNG.
+       media query does not match, so the phone still pulls only its own
+       portrait file and never sees the 1 MB landscape one.
        ASK-25 briefly stood the plate down (opacity 0) so the redesigned Desk
        sat on the amber gradient it was drawn on; 2026-09-14 the founder asked
        for the inbox picture back under the frost cards, so the plate is on
@@ -2188,6 +2193,23 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         transition: opacity 260ms ease;
     }
     .kr-vignette[data-on="1"] { opacity: 1; }
+
+    /* ASK-40 4 · .kr-scroll-quiet — IT SCROLLS, IT JUST DOESN'T SAY SO.
+       The Desk's Decisions column scrolls inside the black card (ASK-34 7.2)
+       and was drawing the browser's own thin scrollbar down its edge: a second
+       vertical rule beside the real one, and on any platform that paints bars
+       permanently — Windows, or macOS set to "Show scroll bars: Always" — it
+       never went away again. The founder asked for it gone. The scrolling
+       stays; only the bar is hidden, which is the same trade .kr-snap below
+       already makes for the Desk band.
+       DELIBERATELY NOT ON THE PAGE SCROLLER. A whole page that scrolls with
+       nothing on screen to say so is a different problem from a list inside a
+       card that is already captioned "N more waiting". */
+    .kr-scroll-quiet {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+    .kr-scroll-quiet::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
     /* KM-3 · .kr-snap — the horizontal section scroller on the Desk band.
        One section per screen, snapped, with the page gutter as the inline

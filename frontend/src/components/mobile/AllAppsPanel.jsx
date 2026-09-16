@@ -51,6 +51,12 @@ import { useBackDismiss } from "@/hooks/useBackDismiss";
 /**
  * The bento, in §5.7's order: live destinations first, occasional ones second,
  * utility last. `size` is config and never derived from the data.
+ *
+ * ASK-40 2 — `blurb` IS GONE FROM EVERY ENTRY, not just from the markup. The
+ * founder asked for the descriptions off the cards ("How the business is
+ * running" and its five siblings); a field nothing renders is a field the next
+ * person has to work out is dead, so it left with them. Nothing else read it —
+ * the search filter matches on `label` only.
  */
 function buildTiles({ user, t, counts }) {
   const tiles = [
@@ -72,25 +78,24 @@ function buildTiles({ user, t, counts }) {
       label: t("allapps.ops", "Ops"),
       icon: Gauge,
       ownerOnly: true,
-      blurb: "How the business is running",
     },
     // RBAC P1 (2026-09-15): /team is open to everyone (read-only without Manage
     // team), so the tile is too — it hid the page from teammates on a phone.
-    { key: "team", to: "/team", label: t("nav.team", "Team"), icon: UsersThree, blurb: "People and permissions" },
-    { key: "journal", to: "/journal", label: t("nav.journal", "Journal"), icon: BookOpen, ownerOnly: true, blurb: "Every decision, by day" },
+    { key: "team", to: "/team", label: t("nav.team", "Team"), icon: UsersThree },
+    { key: "journal", to: "/journal", label: t("nav.journal", "Journal"), icon: BookOpen, ownerOnly: true },
     // ASK-6 (2026-09-12): the standalone Leave tile lands on /team now.
     // Register lives on Team, approvals on the Decision Desk, per-department
     // config on Settings > Operations. The tile stays because "Leave" is still
     // the reader's mental hook for the concept.
-    { key: "leave", to: "/team", label: t("nav.leave", "Leave"), icon: AirplaneTakeoff, blurb: "Apply and approve" },
+    { key: "leave", to: "/team", label: t("nav.leave", "Leave"), icon: AirplaneTakeoff },
     /* Mobile PWA (2026-09-14) — Calendar and Notifications, for everyone. A
        non-owner's More held two tiles (GL-02), Calendar had no way in on a
        phone, and the More badge counted notifications with no tile inside to
        open them — this tile carries that count. */
-    { key: "calendar", to: "/calendar", label: t("nav.calendar", "Calendar"), icon: CalendarBlank, blurb: "Meetings and dates" },
+    { key: "calendar", to: "/calendar", label: t("nav.calendar", "Calendar"), icon: CalendarBlank },
     {
       key: "notifications", to: "/notifications", label: t("nav.notifications", "Notifications"),
-      icon: Bell, badge: counts?.notifications || 0, blurb: "Updates and alerts",
+      icon: Bell, badge: counts?.notifications || 0,
     },
     // §5.7 listed "Send Daily Digest" as a Small tile, and §8 asked for it to sit
     // nowhere near Sign out. E2-63 (2026-08-15) then deleted
@@ -117,7 +122,7 @@ function buildUtility({ user, t }) {
   return [
     // Mobile PWA (2026-09-14): for everyone. Profile, security and Sign out
     // live in Settings, and a non-owner on a phone had no way to reach them.
-    { key: "settings", to: "/settings", label: t("nav.settings", "Settings"), icon: GearSix, blurb: "Preferences, security, sign out" },
+    { key: "settings", to: "/settings", label: t("nav.settings", "Settings"), icon: GearSix },
   ].filter((x) => !x.ownerOnly || user?.role === "owner");
 }
 
@@ -147,45 +152,41 @@ function Tile({ tile, onPick }) {
       data-testid={`allapps-tile-${tile.key}`}
       onClick={() => onPick(tile)}
       className={cn(
-        // >= 100x100 per §5.7, so the 44px floor is met with room to spare.
-        "relative flex min-h-[6.25rem] flex-col justify-between rounded-tile p-3 text-left",
+        /* ASK-40 2 — THE CARD IS A PILL. It was a 100px square carrying icon,
+           name, a line of description and a chevron; the founder's call is to
+           drop the description and let the card collapse to the height of its
+           name. What is left is one row — icon, name — so the shape that fits
+           it is a pill, not a tile. min-h-touch keeps the 44px floor the
+           square used to clear by accident.
+           The two-up grid and the Settings row below are unchanged. */
+        "relative flex min-h-touch items-center gap-1.5 rounded-pill px-2 py-1.5 text-left",
         TILE_INK,
         "transition-[filter] duration-150 hover:brightness-125",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
       )}
     >
-      {/* The chevron says "this goes somewhere" without a word for it. */}
-      <CaretRight
-        size={12}
-        weight="bold"
-        aria-hidden="true"
-        className="absolute right-3 top-3.5 text-white/35"
-      />
-      <span className="grid h-8 w-8 place-items-center rounded-xl bg-white/[.10] text-white/85">
-        <Icon size={17} weight="bold" aria-hidden="true" />
-      </span>
-      <span className="mt-2.5 block">
-        <span className="block pr-4 text-[length:var(--text-label)] font-semibold leading-4 text-white">
-          {tile.label}
-        </span>
-        {tile.blurb && (
-          /* KM-9 — a static descriptor, not a live figure. A menu tile's job is
-             to say where it goes; it does not also need to report. */
-          <span className="mt-0.5 block text-[length:var(--text-label)] leading-4 text-white/55">
-            {tile.blurb}
+      {/* The chevron goes with the description. At this size it would be a
+          third object competing for the same 124px, and a menu row does not
+          need to be told it leads somewhere. Settings keeps its own — that
+          row is full width and has the room. */}
+      <span className="relative grid h-6 w-6 shrink-0 place-items-center rounded-pill bg-white/[.10] text-white/85">
+        <Icon size={15} weight="bold" aria-hidden="true" />
+        {tile.badge > 0 && (
+          /* ON THE ICON, not in the row. Inline it would take 28px out of the
+             name's share and truncate "Notifications"; on the icon's shoulder
+             it is where a badge belongs anyway and it costs the row nothing. */
+          <span
+            data-testid={`allapps-badge-${tile.key}`}
+            aria-label={`${tile.badge} need you`}
+            className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-pill bg-kr-accent px-1 text-[10px] font-bold leading-none text-white"
+          >
+            {Math.min(9, tile.badge)}
           </span>
         )}
       </span>
-
-      {tile.badge > 0 && (
-        <span
-          data-testid={`allapps-badge-${tile.key}`}
-          aria-label={`${tile.badge} need you`}
-          className="absolute right-2.5 top-8 grid h-5 min-w-5 place-items-center rounded-pill bg-kr-accent px-1 text-[length:var(--text-label)] font-bold leading-none text-white"
-        >
-          {Math.min(9, tile.badge)}
-        </span>
-      )}
+      <span className="min-w-0 flex-1 truncate text-[length:var(--text-label)] font-semibold leading-4 text-white">
+        {tile.label}
+      </span>
     </button>
   );
 }
@@ -433,25 +434,25 @@ export function AllAppsPanel({
                       data-testid={`allapps-tile-${item.key}`}
                       onClick={() => pick(item)}
                       className={cn(
-                        "relative flex min-h-touch w-full items-center gap-3 rounded-tile p-3 text-left",
+                        /* ASK-40 2 — a pill too, and without its description,
+                           so it reads as the same object as the six above it
+                           rather than the one card that kept a subtitle. Still
+                           one full-width row: it is one item and a lone tile in
+                           a two-up grid says the wrong thing. */
+                        "relative flex min-h-touch w-full items-center gap-2 rounded-pill px-2 py-1.5 text-left",
                         TILE_INK,
                         "transition-[filter] duration-150 hover:brightness-125",
                         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
                         /* KM-3 — no red on sign out; there is none here anyway. */
                       )}
                     >
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/[.10] text-white/85">
-                        <item.icon size={17} weight="bold" aria-hidden="true" />
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-pill bg-white/[.10] text-white/85">
+                        <item.icon size={16} weight="bold" aria-hidden="true" />
                       </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-[length:var(--text-label)] font-semibold leading-4 text-white">
-                          {item.label}
-                        </span>
-                        <span className="mt-0.5 block text-[length:var(--text-label)] leading-4 text-white/55">
-                          {item.blurb}
-                        </span>
+                      <span className="min-w-0 flex-1 truncate text-[length:var(--text-label)] font-semibold leading-4 text-white">
+                        {item.label}
                       </span>
-                      <CaretRight size={12} weight="bold" aria-hidden="true" className="shrink-0 text-white/35" />
+                      <CaretRight size={12} weight="bold" aria-hidden="true" className="mr-1 shrink-0 text-white/35" />
                     </button>
                   ))}
                 </div>

@@ -264,20 +264,14 @@ export default function Layout({ children }) {
      frame: a top region that does not move, and a scroller under it. The slot
      is state rather than a ref because a page's header portals into it and has
      to re-render once the element exists.
-     `brandGone` collapses the wordmark + bell on first movement and hands the
-     space to the page title, which is what the founder asked for. */
+     ASK-35 1.5 — what it no longer is: a wordmark row that folds away. */
   const [headerSlot, setHeaderSlot] = useState(null);
   const isMobileShell = useIsMobile();
-  /* KM-27 — /inbox opts OUT of the collapse, on the founder's call. The Desk
-     has no page title to promote: its heading IS the greeting, which belongs to
-     the hero rather than to a chrome row, so folding the wordmark away left an
-     empty strip and promoted nothing into it. Every other room has a title and
-     a control row worth keeping on screen. */
-  const collapsingShell = !location.pathname.startsWith("/inbox");
-  const [brandGone, setBrandGone] = useState(false);
-  // Declared AFTER brandGone: reading it above its useState is a temporal dead
-  // zone, which is exactly how the first cut of this white-screened.
-  const brandFolded = brandGone && collapsingShell;
+  /* ASK-35 1.5 — KM-25's `brandGone` / `collapsingShell` / `brandFolded` and
+     main's onScroll handler are gone with the row they folded. KM-27 had
+     already opted /inbox out of the collapse, and the row existed on no other
+     route, so the fold state was being computed for a row that could never
+     read it. */
 
   // MPWA-12f: an empty state whose primary action is "tell Dex to start one" has
   // to be able to open the sheet, and the sheet's state lives here. A window
@@ -464,33 +458,28 @@ export default function Layout({ children }) {
     if (to) navigate(to);
   };
 
-  // `mobile` applies the MPWA-03 header rules — 48px target, and a badge that
-  // counts only what needs him, capped at 9. Desktop keeps its 40px button and
-  // raw unread count so §9.2's pixel-identical requirement holds.
-  const Bellicon = ({ mobile = false }) => {
+  /* ASK-35 1.5 — DESKTOP ONLY NOW. The `mobile` variant existed for one call
+     site, the phone's brand row, and that row is gone; the phone reaches
+     notifications through the dock's More badge and AllAppsPanel's
+     Notifications tile. Desktop keeps exactly what it had — the 40px outlined
+     circle and the raw unread count — so §9.2's pixel-identical requirement
+     still holds. */
+  const Bellicon = () => {
     const items = (notif?.notifications || []).slice(0, 7);
-    const count = mobile ? bellCount : unread;
     return (
       <Popover>
         <PopoverTrigger asChild>
-          {/* KR-5: desktop = the reference's outlined circle. The MOBILE
-              variant is deliberately untouched — everything already shipped
-              on the phone chrome outranks this pass. The badge goes ORANGE:
-              a notification count is alert grammar, exactly what --kr-accent
+          {/* KR-5: the reference's outlined circle. The badge goes ORANGE: a
+              notification count is alert grammar, exactly what --kr-accent
               exists for. */}
           <button data-testid="notif-bell"
-            aria-label={count > 0 ? `Notifications, ${count} need you` : "Notifications"}
-            className={mobile
-              /* Mobile PWA (2026-09-14) — the phone bell joins the glass: a
-                 white glass circle instead of the retired square outline. */
-              ? "relative grid h-12 w-12 place-items-center rounded-full bg-white/75 text-slate-800 ring-1 ring-inset ring-slate-900/[0.05] shadow-[0_6px_16px_-8px_hsl(216_30%_25%/0.35),inset_0_1px_0_hsl(0_0%_100%/0.9)] transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25"
-              : "relative h-10 w-10 rounded-full border border-kr-ink/55 grid place-items-center text-foreground/90 transition-colors hover:bg-white/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"}>
-            <Bell size={mobile ? 22 : 18} weight="regular" />
-            {count > 0 && (
-              <span data-testid="notif-count" className={mobile
-                ? "absolute -top-1 -right-1 grid h-5 min-w-5 place-items-center rounded-full bg-kr-accent px-1 text-[10px] font-bold leading-none text-white"
-                : "absolute -top-1.5 -right-1.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-kr-accent px-1 text-[10px] font-bold leading-none text-white"}>
-                {mobile ? Math.min(9, count) : (unread > 99 ? "99+" : unread)}
+            aria-label={unread > 0 ? `Notifications, ${unread} need you` : "Notifications"}
+            className="relative h-10 w-10 rounded-full border border-kr-ink/55 grid place-items-center text-foreground/90 transition-colors hover:bg-white/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline">
+            <Bell size={18} weight="regular" />
+            {unread > 0 && (
+              <span data-testid="notif-count"
+                className="absolute -top-1.5 -right-1.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-kr-accent px-1 text-[10px] font-bold leading-none text-white">
+                {unread > 99 ? "99+" : unread}
               </span>
             )}
           </button>
@@ -775,52 +764,36 @@ export default function Layout({ children }) {
             recipes re-skin. */}
         {/* KR-8.2: the mobile bar blends too — transparent, no border, no
             blur, static. The phone reference floats its title on the bloom. */}
-        {/* KR-14.17 — the wordmark moves from the row's centre column to
-            the left edge, and steps up to `size="lg"` for a stronger app
-            identity in the phone header. Grid collapses to two columns
-            (logo left, actions right) — the empty centre span is gone. */}
         {/* KM-25 · the top region. It sits OUTSIDE <main>, which is the whole
             point: nothing can scroll through it, so nothing has to be painted
-            over. The brand row collapses on first movement and gives its space
-            to the page title, which portals into the slot beneath it. */}
+            over.
+            ASK-35 1.5 — THE WORDMARK + BELL ROW IS GONE. It ran on /inbox only
+            and cost the Desk ~56px of the one screen that has the most to say;
+            the greeting, the score and the dial all start that much higher now.
+            NOTHING IS ORPHANED, checked before deleting rather than assumed:
+            the bell's count is `bellCount`, which the dock's More slot already
+            wears (moreBadge, below) and AllAppsPanel already carries a
+            Notifications tile with the same count and a route to
+            /notifications. The wordmark's only other job was identity, and the
+            app is installed by then.
+            WHAT WENT WITH IT: the fold. `collapsingShell` was false on /inbox
+            and the row existed nowhere else, so `brandGone`/`brandFolded` and
+            main's onScroll were computing a state that could never be read. */}
         <div className="lg:hidden shrink-0">
-          {/* 2026-09-15, founder — the wordmark + bell row belongs to Decision
-              Desk (/inbox) only. Every other page opens straight on its own
-              title, which then needs the safe-area inset the row used to give. */}
-          {location.pathname.startsWith("/inbox") && (
-          <header
-            data-testid="mobile-brand-row"
-            aria-hidden={brandFolded}
-            className={cn(
-              "flex items-center justify-between gap-2 overflow-hidden px-gutter-safe bg-transparent",
-              "transition-[max-height,opacity,padding-top] duration-300 ease-out motion-reduce:transition-none",
-              brandFolded
-                ? "pointer-events-none max-h-0 pt-0 opacity-0"
-                : "min-h-14 max-h-24 pt-safe opacity-100"
-            )}
-          >
-            <KarmaLogo size="lg" />
-            <div className="flex items-center gap-touch-gap">
-              <Bellicon mobile />
-            </div>
-          </header>
-          )}
           {/* A page's header lands here. Zero-height on routes with none.
-              KM-27 — the title landed hard against the top edge once the brand
-              row folded away. `pt-3` on top of the safe inset gives it the
-              breathing room the wordmark had, so the promotion reads as the
-              title taking that place rather than being shoved into it. */}
+              ASK-35 1.5 — this slot owns the top inset on /inbox now, which it
+              did not while the row was above it. The Desk gets a SMALLER one
+              (0.5rem over the safe area, not 1.75rem): every other room opens
+              on a title that wants air above it, and the Desk opens on a
+              greeting that is the top of a composition. */}
           <div
             ref={setHeaderSlot}
             data-testid="page-header-slot"
             className={cn(
               "px-gutter-safe",
-              /* Pages without the brand row (everything but Decision Desk) get
-                 more room above their title: the safe-area inset plus 1.75rem,
-                 in one value so two padding-top utilities cannot fight. */
-              !location.pathname.startsWith("/inbox")
-                ? "pt-[calc(env(safe-area-inset-top)+1.75rem)]"
-                : brandFolded && "pt-safe pt-3",
+              location.pathname.startsWith("/inbox")
+                ? "pt-[calc(env(safe-area-inset-top,0px)+0.5rem)]"
+                : "pt-[calc(env(safe-area-inset-top,0px)+1.75rem)]",
             )}
           />
         </div>
@@ -841,11 +814,6 @@ export default function Layout({ children }) {
             `position: sticky` inside pages still tracks the document). */}
         <main
           ref={mainRef}
-          onScroll={(e) => {
-            if (!collapsingShell) return;
-            const y = e.currentTarget.scrollTop;
-            setBrandGone((was) => (was ? y > 2 : y > 4));
-          }}
           /* ASK-20 — lg:pb-0, not lg:pb-8. The bottom breathing room already
              comes from the content wrapper's own lg:p-8; main's copy of it was
              doubling to 64px, which read as dead space once main stopped being

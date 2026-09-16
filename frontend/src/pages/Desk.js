@@ -32,6 +32,7 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { inrCompact } from "../lib/format";
+import { cn } from "../lib/utils";
 import { selfScore } from "../lib/karmaScore";
 import { isDemoTenant, demoDelta } from "./_operatingScoreDemo";
 import {
@@ -69,6 +70,16 @@ import {
 // ASK-34 7.3 — the undo window on a reject. Long enough to notice the toast
 // and reach it, short enough that the row leaving the column is believable.
 const UNDO_MS = 6000;
+/* ASK-35 1.1 — how many rows the phone's card shows before the control. Three:
+   the Desk's job on a phone is to say what is waiting, and the rest is one tap
+   away. */
+const PHONE_ROWS = 3;
+/* ASK-35 1.4 — the inner card's material, lifted from the recipe the desktop
+   top nav shelf is cut from (INK_PILL / .kr-navplate::before) so the two stay
+   the same black. Only the fill and the lit top edge: INK_PILL's drop shadow
+   and its hover brighten belong to a pressable pill, and this is a surface. */
+const PHONE_CARD_INK =
+  "bg-[linear-gradient(180deg,hsl(0_0%_24%),hsl(0_0%_6%))] shadow-[inset_0_1px_0_hsl(0_0%_100%/0.16)]";
 // Which surface is asking. The phone and the desktop share every rule here and
 // differ only in the furniture they show it with (ASK-34 B4).
 const isDesktop = () => typeof window !== "undefined" && !!window.matchMedia?.("(min-width: 1024px)").matches;
@@ -389,56 +400,26 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
    The card shows what fits and a control opens the rest in place, so there is
    only ever one thing scrolling — the page. */
 function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, children }) {
-  const cardRef = useRef(null);
-  const listRef = useRef(null);
-  const [fit, setFit] = useState(4);
   const [showAll, setShowAll] = useState(false);
   // A new tab starts closed; the last tab's "show everything" is not a claim
   // about this one.
   useEffect(() => { setShowAll(false); }, [tab]);
 
-  /* AS MANY ROWS AS FIT, AND THE DOCK'S OWN CLEARANCE. Every term here is
-     measured or read; none is typed. The budget is the viewport minus the dock
-     clearance index.css already defines — read off <main>'s computed
-     padding-bottom, which IS `.pb-dock` (KM-32: 7.5rem + the safe-area inset),
-     so this cannot drift from it — minus the card's own chrome (the tab strip
-     and the footer, measured as whatever the card is that the list is not) and
-     the board's padding. What is left, divided by a real row. */
-  useEffect(() => {
-    const card = cardRef.current;
-    const list = listRef.current;
-    if (!card || !list || typeof ResizeObserver === "undefined") return undefined;
-    const measure = () => {
-      const row = list.querySelector("[data-row]");
-      const rowH = row?.offsetHeight || 0;
-      if (!rowH) return;
-      const scroller = document.querySelector("[data-app-scroller]");
-      const clear = scroller ? parseFloat(getComputedStyle(scroller).paddingBottom) || 0 : 0;
-      const board = card.closest(".kr-desk-board");
-      const bs = board && getComputedStyle(board);
-      const padY = bs ? parseFloat(bs.paddingTop) + parseFloat(bs.paddingBottom) : 0;
-      const chrome = card.offsetHeight - list.offsetHeight;
-      const budget = window.innerHeight - clear - chrome - padY;
-      const next = Math.max(1, Math.floor(budget / rowH));
-      // Guarded: fit changes the list's height, which is what the observer
-      // watches, so an unguarded set would chase its own tail.
-      setFit((f) => (f === next ? f : next));
-    };
-    const ro = new ResizeObserver(measure);
-    ro.observe(list);
-    window.addEventListener("resize", measure);
-    measure();
-    return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
-  }, [rows.length, tab]);
-
-  const shown = showAll ? rows : rows.slice(0, fit);
+  /* ASK-35 1.1 — THREE, AND THEN A CONTROL. ASK-34 B3 measured this: the
+     viewport, less the dock clearance, less the card's chrome, divided by a
+     real row. It was right about the constraint and wrong about the answer —
+     on a tall phone it filled the sheet with nine rows, which is a list, not a
+     summary, and the whole point of the tabbed card is that the Desk says what
+     is waiting rather than showing it all. A constant says that in one line,
+     and it took a ResizeObserver, two refs and a guarded setState with it. */
+  const shown = showAll ? rows : rows.slice(0, PHONE_ROWS);
   const hidden = rows.length - shown.length;
 
   return (
     /* min-w-0: a grid item defaults to min-width:auto, i.e. its min-content,
        and a truncated title's min-content is the WHOLE title — which grew this
        card to 568px inside a 358px board. */
-    <div ref={cardRef} className={`min-w-0 ${TONE[tone]}`} data-testid={testid}>
+    <div className={`min-w-0 ${TONE[tone]}`} data-testid={testid}>
       {/* THE TITLE ROW IS THE TABS. One segment material app-wide (KM-54..60):
           this is ScopeSlider, the Company/You control, cut for ink and sharing
           the width three ways. --tabs-trigger-h is the app's own tab height
@@ -454,7 +435,21 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, ch
         testid="desk-tab"
       />
 
-      <div ref={listRef} className="mt-3">
+      {/* ASK-35 1.4 — THE LISTS LIVE ON A CARD, THE STRIP DOES NOT. The strip
+          sits straight on the sheet (above); everything a tab holds sits on a
+          card inside it, so the sheet reads as a surface with something on it
+          rather than as one undifferentiated black rectangle.
+          THE FILL IS THE DESKTOP TOP NAV SHELF'S — INK_PILL / .kr-navplate's
+          ::before: a 24%->6% vertical gradient with a 16% white lip on the top
+          edge. Taken from the recipe (components/karma/glass.js) rather than
+          retyped, so the two cannot drift. Against the sheet's hsl(240 4% 9%)
+          ground the card is lighter at its head and all but equal at its foot,
+          which is the step that does the work — no border and no ring, because
+          either would draw the edge the gradient is already implying.
+          IT HUGS ITS CONTENT: no flex-1, no min-height. It ends where the last
+          row or the show-all control ends, and the sheet's own padding-bottom
+          (index.css, ASK-35 1.2) is what holds it clear of the dock. */}
+      <div className={cn(PHONE_CARD_INK, "mt-3 rounded-tile p-3")} data-testid={`${testid}-card`}>
         {children || (
           <>
             {loading && (
@@ -471,21 +466,21 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, ch
             ))}
           </>
         )}
-      </div>
 
-      {/* THE MORE CONTROL — it opens the rest HERE, in place, and the page
-          scrolls as it always does. Nothing new to learn and nothing nested. */}
-      {!children && !loading && (hidden > 0 || showAll) && (
-        <button
-          type="button"
-          data-testid="desk-phone-more"
-          onClick={() => setShowAll((v) => !v)}
-          className="mt-2 flex h-11 w-full items-center justify-center gap-1.5 rounded-pill bg-white/[.08] text-[13px] font-semibold text-white/85 transition-colors hover:bg-white/[.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
-        >
-          {showAll ? "Show fewer" : `Show all ${rows.length}`}
-          <CaretRight size={12} weight="bold" aria-hidden="true" className={showAll ? "-rotate-90" : "rotate-90"} />
-        </button>
-      )}
+        {/* THE MORE CONTROL — it opens the rest HERE, in place, and the page
+            scrolls as it always does. Nothing new to learn and nothing nested. */}
+        {!children && !loading && (hidden > 0 || showAll) && (
+          <button
+            type="button"
+            data-testid="desk-phone-more"
+            onClick={() => setShowAll((v) => !v)}
+            className="mt-2 flex h-11 w-full items-center justify-center gap-1.5 rounded-pill bg-white/[.08] text-[13px] font-semibold text-white/85 transition-colors hover:bg-white/[.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+          >
+            {showAll ? "Show fewer" : `Show all ${rows.length}`}
+            <CaretRight size={12} weight="bold" aria-hidden="true" className={showAll ? "-rotate-90" : "rotate-90"} />
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -3031,6 +3031,36 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         padding: 1rem;
         min-width: 0;
     }
+    /* ASK-35 1.2 / 1.3 — BELOW lg THE BOARD IS A SHEET, not a card on a page.
+       It breaks out of the page gutter on both flanks and out of main's dock
+       padding at the foot, so it meets the edges of the .app-shell column and
+       its bottom runs off the bottom of the screen.
+       IT CANCELS THE PADDING ABOVE IT IN THE SAME EXPRESSIONS IT WAS WRITTEN
+       IN, never in numbers copied out of them — `max(1rem, env(safe-area-
+       inset-*))` is `.px-gutter-safe` (above), and the 7.5rem + inset + notice
+       pair is `.pb-dock` (index.css ~580, KM-32). If either of those moves,
+       move these with them. "Full width" is the SHELL's width, not the
+       viewport's: on a phone they are the same, and on a tablet or a desktop
+       PWA window the centred column has to survive.
+       The padding then puts the dock's clearance back INSIDE the sheet, which
+       is what keeps the card in it off the floating dock.
+       THE TOP CORNERS ARE THE TAB STRIP'S OWN CURVE. The strip is ScopeSlider
+       at `rounded-pill p-1` around a --tabs-trigger-h track, so its outer
+       radius is half of (--tabs-trigger-h + 0.5rem). Written as that
+       expression so the sheet re-cuts itself if the token ever changes.
+       Square at the foot, because there is no foot. */
+    @media (max-width: 1023.98px) {
+        .kr-desk-board {
+            margin-left:  calc(-1 * max(1rem, env(safe-area-inset-left, 0px)));
+            margin-right: calc(-1 * max(1rem, env(safe-area-inset-right, 0px)));
+            margin-bottom: calc(-1rem - 7.5rem - env(safe-area-inset-bottom, 0px)
+                                - var(--dex-notice-space, 0px));
+            padding-bottom: calc(7.5rem + env(safe-area-inset-bottom, 0px)
+                                + var(--dex-notice-space, 0px));
+            border-radius: calc((var(--tabs-trigger-h) + 0.5rem) / 2)
+                           calc((var(--tabs-trigger-h) + 0.5rem) / 2) 0 0;
+        }
+    }
     @media (min-width: 1024px) {
         .kr-desk-board {
             /* The tile radius on top, square below — it runs to the floor. */

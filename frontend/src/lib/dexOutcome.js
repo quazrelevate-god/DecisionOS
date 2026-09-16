@@ -26,17 +26,13 @@ import { proposalCounts, executionSummaryCounts, proposalCreatesText } from "./d
 
 export const AI_CONSENT_CODE = "ai_consent_required";
 
-/* ASK-33.1 — THE LINK IS OFF UNTIL THERE IS SOMEWHERE TO SEND THEM.
-   Settings on this branch has no AI-consent section (its tabs are business,
-   operations, money and account), so "/settings#ai-consent" landed on Settings'
-   first tab with nothing there to turn on: a link to a screen that does not
-   exist is worse than no link, and pointing at Settings generally only moves the
-   dead end one tap further in. So the consent ending is plain words that name no
-   screen, and the constants below wait for the screen (backend already has
-   GET/POST/DELETE /tenant/ai-consent — services/ai_consent.py). Restore the link
-   in failureReason() when it exists. lib/api.js's own 451 toast dropped its
-   link for the same reason. */
-export const AI_CONSENT_HREF = "/settings#ai-consent";
+/* THE LINK, AND THE SCREEN IT NEEDED.
+   ASK-33.1 took the link off because Settings had no AI-consent section, and a
+   link to a screen that does not exist is worse than no link. RBAC P1 (efbdf83,
+   merged 2026-09-16) built that screen — Settings › Business › AI processing,
+   reading and writing /tenant/ai-consent — so the link is back on, pointing
+   where lib/api.js's own 451 toast now points. */
+export const AI_CONSENT_HREF = "/settings?tab=business#ai-consent";
 
 export const OUTCOME_COPY = {
   ready: (who, creates) => `Decision ready for ${who}${creates ? ` · ${creates}` : ""}`,
@@ -69,8 +65,7 @@ function readNote(u) {
 export function failureReason(error) {
   const raw = typeof error === "string" ? error : error ? JSON.stringify(error) : "";
   if (raw.includes(AI_CONSENT_CODE)) {
-    // href stays null until there is an AI-consent screen to open (see above).
-    return { code: AI_CONSENT_CODE, message: OUTCOME_COPY.consent, href: null, linkLabel: null };
+    return { code: AI_CONSENT_CODE, message: OUTCOME_COPY.consent, href: AI_CONSENT_HREF, linkLabel: OUTCOME_COPY.consentLink };
   }
   return { code: "other", message: OUTCOME_COPY.failed(raw.trim()), href: null, linkLabel: null };
 }

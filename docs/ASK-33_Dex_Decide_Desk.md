@@ -1223,3 +1223,22 @@ described is now gone rather than merely unused.
   ?scope=morning and ?scope=week at xl-1280, 683 px each (0.048%) — which is the
   field's recipe going from raised to sunken. Expected; **the baseline was not
   regenerated** (that needs a go).
+
+### Merged with origin, and the consent link is live again (2026-09-16)
+
+The push was rejected: `origin/karma-redesign` had moved on by seven commits
+(RBAC P0-P2 — Settings, Team, access; `efbdf83`). Merged rather than rebased, so
+nothing was rewritten. One conflict, in `lib/api.js`, and it was the good kind:
+
+- **RBAC P1 built the AI-consent screen** — Settings › Business › AI processing,
+  reading and writing `/tenant/ai-consent` — and pointed the 451 toast at
+  `/settings?tab=business#ai-consent`. Their comment even says "the section this
+  points at now exists".
+- So ASK-33.1's reason for removing the link is gone. Their toast was kept as
+  theirs, and **`lib/dexOutcome.js` now links the consent ending to that same
+  screen** (`AI_CONSENT_HREF = "/settings?tab=business#ai-consent"`), with the
+  checks that asserted "no dead link" flipped back to asserting the live one.
+  The plan's "restore the link when the screen exists" is now done.
+- `.claude/launch.json` is tracked on their branch; the local untracked copy
+  (with the `frontend-alt` and `fixture-api` entries this session used) was moved
+  aside for the merge and kept in the scratchpad.

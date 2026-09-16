@@ -197,8 +197,9 @@ async function run(viewport) {
   const whole = await reason.evaluate((el) => el.scrollWidth <= el.clientWidth + 1
     && el.scrollHeight <= el.clientHeight + 1 && getComputedStyle(el).textOverflow !== 'ellipsis').catch(() => false);
   check(`${w} C: the reason is not truncated`, whole);
-  // ASK-33.1 — plain words, no link, until an AI-consent screen exists.
-  check(`${w} C: no dead Settings link`, (await failed.first().getByTestId('dex-outcome-settings').count()) === 0);
+  // The screen exists again (RBAC P1), so the ending links to it.
+  check(`${w} C: it links to the AI-consent screen`,
+    (await failed.first().getByTestId('dex-outcome-settings').getAttribute('href').catch(() => '')) === '/settings?tab=business#ai-consent');
   await failed.first().getByTestId('dex-outcome-retry').click();
   check(`${w} C: Retry re-sends without asking to say it again`,
     await until(async () => (await sheet(page).getByText('Reading it again…').count()) > 0, 5000));

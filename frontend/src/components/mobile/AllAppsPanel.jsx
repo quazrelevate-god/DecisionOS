@@ -36,6 +36,7 @@ import {
   MagnifyingGlass, ArrowRight,
 } from "@phosphor-icons/react";
 import { hasPerm } from "@/lib/perms";
+import { INK_PLATE } from "@/components/karma/glass";
 import { cn } from "@/lib/utils";
 import { useBodyScrollLock } from "./BottomSheet";
 import { useBackDismiss } from "@/hooks/useBackDismiss";
@@ -141,8 +142,9 @@ function buildUtility({ user, t }) {
    double width, and six equal cards two-up read as a list rather than a puzzle
    — which is what "compact" asks for. `grid-flow-dense` goes with them: it
    existed to fill the holes a mixed-size bento left. */
-const TILE_INK =
-  "bg-[linear-gradient(180deg,hsl(0_0%_24%),hsl(0_0%_6%))] shadow-[inset_0_1px_0_hsl(0_0%_100%/0.16)]";
+// ASK-41 — one copy of the recipe, in components/karma/glass.js, shared with
+// the Desk's phone card and the dock's live slot.
+const TILE_INK = INK_PLATE;
 
 function Tile({ tile, onPick }) {
   const Icon = tile.icon;

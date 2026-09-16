@@ -142,7 +142,19 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
     retry: false,
   });
 
-  const canDecide = d?.status === "pending_approval";
+  /* ASK-41 1 — BOTH SPELLINGS OF "nobody has decided this yet".
+     The database carries two for one state and has since U7-02.3: a decision
+     Dex captures lands as "pending_approval", one created any other way as
+     "pending", and services/decision_flow.py calls them one thing (PENDING) —
+     its _claim accepts either, so the server will approve both. This dialog
+     asked for "pending_approval" only, so a "pending" decision opened with a
+     grey Pending chip, no Approve and no Reject. Nobody noticed while every row
+     carried a tick and a cross of its own; ASK-41 takes those away and makes
+     this window the only way to decide, so the narrow test would have stranded
+     every decision of that spelling. Renaming the status across the app is the
+     bigger sweep desk.py says it is — this is the same widened filter desk.py
+     itself uses to build the feed. */
+  const canDecide = d?.status === "pending" || d?.status === "pending_approval";
   const amount = useMemo(() => extractAmount(d), [d]);
   const wfLabel = useMemo(() => workflowLabel(d), [d]);
   const tasks = d?.tasks || [];
@@ -371,7 +383,11 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
                         <LinkSimple size={12} weight="bold" aria-hidden="true" /> Part of: {wfLabel}
                       </span>
                     )}
-                    {d.status && d.status !== "pending_approval" && (
+                    {/* ASK-41 1 — and the chip stays out of the way of both:
+                        "Pending" beside an Approve button says nothing the
+                        button does not, and it used to appear on exactly the
+                        decisions that could not be decided here. */}
+                    {d.status && !canDecide && (
                       <span className={`${CHIP} ${statusChip} capitalize`} data-testid="decision-status-chip">
                         {d.status.replace(/_/g, " ")}
                       </span>

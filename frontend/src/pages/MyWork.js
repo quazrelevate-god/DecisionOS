@@ -1648,7 +1648,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
     try {
       const endpoint = kind === "reject" ? "reject" : "clarify";
       await api.post(`/tasks/${t.id}/${endpoint}`, { reason: reasonText });
-      toast.success(kind === "reject" ? "Changes requested" : "Clarification requested");
+      toast.success(kind === "reject" ? (apprStage === "close" ? "Changes requested" : "Rejected") : "Clarification requested");
       setReasonDialog(null);
       onChange();
     } catch (e) {
@@ -1657,6 +1657,15 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       setReasonBusy(false);
     }
   };
+  /* ASK-41 1 — WHAT THIS BUTTON IS CALLED DEPENDS ON WHAT IT DOES.
+     It has always been POST /tasks/:id/reject, and routers/tasks.py does two
+     different things with it: on a START-stage approval the task never begins —
+     that is a rejection, plainly — while on a CLOSE-stage sign-off the work
+     exists and goes back to the doer, which is a request for changes. One label
+     covered both and the founder, looking for a reject in this window after the
+     row's red cross went away, did not find one. Now the name follows the case.
+     The endpoint, the reason and the notification are untouched. */
+  const rejectWord = apprStage === "close" ? "Request changes" : "Reject";
   const rejectTask = () => openReasonDialog("reject");
   const clarifyTask = () => openReasonDialog("clarify");
 
@@ -1813,7 +1822,10 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
             </button>
             <button onClick={rejectTask} data-testid={`reject${sfx}-${t.id}`}
               className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
-              <WarningCircle size={16} weight="bold" aria-hidden="true" /> Request changes
+              {apprStage === "close"
+                ? <WarningCircle size={16} weight="bold" aria-hidden="true" />
+                : <XCircle size={16} weight="bold" aria-hidden="true" />}
+              {rejectWord}
             </button>
             <button onClick={clarifyTask} data-testid={`clarify${sfx}-${t.id}`}
               className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
@@ -2505,6 +2517,71 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
         </div>
       </SheetContent>
     </Sheet>
+
+    {/* ASK-41 1 — THIS DIALOG LIVES IN THE DRAWER NOW, and that is the whole
+        of "there is no reject in the approvals popup". Reject and Ask
+        clarification both open it, both are inside the drawer, and the dialog
+        itself sat OUTSIDE `drawer` — in the tile's markup, after it. The Desk
+        opens this card with `drawerOnly`, which returns `drawer` and nothing
+        else, so on the Desk pressing Reject set the state and rendered
+        precisely nothing: no window, no error, no request. It moves inside, so
+        the one return path that carries the buttons also carries the window
+        they open. My Work is unaffected — its tile renders `drawer` too, so the
+        dialog is still there exactly once. */}
+      {/* U7-05: the reject / clarify reason (it replaced window.prompt).
+          2026-09-14, founder — on the gray glass sheet the Reassign window
+          uses: a round glass close, the glass field, a white glass Cancel and
+          the ink pill to send. */}
+      <Dialog open={!!reasonDialog} onOpenChange={(o) => !o && !reasonBusy && setReasonDialog(null)}>
+        <DialogContent className={`max-w-md gap-5 rounded-[1.75rem] p-6 sm:rounded-[1.75rem] [&>button.absolute]:hidden ${GLASS_SHEET}`} data-testid={`reason-dialog-${t.id}`}>
+          <div className="flex items-start justify-between gap-4">
+            <DialogHeader className="space-y-1.5 text-left">
+              <DialogTitle className="font-display text-xl text-neutral-900">
+                {reasonDialog?.kind === "reject" ? rejectWord : "Ask for clarification"}
+              </DialogTitle>
+              <p className="text-sm text-neutral-600">
+                {reasonDialog?.kind !== "reject"
+                  ? "What do you need clarified before starting?"
+                  : apprStage === "close"
+                    ? "Tell the assignee what needs to change before you can approve (optional)."
+                    : "Say why you are turning it down — the assignee is told (optional)."}
+              </p>
+            </DialogHeader>
+            <button type="button" onClick={() => setReasonDialog(null)} disabled={reasonBusy}
+              aria-label="Close" data-testid={`reason-close-${t.id}`} className={GLASS_ICON_BTN}>
+              <X size={16} weight="bold" aria-hidden="true" />
+            </button>
+          </div>
+          <textarea
+            rows={4}
+            value={reasonText}
+            onChange={(e) => setReasonText(e.target.value)}
+            aria-label={reasonDialog?.kind === "reject" ? "What needs to change" : "Your question"}
+            placeholder={reasonDialog?.kind !== "reject" ? "e.g. Which supplier's rate card do I use?"
+              : apprStage === "close" ? "e.g. Please add unit prices per line item." : "e.g. We are not buying this quarter."}
+            className={`${DRAWER_FIELD} resize-none`}
+            autoFocus
+          />
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setReasonDialog(null)}
+              disabled={reasonBusy}
+              data-testid={`reason-cancel-${t.id}`}
+              className={`h-11 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}
+            >Cancel</button>
+            <button
+              type="button"
+              onClick={submitReason}
+              disabled={reasonBusy || (reasonDialog?.kind === "clarify" && !reasonText.trim())}
+              data-testid={`reason-submit-${t.id}`}
+              className={`h-11 rounded-pill px-5 text-sm font-medium disabled:opacity-40 ${INK_PILL}`}
+            >
+              {reasonBusy ? "Sending..." : reasonDialog?.kind === "reject" ? rejectWord : "Send question"}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
   if (drawerOnly) return drawer;
@@ -2685,57 +2762,6 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
 
       {drawer}
 
-      {/* U7-05 dialog: reject / clarify reason (replaced window.prompt).
-          2026-09-14, founder — on the gray glass sheet the Reassign window
-          uses: a round glass close, the glass field, a white glass Cancel and
-          the ink pill to send. */}
-      <Dialog open={!!reasonDialog} onOpenChange={(o) => !o && !reasonBusy && setReasonDialog(null)}>
-        <DialogContent className={`max-w-md gap-5 rounded-[1.75rem] p-6 sm:rounded-[1.75rem] [&>button.absolute]:hidden ${GLASS_SHEET}`} data-testid={`reason-dialog-${t.id}`}>
-          <div className="flex items-start justify-between gap-4">
-            <DialogHeader className="space-y-1.5 text-left">
-              <DialogTitle className="font-display text-xl text-neutral-900">
-                {reasonDialog?.kind === "reject" ? "Request changes" : "Ask for clarification"}
-              </DialogTitle>
-              <p className="text-sm text-neutral-600">
-                {reasonDialog?.kind === "reject"
-                  ? "Tell the assignee what needs to change before you can approve (optional)."
-                  : "What do you need clarified before starting?"}
-              </p>
-            </DialogHeader>
-            <button type="button" onClick={() => setReasonDialog(null)} disabled={reasonBusy}
-              aria-label="Close" data-testid={`reason-close-${t.id}`} className={GLASS_ICON_BTN}>
-              <X size={16} weight="bold" aria-hidden="true" />
-            </button>
-          </div>
-          <textarea
-            rows={4}
-            value={reasonText}
-            onChange={(e) => setReasonText(e.target.value)}
-            aria-label={reasonDialog?.kind === "reject" ? "What needs to change" : "Your question"}
-            placeholder={reasonDialog?.kind === "reject" ? "e.g. Please add unit prices per line item." : "e.g. Which supplier's rate card do I use?"}
-            className={`${DRAWER_FIELD} resize-none`}
-            autoFocus
-          />
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setReasonDialog(null)}
-              disabled={reasonBusy}
-              data-testid={`reason-cancel-${t.id}`}
-              className={`h-11 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}
-            >Cancel</button>
-            <button
-              type="button"
-              onClick={submitReason}
-              disabled={reasonBusy || (reasonDialog?.kind === "clarify" && !reasonText.trim())}
-              data-testid={`reason-submit-${t.id}`}
-              className={`h-11 rounded-pill px-5 text-sm font-medium disabled:opacity-40 ${INK_PILL}`}
-            >
-              {reasonBusy ? "Sending..." : reasonDialog?.kind === "reject" ? "Request changes" : "Send question"}
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <TaskDetailDialog t={t} open={detailOpen} onOpenChange={setDetailOpen} onChange={onChange} />
         </div>

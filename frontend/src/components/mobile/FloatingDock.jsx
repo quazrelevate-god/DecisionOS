@@ -25,6 +25,7 @@ import { Tray, Wallet, DotsThree, Briefcase, AddressBook } from "@phosphor-icons
 import { hasPerm } from "@/lib/perms";
 import { DexWave } from "./DexWave";
 import { cn } from "@/lib/utils";
+import { INK_PLATE } from "@/components/karma/glass";
 
 /**
  * Resolve the dock's destination slots for this user (§8 "Role variance").
@@ -88,13 +89,12 @@ function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
      enough to read as one control, not an icon with a caption. */
   const content = (
     <>
-      <span
-        aria-hidden="true"
-        className={cn(
-          "grid h-6 w-11 place-items-center rounded-pill transition-colors duration-200",
-          active ? "bg-white/[.22]" : "bg-transparent"
-        )}
-      >
+      {/* ASK-41 3 — THE INDICATOR IS THE SLOT, NOT THE ICON. It was a 24px pill
+          behind the glyph alone, which left the label it belongs to sitting
+          outside the thing that was meant to mark it — the founder's word for
+          it was "not a standard way to do it". The whole slot is the marker
+          now (see `cls`), so this span stops painting and only positions. */}
+      <span aria-hidden="true" className="grid h-6 w-11 place-items-center">
         <Icon size={20} weight={active ? "fill" : "regular"} />
       </span>
       <span className="max-w-full truncate text-[length:var(--text-label)] font-semibold leading-none">
@@ -106,10 +106,20 @@ function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
   // class rather than Tailwind min-w/min-h utilities. --dock-item-min drops the
   // WIDTH to the 44px floor MPWA-01 §5.1 requires, because five slots and five
   // words do not fit five 56px boxes on a 360px phone; the height is untouched.
+  /* ASK-41 3 — and what it is painted WITH is the app's dark card: INK_PLATE,
+     the 24%->6% gradient with the white lip on its top edge, the same face
+     More's Ops/Team/Journal pills wear (the founder's reference for this) and
+     the same one the Desk's phone card wears. On the bar's translucent ink it
+     reads as a plate lifted out of the glass rather than a wash over it.
+     THE SHAPE IS THE BAR'S, one size down: 18px against the bar's 28px. A
+     capsule would fight the squircle ASK-39 cut the bar into, and a 52px-wide
+     slot at the bar's own 28px would be a capsule.
+     `my-1` is on EVERY slot, live or not, so nothing shifts when the plate
+     appears — and it keeps the plate a seam clear of the bar's own edge. */
   const cls = cn(
-    "dock-item flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5",
+    "dock-item my-1 flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-[1.125rem] px-0.5",
     "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-    active ? "text-white" : "text-white/55 hover:text-white/80"
+    active ? `text-white ${INK_PLATE}` : "text-white/55 hover:text-white/80"
   );
   const common = {
     style: { "--dock-item-min": "2.75rem" },
@@ -269,7 +279,14 @@ export function FloatingDock({
             <DockItem key={s.to} {...s} active={isActive(s.to)} />
           ))
         )}
-        <div className={cn("relative", dexActive && "hidden")}>
+        {/* ASK-41 3 — the badge needs a positioned parent, and this wrapper is
+            it; what it was NOT is a flex item like the four beside it, so the
+            slot inside it never stretched to the bar's height. It stood 56px
+            tall in a 70px row and its icon sat 7px above every other icon —
+            the misalignment the founder marked. Same flex-1 as a slot now, so
+            the button fills it and the two lines land on the same baselines as
+            Desk, Work, Money and CRM. */}
+        <div className={cn("relative flex min-w-0 flex-1", dexActive && "hidden")}>
           <DockItem
             to="#more"
             label={t("bottomnav.more", "More")}

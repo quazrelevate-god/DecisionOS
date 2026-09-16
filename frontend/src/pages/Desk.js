@@ -27,7 +27,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
-import { toast } from "sonner";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
@@ -41,6 +40,7 @@ import {
   ArcGauge, StatTile, ScopeSlider,
   BigNumeral, KDeltaChip, MiniBars, CircleDots, TinySpark,
 } from "../components/karma";
+import { INK_PLATE } from "../components/karma/glass";
 import { useDeskMetrics } from "./desk/useDeskMetrics";
 /* ASK-34 B — one DOM, not two. The phone's tabbed card and the desktop's three
    columns are different trees, and hiding one with `lg:hidden` would leave a
@@ -58,20 +58,15 @@ import { TaskCard } from "./MyWork";
 // 2026-09-14, founder — a decision opens as a POPUP here too, on the glass,
 // at 70% of the screen, instead of leaving for /decisions/:id.
 import { DecisionDialog } from "../components/DecisionDialog";
-// ASK-34 B4 — MPWA-04's own five-second reversal, reused rather than re-drawn.
-import { UndoSnackbar } from "../components/mobile/UndoSnackbar";
 // ASK-33 — "today's read" is retired from the Desk. Its call site below is
 // commented out, not deleted, and lib/deskInsight.js — the ranker — is kept,
 // untouched, for possible reuse.
 // import { deskInsight } from "../lib/deskInsight";
 import {
-  ArrowSquareOut, CaretRight, Timer, Check, X,
+  ArrowSquareOut, CaretRight, Timer,
   ChatCircleText, Gauge as GaugeIcon, Receipt, HandCoins, TrendUp,
 } from "@phosphor-icons/react";
 
-// ASK-34 7.3 — the undo window on a reject. Long enough to notice the toast
-// and reach it, short enough that the row leaving the column is believable.
-const UNDO_MS = 6000;
 /* ASK-35 1.1 — how many rows the phone's card shows before the control. Three:
    the Desk's job on a phone is to say what is waiting, and the rest is one tap
    away. */
@@ -85,12 +80,9 @@ const DOCK_SEAM = 8;
    top nav shelf is cut from (INK_PILL / .kr-navplate::before) so the two stay
    the same black. Only the fill and the lit top edge: INK_PILL's drop shadow
    and its hover brighten belong to a pressable pill, and this is a surface. */
-const PHONE_CARD_INK =
-  "bg-[linear-gradient(180deg,hsl(0_0%_24%),hsl(0_0%_6%))] shadow-[inset_0_1px_0_hsl(0_0%_100%/0.16)]";
-// Which surface is asking. The phone and the desktop share every rule here and
-// differ only in the furniture they show it with (ASK-34 B4).
-const isDesktop = () => typeof window !== "undefined" && !!window.matchMedia?.("(min-width: 1024px)").matches;
-
+// ASK-41 — the same string that More's tiles and the dock's live slot use,
+// from the one place it is written (components/karma/glass.js).
+const PHONE_CARD_INK = INK_PLATE;
 // ASK-25 — the three chips the Desk still asks /desk for. `important` is
 // gone: its builder returns an empty list (see _cards_important) so the box
 // could never show anything. Order is the reading order across the page:
@@ -183,44 +175,18 @@ function OpenButton({ onClick, label }) {
   );
 }
 
-/* ASK-34 7.3 / B4 — APPROVE AND REJECT, ON THE ROW. Both breakpoints now: 7.3
-   built them for the desktop columns behind `lg:`, and B4 asks for the same
-   pair in the phone's tabbed card, so the gate comes off and the row component
-   carries them wherever it is used.
-   Circular, like the open button beside them, and 44px rather than its 32 —
-   these two commit something. stopPropagation on BOTH click and keydown: the
-   row is a role="link" with its own Enter handler, so without the second one a
-   keyboard Approve would also open the decision it just approved. */
-function RowAction({ intent, label, onClick }) {
-  const Glyph = intent === "approve" ? Check : X;
-  return (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-      onKeyDown={(e) => e.stopPropagation()}
-      aria-label={label}
-      title={label}
-      data-testid={`desk-row-${intent}`}
-      className={`grid h-11 w-11 shrink-0 place-items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${
-        intent === "approve"
-          ? "bg-emerald-400/15 text-emerald-300 hover:bg-emerald-400/25 hover:text-emerald-200"
-          : "bg-rose-400/15 text-rose-300 hover:bg-rose-400/25 hover:text-rose-200"
-      }`}
-    >
-      <Glyph size={16} weight="bold" aria-hidden="true" />
-    </button>
-  );
-}
-
-/** The pair, 8px apart (spacing.touch-gap). */
-function RowActions({ what, onApprove, onReject }) {
-  return (
-    <span className="flex items-center gap-touch-gap">
-      <RowAction intent="approve" label={`Approve: ${what}`} onClick={onApprove} />
-      <RowAction intent="reject" label={`Reject: ${what}`} onClick={onReject} />
-    </span>
-  );
-}
+/* ASK-41 1 — THE ROW'S APPROVE AND REJECT ARE GONE, on both surfaces.
+   ASK-34 7.3 put a circular tick and cross on every row a person could decide,
+   and B4 carried them to the phone; the founder's call now is that a decision
+   is not a thing you commit from a list. The row opens the decision and the
+   decision is taken in the window that shows you what you are deciding — the
+   DecisionDialog for a decision, TaskCard's drawer for a task approval. Both
+   already carry the full pair, so nothing moved and nothing is now unreachable.
+   Everything that existed only to serve those two buttons went with them: the
+   undo window and its snackbar, the `retiring` set that hid a row while the
+   window ran, and the approve/reject/commit helpers. A reject reaches the
+   server through the window's own reason flow now, which is a confirmation in
+   its own right, so there is nothing left to take back six seconds later. */
 
 /* ASK-34 B5 · DeskRow — ONE ROW, TWO CONTAINERS. The desktop's three columns
    and the phone's tabbed card are different boxes holding the same thing, and
@@ -266,13 +232,11 @@ function DeskRow({ r, first, testid }) {
           </p>
         )}
       </div>
-      {/* ASK-34 7.3 — the amount, then the two actions, then the open icon, all
-          in one row with a 10px trough between them (the two actions are 8px
-          apart inside their own span). The row itself stays the link; the
-          buttons only stop their own click. */}
+      {/* ASK-41 1 — the amount, then the open icon, 10px apart. The tick and
+          cross that used to sit between them are gone; the row is the link and
+          the window it opens is where a decision is taken. */}
       <span className="flex shrink-0 items-center gap-2.5">
         {r.amount && <span className="font-mono text-[13px] leading-5 text-neutral-400">{r.amount}</span>}
-        {r.actions}
         <OpenButton onClick={(e) => { e.stopPropagation(); r.onOpen(); }} label={`Open: ${r.title}`} />
       </span>
     </div>
@@ -474,9 +438,6 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, on
     const box = list?.parentElement;              // the card
     if (!list || !box || typeof ResizeObserver === "undefined") return undefined;
     const measure = () => {
-      const row = list.querySelector("[data-row]");
-      const rowH = row?.offsetHeight || 0;
-      if (!rowH) return;
       /* ASK-40 — THE OLD SUM COULD ONLY EVER AGREE WITH ITSELF.
          It was `chrome = box.offsetHeight - list.offsetHeight`, which reads as
          "the card minus its list", i.e. the padding and the control. It is not:
@@ -515,18 +476,41 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, on
       /* Down to ZERO, not one. On a 360x640 phone the hero leaves the card
          ~54px, and forcing a row it cannot draw makes the card overflow the
          sheet — a card holding only "Show all 32" is the honest picture of
-         that screen, and the list is one tap away. */
-      const next = Math.max(0, Math.min(PHONE_ROWS, Math.floor((room - ctrlH) / rowH)));
-      setFit((f) => (f === next ? f : next));
+         that screen, and the list is one tap away.
+         ASK-41 2 — and the row trim only applies to a tab MADE of rows. It used
+         to be the first thing this function did, behind `if (!rowH) return`,
+         which meant the Watch tab — three stacked cards, not rows — was never
+         measured at all. That is why its Slipping card sat half under the dock:
+         nothing was watching. Everything above this line is about the box, so
+         it runs for every tab; only the division into rows is skipped. */
+      const row = list.querySelector("[data-row]");
+      const rowH = row?.offsetHeight || 0;
+      if (rowH) {
+        const next = Math.max(0, Math.min(PHONE_ROWS, Math.floor((room - ctrlH) / rowH)));
+        setFit((f) => (f === next ? f : next));
+      }
       /* THE PAGE IS FIXED TO ONE SCREEN UNLESS IT GENUINELY CANNOT HOLD THE
          SUMMARY. On a 360x640 phone the hero leaves this card less than the
          "Show all" control by itself, and crushing it there is a worse answer
          than letting that one page scroll. Same budget as the trim, asked after
-         the trim, so it only fires when trimming was not enough. */
+         the trim, so it only fires when trimming was not enough.
+         ASK-41 2 — AND THIS IS WHAT GIVES THE WATCH TAB ITS HEIGHT. Its three
+         feeds are a fixed set: there is no trimming them to fit and no "show
+         all" to press, so when Due today, Leave requests and Slipping together
+         come to more than the room above the dock, the only honest answer is
+         for the sheet to grow by the difference. Handing the page's height back
+         does exactly that — the board stops being pinned to one screen, the
+         sheet takes its content's height, and the last card clears the bar. */
       setCramped(list.offsetHeight + ctrlH > room + 1);
     };
     const ro = new ResizeObserver(measure);
     ro.observe(box);
+    /* ASK-41 2 — the CONTENT too, not just the box. The card is `flex-1`, so
+       its box does not move when what is inside it does: the Watch tab's leave
+       and slipping feeds arrive after the first paint and grow the list without
+       the card changing size at all, and a measurement that only watches the
+       box would never hear about it. */
+    ro.observe(list);
     measure();
     return () => ro.disconnect();
   }, [rows.length, tab, showAll]);
@@ -737,57 +721,6 @@ export default function Desk() {
     qc.invalidateQueries({ queryKey: ["desk-summary"] });
   };
 
-  /* ASK-34 7.3 — DECIDING FROM THE ROW, AND TAKING A REJECT BACK.
-     Read the header of this file first: ASK-25 kept approve and reject OFF the
-     Desk on purpose, because rejecting a decision throws away the work it
-     proposed and that deserved the full page. What changes that is not a
-     smaller conscience, it is an undo: a confirm dialog would cost a tap on
-     every single rejection including the ones the founder is sure about, which
-     is the exact thing the shortcut exists to remove, so instead NOTHING
-     REACHES THE SERVER until the window closes. The row leaves the column at
-     once because that is the honest picture of what is about to happen; Undo
-     puts it back and no request is ever made.
-     `retiring` is what a row that has left looks like while the window runs —
-     the 30s board poll keeps returning it until the commit lands, so without
-     this it would flick straight back in. */
-  const [retiring, setRetiring] = useState(() => new Set());
-  const retire = (id) => setRetiring((s) => new Set(s).add(id));
-  const restore = (id) => setRetiring((s) => { const n = new Set(s); n.delete(id); return n; });
-  const refreshBoard = () => {
-    ["desk", "decisions", "tasks", "desk-summary", "notifications"].forEach((k) =>
-      qc.invalidateQueries({ queryKey: [k] }));
-  };
-  const failed = (e, fallback) => toast.error(e?.response?.data?.detail || fallback);
-
-  // Approve CREATES work rather than cancelling it — there is nothing to take
-  // back, so it goes straight out and says so.
-  const approveRow = async (id, run, said) => {
-    retire(id);
-    try { await run(); toast.success(said); refreshBoard(); }
-    catch (e) { restore(id); failed(e, "Could not approve it"); }
-  };
-  const commitReject = async (id, run) => {
-    try { await run(); refreshBoard(); }
-    catch (e) { restore(id); failed(e, "Could not reject it"); }
-  };
-  /* ASK-34 B4 — THE SAME UNDO, THE SURFACE'S OWN FURNITURE. Desktop gets a
-     sonner toast with an Undo action; the phone gets UndoSnackbar, which is
-     MPWA-04's own control for exactly this and is already bottom-anchored above
-     the dock and the home indicator — a top-anchored toast on a phone is a
-     reach, and this is a control with five seconds on it. One window either
-     way, one commit path, and nothing reaches the server until it closes. */
-  const [undo, setUndo] = useState(null);
-  const rejectRow = (id, run, said) => {
-    retire(id);
-    if (!isDesktop()) { setUndo({ id, run, message: said }); return; }
-    let undone = false;
-    const timer = setTimeout(() => { if (!undone) commitReject(id, run); }, UNDO_MS);
-    toast(said, {
-      duration: UNDO_MS,
-      action: { label: "Undo", onClick: () => { undone = true; clearTimeout(timer); restore(id); } },
-    });
-  };
-
   // ASK-25 · Leave: the chip on the Desk, the cards on /approvals.
   const canApproveLeave = user?.role === "owner" || hasPerm(user, "leave_approve");
   const leavesQ = useQuery({
@@ -828,13 +761,8 @@ export default function Desk() {
   const showDecisions = isOwnerView || decisionCards.length > 0;
   const decisionsLoading = boardQs[0]?.isLoading;
   const topDecision = decisionCards[0];
-  /* ASK-34 7.3 — a row that has been acted on is out of the column and out of
-     the count from the moment it is tapped; the refetch after the commit makes
-     it true. An Undo puts both back. */
-  const liveDecisions = decisionCards.filter((c) => !retiring.has(c.id));
   /* Anything that has left the feed has been decided, so it stops being
-     deferred. Pruned from the FULL feed, not the live slice, or a row hidden by
-     an undo window in flight would lose its mark and get it back. */
+     deferred. */
   /* Keyed on target_id, which IS the decision's id — desk.py writes the same
      value into `id` and `target_id`, and `target_id` is the one the well's
      ending hands back, so this is the field that can never drift. */
@@ -853,10 +781,9 @@ export default function Desk() {
   const [deferred, setDeferred] = useState(getDeferred);
   useEffect(() => subscribeDeferred(setDeferred), []);
   const watchCount = (counters?.due_today || 0) + (canApproveLeave ? pendingLeaves.length : 0) + (counters?.on_fire || 0);
-  const decisionCount = counters
-    ? Math.max(0, counters.needs_decision - decisionCards.filter((c) => retiring.has(c.id)).length)
-    : null;
-  const liveApprovals = approvals.filter((t) => !retiring.has(t.id));
+  /* ASK-41 1 — the server's count, plainly. It used to subtract the rows an
+     undo window was hiding; there is no such row any more. */
+  const decisionCount = counters ? counters.needs_decision : null;
 
   /* ASK-34 B2 — THE ACTIVE TAB COUNTS, THE OTHERS ONLY SAY "SOMETHING". A
      number on every tab would be three numbers competing on a 360px strip; no
@@ -886,10 +813,10 @@ export default function Desk() {
   });
   const phoneTabs = [
     tabOption("decisions", "Decisions", decisionCount ?? 0, "needs"),
-    tabOption("approvals", "Approvals", approvalsQ.data ? liveApprovals.length : 0, "flag"),
+    tabOption("approvals", "Approvals", approvalsQ.data ? approvals.length : 0, "flag"),
     tabOption("watch", "Watch", watchCount, "today"),
   ];
-  const decisionRows = liveDecisions.map((c) => ({
+  const decisionRows = decisionCards.map((c) => ({
     id: c.id,
     title: c.title,
     meta: c.context_line,
@@ -897,45 +824,16 @@ export default function Desk() {
     onOpen: () => { clearDeferred(c.target_id); setOpenDecisionId(c.target_id); },
     // ASK-36 2 — read, then set aside. The row says so.
     deferred: deferred.includes(c.target_id),
-    /* ASK-32 1.3 and 2.4 — ONLY WHAT IS MINE TO DECIDE. The feed already draws
-       that line and it draws it on the server: desk.py marks a card "review"
-       when it sits in my approver queue (or is unassigned and I am an owner)
-       and "follow" when I raised it and someone else decides — 2.4's "Waiting
-       on Sunita" row, which gets no actions at all. So a row I may not decide
-       renders no buttons rather than buttons the server would 403, and the rule
-       stays in one place instead of two. Shared by both containers. */
-    actions: c.cta === "review" ? (
-      <RowActions
-        what={c.title}
-        onApprove={() => { clearDeferred(c.target_id); approveRow(c.id, () => api.post(`/decisions/${c.target_id}/approve`), `Approved — ${c.title}`); }}
-        onReject={() => { clearDeferred(c.target_id); rejectRow(c.id, () => api.post(`/decisions/${c.target_id}/reject`), `Rejected — ${c.title}`); }}
-      />
-    ) : null,
   }));
-  const approvalRows = liveApprovals.map((t) => ({
+  /* ASK-41 1 — the row opens the task; TaskCard's drawer is where it is
+     approved or rejected. Its approval block carries both, and the reject there
+     asks for a reason before anything reaches the server — which is the reason
+     the row's own reject needed a six-second undo and this one does not. */
+  const approvalRows = approvals.map((t) => ({
     id: t.id,
     title: t.title,
     meta: [t.assignee_name, daysLabel(daysSince(t.created_at))].filter(Boolean).join(" · "),
     onOpen: () => setOpenTaskId(t.id),
-    /* ASK-34 7.4 / B4 — the same two buttons, and REJECT GETS THE UNDO HERE
-       TOO. Checked against how a task approval is actually reversed:
-       routers/tasks.py reject_task pushes the task back to blocked (or
-       in_progress on a close-stage sign-off) and NOTIFIES every assignee
-       "Changes requested" the moment it lands — that message cannot be recalled
-       — and on a close-stage approval it is not simply re-approvable, because
-       approve_task refuses unless approval_status is still "pending", so the
-       doer has to mark the work complete again first. The work survives, so
-       this is lighter than a decision reject; a person hearing about it is
-       still worth the window. Approve has none.
-       Every row here already passed _can_approve_task on the server and
-       canApproveTask on the client, so all of them get buttons. */
-    actions: (
-      <RowActions
-        what={t.title}
-        onApprove={() => approveRow(t.id, () => api.post(`/tasks/${t.id}/approve`), `Approved — ${t.title}`)}
-        onReject={() => rejectRow(t.id, () => api.post(`/tasks/${t.id}/reject`, { reason: "" }), `Changes requested — ${t.title}`)}
-      />
-    ),
   }));
 
   return (
@@ -1362,7 +1260,7 @@ export default function Desk() {
             <DeskCard
               tone="flag"
               title="Task approvals"
-              count={approvalsQ.data ? liveApprovals.length : null}
+              count={approvalsQ.data ? approvals.length : null}
               loading={!m.tasks}
               empty="Nothing waiting for your sign-off"
               rows={approvalRows}
@@ -1417,20 +1315,6 @@ export default function Desk() {
 
       {openDecisionId && (
         <DecisionDialog decisionId={openDecisionId} open onClose={closeDecision} />
-      )}
-
-      {/* ASK-34 B4 — the phone's undo window. onExpire is where the request
-          actually goes out, which is the whole point of the pattern. */}
-      {undo && (
-        <UndoSnackbar
-          open
-          duration={UNDO_MS}
-          message={undo.message}
-          onUndo={() => { restore(undo.id); setUndo(null); }}
-          onExpire={() => { commitReject(undo.id, undo.run); setUndo(null); }}
-          className="lg:hidden"
-          data-testid="desk-undo"
-        />
       )}
 
       {openTask && (

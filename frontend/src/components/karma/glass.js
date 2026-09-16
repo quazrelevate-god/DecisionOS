@@ -22,6 +22,15 @@ export const GLASS_ICON_BTN = `grid h-11 w-11 shrink-0 place-items-center rounde
 // The filled black-gradient pill: the action that moves things on.
 export const INK_PILL = "bg-[linear-gradient(180deg,hsl(0_0%_24%),hsl(0_0%_6%))] text-white shadow-[0_12px_26px_-12px_hsl(0_0%_0%/0.7),inset_0_1px_0_hsl(0_0%_100%/0.16)] transition-[filter] hover:brightness-125";
 
+/* INK_PLATE — the same face as INK_PILL, WITHOUT the drop shadow: the 24%->6%
+   vertical gradient and the 16% white lip on the top edge, nothing else.
+   INK_PILL's shadow is for a control floating above the pale page; a plate that
+   sits ON a dark surface has nothing to cast onto, and the shadow only muddied
+   the black under it. Three places had typed this exact string out by hand —
+   the Desk's phone card, More's tiles and (ASK-41) the dock's live slot — so it
+   lives here now and they share it. Change the app's dark card here. */
+export const INK_PLATE = "bg-[linear-gradient(180deg,hsl(0_0%_24%),hsl(0_0%_6%))] shadow-[inset_0_1px_0_hsl(0_0%_100%/0.16)]";
+
 // The same pill in maroon: the one destructive action.
 export const MAROON_PILL = "bg-[linear-gradient(180deg,hsl(350_52%_40%),hsl(349_62%_27%))] text-white shadow-[0_12px_26px_-12px_hsl(349_62%_22%/0.7),inset_0_1px_0_hsl(0_0%_100%/0.18)] transition-[filter] hover:brightness-110";
 

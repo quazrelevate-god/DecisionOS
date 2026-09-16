@@ -1043,7 +1043,7 @@ them:
 
 ---
 
-## Outstanding, next session
+## Outstanding, next session — ALL ADDRESSED in ASK-33.2 (see the section after it)
 
 *Recorded 2026-09-16 at the founder's instruction, after ASK-33.1 (`6c1b6e6`).
 Nothing here was started. Nothing is pushed — the founder decides when the eight
@@ -1128,3 +1128,98 @@ Do not push.
   transient ending toast covers an overlay's close X for its four seconds. That
   is app-wide behaviour, outside this ticket, and the persistent notice already
   covers the case that mattered. The note stays in "ASK-33.1" as the record.
+
+---
+
+## ASK-33.2 — the composer row rebuilt, and the greeting answered (2026-09-16)
+
+### 1 · The greeting — a FIXTURE ARTIFACT, not a regression. Nothing changed.
+
+The founder's suspicion was right. Evidence, in the order it settles the
+question:
+
+- The greeting comes from **`GET /desk/summary`**, through
+  `pages/desk/useDeskMetrics.js`: `greeting: summaryQ.data?.greeting || ""`.
+- **That file is byte-identical to `bb0a9e8`** (`git diff bb0a9e8 --
+  frontend/src/pages/desk/useDeskMetrics.js` is empty), and so is the line in
+  `Desk.js` that reads it. Phase 1 commented out the `deskInsight` ranker, which
+  is a different thing entirely; Phase 2 only added the fade wrapper, which is
+  `data-dex-faded="false"` at rest.
+- **The fixtures never serve `/desk/summary`** — their greeting lives on
+  `/brief`, which this page does not read for it. So under fixture data the
+  greeting is `""` on `bb0a9e8` and on HEAD alike.
+- Probed at 1440 on HEAD: the element is present, `opacity: 1`, its parent not
+  faded, and its text is a single space — the `{greeting || " "}` fallback. It
+  renders; there is simply nothing to render.
+
+On Railway, with the real backend, `/desk/summary` returns the greeting and it
+shows. **Not fixed, because there is nothing broken.** Adding a greeting to the
+fixtures would make local screenshots representative, but it would also move the
+desktop baseline that was just regenerated — left alone deliberately.
+
+### 2 · The well's resting height — the consequence, confirmed. Nothing changed.
+
+ASK-25 gives the well `lg:flex-1`, so it takes whatever the left column has
+left. With the greeting empty (item 1) the column has ~90px more to give, and
+the well measures 218px at 1440 under fixtures. On Railway, where the greeting
+takes its height, the well settles back to roughly the ~155px the founder
+measured. **No height was hardcoded and nothing was changed** — as instructed,
+this was only to be touched if it was still wrong with the greeting back, and
+the greeting was never gone.
+
+### 3 · The composer row — three elements, no expansion
+
+    [attach]   [ ——— text field ——— ]   [mic / stop / send]
+
+- **[+] is deleted**, with the reveal container, both revealed circles, the
+  outside-tap and Escape handling, and the swap/stack animation constants.
+  **Attach is its own `.kr-pop` circle** — one tap opens the file picker.
+- **The field is a text field by default and SUNKEN.** It wore `.kr-pop`,
+  inherited from the "Chase it" button it replaced; KM-62 / KM-65 keep that
+  raised recipe for things you press, and an input is not one. It now wears
+  **`nm-inset`**, the recipe every other field in the app uses
+  (`components/ui/input.jsx`, `textarea.jsx`). The circles either side stay
+  raised, because they are pressed. The two-line growth, the placeholder and the
+  read-only-while-transcribing behaviour (KM-53) are unchanged.
+- **The mic carries three states**, DexFab's own `intent` pattern: empty and not
+  recording → mic; recording → stop (the words land in the field for review,
+  KM-51); the field has text → send. Tapping the mic turns the field into the
+  DexWave surface while recording and back into the field when it stops — so the
+  wave still mounts only while recording, which is what keeps the mobile audit
+  settling.
+- **The type/voice toggle is gone.** The mic is the mode switch.
+- **Test ids removed: `desk-dex-plus`, `desk-dex-mode`.** Kept:
+  `desk-dex-attach`, `desk-dex-mic`, `desk-dex-composer`.
+- **Attachment chips are unchanged.** Desktop and phone both.
+
+### 4 · The checks that only tested the reveal are deleted
+
+Removed: the [+]-then-attach dance in `verify-dex.mjs`, `verify-well.mjs`,
+`verify-p23.mjs`, `verify-p5.mjs`, `verify-p5b.mjs` and `verify-p331.mjs`; the
+Phase 3 "a tap on the composer's left edge reaches the field" check (it existed
+because the shut reveal's box sat over the field); and Phase 5's draft-peek
+checks (the draft can no longer be hidden). Added to `verify-well.mjs`: the field
+is sunken while the circles stay raised, the two removed ids are gone, and the
+field is a text field at rest. Everything covering the row itself — the
+recording, the transcript landing, send, the chips, the heights — stays.
+
+The three Phase 5 entries retired with the [+] stay retired; the code they
+described is now gone rather than merely unused.
+
+### Gates (ASK-33.2)
+
+- eslint clean on `pages/desk/DeskDexWell.jsx`; `npm run build` succeeds with
+  unchanged warnings; `npm run verify:dex` 114/114 at 390 and 360;
+  `verify-well.mjs` passes at 1440, 390 and 360, including the new checks that
+  the field is sunken while the circles stay raised and that `desk-dex-plus` and
+  `desk-dex-mode` are gone.
+- Looked at /inbox at 1440, 390 and 360. The row measures attach 40 · field ·
+  mic 40 on desktop and 44px circles on both phones; the mic reads mic → stop →
+  send, with the wave in the field while recording and the transcript landing
+  back in it.
+- `npm run audit:mobile -- --only inbox`: mobile 42 findings (40 failing + 2
+  warnings), no rule, route or viewport count changed; 0 console errors.
+  **Desktop: 3 diffs** against the baseline regenerated at `0beffcb` — /inbox,
+  ?scope=morning and ?scope=week at xl-1280, 683 px each (0.048%) — which is the
+  field's recipe going from raised to sunken. Expected; **the baseline was not
+  regenerated** (that needs a go).

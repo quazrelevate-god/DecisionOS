@@ -94,16 +94,10 @@ const sheet = (page) => page.getByTestId('dex-chat');
 const toasts = (page, text) => page.locator('[data-sonner-toast]').filter({ hasText: text });
 const sheetGone = (page) => until(async () => (await sheet(page).count()) === 0, 3000);
 
-/** Type into the well and press Enter, switching it to typing first if needed. */
+/** Type into the well and press Enter. ASK-33.2 — the field is a text field by
+    default: there is no mode to switch into, and no [+] to open first. */
 async function typeAndSend(page, words) {
-  const composer = page.getByTestId('desk-dex-composer');
-  if ((await composer.getAttribute('data-mode')) !== 'type') {
-    await page.getByTestId('desk-dex-plus').click();
-    await page.waitForTimeout(300);
-    await page.getByTestId('desk-dex-mode').click();
-    await page.waitForTimeout(300);
-  }
-  const input = composer.locator('textarea');
+  const input = page.getByTestId('desk-dex-composer').locator('textarea');
   await input.fill(words);
   await input.press('Enter');
 }
@@ -182,8 +176,6 @@ async function run(viewport) {
 
   // ------------------------------------------- C · FAILED, with a file attached
   await setEnding(page, 'consent');
-  await page.getByTestId('desk-dex-plus').click();
-  await page.waitForTimeout(300);
   const [chooser] = await Promise.all([
     page.waitForEvent('filechooser', { timeout: 5000 }),
     page.getByTestId('desk-dex-attach').click(),

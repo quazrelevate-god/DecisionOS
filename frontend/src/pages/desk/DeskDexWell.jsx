@@ -27,7 +27,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  Plus, Microphone, Stop, PaperPlaneRight, Paperclip, Keyboard, Waveform, X, Check, WarningCircle, File as FileGlyph,
+  Microphone, Stop, PaperPlaneRight, Paperclip, X, Check, WarningCircle, File as FileGlyph,
 } from "@phosphor-icons/react";
 import api from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
@@ -67,14 +67,6 @@ const prefersReducedMotion = () =>
    horizontal overflow. */
 const CIRCLE =
   "kr-pop relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60 disabled:opacity-40";
-/* The two circles [+] reveals. Opacity and transform only — both interpolate,
-   unlike .kr-pop's shadow pair — and nothing moves under reduced motion. They
-   arrive from the [+]: sideways below lg, where they swap into the composer's
-   slot, and upward from lg, where they stack above it. */
-const POP_ITEM = "transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none";
-const POP_OPEN = "pointer-events-auto translate-x-0 translate-y-0 scale-100 opacity-100";
-const POP_SHUT = "pointer-events-none -translate-x-2 scale-90 opacity-0 lg:translate-x-0 lg:translate-y-2";
-
 /** One attached file: a preview (the image itself, or a file glyph), its name,
  *  and a remove. Removing only drops it from the next note; the upload stays
  *  in files, as it always has. */
@@ -152,17 +144,17 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
   const chatRef = useRef(chat);
   chatRef.current = chat;
 
-  const [menuOpen, setMenuOpen] = useState(false);
   const [attaching, setAttaching] = useState(false);
-  const menuRef = useRef(null);
-  const plusRef = useRef(null);
   const fileInputRef = useRef(null);
 
   // KM-53 — the window between "stop" and the words coming back, as Layout
   // computes it for the dock: the upload and the transcript poll, narrowed to
   // the moment there is genuinely nothing in the field yet.
   const transcribing = !!dex.sending && !chat.draft;
-  const showField = chat.mode === "type" || !!chat.draft || transcribing;
+  /* ASK-33.2 — THE FIELD IS THE COMPOSER. It is a text field by default; the
+     wave takes its place only while recording, and hands the words back to it
+     when the recording stops (KM-51). There is no mode to switch into. */
+  const recording = !!dex.recording;
   const canSend = !!chat.draft.trim() || chat.pendingFiles.length > 0;
   const intent = dex.recording ? "stop" : canSend ? "send" : "mic";
 
@@ -187,7 +179,7 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
     el.style.height = `${next}px`;
     el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
     setTwoLines(next > line + pad + 1);
-  }, [chat.draft, showField]);
+  }, [chat.draft, recording]);
 
   /* The decision exists once the note is structured, not when it is sent, so
      the Desk's feeds refresh again at the ending — otherwise the Decisions
@@ -290,10 +282,6 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
     if (!growing || !stage || ENDINGS.includes(stage)) return;
     setSteps((s) => (s.includes(stage) ? s : [...s, stage]));
   }, [growing, stage]);
-
-  const waveState = dex.recording
-    ? "listening"
-    : (chat.busy || (expanded && !outcome && !ENDINGS.includes(stage))) ? "thinking" : "idle";
 
   /* ASK-33 Phase 3 — THE ENDINGS (plan 5.1, 5.2). When the note ends while the
      well is the workspace, lib/dexOutcome reads what it came to — a decision
@@ -404,7 +392,6 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
        founder's words, and released the moment the first note ends. */
     if (isReading(dex) || sheetReading()) { toast(OUTCOME_COPY.stillReading); return; }
     endingRef.current = null;
-    setMenuOpen(false);
     if (isDesktop()) {
       awaitingReplyRef.current = true;
       setSentText(chat.draft.trim() || chat.pendingFiles.map((f) => f.name).join(", "));
@@ -451,21 +438,21 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
 
   /* The mic circle: stop while recording; send once there is something to
      send (a draft, or a file on its own); otherwise record. */
+  /* ASK-33.2 — the mic is the mode switch: it starts a recording, stops one
+     (the words land in the field for review, KM-51), and sends once there is
+     something to send. DexFab's three intents, on the Desk. */
   const onMic = () => {
     if (dex.recording) { dex.stopRecording(); return; }
     // Upload or transcript still on its way: a tap here would record over the
     // words that are about to come back (KM-51).
     if (dex.sending || chat.busy) return;
     if (canSend) { send(); return; }
-    setMenuOpen(false);
-    chat.setMode("voice");
     dex.startRecording();
   };
 
   const onPickFile = async (e) => {
     const f = e.target.files?.[0];
     e.target.value = "";
-    setMenuOpen(false);
     if (!f) return;
     setAttaching(true);
     try {
@@ -476,27 +463,9 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
     }
   };
 
-  // The two circles close on a tap anywhere else, and on Escape.
-  useEffect(() => {
-    if (!menuOpen) return undefined;
-    const onDown = (e) => { if (!menuRef.current?.contains(e.target)) setMenuOpen(false); };
-    const onKey = (e) => {
-      if (e.key !== "Escape") return;
-      setMenuOpen(false);
-      plusRef.current?.focus();
-    };
-    document.addEventListener("pointerdown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [menuOpen]);
-
   // The FAB's glyphs (DexFab), so the two Dex controls speak one language.
   const MicGlyph = intent === "stop" ? Stop : intent === "send" ? PaperPlaneRight : Microphone;
   const micLabel = intent === "stop" ? "Stop recording" : intent === "send" ? "Send to Dex" : "Speak to Dex";
-  const typing = chat.mode === "type";
 
   /* The line under "Dex". Attached files take its place rather than adding a
      row, so the well never changes height. The row's py-2 / -my-2 pair gives
@@ -510,20 +479,7 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
         <AttachmentChip key={f.id} file={f} onRemove={() => chat.removeFile(f.id)} disabled={chat.busy} />
       ))}
     </ul>
-  ) : growing ? null : menuOpen && chat.draft.trim() ? (
-    /* Phase 5 — below lg the [+] circles swap into the composer's slot, so the
-       words typed so far step up into this line while they are out instead of
-       disappearing — the end of the draft, where the newest words are. From lg
-       the circles stack above the field, which stays in view. */
-    <>
-      <p data-testid="desk-dex-draft-peek" className="mt-1.5 truncate text-sm leading-snug text-foreground lg:hidden">
-        {chat.draft.length > 44 ? `…${chat.draft.slice(-43)}` : chat.draft}
-      </p>
-      <p className="mt-1.5 hidden text-sm leading-snug text-foreground/70 lg:block">
-        Tell Dex what you decided — speak or type.
-      </p>
-    </>
-  ) : (
+  ) : growing ? null : (
     <p className="mt-1.5 text-sm leading-snug text-foreground/70">
       {canCapture
         ? "Tell Dex what you decided — speak or type."
@@ -636,114 +592,54 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
 
   const floor = (
     <>
-      <div ref={menuRef} className="relative shrink-0">
-        {/* THE REVEAL NEVER LEAVES THE WELL, at any width.
-            Below lg the well is 150px and the [+] sits ~73px from its top, so
-            two 44px circles stacked above it would land on the KPI strip, and
-            a row above it would cover the "Dex" label and the prompt. So on a
-            phone they SWAP INLINE: they slide into the composer's own slot in
-            the floor row (the pill fades while they are out), right where the
-            thumb already is, and the mic does not move. From lg they stack
-            ABOVE the [+], nearest first — the desktop well leaves ~147px over
-            it for 96px of circles, clear of the prompt line.
-            Always mounted so they can animate out as well as in; shut, they
-            take no taps and no focus. Neither does the box that holds them —
-            it is pointer-events-none and only the circles opt back in, while
-            open. Shut, that box still has their size: on a phone it sits over
-            the composer's left edge and on desktop over the actions an
-            outcome puts above the [+], and it swallowed taps on both. */}
-        <div
-          className="pointer-events-none absolute left-full top-0 z-10 ml-2 flex h-full items-center gap-2 lg:bottom-full lg:left-0 lg:top-auto lg:mb-2 lg:ml-0 lg:h-auto lg:flex-col-reverse"
-          aria-hidden={!menuOpen}
-        >
-          <button
-            type="button"
-            data-testid="desk-dex-attach"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={!canCapture || chat.busy}
-            tabIndex={menuOpen ? 0 : -1}
-            aria-label="Attach a file"
-            title="Attach a file"
-            className={cn(CIRCLE, POP_ITEM, menuOpen ? POP_OPEN : POP_SHUT)}
-          >
-            <Paperclip size={17} weight="bold" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            data-testid="desk-dex-mode"
-            onClick={() => { chat.setMode(typing ? "voice" : "type"); setMenuOpen(false); }}
-            disabled={!canCapture || dex.recording}
-            tabIndex={menuOpen ? 0 : -1}
-            aria-label={typing ? "Speak instead" : "Type instead"}
-            title={typing ? "Speak instead" : "Type instead"}
-            className={cn(CIRCLE, POP_ITEM, menuOpen ? cn(POP_OPEN, "delay-[40ms]") : POP_SHUT)}
-          >
-            {typing
-              ? <Waveform size={17} weight="bold" aria-hidden="true" />
-              : <Keyboard size={17} weight="bold" aria-hidden="true" />}
-          </button>
-        </div>
-        <button
-          ref={plusRef}
-          type="button"
-          data-testid="desk-dex-plus"
-          onClick={() => setMenuOpen((v) => !v)}
-          disabled={!canCapture}
-          aria-expanded={menuOpen}
-          aria-busy={attaching || undefined}
-          aria-label={menuOpen ? "Close" : "Attach a file or switch between speaking and typing"}
-          title={menuOpen ? "Close" : "Attach, or type instead"}
-          className={cn(CIRCLE, attaching && "animate-pulse")}
-        >
-          <Plus
-            size={17}
-            weight="bold"
-            aria-hidden="true"
-            className={cn("transition-transform duration-200 motion-reduce:transition-none", menuOpen && "rotate-45")}
-          />
-        </button>
-        {/* Any file type — the pipeline reads what it can (plan 5.4). */}
-        <input ref={fileInputRef} type="file" className="hidden" tabIndex={-1} onChange={onPickFile} />
-      </div>
+      {/* ASK-33.2 — THREE ELEMENTS, NO EXPANSION: attach · field · mic.
+          The [+] that revealed two circles is gone (founder, 2026-09-16), and
+          with it the reveal's containment invariant, its invisible hitbox and
+          the draft it used to hide. Attach is one tap on its own circle. */}
+      <button
+        type="button"
+        data-testid="desk-dex-attach"
+        onClick={() => fileInputRef.current?.click()}
+        disabled={!canCapture || chat.busy}
+        aria-busy={attaching || undefined}
+        aria-label="Attach a file"
+        title="Attach a file"
+        className={cn(CIRCLE, attaching && "animate-pulse")}
+      >
+        <Paperclip size={17} weight="bold" aria-hidden="true" />
+      </button>
+      {/* Any file type — the pipeline reads what it can (plan 5.4). */}
+      <input ref={fileInputRef} type="file" className="hidden" tabIndex={-1} onChange={onPickFile} />
 
-      {/* The old "Chase it" pill, stretched to the row. KM-51 / KM-53, as the
-          dock: the field shows in type mode, AND whenever there is a draft
-          (a recording's words come back here to be read and edited before
-          anything is sent), AND while transcribing — read-only then, because
-          the words arrive as a setDraft that would wipe anything typed in the
-          gap. Otherwise the wave. */}
+      {/* THE FIELD IS SUNKEN. It wore .kr-pop, inherited from the "Chase it"
+          button it replaced — and KM-62 / KM-65 keep that raised recipe for
+          things you PRESS. An input is not a button, so it takes nm-inset, the
+          recipe every other field in the app wears (ui/input.jsx); the circles
+          either side stay raised, because they are pressed.
+          KM-53 — while transcribing it is read-only: the words arrive as a
+          setDraft that would wipe anything typed in the gap. */}
       <div
         data-testid="desk-dex-composer"
-        data-mode={showField ? "type" : "voice"}
+        data-mode={recording ? "voice" : "type"}
         /* min-h from the same token that lifts the circles and the field to
            44px below lg (index.css --control-h-sm), so the pill never sits
            shorter than its neighbours on a phone. */
         className={cn(
-          "kr-pop flex min-h-[var(--control-h-sm)] min-w-0 flex-1 items-center overflow-hidden focus-within:ring-2 focus-within:ring-kr-ink/60",
-          // Phase 5 — a fixed 40px while it draws the wave; as a field it takes
-          // the field's height (one line or two) and rounds less at two.
-          showField ? "h-auto" : "h-10",
-          twoLines ? "rounded-[1.375rem]" : "rounded-pill",
-          "transition-opacity duration-200 motion-reduce:transition-none",
-          // Below lg the [+] circles swap into this slot; the pill steps back.
-          menuOpen && "pointer-events-none opacity-0 lg:pointer-events-auto lg:opacity-100"
+          "nm-inset flex min-h-[var(--control-h-sm)] min-w-0 flex-1 items-center overflow-hidden focus-within:ring-2 focus-within:ring-kr-ink/60",
+          // A fixed 40px while it draws the wave; as a field it takes the
+          // field's own height (one line or two) and rounds less at two.
+          recording ? "h-10" : "h-auto",
+          twoLines ? "rounded-[1.375rem]" : "rounded-pill"
         )}
       >
-        {showField ? (
+        {!recording ? (
           <textarea
             ref={fieldRef}
             rows={1}
-            // Mounts on switching to type, so the keyboard comes up with it —
-            // but not for a transcript arriving, which is only to be watched.
-            autoFocus={typing}
             value={chat.draft}
             readOnly={transcribing}
             disabled={!canCapture}
-            onChange={(e) => { setMenuOpen(false); chat.setDraft(e.target.value); }}
-            // Phase 5 — below lg the [+] circles take this field's slot. A
-            // field that is focused or typed into puts them away, so the words
-            // being typed are never hidden behind them.
-            onFocus={() => setMenuOpen(false)}
+            onChange={(e) => chat.setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); send(); } }}
             // Short enough to fit whole at 360px, where the field is ~150px of text.
             placeholder={transcribing ? "Transcribing…" : "Type a decision…"}
@@ -756,25 +652,13 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
             )}
           />
         ) : (
+          /* Recording: the field becomes the wave, and gives the words back to
+             the field when it stops (KM-51). tone="ink" — KM-62's light-surface
+             ribbons; levelsRef, not levels, so the meter never renders the well
+             (KM-60). It mounts only while recording, so nothing animates at
+             rest — which is also what let the mobile audit settle. */
           <div className="h-full min-w-0 flex-1 px-4 py-1.5">
-            {waveState !== "idle" ? (
-              /* tone="ink" — KM-62's light-surface ribbons; levelsRef, not
-                 levels, so the meter never renders the well (KM-60). */
-              <DexWave tone="ink" state={waveState} levelsRef={dex.levelsRef} />
-            ) : (
-              /* AT REST THE WAVE IS STILL. DexWave redraws its ribbons on every
-                 animation frame for as long as it is mounted. That is right for
-                 the dock, which is only open while Dex is in use, and wrong for
-                 a well that sits on the Desk all day: a dashboard left open ran
-                 a frame loop for as long as it stayed open, and the endless path
-                 writes kept the mobile audit waiting for a page that never went
-                 still. So the ribbons mount only while there is something to
-                 show (listening, thinking); at rest this is DexWave's own ink
-                 hairline, drawn once. */
-              <svg viewBox="0 0 240 44" preserveAspectRatio="none" aria-hidden="true" className="block h-full w-full">
-                <line x1="0" y1="22" x2="240" y2="22" stroke="hsl(230 15% 30% / .38)" strokeWidth="0.6" opacity="0.35" />
-              </svg>
-            )}
+            <DexWave tone="ink" state="listening" levelsRef={dex.levelsRef} />
           </div>
         )}
       </div>

@@ -1,31 +1,32 @@
 #!/usr/bin/env node
 /**
- * ASK-33 Phase 4 verification — the phone's Dex sheet shows what a decision
- * capture came to.
+ * ASK-35 Group 2 verification — the phone's Dex answers where it was asked.
  *
- * REWRITTEN. This file used to verify MPWA-12e's DexSheet: a 64px mic, contextual
- * chips, a recording stage and an "understanding" stage with Looks right / Fix.
- * DexSheet was removed from Layout in 97c2bfc (KM-23) and is not mounted, so the
- * old run waited for a `dex-sheet` that never appears and crashed on its first
- * open. The live sheet is DexChat — a transcript — and on the phone a decision is
- * captured in the Desk's Dex well, which hands what it sent to that sheet.
+ * REWRITTEN AGAIN, and the reason is the point of the file. The first cut
+ * verified MPWA-12e's DexSheet, which KM-23 had already deleted. The second
+ * (ASK-33 Phase 4) verified the HAND-OFF: the Desk's well sent a decision and
+ * DexChat showed what it came to. ASK-35 G2 reverses that — the well expands in
+ * place on a phone exactly as it does on a desktop — so every check that
+ * asserted "sending from the well opens the Dex sheet" was encoding a rule the
+ * product no longer has. A gate that tests last week's design is worse than no
+ * gate: it fails for being right.
  *
  * At 390x844 and 360x640, against the fixtures:
  *   A  speak into the well (Chromium's fake audio device), read the words back,
- *      send: the sheet opens on Decide and the READY ending lands as a message —
- *      the 5.1 line, the echo, Review — and Review opens DecisionDialog
+ *      send: THE WELL EXPANDS — it grows to the top of the hero, the composer
+ *      does not move, the greeting and the KPI strip fade — the stages are
+ *      printed while it reads, and the READY ending lands in the workspace with
+ *      the 5.1 line and Review, which opens DecisionDialog
  *   B  type, NOTHING TO DECIDE: Dex's answer, one way out, not an error
  *   C  attach a file, AI-consent FAILURE: the reason untruncated, the Settings
- *      link, Retry re-sends that capture and a new ending arrives
- *   D  endings that land after the sheet is closed: READY is a toast that goes
- *      away; FAILED is a notice docked above the dock that stays, with Retry and
- *      Dismiss, never over the dock or the FAB, and moves into the sheet's flow
- *      while the sheet is open (ASK-33 Phase 5)
+ *      link at the phone's touch floor, Retry re-sends that capture
+ *   D  the three ways out — Later, Got it, Not now — collapse the workspace back
+ *      to its resting height and leave the composer ready for the next capture
  *   E  one capture at a time (ASK-33.1): a second send while the first is still
  *      being read is refused in plain words, the first still reports its ending,
  *      and the next send goes through once it has
- *   F  the guard: when nothing takes the hand-off, the well keeps the capture —
- *      it polls the note itself and reports the ending
+ *   F  THE SHEET IS ASK-ONLY NOW: no decide path opens it, and the FAB still
+ *      opens it on Ask in one tap
  *
  * The fixtures walk a note queued -> transcribing -> structuring -> done, and
  * sessionStorage "dos_fixture_capture" (nothing | consent | failed) picks the
@@ -102,6 +103,31 @@ async function typeAndSend(page, words) {
   await input.press('Enter');
 }
 
+/** The handful of numbers ASK-35 G2 turns on, all in CSS px. */
+const geometry = (page) => page.evaluate(() => {
+  const T = (s) => { const e = document.querySelector(s); return e ? Math.round(e.getBoundingClientRect().top) : null; };
+  const well = document.querySelector('[data-testid="desk-insight"]');
+  const pane = well.querySelector('.kr-well__pane');
+  return {
+    wellTop: T('[data-testid="desk-insight"]'), wellHeight: Math.round(well.getBoundingClientRect().height),
+    paneTop: Math.round(pane.getBoundingClientRect().top), heroTop: T('.kr-hero'),
+    micTop: T('[data-testid="desk-dex-mic"]'), boardTop: T('[data-testid="desk-board"]'),
+    greetFaded: document.querySelector('[data-testid="desk-brief-greeting"]')?.closest('[data-dex-faded]')?.dataset.dexFaded,
+    kpiFaded: document.querySelector('[data-testid="desk-kpi-strip"]')?.dataset.dexFaded,
+  };
+});
+
+/** MPWA-01 §5.1 — every control in an ending is a real target, and none of them
+ *  is below the fold on the shortest phone we support. */
+const touchAndFold = (page, testid, viewport) => page.evaluate(([t, vh]) => {
+  const el = document.querySelector(`[data-testid="${t}"]`);
+  if (!el) return false;
+  return [...el.querySelectorAll('button,a')].every((b) => {
+    const r = b.getBoundingClientRect();
+    return r.height >= 44 && r.bottom <= vh;
+  });
+}, [testid, viewport.height]);
+
 async function closeSheet(page) {
   await page.getByTestId('dex-chat-close').click();
   return sheetGone(page);
@@ -112,67 +138,95 @@ async function run(viewport) {
   const { ctx, page, errors, signedIn } = await open(viewport);
   check(`${w}: signed in`, signedIn);
   const well = page.getByTestId('desk-insight');
-  const wellRest = await well.boundingBox();
+  const field = page.getByTestId('desk-dex-composer').locator('textarea');
+  const mic = page.getByTestId('desk-dex-mic');
+  const rest = await geometry(page);
 
   // ------------------------------------------------------------ A · READY
   await setEnding(page, null);
-  const mic = page.getByTestId('desk-dex-mic');
   await mic.click();
   await page.waitForTimeout(1500);
   check(`${w} A: the well records`, (await mic.getAttribute('data-intent')) === 'stop');
   await mic.click();
-  const field = page.getByTestId('desk-dex-composer').locator('textarea');
   await until(async () => (await field.inputValue()).length > 0, 20000);
   const said = await field.inputValue().catch(() => '');
   check(`${w} A: the words come back into the well to be read first`, said.length > 0, clip(said, 60));
   await mic.click();
-  await sheet(page).waitFor({ timeout: 8000 }).catch(() => {});
-  check(`${w} A: sending from the well opens the Dex sheet`, await sheet(page).isVisible().catch(() => false));
-  check(`${w} A: the sheet says it is Decide`,
-    (await sheet(page).locator('span.rounded-pill', { hasText: /^decide$/i }).count()) === 1);
-  check(`${w} A: what was said is in the transcript`, (await sheet(page).textContent()).includes(said.slice(0, 24)));
-  const ready = sheet(page).getByTestId('dex-outcome-ready');
+  await page.waitForTimeout(1600);
+  const open1 = await geometry(page);
+
+  /* ASK-35 2.1 / 2.2 — THE WELL IS THE WORKSPACE. This is the reversal: no
+     sheet, the pane grows to the top of the hero, and the composer the founder
+     just typed into stays exactly where it was. */
+  check(`${w} A: sending expands the well in place`, open1.paneTop < rest.wellTop, `pane ${open1.paneTop} vs well ${rest.wellTop}`);
+  check(`${w} A: … and the Dex sheet does NOT open`, (await sheet(page).count()) === 0);
+  check(`${w} A: it grows to the top of the hero`, Math.abs(open1.paneTop - open1.heroTop) <= 2,
+    `pane ${open1.paneTop} vs hero ${open1.heroTop}`);
+  check(`${w} A: the composer row does not move`, open1.micTop === rest.micTop, `${rest.micTop} -> ${open1.micTop}`);
+  check(`${w} A: nothing below it shifts`, open1.boardTop === rest.boardTop, `${rest.boardTop} -> ${open1.boardTop}`);
+  check(`${w} A: the greeting and the KPI strip both fade`,
+    open1.greetFaded === 'true' && open1.kpiFaded === 'true', `greeting ${open1.greetFaded} · kpi ${open1.kpiFaded}`);
+  check(`${w} A: what was said is quoted back`, (await well.textContent()).includes(said.slice(0, 24)));
+
+  /* ASK-35 2.5 — the REAL stages, stacked above the forge rather than crammed
+     beside it, and the body is not a nested scroller. */
+  const stages = page.locator('[aria-label="What Dex is doing"]');
+  check(`${w} A: the real stages are printed while it reads`,
+    (await stages.count()) === 1 && /Sending it to Dex/.test(await stages.textContent()),
+    clip(await stages.textContent().catch(() => ''), 90));
+  const stacked = await page.evaluate(() => {
+    const st = document.querySelector('[aria-label="What Dex is doing"]');
+    const fg = document.querySelector('[data-testid="desk-dex-forge"]');
+    const body = document.querySelector('[data-testid="desk-insight"] [aria-live="polite"]');
+    if (!st || !fg || !body) return null;
+    return { below: fg.getBoundingClientRect().top >= st.getBoundingClientRect().bottom - 1,
+      h: Math.round(fg.getBoundingClientRect().height),
+      scrolls: body.scrollHeight > body.clientHeight + 1 };
+  });
+  check(`${w} A: the forge sits under them, whole`, !!stacked && stacked.below && stacked.h >= 72,
+    stacked ? `${stacked.h}px tall` : 'not drawn');
+  check(`${w} A: … and the body is not a nested scroller`, !!stacked && stacked.scrolls === false);
+
+  const ready = well.getByTestId('dex-outcome-ready');
   await ready.waitFor({ timeout: 25000 }).catch(() => {});
-  check(`${w} A: the READY ending lands as a message`, await ready.isVisible().catch(() => false));
-  const headline = clip(await ready.locator('p').first().textContent().catch(() => ''), 120);
+  check(`${w} A: the READY ending lands in the workspace`, await ready.isVisible().catch(() => false));
+  const headline = clip(await ready.getByTestId('desk-dex-summary').textContent().catch(() => ''), 120);
   check(`${w} A: it leads with the 5.1 line`, READY.test(headline), headline);
-  const readyText = clip(await ready.textContent().catch(() => ''), 400);
-  check(`${w} A: the echo says what it became`,
-    /Ship the indigo lot to Tirupur before Friday/.test(readyText) && /Nothing is created until it's approved/.test(readyText),
-    readyText.slice(0, 90));
-  check(`${w} A: nothing is toasted while the sheet shows it`, (await page.locator('[data-sonner-toast]').count()) === 0);
-  const wellNow = await well.boundingBox();
-  check(`${w} A: the well stays at rest (no desktop expansion)`, Math.round(wellNow.height) === Math.round(wellRest.height),
-    `${Math.round(wellRest.height)} -> ${Math.round(wellNow.height)}`);
+  check(`${w} A: nothing is toasted while the workspace shows it`, (await page.locator('[data-sonner-toast]').count()) === 0);
   check(`${w} A: the field is clear for the next one`, (await field.inputValue().catch(() => '')) === '');
-  const rb = await ready.boundingBox();
-  check(`${w} A: the ending sits inside the screen`, !!rb && rb.x >= 0 && rb.x + rb.width <= viewport.width,
-    rb ? `${Math.round(rb.x)}..${Math.round(rb.x + rb.width)}` : 'no box');
-  await ready.getByTestId('dex-outcome-review').click();
+  check(`${w} A: the ending's controls clear the touch floor and stay on screen`,
+    await touchAndFold(page, 'dex-outcome-ready', viewport));
+  await ready.getByTestId('desk-dex-review').click();
   await page.getByTestId('decision-dialog').waitFor({ timeout: 8000 }).catch(() => {});
-  check(`${w} A: Review closes the sheet`, await sheetGone(page));
-  check(`${w} A: … and opens the decision in DecisionDialog`,
-    await page.getByTestId('decision-dialog').isVisible().catch(() => false)
-      && new URL(page.url()).searchParams.get('decision') === 'dec_fixture',
-    new URL(page.url()).search);
+  check(`${w} A: Review opens the decision in DecisionDialog`,
+    await page.getByTestId('decision-dialog').isVisible().catch(() => false));
   await page.getByTestId('decision-close').click().catch(() => {});
   await until(async () => (await page.getByTestId('decision-dialog').count()) === 0, 5000);
-  await page.waitForTimeout(500);
+  await gotoDesk(page);
 
   // ---------------------------------------------------- B · NOTHING TO DECIDE
   await setEnding(page, 'nothing');
   await typeAndSend(page, 'How much profit did we make this month?');
-  await sheet(page).waitFor({ timeout: 8000 }).catch(() => {});
-  const nothing = sheet(page).getByTestId('dex-outcome-nothing');
+  const nothing = well.getByTestId('dex-outcome-nothing');
   await nothing.waitFor({ timeout: 25000 }).catch(() => {});
-  check(`${w} B: NOTHING TO DECIDE lands as a message`, await nothing.isVisible().catch(() => false));
+  check(`${w} B: NOTHING TO DECIDE lands in the workspace`, await nothing.isVisible().catch(() => false));
   const nothingText = clip(await nothing.textContent().catch(() => ''), 200);
-  check(`${w} B: Dex's answer is shown`, /Nothing to decide in that/.test(nothingText) && /question, not a decision/.test(nothingText), nothingText.slice(0, 90));
+  check(`${w} B: Dex's answer is shown`,
+    /Nothing to decide in that/.test(nothingText) && /question, not a decision/.test(nothingText), nothingText.slice(0, 90));
   check(`${w} B: exactly one way out`, (await nothing.getByRole('button').count()) === 1);
   check(`${w} B: not styled as an error`,
     (await nothing.getAttribute('role')) !== 'alert' && (await nothing.locator('svg').count()) === 0);
-  await nothing.getByTestId('dex-outcome-dismiss').click();
-  check(`${w} B: the way out closes the sheet`, await sheetGone(page));
+  check(`${w} B: its control clears the touch floor and stays on screen`,
+    await touchAndFold(page, 'dex-outcome-nothing', viewport));
+
+  // D · the way out collapses the workspace, checked on this ending
+  await nothing.getByRole('button').click();
+  check(`${w} D: "Got it" puts the well back to its resting height`,
+    await until(async () => { const g = await geometry(page); return g.wellHeight === rest.wellHeight && g.paneTop >= rest.wellTop - 1; }, 6000),
+    `${rest.wellHeight}px`);
+  check(`${w} D: … and the greeting and the strip come back`,
+    await until(async () => { const g = await geometry(page); return g.greetFaded === 'false' && g.kpiFaded === 'false'; }, 4000));
+  check(`${w} D: … with the composer still where it was`, (await geometry(page)).micTop === rest.micTop);
 
   // ------------------------------------------- C · FAILED, with a file attached
   await setEnding(page, 'consent');
@@ -185,93 +239,40 @@ async function run(viewport) {
   await chips.first().waitFor({ timeout: 8000 }).catch(() => {});
   check(`${w} C: the file is attached in the well`, (await chips.count()) === 1);
   await typeAndSend(page, 'Tell Suresh to ship the indigo lot before Friday');
-  await sheet(page).waitFor({ timeout: 8000 }).catch(() => {});
+  await page.waitForTimeout(1200);
   check(`${w} C: the file goes with the capture`, (await chips.count()) === 0);
-  const failed = sheet(page).getByTestId('dex-outcome-failed');
-  await failed.first().waitFor({ timeout: 25000 }).catch(() => {});
-  check(`${w} C: the FAILED ending lands as a message`, await failed.first().isVisible().catch(() => false));
-  check(`${w} C: it is announced`, (await failed.first().getAttribute('role')) === 'alert');
-  const reason = failed.first().getByTestId('dex-outcome-reason');
-  check(`${w} C: the consent reason, in the Desk well's words`, (await reason.textContent().catch(() => '')) === CONSENT,
-    clip(await reason.textContent().catch(() => '')));
-  const whole = await reason.evaluate((el) => el.scrollWidth <= el.clientWidth + 1
+  const failed = well.getByTestId('dex-outcome-failed');
+  await failed.waitFor({ timeout: 25000 }).catch(() => {});
+  check(`${w} C: the FAILED ending lands in the workspace`, await failed.isVisible().catch(() => false));
+  check(`${w} C: it is announced`, (await failed.getAttribute('role')) === 'alert');
+  const reasonText = clip(await failed.locator('span.break-words').first().textContent().catch(() => ''), 200);
+  check(`${w} C: the consent reason, in the Desk well's words`, reasonText === CONSENT, reasonText);
+  const whole = await failed.locator('span.break-words').first().evaluate((el) => el.scrollWidth <= el.clientWidth + 1
     && el.scrollHeight <= el.clientHeight + 1 && getComputedStyle(el).textOverflow !== 'ellipsis').catch(() => false);
   check(`${w} C: the reason is not truncated`, whole);
-  // The screen exists again (RBAC P1), so the ending links to it.
+  const link = failed.getByTestId('dex-outcome-settings');
   check(`${w} C: it links to the AI-consent screen`,
-    (await failed.first().getByTestId('dex-outcome-settings').getAttribute('href').catch(() => '')) === '/settings?tab=business#ai-consent');
-  await failed.first().getByTestId('dex-outcome-retry').click();
-  check(`${w} C: Retry re-sends without asking to say it again`,
-    await until(async () => (await sheet(page).getByText('Reading it again…').count()) > 0, 5000));
-  check(`${w} C: the retried ending stops offering Retry`,
-    (await failed.first().getByTestId('dex-outcome-retry').count()) === 0);
+    (await link.getAttribute('href').catch(() => '')) === '/settings?tab=business#ai-consent');
+  /* ASK-35 2.6 — it was a 20px line of text; it is a tap target below lg. */
+  const linkBox = await link.boundingBox();
+  check(`${w} C: … and that link is a 44px target on a phone`, !!linkBox && linkBox.height >= 44,
+    linkBox ? `${Math.round(linkBox.height)}px` : 'no box');
+  check(`${w} C: the failure's controls clear the touch floor and stay on screen`,
+    await touchAndFold(page, 'dex-outcome-failed', viewport));
+  await failed.getByTestId('dex-outcome-retry').click();
+  check(`${w} C: Retry re-sends without asking to say it again, and thinks again`,
+    await until(async () => (await stages.count()) === 1, 6000));
   check(`${w} C: the re-sent capture reaches its own ending`,
-    await until(async () => (await failed.count()) === 2));
-  await failed.last().getByTestId('dex-outcome-dismiss').click();
-  check(`${w} C: Not now closes the sheet`, await sheetGone(page));
+    await until(async () => (await failed.count()) === 1, 25000));
+  await failed.getByRole('button', { name: 'Not now' }).click();
+  check(`${w} D: "Not now" collapses it too`,
+    await until(async () => (await geometry(page)).wellHeight === rest.wellHeight, 6000));
   await gotoDesk(page);
-
-  // ------------------------------------- D · endings after the sheet is closed
-  await setEnding(page, null);
-  await typeAndSend(page, 'Tell Suresh to ship the indigo lot before Friday');
-  await sheet(page).waitFor({ timeout: 8000 }).catch(() => {});
-  check(`${w} D: the sheet can be closed before the note ends`, await closeSheet(page));
-  const readyToast = toasts(page, 'Decision ready for Sunita Rao');
-  check(`${w} D: a READY ending that lands after closing is toasted`, await until(async () => (await readyToast.count()) === 1));
-  // Sonner marks both buttons data-button; the action is data-action, the cancel data-cancel.
-  check(`${w} D: … with Review`, (await readyToast.first().locator('[data-action]').textContent().catch(() => '')) === 'Review');
-  check(`${w} D: … and it goes away on its own`, await until(async () => (await readyToast.count()) === 0, 12000));
-
-  await setEnding(page, 'failed');
-  await typeAndSend(page, 'Tell Suresh to ship the indigo lot before Friday');
-  await sheet(page).waitFor({ timeout: 8000 }).catch(() => {});
-  await closeSheet(page);
-  // Phase 5 — a failure is not a toast: a notice docked above the dock.
-  const notice = page.getByTestId('dex-failure-notice');
-  check(`${w} D: a FAILED ending that lands after closing is a notice`, await until(async () => (await notice.count()) === 1));
-  check(`${w} D: … with the reason`, /structuring service did not answer/.test(await notice.textContent().catch(() => '')),
-    clip(await notice.textContent().catch(() => '')));
-  check(`${w} D: … Retry and Dismiss`,
-    (await notice.getByTestId('dex-failure-retry').count()) === 1 && (await notice.getByTestId('dex-failure-dismiss').count()) === 1);
-  check(`${w} D: … and no toast for it`, (await toasts(page, "That didn't go through").count()) === 0);
-  await page.waitForTimeout(9000);
-  check(`${w} D: … and it stays until dismissed`, (await notice.count()) === 1);
-  const nb = await notice.boundingBox();
-  const dockBox = await page.getByTestId('floating-dock').boundingBox();
-  const fabBox = await page.getByTestId('dex-fab').boundingBox();
-  check(`${w} D: … above the dock and the FAB, never over them`,
-    !!nb && nb.y + nb.height <= Math.min(dockBox.y, fabBox.y),
-    nb ? `notice ends ${Math.round(nb.y + nb.height)} · dock ${Math.round(dockBox.y)} · FAB ${Math.round(fabBox.y)}` : 'no box');
-  const clearance = await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('[data-app-scroller]')).paddingBottom));
-  check(`${w} D: … and the page gains its height as scroll clearance`, !!nb && clearance >= 120 + nb.height,
-    `padding-bottom ${Math.round(clearance)} for a ${Math.round(nb?.height || 0)}px notice`);
-  await page.getByTestId('dex-fab').click();
-  await sheet(page).waitFor({ timeout: 6000 }).catch(() => {});
-  await page.waitForTimeout(500);
-  const inline = sheet(page).getByTestId('dex-failure-notice');
-  const ib = await inline.boundingBox();
-  const plusBox = await page.getByTestId('dex-plus').boundingBox();
-  check(`${w} D: … and the failure is not shown twice there`,
-    (await sheet(page).getByTestId('dex-outcome-failed').count()) === 0 && (await sheet(page).getByTestId('dex-failure-notice').count()) === 1);
-  check(`${w} D: with the sheet open it sits in the sheet's flow, clear of the plus`,
-    (await page.locator('[data-testid="dex-failure-notice"][data-placement="dock"]').count()) === 0
-      && !!ib && !!plusBox && ib.y + ib.height <= plusBox.y,
-    ib && plusBox ? `notice ends ${Math.round(ib.y + ib.height)} · plus ${Math.round(plusBox.y)}` : 'no box');
-  await closeSheet(page);
-  await notice.getByTestId('dex-failure-retry').click();
-  const retried = await until(async () => (await notice.count()) === 0, 4000);
-  check(`${w} D: Retry from the notice re-sends it, and its ending is reported again`,
-    retried && (await until(async () => (await notice.count()) === 1)) && (await sheet(page).count()) === 0);
-  await notice.getByTestId('dex-failure-dismiss').click().catch(() => {});
-  check(`${w} D: Dismiss clears it`, await until(async () => (await notice.count()) === 0, 4000));
-  const settled = await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('[data-app-scroller]')).paddingBottom));
-  check(`${w} D: … and gives the clearance back`, settled < clearance, `${Math.round(clearance)} -> ${Math.round(settled)}`);
 
   // --------------------------------------------------- E · one note at a time
   await setEnding(page, null);
   await typeAndSend(page, 'Tell Suresh to ship the indigo lot before Friday');
-  await sheet(page).waitFor({ timeout: 8000 }).catch(() => {});
-  await closeSheet(page);
+  await page.waitForTimeout(1200);
   await typeAndSend(page, 'Ask Priya to book the Tirupur truck for Thursday');
   await page.waitForTimeout(1000);
   /* ASK-33.1 — the second send is REFUSED while Dex is still reading the first.
@@ -279,41 +280,34 @@ async function run(viewport) {
      Decisions column — but it retires the first note's poll, and a failure has
      nowhere else to land (plan 5.2). */
   check(`${w} E: a second capture while the first is still being read is refused`,
-    (await sheet(page).count()) === 0 && (await toasts(page, 'Dex is still reading your last one').count()) === 1);
-  check(`${w} E: the first capture still reports its ending`,
-    await until(async () => (await toasts(page, 'Decision ready for Sunita Rao').count()) >= 1));
-  await page.waitForTimeout(700);
+    (await toasts(page, 'Dex is still reading your last one').count()) === 1);
+  check(`${w} E: the first capture still reaches its ending`,
+    await until(async () => (await well.getByTestId('dex-outcome-ready').count()) === 1));
+  await well.getByRole('button', { name: 'Later' }).click();
+  check(`${w} D: "Later" collapses it as well`,
+    await until(async () => (await geometry(page)).wellHeight === rest.wellHeight, 6000));
+  await page.waitForTimeout(800);
   await typeAndSend(page, 'Ask Priya to book the Tirupur truck for Thursday');
   check(`${w} E: and the next send goes through once it has`,
-    await until(async () => (await sheet(page).count()) === 1, 8000));
-  /* Left open on purpose. The app's toasts are top-anchored and sit above
-     everything, so a transient one covers the sheet's X for its life — and
-     hovering it (which reaching for the X does) pauses its dismissal. True of
-     any overlay's close button in this app, which is why the persistent failure
-     is a notice instead. Nothing below needs the sheet shut. */
+    await until(async () => (await stages.count()) === 1, 8000));
+
+  // ------------------------------------------------- F · the sheet is Ask-only
+  check(`${w} F: no decide path opened the sheet, all run long`, (await sheet(page).count()) === 0);
+  await until(async () => (await well.getByTestId('dex-outcome-ready').count()) === 1);
+  await well.getByRole('button', { name: 'Later' }).click();
+  await page.waitForTimeout(700);
+  await page.getByTestId('dex-fab').click();
+  await sheet(page).waitFor({ timeout: 8000 }).catch(() => {});
+  await page.waitForTimeout(700);
+  check(`${w} F: the FAB still opens the sheet in one tap`, (await sheet(page).count()) === 1);
+  check(`${w} F: … and it is ASK`, /\bAsk\b/i.test(await sheet(page).innerText().catch(() => '')),
+    clip(await sheet(page).innerText().catch(() => ''), 60));
+  await closeSheet(page);
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   check(`${w}: no horizontal overflow`, overflow <= 0, `${overflow}px`);
   check(`${w}: no page errors`, errors.length === 0, errors[0] || '');
   await ctx.close();
-
-  // ------------------------------------------------------------- F · the guard
-  const g = await open(viewport, { blockHandoff: true });
-  await setEnding(g.page, null);
-  await typeAndSend(g.page, 'Tell Suresh to ship the indigo lot before Friday');
-  await g.page.waitForTimeout(1500);
-  check(`${w} F: nothing took the hand-off, so no sheet`, (await sheet(g.page).count()) === 0);
-  check(`${w} F: the well kept polling and reported the ending`,
-    await until(async () => (await toasts(g.page, 'Decision ready for Sunita Rao').count()) === 1));
-  await until(async () => (await toasts(g.page, 'Decision ready').count()) === 0, 12000);
-  await setEnding(g.page, 'failed');
-  await typeAndSend(g.page, 'Tell Suresh to ship the indigo lot before Friday');
-  const kept = g.page.getByTestId('dex-failure-notice');
-  check(`${w} F: a failure the well kept is reported too`, await until(async () => (await kept.count()) === 1));
-  await g.page.waitForTimeout(9000);
-  check(`${w} F: … and it stays until dismissed`, (await kept.count()) === 1);
-  check(`${w} F: no page errors`, g.errors.length === 0, g.errors[0] || '');
-  await g.ctx.close();
 }
 
 await run({ width: 390, height: 844 });

@@ -3063,9 +3063,11 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
     }
     @media (min-width: 1024px) {
         .kr-desk-board {
-            /* The tile radius on top, square below — it runs to the floor. */
+            /* ASK-35 3.1 — ALL FOUR CORNERS. It was square below because it ran
+               off the bottom of the page; it is a card sitting ON the page now,
+               and a card has four corners. */
             padding: 1.125rem 1.25rem 1.375rem;
-            border-radius: var(--radius-tile) var(--radius-tile) 0 0;
+            border-radius: var(--radius-tile);
         }
     }
 

@@ -1043,7 +1043,19 @@ export default function Desk() {
            black. minmax(0,1fr) makes the row take the container's height and
            allows it to go under its content — which is precisely what lets the
            overflow land on the list inside, where the scroll now is. */
-        className={`kr-desk-board grid gap-5 lg:-mb-8 lg:min-h-0 lg:flex-1 lg:gap-0 lg:grid-rows-[minmax(0,1fr)] ${showDecisions ? "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]" : ""}`}
+        /* ASK-35 3.1-3.3 — THE BOARD DETACHES.
+           `lg:-mb-8` is gone: it existed to pull the black through the content
+           wrapper's 2rem bottom padding and off the floor, and it is a card
+           now. `lg:-mb-2` in its place is EVEN SPACING, not a guess: the gap
+           ABOVE the board is desk-page's own `gap-6`, 1.5rem; below it the
+           wrapper leaves 2rem; pulling back 0.5rem makes the visible gap
+           2 - 0.5 = 1.5rem and the two match exactly. Measured at 1280 and
+           1440, not eyeballed.
+           `lg:-mx-3` pushes it 12px past the well's left edge and the KPI
+           grid's right — enough to read as a wider plane than the content on
+           it, and 12 of the wrapper's 32px of padding, so it can never reach
+           the page edge. */
+        className={`kr-desk-board grid gap-5 lg:-mx-3 lg:-mb-2 lg:min-h-0 lg:flex-1 lg:gap-0 lg:grid-rows-[minmax(0,1fr)] ${showDecisions ? "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]" : ""}`}
       >
         {/* ASK-34 B — THE PHONE'S CARD. One card, three tabs, the same rows the
             desktop columns use. */}

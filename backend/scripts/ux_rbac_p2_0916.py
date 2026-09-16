@@ -23,6 +23,7 @@ from datetime import date, timedelta
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from ux_login import demo_login  # noqa: E402
+from ux_team_nav import reveal_member  # noqa: E402
 from playwright.sync_api import sync_playwright  # noqa: E402
 
 BASE = "http://localhost:3000"
@@ -176,7 +177,8 @@ with sync_playwright() as pw:
 
     # Make-owner asks in the app's own dialog
     p.goto(f"{BASE}/team")
-    wait_id(p, f"team-member-{SALES}", 20000)
+    wait_id(p, "team-tree", 20000)
+    reveal_member(p, SALES)
     p.locator(f'[data-testid="team-member-{SALES}"]').first.click()
     p.locator(f'[data-testid="edit-access-{SALES}"]').first.click()
     wait_id(p, "member-dialog")

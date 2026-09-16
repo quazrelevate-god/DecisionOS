@@ -508,8 +508,15 @@ async def login(inp: LoginInput, request: Request, response: Response):
         find_membership as _find_m,
         LIVE_STATUSES as _LIVE,
         legacy_access_allowed as _legacy_ok,
+        accept_pending_membership as _accept_pending,
     )
     choices = await _choices(db, user["id"])
+    # 2026-09-16: a password sign-in accepts a pending invite too — the picker
+    # only lists live memberships, so an invited member would otherwise be told
+    # their account isn't linked to any workspace.
+    if not choices or (inp.tenant_id and not any(c["tenant_id"] == inp.tenant_id for c in choices)):
+        if await _accept_pending(db, user["id"], inp.tenant_id):
+            choices = await _choices(db, user["id"])
     # Fallback: pre-migration users may not have a memberships row yet
     # (backfill runs at bootstrap but a race is possible). Fall through
     # to the legacy user.tenant_id/role so nobody is locked out — except

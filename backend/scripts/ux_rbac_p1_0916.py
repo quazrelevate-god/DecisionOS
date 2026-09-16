@@ -11,8 +11,8 @@ Refuses to run unless the signed-in tenant carries the scratch marker "rbac".
   Owner (desktop)  AI processing card turns on and off; "Task templates", no approval
                    rules; adding a member with a password shows a welcome message
                    (their email, never the password); editing their name and giving
-                   them No access; no invite link for an active member; naming the
-                   doer as approver is refused.
+                   them No access; the invite icon beside a member's name; naming
+                   the doer as approver is refused.
   Sales (phone)    Team tile in All apps; AI processing card is read-only.
   Sales (desktop)  the decisions list holds only decisions they are part of.
 """
@@ -23,6 +23,7 @@ import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from ux_login import demo_login  # noqa: E402
+from ux_team_nav import open_member  # noqa: E402
 from playwright.sync_api import sync_playwright  # noqa: E402
 
 BASE = "http://localhost:3000"
@@ -100,10 +101,7 @@ def status_becomes(p, want, timeout=12000):
 
 
 def open_profile(p, uid):
-    p.goto(f"{BASE}/team")
-    wait_id(p, f"team-member-{uid}", 20000)
-    p.locator(f'[data-testid="team-member-{uid}"]').first.click()
-    return wait_id(p, f"profile-dialog-{uid}")
+    return open_member(p, BASE, uid, wait_id)
 
 
 with sync_playwright() as pw:
@@ -172,7 +170,7 @@ with sync_playwright() as pw:
     rec("no-access-saved", kavya.get("effective_permissions") == [] and kavya.get("permissions_custom") is True,
         f"{kavya.get('effective_permissions')} custom={kavya.get('permissions_custom')}")
 
-    # An active member has no invite link.
+    # The invite icon, on an active member's profile.
     open_profile(p, SALES)
     # Sakthivel's Team redesign (8b60707, founder 2026-09-16): the invite icon sits
     # beside the name for every member but an owner, so it shows for an active one too.

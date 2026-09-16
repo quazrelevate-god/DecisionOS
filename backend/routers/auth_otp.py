@@ -96,8 +96,18 @@ async def invite_start(token: str):
     # FIX-003-A: invite already carries the exact tenant we're joining;
     # no ambiguity to resolve, but the OTP row still needs the tenant
     # scope so /auth/otp/verify can find it.
-    resp = await _issue_otp(norm, phone, tenant_id=user["tenant_id"],
-                             enforce_cooldown=False)
+    # 2026-09-16: an invite link gets forwarded and re-tapped (WhatsApp), and
+    # anyone holding the URL can call this without signing in. It keeps the same
+    # 30s cooldown as an ordinary login so a stray link can't text someone on a
+    # loop — but a tap inside that window still returns everything the device
+    # needs to enter the code that was already sent, rather than an error.
+    try:
+        resp = await _issue_otp(norm, phone, tenant_id=user["tenant_id"])
+    except HTTPException as e:
+        if e.status_code != 429:
+            raise
+        resp = {"sent": True, "dev_mode": False, "tenant_id": user["tenant_id"],
+                "detail": "We've already texted you a code — check your messages."}
     resp["phone"] = phone  # returned so the invitee's device can verify
     resp["name"] = user.get("name")
     return resp
@@ -187,6 +197,13 @@ async def verify_otp(inp: OtpVerifyInput, response: Response):
         )
         user.pop("invite_token", None)
         user.pop("invite_expires_at", None)
+    # 2026-09-16: the same moment accepts the MEMBERSHIP. A pending row is not a
+    # live one, so without this an invited member got a session token here and a
+    # 403 on their next request.
+    from services.auth.membership import accept_pending_membership as _accept
+    _accepted = await _accept(db, user["id"], tenant_id)
+    if _accepted:
+        user["role"] = _accepted.get("role") or user.get("role")
     token = create_token(user["id"], user["tenant_id"], user["role"])
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
     user.pop("_id", None)

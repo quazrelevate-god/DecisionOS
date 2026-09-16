@@ -3617,6 +3617,28 @@ export default function MyWork() {
               — reorder it, filter it — sit together, in the same shape, in
               the same place. */}
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            {/* ASK-38 — WORKFLOWS IS BACK IN THIS ROW, as a circle. KM-31 took
+                the Workflows pill out of here and made it a More tile, on the
+                argument that a pipeline board is a destination rather than a
+                lens on the task list — and the measurement above records that
+                Row 2 genuinely could not hold six controls while it was a
+                78px worded pill. A 44px circle is not that pill: it costs the
+                row 44px rather than 78, which is exactly what the AI toggle
+                beside it costs, and the row has held both since New Task moved
+                off it. The founder's call is that the board belongs beside the
+                controls of the page it shares, and the circle is the shape this
+                row already uses for "another surface". The route and the view
+                state are untouched; only the way in moved. */}
+            {canSeeWorkflows && (
+              <button type="button" data-testid="work-mobile-workflows"
+                onClick={() => goView(null, view === "workflows" ? "mywork" : "workflows")}
+                aria-pressed={view === "workflows"}
+                aria-label={t("mywork.view_workflows")}
+                title={t("mywork.view_workflows")}
+                className={`${MCIRCLE} ${view === "workflows" ? "kr-pressed" : "kr-pop"}`}>
+                <FlowArrow size={15} weight={view === "workflows" ? "fill" : "bold"} aria-hidden="true" />
+              </button>
+            )}
             {inSegmentView && canPrioritize && (
               <button type="button" onClick={() => { setAiPriority((v) => !v); setView("mywork"); }}
                 aria-pressed={aiPriority} data-testid="work-mobile-priority"
@@ -3857,15 +3879,35 @@ export default function MyWork() {
                 onClick: () => go(null, "approvals"),
               });
             }
-            if (canSeeWorkflows) {
-              segments.push({
-                key: "workflows", label: t("mywork.view_workflows"), testid: "work-view-workflows",
-                active: view === "workflows",
-                onClick: () => go(null, "workflows"),
-              });
-            }
+            /* ASK-38 — WORKFLOWS COMES OUT OF THE SEGMENT and back to being a
+               control of its own, beside the AI-priority circle in this same
+               row. KM-31 had moved it out of My Work entirely, into the More
+               panel, on the argument that a pipeline board is a destination
+               rather than a lens on the task list. The founder's call is that
+               it is both, and that the board belongs beside the filters it
+               shares a page with. As a segment it sat in a group whose other
+               members are all views of TASKS — "My tasks", "My team",
+               "Approvals" — and a pipeline board is not one of those, so it
+               read as a fourth task filter that then replaced the whole page.
+               A circle says "another surface" the way the segment could not,
+               and it is the row's existing vocabulary: same 40px .kr-pop /
+               .kr-pressed pair as the AI toggle beside it. The route, the deep
+               links and the view itself are untouched. */
             return (
               <div className="flex flex-wrap items-center gap-2.5" data-testid="mywork-lens-group">
+                {canSeeWorkflows && (
+                  <button
+                    type="button"
+                    onClick={() => go(null, view === "workflows" ? "mywork" : "workflows")}
+                    data-testid="work-view-workflows"
+                    aria-pressed={view === "workflows"}
+                    aria-label={t("mywork.view_workflows")}
+                    title={t("mywork.view_workflows")}
+                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground ${view === "workflows" ? "kr-pressed" : "kr-pop"}`}
+                  >
+                    <FlowArrow size={17} weight={view === "workflows" ? "fill" : "bold"} aria-hidden="true" />
+                  </button>
+                )}
                 {view === "mywork" && !asked && !team && canPrioritize && (
                   <button onClick={() => setAiPriority((v) => !v)} data-testid="ai-priority-toggle"
                     aria-pressed={aiPriority}

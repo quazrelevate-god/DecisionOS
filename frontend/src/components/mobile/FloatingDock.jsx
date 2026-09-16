@@ -21,7 +21,7 @@
 import * as React from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Tray, Wallet, DotsThree, Briefcase } from "@phosphor-icons/react";
+import { Tray, Wallet, DotsThree, Briefcase, AddressBook } from "@phosphor-icons/react";
 import { hasPerm } from "@/lib/perms";
 import { DexWave } from "./DexWave";
 import { cn } from "@/lib/utils";
@@ -51,14 +51,22 @@ export function dockSlots(user, t = (k, d) => d) {
     ? { to: "/finance", label: t("bottomnav.money", "Money"), icon: Wallet, testid: "dock-money" }
     : null;
 
-  const slots = [desk, work, money].filter(Boolean);
+  /* ASK-38 — CRM comes DOWN from More. It was a tile behind the dots, which is
+     two taps and a panel for the screen an owner opens to look somebody up;
+     the rest of More is genuinely occasional and CRM is not. Same `people`
+     permission the tile carried, so nobody gains access by the move. */
+  const crm = hasPerm(user, "people")
+    ? { to: "/crm", label: t("nav.crm", "CRM"), icon: AddressBook, testid: "dock-crm" }
+    : null;
+
+  const slots = [desk, work, money, crm].filter(Boolean);
   // If a permission collapse duplicated My Work, drop the repeat rather than
   // showing the same destination twice — §8: nothing appears in two places.
   const seen = new Set();
   return slots.filter((s) => (seen.has(s.to) ? false : seen.add(s.to)));
 }
 
-function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
+function DockItem({ to, label, icon: Icon, testid, active, named = true, onClick }) {
   /* KM-49 — THE SELECTED SLOT IS FLAT, and it is an INDICATOR rather than a
      treatment of the whole slot. Founder: "the neumorphic styled option is not
      nice in the bottom fab bar so make it a usual materialistic flat style menu
@@ -91,12 +99,12 @@ function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
   const content = (
     <>
       <Icon size={22} weight={active ? "fill" : "regular"} aria-hidden="true" />
-      {active && (
+      {active && named && (
         /* truncate + the min-w-0 above it: below 360 there is genuinely not
            enough bar for four targets and a whole word, and a clipped label on
            a slot you are already standing in is a better failure than a bar
            that overflows its own pill. */
-        <span className="min-w-0 truncate text-[length:var(--text-label)] font-semibold leading-none">
+        <span data-dock-label="" className="min-w-0 truncate text-[length:var(--text-label)] font-semibold leading-none">
           {label}
         </span>
       )}
@@ -113,11 +121,11 @@ function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
     "dock-item flex min-w-0 items-center justify-center gap-1.5 rounded-pill",
     "transition-[background-color,color,padding] duration-200 motion-reduce:transition-none",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-    active ? "bg-white/[.22] px-3 text-white" : "px-0 text-white/55 hover:text-white/80"
+    active ? cn("bg-white/[.22] text-white", named ? "px-3" : "px-0") : "px-0 text-white/55 hover:text-white/80"
   );
   const common = {
     // The icon-only slots give their reserved width back to the live one.
-    style: active ? undefined : { "--dock-item-min": "2.75rem" },
+    style: active && named ? undefined : { "--dock-item-min": "2.75rem" },
     "data-testid": testid,
     "data-active": active ? "true" : undefined,
     className: cls,
@@ -170,6 +178,42 @@ export function FloatingDock({
       ? location.pathname === "/inbox" || location.pathname === "/"
       : location.pathname.startsWith(to);
 
+  const rowRef = React.useRef(null);
+  const [cramped, setCramped] = React.useState(false);
+  const activeKey = slots.find((s) => isActive(s.to))?.to || "";
+  /* ASK-38 — ONE NAMED SLOT, EVER. `More` being open is a different kind of
+     "active" from a route being active, and while the panel is up BOTH were
+     drawing a pill with a word in it — two names in a bar whose whole point is
+     that one slot is named, and at 390 the second one pushed the first into
+     clipping. The open panel is the thing you are in, so it takes the name and
+     the route slot keeps its fill only. */
+  const named = (isRoute) => !cramped && (moreOpen ? !isRoute : true);
+  // Pass 1: forget what we decided, so pass 2 always measures the NAMED layout.
+  React.useLayoutEffect(() => { setCramped(false); }, [activeKey, dexActive, moreOpen]);
+  React.useLayoutEffect(() => {
+    const row = rowRef.current;
+    if (!row || cramped || dexActive) return undefined;
+    /* THE SIGNAL IS THE LABEL BEING CUT, not the row overflowing. `min-w-0`
+       lets the pill give way first, so at 360 the row measured a tidy zero
+       while the pill itself was crushed to its icon with "Desk" clipped inside
+       it. Asking the label whether it fits is asking the actual question. */
+    const measure = () => {
+      const lbl = row.querySelector("[data-dock-label]");
+      setCramped((!!lbl && lbl.scrollWidth > lbl.clientWidth + 1) || row.scrollWidth > row.clientWidth + 1);
+    };
+    measure();
+    /* Again next frame, and again once the webfont has landed. A layout effect
+       runs before the browser has necessarily laid the label out with its real
+       face, and Inter is wider than the fallback — measured on /my-work, where
+       the first pass saw a label that fit and the founder saw "Wo…". */
+    const raf = requestAnimationFrame(measure);
+    let live = true;
+    document.fonts?.ready?.then(() => { if (live) measure(); });
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => setCramped(false));
+    ro?.observe(row);
+    return () => { live = false; cancelAnimationFrame(raf); ro?.disconnect(); };
+  }, [cramped, dexActive, activeKey, moreOpen]);
+
   return (
     <nav
       // lg:hidden — desktop keeps its sidebar, untouched (§8).
@@ -182,7 +226,7 @@ export function FloatingDock({
       aria-label={t("nav.primary", "Primary")}
     >
       <div
-        ref={barRef}
+        ref={(el) => { barRef.current = el; rowRef.current = el; }}
         className={cn(
           // KR-14.3 · GLASS DOCK — the pill widens edge-to-edge (via
           // `app-dock-right` also anchoring the right side) and takes a
@@ -194,7 +238,11 @@ export function FloatingDock({
              edge plus a soft outer halo in the same warm white. That is the
              glow the founder liked in the reference — theirs was blue, and blue
              is not in this palette. */
-          "flex h-[4.5rem] w-full items-center justify-around gap-1 rounded-pill px-3",
+          /* ASK-38 — px-2 and gap-0.5, down from px-3 and gap-1. CRM makes a
+             fifth slot, and five 44px targets plus a word is 28px more than a
+             360px phone's bar holds; this is the 20px of the bar's own chrome
+             that can be given back without the pill touching its rounded end. */
+          "flex h-[4.5rem] w-full items-center justify-around gap-0.5 rounded-pill px-2",
           "bg-kr-ink/55 backdrop-blur-2xl backdrop-saturate-150",
           "border border-[hsl(40_30%_92%/.28)]",
           "shadow-[0_8px_32px_rgba(0,0,0,0.35),inset_0_1px_0_hsl(40_40%_96%/.22),0_0_20px_-4px_hsl(40_35%_92%/.30)]",
@@ -209,6 +257,15 @@ export function FloatingDock({
             exactly the right material, so it should do the work rather than be
             duplicated. py-2 is the "adequate spacing above and below" so the
             ribbons never touch the pill's edge. */}
+        {/* ASK-38 — THE LABEL YIELDS TO THE MEASUREMENT, not to a breakpoint.
+            With CRM in the bar there are five targets, and whether the live
+            one can also hold its word depends on the width, the slot count
+            (CRM and Money are both permission-gated) and the word itself —
+            "Money" is wider than "CRM". So it is measured rather than guessed:
+            the row is laid out named, and if that overflows, the labels go and
+            the pill falls back to the fill-only indicator KM-49 shipped. Two
+            passes and it settles; re-run whenever the width or the live slot
+            changes, so widening the window brings the word back. */}
         {dexActive ? (
           /* KM-51 — the field also appears when there is a DRAFT, whatever the
              mode. After a voice capture the transcript lands here as a preview:
@@ -264,7 +321,7 @@ export function FloatingDock({
           )
         ) : (
           slots.map((s) => (
-            <DockItem key={s.to} {...s} active={isActive(s.to)} />
+            <DockItem key={s.to} {...s} active={isActive(s.to)} named={named(true)} />
           ))
         )}
         <div className={cn("relative", dexActive && "hidden")}>
@@ -272,6 +329,7 @@ export function FloatingDock({
             to="#more"
             label={t("bottomnav.more", "More")}
             icon={DotsThree}
+            named={named(false)}
             testid="dock-more"
             active={moreOpen}
             onClick={onMore}

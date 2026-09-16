@@ -31,7 +31,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
-  CalendarBlank, AddressBook, UsersThree, Sparkle, BookOpen, Gauge, FlowArrow, AirplaneTakeoff,
+  CalendarBlank, UsersThree, BookOpen, Gauge, AirplaneTakeoff, CaretRight,
   Bell, GearSix, Translate, SignOut, X,
   MagnifyingGlass, ArrowRight,
 } from "@phosphor-icons/react";
@@ -54,67 +54,43 @@ import { useBackDismiss } from "@/hooks/useBackDismiss";
  */
 function buildTiles({ user, t, counts }) {
   const tiles = [
-    {
-      key: "crm",
-      to: "/crm",
-      label: t("nav.crm", "CRM"),
-      icon: AddressBook,
-      /* KM-7 — CRM drops from a 2x2 to the same 2x1 the other two live tiles
-         use. As a `large` it was twice the height of everything else and left
-         the right-hand column (Team / Journal / Work Coach) floating against
-         a tall blank, so the two columns never lined up. Three equal wide
-         tiles on the left now sit level with three smalls on the right. */
-      size: "wide",
-      perm: "people",
-      blurb: "Buyers, suppliers, complaints",
-    },
-    // RBAC P1 (2026-09-15): /team is open to everyone (read-only without Manage
-    // team), so the tile is too — it hid the page from teammates on a phone.
-    { key: "team", to: "/team", label: t("nav.team", "Team"), icon: UsersThree, size: "small" },
+    /* ASK-38 — CRM LEFT THIS PANEL for the dock. It is the screen an owner
+       opens to look somebody up, and behind the dots it cost two taps and a
+       sheet; the rest of More is genuinely occasional. Same `people`
+       permission, carried by the dock slot now (FloatingDock dockSlots), so
+       nobody gains access by the move.
+       WORKFLOWS LEFT TOO, back to My Work. KM-31 brought it here on the
+       argument that a pipeline board is a destination rather than a lens on
+       the task list. It is both, and the founder's call is that the board
+       belongs beside the task filters it shares a page with — it is a circular
+       control in My Work's own control row again (pages/MyWork.js). The route
+       is untouched; only the way in moved. */
     {
       key: "operating-score",
       to: "/operating-score",
       // Not t("nav.ops") — that bundle says "Ops", which is jargon for a tile.
-      // KM-7 — "Ops", not "Operating Score": at a 2x1 tile the long form
-      // wrapped to two lines and pushed its own live figure out of the card.
       label: t("allapps.ops", "Ops"),
       icon: Gauge,
-      size: "wide",
       ownerOnly: true,
       blurb: "How the business is running",
     },
-    { key: "journal", to: "/journal", label: t("nav.journal", "Journal"), icon: BookOpen, size: "small", ownerOnly: true },
-    /* KM-31 — Calendar and Work Coach give up their places to Workflows and
-       Leave, on the founder's call. Both of those were pills inside My Work,
-       which is the wrong home for them: they are destinations, not lenses on
-       the task list, and burying a whole pipeline board behind a pill in
-       another page is why it was hard to find. Their routes still exist and
-       still work; they are simply not on this panel any more. */
-    {
-      key: "workflows",
-      to: "/workflows",
-      label: t("nav.workflows", "Workflows"),
-      icon: FlowArrow,
-      size: "wide",
-      // Mobile PWA (2026-09-14): shown only to people who can open it — the
-      // tile used to send everyone else to Access Denied.
-      perm: "workflows",
-      blurb: "Pipelines, stage by stage",
-    },
+    // RBAC P1 (2026-09-15): /team is open to everyone (read-only without Manage
+    // team), so the tile is too — it hid the page from teammates on a phone.
+    { key: "team", to: "/team", label: t("nav.team", "Team"), icon: UsersThree, blurb: "People and permissions" },
+    { key: "journal", to: "/journal", label: t("nav.journal", "Journal"), icon: BookOpen, ownerOnly: true, blurb: "Every decision, by day" },
     // ASK-6 (2026-09-12): the standalone Leave tile lands on /team now.
-    // Register lives on Team, approvals on the Decision Desk, per-
-    // department config on Settings > Operations. The tile itself stays
-    // because "Leave" is still the reader's mental hook for the concept
-    // -- it just navigates to the new home.
-    { key: "leave", to: "/team", label: t("nav.leave", "Leave"), icon: AirplaneTakeoff, size: "small" },
+    // Register lives on Team, approvals on the Decision Desk, per-department
+    // config on Settings > Operations. The tile stays because "Leave" is still
+    // the reader's mental hook for the concept.
+    { key: "leave", to: "/team", label: t("nav.leave", "Leave"), icon: AirplaneTakeoff, blurb: "Apply and approve" },
     /* Mobile PWA (2026-09-14) — Calendar and Notifications, for everyone. A
        non-owner's More held two tiles (GL-02), Calendar had no way in on a
        phone, and the More badge counted notifications with no tile inside to
        open them — this tile carries that count. */
-    { key: "calendar", to: "/calendar", label: t("nav.calendar", "Calendar"), icon: CalendarBlank, size: "small" },
+    { key: "calendar", to: "/calendar", label: t("nav.calendar", "Calendar"), icon: CalendarBlank, blurb: "Meetings and dates" },
     {
       key: "notifications", to: "/notifications", label: t("nav.notifications", "Notifications"),
-      icon: Bell, size: "small", badge: counts?.notifications || 0,
+      icon: Bell, badge: counts?.notifications || 0, blurb: "Updates and alerts",
     },
     // §5.7 listed "Send Daily Digest" as a Small tile, and §8 asked for it to sit
     // nowhere near Sign out. E2-63 (2026-08-15) then deleted
@@ -141,76 +117,71 @@ function buildUtility({ user, t }) {
   return [
     // Mobile PWA (2026-09-14): for everyone. Profile, security and Sign out
     // live in Settings, and a non-owner on a phone had no way to reach them.
-    { key: "settings", to: "/settings", label: t("nav.settings", "Settings"), icon: GearSix },
+    { key: "settings", to: "/settings", label: t("nav.settings", "Settings"), icon: GearSix, blurb: "Preferences, security, sign out" },
   ].filter((x) => !x.ownerOnly || user?.role === "owner");
 }
 
-const SPAN = {
-  // §5.7: 3 columns at 390px. A `wide` tile is 2x1, and the tile after it fills
-  // the third cell — "when filtering leaves a hole in the bento, promote the next
-  // Small tile to fill it rather than leaving a gap." grid-flow-dense does that
-  // placement for us, in either direction.
-  large: "col-span-2 row-span-2",
-  wide: "col-span-2",
-  small: "",
-};
+/* ASK-38 · THE TILE IS A DARK CARD.
+   It was .kr-frost-min — a light glass pane drawn by its hairline — in three
+   sizes (large / wide / small) with a `grid-flow-dense` bento packing them.
+   The founder's reference is a flat list of equal cards, each with its icon in
+   a chip, its name, a line saying what is behind it, and a chevron; and their
+   correction to the reference's own light theme is the black the Desk's inner
+   card already uses.
+   SO THE FILL IS THAT EXACT ONE: pages/Desk.js's PHONE_CARD_INK, which is
+   itself INK_PILL / .kr-navplate::before — a 24%->6% vertical gradient with a
+   16% white lip on the top edge. The same black in both places on purpose;
+   this is the app's dark card now, not a new one.
+   SIZES ARE GONE. With CRM and Workflows out there is nothing left that earns
+   double width, and six equal cards two-up read as a list rather than a puzzle
+   — which is what "compact" asks for. `grid-flow-dense` goes with them: it
+   existed to fill the holes a mixed-size bento left. */
+const TILE_INK =
+  "bg-[linear-gradient(180deg,hsl(0_0%_24%),hsl(0_0%_6%))] shadow-[inset_0_1px_0_hsl(0_0%_100%/0.16)]";
 
 function Tile({ tile, onPick }) {
   const Icon = tile.icon;
-  const big = tile.size === "large";
-  const wide = tile.size === "wide";
-  // undefined = not cached yet -> Skeleton in a full-size tile (§5.7).
-
   return (
     <button
       type="button"
       data-testid={`allapps-tile-${tile.key}`}
-      data-size={tile.size}
       onClick={() => onPick(tile)}
       className={cn(
         // >= 100x100 per §5.7, so the 44px floor is met with room to spare.
-        /* KM-8 — minimal glass, not neumorphism. .kr-pop drew a raised,
-           shadowed tile; the founder wants all seven reading as one quiet set
-           of glass panes on a glass sheet, so they take .kr-frost-min and are
-           drawn by their hairline rather than by depth. .kr-lift stays for the
-           press response. */
-        "relative flex min-h-[6.25rem] flex-col kr-frost-min kr-lift rounded-tile p-3 text-left",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
-        big || wide ? "justify-between" : "items-center justify-center gap-1.5",
-        SPAN[tile.size] || "",
-        /* KM-3 — no red. DS-1's token comment: `danger` means money or a
-           deadline at risk, "never chrome, borders, sign-out". Sign out is
-           terminal, not alerting, and spending the alert colour on it
-           devalues it everywhere it does mean something. */
+        "relative flex min-h-[6.25rem] flex-col justify-between rounded-tile p-3 text-left",
+        TILE_INK,
+        "transition-[filter] duration-150 hover:brightness-125",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
       )}
     >
-      {big || wide ? (
-        <>
-          <span className="flex items-center gap-1.5 text-[length:var(--text-label)] font-semibold leading-4 text-muted-foreground">
-            <Icon size={18} weight="bold" aria-hidden="true" />
-            {tile.label}
-          </span>
-
-          {/* KM-9 — a static descriptor, not a live figure. A menu tile's
-              job is to say where it goes; it does not also need to report. */}
-          <span className="mt-2 block text-[length:var(--text-label)] leading-4 text-muted-foreground">
+      {/* The chevron says "this goes somewhere" without a word for it. */}
+      <CaretRight
+        size={12}
+        weight="bold"
+        aria-hidden="true"
+        className="absolute right-3 top-3.5 text-white/35"
+      />
+      <span className="grid h-8 w-8 place-items-center rounded-xl bg-white/[.10] text-white/85">
+        <Icon size={17} weight="bold" aria-hidden="true" />
+      </span>
+      <span className="mt-2.5 block">
+        <span className="block pr-4 text-[length:var(--text-label)] font-semibold leading-4 text-white">
+          {tile.label}
+        </span>
+        {tile.blurb && (
+          /* KM-9 — a static descriptor, not a live figure. A menu tile's job is
+             to say where it goes; it does not also need to report. */
+          <span className="mt-0.5 block text-[length:var(--text-label)] leading-4 text-white/55">
             {tile.blurb}
           </span>
-        </>
-      ) : (
-        <>
-          <Icon size={26} weight="regular" aria-hidden="true" />
-          <span className="text-center text-[length:var(--text-label)] font-semibold leading-4 line-clamp-2">
-            {tile.label}
-          </span>
-        </>
-      )}
+        )}
+      </span>
 
       {tile.badge > 0 && (
         <span
           data-testid={`allapps-badge-${tile.key}`}
           aria-label={`${tile.badge} need you`}
-          className="absolute right-1.5 top-1.5 grid h-5 min-w-5 place-items-center rounded-pill bg-danger-600 px-1 text-[length:var(--text-label)] font-bold leading-none text-white"
+          className="absolute right-2.5 top-8 grid h-5 min-w-5 place-items-center rounded-pill bg-kr-accent px-1 text-[length:var(--text-label)] font-bold leading-none text-white"
         >
           {Math.min(9, tile.badge)}
         </span>
@@ -430,7 +401,8 @@ export function AllAppsPanel({
                 <h3 id="allapps-h-destinations" className="sr-only">
                   {t("allapps.destinations", "Screens")}
                 </h3>
-                <div className="grid auto-rows-[6.25rem] grid-flow-row-dense grid-cols-3 gap-3">
+                {/* ASK-38 — two up, equal, no dense packing: see TILE_INK. */}
+                <div className="grid grid-cols-2 gap-2.5">
                   {shown.map((tile) => (
                     <Tile key={tile.key} tile={tile} onPick={pick} />
                   ))}
@@ -444,12 +416,16 @@ export function AllAppsPanel({
               <section
                 aria-labelledby="allapps-h-utility"
                 data-testid="allapps-utility"
-                className="mt-3 border-t border-border pt-2"
+                className="mt-2.5"
               >
                 <h3 id="allapps-h-utility" className="sr-only">
                   {t("allapps.account", "Account")}
                 </h3>
-                <div className="flex items-stretch justify-between gap-1">
+                {/* ASK-38 — Settings is a full-width ROW of the same card, the
+                    way the founder's reference ends its list: icon, name, what
+                    is inside, chevron. It is one item and a one-up row says so
+                    better than a lone tile in a two-up grid. */}
+                <div className="flex flex-col gap-2.5">
                   {shownUtility.map((item) => (
                     <button
                       key={item.key}
@@ -457,15 +433,25 @@ export function AllAppsPanel({
                       data-testid={`allapps-tile-${item.key}`}
                       onClick={() => pick(item)}
                       className={cn(
-                        "flex min-h-[3.5rem] flex-1 flex-col items-center justify-center gap-1 rounded-control px-1",
-                        "kr-frost-min focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
-                        "text-muted-foreground"   /* KM-3 — see above: no red on sign out. */
+                        "relative flex min-h-touch w-full items-center gap-3 rounded-tile p-3 text-left",
+                        TILE_INK,
+                        "transition-[filter] duration-150 hover:brightness-125",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                        /* KM-3 — no red on sign out; there is none here anyway. */
                       )}
                     >
-                      <item.icon size={20} weight="bold" aria-hidden="true" />
-                      <span className="text-center text-[length:var(--text-label)] font-semibold leading-4 line-clamp-1">
-                        {item.label}
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/[.10] text-white/85">
+                        <item.icon size={17} weight="bold" aria-hidden="true" />
                       </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[length:var(--text-label)] font-semibold leading-4 text-white">
+                          {item.label}
+                        </span>
+                        <span className="mt-0.5 block text-[length:var(--text-label)] leading-4 text-white/55">
+                          {item.blurb}
+                        </span>
+                      </span>
+                      <CaretRight size={12} weight="bold" aria-hidden="true" className="shrink-0 text-white/35" />
                     </button>
                   ))}
                 </div>

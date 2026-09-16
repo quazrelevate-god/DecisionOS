@@ -41,6 +41,7 @@ import { DexFab } from "./mobile/DexFab";
 import { DexChat } from "./mobile/DexChat";
 import { HeaderSlotContext } from "./mobile/HeaderSlot";
 import { useDexConversation } from "../hooks/useDexConversation";
+import { isReading } from "../lib/dexOutcome";
 import { toastDexOutcome } from "../lib/dexOutcomeToast";
 import { DexFailureNotice } from "./mobile/DexFailureNotice";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -261,6 +262,16 @@ export default function Layout({ children }) {
   /* ASK-33 Phase 4 — the Desk's Dex well sends the same event WITH a detail, to
      hand a sent decision to the sheet. See handoffRef, below the Dex hooks. */
   const handoffRef = useRef(null);
+  /* ASK-33.1 — the Desk well asks, before it sends, whether the Dex behind the
+     sheet is still reading a note; a second capture would retire that poll and
+     leave a failure with nowhere to land. Answered on the event, like the
+     hand-off itself. */
+  const dexReadingRef = useRef(null);
+  useEffect(() => {
+    const onState = (e) => { if (e.detail) e.detail.reading = !!dexReadingRef.current?.(); };
+    window.addEventListener("dos:dex-state", onState);
+    return () => window.removeEventListener("dos:dex-state", onState);
+  }, []);
   useEffect(() => {
     const open = (e) => {
       if (e.detail?.channel === "decide") { handoffRef.current?.(e); return; }
@@ -358,6 +369,7 @@ export default function Layout({ children }) {
   });
   draftSinkRef.current = chat.setDraftFromVoice;
   dexChatRef.current = chat;
+  dexReadingRef.current = () => isReading(dex) || chat.busy;
   /* ASK-33 Phase 4 — THE WELL SENDS, THE SHEET SHOWS.
      Below lg the Desk's Dex well sends a decision itself, then hands it here on
      dos:open-dex with { channel: "decide", noteId, text, files, error }. The
@@ -828,6 +840,8 @@ export default function Layout({ children }) {
            so the placeholder never sits on top of text that has already
            arrived. */
         dexTranscribing={!!dex.sending && !chat.draft}
+        /* ASK-33.1 — which Dex the bar is serving, for its placeholder. */
+        dexChannel={dexChannel}
       />
       {/* KM-11 — the vignette. Rendered always so it can transition rather
           than pop in, and gated by a data attribute. Sits below the dock's

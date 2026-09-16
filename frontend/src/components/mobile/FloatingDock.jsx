@@ -116,11 +116,13 @@ function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
  * @param {Function} onMore     opens AllAppsPanel
  * @param {boolean}  moreOpen
  * @param {number}   [moreBadge] count of items needing him behind More (caps at 9)
+ * @param {"ask"|"decide"|null} [dexChannel] which Dex the bar is serving, for its
+ *        placeholder — the FAB opens Ask, the Desk's Dex well hands over a Decide
  */
 export function FloatingDock({
   user, onMore, moreOpen = false, moreBadge = 0,
   dexActive = false, dexLevels = [], dexLevelsRef, dexMode = "voice", dexWaveState = "idle",
-  dexDraft = "", onDexDraft, onDexSubmit, dexTranscribing = false,
+  dexDraft = "", onDexDraft, onDexSubmit, dexTranscribing = false, dexChannel = null,
 }) {
   const { t } = useTranslation();
   const location = useLocation();
@@ -214,10 +216,18 @@ export function FloatingDock({
               readOnly={dexTranscribing}
               onChange={(e) => onDexDraft?.(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onDexSubmit?.(); } }}
+              /* ASK-33.1 — the bar says WHICH Dex it is. One string for both
+                 ("Ask Dex, or state a decision…") promised the two doors ASK-33
+                 removed: this field is reached by the FAB, which opens Ask, and
+                 by the Desk's Dex well handing a decision to the sheet. A
+                 decision stated on the Ask side goes to /ask and creates
+                 nothing, so the placeholder must not invite one. */
               placeholder={dexTranscribing
                 ? t("dex.transcribing", "Transcribing…")
-                : t("dex.typePlaceholder", "Ask Dex, or state a decision…")}
-              aria-label="Message Dex"
+                : dexChannel === "decide"
+                  ? t("dex.decidePlaceholder", "Tell Dex what you decided…")
+                  : t("dex.askPlaceholder", "Ask Dex anything…")}
+              aria-label={dexChannel === "decide" ? "Tell Dex what you decided" : "Ask Dex anything"}
               className={cn(
                 "min-w-0 flex-1 bg-transparent px-3 text-sm text-white focus:outline-none",
                 /* A status the founder is waiting on should not wear the same

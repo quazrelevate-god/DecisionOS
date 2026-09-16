@@ -443,7 +443,8 @@ depend on a conversation summary. Branch `karma-redesign`, built on `bb0a9e8`.*
 | — | `c32e7bd` | This Progress section |
 | 4-B | `b6965fd` | The well sends, DexChat shows: the hand-off and its guard, endings as transcript messages, the split late-ending toast, `verify-dex.mjs` rewritten with `npm run verify:dex`, five stale DexSheet comments corrected; carries the DexChat stuck-sheet fix |
 | 4-A | `ee53663` | The FAB opens Ask directly: KM-54's picker removed from DexFab and Layout, its reasoning rewritten as the ASK-33 note, verify-nav's Dex section rewritten against DexChat; the end-of-Phase-4 build, full audit and route comparison |
-| 5 | the commit that adds this row | Phone QA: the failure notice that never covers a control, dark mode removed, measured touch sizes, the draft behind [+], the two-line field, long reasons, chip spacing; the framer-motion write-up |
+| 5 | `0beffcb` | Phone QA: the failure notice that never covers a control, dark mode removed, measured touch sizes, the draft behind [+], the two-line field, long reasons, chip spacing; the framer-motion write-up |
+| 33.1 | the commit that adds this row | The dock says which Dex it is, one capture at a time, no dead Settings link, the desktop baseline regenerated on `0beffcb`, and the note's shape confirmed from the backend |
 
 **Nothing is pushed** — the founder decides when this goes to Railway.
 
@@ -719,6 +720,131 @@ the phone (fixed in Phase 1 by the inline swap).
 - Inherited and left alone: `verify:nav`'s All Apps checks (stops at line 203)
   and `verify:brief` (stops at line 34, see above).
 
+### ASK-33.1 (founder, 2026-09-16)
+
+1. **The notice stays above the dock** — accepted as is: it only appears after a
+   failed capture, and covering a few Decisions rows during an exception state
+   until dismissed is what the dock already does. No top banner: something that
+   scrolls out of sight is the silent failure this was built to prevent.
+2. **The dock's placeholder is channel-aware.** Ask: "Ask Dex anything…";
+   Decide (the well's hand-off): "Tell Dex what you decided…", with the
+   aria-label to match. One string for both ("Ask Dex, or state a decision…")
+   promised the two doors ASK-33 removed. Nothing else in the dock or the FAB
+   implies a second door (checked: no `dex-pick-*`, and DexFab's KM-54 note is
+   the ASK-33 rewrite).
+3. **One capture at a time, enforced.** No concurrent polling: a second send is
+   REFUSED while Dex is still reading, in the founder's words ("Dex is still
+   reading your last one — send this when it's done"), and released the moment
+   the first note ends. Why it matters: the capture would still be sent, so a
+   decision lands in the Decisions column either way — but a FAILURE has nowhere
+   to land, so the second send could swallow the first one's failure, which is
+   plan item 5.2 through a side door. Enforced in `useDexConversation.ask` (the
+   sheet's own composer says it in the transcript) and in the Desk well's
+   `send()` (a toast). The well asks Layout whether the SHEET's Dex is reading
+   over a `dos:dex-state` event — the same way the hand-off is taken — because
+   below lg the note being read belongs to Layout's hook, not the well's.
+4. **The dead Settings link is gone — the link, not the reason.** Chosen: plain
+   words that name no screen ("AI is off for this company — an owner has to turn
+   on AI consent before Dex can read anything"), because Settings has no
+   AI-consent section, so pointing at Settings generally moves the dead end one
+   tap further in rather than removing it. `AI_CONSENT_HREF` and the link copy
+   stay in `lib/dexOutcome.js` with a note to restore the link in
+   `failureReason()` once the screen exists. `lib/api.js`'s own 451 toast carried
+   the same dead anchor ("Open Settings" → `/settings#ai-consent`) and lost it
+   too, with matching words.
+5. **Desktop baseline regenerated** on the committed Phase 5 code — see
+   "Inherited audit numbers".
+6. **/brain's dark room stays** — the page's design, not a mode.
+
+**Seen while verifying 3, and NOT changed — a founder call.** The app's toasts
+are top-anchored and sit above everything (Sonner's own layer), so a transient
+ending toast covers the Dex sheet's close X for its four seconds on a phone.
+That is true of any overlay's close button in this app, not just the sheet, and
+it is exactly why the persistent failure is a notice instead. Options if it
+bothers you: move the phone's toasts to the bottom (they would then have to
+clear the dock, the FAB and the notice), or leave it. Nothing was changed.
+
+### The note's shape, confirmed (read from the backend, 2026-09-16)
+
+Part 1's question 1 answered by reading the pipeline rather than waiting.
+READ ONLY — nothing under `backend/` was touched. Sources: `routers/voice_notes.py`
+(the endpoint), `services/voice.py` (`process_voice_note`), `services/ai_consent.py`
+and `services/ai/llm_limits.py` (the consent gate), `integrations/llm.py`.
+
+**The endpoint the client polls** is `GET /voice-notes/{note_id}`
+(`routers/voice_notes.py:192`). It returns **the stored note document itself**,
+with only `_id` and `audio_path` projected away — there is no response model, so
+every field the pipeline writes is visible.
+
+**The full JSON, by the path that wrote it**
+
+| Key | Written by | Notes |
+|---|---|---|
+| `id`, `tenant_id`, `created_by`, `created_at` | POST /voice-notes or /voice-notes/text | |
+| `kind` | the same | `"audio"` · `"text"` · `"file"` (text POST with only files) |
+| `language` | the same | as sent; `"auto"` by default |
+| `reference_file_ids` | the same, and /submit | **the attachments** — ids only |
+| `held` | POST /voice-notes | true when `hold=1` (ASK-32 1.6) |
+| `status` | throughout | `queued` → `transcribing` → (`transcribed` when held) → `structuring` → `done` \| `failed` |
+| `transcript` | POST, or the STT step | |
+| `detected_language`, `detected_language_name`, `language_probability`, `stt_engine` | the STT step (audio only) | |
+| `transcribed_at` | the held stop | |
+| `edited`, `submitted_at` | POST /voice-notes/{id}/submit | `edited` = the words were changed before sending |
+| `outcome` | the two `done` endings | **`"decision"` \| `"nothing_to_decide"`** — the only two values written anywhere (`services/voice.py:523` and `:582`) |
+| `decision_id` | ready (`:582`), and explicitly `null` on nothing-to-decide (`:523`) | |
+| `execution_summary` | ready only | `{tasks, assignees, approvals, workflows, meetings, reminders}` (`summarize_proposal`) |
+| `summary` | nothing-to-decide only | **the answer text we show** — the AI's own `extracted["summary"]`; can be `""` |
+| `error` | failure only (`:587`) | `str(exception)` |
+| `processed_at` | both `done` endings | |
+| WhatsApp captures add `source`, `wa_from`, `raised_by_name` (`services/captures.py`) | | the same GET returns them |
+
+**Which field distinguishes the three endings:** `status` first — `failed` is the
+failure. Between the two `done` endings it is **`outcome`**, and the plan's
+`nothing_to_decide` is confirmed, with exactly one sibling: `decision`. There is
+no third value anywhere in the backend. (`decision_id` is a reliable second
+signal: set on ready, explicitly `null` on nothing-to-decide.)
+
+**Where the "nothing to decide" answer comes from:** `summary` on the note,
+written as `extracted.get("summary", "")` when `proposal_is_empty(proposal)`.
+
+**Where a failure's reason lives:** only `error`, and only as text. The pipeline's
+single `except` writes `str(e)`. For the consent case the exception is
+`HTTPException(451, detail={"code": "ai_consent_required", "message": …,
+"current_version", "granted_version", "needs_reconsent"})`, raised by
+`require_ai_consent` inside `guarded_llm`, which wraps **every** LLM turn
+(`integrations/llm.py:86`, and the fallback at `:117`) — which is why 14 of 15
+real failures are this one. Starlette 1.3.1 renders that exception as
+`"451: {'code': 'ai_consent_required', 'message': 'This AI feature is unavailable
+until your workspace owner grants consent for AI data processing.', …}"`, so
+**the literal string `ai_consent_required` is confirmed** — but only as a
+substring of a Python dict repr inside `error`. There is **no machine-readable
+code field** on the note.
+
+**Attachments in that response:** yes — `reference_file_ids` (ids only; no names,
+sizes or urls). The client does not read them.
+
+**Diff against `lib/dexOutcome.js`: no mismatches.** Field by field:
+
+| The client reads | The backend writes | Verdict |
+|---|---|---|
+| `status` | same values | ✅ |
+| `outcome === "nothing_to_decide"` | `:523` | ✅ |
+| ready = `status "done"` + `decision_id` (outcome `"decision"`) | `:582` | ✅ |
+| `said` ← note `summary` | the nothing-to-decide answer | ✅ |
+| `error` contains `ai_consent_required` | the 451 dict repr | ✅ confirmed literal |
+| `summary` ← note `execution_summary` (counts) | `{tasks, assignees, approvals, workflows, meetings, reminders}` — `executionSummaryCounts` maps `assignees` → people | ✅ |
+| `"slow"` | never written by the backend — the client's own poll timeout | ✅ by design |
+| — | `reference_file_ids`, `held`, `edited`, `submitted_at`, `language_probability`, `stt_engine`, `processed_at` | read by nobody; harmless |
+
+**Nothing is ambiguous enough to ask Yokesh.** Two remarks, neither blocking:
+- A consent refusal is identifiable only by substring-matching a Python dict
+  repr. If the detail shape or the wrapper ever changes, ASK-33's consent ending
+  silently degrades to the generic failure sentence. A `error_code` field on the
+  note would make it robust — a request to make when 5.3 is built, not now.
+- `_ResilientChat.send_message` retries the consent 451 across every key and
+  fallback model before giving up (`integrations/llm.py:79-138`), so a
+  consent-blocked capture spends several attempts before failing. Backend's call.
+
 ### The framer-motion exit trap (found in 4-B — NOT ASK-33's bug)
 
 The most useful thing this ticket found, and it will bite again wherever
@@ -816,6 +942,11 @@ them:
 - Desktop, against the baseline regenerated on clean code: **6 diffs**, all
   /inbox — lg-1024 14,924 px (1.475%), xl-1280 16,823 px (1.183%) — identical
   in Phases 1–3 (the audit captures the resting state).
+- **Desktop baseline REGENERATED 2026-09-16 on `0beffcb`** (the committed Phase
+  5 code), with the founder's go: the six approved /inbox diffs are folded into
+  it, and a scoped `--only inbox` run against it is now **0 desktop diffs**. That
+  is the reference the next ticket starts from; the numbers below are the history
+  that led to it.
 - **End of Phase 4 (4-A), the one full run:** mobile **307 failing + 34
   warnings across 24 routes — identical to the clean run rule by rule and route
   by route**; nothing worse, nothing better. Console errors: the same four

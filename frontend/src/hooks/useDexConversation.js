@@ -143,6 +143,14 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
     heldNoteRef.current = noteId || null;
   }, []);
 
+  /* ASK-33 Phase 4 — ONE NOTE AT A TIME. useDexCapture follows a single note: a
+     new follow() retires the one in flight, and a recording's transcript poll
+     shares the same generation. So nothing here starts another while a note
+     is still being read or a recording is under way — that note would stop
+     being polled and its ending would never be reported. */
+  const oneAtATime = isReading(dex) || !!dex?.recording || !!dex?.sending;
+  const canRetry = !busy && !oneAtATime;
+
   /* ASK-33 Phase 4 — a decide send also REPORTS what it did: { ok, noteId,
      text, files, file_ids } or { ok: false, message, text, files, file_ids }, so
      the Desk well can hand the capture to the phone's sheet. `follow: false`
@@ -151,6 +159,15 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
     const text = String(question || "").trim();
     const withFiles = channel === "decide" && pendingFiles.length > 0;
     if ((!text && !withFiles) || busy) return null;
+    /* ASK-33.1 — ONE CAPTURE AT A TIME, enforced where the capture is made.
+       A second send does reach the pipeline, so its decision still lands in the
+       Decisions column — but it retires the first note's poll, and a FAILURE has
+       nowhere else to land: plan item 5.2 coming back through a side door. So it
+       is refused, said plainly, and released the moment the first note ends. */
+    if (channel === "decide" && oneAtATime) {
+      push({ role: "dex", text: OUTCOME_COPY.stillReading });
+      return { ok: false, blocked: true, text, files: pendingFiles, file_ids: pendingFiles.map((f) => f.id) };
+    }
     push({ role: "user", text: text || pendingFiles.map((f) => f.name).join(", ") });
     setDraft("");
     setBusy(true);
@@ -193,7 +210,7 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
     } finally {
       setBusy(false);
     }
-  }, [busy, channel, ctxId, dex, onCommitted, pendingFiles, push]);
+  }, [busy, channel, ctxId, dex, onCommitted, oneAtATime, pendingFiles, push]);
 
   const attach = useCallback(async (file, label = "File") => {
     if (!file) return;
@@ -230,14 +247,6 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
   /** ASK-33 — take a file back off the next decision (the Desk well's chip).
       The upload itself stays in files, as a sent one always has. */
   const removeFile = useCallback((id) => setPendingFiles((p) => p.filter((f) => f.id !== id)), []);
-
-  /* ASK-33 Phase 4 — ONE NOTE AT A TIME. useDexCapture follows a single note: a
-     new follow() retires the one in flight, and a recording's transcript poll
-     shares the same generation. So nothing here starts another while a note
-     is still being read or a recording is under way — that note would stop
-     being polled and its ending would never be reported. */
-  const oneAtATime = isReading(dex) || !!dex?.recording || !!dex?.sending;
-  const canRetry = !busy && !oneAtATime;
 
   /** ASK-33 Phase 3 — Retry re-sends the same capture, its words and its files,
       rather than asking the founder to say it again. A held recording's words

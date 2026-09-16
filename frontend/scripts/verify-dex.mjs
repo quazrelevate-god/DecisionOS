@@ -21,8 +21,9 @@
  *      away; FAILED is a notice docked above the dock that stays, with Retry and
  *      Dismiss, never over the dock or the FAB, and moves into the sheet's flow
  *      while the sheet is open (ASK-33 Phase 5)
- *   E  one note at a time: a second capture sent while the sheet is still
- *      reading the first is kept by the well, and both endings are reported
+ *   E  one capture at a time (ASK-33.1): a second send while the first is still
+ *      being read is refused in plain words, the first still reports its ending,
+ *      and the next send goes through once it has
  *   F  the guard: when nothing takes the hand-off, the well keeps the capture —
  *      it polls the note itself and reports the ending
  *
@@ -35,7 +36,7 @@ import { signIn } from './lib/auth.mjs';
 
 const BASE = process.env.AUDIT_BASE || 'http://localhost:3000';
 const READY = /^Decision ready for Sunita Rao · 2 tasks, 1 workflow$/;
-const CONSENT = 'AI is off for this company — turn on AI consent in Settings';
+const CONSENT = 'AI is off for this company — an owner has to turn on AI consent before Dex can read anything';
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
   'base64'
@@ -204,8 +205,8 @@ async function run(viewport) {
   const whole = await reason.evaluate((el) => el.scrollWidth <= el.clientWidth + 1
     && el.scrollHeight <= el.clientHeight + 1 && getComputedStyle(el).textOverflow !== 'ellipsis').catch(() => false);
   check(`${w} C: the reason is not truncated`, whole);
-  check(`${w} C: it links to Settings`,
-    (await failed.first().getByTestId('dex-outcome-settings').getAttribute('href').catch(() => '')) === '/settings#ai-consent');
+  // ASK-33.1 — plain words, no link, until an AI-consent screen exists.
+  check(`${w} C: no dead Settings link`, (await failed.first().getByTestId('dex-outcome-settings').count()) === 0);
   await failed.first().getByTestId('dex-outcome-retry').click();
   check(`${w} C: Retry re-sends without asking to say it again`,
     await until(async () => (await sheet(page).getByText('Reading it again…').count()) > 0, 5000));
@@ -213,9 +214,8 @@ async function run(viewport) {
     (await failed.first().getByTestId('dex-outcome-retry').count()) === 0);
   check(`${w} C: the re-sent capture reaches its own ending`,
     await until(async () => (await failed.count()) === 2));
-  await failed.last().getByTestId('dex-outcome-settings').click();
-  check(`${w} C: the Settings link leaves the sheet for Settings`,
-    (await sheetGone(page)) && new URL(page.url()).pathname === '/settings', new URL(page.url()).pathname);
+  await failed.last().getByTestId('dex-outcome-dismiss').click();
+  check(`${w} C: Not now closes the sheet`, await sheetGone(page));
   await gotoDesk(page);
 
   // ------------------------------------- D · endings after the sheet is closed
@@ -281,9 +281,23 @@ async function run(viewport) {
   await closeSheet(page);
   await typeAndSend(page, 'Ask Priya to book the Tirupur truck for Thursday');
   await page.waitForTimeout(1000);
-  check(`${w} E: a second capture while the sheet still reads the first is not taken over it`, (await sheet(page).count()) === 0);
-  check(`${w} E: both endings are reported`,
-    await until(async () => (await toasts(page, 'Decision ready for Sunita Rao').count()) >= 2));
+  /* ASK-33.1 — the second send is REFUSED while Dex is still reading the first.
+     It would still reach the pipeline, so its decision would land in the
+     Decisions column — but it retires the first note's poll, and a failure has
+     nowhere else to land (plan 5.2). */
+  check(`${w} E: a second capture while the first is still being read is refused`,
+    (await sheet(page).count()) === 0 && (await toasts(page, 'Dex is still reading your last one').count()) === 1);
+  check(`${w} E: the first capture still reports its ending`,
+    await until(async () => (await toasts(page, 'Decision ready for Sunita Rao').count()) >= 1));
+  await page.waitForTimeout(700);
+  await typeAndSend(page, 'Ask Priya to book the Tirupur truck for Thursday');
+  check(`${w} E: and the next send goes through once it has`,
+    await until(async () => (await sheet(page).count()) === 1, 8000));
+  /* Left open on purpose. The app's toasts are top-anchored and sit above
+     everything, so a transient one covers the sheet's X for its life — and
+     hovering it (which reaching for the X does) pauses its dismissal. True of
+     any overlay's close button in this app, which is why the persistent failure
+     is a notice instead. Nothing below needs the sheet shut. */
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   check(`${w}: no horizontal overflow`, overflow <= 0, `${overflow}px`);

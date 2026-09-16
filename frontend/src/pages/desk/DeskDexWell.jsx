@@ -31,7 +31,7 @@ import {
 } from "@phosphor-icons/react";
 import api from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
-import { captureOutcome, decisionCounts, failureReason, readyLine, OUTCOME_COPY } from "../../lib/dexOutcome";
+import { captureOutcome, decisionCounts, failureReason, isReading, readyLine, OUTCOME_COPY } from "../../lib/dexOutcome";
 import { toastDexOutcome } from "../../lib/dexOutcomeToast";
 import { hasPerm } from "../../lib/perms";
 import { cn } from "../../lib/utils";
@@ -387,8 +387,22 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
     },
   }));
 
+  /* ASK-33.1 — below lg the capture being read may be the SHEET's (a hand-off),
+     and this well cannot see that hook. Layout answers on an event, the same way
+     it takes the hand-off. */
+  const sheetReading = () => {
+    const ev = new CustomEvent("dos:dex-state", { detail: { reading: false } });
+    window.dispatchEvent(ev);
+    return !!ev.detail.reading;
+  };
+
   const send = async () => {
     if (!canSend || dex.sending || chat.busy) return;
+    /* ASK-33.1 — ONE CAPTURE AT A TIME. A second send while Dex is still reading
+       the first retires that poll: the decision would still land in the Decisions
+       column, but a FAILURE would have nowhere to land (plan 5.2). Refused in the
+       founder's words, and released the moment the first note ends. */
+    if (isReading(dex) || sheetReading()) { toast(OUTCOME_COPY.stillReading); return; }
     endingRef.current = null;
     setMenuOpen(false);
     if (isDesktop()) {
@@ -770,6 +784,8 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
         type="button"
         data-testid="desk-dex-mic"
         data-intent={intent}
+        // ASK-33.1 — still pressable: pressing it says why, rather than going dead.
+        data-blocked={intent === "send" && isReading(dex) ? "reading" : undefined}
         onClick={onMic}
         disabled={!canCapture || (!dex.recording && (dex.sending || chat.busy))}
         aria-label={micLabel}

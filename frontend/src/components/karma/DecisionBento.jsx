@@ -33,8 +33,10 @@
 // prefix whose spans still fit the row — which is why the count changes with
 // width instead of leaving a ragged half-row.
 import * as React from "react";
-import { CheckCircle, Spinner, CaretRight, CaretDown } from "@phosphor-icons/react";
+import { CheckCircle, CaretRight, CaretDown } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+// ASK-36 5 — the app's one loading animation.
+import { Loader } from "../common";
 
 /** Tier → grid span + type scale. Never narrower than the text can carry. */
 /* KM-32 — the phone type comes DOWN a step. At text-lg a two-clause directive
@@ -199,7 +201,7 @@ function DecisionBox({ card, tier, tint, verb, icon: Icon, busy, done, onAction 
             (busy || done) && "opacity-60"
           )}
         >
-          {busy && <Spinner size={12} className="animate-spin" aria-hidden="true" />}
+          {busy && <Loader size={14} />}
           {done ? "Done" : busy ? "Working…" : verb}
           {!busy && !done && (
             <CaretRight size={11} weight="bold" aria-hidden="true"

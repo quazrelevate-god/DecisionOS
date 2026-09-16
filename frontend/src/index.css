@@ -3163,6 +3163,67 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
        a fill does: the app's outlined pills mark selection with contrast,
        these mark it with depth, and the founder can now tell a page control
        from a nav control at a glance. */
+    /* ═══════════════════════════════════════════════════════════════════
+       ASK-36 5 · .kr-cradle — the loading animation, app-wide.
+       The founder supplied it as a styled-components snippet. The geometry,
+       the timings and both keyframe curves are transcribed exactly; what is NOT
+       taken is styled-components itself — the app does not carry that
+       dependency and adding one for four dots would be a second styling system
+       beside Tailwind and this file. Same animation, one less runtime.
+       Three knobs, so one recipe serves a 20px spinner inside a button and a
+       56px one in the middle of an empty page:
+         --uib-size   the square it draws in        (default 50px)
+         --uib-speed  one full swing                 (default 1.2s)
+         --uib-color  the dots                       (default #474554, the
+                      founder's; call sites on ink pass white)
+       Under prefers-reduced-motion the dots hold still — the component keeps
+       its own aria-live label, so a screen reader is told it is loading either
+       way. */
+    .kr-cradle {
+        --uib-size: 50px;
+        --uib-speed: 1.2s;
+        --uib-color: #474554;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--uib-size);
+        height: var(--uib-size);
+    }
+    .kr-cradle__dot {
+        position: relative;
+        display: flex;
+        align-items: center;
+        height: 100%;
+        width: 25%;
+        transform-origin: center top;
+    }
+    .kr-cradle__dot::after {
+        content: "";
+        display: block;
+        width: 100%;
+        height: 25%;
+        border-radius: 50%;
+        background-color: var(--uib-color);
+    }
+    .kr-cradle__dot:first-child { animation: kr-cradle-swing var(--uib-speed) linear infinite; }
+    .kr-cradle__dot:last-child  { animation: kr-cradle-swing2 var(--uib-speed) linear infinite; }
+
+    @keyframes kr-cradle-swing {
+        0%   { transform: rotate(0deg);  animation-timing-function: ease-out; }
+        25%  { transform: rotate(70deg); animation-timing-function: ease-in; }
+        50%  { transform: rotate(0deg);  animation-timing-function: linear; }
+    }
+    @keyframes kr-cradle-swing2 {
+        0%   { transform: rotate(0deg);   animation-timing-function: linear; }
+        50%  { transform: rotate(0deg);   animation-timing-function: ease-out; }
+        75%  { transform: rotate(-70deg); animation-timing-function: ease-in; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .kr-cradle__dot:first-child,
+        .kr-cradle__dot:last-child { animation: none; }
+    }
+
     .kr-pressed {
         border: 0;
         background: hsl(0 0% 100% / .30);
@@ -3324,4 +3385,117 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
 .login-stage .app-sky__art--aside {
     --sky-art: url("/sky/login.webp");
     --sky-art-lg: url("/sky/login-lg.webp");
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   OUTSIDE @layer ON PURPOSE. sonner injects its own stylesheet into <head> at
+   runtime, unlayered — and an unlayered rule beats a layered one whatever the
+   specificity, so the same block inside @layer components lost every property
+   to sonner's defaults (8px radius, a 1px hairline, a flat 4px/12px shadow).
+   Unlayered, `.kr-toast[data-sonner-toast]` (0,2,0) simply outranks
+   `[data-sonner-toast]` (0,1,0) and no !important is needed.
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════
+   ASK-36 4 · .kr-toast — the notification, in the app's own material.
+   It wore shadcn's `bg-background / border-border / shadow-lg`: a flat card
+   with a hairline, which is the system this branch retired everywhere else.
+   This is .kr-pop's recipe — white glass, a lit top lip, KR-14.2's tight
+   contact shadow instead of the old white halo — at the card radius, plus
+   the one thing a toast needs that a button does not: a settle.
+   THE MOTION. Sonner's default slides a card in from the edge. A status
+   message that flies pulls the eye off the work, so this rises 8px and
+   fades on the app's own ease — cubic-bezier(.22,1,.36,1), the curve the
+   Dex well grows on — and leaves the same way. Under prefers-reduced-motion
+   it simply appears; the rule is at the foot of this block.
+   Specificity: sonner writes its own [data-sonner-toast] styles, so these
+   are qualified with it rather than fighting !important. */
+[data-sonner-toaster] { --width: 21rem; }
+.kr-toast.kr-toast[data-sonner-toast] {
+    width: 100%;
+    gap: 0.625rem;
+    padding: 0.8125rem 0.875rem;
+    border: 0;
+    border-radius: var(--radius-tile);
+    background: hsl(0 0% 100% / .72);
+    backdrop-filter: blur(18px) saturate(1.5);
+    -webkit-backdrop-filter: blur(18px) saturate(1.5);
+    box-shadow:
+        inset 0 1px 0 hsl(0 0% 100% / .85),
+        0 1px 2px hsl(230 20% 20% / .12),
+        0 10px 24px -10px hsl(230 20% 20% / .34);
+    color: hsl(var(--foreground));
+}
+/* The rise. `data-mounted` is sonner's own "it is on screen now" flag and
+   `data-removed` its "it is going"; both are set a frame apart from the
+   element appearing, which is exactly the hook a transition needs. */
+.kr-toast.kr-toast[data-sonner-toast] {
+    opacity: 0;
+    transform: translateY(8px) scale(.985);
+    transition: opacity 260ms cubic-bezier(.22, 1, .36, 1),
+                transform 320ms cubic-bezier(.22, 1, .36, 1);
+}
+.kr-toast.kr-toast[data-sonner-toast][data-mounted="true"] {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+.kr-toast.kr-toast[data-sonner-toast][data-removed="true"] {
+    opacity: 0;
+    transform: translateY(-6px) scale(.985);
+}
+/* One soft scale-in on the status icon — the only thing in the toast that
+   is a picture rather than a word, so it is the only thing worth animating
+   a second time. */
+.kr-toast__icon {
+    animation: kr-toast-pop 380ms cubic-bezier(.22, 1, .36, 1) both;
+}
+@keyframes kr-toast-pop {
+    from { opacity: 0; transform: scale(.7); }
+    to   { opacity: 1; transform: scale(1); }
+}
+/* The two buttons are the app's pills: the action is INK_PILL's gradient
+   (components/karma/glass.js — the thing that moves you on), the cancel the
+   quiet raised one. 32px, because a toast is a strip and the 44px tier
+   would make it a card; both keep a 44px touch area below lg through the
+   pseudo-element, which costs no layout. */
+.kr-toast .kr-toast__action.kr-toast__action[data-button],
+.kr-toast .kr-toast__cancel.kr-toast__cancel[data-button] {
+    position: relative;
+    height: 2rem;
+    padding-inline: 0.875rem;
+    border: 0;
+    border-radius: var(--radius-pill);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    transition: filter 150ms ease-out, background-color 150ms ease-out;
+}
+.kr-toast .kr-toast__action.kr-toast__action[data-button] {
+    background: linear-gradient(180deg, hsl(0 0% 24%), hsl(0 0% 6%));
+    color: #fff;
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / .16), 0 6px 14px -8px hsl(0 0% 0% / .7);
+}
+.kr-toast .kr-toast__action.kr-toast__action[data-button]:hover { filter: brightness(1.25); }
+.kr-toast .kr-toast__cancel.kr-toast__cancel[data-button] {
+    background: hsl(0 0% 100% / .55);
+    color: hsl(var(--foreground) / .8);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / .85), 0 1px 2px hsl(230 20% 20% / .12);
+}
+.kr-toast .kr-toast__cancel.kr-toast__cancel[data-button]:hover { background: hsl(0 0% 100% / .8); }
+@media (max-width: 1023.98px) {
+    .kr-toast .kr-toast__action.kr-toast__action[data-button]::after,
+    .kr-toast .kr-toast__cancel.kr-toast__cancel[data-button]::after {
+        content: "";
+        position: absolute;
+        inset: -6px -2px;   /* 32 + 12 = 44, with no layout cost */
+    }
+}
+.kr-toast .kr-toast__close.kr-toast__close[data-close-button] {
+    border: 0;
+    background: hsl(0 0% 100% / .7);
+    color: hsl(var(--foreground) / .7);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / .85), 0 1px 2px hsl(230 20% 20% / .12);
+}
+@media (prefers-reduced-motion: reduce) {
+    .kr-toast.kr-toast[data-sonner-toast] { transition: none; }
+    .kr-toast__icon { animation: none; }
 }

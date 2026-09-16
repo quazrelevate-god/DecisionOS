@@ -33,9 +33,11 @@
  */
 import { useMemo } from "react";
 import {
-  Microphone, Stop, PaperPlaneTilt, Paperclip, Sparkle, Spinner, NotePencil,
+  Microphone, Stop, PaperPlaneTilt, Paperclip, Sparkle, NotePencil,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+// ASK-36 5 — the app's one loading animation.
+import { Loader } from "../../components/common";
 
 /**
  * Concentric rings whose radius tracks the live amplitude.
@@ -125,7 +127,7 @@ function Orb({ levels, recording, thinking, scale = 1 }) {
         }}
       >
         {thinking
-          ? <Spinner size={px(30)} className="animate-spin text-primary" />
+          ? <Loader size={px(34)} className="text-primary" />
           : <Sparkle size={px(34)} weight="fill" className={cn("text-primary transition-opacity", live ? "opacity-100" : "opacity-70")} />}
       </span>
     </div>

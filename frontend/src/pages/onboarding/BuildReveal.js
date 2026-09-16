@@ -1,7 +1,7 @@
 import { createElement, forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ArrowRight, Sparkle, Stop, CircleNotch, PaperPlaneRight, PencilSimple,
+  ArrowRight, Sparkle, Stop, PaperPlaneRight, PencilSimple,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import api, { formatApiError } from "../../lib/api";
@@ -9,6 +9,8 @@ import { DexForge } from "./DexForge";
 import { useAnswerRecorder, useSynthLevels } from "./voice";
 import { DexWave } from "../../components/mobile/DexWave";
 import { CountUp } from "../../components/karma";
+// ASK-36 5 — the app's one loading animation.
+import { Loader } from "../../components/common";
 
 // What Dex is "doing" while the real AI build runs (30-60s). Loops until done.
 const WAIT_LINES = [
@@ -692,7 +694,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                             ? "bg-kr-ink text-[hsl(var(--kr-gold))] shadow-[inset_0_2px_5px_hsl(230_30%_8%/.55),inset_0_-1px_0_hsl(0_0%_100%/.10),0_1px_0_hsl(0_0%_100%/.45)]"
                             : "kr-pop"
                         }`}>
-                        {recorder.transcribing ? <CircleNotch size={14} className="animate-spin" />
+                        {recorder.transcribing ? <Loader size={16} />
                           : recorder.recording ? <Stop size={14} weight="fill" /> : <Sparkle size={14} weight="fill" />}
                         {recorder.transcribing ? "Transcribing…" : recorder.recording ? "Stop" : "Speak"}
                       </button>
@@ -711,7 +713,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                         onClick={submitRefinement}
                         disabled={!refineText.trim() || refining}
                         className="kr-pop flex h-11 shrink-0 items-center gap-2 rounded-pill bg-kr-ink px-5 text-xs font-medium text-white disabled:opacity-40">
-                        {refining ? <CircleNotch size={14} className="animate-spin" /> : <PaperPlaneRight size={14} weight="bold" />}
+                        {refining ? <Loader size={16} /> : <PaperPlaneRight size={14} weight="bold" />}
                         {refining ? "Applying…" : "Apply to my OS"}
                       </button>
                     </div>

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, ArrowLeft, Eye, EyeSlash, CircleNotch } from "@phosphor-icons/react";
+import { ArrowRight, ArrowLeft, Eye, EyeSlash } from "@phosphor-icons/react";
 import api from "../../lib/api";
+// ASK-36 5 — the app's one loading animation.
+import { Loader } from "../../components/common";
 
 // KM-19 — rebuilt on the Karma material. The step used to be a black
 // underline under a huge heading with a square indigo button beside it; the
@@ -164,7 +166,7 @@ export function BasicsFlow({ form, setForm, onDone }) {
                 whileHover={{ y: -2, scale: 1.03 }}
                 whileTap={{ scale: 0.98 }}
                 className="kr-pop flex h-12 items-center gap-2 rounded-pill bg-kr-ink px-8 text-sm font-medium text-white disabled:opacity-50">
-                {checking ? <CircleNotch size={16} className="animate-spin" /> : null}
+                {checking ? <Loader size={18} /> : null}
                 {step.optional && !value.trim() ? "Skip" : "Continue"} <ArrowRight size={16} weight="bold" />
               </motion.button>
               <span className="hidden text-xs text-muted-foreground sm:block">

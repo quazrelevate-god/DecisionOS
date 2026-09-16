@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Upload, MagnifyingGlass, File, Trash, PencilSimple, DownloadSimple, Lock,
-  CircleNotch, X,
+  X,
 } from "@phosphor-icons/react";
 import api from "../lib/api";
-import { EmptyState } from "../components/common";
+import { EmptyState, Loader } from "../components/common";
 import { useAuth } from "../context/AuthContext";
 
 const KINDS = [
@@ -156,7 +156,7 @@ function UploadDialog({ onClose, onUploaded }) {
           <button onClick={onClose} className="px-4 py-2 border border-border text-xs font-medium hover:bg-accent">Cancel</button>
           <button onClick={submit} disabled={busy || !file} data-testid="brain-doc-upload-submit"
             className="flex items-center gap-2 bg-brand-600 text-white px-5 py-2 border border-border text-xs font-medium transition-all disabled:opacity-40">
-            {busy ? <CircleNotch size={14} className="animate-spin" /> : <Upload size={14} weight="bold" />}
+            {busy ? <Loader size={16} /> : <Upload size={14} weight="bold" />}
             {busy ? "Adding…" : "Add to Brain"}
           </button>
         </div>
@@ -307,7 +307,7 @@ export function DocumentsPanel() {
                 {(isOwner || d.uploaded_by === user?.id) && (
                   <button onClick={() => remove(d)} disabled={deleting === d.id} data-testid={`brain-doc-delete-${d.id}`}
                     className="flex items-center justify-center gap-1.5 border border-border py-2 px-3 text-[11px] font-medium bg-white hover:bg-brand-600 hover:text-white transition-colors disabled:opacity-40">
-                    {deleting === d.id ? <CircleNotch size={12} className="animate-spin" /> : <Trash size={12} weight="bold" />}
+                    {deleting === d.id ? <Loader size={14} /> : <Trash size={12} weight="bold" />}
                   </button>
                 )}
               </div>

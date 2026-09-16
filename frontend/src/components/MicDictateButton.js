@@ -1,7 +1,9 @@
 import { useRef, useState } from "react";
 import api from "../lib/api";
 import { toast } from "sonner";
-import { Microphone, Stop, Spinner } from "@phosphor-icons/react";
+import { Microphone, Stop } from "@phosphor-icons/react";
+// ASK-36 5 — the app's one loading animation.
+import { Loader } from "./common";
 
 // Small mic button that records a short clip, transcribes it to text via
 // /api/transcribe, and hands the text back through onText(). Reusable anywhere
@@ -51,7 +53,7 @@ export function MicDictateButton({ onText, language = "auto", title = "Dictate",
       title={recording ? "Stop & transcribe" : title}
       className={`flex items-center justify-center border border-border transition-all disabled:opacity-60 ${recording ? "bg-brand-600 text-white animate-pulse" : "bg-white hover:bg-accent"} ${className}`}
     >
-      {busy ? <Spinner size={18} weight="bold" className="animate-spin" /> : recording ? <Stop size={18} weight="fill" /> : <Microphone size={18} weight="bold" />}
+      {busy ? <Loader size={18} /> : recording ? <Stop size={18} weight="fill" /> : <Microphone size={18} weight="bold" />}
     </button>
   );
 }

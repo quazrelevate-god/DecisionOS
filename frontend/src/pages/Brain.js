@@ -27,13 +27,15 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
-import { Books, ArrowLeft, Broom, Sparkle, Spinner } from "@phosphor-icons/react";
+import { Books, ArrowLeft, Broom, Sparkle } from "@phosphor-icons/react";
 import { AiAnswer, ASK_SUGGESTIONS } from "./AskAI";
 import { DocumentsPanel } from "./BrainDocuments";
 import { useDexCapture } from "../hooks/useDexCapture";
 import { DexStage } from "./brain/DexStage";
 import { useAuth } from "../context/AuthContext";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+// ASK-36 5 — the app's one loading animation.
+import { Loader } from "../components/common";
 
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
@@ -162,7 +164,7 @@ export default function Brain() {
           data-testid="dex-inflight-badge"
           className="mt-4 inline-flex items-center gap-2 rounded-pill nm-inset px-3 py-1.5"
         >
-          <Spinner size={14} weight="bold" className="animate-spin text-primary" />
+          <Loader size={18} className="text-primary" />
           <span className="text-xs font-medium text-muted-foreground">
             Dex is structuring {inflightN} capture{inflightN === 1 ? "" : "s"} right now
           </span>

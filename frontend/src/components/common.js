@@ -223,6 +223,43 @@ export function EmptyState({ title, hint, ctaLabel, onCta, ctaTo, secondary, tes
 //   * <SkeletonRow>  for table rows
 // All three respect the same `pulse` animation timing.
 
+/* ASK-36 5 · Loader — the app's one loading animation.
+ *
+ * The founder's Newton's cradle. The CSS is .kr-cradle in index.css (see the
+ * note there for what was and was not taken from the snippet they sent); this
+ * is the four dots and the accessible label.
+ *
+ * SIZE IS A PROP because the same animation has to work in two places that are
+ * nothing alike: inline in a button that says "Sending…", where it replaces a
+ * 14px spinner, and alone in the middle of a panel that has nothing else in it.
+ * `tone="light"` is for the ink surfaces — the Dex sheet, the black board —
+ * where the founder's #474554 would disappear.
+ *
+ * ONE LIVE REGION, NOT FOUR DOTS. The dots are decoration; `label` is what a
+ * screen reader hears, and it is announced whether or not the animation runs.
+ */
+export function Loader({ size = 24, speed, color = "currentColor", label = "Loading", className = "", testid = "loader" }) {
+  /* COLOUR DEFAULTS TO currentColor, and that is the whole reason the swap was
+     safe. Every one of these replaced a Phosphor icon inside a button, and an
+     icon inherits its button's text colour — a white one on the ink pills, the
+     ink on the glass ones. Hard-coding the founder's #474554 here would have
+     turned the dots invisible on half of them. The bare .kr-cradle class keeps
+     #474554, exactly as they wrote it, for anything used on its own. */
+  const style = { "--uib-size": `${size}px`, "--uib-color": color };
+  if (speed) style["--uib-speed"] = speed;
+  return (
+    <span className={`inline-flex items-center ${className}`} data-testid={testid}>
+      <span className="kr-cradle" style={style} aria-hidden="true">
+        <span className="kr-cradle__dot" />
+        <span className="kr-cradle__dot" />
+        <span className="kr-cradle__dot" />
+        <span className="kr-cradle__dot" />
+      </span>
+      <span className="sr-only" role="status">{label}</span>
+    </span>
+  );
+}
+
 export function SkeletonLine({ className = "", width = "100%" }) {
   // RD-1: `bg-black/10` + `rounded-none` were the brutalist bar. A skeleton
   // should read as the shape of the content that is coming, so it takes the

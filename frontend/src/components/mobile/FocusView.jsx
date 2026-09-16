@@ -21,7 +21,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  CheckCircle, XCircle, ArrowRight, ChatText, Spinner, Warning, Phone, Receipt,
+  CheckCircle, XCircle, ArrowRight, ChatText, Warning, Phone, Receipt,
 } from "@phosphor-icons/react";
 import api from "@/lib/api";
 import { inr } from "@/lib/format";
@@ -30,6 +30,8 @@ import { EmptyState } from "./EmptyState";
 import { ListSkeleton } from "./Skeleton";
 import { StatusChip } from "./StatusChip";
 import { dueLabel } from "./MobileCard";
+// ASK-36 5 — the app's one loading animation.
+import { Loader } from "../common";
 
 export const FOCUS_TYPES = ["decision", "task", "money", "fire", "contact"];
 
@@ -233,7 +235,7 @@ function DecisionFocus({ id, threshold, onDecided, onClose }) {
             className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-base font-semibold text-primary-foreground disabled:opacity-50"
             style={{ minHeight: "var(--control-h-lg)" }}
           >
-            {busy === "approve" ? <Spinner size={20} className="animate-spin" /> : <CheckCircle size={20} weight="bold" />}
+            {busy === "approve" ? <Loader size={20} /> : <CheckCircle size={20} weight="bold" />}
             {/* §5.5: above the threshold the amount goes INSIDE the button. */}
             {isHighValue && amount ? `Approve ${inr(amount)}` : "Approve"}
           </button>
@@ -351,7 +353,7 @@ function TaskFocus({ id, onChanged, onClose, fire = false }) {
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary text-base font-semibold text-primary-foreground disabled:opacity-50"
           style={{ minHeight: "var(--control-h-lg)" }}
         >
-          {busy ? <Spinner size={20} className="animate-spin" /> : <ChatText size={20} weight="bold" />}
+          {busy ? <Loader size={20} /> : <ChatText size={20} weight="bold" />}
           Chase {data.assignee_name?.split(" ")[0] || "them"}
         </button>
         <button

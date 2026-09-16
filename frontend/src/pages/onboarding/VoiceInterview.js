@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Microphone, Sparkle, Stop, PaperPlaneRight, CircleNotch, SpeakerHigh, SpeakerSlash, Waveform, CaretDown, CaretLeft, Check, Translate,
+  Microphone, Sparkle, Stop, PaperPlaneRight, SpeakerHigh, SpeakerSlash, Waveform, CaretDown, CaretLeft, Check, Translate,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import api from "../../lib/api";
 import { DexWave } from "../../components/mobile/DexWave";
 import { fetchTTS, useAnswerRecorder, useSynthLevels, SPOKEN_LANGS, langLabel } from "./voice";
+// ASK-36 5 — the app's one loading animation.
+import { Loader } from "../../components/common";
 
 // KM-19 — the interview now shows the SAME voice surface the app shows.
 // components/mobile/DexWave is the three-ribbon lens (white, grey, gold) that
@@ -304,7 +306,7 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack }) {
         <div className="flex min-w-0 items-center gap-3">
           <div className="kr-pressed grid h-12 w-12 shrink-0 place-items-center rounded-full">
             {orbState === "thinking"
-              ? <CircleNotch size={20} className="animate-spin" />
+              ? <Loader size={22} />
               : orbState === "speaking" ? <Waveform size={22} weight="bold" />
               : <Microphone size={20} weight="bold" className={orbState === "listening" ? "text-[hsl(var(--kr-gold))]" : ""} />}
           </div>
@@ -399,7 +401,7 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack }) {
                 ? "bg-kr-ink text-[hsl(var(--kr-gold))] shadow-[inset_0_2px_5px_hsl(230_30%_8%/.55),inset_0_-1px_0_hsl(0_0%_100%/.10),0_1px_0_hsl(0_0%_100%/.45)]"
                 : "kr-pop"
             }`}>
-            {recorder.transcribing ? <CircleNotch size={16} className="animate-spin" />
+            {recorder.transcribing ? <Loader size={18} />
               : recorder.recording ? <Stop size={16} weight="fill" />
               /* Dex's mark, not a microphone: the FAB, the AI-priority control
                  and the wordmark all use the sparkle, and this is Dex asking. */
@@ -430,7 +432,7 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack }) {
 
           <button onClick={() => send()} disabled={!answer.trim() || thinking || starting} data-testid="interview-send-button"
             className="kr-pop flex h-11 items-center gap-2 rounded-pill bg-kr-ink px-6 text-xs font-medium text-white disabled:opacity-40">
-            {thinking ? <CircleNotch size={16} className="animate-spin" /> : <PaperPlaneRight size={16} weight="bold" />}
+            {thinking ? <Loader size={18} /> : <PaperPlaneRight size={16} weight="bold" />}
             {thinking ? "Thinking…" : "Answer"}
           </button>
         </div>

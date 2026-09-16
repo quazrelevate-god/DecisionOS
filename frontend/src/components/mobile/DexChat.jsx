@@ -2,7 +2,7 @@ import * as React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, PresenceContext, motion } from "framer-motion";
 import {
-  Plus, X, Paperclip, Camera, Keyboard, Microphone, CircleNotch, Check, Sparkle, WarningCircle,
+  Plus, X, Paperclip, Camera, Keyboard, Microphone, Check, Sparkle, WarningCircle,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { ENDING_STATUSES, OUTCOME_COPY, isReading, stageLabel } from "@/lib/dexOutcome";
@@ -12,6 +12,8 @@ import { ENDING_STATUSES, OUTCOME_COPY, isReading, stageLabel } from "@/lib/dexO
 import { DexForgeFit } from "@/pages/onboarding/DexForge";
 import { DexFailureNotice } from "./DexFailureNotice";
 import { useBackDismiss } from "@/hooks/useBackDismiss";
+// ASK-36 5 — the app's one loading animation.
+import { Loader } from "../common";
 
 // KM-23 · DexChat — Dex as a conversation, over the page you were on.
 //
@@ -201,7 +203,7 @@ function Bubble({ m, index }) {
              edge at any width — 0.89 at 390, 0.81 at 360. */
           <div className="min-w-0">
             <span className="flex items-center gap-2 text-white/70">
-              <CircleNotch size={14} className="animate-spin motion-reduce:animate-none" /> {m.text}
+              <Loader size={18} /> {m.text}
             </span>
             {!m.reduceMotion && (
               <DexForgeFit
@@ -235,7 +237,7 @@ function Bubble({ m, index }) {
           </div>
         ) : m.pending ? (
           <span className="flex items-center gap-2 text-white/70">
-            <CircleNotch size={14} className="animate-spin" /> {m.text}
+            <Loader size={18} /> {m.text}
           </span>
         ) : m.outcome && m.outcome.kind !== "slow" ? (
           <Outcome

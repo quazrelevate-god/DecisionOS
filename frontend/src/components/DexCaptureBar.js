@@ -19,9 +19,10 @@ import { useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { useDexCapture } from "../hooks/useDexCapture";
+// ASK-36 5 — the app's one loading animation.
+import { Loader } from "./common";
 import {
-  Microphone, Stop, PaperPlaneTilt, Paperclip, Spinner,
-} from "@phosphor-icons/react";
+  Microphone, Stop, PaperPlaneTilt, Paperclip, } from "@phosphor-icons/react";
 
 
 // MPWA-03 additions (additive only — endpoints, recorder and upload paths are
@@ -133,7 +134,7 @@ export function DexCaptureBar({
               lg ? "flex-1 h-12 rounded-xl text-base" : "px-4 text-sm "
             }`}
           >
-            {sending ? <Spinner size={lg ? 20 : 16} className="animate-spin" /> : <PaperPlaneTilt size={lg ? 20 : 16} weight="bold" />}
+            {sending ? <Loader size={lg ? 20 : 16} /> : <PaperPlaneTilt size={lg ? 20 : 16} weight="bold" />}
             Send
           </button>
         </div>

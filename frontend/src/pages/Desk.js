@@ -39,6 +39,13 @@ import {
   BigNumeral, KDeltaChip, MiniBars, CircleDots, TinySpark,
 } from "../components/karma";
 import { useDeskMetrics } from "./desk/useDeskMetrics";
+/* ASK-34 B — one DOM, not two. The phone's tabbed card and the desktop's three
+   columns are different trees, and hiding one with `lg:hidden` would leave a
+   phone carrying every desktop row as well as its own — duplicate testids at
+   the same moment, and the audit counting rows nobody can see. hooks/useIsMobile
+   is the app's own answer to exactly this and says so in its note: a JS branch
+   keeps a single copy in the document. */
+import { useIsMobile } from "../hooks/useIsMobile";
 // ASK-33 — the well on the left column's floor is Dex's Decide door. It owns
 // the capture hooks and hosts the repurposed InsightWell container itself.
 import { DeskDexWell } from "./desk/DeskDexWell";
@@ -48,6 +55,8 @@ import { TaskCard } from "./MyWork";
 // 2026-09-14, founder — a decision opens as a POPUP here too, on the glass,
 // at 70% of the screen, instead of leaving for /decisions/:id.
 import { DecisionDialog } from "../components/DecisionDialog";
+// ASK-34 B4 — MPWA-04's own five-second reversal, reused rather than re-drawn.
+import { UndoSnackbar } from "../components/mobile/UndoSnackbar";
 // ASK-33 — "today's read" is retired from the Desk. Its call site below is
 // commented out, not deleted, and lib/deskInsight.js — the ranker — is kept,
 // untouched, for possible reuse.
@@ -60,6 +69,9 @@ import {
 // ASK-34 7.3 — the undo window on a reject. Long enough to notice the toast
 // and reach it, short enough that the row leaving the column is believable.
 const UNDO_MS = 6000;
+// Which surface is asking. The phone and the desktop share every rule here and
+// differ only in the furniture they show it with (ASK-34 B4).
+const isDesktop = () => typeof window !== "undefined" && !!window.matchMedia?.("(min-width: 1024px)").matches;
 
 // ASK-25 — the three chips the Desk still asks /desk for. `important` is
 // gone: its builder returns an empty list (see _cards_important) so the box
@@ -133,8 +145,10 @@ function OpenButton({ onClick, label }) {
   );
 }
 
-/* ASK-34 7.3 — APPROVE AND REJECT, ON THE ROW. Desktop only: `hidden lg:grid`
-   is the whole of "do not touch these columns below lg".
+/* ASK-34 7.3 / B4 — APPROVE AND REJECT, ON THE ROW. Both breakpoints now: 7.3
+   built them for the desktop columns behind `lg:`, and B4 asks for the same
+   pair in the phone's tabbed card, so the gate comes off and the row component
+   carries them wherever it is used.
    Circular, like the open button beside them, and 44px rather than its 32 —
    these two commit something. stopPropagation on BOTH click and keydown: the
    row is a role="link" with its own Enter handler, so without the second one a
@@ -160,13 +174,51 @@ function RowAction({ intent, label, onClick }) {
   );
 }
 
-/** The pair, 8px apart (spacing.touch-gap), desktop only. */
+/** The pair, 8px apart (spacing.touch-gap). */
 function RowActions({ what, onApprove, onReject }) {
   return (
-    <span className="hidden items-center gap-touch-gap lg:flex">
+    <span className="flex items-center gap-touch-gap">
       <RowAction intent="approve" label={`Approve: ${what}`} onClick={onApprove} />
       <RowAction intent="reject" label={`Reject: ${what}`} onClick={onReject} />
     </span>
+  );
+}
+
+/* ASK-34 B5 · DeskRow — ONE ROW, TWO CONTAINERS. The desktop's three columns
+   and the phone's tabbed card are different boxes holding the same thing, and
+   a second copy of this markup is exactly the drift the component audit exists
+   to catch: the inline approve/reject, the 403-avoiding rule behind them, the
+   amount, the open icon and the row-is-the-link behaviour would all have had to
+   be written twice and kept in step by hand. So the row is a component and the
+   container is the variable.
+   `data-row` is what both containers measure a row's height with; the testid
+   pattern is the caller's, so desk-decisions-row-<id> means the same element in
+   either one. */
+function DeskRow({ r, first, testid }) {
+  return (
+    <div
+      data-row=""
+      role="link"
+      tabIndex={0}
+      onClick={r.onOpen}
+      onKeyDown={(e) => { if (e.key === "Enter") r.onOpen(); }}
+      data-testid={`${testid}-row-${r.id}`}
+      className={`flex cursor-pointer items-center justify-between gap-3 py-[7px] ${first ? "" : "border-t border-white/[.14]"}`}
+    >
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <p className="truncate text-[15px] font-medium leading-5 tracking-[-0.006em] text-neutral-300">{r.title}</p>
+        {r.meta && <p className="truncate text-xs leading-4 text-neutral-500">{r.meta}</p>}
+      </div>
+      {/* ASK-34 7.3 — the amount, then the two actions, then the open icon, all
+          in one row with a 10px trough between them (the two actions are 8px
+          apart inside their own span). The row itself stays the link; the
+          buttons only stop their own click. */}
+      <span className="flex shrink-0 items-center gap-2.5">
+        {r.amount && <span className="font-mono text-[13px] leading-5 text-neutral-400">{r.amount}</span>}
+        {r.actions}
+        <OpenButton onClick={(e) => { e.stopPropagation(); r.onOpen(); }} label={`Open: ${r.title}`} />
+      </span>
+    </div>
   );
 }
 
@@ -286,30 +338,7 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
             <p className="py-3 text-sm text-neutral-500" data-testid={`${testid}-empty`}>{empty}</p>
           )}
           {!loading && shown.map((r, i) => (
-            <div
-              key={r.id}
-              data-row=""
-              role="link"
-              tabIndex={0}
-              onClick={r.onOpen}
-              onKeyDown={(e) => { if (e.key === "Enter") r.onOpen(); }}
-              data-testid={`${testid}-row-${r.id}`}
-              className={`flex cursor-pointer items-center justify-between gap-3 py-[7px] ${i > 0 ? "border-t border-white/[.14]" : ""}`}
-            >
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <p className="truncate text-[15px] font-medium leading-5 tracking-[-0.006em] text-neutral-300">{r.title}</p>
-                {r.meta && <p className="truncate text-xs leading-4 text-neutral-500">{r.meta}</p>}
-              </div>
-              {/* ASK-34 7.3 — the amount, then the two actions, then the open
-                  icon, all in one row with a 10px trough between them (the two
-                  actions are 8px apart inside their own span). The row itself
-                  stays the link; the buttons only stop their own click. */}
-              <span className="flex shrink-0 items-center gap-2.5">
-                {r.amount && <span className="font-mono text-[13px] leading-5 text-neutral-400">{r.amount}</span>}
-                {r.actions}
-                <OpenButton onClick={(e) => { e.stopPropagation(); r.onOpen(); }} label={`Open: ${r.title}`} />
-              </span>
-            </div>
+            <DeskRow key={r.id} r={r} first={i === 0} testid={testid} />
           ))}
         </div>
 
@@ -340,6 +369,123 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ASK-34 B · THE PHONE'S BLACK CARD IS THREE TABS.
+   It was one column stacked on another stacked on a third — 889px of card on
+   an 844px screen, so the founder was always scrolling it with the floating
+   dock hovering over whatever they were reading. Decisions, Approvals and the
+   three watch feeds become three tabs of one card instead, and the card is
+   sized to end above the dock.
+   TAP ONLY. No swipe between tabs: the rows carry their own actions and a
+   horizontal drag starting on a row would have to decide, every time, whether
+   it meant the tab strip or the row — and getting that wrong either changes
+   the tab under a thumb aiming at a button or eats a scroll. The founder's
+   call, and it is the right one.
+   NO SCROLL REGION INSIDE. A scrollport nested in a scrolling page is a trap
+   on a phone: the inner one swallows the gesture and the page appears stuck.
+   The card shows what fits and a control opens the rest in place, so there is
+   only ever one thing scrolling — the page. */
+function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, children }) {
+  const cardRef = useRef(null);
+  const listRef = useRef(null);
+  const [fit, setFit] = useState(4);
+  const [showAll, setShowAll] = useState(false);
+  // A new tab starts closed; the last tab's "show everything" is not a claim
+  // about this one.
+  useEffect(() => { setShowAll(false); }, [tab]);
+
+  /* AS MANY ROWS AS FIT, AND THE DOCK'S OWN CLEARANCE. Every term here is
+     measured or read; none is typed. The budget is the viewport minus the dock
+     clearance index.css already defines — read off <main>'s computed
+     padding-bottom, which IS `.pb-dock` (KM-32: 7.5rem + the safe-area inset),
+     so this cannot drift from it — minus the card's own chrome (the tab strip
+     and the footer, measured as whatever the card is that the list is not) and
+     the board's padding. What is left, divided by a real row. */
+  useEffect(() => {
+    const card = cardRef.current;
+    const list = listRef.current;
+    if (!card || !list || typeof ResizeObserver === "undefined") return undefined;
+    const measure = () => {
+      const row = list.querySelector("[data-row]");
+      const rowH = row?.offsetHeight || 0;
+      if (!rowH) return;
+      const scroller = document.querySelector("[data-app-scroller]");
+      const clear = scroller ? parseFloat(getComputedStyle(scroller).paddingBottom) || 0 : 0;
+      const board = card.closest(".kr-desk-board");
+      const bs = board && getComputedStyle(board);
+      const padY = bs ? parseFloat(bs.paddingTop) + parseFloat(bs.paddingBottom) : 0;
+      const chrome = card.offsetHeight - list.offsetHeight;
+      const budget = window.innerHeight - clear - chrome - padY;
+      const next = Math.max(1, Math.floor(budget / rowH));
+      // Guarded: fit changes the list's height, which is what the observer
+      // watches, so an unguarded set would chase its own tail.
+      setFit((f) => (f === next ? f : next));
+    };
+    const ro = new ResizeObserver(measure);
+    ro.observe(list);
+    window.addEventListener("resize", measure);
+    measure();
+    return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
+  }, [rows.length, tab]);
+
+  const shown = showAll ? rows : rows.slice(0, fit);
+  const hidden = rows.length - shown.length;
+
+  return (
+    /* min-w-0: a grid item defaults to min-width:auto, i.e. its min-content,
+       and a truncated title's min-content is the WHOLE title — which grew this
+       card to 568px inside a 358px board. */
+    <div ref={cardRef} className={`min-w-0 ${TONE[tone]}`} data-testid={testid}>
+      {/* THE TITLE ROW IS THE TABS. One segment material app-wide (KM-54..60):
+          this is ScopeSlider, the Company/You control, cut for ink and sharing
+          the width three ways. --tabs-trigger-h is the app's own tab height
+          token — 44px below lg, which is also the touch floor. */}
+      <ScopeSlider
+        fluid
+        variant="ink"
+        segHeight="var(--tabs-trigger-h)"
+        options={tabs}
+        value={tab}
+        onChange={onTab}
+        label="Desk sections"
+        testid="desk-tab"
+      />
+
+      <div ref={listRef} className="mt-3">
+        {children || (
+          <>
+            {loading && (
+              <div className="space-y-2" aria-hidden="true">
+                <div className="ds-skeleton h-5 w-4/5 rounded-control" />
+                <div className="ds-skeleton h-5 w-3/5 rounded-control" />
+              </div>
+            )}
+            {!loading && rows.length === 0 && (
+              <p className="py-3 text-sm text-neutral-500" data-testid={`${testid}-empty`}>{empty}</p>
+            )}
+            {!loading && shown.map((r, i) => (
+              <DeskRow key={r.id} r={r} first={i === 0} testid={`desk-${tab}`} />
+            ))}
+          </>
+        )}
+      </div>
+
+      {/* THE MORE CONTROL — it opens the rest HERE, in place, and the page
+          scrolls as it always does. Nothing new to learn and nothing nested. */}
+      {!children && !loading && (hidden > 0 || showAll) && (
+        <button
+          type="button"
+          data-testid="desk-phone-more"
+          onClick={() => setShowAll((v) => !v)}
+          className="mt-2 flex h-11 w-full items-center justify-center gap-1.5 rounded-pill bg-white/[.08] text-[13px] font-semibold text-white/85 transition-colors hover:bg-white/[.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+        >
+          {showAll ? "Show fewer" : `Show all ${rows.length}`}
+          <CaretRight size={12} weight="bold" aria-hidden="true" className={showAll ? "-rotate-90" : "rotate-90"} />
+        </button>
+      )}
     </div>
   );
 }
@@ -383,6 +529,7 @@ export default function Desk() {
   const navigate = useNavigate();
   const { user, tenant } = useAuth();
   const m = useDeskMetrics();
+  const isMobile = useIsMobile();
   const heroRef = useRef(null);
   // ASK-33 Phase 2 — the expanded Dex well grows to this grid's top, and while
   // it is the workspace the greeting and the score row above it fade.
@@ -491,14 +638,22 @@ export default function Desk() {
     try { await run(); toast.success(said); refreshBoard(); }
     catch (e) { restore(id); failed(e, "Could not approve it"); }
   };
+  const commitReject = async (id, run) => {
+    try { await run(); refreshBoard(); }
+    catch (e) { restore(id); failed(e, "Could not reject it"); }
+  };
+  /* ASK-34 B4 — THE SAME UNDO, THE SURFACE'S OWN FURNITURE. Desktop gets a
+     sonner toast with an Undo action; the phone gets UndoSnackbar, which is
+     MPWA-04's own control for exactly this and is already bottom-anchored above
+     the dock and the home indicator — a top-anchored toast on a phone is a
+     reach, and this is a control with five seconds on it. One window either
+     way, one commit path, and nothing reaches the server until it closes. */
+  const [undo, setUndo] = useState(null);
   const rejectRow = (id, run, said) => {
     retire(id);
+    if (!isDesktop()) { setUndo({ id, run, message: said }); return; }
     let undone = false;
-    const timer = setTimeout(async () => {
-      if (undone) return;
-      try { await run(); refreshBoard(); }
-      catch (e) { restore(id); failed(e, "Could not reject it"); }
-    }, UNDO_MS);
+    const timer = setTimeout(() => { if (!undone) commitReject(id, run); }, UNDO_MS);
     toast(said, {
       duration: UNDO_MS,
       action: { label: "Undo", onClick: () => { undone = true; clearTimeout(timer); restore(id); } },
@@ -549,10 +704,94 @@ export default function Desk() {
      the count from the moment it is tapped; the refetch after the commit makes
      it true. An Undo puts both back. */
   const liveDecisions = decisionCards.filter((c) => !retiring.has(c.id));
+  /* ASK-34 B1 — the phone's three tabs. `watch` is the group that was three
+     stacked cards under the two columns: Due today, Leave requests, Slipping.
+     Its badge is the three counts together, because the tab is the three feeds
+     together. */
+  const [phoneTab, setPhoneTab] = useState("decisions");
+  const watchCount = (counters?.due_today || 0) + (canApproveLeave ? pendingLeaves.length : 0) + (counters?.on_fire || 0);
   const decisionCount = counters
     ? Math.max(0, counters.needs_decision - decisionCards.filter((c) => retiring.has(c.id)).length)
     : null;
   const liveApprovals = approvals.filter((t) => !retiring.has(t.id));
+
+  /* ASK-34 B2 — THE ACTIVE TAB COUNTS, THE OTHERS ONLY SAY "SOMETHING". A
+     number on every tab would be three numbers competing on a 360px strip; no
+     signal at all would leave nothing to tell the founder a tab is worth
+     switching to, which is the only reason tabs exist here. So the active one
+     carries its number in a badge and an inactive one with anything in it
+     carries a dot in its own section hue (the TONE class sets --kr-glass-from
+     on the element the dot reads it from). Empty tabs carry nothing, and the
+     dot's meaning is spoken for screen readers rather than left to colour. */
+  const tabOption = (key, label, n, tone) => ({
+    key,
+    label: (
+      <span className="inline-flex items-center justify-center gap-1.5">
+        {label}
+        {n > 0 && (phoneTab === key ? (
+          <span className="grid h-5 min-w-[1.25rem] place-items-center rounded-full bg-white/25 px-1 text-[11px] font-semibold tabular-nums text-white">
+            {n}
+          </span>
+        ) : (
+          <>
+            <span aria-hidden="true" className={`${TONE[tone]} h-1.5 w-1.5 rounded-full bg-[hsl(var(--kr-glass-from))]`} />
+            <span className="sr-only">, {n} waiting</span>
+          </>
+        ))}
+      </span>
+    ),
+  });
+  const phoneTabs = [
+    tabOption("decisions", "Decisions", decisionCount ?? 0, "needs"),
+    tabOption("approvals", "Approvals", approvalsQ.data ? liveApprovals.length : 0, "flag"),
+    tabOption("watch", "Watch", watchCount, "today"),
+  ];
+  const decisionRows = liveDecisions.map((c) => ({
+    id: c.id,
+    title: c.title,
+    meta: c.context_line,
+    amount: Number(c.amount) > 0 ? inrCompact(c.amount) : null,
+    onOpen: () => setOpenDecisionId(c.target_id),
+    /* ASK-32 1.3 and 2.4 — ONLY WHAT IS MINE TO DECIDE. The feed already draws
+       that line and it draws it on the server: desk.py marks a card "review"
+       when it sits in my approver queue (or is unassigned and I am an owner)
+       and "follow" when I raised it and someone else decides — 2.4's "Waiting
+       on Sunita" row, which gets no actions at all. So a row I may not decide
+       renders no buttons rather than buttons the server would 403, and the rule
+       stays in one place instead of two. Shared by both containers. */
+    actions: c.cta === "review" ? (
+      <RowActions
+        what={c.title}
+        onApprove={() => approveRow(c.id, () => api.post(`/decisions/${c.target_id}/approve`), `Approved — ${c.title}`)}
+        onReject={() => rejectRow(c.id, () => api.post(`/decisions/${c.target_id}/reject`), `Rejected — ${c.title}`)}
+      />
+    ) : null,
+  }));
+  const approvalRows = liveApprovals.map((t) => ({
+    id: t.id,
+    title: t.title,
+    meta: [t.assignee_name, daysLabel(daysSince(t.created_at))].filter(Boolean).join(" · "),
+    onOpen: () => setOpenTaskId(t.id),
+    /* ASK-34 7.4 / B4 — the same two buttons, and REJECT GETS THE UNDO HERE
+       TOO. Checked against how a task approval is actually reversed:
+       routers/tasks.py reject_task pushes the task back to blocked (or
+       in_progress on a close-stage sign-off) and NOTIFIES every assignee
+       "Changes requested" the moment it lands — that message cannot be recalled
+       — and on a close-stage approval it is not simply re-approvable, because
+       approve_task refuses unless approval_status is still "pending", so the
+       doer has to mark the work complete again first. The work survives, so
+       this is lighter than a decision reject; a person hearing about it is
+       still worth the window. Approve has none.
+       Every row here already passed _can_approve_task on the server and
+       canApproveTask on the client, so all of them get buttons. */
+    actions: (
+      <RowActions
+        what={t.title}
+        onApprove={() => approveRow(t.id, () => api.post(`/tasks/${t.id}/approve`), `Approved — ${t.title}`)}
+        onReject={() => rejectRow(t.id, () => api.post(`/tasks/${t.id}/reject`, { reason: "" }), `Changes requested — ${t.title}`)}
+      />
+    ),
+  }));
 
   return (
     /* ASK-25 — ONE SCREEN. On desktop the page is a flex column that fills
@@ -790,7 +1029,63 @@ export default function Desk() {
            overflow land on the list inside, where the scroll now is. */
         className={`kr-desk-board grid gap-5 lg:-mb-8 lg:min-h-0 lg:flex-1 lg:gap-0 lg:grid-rows-[minmax(0,1fr)] ${showDecisions ? "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]" : ""}`}
       >
-        {showDecisions && (
+        {/* ASK-34 B — THE PHONE'S CARD. One card, three tabs, the same rows the
+            desktop columns use. */}
+        {isMobile && (
+        <PhoneTabCard
+          tone={phoneTab === "decisions" ? "needs" : phoneTab === "approvals" ? "flag" : "today"}
+          testid="desk-phone-card"
+          tabs={phoneTabs}
+          tab={phoneTab}
+          onTab={setPhoneTab}
+          loading={phoneTab === "decisions" ? decisionsLoading : phoneTab === "approvals" ? !m.tasks : false}
+          empty={phoneTab === "decisions" ? SECTIONS[0].empty : "Nothing waiting for your sign-off"}
+          rows={phoneTab === "decisions" ? decisionRows : phoneTab === "approvals" ? approvalRows : []}
+        >
+          {/* Watch is three feeds, not a list of rows: they keep the cards they
+              already had, which are links to the pages that hold the detail. */}
+          {phoneTab === "watch" ? (
+            <div className="flex flex-col gap-2.5" data-testid="desk-watch">
+              <StackCard
+                tone="today"
+                title="Due today"
+                count={counters ? counters.due_today : null}
+                loading={boardQs[2]?.isLoading}
+                line={todayCards[0]?.title}
+                empty={SECTIONS[2].empty}
+                to="/my-work?filter=due_today"
+                testid="desk-due-today-m"
+              />
+              {canApproveLeave && (
+                <StackCard
+                  tone="warm"
+                  title="Leave requests"
+                  count={leavesQ.data ? pendingLeaves.length : null}
+                  loading={leavesQ.isLoading}
+                  line={leaveNames(pendingLeaves)}
+                  tail={pendingLeaves[0] ? leaveRange(pendingLeaves[0]) : ""}
+                  empty="No leave requests waiting"
+                  to="/my-work?view=approvals&sub=leave"
+                  testid="desk-leave-m"
+                />
+              )}
+              <StackCard
+                tone="fire"
+                title="Slipping"
+                count={counters ? counters.on_fire : null}
+                loading={boardQs[1]?.isLoading}
+                line={fireCards[0]?.title}
+                tail={fireCards[0]?.context_line}
+                empty={SECTIONS[1].empty}
+                to="/my-work?filter=overdue"
+                testid="desk-slipping-m"
+              />
+            </div>
+          ) : null}
+        </PhoneTabCard>
+        )}
+
+        {!isMobile && showDecisions && (
           <DeskCard
             tone="needs"
             title="Decisions"
@@ -801,41 +1096,21 @@ export default function Desk() {
             note="longest waiting first"
             loading={decisionsLoading}
             empty={SECTIONS[0].empty}
-            rows={liveDecisions.map((c) => ({
-              id: c.id,
-              title: c.title,
-              meta: c.context_line,
-              amount: Number(c.amount) > 0 ? inrCompact(c.amount) : null,
-              onOpen: () => setOpenDecisionId(c.target_id),
-              /* ASK-32 1.3 and 2.4 — ONLY WHAT IS MINE TO DECIDE. The feed
-                 already draws that line and it draws it on the server:
-                 desk.py marks a card "review" when it sits in my approver
-                 queue (or is unassigned and I am an owner) and "follow" when I
-                 raised it and someone else decides — 2.4's "Waiting on Sunita"
-                 row, which gets no actions at all. So a row I may not decide
-                 renders no buttons rather than buttons the server would 403,
-                 and the rule stays in one place instead of two. */
-              actions: c.cta === "review" ? (
-                <RowActions
-                  what={c.title}
-                  onApprove={() => approveRow(c.id, () => api.post(`/decisions/${c.target_id}/approve`),
-                    `Approved — ${c.title}`)}
-                  onReject={() => rejectRow(c.id, () => api.post(`/decisions/${c.target_id}/reject`),
-                    `Rejected — ${c.title}`)}
-                />
-              ) : null,
-            }))}
+            rows={decisionRows}
             moreSuffix=" waiting"
             cta={topDecision ? "Review" : null}
             onCta={() => topDecision && setOpenDecisionId(topDecision.target_id)}
             scroll
             testid="desk-decisions"
+            /* ASK-34 B — the three columns are the DESKTOP card now; below lg the
+               same rows are in the tabbed card above. */
             className="lg:border-r lg:border-white/[.14] lg:pr-5"
           />
         )}
 
         {/* The same row cap again — this nested grid is itself a grid item, so
             without it Task approvals would push the board open on its own. */}
+        {!isMobile && (
         <div className={`grid min-w-0 gap-5 lg:min-h-0 lg:grid-rows-[minmax(0,1fr)] ${showDecisions ? "lg:pl-5" : ""} ${showApprovals ? "lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:gap-0" : ""}`}>
           {showApprovals && (
             <DeskCard
@@ -844,35 +1119,7 @@ export default function Desk() {
               count={approvalsQ.data ? liveApprovals.length : null}
               loading={!m.tasks}
               empty="Nothing waiting for your sign-off"
-              rows={liveApprovals.map((t) => ({
-                id: t.id,
-                title: t.title,
-                meta: [t.assignee_name, daysLabel(daysSince(t.created_at))].filter(Boolean).join(" · "),
-                onOpen: () => setOpenTaskId(t.id),
-                /* ASK-34 7.4 — the same two buttons, and REJECT GETS THE UNDO
-                   HERE TOO. The brief said neither action needs one; read
-                   against how a task approval is actually reversed, reject does.
-                   routers/tasks.py reject_task pushes the task back to blocked
-                   (or in_progress on a close-stage sign-off) and NOTIFIES every
-                   assignee "Changes requested" the instant it lands — that
-                   message cannot be recalled. And on a close-stage approval it
-                   is not simply re-approvable: approve_task refuses unless
-                   approval_status is still "pending", so the doer has to mark
-                   the work complete again first. The work survives, so this is
-                   lighter than a decision reject; a person hearing about it is
-                   still a thing worth six seconds. Approve has none, as asked.
-                   Every row here already passed _can_approve_task on the server
-                   and canApproveTask on the client, so all of them get buttons. */
-                actions: (
-                  <RowActions
-                    what={t.title}
-                    onApprove={() => approveRow(t.id, () => api.post(`/tasks/${t.id}/approve`),
-                      `Approved — ${t.title}`)}
-                    onReject={() => rejectRow(t.id, () => api.post(`/tasks/${t.id}/reject`, { reason: "" }),
-                      `Changes requested — ${t.title}`)}
-                  />
-                ),
-              }))}
+              rows={approvalRows}
               cta="Approvals"
               /* The pill goes to My Work's Approvals view on MY approvals. */
               onCta={() => navigate("/my-work?view=approvals&scope=mine")}
@@ -919,10 +1166,25 @@ export default function Desk() {
             />
           </div>
         </div>
+        )}
       </section>
 
       {openDecisionId && (
         <DecisionDialog decisionId={openDecisionId} open onClose={closeDecision} />
+      )}
+
+      {/* ASK-34 B4 — the phone's undo window. onExpire is where the request
+          actually goes out, which is the whole point of the pattern. */}
+      {undo && (
+        <UndoSnackbar
+          open
+          duration={UNDO_MS}
+          message={undo.message}
+          onUndo={() => { restore(undo.id); setUndo(null); }}
+          onExpire={() => { commitReject(undo.id, undo.run); setUndo(null); }}
+          className="lg:hidden"
+          data-testid="desk-undo"
+        />
       )}
 
       {openTask && (

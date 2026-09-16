@@ -3,6 +3,10 @@
 // team's people hanging off a vertical line that ends in "Add member". Drawn
 // from the founder's tree reference; its background is not part of the ask.
 //
+// 2026-09-16: this tree now draws below lg only. At lg and up TeamPanel
+// renders OrgCanvas, the founder's left-to-right org chart; this file still
+// supplies MEMBER_STATUS and teamIcon to it.
+//
 // Presentation only. TeamPanel owns the data, the search, who may add or edit,
 // and the dialogs; the tree is told what to draw and whom to call.
 //

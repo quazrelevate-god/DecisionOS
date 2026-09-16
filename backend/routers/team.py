@@ -149,9 +149,21 @@ async def list_users(user: dict = Depends(get_current_user)):
     from services.auth.membership import list_memberships_for_tenant
     memberships = await list_memberships_for_tenant(db, user["tenant_id"])
     m_by_uid = {m["user_id"]: m for m in memberships if m.get("status") != "removed"}
+    # 2026-09-15: someone removed from this workspace is gone from the list. They
+    # used to come back as "active": no live row looked like a legacy member.
+    removed_ids = {m["user_id"] for m in memberships if m.get("status") == "removed"} - set(m_by_uid)
+    # What each person can actually open (role settings, temporary grants and
+    # "No access" included), so approver lists and profiles show the truth.
+    from services.auth.membership import members_effective_perms
+    perms_map = await members_effective_perms(db, user["tenant_id"], users)
     out = []
     for u in users:
+        if u.get("id") in removed_ids:
+            continue
         m = m_by_uid.get(u.get("id"))
+        u["effective_permissions"] = sorted(perms_map.get(u.get("id"), set()))
+        if m and "permissions_custom" in m:
+            u["permissions_custom"] = bool(m["permissions_custom"])
         if m:
             u["invite_status"] = m.get("status")   # pending | active | suspended
             u["invited_at"] = m.get("invited_at")
@@ -165,6 +177,37 @@ async def list_users(user: dict = Depends(get_current_user)):
     return out
 
 
+
+
+@router.get("/users/{user_id}/offboarding")
+async def offboarding_summary(user_id: str, user: dict = Depends(require_role("owner"))):
+    """2026-09-15 — what someone holds before they are removed, so the owner
+    sees what will be handed over: open work they do or help on, approvals and
+    decisions waiting on them, the people who report to them, their contacts."""
+    tid = user["tenant_id"]
+    target = await db.users.find_one({"id": user_id, "tenant_id": tid},
+                                     {"_id": 0, "id": 1, "name": 1, "reporting_manager_id": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="Member not found")
+    open_ = {"$nin": ["done", "cancelled"]}
+    suggested = None
+    if target.get("reporting_manager_id"):
+        from services.auth.membership import find_membership, LIVE_STATUSES, legacy_access_allowed
+        mgr = await db.users.find_one({"id": target["reporting_manager_id"], "tenant_id": tid},
+                                      {"_id": 0, "id": 1, "tenant_id": 1, "role": 1})
+        if mgr and (await find_membership(db, mgr["id"], tid, statuses=LIVE_STATUSES)
+                    or await legacy_access_allowed(db, mgr, tid)):
+            suggested = mgr["id"]
+    return {
+        "tasks_doing": await db.tasks.count_documents({"tenant_id": tid, "assignee_id": user_id, "status": open_}),
+        "tasks_helping": await db.tasks.count_documents({"tenant_id": tid, "co_assignee_ids": user_id, "status": open_}),
+        "tasks_approving": await db.tasks.count_documents({"tenant_id": tid, "approver_id": user_id, "status": open_}),
+        "decisions_waiting": await db.decisions.count_documents(
+            {"tenant_id": tid, "approver_id": user_id, "status": {"$in": ["pending", "pending_approval"]}}),
+        "reports": await db.users.count_documents({"tenant_id": tid, "reporting_manager_id": user_id}),
+        "contacts": await db.contacts.count_documents({"tenant_id": tid, "assigned_id": user_id}),
+        "suggested_replacement_id": suggested,
+    }
 
 
 @router.post("/users/{user_id}/deprovision")
@@ -194,10 +237,15 @@ async def deprovision_member(user_id: str, inp: DeprovisionInput,
         )
     # Guard: replacement (if provided) must be a live member.
     if inp.reassign_to_user_id:
-        from services.auth.membership import find_membership, LIVE_STATUSES
+        from services.auth.membership import find_membership, LIVE_STATUSES, legacy_access_allowed
         rep = await find_membership(
             db, inp.reassign_to_user_id, user["tenant_id"], statuses=LIVE_STATUSES,
         )
+        if not rep:
+            # 2026-09-15: an account from before memberships is a live member too.
+            rep_user = await db.users.find_one({"id": inp.reassign_to_user_id, "tenant_id": user["tenant_id"]},
+                                               {"_id": 0, "id": 1, "tenant_id": 1, "role": 1})
+            rep = rep_user if rep_user and await legacy_access_allowed(db, rep_user, user["tenant_id"]) else None
         if not rep:
             raise HTTPException(
                 status_code=400,
@@ -261,6 +309,8 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
             raise HTTPException(status_code=403, detail="Only an owner can create another owner")
     elif inp.role not in role_keys:
         raise HTTPException(status_code=400, detail="Invalid role")
+    else:
+        await _refuse_ungrantable(user, clean_perms(inp.permissions), inp.role)
     # FIX-005-A (S3-02): enforce the plan's seat cap BEFORE creating
     # the user. Raises 402 with a friendly upgrade prompt when full.
     # Owner-role invitees still count against the cap — a workspace
@@ -283,6 +333,10 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
         if len(pwd) < 6:
             raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
         password_hash = hash_password(pwd)
+    # 2026-09-15: follow the role (empty list), or their own list — which may be
+    # empty on purpose ("No access").
+    _perms_new = [] if inp.follow_role is True else clean_perms(inp.permissions)
+    _custom_new = inp.follow_role is False or bool(_perms_new)
     uid = new_id()
     invite_token = None
     # FIX-002-A: also write phone_norm for indexed OTP + WhatsApp lookup.
@@ -291,7 +345,7 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
         "id": uid, "tenant_id": user["tenant_id"], "name": inp.name, "email": email,
         "phone": phone, "phone_norm": _np(phone), "passwordless": passwordless,
         "password_hash": password_hash, "role": inp.role,
-        "permissions": clean_perms(inp.permissions), "created_at": now_iso(),
+        "permissions": _perms_new, "permissions_custom": _custom_new, "created_at": now_iso(),
     }
     if inp.reporting_manager_id:
         mgr = await db.users.find_one(
@@ -320,12 +374,14 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
     _mstatus = _MSTATUS_PENDING if invite_token else _MSTATUS_ACTIVE
     await _create_membership(
         db, user_id=uid, tenant_id=user["tenant_id"], role=inp.role,
-        permissions=clean_perms(inp.permissions),
+        permissions=_perms_new,
         invited_by=user["id"],
         status=_mstatus,
         invite_token=invite_token,
         invite_expires_at=doc.get("invite_expires_at"),
     )
+    await db.memberships.update_one({"user_id": uid, "tenant_id": user["tenant_id"]},
+                                    {"$set": {"permissions_custom": _custom_new}})
     await log_activity(user["tenant_id"], user["id"], "user_added",
                        f"Added {inp.name} as {inp.role}"
                        + (" (mobile OTP login)" if passwordless else ""))
@@ -357,6 +413,28 @@ async def regenerate_invite(user_id: str, user: dict = Depends(require_perm("tea
             "phone_masked": _mask_phone(target.get("phone", ""))}
 
 
+async def _refuse_ungrantable(user: dict, perms: list, role: Optional[str], target: Optional[dict] = None) -> None:
+    """RBAC P0 (2026-09-15) — Manage team could raise access, its own included.
+    Someone who isn't an owner may give only what they hold themselves, what the
+    person already has, or (for someone else) the defaults of that person's role,
+    which the owner set."""
+    if user.get("role") == "owner":
+        return
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "roles": 1})
+    role_map = {r["key"]: list(r["permissions"]) for r in ((tenant or {}).get("roles") or [])
+                if r.get("key") and isinstance(r.get("permissions"), list) and r.get("permissions")}
+    allowed = set(user_perms(user))
+    self_edit = bool(target) and target.get("id") == user["id"]
+    if target:
+        allowed |= set(user_perms({**target, "_role_perms_map": role_map}))
+    if role and not self_edit:
+        allowed |= set(user_perms({"role": role, "permissions": [], "_role_perms_map": role_map}))
+    extra = sorted(set(perms) - allowed)
+    if extra:
+        raise HTTPException(status_code=403, detail=(
+            f"You can only give access you have yourself. Ask an owner for: {', '.join(extra)}."))
+
+
 @router.patch("/users/{user_id}")
 async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(require_perm("team_manage"))):
     target = await db.users.find_one({"id": user_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
@@ -366,6 +444,12 @@ async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(r
     # Only an owner may change another owner's access (e.g. to demote them).
     if target["role"] == "owner" and not acting_is_owner:
         raise HTTPException(status_code=403, detail="Only an owner can change another owner's access")
+    if not acting_is_owner:
+        if user_id == user["id"] and inp.role is not None and inp.role != target["role"]:
+            raise HTTPException(status_code=403, detail="You can't change your own role. Ask an owner.")
+        if inp.permissions is not None and inp.role != "owner" and inp.follow_role is not True:
+            await _refuse_ungrantable(user, clean_perms(inp.permissions),
+                                      inp.role if inp.role is not None else target["role"], target)
     updates: dict = {}
     new_role = target["role"]
     if inp.role is not None and inp.role != target["role"]:
@@ -383,8 +467,13 @@ async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(r
                     raise HTTPException(status_code=400, detail="Cannot demote the last owner — assign another owner first")
         new_role = inp.role
         updates["role"] = inp.role
-    if inp.permissions is not None:
+    # 2026-09-15: "Use the role's access" is its own choice, so their own list
+    # with nothing ticked means No access rather than the role's.
+    if inp.follow_role is True:
+        updates["permissions"], updates["permissions_custom"] = [], False
+    elif inp.permissions is not None:
         updates["permissions"] = clean_perms(inp.permissions)
+        updates["permissions_custom"] = inp.follow_role is False or bool(updates["permissions"])
     if new_role == "owner":
         updates["permissions"] = list(PERMISSION_KEYS)
     if inp.phone is not None:
@@ -404,6 +493,23 @@ async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(r
     if inp.title is not None:
         # 2026-09-14 — the job title on the Team tree; an empty string clears it.
         updates["title"] = inp.title.strip()[:80] or None
+    # RBAC P1 (2026-09-15): name and email can be corrected. Email is how they
+    # sign in, so only an owner changes it, and it must be free.
+    if inp.name is not None:
+        name = inp.name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Enter a name")
+        updates["name"] = name[:80]
+    if inp.email is not None and inp.email.strip().lower() != (target.get("email") or "").lower():
+        if not acting_is_owner:
+            raise HTTPException(status_code=403, detail="Only an owner can change someone's email, because it's how they sign in.")
+        email = inp.email.strip().lower()
+        local, _, domain = email.partition("@")
+        if not local or "." not in domain:
+            raise HTTPException(status_code=400, detail="Enter a valid email")
+        if await db.users.find_one({"email": email, "id": {"$ne": user_id}}, {"_id": 0, "id": 1}):
+            raise HTTPException(status_code=400, detail="That email is already used by another account")
+        updates["email"] = email
     if updates:
         # E2-57: tenant scope on the write (defense-in-depth; target was
         # already loaded from this tenant above).
@@ -421,6 +527,8 @@ async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(r
             membership_updates["role"] = updates["role"]
         if "permissions" in updates:
             membership_updates["permissions"] = updates["permissions"]
+        if "permissions_custom" in updates:
+            membership_updates["permissions_custom"] = updates["permissions_custom"]
         if membership_updates:
             from services.auth.membership import update_membership as _um
             await _um(

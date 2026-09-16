@@ -193,12 +193,16 @@ class TestEndpointGates:
             f"RBAC-07: delete_task must gate on require_role('owner'); got: {line}"
         )
 
-    def test_rbac_07_reassign_task_requires_team_manage(self):
-        """RBAC-07: any employee could reassign any task before. Now
-        team_manage gates the action."""
+    def test_rbac_07_reassign_task_follows_the_people_rule(self):
+        """RBAC-07: any employee could reassign any task before. RBAC P2
+        (2026-09-16): the same people who may change who is on a task in
+        PATCH /tasks/{id} (the person who asked, the manager, Manage team, the
+        owner), then the assign rules — not a separate team_manage gate."""
+        import inspect
         import routers.tasks
-        line = _dep_source_marker(routers.tasks.reassign_task)
-        assert "require_perm(\"team_manage\")" in line
+        src = inspect.getsource(routers.tasks.reassign_task)
+        assert 'task_edit_rights(user, t' in src and '["people"]' in src
+        assert "_check_assignable(user, inp.assignee_id)" in src
 
     def test_rbac_07_delete_execution_plan_requires_team_manage(self):
         """RBAC-07: wiping an in-flight execution plan needs

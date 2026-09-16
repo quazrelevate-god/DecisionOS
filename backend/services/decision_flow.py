@@ -42,7 +42,8 @@ def can_decide(user: dict, d: dict) -> bool:
     if user.get("role") == "owner":
         return True
     if d.get("approver_id"):
-        return d["approver_id"] == user.get("id")
+        # RBAC P2 (2026-09-16): or the decider handed their approvals to me while away.
+        return d["approver_id"] == user.get("id") or d["approver_id"] in (user.get("_acting_for") or [])
     return "decisions_approve" in user_perms(user)
 
 
@@ -67,15 +68,17 @@ def member_can_decide(member: dict, role_map: dict) -> bool:
     return "decisions_approve" in user_perms({**member, "_role_perms_map": role_map})
 
 
-_PERSON = {"_id": 0, "id": 1, "name": 1, "role": 1, "permissions": 1, "reporting_manager_id": 1}
+_PERSON = {"_id": 0, "id": 1, "name": 1, "role": 1, "permissions": 1, "permissions_custom": 1, "reporting_manager_id": 1}
 
 
 async def decision_deciders(tenant_id: str) -> list:
-    """Everyone in the company who may decide a decision."""
-    role_map = await _role_map(tenant_id)
+    """Everyone in the company who may decide a decision — by what they can
+    really open (membership, role settings, temporary grants, owner exclusions)."""
+    from services.auth.membership import members_effective_perms
     people = await db.users.find({"tenant_id": tenant_id}, _PERSON).to_list(500)
+    perms = await members_effective_perms(db, tenant_id, people)
     return [{"id": p["id"], "name": p.get("name"), "role": p.get("role")}
-            for p in people if member_can_decide(p, role_map)]
+            for p in people if "decisions_approve" in perms.get(p["id"], set())]
 
 
 async def route_approver(tenant_id: str, capturer_id: str) -> tuple:
@@ -83,14 +86,15 @@ async def route_approver(tenant_id: str, capturer_id: str) -> tuple:
     approve; else their reporting manager when the manager can; else the owner.
     A company with several owners keeps it with every owner (None), so naming
     one would not hide it from the others. Returns (approver_id, how)."""
-    role_map = await _role_map(tenant_id)
+    # 2026-09-15 (RBAC P1): by what they can really open, not the bare user record.
+    from services.auth.membership import members_effective_perms
     capturer = await db.users.find_one({"id": capturer_id, "tenant_id": tenant_id}, _PERSON)
-    if member_can_decide(capturer, role_map):
+    if capturer and "decisions_approve" in (await members_effective_perms(db, tenant_id, [capturer])).get(capturer_id, set()):
         return capturer_id, "captured"
     mid = (capturer or {}).get("reporting_manager_id")
     if mid and mid != capturer_id:
         manager = await db.users.find_one({"id": mid, "tenant_id": tenant_id}, _PERSON)
-        if member_can_decide(manager, role_map):
+        if manager and "decisions_approve" in (await members_effective_perms(db, tenant_id, [manager])).get(mid, set()):
             return mid, "manager"
     owners = await db.users.find({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0, "id": 1}).to_list(5)
     if len(owners) == 1:

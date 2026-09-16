@@ -193,7 +193,11 @@ def test_get_current_user_isolation_guards_present():
     src = inspect.getsource(deps.get_current_user)
     # T10-08.3: the legacy no-membership fallback is only trusted when the
     # user's own tenant_id matches the token's claimed tenant (no confusion).
-    assert 'tenant_id") == claimed_tenant' in src, "legacy fallback must be tenant-matched"
+    # 2026-09-15: the check lives in membership.legacy_access_allowed, which also
+    # refuses anyone who has a membership row there (removed / suspended / pending).
+    assert "_legacy_access_allowed(db, user, claimed_tenant)" in src, "legacy fallback must be tenant-matched"
+    from services.auth.membership import legacy_access_allowed
+    assert 'user.get("tenant_id") == tenant_id' in inspect.getsource(legacy_access_allowed)
     # T10-08.10: a revoked jti is refused, and suspended user/tenant are 403.
     assert "is_revoked" in src, "logout must be able to blacklist the jti"
     assert 'user.get("suspended")' in src and 'user.get("tenant_suspended")' in src, \

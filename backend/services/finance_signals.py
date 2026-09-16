@@ -38,12 +38,15 @@ async def run_followup(tenant_id: str):
     # ASK-28 Phase 7 (plan 7.1–7.3): every open stage counts — Waiting on and
     # waiting for approval too — and the ladder and who hears at each step
     # live in services/tasks (followup_level, stuck_on, escalation_manager_id).
-    from services.tasks import OPEN_STATUSES, followup_level
+    from services.tasks import OPEN_STATUSES, followup_days, followup_level
     tasks = await db.tasks.find(
         {"tenant_id": tenant_id, "status": {"$in": list(OPEN_STATUSES)}, "due_date": {"$ne": None, "$lt": now.isoformat()}},
         {"_id": 0}
     ).to_list(500)
     owners = await _owner_ids(tenant_id)
+    # RBAC P2 (2026-09-16): the company's own escalation days.
+    ladder = followup_days(await db.tenants.find_one(
+        {"id": tenant_id}, {"_id": 0, "followup_manager_days": 1, "followup_owner_days": 1}))
     for t in tasks:
         try:
             due = datetime.fromisoformat(t["due_date"])
@@ -52,7 +55,7 @@ async def run_followup(tenant_id: str):
         except Exception:
             continue
         days = (now - due).days
-        target = followup_level(days)
+        target = followup_level(days, *ladder)
         if target <= t.get("escalation_level", 0):
             continue
         msg = f"Task '{t['title']}' is overdue by {days} day(s)."

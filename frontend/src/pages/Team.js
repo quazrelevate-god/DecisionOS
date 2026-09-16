@@ -6,15 +6,15 @@
    GlassSelect for role and reporting manager, and a job title, which the
    tree shows under each name. */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { formatPhone } from "../lib/format";
+import { formatPhone, timeAgo } from "../lib/format";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { PERMISSIONS, defaultPermsForRole, hasPerm, userPerms } from "../lib/perms";
+import { PERMISSIONS, hasPerm, roleDefaultPerms, userPerms } from "../lib/perms";
 import { toast } from "sonner";
 import {
-  AirplaneTakeoff, Camera, Check, Copy, EnvelopeSimple, Eye, LinkSimple, MagnifyingGlass,
-  PencilSimple, Phone, Plus, ShieldCheck, User, UsersThree, WhatsappLogo, X,
+  AirplaneTakeoff, Briefcase, Camera, Check, Copy, EnvelopeSimple, Eye, LinkSimple, MagnifyingGlass,
+  PencilSimple, Phone, Plus, Pulse, ShieldCheck, Trash, User, WhatsappLogo, X,
 } from "@phosphor-icons/react";
 import { PersonAvatar } from "../components/karma/PersonAvatar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
@@ -25,12 +25,43 @@ import {
 } from "../components/karma/glass";
 import { GlassSelect } from "../components/karma/GlassSelect";
 import { AddMemberTile, MEMBER_STATUS, MemberNode, OrgTree, orderByReportingLine } from "./team/OrgTree";
-// ASK-6 (2026-09-12): Leave register + personal history land here.
-// LeaveCard is reused as the shared card primitive; the register uses
-// the same /leaves endpoints that pages/Leave.js consumed.
-import { LeaveCard } from "./Leave";
+// 2026-09-16, founder: at lg and up the tree is the reference's left-to-right
+// org chart (OrgCanvas); below lg the vertical OrgTree stays.
+import { AddNode, OrgCanvas } from "./team/OrgCanvas";
+import { useIsMobile } from "../hooks/useIsMobile";
+// ASK-6 (2026-09-12): a member's leave lands in their profile. Since
+// 2026-09-16 it is a timeline there rather than cards, so only Leave.js's
+// status and leave-type labels are shared.
+import { STATUS_META, typeLabel } from "./Leave";
 
 const SHEET = `gap-5 rounded-[1.75rem] p-6 sm:rounded-[1.75rem] [&>button.absolute]:hidden ${GLASS_SHEET}`;
+/* 2026-09-16, founder: the profile pop-up is frosted glass like the Team tree's
+   cards, not the grey sheet. A near-opaque white wash (it sits on the dialog's
+   dark backdrop, where a thin .kr-frost would read grey), a blur, a white rim
+   with a top-lip highlight and a long soft shadow. Its tiles and chips are the
+   quieter glass (.kr-frost-min's idea): drawn by a white rim over the card's
+   own blur, with no second backdrop-filter. */
+// The profile pop-up is see-through glass (founder, 2026-09-16): a thin white
+// wash and a heavy blur over a barely dimmed page, so the tree reads through
+// it. Tiles and chips inside carry no blur of their own, only a lighter wash
+// and a white hairline, so the alphas do not stack back to opaque.
+// Text on the glass reads a step darker than on solid white (founder,
+// 2026-09-16: "the text in the popup is blur"): every grey inside the card is
+// lifted one shade, including the shared labels it borrows.
+const PROFILE_INK = "antialiased [&_.text-slate-500]:text-slate-700 [&_.text-slate-600]:text-slate-800 [&_.text-slate-700]:text-slate-900 [&_.text-slate-800]:text-slate-900 [&_.text-neutral-600]:text-neutral-800";
+const PROFILE_GLASS = "bg-[linear-gradient(160deg,hsl(0_0%_100%/0.62),hsl(0_0%_100%/0.42))] backdrop-blur-[28px] backdrop-saturate-150 border border-white/60 shadow-[0_40px_90px_-30px_hsl(245_35%_15%/0.45),inset_0_1px_0_hsl(0_0%_100%/0.8)]";
+const PROFILE_TILE = "rounded-2xl bg-white/30 border border-white/55 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.7)]";
+const PROFILE_CHIP = "inline-flex items-center gap-1 rounded-full bg-white/45 border border-white/60 px-2.5 py-1 text-[12px] font-medium text-slate-700";
+/* The add / edit member form is neumorphic (founder, 2026-09-16): one soft
+   grey-blue ground; buttons and options are pushed out of it with a light and
+   a dark shadow, and fields, selects and the chosen options are pressed in. */
+const NM_RAISED = "bg-[hsl(226_24%_92%)] shadow-[6px_6px_14px_hsl(226_18%_74%),-6px_-6px_14px_hsl(0_0%_100%/0.95)]";
+const NM_PRESSED = "bg-[hsl(226_24%_92%)] shadow-[inset_4px_4px_9px_hsl(226_18%_76%),inset_-4px_-4px_9px_hsl(0_0%_100%/0.95)]";
+const NM_SHEET = "gap-5 rounded-[1.75rem] border-0 p-6 sm:rounded-[1.75rem] [&>button.absolute]:hidden bg-[hsl(226_24%_92%)] shadow-[0_30px_80px_-20px_hsl(226_30%_20%/0.5)]";
+const NM_FIELD = `w-full rounded-2xl border-0 px-4 py-3 text-[15px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/20 ${NM_PRESSED}`;
+const NM_ICON_BTN = `grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-700 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 active:shadow-[inset_3px_3px_7px_hsl(226_18%_76%),inset_-3px_-3px_7px_hsl(0_0%_100%/0.95)] ${NM_RAISED}`;
+// GlassSelect's pill, pressed in: twMerge swaps its white glass for the ground.
+const NM_SELECT = "ring-0 hover:bg-[hsl(226_24%_92%)] bg-[hsl(226_24%_92%)] shadow-[inset_4px_4px_9px_hsl(226_18%_76%),inset_-4px_-4px_9px_hsl(0_0%_100%/0.95)]";
 const COLLAPSE_KEY = "team.folded-branches";
 
 const humanize = (key) => String(key).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -43,14 +74,14 @@ const memberMatches = (u, q, roles) =>
     .some((v) => String(v || "").toLowerCase().includes(q));
 
 /* A glass dialog's header: title, a line under it, and the round glass close. */
-function SheetHead({ title, children, onClose, closeTestid }) {
+function SheetHead({ title, children, onClose, closeTestid, closeClassName = GLASS_ICON_BTN }) {
   return (
     <div className="flex items-start gap-3">
       <DialogHeader className="min-w-0 flex-1 space-y-1.5 text-left">
         <DialogTitle className="text-lg font-semibold text-neutral-900">{title}</DialogTitle>
         {children && <DialogDescription className="text-sm text-neutral-600">{children}</DialogDescription>}
       </DialogHeader>
-      <button type="button" onClick={onClose} aria-label="Close" data-testid={closeTestid} className={GLASS_ICON_BTN}>
+      <button type="button" onClick={onClose} aria-label="Close" data-testid={closeTestid} className={closeClassName}>
         <X size={16} weight="bold" aria-hidden="true" />
       </button>
     </div>
@@ -100,6 +131,44 @@ function InviteLinkModal({ info, onClose }) {
   );
 }
 
+/* RBAC P1 (2026-09-15) — someone added with a password got no hand-off at all.
+   This is the message to pass on: where to sign in and with which email. The
+   password is never in it; the owner shares that separately. */
+function WelcomeModal({ info, company, onClose }) {
+  const login = `${window.location.origin}/login`;
+  const first = (info?.name || "").split(" ")[0];
+  const msg = info
+    ? `Hi ${first}, you've been added to ${company || "our company"} on DecisionOS. Sign in at ${login} with ${info.email}. `
+      + "I'll share your password separately. You can change it in Settings › Account after you sign in."
+    : "";
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(msg); toast.success("Welcome message copied"); }
+    catch { toast.error("Couldn't copy — select and copy manually"); }
+  };
+  return (
+    <Dialog open={!!info} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className={`max-w-md ${SHEET}`} data-testid="welcome-modal">
+        <SheetHead title={`Welcome ${first}`} onClose={onClose} closeTestid="welcome-close">
+          {info?.name} is added. Send them this so they know where to sign in.
+        </SheetHead>
+        <textarea readOnly value={msg} rows={5} data-testid="welcome-message" aria-label="Welcome message"
+          className={`${DRAWER_FIELD} min-h-28 resize-none text-sm leading-relaxed`} onFocus={(e) => e.target.select()} />
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={copy} data-testid="copy-welcome"
+            className={`flex h-11 flex-1 items-center justify-center gap-1.5 rounded-pill px-4 text-sm font-medium ${INK_PILL}`}>
+            <Copy size={15} weight="bold" aria-hidden="true" /> Copy message
+          </button>
+          <a href={`https://wa.me/?text=${encodeURIComponent(msg)}`} target="_blank" rel="noreferrer" data-testid="welcome-whatsapp-share"
+            className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
+            <WhatsappLogo size={16} weight="bold" aria-hidden="true" /> WhatsApp
+          </a>
+        </div>
+        <p className="text-xs text-neutral-500">The password isn&rsquo;t in the message. Tell them in person or on a call.</p>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 const MENU_PREVIEW = [
   { label: "Decision Desk", perm: "inbox" },
   { label: "CEO Brief", perm: null },
@@ -112,18 +181,25 @@ const MENU_PREVIEW = [
 ];
 
 /* Add a member, or edit one (`initial`). `defaultRole` pre-sets the team when
-   the dialog opens from that team's branch. */
-function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onInvite, members = [] }) {
+   the dialog opens from that team's branch; `defaultManagerId` pre-sets
+   "Reports to" when it opens from a node in the desktop tree. */
+function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOptions, onSaved, onInvite, onWelcome, members = [], inviteAfterSave = false }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const { user: me } = useAuth();
   const editing = !!initial;
   const startRole = defaultRole && roleOptions.some((r) => r.key === defaultRole) ? defaultRole : roleOptions[0]?.key || "";
+  const startManager = defaultManagerId && members.some((m) => m.id === defaultManagerId) ? defaultManagerId : "";
   const blankForm = () => ({
     name: "", email: "", title: "", password: "", phone: "", passwordless: false,
-    role: startRole, permissions: defaultPermsForRole(startRole), reporting_manager_id: "",
+    role: startRole, permissions: roleDefaultPerms(startRole, roleOptions), reporting_manager_id: startManager,
+    // 2026-09-15 — a new member follows their role's access unless unticked.
+    follow_role: true,
   });
   const [form, setForm] = useState(blankForm);
   const roleName = (key) => roleOptions.find((r) => r.key === key)?.label || key;
+  const rolePerms = roleDefaultPerms(form.role, roleOptions);
+  const shownPerms = form.follow_role ? rolePerms : form.permissions;
 
   const openChange = (o) => {
     setOpen(o);
@@ -132,7 +208,9 @@ function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onI
       setForm({
         name: initial.name, email: initial.email, title: initial.title || "", password: "",
         phone: initial.phone || "", passwordless: false, role: initial.role,
-        permissions: Array.isArray(initial.permissions) && initial.permissions.length ? [...initial.permissions] : defaultPermsForRole(initial.role),
+        permissions: initial.permissions_custom || (Array.isArray(initial.permissions) && initial.permissions.length)
+          ? [...(initial.permissions || [])] : roleDefaultPerms(initial.role, roleOptions),
+        follow_role: !initial.permissions_custom && !(Array.isArray(initial.permissions) && initial.permissions.length),
         reporting_manager_id: initial.reporting_manager_id || "",
       });
     } else {
@@ -143,16 +221,23 @@ function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onI
   const setRole = (role) => setForm((f) => ({
     ...f, role,
     permissions: role === "owner" ? PERMISSIONS.map((p) => p.key)
+      : f.follow_role ? roleDefaultPerms(role, roleOptions)
       : (editing && f.role !== "owner") ? f.permissions
-      : defaultPermsForRole(role),
+      : roleDefaultPerms(role, roleOptions),
   }));
   const togglePerm = (key) => setForm((f) => ({ ...f, permissions: f.permissions.includes(key) ? f.permissions.filter((k) => k !== key) : [...f.permissions, key] }));
 
-  const save = async () => {
+  const [ownerConfirm, setOwnerConfirm] = useState(null);
+  const save = async (confirmed = false) => {
     const promotingToOwner = form.role === "owner" && (!editing || initial.role !== "owner");
-    if (promotingToOwner && !window.confirm("This makes them a co-owner with FULL control of the company account — including managing team, finances and all data. Continue?")) return;
     const demotingOwner = editing && initial.role === "owner" && form.role !== "owner";
-    if (demotingOwner && !window.confirm(`Remove Owner access from ${initial.name}? They will lose full control. At least one owner must remain.`)) return;
+    // RBAC P2 (2026-09-16): the app's own dialog, not the browser's confirm box.
+    if ((promotingToOwner || demotingOwner) && confirmed !== true) {
+      setOwnerConfirm(promotingToOwner
+        ? { title: `Make ${form.name || "them"} an owner?`, body: "They get full control of the company account — the team, finances and all data.", action: "Make owner" }
+        : { title: `Remove owner access from ${initial.name}?`, body: "They lose full control. At least one owner must remain.", action: "Remove owner access" });
+      return;
+    }
     if (!editing) {
       if (!form.name.trim() || !form.email.trim()) { toast.error("Name and email are required"); return; }
       if (form.passwordless && form.phone.replace(/\D/g, "").length < 10) { toast.error("A valid mobile number is required for OTP login"); return; }
@@ -161,18 +246,34 @@ function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onI
     setBusy(true);
     try {
       if (editing) {
+        if (!form.name.trim()) { toast.error("Enter a name"); setBusy(false); return; }
         await api.patch(`/users/${initial.id}`, {
-          role: form.role, permissions: form.permissions, phone: form.phone,
+          // RBAC P1 (2026-09-15): name can be corrected; email by an owner only.
+          name: form.name.trim(), ...(me?.role === "owner" ? { email: form.email.trim() } : {}),
+          follow_role: !!form.follow_role,
+          role: form.role, permissions: form.follow_role ? [] : form.permissions, phone: form.phone,
           reporting_manager_id: form.reporting_manager_id, title: form.title.trim(),
         });
         toast.success(`${initial.name}'s access updated`);
         setOpen(false);
         onSaved();
+        // Opened from the invite icon of someone with no mobile: once the
+        // number is saved, hand over their invite link straight away.
+        if (inviteAfterSave && onInvite && form.phone.replace(/\D/g, "").length >= 10) {
+          try {
+            const { data } = await api.post(`/users/${initial.id}/invite`);
+            onInvite({ token: data.invite_token, name: data.name, phone_masked: data.phone_masked });
+          } catch (e) {
+            toast.error(formatApiError(e.response?.data?.detail) || "Couldn't create invite link");
+          }
+        }
         return;
       }
       const base = {
         name: form.name, email: form.email, title: form.title.trim() || null, role: form.role,
-        permissions: form.permissions, phone: form.phone, reporting_manager_id: form.reporting_manager_id || null,
+        // An empty list means "the role's access" on the server.
+        follow_role: !!form.follow_role,
+        permissions: form.follow_role ? [] : form.permissions, phone: form.phone, reporting_manager_id: form.reporting_manager_id || null,
       };
       const res = await api.post("/users", form.passwordless ? base : { ...base, password: form.password });
       toast.success(`${form.name} added`);
@@ -181,6 +282,8 @@ function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onI
       if (res?.data?.invite_token && onInvite) {
         const d = form.phone.replace(/\D/g, "");
         onInvite({ token: res.data.invite_token, name: form.name, phone_masked: d.length >= 4 ? "•••• " + d.slice(-4) : "••••" });
+      } else if (!form.passwordless && onWelcome) {
+        onWelcome({ name: form.name.trim(), email: form.email.trim().toLowerCase() });
       }
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Failed");
@@ -192,33 +295,35 @@ function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onI
   return (
     <Dialog open={open} onOpenChange={openChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className={`max-h-[calc(90dvh/var(--ui-scale,1))] max-w-xl overflow-y-auto ${SHEET}`} data-testid="member-dialog">
+      <DialogContent className={`max-h-[calc(90dvh/var(--ui-scale,1))] max-w-xl overflow-y-auto ${NM_SHEET}`}
+        overlayClassName="bg-slate-900/30" data-testid="member-dialog">
         <SheetHead title={editing ? `Edit ${initial.role === "owner" ? "details" : "access"} — ${initial.name}` : "Add team member"}
-          onClose={() => setOpen(false)} closeTestid="member-dialog-close">
+          onClose={() => setOpen(false)} closeTestid="member-dialog-close" closeClassName={NM_ICON_BTN}>
           {editing ? "Job title, team, reporting line and what they can open." : "Who they are, where they sit in the team, and what they can open."}
         </SheetHead>
 
         <div className="space-y-5">
           <section className="space-y-3">
-            {!editing && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Name" htmlFor="member-name">
-                  <input id="member-name" data-testid="member-name-input" className={DRAWER_FIELD} placeholder="e.g. Priya Nair"
-                    value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-                </Field>
-                <Field label="Email" htmlFor="member-email">
-                  <input id="member-email" data-testid="member-email-input" className={DRAWER_FIELD} type="email" placeholder="name@company.com"
-                    value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-                </Field>
-              </div>
-            )}
+            {/* RBAC P1 (2026-09-15): name and email show when editing too. Email is
+                how they sign in, so only an owner changes it. */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Name" htmlFor="member-name">
+                <input id="member-name" data-testid="member-name-input" className={NM_FIELD} placeholder="e.g. Priya Nair"
+                  value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </Field>
+              <Field label="Email" htmlFor="member-email">
+                <input id="member-email" data-testid="member-email-input" className={NM_FIELD} type="email" placeholder="name@company.com"
+                  disabled={editing && me?.role !== "owner"} title={editing && me?.role !== "owner" ? "Only an owner can change an email" : undefined}
+                  value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              </Field>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Job title" htmlFor="member-title">
-                <input id="member-title" data-testid="member-title-input" className={DRAWER_FIELD} placeholder="e.g. Sales Lead" maxLength={80}
+                <input id="member-title" data-testid="member-title-input" className={NM_FIELD} placeholder="e.g. Sales Lead" maxLength={80}
                   value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
               </Field>
               <Field label="Mobile number" htmlFor="member-phone">
-                <input id="member-phone" data-testid="member-phone-input" className={DRAWER_FIELD} type="tel"
+                <input id="member-phone" data-testid="member-phone-input" className={NM_FIELD} type="tel"
                   placeholder={form.passwordless ? "Required for OTP login" : "For OTP login"}
                   value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
               </Field>
@@ -226,13 +331,13 @@ function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onI
             {!editing && (
               <div>
                 <p className={DRAWER_LABEL}>Sign-in</p>
-                <div className={`flex gap-1 rounded-pill p-1 ${DRAWER_TRACK}`} data-testid="login-method-toggle" role="group" aria-label="Sign-in method">
+                <div className={`flex gap-2 rounded-pill p-1.5 ${NM_PRESSED}`} data-testid="login-method-toggle" role="group" aria-label="Sign-in method">
                   {[["password", "Password", false], ["otp", "Mobile OTP", true]].map(([key, label, passwordless]) => {
                     const on = form.passwordless === passwordless;
                     return (
                       <button key={key} type="button" aria-pressed={on} data-testid={`login-method-${key}`}
                         onClick={() => setForm({ ...form, passwordless })}
-                        className={`flex h-10 flex-1 items-center justify-center rounded-pill text-sm font-medium ${on ? `${GLASS_PILL} text-slate-900` : "text-slate-500 hover:text-slate-800"}`}>
+                        className={`flex h-10 flex-1 items-center justify-center rounded-pill text-sm font-medium transition-shadow ${on ? `${NM_RAISED} text-slate-900` : "text-slate-600 hover:text-slate-900"}`}>
                         {label}
                       </button>
                     );
@@ -241,7 +346,7 @@ function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onI
                 {form.passwordless ? (
                   <p className="mt-2 text-xs text-neutral-500" data-testid="passwordless-hint">No password needed — they sign in with a one-time code sent to their mobile.</p>
                 ) : (
-                  <input data-testid="member-password-input" className={`${DRAWER_FIELD} mt-2`} type="password" aria-label="Temporary password"
+                  <input data-testid="member-password-input" className={`${NM_FIELD} mt-3`} type="password" aria-label="Temporary password"
                     placeholder="Temporary password (min 6)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
                 )}
               </div>
@@ -251,11 +356,11 @@ function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onI
           <section className="space-y-2">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Team">
-                <GlassSelect testid="member-role-select" ariaLabel="Team (role)" value={form.role} onChange={setRole}
+                <GlassSelect testid="member-role-select" ariaLabel="Team (role)" value={form.role} onChange={setRole} triggerClassName={NM_SELECT}
                   options={roleOptions.map((r) => ({ value: r.key, label: r.label }))} />
               </Field>
               <Field label="Reports to">
-                <GlassSelect testid="member-manager-select" ariaLabel="Reporting manager" value={form.reporting_manager_id}
+                <GlassSelect testid="member-manager-select" ariaLabel="Reporting manager" value={form.reporting_manager_id} triggerClassName={NM_SELECT}
                   onChange={(v) => setForm({ ...form, reporting_manager_id: v })}
                   options={[
                     { value: "", label: "No one (team approver)" },
@@ -263,7 +368,7 @@ function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onI
                   ]} />
               </Field>
             </div>
-            <p className="text-xs text-neutral-500">The reporting manager approves their leave, and the tree lines them up under that person.</p>
+            <p className="text-xs text-neutral-500">The reporting manager approves their leave, and their tasks and decisions when nobody else is picked; overdue work reaches them first. The tree lines them up under that person.</p>
           </section>
 
           <section>
@@ -271,20 +376,48 @@ function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onI
               <ShieldCheck size={13} weight="bold" aria-hidden="true" /> Access
             </p>
             {form.role === "owner" ? (
-              <div className={`px-4 py-3.5 text-sm ${DRAWER_CARD}`} data-testid="owner-access-note">
+              <div className={`rounded-[1.4rem] px-4 py-3.5 text-sm ${NM_PRESSED}`} data-testid="owner-access-note">
                 <p className="flex items-center gap-1.5 font-semibold text-neutral-900"><ShieldCheck size={15} weight="bold" aria-hidden="true" /> Full company access</p>
                 <p className="mt-1 text-xs text-neutral-600">Owners can open and manage everything — team, finances, workflows and all data. Individual permissions don't apply.</p>
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" data-testid="permission-list">
+                <label className={`mb-3 flex cursor-pointer items-start gap-3 rounded-[1.4rem] px-4 py-3 ${NM_PRESSED}`} data-testid="member-follow-role">
+                  <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-neutral-900" checked={!!form.follow_role}
+                    data-testid="member-follow-role-toggle"
+                    onChange={(e) => {
+                      const follow = e.target.checked;
+                      setForm((f) => ({ ...f, follow_role: follow, permissions: follow ? f.permissions : [...roleDefaultPerms(f.role, roleOptions)] }));
+                    }} />
+                  <span className="min-w-0 text-sm text-neutral-800">
+                    <span className="font-semibold">Use the {roleName(form.role)} team's access</span>
+                    <span className="mt-0.5 block text-xs text-neutral-500">
+                      {form.follow_role
+                        ? "When the owner changes this team's access in Settings › Teams, it reaches them too."
+                        : form.permissions.length
+                          ? "Their own access, chosen below. Changes to the team won't reach them."
+                          : "No access: they can sign in but can't open anything until you tick something."}
+                    </span>
+                  </span>
+                </label>
+                {/* An area that is on is pressed into the sheet; one that is off stands out of it. */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2" data-testid="permission-list">
                   {PERMISSIONS.map((p) => {
-                    const on = form.permissions.includes(p.key);
+                    const on = shownPerms.includes(p.key);
+                    // RBAC P0 (2026-09-15) — same rule as the server: someone who isn't
+                    // an owner gives only access they hold, the person already has, or
+                    // their role's defaults (not to themselves).
+                    const selfEdit = editing && initial?.id === me?.id;
+                    const locked = me?.role !== "owner" && !on && !userPerms(me).includes(p.key)
+                      && !(initial?.permissions || []).includes(p.key)
+                      && (selfEdit || !rolePerms.includes(p.key));
                     return (
-                      <button key={p.key} type="button" data-testid={`perm-${p.key}`} aria-pressed={on} onClick={() => togglePerm(p.key)}
-                        className={`flex min-h-11 items-center justify-between gap-2 rounded-2xl px-3.5 py-2 text-left text-[13px] font-medium ring-1 ring-inset transition-colors ${on ? "bg-neutral-900 text-white ring-transparent" : "bg-white/70 text-slate-700 ring-slate-900/[0.06] hover:bg-white"}`}>
+                      <button key={p.key} type="button" data-testid={`perm-${p.key}`} aria-pressed={on} disabled={locked || form.follow_role}
+                        title={form.follow_role ? "Set by the team — untick “Use the team’s access” to choose" : locked ? "Only an owner can give access you don't have" : undefined}
+                        onClick={() => togglePerm(p.key)}
+                        className={`flex min-h-11 items-center justify-between gap-2 rounded-2xl px-3.5 py-2 text-left text-[13px] transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 disabled:cursor-not-allowed disabled:opacity-45 ${on ? `${NM_PRESSED} font-semibold text-slate-900` : `${NM_RAISED} font-medium text-slate-600 hover:text-slate-900`}`}>
                         <span>{p.label}</span>
-                        <span aria-hidden="true" className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${on ? "bg-white text-neutral-900" : "ring-1 ring-inset ring-slate-900/20"}`}>
+                        <span aria-hidden="true" className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${on ? "bg-neutral-900 text-white" : "ring-1 ring-inset ring-slate-900/20"}`}>
                           {on && <Check size={11} weight="bold" />}
                         </span>
                       </button>
@@ -295,7 +428,7 @@ function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onI
                   <p className={DRAWER_LABEL}>They will see these menus</p>
                   <div className="flex flex-wrap gap-1.5">
                     {MENU_PREVIEW.map((m) => {
-                      const visible = !m.perm || form.permissions.includes(m.perm);
+                      const visible = !m.perm || shownPerms.includes(m.perm);
                       return (
                         <span key={m.label} data-testid={`preview-${m.label}`}
                           className={`${CHIP} ${visible ? "bg-neutral-900 text-white ring-transparent" : `${QUIET_CHIP} line-through opacity-60`}`}>
@@ -311,12 +444,27 @@ function MemberDialog({ trigger, initial, defaultRole, roleOptions, onSaved, onI
           </section>
         </div>
 
+        {/* RBAC P2 (2026-09-16): the owner change is confirmed right here, above
+            the buttons — a second dialog stacked under this one. */}
+        {ownerConfirm && (
+          <div role="alertdialog" aria-labelledby="owner-confirm-title" aria-describedby="owner-confirm-body"
+            data-testid="owner-confirm" className={`space-y-3 px-4 py-4 ${DRAWER_CARD}`}>
+            <p id="owner-confirm-title" className="text-sm font-semibold text-neutral-900">{ownerConfirm.title}</p>
+            <p id="owner-confirm-body" className="text-xs leading-relaxed text-neutral-600">{ownerConfirm.body}</p>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" data-testid="owner-confirm-cancel" onClick={() => setOwnerConfirm(null)}
+                className={`h-10 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>Keep as is</button>
+              <button type="button" data-testid="owner-confirm-go" onClick={() => { setOwnerConfirm(null); save(true); }}
+                className={`h-10 rounded-pill px-4 text-sm font-medium ${INK_PILL}`}>{ownerConfirm.action}</button>
+            </div>
+          </div>
+        )}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={() => setOpen(false)} disabled={busy} data-testid="member-cancel"
-            className={`h-11 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}>
+            className={`h-11 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-shadow active:shadow-[inset_3px_3px_7px_hsl(226_18%_76%),inset_-3px_-3px_7px_hsl(0_0%_100%/0.95)] disabled:opacity-40 ${NM_RAISED}`}>
             Cancel
           </button>
-          <button type="button" data-testid="member-save-submit" onClick={save} disabled={busy}
+          <button type="button" data-testid="member-save-submit" onClick={() => save()} disabled={busy || !!ownerConfirm}
             className={`h-11 rounded-pill px-6 text-sm font-medium disabled:opacity-50 ${INK_PILL}`}>
             {busy ? "Saving…" : editing ? "Save" : "Add member"}
           </button>
@@ -358,30 +506,89 @@ function CurrentlyOutStrip({ people }) {
   );
 }
 
-/* ASK-6: per-member leave history inside the profile dialog. GET
-   /leaves?scope=all is gated to team_manage users and the list is small, so
-   it is filtered by user here. */
-function MemberLeaveHistory({ userId }) {
+/* ASK-6 → 2026-09-16, founder: a member's leave inside their profile, as a
+   timeline rather than cards — newest first, a dot per request in its status
+   colour on one line. GET /leaves?scope=all is gated to team_manage users and
+   the list is small, so it is filtered by user here. */
+const LEAVE_DOT = {
+  pending: "bg-amber-400",
+  approved: "bg-emerald-500",
+  rejected: "bg-rose-500",
+  info_requested: "bg-violet-500",
+};
+const leaveDay = (d, withYear) =>
+  new Date(`${String(d).slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, {
+    day: "numeric", month: "short", ...(withYear ? { year: "numeric" } : {}),
+  });
+function leaveRange(lv) {
+  const from = String(lv.from_date || "").slice(0, 10);
+  const to = String(lv.to_date || from).slice(0, 10);
+  if (!from) return "";
+  if (from === to) return leaveDay(from, true);
+  return `${leaveDay(from, from.slice(0, 4) !== to.slice(0, 4))} – ${leaveDay(to, true)}`;
+}
+function leaveLength(lv) {
+  if (lv.day_portion === "half") return "Half day";
+  const n = typeof lv.days === "number"
+    ? lv.days
+    : Math.round((new Date(`${String(lv.to_date).slice(0, 10)}T00:00:00`) - new Date(`${String(lv.from_date).slice(0, 10)}T00:00:00`)) / 86400000) + 1;
+  return Number.isFinite(n) && n > 0 ? `${n} ${n === 1 ? "day" : "days"}` : "";
+}
+
+function MemberLeaveTimeline({ userId }) {
   const q = useQuery({
     queryKey: ["leaves", "all"],
     queryFn: () => api.get("/leaves?scope=all").then((r) => r.data),
   });
-  const qc = useQueryClient();
-  const refresh = () => qc.invalidateQueries({ queryKey: ["leaves"] });
-  const mine = (q.data || []).filter((l) => l.user_id === userId);
+  const mine = (q.data || [])
+    .filter((l) => l.user_id === userId)
+    .sort((a, b) => String(b.from_date || "").localeCompare(String(a.from_date || ""))
+      || String(b.created_at || "").localeCompare(String(a.created_at || "")));
   return (
     <section data-testid={`member-leave-history-${userId}`}>
       <p className={`${DRAWER_LABEL} flex items-center gap-1.5`}>
-        <AirplaneTakeoff size={13} weight="bold" aria-hidden="true" /> Leave history
+        <AirplaneTakeoff size={13} weight="bold" aria-hidden="true" /> Leave
       </p>
-      {mine.length === 0 ? (
-        <p className={`px-4 py-3 text-sm text-slate-500 ${DRAWER_CARD}`}>No leave on record.</p>
+      {q.isLoading ? (
+        <p className="py-1 text-sm text-slate-500">Loading leave…</p>
+      ) : mine.length === 0 ? (
+        <p className="py-1 text-sm text-slate-500">No leave on record.</p>
       ) : (
-        <div className="grid gap-3 lg:grid-cols-2">
-          {mine.slice(0, 6).map((lv) => (
-            <LeaveCard key={lv.id} lv={lv} canAct={false} onRefresh={refresh} />
-          ))}
-        </div>
+        /* The guided path (founder, 2026-09-16): one sunken glass channel runs
+           the length of the list and every request's dot sits in it, so the eye
+           follows a single track from the newest leave down to the oldest. The
+           entries stay plain text beside it: a timeline, not a stack of cards. */
+        <ol className="relative pl-10 pt-1">
+          <span aria-hidden="true"
+            className="absolute bottom-2 left-[13.5px] top-3 w-px bg-slate-900/15" />
+          {mine.map((lv, i) => {
+            const st = STATUS_META[lv.status] || STATUS_META.pending;
+            const last = i === mine.length - 1;
+            const facts = [typeLabel(lv.leave_type), leaveLength(lv), lv.is_emergency ? "Emergency" : null].filter(Boolean);
+            return (
+              <li key={lv.id} data-testid={`leave-entry-${lv.id}`} className={`relative ${last ? "" : "pb-6"}`}>
+                {/* The dot rides in the channel: centred on it (channel centre 14px,
+                    list padding 40px), level with the date line. */}
+                <span aria-hidden="true"
+                  className={`absolute left-[-33px] top-[5px] h-3.5 w-3.5 rounded-full ring-[3px] ring-white shadow-[0_2px_6px_-1px_hsl(245_30%_25%/0.45)] ${LEAVE_DOT[lv.status] || LEAVE_DOT.pending}`} />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                    <p className="text-[15px] font-semibold tabular-nums text-neutral-900" data-testid={`leave-range-${lv.id}`}>{leaveRange(lv)}</p>
+                    <span className={`${CHIP} ${st.tone}`} data-testid={`leave-status-${lv.id}`}>{st.label}</span>
+                  </div>
+                  {facts.length > 0 && <p className="mt-0.5 text-[13px] text-slate-600">{facts.join(" · ")}</p>}
+                  {lv.reason && <p className="mt-1.5 text-sm leading-relaxed text-slate-700">{lv.reason}</p>}
+                  {lv.status === "info_requested" && lv.info_note && (
+                    <p className="mt-1.5 text-[13px] text-violet-700">Asked: {lv.info_note}</p>
+                  )}
+                  <p className="mt-1.5 text-xs text-slate-500">
+                    Requested {timeAgo(lv.created_at)}{lv.approver_name ? ` · Approver: ${lv.approver_name}` : ""}
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
       )}
     </section>
   );
@@ -401,6 +608,7 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
     [tenantRoles, isOwner],
   );
   const [invite, setInvite] = useState(null);
+  const [welcome, setWelcome] = useState(null);
   // U7-09.TEAM v2 (2026-08-17): the profile dialog every card opens.
   const [profileUser, setProfileUser] = useState(null);
   const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
@@ -467,7 +675,8 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
      (role), in the tenant's team order, then any team the tenant no longer
      lists. A search keeps a team whole when its name matches, and otherwise
      keeps only the people who match; teams with nothing left drop out. */
-  const { owners, branches, shownCount } = useMemo(() => {
+  const isMobile = useIsMobile();
+  const { owners, branches, teams, shownCount } = useMemo(() => {
     const ownersAll = members.filter((u) => u.role === "owner");
     const byTeam = new Map();
     members.filter((u) => u.role !== "owner").forEach((u) => {
@@ -489,6 +698,8 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
     return {
       owners: ownersAll,
       branches: list,
+      // The desktop canvas filters itself, so it takes every team whole.
+      teams: keys.map((key) => ({ key, label: roleNameFor(tenantRoles, key), members: byTeam.get(key) || [] })),
       shownCount: ownerHits + list.reduce((n, b) => n + b.members.length, 0),
     };
   }, [members, q, tenantRoles]);
@@ -508,9 +719,22 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
   );
   const renderAdd = canManageTeam
     ? (b) => (tenantRoles.some((r) => r.key === b.key) ? (
-      <MemberDialog roleOptions={roleOptions} members={members} defaultRole={b.key} onSaved={refresh} onInvite={setInvite}
+      <MemberDialog roleOptions={roleOptions} members={members} defaultRole={b.key} onSaved={refresh} onInvite={setInvite} onWelcome={setWelcome}
         trigger={<AddMemberTile data-testid={`team-add-${b.key}`} aria-label={`Add member to ${b.label}`} />} />
     ) : null)
+    : null;
+
+  /* The desktop tree's "Add member" node, at the top of each open column: the
+     Add member dialog with "Reports to" (and, below the heads, the team) set. */
+  const canvasAdd = canManageTeam
+    ? ({ managerId, role, hint, testid, width, height }) => (
+      <MemberDialog roleOptions={roleOptions} members={members} defaultRole={role} defaultManagerId={managerId}
+        onSaved={refresh} onInvite={setInvite}
+        trigger={
+          <AddNode data-testid={testid} hint={hint} width={width} height={height}
+            aria-label={hint ? `Add a member who ${hint.charAt(0).toLowerCase()}${hint.slice(1)}` : "Add a member"} />
+        } />
+    )
     : null;
 
   const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || "");
@@ -518,6 +742,7 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
   return (
     <div data-testid="team-panel">
       <InviteLinkModal info={invite} onClose={() => setInvite(null)} />
+      <WelcomeModal info={welcome} company={tenant?.name} onClose={() => setWelcome(null)} />
 
       <div className="mb-6 flex flex-col gap-6 lg:mb-8 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
         {title ? (
@@ -557,7 +782,7 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
             )}
           </div>
           {canManageTeam && (
-            <MemberDialog roleOptions={roleOptions} members={members} onSaved={refresh} onInvite={setInvite}
+            <MemberDialog roleOptions={roleOptions} members={members} onSaved={refresh} onInvite={setInvite} onWelcome={setWelcome}
               trigger={
                 <button type="button" data-testid="add-user-button"
                   className={`flex h-12 shrink-0 items-center gap-2 rounded-pill px-5 text-sm font-medium ${INK_PILL}`}>
@@ -589,14 +814,12 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
       {out.length > 0 && <CurrentlyOutStrip people={out} />}
 
       {usersQ.isLoading ? (
-        <div className="grid gap-4 lg:grid-cols-4" aria-hidden="true">
-          {[0, 1, 2, 3].map((i) => <div key={i} className="ds-skeleton h-40 rounded-[1.4rem]" />)}
-        </div>
-      ) : members.length === 0 || (q && shownCount === 0) ? (
+        <TreeSkeleton mobile={isMobile} />
+      ) :members.length === 0 || (q && shownCount === 0) ? (
         <div className={`px-6 py-10 text-center text-sm text-slate-600 ${DRAWER_CARD}`} data-testid="team-empty">
           {q ? `Nobody matches “${query.trim()}”.` : "No team members yet."}
         </div>
-      ) : (
+      ) : isMobile ? (
         <OrgTree
           owners={owners}
           branches={branches}
@@ -605,6 +828,19 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
           searching={!!q}
           renderMember={renderMember}
           renderAdd={renderAdd}
+        />
+      ) : (
+        <OrgCanvas
+          owners={owners}
+          teams={teams}
+          query={q}
+          matches={(u) => memberMatches(u, q, tenantRoles)}
+          teamMatches={(t) => t.label.toLowerCase().includes(q)}
+          titleOf={(u) => u.title || roleNameFor(tenantRoles, u.role)}
+          meId={user?.id}
+          outIds={outIds}
+          onOpen={setProfileUser}
+          renderAdd={canvasAdd}
         />
       )}
 
@@ -633,6 +869,38 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
   );
 }
 
+/* While the roster loads, the outline of the tree it is about to draw (founder,
+   2026-09-16): on desktop the owner's circle, a connector and a column of
+   cards; on a phone the owner and a stack of rows. Not a grid of four cards. */
+function TreeSkeleton({ mobile }) {
+  if (mobile) {
+    return (
+      <div className="flex flex-col items-center gap-4" aria-hidden="true" data-testid="team-skeleton">
+        <div className="ds-skeleton h-24 w-24 rounded-full" />
+        <div className="ds-skeleton h-4 w-32 rounded-full" />
+        <div className="mt-2 w-full space-y-3">
+          {[0, 1, 2, 3].map((i) => <div key={i} className="ds-skeleton h-16 w-full rounded-full" />)}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex h-[min(560px,calc(100dvh/var(--ui-scale,1)-16rem))] min-h-[420px] items-center" aria-hidden="true" data-testid="team-skeleton">
+      <div className="flex w-[240px] shrink-0 flex-col items-center gap-4">
+        <div className="ds-skeleton h-[156px] w-[156px] rounded-full" />
+        <div className="ds-skeleton h-4 w-36 rounded-full" />
+        <div className="ds-skeleton h-9 w-32 rounded-full" />
+      </div>
+      <div className="h-px w-[120px] shrink-0 bg-slate-900/10" />
+      <div className="flex h-full flex-col justify-center gap-6">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div key={i} className="ds-skeleton flex h-[78px] w-[320px] items-center gap-3 rounded-full" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // MemberProfileDialog — everything about one person, opened from their card:
 // who they are, how to reach them, their reporting line, what they can open,
@@ -650,14 +918,24 @@ function MemberProfileDialog({
   const granted = PERMISSIONS.filter((pp) => perms.includes(pp.key));
   const denied = PERMISSIONS.filter((pp) => !perms.includes(pp.key));
   const manager = (members || []).find((m) => m.id === u.reporting_manager_id);
-  const reports = (members || []).filter((m) => m.reporting_manager_id === u.id && m.id !== u.id);
   // Only an owner edits another owner — the rule PATCH /users holds too.
   const canEdit = canManageTeam && (u.role !== "owner" || isOwner);
+  // ASK-6: leave is for team managers and for the person themselves.
+  const showLeave = canManageTeam || isMe;
+  // Every member but an owner gets the invite-link icon from a team manager
+  // (founder, 2026-09-16). The link logs in by a code texted to their mobile,
+  // so for someone with no number the icon opens their form to add one, and
+  // the link follows the save.
+  const canInvite = canManageTeam && u.role !== "owner";
 
   return (
     <Dialog open={!!u} onOpenChange={openChange}>
+      {/* 2026-09-16, founder: the photo sits on the card's top edge, so the
+          dialog itself is an unclipped, transparent frame and the card inside
+          it carries the surface; only the card's body scrolls. */}
       <DialogContent
-        className={`max-h-[calc(88dvh/var(--ui-scale,1))] max-w-xl gap-0 overflow-y-auto rounded-[1.75rem] p-0 sm:rounded-[1.75rem] [&>button.absolute]:hidden ${GLASS_SHEET}`}
+        className="top-[calc(50%+2.5rem)] max-h-none w-[calc(100%-1.5rem)] max-w-4xl gap-0 overflow-visible border-0 bg-transparent p-0 shadow-none lg:p-0 [&>button.absolute]:hidden"
+        overlayClassName="bg-slate-900/15"
         data-testid={`profile-dialog-${u.id}`}
       >
         <DialogHeader className="sr-only">
@@ -665,42 +943,72 @@ function MemberProfileDialog({
           <DialogDescription>Profile, reporting line, access and leave for {u.name}</DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-start gap-4 px-6 pb-5 pt-6">
+        {/* max-h leaves room for the photo's 66px above the card, the dialog's
+            2.5rem shift down, and a visible margin of the page below it. dvh is
+            divided by --ui-scale: the body is CSS-zoomed (hooks/useUiScale) and
+            viewport units are not, so an undivided 100dvh ran off the bottom of
+            the screen by the scale factor. */}
+        <div className={`relative mt-[66px] flex max-h-[calc(100dvh/var(--ui-scale,1)-12rem)] flex-col rounded-[1.75rem] ${PROFILE_GLASS} ${PROFILE_INK}`}>
           {/* ASK-25 — the member themselves, or anyone who could edit their
-              access, can set the photo. The server holds the same rule. */}
-          <AvatarEditor u={u} canChange={isMe || canEdit} onChanged={onAvatarChanged} />
-          <div className="min-w-0 flex-1 pt-0.5">
-            <p className="flex items-center gap-2 text-2xl font-semibold leading-tight text-neutral-900">
-              <span className="truncate">{u.name}</span>
-              {isMe && (
-                <span className="shrink-0 rounded-md bg-slate-900/[0.06] px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-slate-600">YOU</span>
-              )}
-            </p>
-            <p className="mt-1 text-sm text-neutral-700" data-testid={`profile-title-${u.id}`}>{u.title || roleName(u.role)}</p>
-            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-neutral-500">
-              <span>{roleName(u.role)}</span>
-              <span aria-hidden="true">·</span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className={`h-2 w-2 rounded-full ${status.dot}`} aria-hidden="true" />
-                {status.label}
-              </span>
-            </p>
+              access, can set the photo. The server holds the same rule. About
+              55% of the circle rises above the card. */}
+          <div className="absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-[55%]">
+            <AvatarEditor u={u} canChange={isMe || canEdit} onChanged={onAvatarChanged} size={120} />
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" data-testid={`profile-close-${u.id}`} className={GLASS_ICON_BTN}>
+          <button type="button" onClick={onClose} aria-label="Close" data-testid={`profile-close-${u.id}`}
+            className={`absolute right-4 top-4 z-10 ${GLASS_ICON_BTN}`}>
             <X size={16} weight="bold" aria-hidden="true" />
           </button>
-        </div>
 
-        <div className="space-y-5 px-6 pb-6">
+          {/* Under the photo: their name and their role. Nothing else. */}
+          <div className="px-16 pb-5 pt-[4.5rem] text-center">
+            <p className="flex items-center justify-center gap-1.5">
+              <span className="truncate text-2xl font-semibold leading-tight text-neutral-900">{u.name}</span>
+              {/* The invite link sits beside the name as a bare icon (founder,
+                  2026-09-16): no pill behind it, a pointer and a tooltip on hover. */}
+              {canInvite && (u.phone ? (
+                <button type="button" onClick={() => onInviteLink(u)} data-testid={`invite-link-${u.id}`}
+                  aria-label={`Get ${u.name}'s invite link`} title="Get invite link"
+                  className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full text-slate-500 transition-colors hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30">
+                  <LinkSimple size={18} weight="bold" aria-hidden="true" />
+                </button>
+              ) : (
+                <MemberDialog roleOptions={roleOptions} initial={u} members={members} onSaved={onSaved} onInvite={onInvite} inviteAfterSave
+                  trigger={
+                    <button type="button" data-testid={`invite-link-${u.id}`}
+                      aria-label={`Add a mobile number to get ${u.name}'s invite link`} title="Add a mobile number to get an invite link"
+                      className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full text-slate-500 transition-colors hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30">
+                      <LinkSimple size={18} weight="bold" aria-hidden="true" />
+                    </button>
+                  } />
+              ))}
+            </p>
+            <p className="mt-1 truncate text-sm text-neutral-600" data-testid={`profile-title-${u.id}`}>{u.title || roleName(u.role)}</p>
+          </div>
+
+          {/* Body. On a phone the columns stack and the body scrolls as one. From md
+              up each column is its own scroll area (founder, 2026-09-16): a long
+              leave history scrolls on the right without moving the details on
+              the left, and the left scrolls only if its own content is too tall. */}
+          <div className={`grid min-h-0 flex-1 gap-6 overflow-y-auto border-t border-slate-900/[0.06] px-6 pt-5 [scrollbar-width:thin] md:grid-rows-[minmax(0,1fr)] md:overflow-hidden ${showLeave ? "md:grid-cols-2" : ""}`}>
+            {/* Left: personal details and access. */}
+            <div className="min-w-0 space-y-5 pb-6 md:min-h-0 md:overflow-y-auto md:[scrollbar-width:thin]">
           <section>
-            <p className={DRAWER_LABEL}>Contact and reporting line</p>
-            <div className={`grid grid-cols-1 gap-x-6 gap-y-4 px-4 py-4 sm:grid-cols-2 ${DRAWER_CARD}`}>
-              <ContactRow icon={EnvelopeSimple} label="Email" value={u.email} />
+            <p className={DRAWER_LABEL}>Personal details</p>
+            {/* Each fact is its own glass tile; email spans the row, since it
+                is the long value people copy. */}
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              <ContactRow icon={EnvelopeSimple} label="Email" value={u.email} wide />
               {u.phone && <ContactRow icon={Phone} label="Phone" value={formatPhone(u.phone)} />}
+              <ContactRow icon={Briefcase} label="Team" value={roleName(u.role)} />
+              <ContactRow icon={Pulse} label="Status" value={
+                <span className="inline-flex items-center gap-1.5">
+                  <span className={`h-2 w-2 rounded-full ${status.dot}`} aria-hidden="true" />
+                  {status.label}
+                </span>
+              } />
+              {/* No "Direct reports" here (founder, 2026-09-16): the tree already shows them. */}
               <ContactRow icon={User} label="Reports to" value={manager ? manager.name : "No one"} />
-              {reports.length > 0 && (
-                <ContactRow icon={UsersThree} label={`Direct reports (${reports.length})`} value={reports.map((r) => r.name).join(", ")} />
-              )}
             </div>
           </section>
 
@@ -728,16 +1036,16 @@ function MemberProfileDialog({
               )}
             </div>
             {u.role === "owner" ? (
-              <p className={`px-4 py-3 text-sm text-slate-600 ${DRAWER_CARD}`}>Owner has full access to every part of the app.</p>
+              <p className={`px-4 py-3 text-sm text-slate-600 ${PROFILE_TILE}`}>Owner has full access to every part of the app.</p>
             ) : (
-              <div className={`px-4 py-4 ${DRAWER_CARD}`}>
+              <div className={`px-4 py-4 ${PROFILE_TILE}`}>
                 <p className="text-sm text-slate-800">
                   <span className="font-semibold tabular-nums">{granted.length}</span>
                   <span className="text-slate-500"> of {PERMISSIONS.length} areas</span>
                 </p>
                 {granted.length > 0 ? (
                   <div className="mt-3 flex flex-wrap gap-1.5" data-testid={`granted-perms-${u.id}`}>
-                    {granted.map((pp) => <span key={pp.key} className={`${CHIP} ${QUIET_CHIP}`}>{pp.label}</span>)}
+                    {granted.map((pp) => <span key={pp.key} className={PROFILE_CHIP}>{pp.label}</span>)}
                   </div>
                 ) : (
                   <p className="mt-2 text-sm text-slate-500">No areas granted yet.</p>
@@ -749,20 +1057,138 @@ function MemberProfileDialog({
             )}
           </section>
 
-          {/* ASK-6: leave history, for team managers and for the person themselves. */}
-          {(canManageTeam || isMe) && <MemberLeaveHistory userId={u.id} />}
+            </div>
 
-          {canManageTeam && u.role !== "owner" && u.phone && (
-            <div className="flex flex-wrap items-center gap-2 border-t border-slate-900/[0.06] pt-4">
-              <button type="button" onClick={() => onInviteLink(u)} data-testid={`invite-link-${u.id}`}
-                className={`inline-flex h-10 items-center gap-1.5 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
-                <LinkSimple size={15} weight="bold" aria-hidden="true" /> Get invite link
-              </button>
+            {/* Right: their leave, as a timeline (team managers and the person themselves). */}
+            {showLeave && (
+              <div className="min-w-0 pb-6 md:min-h-0 md:overflow-y-auto md:border-l md:border-slate-900/[0.06] md:pl-6 md:pr-1 md:[scrollbar-width:thin]" data-testid="profile-leave-scroll">
+                <MemberLeaveTimeline userId={u.id} />
+              </div>
+            )}
+          </div>
+
+          {/* 2026-09-15 — off-boarding: the owner removes someone (or cancels a
+              pending invite) and picks who takes over their work. It sits under
+              both columns, out of the way until it is needed. */}
+          {isOwner && !isMe && (
+            <div className="shrink-0 border-t border-slate-900/[0.06] px-6 py-4">
+              <RemoveMemberSection u={u} members={members} onDone={onSaved} />
             </div>
           )}
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* 2026-09-15 — remove someone from the company, or cancel their pending invite.
+   Shows what they hold, asks who takes it over, then POST /deprovision: their
+   sign-in ends, open work / contacts / reports go to that person, and approvals
+   and decisions go to them when allowed, else to the owner. History stays. */
+function RemoveMemberSection({ u, members, onDone }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [to, setTo] = useState(null);
+  const pending = u.invite_status === "pending";
+  const summaryQ = useQuery({
+    queryKey: ["offboarding", u.id],
+    queryFn: () => api.get(`/users/${u.id}/offboarding`).then((r) => r.data),
+    enabled: open && !pending,
+  });
+  const s = summaryQ.data;
+  const chosen = to ?? (s?.suggested_replacement_id || "");
+  const others = (members || []).filter((m) => m.id !== u.id && m.invite_status !== "pending");
+  const first = u.name.split(" ")[0];
+
+  const cancelInvite = async () => {
+    setBusy(true);
+    try {
+      await api.post(`/users/${u.id}/uninvite`);
+      toast.success(`Invite for ${u.name} cancelled`);
+      onDone();
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Couldn't cancel the invite");
+    } finally { setBusy(false); }
+  };
+  const remove = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/users/${u.id}/deprovision`, { reassign_to_user_id: chosen || null });
+      const who = others.find((m) => m.id === chosen)?.name;
+      const moved = (data.tasks_reassigned || 0) + (data.approvals_moved || 0) + (data.decisions_moved || 0);
+      toast.success(`${u.name} removed${who && moved ? ` — ${moved} item${moved === 1 ? "" : "s"} handed to ${who}` : ""}`);
+      onDone();
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Couldn't remove them");
+    } finally { setBusy(false); }
+  };
+
+  if (pending) {
+    return (
+      <div className="border-t border-slate-900/[0.06] pt-4">
+        <button type="button" onClick={cancelInvite} disabled={busy} data-testid={`cancel-invite-${u.id}`}
+          className={`inline-flex h-10 items-center rounded-pill px-4 text-sm font-medium text-rose-700 transition-colors hover:bg-white disabled:opacity-50 ${GLASS_PILL}`}>
+          {busy ? "Cancelling…" : "Cancel invite"}
+        </button>
+      </div>
+    );
+  }
+  const rows = s ? [
+    ["Open tasks they do", s.tasks_doing],
+    ["Open tasks they help on (they come off)", s.tasks_helping],
+    ["Tasks waiting for their approval", s.tasks_approving],
+    ["Decisions waiting on them", s.decisions_waiting],
+    ["People who report to them", s.reports],
+    ["Contacts assigned to them", s.contacts],
+  ] : [];
+  return (
+    <div className="border-t border-slate-900/[0.06] pt-4" data-testid={`remove-member-${u.id}`}>
+      {!open ? (
+        <button type="button" onClick={() => setOpen(true)} data-testid={`remove-member-open-${u.id}`}
+          className={`inline-flex h-10 items-center rounded-pill px-4 text-sm font-medium text-rose-700 transition-colors hover:bg-white ${GLASS_PILL}`}>
+          Remove from company
+        </button>
+      ) : (
+        <div className={`space-y-3 px-4 py-4 ${DRAWER_CARD}`}>
+          <p className="text-sm font-semibold text-neutral-900">Remove {u.name}?</p>
+          <p className="text-xs leading-relaxed text-neutral-600">
+            {first} can no longer sign in. Their history stays. Nothing is deleted.
+          </p>
+          {summaryQ.isLoading ? (
+            <div className="ds-skeleton h-24 rounded-xl" aria-hidden="true" />
+          ) : summaryQ.isError ? (
+            <p className="text-xs text-rose-700">Couldn't load what they hold. Close and try again.</p>
+          ) : (
+            <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm" data-testid={`offboarding-summary-${u.id}`}>
+              {rows.map(([label, n]) => (
+                <div key={label} className="contents">
+                  <dt className="text-neutral-600">{label}</dt>
+                  <dd className="text-right font-semibold tabular-nums text-neutral-900">{n}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          <Field label="Hand their work to">
+            <GlassSelect testid={`remove-member-to-${u.id}`} ariaLabel="Who takes over" value={chosen} onChange={setTo}
+              options={[{ value: "", label: "Nobody (tasks left unassigned)" }, ...others.map((m) => ({ value: m.id, label: m.name }))]} />
+          </Field>
+          <p className="text-xs leading-relaxed text-neutral-500">
+            Open tasks, contacts and the people who report to {first} go to the person you pick. Approvals and decisions go to them
+            when they're allowed to approve, otherwise to the owner.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={remove} disabled={busy || summaryQ.isLoading} data-testid={`remove-member-confirm-${u.id}`}
+              className="inline-flex h-10 items-center rounded-pill bg-rose-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:opacity-50">
+              {busy ? "Removing…" : `Remove ${first}`}
+            </button>
+            <button type="button" onClick={() => { setOpen(false); setTo(null); }} disabled={busy}
+              className={`inline-flex h-10 items-center rounded-pill px-4 text-sm font-medium text-neutral-800 hover:bg-white ${GLASS_PILL}`}>
+              Keep them
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -795,7 +1221,7 @@ async function squareImage(file, size) {
   }
 }
 
-function AvatarEditor({ u, canChange, onChanged }) {
+function AvatarEditor({ u, canChange, onChanged, size = 120 }) {
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(false);
 
@@ -828,32 +1254,42 @@ function AvatarEditor({ u, canChange, onChanged }) {
     run(() => api.post(`/users/${u.id}/avatar`, fd, { headers: { "Content-Type": "multipart/form-data" } }), "Photo updated");
   };
 
+  /* 2026-09-16, founder: hovering the photo shows a dark overlay with a camera
+     to change it; with a photo on file, a small remove button joins it. On a
+     touch screen (no hover) a small camera badge stays visible instead. */
+  const label = u.avatar_url ? "Change photo" : "Add photo";
   return (
-    <div className="flex shrink-0 flex-col items-center gap-1.5">
-      <div className="relative">
-        <PersonAvatar name={u.name} src={u.avatar_url} size={64} ring={false}
-          className={busy ? "opacity-60" : ""} />
-        {canChange && (
-          <>
-            <button type="button" onClick={() => fileRef.current?.click()} disabled={busy}
-              data-testid={`avatar-change-${u.id}`}
-              aria-label={u.avatar_url ? "Change photo" : "Add photo"}
-              title={u.avatar_url ? "Change photo" : "Add photo"}
-              className="absolute -bottom-1 -right-1 grid h-7 w-7 place-items-center rounded-full bg-white text-slate-700 ring-1 ring-slate-900/10 shadow-[0_2px_8px_-2px_hsl(216_28%_18%/0.35)] transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 disabled:opacity-50">
-              <Camera size={14} weight="bold" aria-hidden="true" />
+    <div className="group relative shrink-0 rounded-full" style={{ width: size, height: size }}>
+      <PersonAvatar name={u.name} src={u.avatar_url} size={size} ring={false}
+        className={`ring-4 ring-white shadow-[0_18px_40px_-18px_hsl(245_30%_25%/0.55)] ${busy ? "opacity-60" : ""}`} />
+      {canChange && (
+        <>
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={busy}
+            data-testid={`avatar-change-${u.id}`} aria-label={label} title={label}
+            className="absolute inset-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40 focus-visible:ring-offset-2 disabled:cursor-wait [&:focus-visible>span:first-child]:opacity-100">
+            {/* Hover or keyboard focus only: the dialog focuses this button when
+                it opens, and plain focus would show the overlay on every open. */}
+            <span aria-hidden="true"
+              className="absolute inset-0 flex flex-col items-center justify-center gap-1 rounded-full bg-neutral-950/55 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100 motion-reduce:transition-none [@media(hover:none)]:hidden">
+              <Camera size={24} weight="bold" />
+              <span className="text-[12px] font-medium">{label}</span>
+            </span>
+            <span aria-hidden="true"
+              className="absolute bottom-1 right-1 hidden h-8 w-8 place-items-center rounded-full bg-white text-slate-700 ring-1 ring-slate-900/10 shadow-[0_2px_8px_-2px_hsl(216_28%_18%/0.35)] [@media(hover:none)]:grid">
+              <Camera size={15} weight="bold" />
+            </span>
+          </button>
+          {u.avatar_url && (
+            <button type="button" disabled={busy}
+              onClick={() => run(() => api.delete(`/users/${u.id}/avatar`), "Photo removed")}
+              data-testid={`avatar-remove-${u.id}`} aria-label="Remove photo" title="Remove photo"
+              className="absolute -right-1 top-1 grid h-8 w-8 place-items-center rounded-full bg-white text-slate-600 opacity-0 ring-1 ring-slate-900/10 shadow-[0_2px_8px_-2px_hsl(216_28%_18%/0.35)] transition-opacity hover:text-rose-600 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 group-hover:opacity-100 disabled:opacity-50 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
+              <Trash size={14} weight="bold" aria-hidden="true" />
             </button>
-            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp"
-              className="hidden" onChange={onFile} data-testid={`avatar-input-${u.id}`} />
-          </>
-        )}
-      </div>
-      {canChange && u.avatar_url && (
-        <button type="button" disabled={busy}
-          onClick={() => run(() => api.delete(`/users/${u.id}/avatar`), "Photo removed")}
-          data-testid={`avatar-remove-${u.id}`}
-          className="text-[11px] text-slate-500 underline-offset-2 hover:text-slate-900 hover:underline disabled:opacity-50">
-          Remove
-        </button>
+          )}
+          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp"
+            className="hidden" onChange={onFile} data-testid={`avatar-input-${u.id}`} />
+        </>
       )}
     </div>
   );
@@ -861,13 +1297,18 @@ function AvatarEditor({ u, canChange, onChanged }) {
 
 // NM-16: label ABOVE value, not a fixed column beside it — the email is the
 // field someone actually needs to copy, so it is never truncated.
-function ContactRow({ icon: Icon, label, value }) {
+// 2026-09-16, founder: each fact is a glass tile with its icon in a glass chip.
+function ContactRow({ icon: Icon, label, value, wide = false }) {
   return (
-    <div className="min-w-0">
-      <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">
-        <Icon size={12} weight="bold" aria-hidden="true" /> {label}
-      </p>
-      <p className="mt-1 break-words text-sm text-slate-800">{value}</p>
+    <div className={`flex min-w-0 items-start gap-3 px-3.5 py-3 ${PROFILE_TILE} ${wide ? "sm:col-span-2" : ""}`}>
+      <span aria-hidden="true"
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/60 text-slate-600 border border-white/70">
+        <Icon size={15} weight="bold" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
+        <p className="mt-0.5 break-words text-sm text-slate-800">{value}</p>
+      </div>
     </div>
   );
 }

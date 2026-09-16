@@ -351,7 +351,9 @@ export default function Desk() {
   // outside it saw 0 here. Same query key as My Work's Approvals view, so the
   // count and the list never disagree; the client check stays as a guard.
   const canApproveTask = (t) =>
-    user?.role === "owner" || (t.approver_id ? user?.id === t.approver_id : hasPerm(user, "approvals"));
+    user?.role === "owner" || (![t.assignee_id, t.created_by, ...(t.co_assignee_ids || [])].includes(user?.id)
+      && (t.approver_id ? (user?.id === t.approver_id || (user?._acting_for || []).includes(t.approver_id))
+        : hasPerm(user, "approvals")));
   const approvalsQ = useQuery({
     queryKey: ["tasks", "approvals"],
     queryFn: () => api.get("/tasks?view=approvals").then((r) => r.data),

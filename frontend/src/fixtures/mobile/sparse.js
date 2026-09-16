@@ -64,7 +64,7 @@ const data = {
       due_today: [{ id: "t_stock", kind: "task_due_today", title: "Count finished-goods stock before the audit", context_line: "With Amit Verma", cta: "nudge", target_id: "t_stock", target_kind: "task", due_date: ymd(0), from_name: "Amit Verma", amount: null }],
       needs_decision: DECISIONS.map((d) => ({
         id: d.id, kind: "decision", title: d.title,
-        context_line: `Waiting ${d.id === "d_hire" ? 6 : 2} days · From ${d.created_by === "u_prod" ? "Amit Verma" : "Priya Nair"}${d.proposed_tasks.length ? ` · Unblocks ${d.proposed_tasks.length} task` : ""}`,
+        context_line: `Raised by ${d.created_by === "u_prod" ? "Amit Verma" : "Priya Nair"} · You decide · Waiting ${d.id === "d_hire" ? 6 : 2} days${d.proposed_tasks.length ? ` · Unblocks ${d.proposed_tasks.length} task` : ""}`,
         amount: d.amount, cta: "review", target_id: d.id, target_kind: "decision",
         waiting_days: d.id === "d_hire" ? 6 : 2, from_name: d.created_by === "u_prod" ? "Amit Verma" : "Priya Nair",
         unblocks: d.unblocks, due_date: d.due_date,

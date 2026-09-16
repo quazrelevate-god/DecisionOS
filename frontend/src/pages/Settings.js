@@ -2,9 +2,10 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../lib/api";
-import { hasPerm } from "../lib/perms";
+import { hasPerm, PERMISSIONS } from "../lib/perms";
 import { PageHeader } from "../components/common";
 import { CompanyDetails } from "../components/CompanyDetails";
+import { GlassSelect } from "../components/karma/GlassSelect";
 import { BusinessVocabulary } from "../components/BusinessVocabulary";
 import { OperatingModelEditor } from "../components/OperatingModelEditor";
 // ASK-8 (2026-09-12): Leave Approvers by Department moves from
@@ -173,6 +174,452 @@ function LeaveApproversCard() {
   );
 }
 
+/* RBAC P1 (2026-09-15) — AI processing consent. The "AI is off" message sent
+   people to Settings, but there was nothing here. Everyone sees whether it's
+   on; only an owner turns it on or off (the server holds the same rule). */
+function AiConsentCard() {
+  const { user } = useAuth();
+  const isOwner = user?.role === "owner";
+  const [s, setS] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [confirmOff, setConfirmOff] = useState(false);
+  useEffect(() => {
+    // A late answer from an earlier mount must not overwrite a fresher one
+    // (dev StrictMode mounts twice; a slow read could land after a click).
+    let live = true;
+    api.get("/tenant/ai-consent")
+      .then((r) => { if (live) setS(r.data); })
+      .catch(() => { if (live) setS({ error: true }); });
+    return () => { live = false; };
+  }, []);
+  const day = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "");
+  const grant = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.post("/tenant/ai-consent", { version: s?.current_version, acknowledged: true });
+      setS(data);
+      toast.success("AI processing is on");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Couldn't turn AI processing on");
+    } finally { setBusy(false); }
+  };
+  const revoke = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.delete("/tenant/ai-consent");
+      setS(data);
+      setConfirmOff(false);
+      toast.success("AI processing is off");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Couldn't turn AI processing off");
+    } finally { setBusy(false); }
+  };
+  const on = !!s?.active;
+  const pill = "kr-pop flex h-11 shrink-0 items-center justify-center rounded-pill px-4 text-sm font-medium text-foreground disabled:opacity-50";
+  return (
+    <div id="ai-consent" className="kr-bento scroll-mt-24 p-5 sm:p-6" data-testid="settings-ai-consent-card">
+      <h2 className="text-base font-medium">AI processing</h2>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Dex, reading voice notes and documents, and AI suggestions send the text involved to DecisionOS&rsquo;s AI providers.
+        They stay off until an owner agrees.
+      </p>
+      {!s ? (
+        <div className="ds-skeleton mt-4 h-12 rounded-xl" aria-hidden="true" />
+      ) : s.error ? (
+        <p className="mt-4 text-sm text-muted-foreground">Couldn&rsquo;t load whether AI processing is on.</p>
+      ) : (
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 text-sm">
+            <p className="font-semibold" data-testid="ai-consent-status">
+              {on ? "On" : s.needs_reconsent ? "Needs agreeing to again" : "Off"}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {on ? `Agreed by ${s.granted_by_email || "an owner"} on ${day(s.granted_at)}.`
+                : s.needs_reconsent ? `The terms changed (v${s.current_version}) since they were agreed.`
+                : s.revoked_at ? `Turned off on ${day(s.revoked_at)}.`
+                : "Nobody has agreed yet."}
+            </p>
+          </div>
+          {!isOwner ? (
+            <p className="text-xs text-muted-foreground">Only an owner can change this.</p>
+          ) : on ? (
+            confirmOff ? (
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={revoke} disabled={busy} data-testid="ai-consent-off-confirm"
+                  className="flex h-11 items-center rounded-pill bg-rose-600 px-4 text-sm font-semibold text-white disabled:opacity-50">
+                  {busy ? "Turning off…" : "Turn off AI"}
+                </button>
+                <button type="button" onClick={() => setConfirmOff(false)} disabled={busy} className={pill}>Keep it on</button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setConfirmOff(true)} data-testid="ai-consent-off" className={pill}>Turn off</button>
+            )
+          ) : (
+            <button type="button" onClick={grant} disabled={busy} data-testid="ai-consent-on"
+              className="flex h-11 shrink-0 items-center justify-center rounded-pill bg-kr-ink px-4 text-sm font-medium text-white disabled:opacity-50">
+              {busy ? "Turning on…" : "Agree and turn on"}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const PILL = "kr-pop flex h-11 shrink-0 items-center justify-center rounded-pill px-4 text-sm font-medium text-foreground disabled:opacity-50";
+const INK = "flex h-11 shrink-0 items-center justify-center rounded-pill bg-kr-ink px-4 text-sm font-medium text-white disabled:opacity-50";
+const FIELD = "w-full rounded-2xl bg-white/80 px-4 py-2.5 text-sm text-slate-800 ring-1 ring-inset ring-slate-900/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25";
+const dayLabel = (iso) => (iso ? new Date(`${String(iso).slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "");
+
+/* A GET that ignores an answer from an earlier mount (dev StrictMode, slow reads). */
+function useLoad(path) {
+  const [data, setData] = useState(null);
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    let live = true;
+    api.get(path).then((r) => { if (live) setData(r.data); }).catch(() => { if (live) setData({ error: true }); });
+    return () => { live = false; };
+  }, [path, n]);
+  return [data, () => setN((x) => x + 1), setData];
+}
+
+/* RBAC P2 (2026-09-16) — "approve on my behalf while I'm away". While the dates
+   are on, the person picked approves tasks and decides decisions that wait on
+   you, sees them in Approvals and on the Desk, and is told when they arrive. */
+function DelegationCard() {
+  const { user } = useAuth();
+  const [state, reload] = useLoad("/me/acting-as");
+  const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
+  const blank = { delegate_user_id: "", from_date: "", to_date: "", reason: "" };
+  const [form, setForm] = useState(blank);
+  const [busy, setBusy] = useState(false);
+  const people = (usersQ.data || []).filter((m) => m.id !== user?.id && m.invite_status !== "pending");
+  const today = new Date().toISOString().slice(0, 10);
+  const ac = state?.acting_as;
+  const save = async () => {
+    if (!form.delegate_user_id || !form.from_date || !form.to_date) { toast.error("Pick who, and your first and last day away"); return; }
+    if (form.to_date < form.from_date) { toast.error("The last day can't be before the first"); return; }
+    setBusy(true);
+    try {
+      await api.post("/me/acting-as", form);
+      toast.success("Your approvals are handed over for those days");
+      setForm(blank);
+      reload();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Couldn't hand over your approvals");
+    } finally { setBusy(false); }
+  };
+  const clear = async () => {
+    setBusy(true);
+    try {
+      await api.delete("/me/acting-as");
+      toast.success("You're handling your own approvals again");
+      reload();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Couldn't stop the hand-over");
+    } finally { setBusy(false); }
+  };
+  const who = ac && (people.find((m) => m.id === ac.delegate_user_id)?.name || ac.delegate_name || "Someone");
+  return (
+    <div className="kr-bento p-5 sm:p-6" data-testid="settings-delegation-card">
+      <h2 className="text-base font-medium">While you&rsquo;re away</h2>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Hand your approvals to someone for a few days. They can approve tasks and decide decisions that wait on you, and they&rsquo;re told when new ones arrive.
+      </p>
+      {!state ? (
+        <div className="ds-skeleton mt-4 h-12 rounded-xl" aria-hidden="true" />
+      ) : state.error ? (
+        <p className="mt-4 text-sm text-muted-foreground">Couldn&rsquo;t load your hand-over.</p>
+      ) : ac?.delegate_user_id ? (
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm" data-testid="delegation-status">
+            <span className="font-semibold">{who}</span> {state.active_now ? "is handling" : "will handle"} your approvals, {dayLabel(ac.from)} – {dayLabel(ac.to)}.
+          </p>
+          <button type="button" onClick={clear} disabled={busy} data-testid="delegation-clear" className={PILL}>Stop handing over</button>
+        </div>
+      ) : (
+        <div className="mt-4 space-y-3">
+          <GlassSelect testid="delegation-person" ariaLabel="Who handles your approvals" variant="field" triggerClassName={FIELD}
+            value={form.delegate_user_id} onChange={(v) => setForm({ ...form, delegate_user_id: v })}
+            options={[{ value: "", label: "Pick who handles your approvals" }, ...people.map((m) => ({ value: m.id, label: m.name }))]} />
+          <div className="grid grid-cols-2 gap-3">
+            <label className="text-xs text-muted-foreground">First day away
+              <input type="date" min={today} value={form.from_date} data-testid="delegation-from"
+                onChange={(e) => setForm({ ...form, from_date: e.target.value })} className={`${FIELD} mt-1`} />
+            </label>
+            <label className="text-xs text-muted-foreground">Last day away
+              <input type="date" min={form.from_date || today} value={form.to_date} data-testid="delegation-to"
+                onChange={(e) => setForm({ ...form, to_date: e.target.value })} className={`${FIELD} mt-1`} />
+            </label>
+          </div>
+          <button type="button" onClick={save} disabled={busy} data-testid="delegation-save" className={INK}>
+            {busy ? "Saving…" : "Hand over approvals"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* RBAC P2 (2026-09-16) — overdue work: when the doer's manager, then the owner,
+   hears about a late task, and whether owners also get the alert by email. */
+function EscalationCard() {
+  const { tenant, refreshTenant } = useAuth();
+  const [manager, setManager] = useState(String(tenant?.followup_manager_days || 2));
+  const [owner, setOwner] = useState(String(tenant?.followup_owner_days || 4));
+  const [email, setEmail] = useState(tenant?.owner_alert_email !== false);
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    const m = parseInt(manager, 10);
+    const o = parseInt(owner, 10);
+    if (!(m >= 1 && m <= 30) || !(o >= 1 && o <= 60)) { toast.error("Use 1 to 30 days for the manager and 1 to 60 for the owner"); return; }
+    if (o <= m) { toast.error("The owner should hear after the manager"); return; }
+    setBusy(true);
+    try {
+      await api.patch("/tenant/settings", { followup_manager_days: m, followup_owner_days: o, owner_alert_email: email });
+      if (refreshTenant) await refreshTenant();
+      toast.success("Overdue work settings saved");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Couldn't save");
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="kr-bento p-5 sm:p-6" data-testid="settings-escalation-card">
+      <h2 className="text-base font-medium">Overdue work</h2>
+      <p className="mt-1 text-xs text-muted-foreground">
+        A late task reminds the people on it the day it&rsquo;s due and the day after. Then it goes up, one step at a time.
+      </p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <label className="text-sm">Tell their manager after
+          <span className="mt-1 flex items-center gap-2">
+            <input type="number" min={1} max={30} value={manager} onChange={(e) => setManager(e.target.value)}
+              data-testid="escalation-manager-days" className={`${FIELD} w-24`} /> days late
+          </span>
+        </label>
+        <label className="text-sm">Tell the owner after
+          <span className="mt-1 flex items-center gap-2">
+            <input type="number" min={1} max={60} value={owner} onChange={(e) => setOwner(e.target.value)}
+              data-testid="escalation-owner-days" className={`${FIELD} w-24`} /> days late
+          </span>
+        </label>
+      </div>
+      <label className="mt-4 flex cursor-pointer items-start gap-2 text-sm">
+        <input type="checkbox" checked={email} onChange={(e) => setEmail(e.target.checked)} data-testid="escalation-owner-email"
+          className="mt-0.5 h-4 w-4 accent-neutral-900" />
+        <span>Also email owners when a task reaches them <span className="block text-xs text-muted-foreground">They always get it in the app.</span></span>
+      </label>
+      <button type="button" onClick={save} disabled={busy} data-testid="escalation-save" className={`${INK} mt-4`}>
+        {busy ? "Saving…" : "Save overdue work"}
+      </button>
+    </div>
+  );
+}
+
+/* RBAC P2 (2026-09-16) — Workspace tab, owner only: what the backend already
+   had but no screen showed. */
+function PlanSeatsCard() {
+  const [p] = useLoad("/tenant/plan");
+  const limit = p?.seat_limit;
+  const pct = limit ? Math.min(100, Math.round(((p?.seats_used || 0) / limit) * 100)) : 0;
+  const name = p?.key ? p.key.charAt(0).toUpperCase() + p.key.slice(1) : "";
+  return (
+    <div className="kr-bento p-5 sm:p-6" data-testid="settings-plan-card">
+      <h2 className="text-base font-medium">Plan and seats</h2>
+      {!p ? <div className="ds-skeleton mt-4 h-12 rounded-xl" aria-hidden="true" />
+        : p.error ? <p className="mt-3 text-sm text-muted-foreground">Couldn&rsquo;t load your plan.</p> : (
+        <div className="mt-3 space-y-3">
+          <p className="text-sm"><span className="font-semibold" data-testid="plan-name">{name}</span>
+            {p.trial_ends_at && <span className="text-muted-foreground"> · {p.trial_expired ? "trial ended" : `trial ends ${dayLabel(p.trial_ends_at)}`}</span>}
+          </p>
+          <div>
+            <p className="text-sm tabular-nums" data-testid="plan-seats">
+              {p.seats_used} {limit ? `of ${limit}` : ""} seat{p.seats_used === 1 && !limit ? "" : "s"} used{limit ? "" : " · no seat limit"}
+            </p>
+            {limit ? (
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-900/[0.07]" aria-hidden="true">
+                <div className={`h-full rounded-full ${pct >= 90 ? "bg-rose-500" : "bg-neutral-900"}`} style={{ width: `${pct}%` }} />
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AiKeysCard() {
+  const [data, reload, setData] = useLoad("/tenant/ai-keys");
+  const [editing, setEditing] = useState(null);
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const rows = data?.providers || [];
+  const label = (p) => ({ anthropic: "Anthropic (Claude)", openai: "OpenAI", gemini: "Google Gemini", google: "Google", sarvam: "Sarvam (speech)" }[p]
+    || p.charAt(0).toUpperCase() + p.slice(1));
+  const save = async (provider) => {
+    setBusy(true);
+    try {
+      const { data: out } = await api.patch(`/tenant/ai-keys/${provider}`, { key: value });
+      setData(out);
+      setEditing(null);
+      setValue("");
+      toast.success(`${label(provider)} key saved`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Couldn't save the key");
+    } finally { setBusy(false); }
+  };
+  const remove = async (provider) => {
+    setBusy(true);
+    try {
+      const { data: out } = await api.delete(`/tenant/ai-keys/${provider}`);
+      setData(out);
+      toast.success(`Back to DecisionOS's ${label(provider)} key`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Couldn't remove the key");
+      reload();
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="kr-bento p-5 sm:p-6" data-testid="settings-ai-keys-card">
+      <h2 className="text-base font-medium">AI keys</h2>
+      <p className="mt-1 text-xs text-muted-foreground">Use your company&rsquo;s own AI accounts instead of DecisionOS&rsquo;s. Keys are stored for your company only and never shown in full.</p>
+      {!data ? <div className="ds-skeleton mt-4 h-16 rounded-xl" aria-hidden="true" />
+        : data.error ? <p className="mt-3 text-sm text-muted-foreground">Couldn&rsquo;t load the AI keys.</p> : (
+        <ul className="mt-4 divide-y divide-slate-900/[0.06]">
+          {rows.map((r) => (
+            <li key={r.provider} className="py-3" data-testid={`ai-key-${r.provider}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{label(r.provider)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {r.has_tenant_key ? `Your key ${r.masked}` : r.source === "platform" ? "Using DecisionOS's key" : "Not set"}
+                  </p>
+                </div>
+                {editing !== r.provider && (
+                  <div className="flex gap-2">
+                    <button type="button" className={PILL} disabled={busy} data-testid={`ai-key-edit-${r.provider}`}
+                      onClick={() => { setEditing(r.provider); setValue(""); }}>{r.has_tenant_key ? "Replace" : "Add key"}</button>
+                    {r.has_tenant_key && (
+                      <button type="button" className={PILL} disabled={busy} onClick={() => remove(r.provider)}
+                        data-testid={`ai-key-remove-${r.provider}`}>Remove</button>
+                    )}
+                  </div>
+                )}
+              </div>
+              {editing === r.provider && (
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <input type="password" autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)}
+                    placeholder={`Paste the ${label(r.provider)} key`} aria-label={`${label(r.provider)} key`}
+                    data-testid={`ai-key-input-${r.provider}`} className={FIELD} />
+                  <div className="flex gap-2">
+                    <button type="button" className={INK} disabled={busy || value.trim().length < 8} onClick={() => save(r.provider)}
+                      data-testid={`ai-key-save-${r.provider}`}>Save</button>
+                    <button type="button" className={PILL} disabled={busy} onClick={() => setEditing(null)}>Cancel</button>
+                  </div>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function OwnerExclusionsCard() {
+  const { tenant, refreshTenant } = useAuth();
+  const [excl, setExcl] = useState(tenant?.owner_exclusions || []);
+  const [busy, setBusy] = useState(false);
+  const toggle = (k) => setExcl((x) => (x.includes(k) ? x.filter((y) => y !== k) : [...x, k]));
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api.put("/tenant/owner-exclusions", { exclusions: excl });
+      if (refreshTenant) await refreshTenant();
+      toast.success(excl.length ? "Owners no longer see the areas you switched off" : "Owners see everything again");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Couldn't save");
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="kr-bento p-5 sm:p-6" data-testid="settings-owner-exclusions-card">
+      <h2 className="text-base font-medium">What owners can open</h2>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Every owner can open everything. Switch an area off to keep it from all owners, you included &mdash; for example a co-founder who shouldn&rsquo;t see finance. Manage team always stays on.
+      </p>
+      <div className="mt-4 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+        {PERMISSIONS.map((p) => {
+          const locked = p.key === "team_manage";
+          const on = locked || !excl.includes(p.key);
+          return (
+            <button key={p.key} type="button" aria-pressed={on} disabled={locked || busy} onClick={() => toggle(p.key)}
+              data-testid={`owner-perm-${p.key}`}
+              className={`flex min-h-10 items-center justify-between gap-2 rounded-xl px-3 py-1.5 text-left text-xs font-medium ring-1 ring-inset transition-colors disabled:cursor-not-allowed ${on ? "bg-neutral-900 text-white ring-transparent" : "bg-white/80 text-slate-700 ring-slate-900/[0.06] hover:bg-white"} ${locked ? "opacity-70" : ""}`}>
+              <span>{p.label}</span>
+              <span className="text-[10px] uppercase tracking-wide">{on ? "On" : "Off"}</span>
+            </button>
+          );
+        })}
+      </div>
+      <button type="button" onClick={save} disabled={busy} data-testid="owner-exclusions-save" className={`${INK} mt-4`}>
+        {busy ? "Saving…" : "Save what owners can open"}
+      </button>
+    </div>
+  );
+}
+
+function AuditLogCard() {
+  const PAGE = 25;
+  const [rows, setRows] = useState(null);
+  const [done, setDone] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const load = async (before) => {
+    setBusy(true);
+    try {
+      const { data } = await api.get(`/admin/audit-log?limit=${PAGE}${before ? `&before_ts=${encodeURIComponent(before)}` : ""}`);
+      const got = data?.rows || [];
+      setRows((r) => (before ? [...(r || []), ...got] : got));
+      setDone(got.length < PAGE);
+    } catch {
+      setRows((r) => r || []);
+      toast.error("Couldn't load the audit log");
+    } finally { setBusy(false); }
+  };
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const what = (a) => (a || "").replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+  return (
+    <div className="kr-bento p-5 sm:p-6" data-testid="settings-audit-card">
+      <h2 className="text-base font-medium">Audit log</h2>
+      <p className="mt-1 text-xs text-muted-foreground">Sign-ins, access changes, removals, AI consent and keys, newest first. It can&rsquo;t be edited.</p>
+      {!rows ? <div className="ds-skeleton mt-4 h-24 rounded-xl" aria-hidden="true" /> : rows.length === 0 ? (
+        <p className="mt-4 text-sm text-muted-foreground">Nothing recorded yet.</p>
+      ) : (
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[32rem] text-left text-sm" data-testid="audit-table">
+            <thead>
+              <tr className="text-xs text-muted-foreground">
+                <th className="py-2 pr-3 font-medium">When</th><th className="py-2 pr-3 font-medium">What</th><th className="py-2 font-medium">Who</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-900/[0.06]">
+              {rows.map((r) => (
+                <tr key={r.id}>
+                  <td className="whitespace-nowrap py-2 pr-3 tabular-nums text-muted-foreground">{r.timestamp ? new Date(r.timestamp).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : ""}</td>
+                  <td className="py-2 pr-3">{what(r.action)}</td>
+                  <td className="py-2 text-muted-foreground">{r.actor_email || (r.actor_id ? "A member" : "System")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {rows && rows.length > 0 && !done && (
+        <button type="button" className={`${PILL} mt-3`} disabled={busy} data-testid="audit-older"
+          onClick={() => load(rows[rows.length - 1]?.timestamp)}>{busy ? "Loading…" : "Show older"}</button>
+      )}
+    </div>
+  );
+}
+
 const TABS = [
   { key: "business", label: "Business", icon: Buildings,
     desc: "Company profile, products, roles, and the words your team uses." },
@@ -181,7 +628,10 @@ const TABS = [
   { key: "money", label: "Money", icon: CurrencyCircleDollar,
     desc: "High-value approval threshold, currency, and finance categories." },
   { key: "account", label: "Account", icon: User,
-    desc: "Your language, profile and sign-in password." },
+    desc: "Your language, look, profile, password, and who handles your approvals while you're away." },
+  // RBAC P2 (2026-09-16): owner only.
+  { key: "workspace", label: "Workspace", icon: ShieldCheck,
+    desc: "Plan and seats, your own AI keys, what owners can open, and the audit log." },
 ];
 const VALID_TAB_KEYS = new Set(TABS.map((t) => t.key));
 
@@ -243,6 +693,17 @@ export default function Settings() {
       setTab(urlTab);
     }
   }, [urlTab, tab]);
+  // A link like /settings?tab=business#ai-consent lands on that card.
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    if (!id) return undefined;
+    const timer = setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 400);
+    return () => clearTimeout(timer);
+  }, []);
+  // The Workspace tab is the owner's; anyone else lands on Business.
+  useEffect(() => {
+    if (tab === "workspace" && user?.role !== "owner") setTab("business");
+  }, [tab, user]);
 
 
   // Non-owner view stays a simple stack -- just Profile + Security.
@@ -258,8 +719,13 @@ export default function Settings() {
         </div>
         </header>
         <div className="max-w-2xl">
-          <ProfileCard />
+          {/* RBAC P2 (2026-09-16): Language and Theme for everyone, and the hand-over. */}
+          <LanguageCard />
+          <div className="mt-6"><ThemeCard /></div>
+          <div className="mt-6"><ProfileCard /></div>
+          <div className="mt-6"><AiConsentCard /></div>
           <div className="mt-6"><SecurityCard /></div>
+          <div className="mt-6"><DelegationCard /></div>
           {/* Mobile PWA (2026-09-14) — Sign out, for everyone. KM-5 moved it
               out of the phone's More panel into Settings, but only the owner
               view rendered it, so on a phone a teammate could not sign out. */}
@@ -291,7 +757,7 @@ export default function Settings() {
           than it earns. No transition utility (outset/inset shadows). */}
       <div className="kr-pressed mb-5 flex items-center gap-1 rounded-pill p-1"
            role="tablist" aria-label="Settings sections" data-testid="settings-tabs">
-        {TABS.map((t) => {
+        {TABS.filter((t) => t.key !== "workspace" || user?.role === "owner").map((t) => {
           const Icon = t.icon;
           const isActive = t.key === tab;
           return (
@@ -317,6 +783,7 @@ export default function Settings() {
       <div className="space-y-6 max-w-2xl" data-testid={`settings-panel-${tab}`}>
         {tab === "business" && (
           <>
+            <AiConsentCard />
             <CompanyDetails />
             <BusinessVocabulary />
           </>
@@ -331,6 +798,7 @@ export default function Settings() {
                 description already covers "approval gates". Gated on
                 team_manage: non-managers see nothing at all. */}
             <LeaveApproversCard />
+            {user?.role === "owner" && <EscalationCard />}
           </>
         )}
 
@@ -341,7 +809,9 @@ export default function Settings() {
                 owner actually touches; the category editor is a long
                 list they rarely re-order. Putting categories first
                 buried the two decisions that matter for approvals. */}
-            <MoneyAndApprovalsCard />
+            {/* RBAC P0 (2026-09-15): the server lets only an owner save this card,
+                so Manage team without owner saw it and hit "Could not save". */}
+            {user?.role === "owner" && <MoneyAndApprovalsCard />}
             <FinanceCategoriesEditor />
           </>
         )}
@@ -351,7 +821,17 @@ export default function Settings() {
             <LanguageCard />
             <ProfileCard />
             <SecurityCard />
+            <DelegationCard />
             <SignOutCard />
+          </>
+        )}
+
+        {tab === "workspace" && user?.role === "owner" && (
+          <>
+            <PlanSeatsCard />
+            <AiKeysCard />
+            <OwnerExclusionsCard />
+            <AuditLogCard />
           </>
         )}
       </div>

@@ -1,5 +1,6 @@
 export const PERMISSIONS = [
-  { key: "inbox", label: "Inbox" },
+  // RBAC P2 (2026-09-16): the key stays "inbox"; on screen it is the Decision Desk.
+  { key: "inbox", label: "Decision Desk" },
   { key: "voice_capture", label: "Voice Box (Decision Desk capture)" },
   { key: "data_input", label: "Data Input" },
   { key: "people", label: "People / Contacts" },
@@ -9,7 +10,8 @@ export const PERMISSIONS = [
   { key: "tasks", label: "Tasks" },
   { key: "brain", label: "Company Brain" },
   { key: "ask", label: "Ask AI" },
-  { key: "approvals", label: "Approve Tasks" },
+  { key: "brain_export", label: "Export Company Brain" },
+  { key: "approvals", label: "Approve tasks & WhatsApp captures" },
   { key: "decisions_approve", label: "Approve Decisions" },
   { key: "leave_approve", label: "Approve Leave" },
   { key: "team_manage", label: "Manage Team" },
@@ -33,6 +35,14 @@ export function defaultPermsForRole(role) {
   return ROLE_DEFAULT_PERMS[role] || BASE;
 }
 
+// 2026-09-15 — what a role gives: the owner's setting for it (Settings › Team
+// roles › Access), else the built-in default. Same order as the server.
+export function roleDefaultPerms(role, tenantRoles) {
+  const r = (tenantRoles || []).find((x) => x.key === role);
+  if (r && Array.isArray(r.permissions) && r.permissions.length) return r.permissions.filter((k) => PERMISSION_KEYS.includes(k));
+  return defaultPermsForRole(role);
+}
+
 export function userPerms(user) {
   if (!user) return [];
   if (user.role === "owner") return PERMISSION_KEYS;
@@ -40,7 +50,8 @@ export function userPerms(user) {
   // (company role settings included); other members fall back to their list.
   if (Array.isArray(user.effective_permissions)) return user.effective_permissions.filter((k) => PERMISSION_KEYS.includes(k));
   const p = user.permissions;
-  if (Array.isArray(p) && p.length) return p.filter((k) => PERMISSION_KEYS.includes(k));
+  // A deliberate own list (permissions_custom) may be empty: No access.
+  if (user.permissions_custom || (Array.isArray(p) && p.length)) return (p || []).filter((k) => PERMISSION_KEYS.includes(k));
   return defaultPermsForRole(user.role);
 }
 

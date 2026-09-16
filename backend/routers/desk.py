@@ -468,7 +468,9 @@ async def _cards_needs_decision(tid: str, user: dict) -> list:
             {"approver_id": {"$exists": False}},
         ]
     else:
-        q["approver_id"] = uid
+        # RBAC P2 (2026-09-16): plus decisions handed to me while their decider is away.
+        held = list(user.get("_acting_for") or [])
+        q["approver_id"] = {"$in": [uid, *held]} if held else uid
     rows = await db.decisions.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
     # ASK-32 2.4 — decisions I raised that wait on someone else: I can follow
     # them here ("Waiting on Sunita"), I just cannot decide them.
@@ -487,12 +489,15 @@ async def _cards_needs_decision(tid: str, user: dict) -> list:
     for d, following in ordered:
         creator = (umap.get(d.get("created_by") or "", {}) or {}).get("name") or "Unknown"
         waiting_days = _days_between(d.get("created_at"))
-        ctx_parts = [f"Waiting {waiting_days} day{'s' if waiting_days != 1 else ''}"]
+        # Yokesh 2026-09-15: "Raised by Priya · You decide · Waiting 13 days · …",
+        # or "Raised by you · Sunita decides" on a decision someone else decides.
+        raised_by = "you" if d.get("created_by") == user["id"] else creator
         if following:
             decider = (umap.get(d.get("approver_id") or "", {}) or {}).get("name")
-            ctx_parts.append(f"Waiting on {decider or 'an owner'}")
+            ctx_parts = [f"Raised by {raised_by}", f"{decider or 'An owner'} decides"]
         else:
-            ctx_parts.append(f"From {creator}")
+            ctx_parts = [f"Raised by {raised_by}", "You decide"]
+        ctx_parts.append(f"Waiting {waiting_days} day{'s' if waiting_days != 1 else ''}")
         # ASK-32 Phase 1: a new decision PROPOSES its work; an older one created
         # its tasks blocked and unblocks them. (`proposed_tasks` was never written.)
         prop = d.get("proposal") or {}
@@ -549,7 +554,10 @@ async def _cards_on_fire(tid: str, user: dict) -> list:
     # ASK-28 Phase 7 (plan 7.3): the same ladder as the reminders — a manager
     # also chases their direct reports' tasks once they reach the manager step
     # (FOLLOWUP_MANAGER_DAYS overdue), not from the first late hour.
-    from services.tasks import FOLLOWUP_MANAGER_DAYS
+    # RBAC P2 (2026-09-16): the company's own escalation days (Settings › Operations).
+    from services.tasks import followup_days
+    manager_days = followup_days(await db.tenants.find_one(
+        {"id": tid}, {"_id": 0, "followup_manager_days": 1, "followup_owner_days": 1}))[0]
     report_ids = set()
     if not is_owner:
         report_ids = {r["id"] for r in await db.users.find(
@@ -557,7 +565,7 @@ async def _cards_on_fire(tid: str, user: dict) -> list:
         q_overdue["$or"] = [{"created_by": uid}, {"assignee_id": {"$in": sorted(report_ids)}}]
     overdue = [t for t in await db.tasks.find(q_overdue, {"_id": 0}).sort("due_date", 1).to_list(200)
                if is_owner or t.get("created_by") == uid
-               or _days_between(t.get("due_date")) >= FOLLOWUP_MANAGER_DAYS]
+               or _days_between(t.get("due_date")) >= manager_days]
 
     # 2) Escalations/handoffs pointed at me. The `updates` array is the
     # source of truth; the latest entry that is an escalate or handoff with

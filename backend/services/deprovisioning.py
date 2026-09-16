@@ -96,6 +96,20 @@ async def deprovision_user(
             report["error"] = ("Cannot deprovision the last owner. Promote another "
                                 "member to owner first, then retry.")
             return report
+    target_user = await db.users.find_one({"id": target_user_id, "tenant_id": tenant_id},
+                                          {"_id": 0, "id": 1, "role": 1})
+    if not target_membership and (target_user or {}).get("role") == "owner":
+        # 2026-09-15: an owner from before memberships — count every other owner,
+        # with a live membership or an account of the same age.
+        live_owner_ids = {m["user_id"] for m in await list_memberships_for_tenant(db, tenant_id, statuses=LIVE_STATUSES)
+                          if m.get("role") == "owner"}
+        other_legacy = await db.users.find_one({"tenant_id": tenant_id, "role": "owner", "id": {"$ne": target_user_id}},
+                                               {"_id": 0, "id": 1})
+        if not (live_owner_ids - {target_user_id}) and not other_legacy:
+            report["ok"] = False
+            report["error"] = ("Cannot deprovision the last owner. Promote another "
+                                "member to owner first, then retry.")
+            return report
 
     # 2. Revoke sessions scoped to THIS tenant only.
     try:
@@ -111,6 +125,15 @@ async def deprovision_user(
         report["membership_removed"] = await remove_membership(
             db, user_id=target_user_id, tenant_id=tenant_id,
         )
+        if not target_membership and target_user:
+            # 2026-09-15: an account from before memberships had no row to mark,
+            # so the legacy sign-in fallback still let them in. Record the removal.
+            await db.memberships.insert_one({
+                "id": f"removed-{target_user_id}-{tenant_id}", "user_id": target_user_id, "tenant_id": tenant_id,
+                "role": target_user.get("role"), "status": "removed", "removed_at": now_iso(),
+                "created_at": now_iso(), "updated_at": now_iso(),
+            })
+            report["membership_removed"] = True
     except Exception as e:
         logger.warning(f"[deprovision] membership remove failed: {e}")
 
@@ -142,8 +165,9 @@ async def deprovision_user(
             )
             if replacement:
                 set_fields["assignee_role"] = replacement.get("role")
+        # 2026-09-15: open work only — finished tasks keep who did them.
         res = await db.tasks.update_many(
-            {"tenant_id": tenant_id, "assignee_id": target_user_id},
+            {"tenant_id": tenant_id, "assignee_id": target_user_id, "status": {"$nin": ["done", "cancelled"]}},
             {"$set": set_fields},
         )
         report["tasks_reassigned"] = getattr(res, "modified_count", 0)
@@ -166,6 +190,53 @@ async def deprovision_user(
             )
     except Exception as e:
         logger.warning(f"[deprovision] co-assignee removal failed: {e}")
+
+    # 5c. 2026-09-15 — nothing waits on someone who has left. Open tasks they
+    # approve and decisions waiting on them go to the replacement when that
+    # person may approve / decide, else to an owner; the people who reported
+    # to them report to the replacement (or to nobody).
+    try:
+        from core import user_perms
+        tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "roles": 1}) or {}
+        role_map = {r["key"]: list(r["permissions"]) for r in (tenant.get("roles") or [])
+                    if r.get("key") and isinstance(r.get("permissions"), list) and r.get("permissions")}
+        rep = (await db.users.find_one({"id": reassign_to_user_id, "tenant_id": tenant_id},
+                                       {"_id": 0, "id": 1, "role": 1, "permissions": 1})
+               if reassign_to_user_id else None)
+        live = await list_memberships_for_tenant(db, tenant_id, statuses=LIVE_STATUSES)
+        owners = [m["user_id"] for m in live if m.get("role") == "owner" and m.get("user_id") != target_user_id]
+        owner_id = owners[0] if owners else None
+        if not owner_id:
+            legacy_owner = await db.users.find_one({"tenant_id": tenant_id, "role": "owner", "id": {"$ne": target_user_id}},
+                                                   {"_id": 0, "id": 1})
+            owner_id = (legacy_owner or {}).get("id")
+
+        def _may(perm: str) -> bool:
+            return bool(rep) and (rep.get("role") == "owner" or perm in user_perms({**rep, "_role_perms_map": role_map}))
+
+        res = await db.tasks.update_many(
+            {"tenant_id": tenant_id, "approver_id": target_user_id, "status": {"$nin": ["done", "cancelled"]}},
+            {"$set": {"approver_id": reassign_to_user_id if _may("approvals") else owner_id, "updated_at": now_iso()}},
+        )
+        report["approvals_moved"] = getattr(res, "modified_count", 0)
+        res = await db.decisions.update_many(
+            {"tenant_id": tenant_id, "approver_id": target_user_id, "status": {"$in": ["pending", "pending_approval"]}},
+            {"$set": {"approver_id": reassign_to_user_id if _may("decisions_approve") else owner_id, "updated_at": now_iso()}},
+        )
+        report["decisions_moved"] = getattr(res, "modified_count", 0)
+        res = await db.users.update_many(
+            {"tenant_id": tenant_id, "reporting_manager_id": target_user_id},
+            {"$set": {"reporting_manager_id": reassign_to_user_id, "updated_at": now_iso()}},
+        )
+        report["reports_moved"] = getattr(res, "modified_count", 0)
+        if reassign_to_user_id:
+            # The replacement may have reported to the person who left.
+            await db.users.update_one(
+                {"id": reassign_to_user_id, "tenant_id": tenant_id, "reporting_manager_id": reassign_to_user_id},
+                {"$set": {"reporting_manager_id": None}},
+            )
+    except Exception as e:
+        logger.warning(f"[deprovision] approvals/decisions/reports hand-over failed: {e}")
 
     # 6. Reassign authored contacts.
     try:

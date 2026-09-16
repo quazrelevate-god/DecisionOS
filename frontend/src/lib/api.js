@@ -106,13 +106,9 @@ if (process.env.NODE_ENV !== "production") {
 // For Legal Reasons) which is what FIX-005-C returns for LLM calls
 // before the tenant has granted DPDP consent. Old behaviour: frontend
 // swallowed the 451 -> click looked like a silent no-op. New: show a
-// toast that says what is wrong, so the founder knows what to do. The
-// retry is manual so the founder is aware the AI call is happening.
-// ASK-33.1 (2026-09-16): the toast's "Open Settings" action pointed at
-// /settings#ai-consent, and Settings has no AI-consent section — a link
-// to a screen that does not exist. Dropped until that screen is built,
-// and the words name no screen (lib/dexOutcome.js says the same for a
-// failed capture and keeps the href for when it exists).
+// toast that links to Settings > AI Consent so the founder knows what
+// to do. Consent grant lives in Settings; the retry is manual so the
+// founder is aware the AI call is happening.
 let _consentToastShownAt = 0;
 api.interceptors.response.use(
   (r) => r,
@@ -124,8 +120,15 @@ api.interceptors.response.use(
       if (now - _consentToastShownAt > 8000) {
         _consentToastShownAt = now;
         toast.error(
-          "AI is off for this company — an owner has to turn on AI consent before this will work.",
-          { duration: 8000 }
+          "AI features need the owner's consent. Open Settings › Business › AI processing to turn them on, then try again.",
+          {
+            duration: 8000,
+            action: {
+              label: "Open Settings",
+              // RBAC P1 (2026-09-15): the section this points at now exists.
+              onClick: () => { window.location.href = "/settings?tab=business#ai-consent"; },
+            },
+          }
         );
       }
     }

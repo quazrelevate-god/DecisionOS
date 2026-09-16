@@ -103,11 +103,11 @@ with sync_playwright() as pw:
         desk = api(p, "/desk?chip=needs_decision")["body"] or {}
         card = next((c for c in desk.get("cards") or [] if c["id"] == A), None)
         rec("desk-lists-own-decision-waiting-on-manager", bool(card) and card["cta"] == "follow"
-            and f"Waiting on {SEED['fin_name']}" in card["context_line"], (card or {}).get("context_line"))
+            and f"Raised by you · {SEED['fin_name']} decides" in card["context_line"], (card or {}).get("context_line"))
         rec("desk-does-not-count-it", (desk.get("counters") or {}).get("needs_decision") == 0, desk.get("counters"))
         p.goto(BASE + "/inbox")
         p.wait_for_timeout(3500)
-        rec("desk-shows-waiting-on", wait_text(p, f"Waiting on {SEED['fin_name']}", 8000), "card line rendered")
+        rec("desk-shows-who-decides", wait_text(p, f"{SEED['fin_name']} decides", 8000), "card line rendered")
         p.screenshot(path=str(OUT / f"sales_{CTX['vp']}_desk.png"))
         open_decision(p, A)
         waiting = text_of(p, "decision-waiting-card")

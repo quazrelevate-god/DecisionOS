@@ -545,7 +545,8 @@ export default function CRM() {
   const [page, setPage] = useState(1);
   const [adding, setAdding] = useState(null); // "customer" | "vendor" while the New window is open
 
-  const canManage = user?.role === "owner" || user?.role === "sales";
+  // RBAC P1 (2026-09-15): People access, not the role name (the server's rule).
+  const canManage = hasPerm(user, "people");
   const can360 = hasPerm(user, "finance");
   const canImport = hasPerm(user, "data_input");
 

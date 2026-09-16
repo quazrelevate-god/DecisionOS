@@ -42,7 +42,9 @@ async def list_contacts(type: Optional[str] = None, status: Optional[str] = None
 
 
 @router.post("/contacts")
-async def create_contact(inp: ContactInput, user: dict = Depends(require_role("owner", "sales"))):
+# RBAC P1 (2026-09-15): People access, not the role name — a custom role with
+# People was refused although the buttons showed (owners pass).
+async def create_contact(inp: ContactInput, user: dict = Depends(require_perm("people"))):
     if inp.type not in CONTACT_TYPES:
         raise HTTPException(status_code=400, detail="Invalid contact type")
     status = inp.status if inp.status in CONTACT_STATUS else "lead"
@@ -67,7 +69,7 @@ async def create_contact(inp: ContactInput, user: dict = Depends(require_role("o
 
 
 @router.patch("/contacts/{contact_id}")
-async def update_contact(contact_id: str, inp: ContactUpdateInput, user: dict = Depends(require_role("owner", "sales"))):
+async def update_contact(contact_id: str, inp: ContactUpdateInput, user: dict = Depends(require_perm("people"))):
     c = await db.contacts.find_one({"id": contact_id, "tenant_id": user["tenant_id"]})
     if not c:
         raise HTTPException(status_code=404, detail="Not found")
@@ -134,7 +136,7 @@ async def update_contact(contact_id: str, inp: ContactUpdateInput, user: dict = 
 
 
 @router.delete("/contacts/{contact_id}")
-async def delete_contact(contact_id: str, user: dict = Depends(require_role("owner", "sales"))):
+async def delete_contact(contact_id: str, user: dict = Depends(require_perm("people"))):
     res = await db.contacts.delete_one({"id": contact_id, "tenant_id": user["tenant_id"]})
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Not found")

@@ -28,7 +28,7 @@ from models.complaints import (
 
 
 @router.post("/complaints")
-async def create_complaint(inp: ComplaintInput, user: dict = Depends(require_role("owner", "sales"))):
+async def create_complaint(inp: ComplaintInput, user: dict = Depends(require_perm("people"))):  # RBAC P1: People access, not the role name
     name = None
     if inp.customer_id:
         c = await db.contacts.find_one({"id": inp.customer_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "name": 1, "company": 1})
@@ -56,7 +56,7 @@ async def list_complaints(status: Optional[str] = None, user: dict = Depends(get
 
 
 @router.patch("/complaints/{cid}/resolve")
-async def resolve_complaint(cid: str, user: dict = Depends(require_role("owner", "sales"))):
+async def resolve_complaint(cid: str, user: dict = Depends(require_perm("people"))):
     c = await db.complaints.find_one({"id": cid, "tenant_id": user["tenant_id"]}, {"_id": 0})
     res = await db.complaints.update_one({"id": cid, "tenant_id": user["tenant_id"]}, {"$set": {"status": "resolved", "resolved_at": now_iso()}})
     if res.matched_count == 0:

@@ -166,7 +166,7 @@ const data = {
     cards: {
       needs_decision: decisions.map((d, i) => ({
         id: d.id, kind: "decision", title: d.title,
-        context_line: `Waiting ${(i % 9) + 1} days · From ${TEAM[(i % 3) + 1].name}${d.proposed_tasks.length ? ` · Unblocks ${d.proposed_tasks.length} tasks` : ""}`,
+        context_line: `Raised by ${TEAM[(i % 3) + 1].name} · You decide · Waiting ${(i % 9) + 1} days${d.proposed_tasks.length ? ` · Unblocks ${d.proposed_tasks.length} tasks` : ""}`,
         amount: d.amount, cta: "review", target_id: d.id, target_kind: "decision",
         waiting_days: (i % 9) + 1, from_name: TEAM[(i % 3) + 1].name,
         unblocks: d.unblocks, due_date: d.due_date,

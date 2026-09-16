@@ -90,6 +90,7 @@ async def get_current_user(
         find_membership as _find_membership,
         project_membership_onto_user as _project,
         LIVE_STATUSES as _LIVE_STATUSES,
+        legacy_access_allowed as _legacy_access_allowed,
     )
     claimed_tenant = payload.get("tenant_id")
     if not claimed_tenant:
@@ -104,7 +105,12 @@ async def get_current_user(
         # fields on the user doc until the backfill migration runs.
         # If those exist AND match the JWT claim, trust them as a
         # fallback so a mid-migration boot doesn't lock everyone out.
-        if user.get("tenant_id") == claimed_tenant and user.get("role"):
+        # ...unless a membership row exists for this workspace (removed,
+        # suspended, pending): then that row is the answer.
+        if await _legacy_access_allowed(db, user, claimed_tenant):
+            # RBAC P2 (2026-09-16): an older account can hold someone's approvals too.
+            from services.delegation import acting_for as _legacy_acting_for
+            user["_acting_for"] = await _legacy_acting_for(db, claimed_tenant, user["id"])
             set_usage_tenant(user.get("tenant_id"))
             return user
         raise HTTPException(
@@ -138,6 +144,9 @@ async def get_current_user(
     # auto-routes to the delegate. Approval-routing sites (_can_approve_*,
     # push_notification of pending approvals) read user['_acting_as'].
     user["_acting_as"] = user.get("acting_as") or {}
+    # RBAC P2 (2026-09-16): whose approvals this person holds right now.
+    from services.delegation import acting_for as _acting_for
+    user["_acting_for"] = await _acting_for(db, claimed_tenant, user["id"])
     set_usage_tenant(user.get("tenant_id"))
     return user
 

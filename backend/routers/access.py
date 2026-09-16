@@ -42,13 +42,10 @@ router = APIRouter(prefix="/api")
 
 
 def _is_active_now(from_iso: str, to_iso: str) -> bool:
-    """Inclusive window check. Empty ends mean 'no bound on that side'."""
-    now = datetime.now(timezone.utc).isoformat()
-    if from_iso and now < from_iso:
-        return False
-    if to_iso and now > to_iso + "T23:59:59+00:00":
-        return False
-    return True
+    """Inclusive window check. Empty ends mean 'no bound on that side'.
+    2026-09-16: the one rule in services.delegation (timezone-tolerant)."""
+    from services.delegation import is_active_now
+    return is_active_now({"delegate_user_id": "-", "from": from_iso or "", "to": to_iso or ""})
 
 
 async def resolve_delegate(tenant_id: str, user_id: str) -> Optional[str]:
@@ -145,6 +142,14 @@ async def grant_temp_perm(uid: str, inp: TempGrantInput,
                                       {"_id": 0, "id": 1, "name": 1})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    # RBAC P0 (2026-09-15): Manage team could grant itself anything. Someone who
+    # isn't an owner may not grant to themselves, nor a permission they lack.
+    if user.get("role") != "owner":
+        from core import user_perms
+        if uid == user["id"]:
+            raise HTTPException(status_code=403, detail="You can't give yourself access. Ask an owner.")
+        if inp.perm not in user_perms(user):
+            raise HTTPException(status_code=403, detail=f"You can only give access you have yourself. Ask an owner for: {inp.perm}.")
     from services.auth.membership import find_membership, update_membership
     m = await find_membership(db, uid, tid)
     if not m:

@@ -1479,6 +1479,10 @@ html[data-page="finance"] {
 
 html[data-page="team"] {
     --sky-art: url("/sky/team.webp");
+    /* 2026-09-16 — the founder's desktop plate ("Ethereal Pastel Glass
+       Waves"), same arrangement as /my-work: >= 1024px loads the landscape
+       WebP, the phone keeps its portrait file and never fetches this one. */
+    --sky-art-lg: url("/sky/team-lg.webp");
 }
 
 /* KM-39 — /workflows joins the table. It was the one room in the dock with a

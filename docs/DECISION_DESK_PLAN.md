@@ -48,8 +48,8 @@ Numbers below are from the live owner company (Sharma), read-only, 2026-09-15.
 - [x] **DD2 · Who decides** — always name one person: the person who captured it if they can approve; else their reporting manager if the manager can approve; else the owner. One permission for routing and approving (`decisions_approve`). *(Yokesh, 2026-09-15: the Decide flow is for the owner and, in some cases, managers; the person who captures is the approver. Phase 2.)*
 - [x] **DD3 · Questions are not decisions** — a capture with nothing to act on gets a "Nothing to decide" reply and no decision card. *(Default taken in Phase 1.)*
 - [x] **DD4 · Reject cancels, it doesn't erase** — reject only while undecided; proposed items are simply not created; for older decisions, waiting tasks are cancelled and only untouched auto-created work is removed. *(Default taken in Phase 1.)*
-- [ ] **DD5 · Approve with edits** — the approver can change tasks (doer, due date, priority), drop an item, and change / remove the workflow before approving. *Default: yes.*
-- [ ] **DD6 · Workflow tagging** — first match an **existing** workflow (same counterparty / order) and attach or move it; create a new one only when none matches; the approver sees and can change it. *Default: yes.*
+- [x] **DD5 · Approve with edits** — the approver can change tasks (doer, due date, priority), drop an item, and change / remove the workflow before approving. *Default: yes.*
+- [x] **DD6 · Workflow tagging** — first match an **existing** workflow (same counterparty / order) and attach or move it; create a new one only when none matches; the approver sees and can change it. *Default: yes.*
 - [x] **DD7 · Duplicates** — the same capture within 24 hours is flagged "Looks like a repeat of …" instead of silently creating another decision. *(Flag, not block — built in Phase 1.)*
 
 ---
@@ -89,6 +89,21 @@ Numbers below are from the live owner company (Sharma), read-only, 2026-09-15.
 - [x] **3.4 After approving** — the popup stays open: each created task and the workflows it created or moved are links.
 - Not built (not wanted): confidence, review reasons, every decision point, "Ask the person" as a separate action (Send a note already exists).
 
+### 3.5 Sign-off on decision tasks (planned)
+
+*Yokesh, 2026-09-15: keep the decision screen simple. One choice per task, "needs approval before done". No approval before start (the decision is already approved). No proof switch, because finance tasks should always carry proof.*
+
+**Checked on dev data, 2026-09-15: proof is not automatic today.** Of 23 Finance tasks, 0 need proof (20 came from voice, 3 from Finance). `evidence_required` is only ever set in two places: the "Needs proof" box on New Task and a workflow stage's template tasks. Nothing turns it on because a task is a Finance task.
+
+- [ ] **3.5 Needs sign-off before done**: one checkbox on each task row, shown only to whoever decides, while the decision is waiting.
+  - Stored on the proposal task as `signoff`. The existing `PATCH /decisions/{id}/proposal/tasks/{key}` takes it, and the change goes on the timeline.
+  - On approval the task is created with `approval_required=True`, `approval_stage="close"` and `approver_id` = the person who approved the decision.
+  - Nothing new is needed on the task side. The close sign-off flow already exists (ASK-28 TK-05): the doer marks it done, it goes to Under review, the approver is told and closes it.
+  - Dex ticks it in advance for money work (a Finance task, or an amount at or above the company's high-value threshold, ₹50,000 by default). Whoever decides can untick it.
+- *3.5 is being built by another team (Yokesh, 2026-09-15).*
+- Not in it: approval before start, a proof switch, a per-task approver picker (the decision's approver signs off), automatic proof on Finance tasks (not needed, Yokesh 2026-09-15).
+- **Proof stays once the work is completed** (built 2026-09-15): nobody, the owner included, removes proof from a task that is done or sent for sign-off. Reopen the task to change it. Reference material stays removable.
+
 ## Phase 4 — Workflows go by themselves
 
 *Yokesh, 2026-09-15: when proposing, check what is already on the board so nothing is duplicated; tag a task with a workflow when it belongs to one; ad hoc tasks stay plain; the workflow should move automatically, not by hand. Built 2026-09-15 as ASK-32 Phase 4.*
@@ -109,7 +124,18 @@ Numbers below are from the live owner company (Sharma), read-only, 2026-09-15.
 
 </details>
 
+## Desk and My Work tidy-up
+
+*Yokesh, 2026-09-15: decisions are approved on the Desk only, so they do not belong in My Work's Needs approval. Built 2026-09-15.*
+
+- [x] **Needs approval is task approvals only**: the My Work filter lists tasks waiting for approval before work starts (sent back included) or for sign-off. It no longer includes tasks waiting for a decision (32 of the 39). Those tasks still show in All tasks with "Waiting for a decision" and a link to it.
+- [x] **The decision card says who raised it and who decides**: "Raised by Priya · You decide · Waiting 13 days · Unblocks 2 tasks", or "Raised by you · Sunita decides · …" for the person following it.
+- [x] **Old test data cleared** from the Sharma company (dev data): 60 test tasks (TEST_…, TESTIT57…, QA_NOTIF_TEST…), 22 decisions with nothing to act on ("No actionable directive", "said hello"…), and their 62 notifications and 113 activity entries. Everything is copied to `cleanup_archive` first and can be restored (`scripts/cleanup_test_data_0915.py --restore <run>`).
+- [x] **Approver on every approval task** *(Yokesh 2026-09-15, option A)*: when a task needs approval and nobody is picked, the creator's reporting manager approves if they may approve tasks, otherwise the owner. An owner who creates it approves it themselves; with several owners, the first one approves. A picked approver always wins. New Task names the default in the Approver list ("Sunita Rao · your manager"). "Anyone with approval access" is gone, so My approvals covers every task.
+
 ## Phase 5 — Capture feedback and history
+
+*Later — Yokesh, 2026-09-15: not now, we will do it later.*
 
 - [ ] **5.1 Result after capture** (desktop and phone): "Decision ready for Sunita: 2 tasks, 1 workflow" with a link; or "Nothing to decide" with the answer.
 - [ ] **5.2 Failures say why** — e.g. "AI is off for this company — turn on AI consent in Settings" (14 of today's 15 failures) — with Retry.

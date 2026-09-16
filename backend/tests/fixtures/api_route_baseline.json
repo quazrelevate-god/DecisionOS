@@ -1,6 +1,6 @@
 {
-  "count": 326,
-  "sha": "08214e3f5cdbf4b7cc7240fe217a938ac523e2d9a4aebaae08d2d8c1919f900b",
+  "count": 329,
+  "sha": "29c1678de3b2a562ed967103b70f7c11c1e655b5e4b5c0f69b8a0dc9c41c4a8d",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -21,6 +21,7 @@
     "DELETE /api/revenue/invoice/{iid}",
     "DELETE /api/revenue/payment/{pid}",
     "DELETE /api/tasks/{task_id}",
+    "DELETE /api/tasks/{task_id}/attachments/{att_id}",
     "DELETE /api/tasks/{task_id}/execution-plan",
     "DELETE /api/tenant/ai-consent",
     "DELETE /api/tenant/ai-keys/{provider}",
@@ -139,6 +140,7 @@
     "GET /api/tenant/usage",
     "GET /api/users",
     "GET /api/users/{uid}/temp-grants",
+    "GET /api/users/{user_id}/offboarding",
     "GET /api/voice-notes",
     "GET /api/voice-notes/{note_id}",
     "GET /api/voice-notes/{note_id}/audio",
@@ -179,6 +181,7 @@
     "PATCH /api/tasks/{task_id}",
     "PATCH /api/tasks/{task_id}/execution-plan",
     "PATCH /api/tenant",
+    "PATCH /api/tenant/ai-keys/{provider}",
     "PATCH /api/tenant/finance-categories",
     "PATCH /api/tenant/leave-approvers",
     "PATCH /api/tenant/lexicon",

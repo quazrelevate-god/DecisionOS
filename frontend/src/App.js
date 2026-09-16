@@ -20,7 +20,6 @@ import Workflows from "./pages/Workflows";
 // /inbox-legacy now redirects to /inbox so any lingering bookmarks work.
 import Desk from "./pages/Desk";
 import Brain from "./pages/Brain";
-import People from "./pages/People";
 // Epic 2 Sprint A — E2-01 / E2-02: dedicated CRM (customers + suppliers) and
 // Team (employees) pages replace the tabbed /contacts People surface.
 import CRM from "./pages/CRM";
@@ -259,7 +258,8 @@ function App() {
                 Founder ask: 'people section can be show to all the people
                 but as view and owner and given access to people only has
                 the edit section, other will have the view section'. */}
-            <Route path="/people" element={<Protected><People /></Protected>} />
+            {/* RBAC P2 (2026-09-16): the old People page duplicated Team; old links land there. */}
+            <Route path="/people" element={<Navigate to="/team" replace />} />
             {/* MPWA-04: component harness, development only. */}
             {process.env.NODE_ENV !== "production" && (
               <Route path="/__mobile-kit" element={<Protected><MobileKitchenSink /></Protected>} />

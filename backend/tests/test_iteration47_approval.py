@@ -125,9 +125,13 @@ class TestApprovalFlow:
         r = sales.post(f"{API}/tasks/{tid}/approve", timeout=10)
         assert r.status_code == 403
 
-        # finance CAN approve (has approvals perm, no approver_id set)
+        # 2026-09-15: nobody picked -> the owner (who has no manager) is named, so
+        # finance's approvals access no longer lets them approve it; the owner does.
+        assert t["approver_id"] == umap[OWNER[0]]["id"]
         finance = _login(*FIN)
         r = finance.post(f"{API}/tasks/{tid}/approve", timeout=10)
+        assert r.status_code == 403
+        r = owner.post(f"{API}/tasks/{tid}/approve", timeout=10)
         assert r.status_code == 200, r.text
         j = r.json()
         assert j["approval_status"] == "approved"

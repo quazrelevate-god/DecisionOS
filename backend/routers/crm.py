@@ -111,10 +111,10 @@ async def outstanding_by_contact(user: dict = Depends(get_current_user)):
 async def log_activity_for_contact(
     contact_id: str,
     inp: ActivityInput,
-    user: dict = Depends(require_role("owner", "sales")),
+    user: dict = Depends(require_perm("people")),
 ):
-    """Log a manual CRM activity against a contact. Owner + sales only
-    (write path). Reads are open to anyone with `finance` perm since the
+    """Log a manual CRM activity against a contact. Anyone with People access
+    (write path; RBAC P1 2026-09-15 — was the owner/sales role names). Reads are open to anyone with `finance` perm since the
     360 profile is Owner/Finance-only anyway (E2-08 spec)."""
     tid = user["tenant_id"]
     contact = await db.contacts.find_one(

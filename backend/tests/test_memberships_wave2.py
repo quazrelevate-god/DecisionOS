@@ -486,7 +486,11 @@ class TestGetCurrentUserResolvesMembership:
         import inspect as _inspect
         import core
         src = _inspect.getsource(core.get_current_user)
-        assert 'user.get("tenant_id") == claimed_tenant' in src
+        # 2026-09-15: moved into membership.legacy_access_allowed (tenant-matched,
+        # and never for someone with a membership row there).
+        assert "_legacy_access_allowed(db, user, claimed_tenant)" in src
+        from services.auth.membership import legacy_access_allowed
+        assert 'user.get("tenant_id") == tenant_id' in _inspect.getsource(legacy_access_allowed)
 
 
 # ===========================================================================

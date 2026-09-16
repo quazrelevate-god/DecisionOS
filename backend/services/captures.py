@@ -264,9 +264,16 @@ async def execute_capture(d: dict, user: dict):
             await db.decisions.update_one({"id": decision_id, "tenant_id": tenant_id}, {"$set": {"proposal.tasks": proposal["tasks"]}})
         # ...and approving the capture approves the decision through the one
         # approve path (ASK-32 1.8): it creates the work, writes the timeline,
-        # moves procurement and records the outcome. The reviewer was already
-        # authorised by POST /captures/{id}/approve.
-        from services.decision_flow import approve_decision_flow
+        # moves procurement and records the outcome — but only when the reviewer
+        # may decide it. RBAC P0 (2026-09-15): "Approve tasks" used to approve
+        # the decision too, skipping its named decider and Approve decisions.
+        # Otherwise the decision waits for the person it names, who is told.
+        from services.decision_flow import approve_decision_flow, can_decide, notify_decision_waiting
+        dec = await db.decisions.find_one({"id": decision_id, "tenant_id": tenant_id}, {"_id": 0})
+        if dec and not can_decide(user, dec):
+            await db.voice_notes.update_one({"id": note_id, "tenant_id": tenant_id}, {"$set": {"review_approved": False}})
+            await notify_decision_waiting(tenant_id, dec, sender_name=user.get("name"))
+            return {"type": "decision", "id": decision_id, "waiting_on": dec.get("approver_id")}
         await approve_decision_flow(user, decision_id, authorized=True)
     return {"type": "decision", "id": decision_id,
             **({"nothing_to_decide": True} if (vn or {}).get("outcome") == "nothing_to_decide" else {})}

@@ -507,13 +507,15 @@ async def login(inp: LoginInput, request: Request, response: Response):
         resolve_login_choices as _choices,
         find_membership as _find_m,
         LIVE_STATUSES as _LIVE,
+        legacy_access_allowed as _legacy_ok,
     )
     choices = await _choices(db, user["id"])
     # Fallback: pre-migration users may not have a memberships row yet
     # (backfill runs at bootstrap but a race is possible). Fall through
-    # to the legacy user.tenant_id/role so nobody is locked out.
+    # to the legacy user.tenant_id/role so nobody is locked out — except
+    # someone removed from that workspace (2026-09-15).
     if not choices:
-        if user.get("tenant_id") and user.get("role"):
+        if user.get("tenant_id") and await _legacy_ok(db, user, user["tenant_id"]):
             tenant_id = user["tenant_id"]
             role = user["role"]
         else:

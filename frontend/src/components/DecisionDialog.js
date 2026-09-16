@@ -636,6 +636,21 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
                     </ol>
                   </Card>
 
+                  {/* ASK-34 item 3 — NOT WHEN YOU RAISED IT YOURSELF.
+                      ASK-32 Phase 3 built this as the approver's way back to
+                      the person who RAISED the decision: a question about what
+                      they meant, before signing it off. When an owner captures
+                      through Dex they are both ends of that line, so the card
+                      offered to send a note from them to themselves — and the
+                      backend agrees it is not a message: comment_decision
+                      (routers/decisions.py) builds its recipients as
+                      `[p for p in participants if p != user["id"]]`, so a note
+                      to yourself notifies nobody. Hidden, not disabled: there
+                      is nothing here to do. Left EXACTLY as it was whenever
+                      someone else raised it — that is the case it exists for,
+                      and it works. This is not about task assignees; ASK-32
+                      2.3 already tells them on approval. */}
+                  {d.created_by !== user?.id && (
                   <Card label="Send a note" right={`To ${d.created_by_name || "creator"}`} testid="decision-note-section">
                     <textarea
                       value={note}
@@ -670,6 +685,7 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
                     </div>
                     <p className="mt-2 text-xs text-slate-500">Or tap the mic — speaking is faster than typing.</p>
                   </Card>
+                  )}
                   {/* ASK-32 Phase 3 — on a phone the work to check comes first; the history follows it. */}
                   <div className="lg:hidden">{historyCard("-m")}</div>
                 </div>

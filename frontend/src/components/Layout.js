@@ -114,6 +114,28 @@ const NAV = [
 // uses the whole width, the founder's reference drawn edge to edge.
 const WIDE_ROUTES = ["/my-work", "/team"];
 
+/* ASK-34 item 6 — /inbox BREATHES ON A WIDE MONITOR, and only /inbox.
+   The Desk is composed as ONE TRACK: the greeting, the score row, the Dex
+   well, the KPI tiles and the black board all share the same left and right
+   edges (the board's column formula is the hero's left column re-derived, see
+   Desk.js). So the width has to be given to the track, never to the board —
+   widening the black card alone would push its edges past the well and the
+   tiles it lines up with. That means giving it HERE, on the shell that carries
+   every one of them, not in the page.
+   Measured at 1920 (UI-SCALE puts the app at a 1600px CSS viewport there): the
+   1400 cap left 200 CSS px of empty page, and with the content wrapper's own
+   2rem the board's edge sat 158 device px in from the screen. It reads boxed
+   in. This is deliberately NOT a bigger number for everyone — MW-18 is the
+   record of what happened last time a global container moved, and every other
+   page is still composed against 1400.
+   A pixel cap AND a percentage, because either alone fails at one end: the
+   percentage keeps a real gutter at 1536 where a flat 1640 would be inert and
+   the board would run to the padding, and the pixel cap stops the track
+   sprawling on a 2560 monitor. `2xl` only — `sm`/`md` are banned inside
+   .app-shell (tailwind.config.js) and `xl` fires at 1280, where 1400 is
+   already more width than the viewport has. */
+const DESK_WIDE = "2xl:max-w-[min(1640px,94%)]";
+
 export default function Layout({ children }) {
   const { user, tenant, logout } = useAuth();
   const { t } = useTranslation();
@@ -717,7 +739,8 @@ export default function Layout({ children }) {
           designed for. */}
       <div className={cn(
         "flex min-h-0 flex-1 flex-col min-w-0 app-shell lg:w-full lg:mx-auto",
-        !WIDE_ROUTES.some((p) => location.pathname.startsWith(p)) && "lg:max-w-[1400px]"
+        !WIDE_ROUTES.some((p) => location.pathname.startsWith(p)) && "lg:max-w-[1400px]",
+        location.pathname.startsWith("/inbox") && DESK_WIDE
       )}>
         {/* Mobile top app bar — MPWA-03.
             Two controls, not four; min-h + top inset so nothing sits under the

@@ -39,6 +39,8 @@ import { useDexCapture } from "../../hooks/useDexCapture";
 import { useDexConversation } from "../../hooks/useDexConversation";
 import { InsightWell } from "../../components/karma";
 import { DexWave } from "../../components/mobile/DexWave";
+// ASK-34 item 5 — the same picture the founder met at signup (BuildReveal).
+import { DexForge } from "../onboarding/DexForge";
 
 // A capture lands in several caches at once — the same set Layout refreshes
 // after the phone's Dex (refreshAfterCapture).
@@ -67,6 +69,64 @@ const prefersReducedMotion = () =>
    horizontal overflow. */
 const CIRCLE =
   "kr-pop relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60 disabled:opacity-40";
+/* ASK-34 item 5 — DEX IS THINKING, AND IT LOOKS LIKE THE FORGE.
+   The expanded well showed the stages as text alone. DexForge is the picture
+   the founder already met once, at signup, while Dex built their company out
+   of what they had just said — the same moment, so the product reads as one
+   thing rather than two.
+   IT IS SCALED, NOT RESIZED. The forge was drawn as a full-page hero: a fixed
+   19rem bed with a 160px tile grid inside 12px of padding, so it cannot reflow
+   to a smaller box — and the box it gets here is whatever the expanded well has
+   left beside the stage list, which changes with the viewport and again with
+   the page's UI-SCALE zoom. So the space is MEASURED and the forge is scaled to
+   it. A transform costs no layout, which is the point: the forge can never
+   dictate the well's height or spill out of it. */
+const FORGE_W = 304;   // 19rem
+const FORGE_H = 184;   // h-40 grid + p-3 either side
+function ForgeStage({ label }) {
+  const boxRef = useRef(null);
+  const [scale, setScale] = useState(0);
+  useLayoutEffect(() => {
+    const el = boxRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    // offsetWidth/Height, not a rect: under UI-SCALE a rect is reported in
+    // visual px while the forge's own box is in CSS px (see measure(), below).
+    const fit = () => {
+      const s = Math.min(el.offsetWidth / FORGE_W, el.offsetHeight / FORGE_H, 1);
+      setScale(s > 0 && Number.isFinite(s) ? s : 0);
+    };
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    fit();
+    return () => ro.disconnect();
+  }, []);
+  return (
+    /* aria-hidden: the stages beside it already say what is happening, in the
+       live region, and a second announcement of the same moment is noise. */
+    <div
+      ref={boxRef}
+      data-testid="desk-dex-forge"
+      aria-hidden="true"
+      className="relative min-h-0 min-w-0 flex-1 overflow-hidden"
+    >
+      {/* CENTRED BY POSITION, NOT BY ALIGNMENT. The forge's unscaled box is
+          WIDER than the space it is given — that is the whole reason it is
+          being scaled — and an over-wide grid item is clamped to the start of
+          its area rather than centred, so `place-items-center` hung it 44px
+          off to the right and the bed was clipped at the well's edge.
+          left/top 50% puts its corner on the centre, translate(-50%,-50%)
+          moves its own centre there, and the scale then runs about that same
+          point. */}
+      <div
+        className="absolute left-1/2 top-1/2 transition-opacity duration-300"
+        style={{ width: FORGE_W, transform: `translate(-50%, -50%) scale(${scale})`, opacity: scale ? 1 : 0 }}
+      >
+        <DexForge label={label} />
+      </div>
+    </div>
+  );
+}
+
 /** One attached file: a preview (the image itself, or a file glyph), its name,
  *  and a remove. Removing only drops it from the next note; the upload stays
  *  in files, as it always has. */
@@ -163,22 +223,23 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
      half of "Tell Suresh to ship the indigo lot before Friday"). Measured from
      the field's own line height and padding, so the phone's 16px text and the
      desktop's 14px both land on exactly two lines; past that it scrolls inside
-     itself. The pill grows with it and rounds less, so its ends do not clip
-     the text. */
+     itself.
+     ASK-34 item 1 — the pill stays FULLY ROUNDED as it grows. It used to drop
+     to a 22px radius at two lines, on the fear that a 999px end would clip the
+     text; measured, it does not. At 68px tall each end is a 34px arc, the text
+     sits 10px in from the top and the arc is only 9.9px in at that height —
+     the px-4 padding clears it by 6px. */
   const fieldRef = useRef(null);
-  const [twoLines, setTwoLines] = useState(false);
   useLayoutEffect(() => {
     const el = fieldRef.current;
-    if (!el) { setTwoLines(false); return; }
+    if (!el) return;
     const cs = getComputedStyle(el);
     const line = parseFloat(cs.lineHeight) || 20;
     const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
     el.style.height = "auto";
     const max = Math.round(line * 2 + pad);
-    const next = Math.min(el.scrollHeight, max);
-    el.style.height = `${next}px`;
+    el.style.height = `${Math.min(el.scrollHeight, max)}px`;
     el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
-    setTwoLines(next > line + pad + 1);
   }, [chat.draft, recording]);
 
   /* The decision exists once the note is structured, not when it is sent, so
@@ -564,29 +625,44 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
   const shownSteps = ["sending", ...steps];
   const body = growing ? (
     <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-y-auto animate-in fade-in-0 duration-300 motion-reduce:animate-none" aria-live="polite">
-      {outcome ? outcomeView : (<>
-      {sentText && (
-        <p className="line-clamp-3 text-[15px] leading-snug text-foreground">&ldquo;{sentText}&rdquo;</p>
+      {outcome ? outcomeView : (
+      /* ASK-34 item 5 — TWO COLUMNS, NOT ONE LAYER OVER ANOTHER. The stages
+         keep the left, left-aligned, exactly as they were; the forge takes the
+         space beside them and is centred in it, with a 24px trough between so
+         neither crowds the other. It is drawn only while Dex is reading — the
+         branch it sits in is the one an outcome replaces, so it leaves the
+         instant a result arrives. Under prefers-reduced-motion it is not drawn
+         at all and the stage text stands alone. */
+      <div className="flex min-h-0 flex-1 gap-6">
+        {/* Half each. The forge is WIDTH-bound at this size — measured, the
+            box it gets is wider than 304 only past 2xl — so every pixel the
+            stages do not need is a pixel it draws with. */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          {sentText && (
+            <p className="line-clamp-3 text-[15px] leading-snug text-foreground">&ldquo;{sentText}&rdquo;</p>
+          )}
+          <ol className="mt-4 space-y-2.5" aria-label="What Dex is doing">
+            {shownSteps.map((s, i) => {
+              const current = i === shownSteps.length - 1;
+              return (
+                <li key={s} className={cn("flex items-center gap-2.5 text-sm", current ? "font-medium text-foreground" : "text-foreground/55")}>
+                  {current ? (
+                    <span aria-hidden="true" className="relative grid h-4 w-4 shrink-0 place-items-center">
+                      <span className="absolute inset-0 animate-ping rounded-full bg-kr-ink/20 motion-reduce:animate-none" />
+                      <span className="h-2 w-2 rounded-full bg-kr-ink" />
+                    </span>
+                  ) : (
+                    <Check size={14} weight="bold" aria-hidden="true" className="shrink-0" />
+                  )}
+                  {STEP_LABEL[s] || s}
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+        {!prefersReducedMotion() && <ForgeStage label="Dex is building what you decided" />}
+      </div>
       )}
-      <ol className="mt-4 space-y-2.5" aria-label="What Dex is doing">
-        {shownSteps.map((s, i) => {
-          const current = i === shownSteps.length - 1;
-          return (
-            <li key={s} className={cn("flex items-center gap-2.5 text-sm", current ? "font-medium text-foreground" : "text-foreground/55")}>
-              {current ? (
-                <span aria-hidden="true" className="relative grid h-4 w-4 shrink-0 place-items-center">
-                  <span className="absolute inset-0 animate-ping rounded-full bg-kr-ink/20 motion-reduce:animate-none" />
-                  <span className="h-2 w-2 rounded-full bg-kr-ink" />
-                </span>
-              ) : (
-                <Check size={14} weight="bold" aria-hidden="true" className="shrink-0" />
-              )}
-              {STEP_LABEL[s] || s}
-            </li>
-          );
-        })}
-      </ol>
-      </>)}
     </div>
   ) : null;
 
@@ -613,9 +689,21 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
 
       {/* THE FIELD IS SUNKEN. It wore .kr-pop, inherited from the "Chase it"
           button it replaced — and KM-62 / KM-65 keep that raised recipe for
-          things you PRESS. An input is not a button, so it takes nm-inset, the
-          recipe every other field in the app wears (ui/input.jsx); the circles
-          either side stay raised, because they are pressed.
+          things you PRESS. An input is not a button, so the circles either
+          side stay raised and the field is pressed into the well.
+          ASK-34 items 1 and 2 — and the recipe is .nm-field, not .nm-inset.
+          nm-inset is a CONTAINER recipe: bg-nm-sunken, a flat grey step under
+          the canvas, which is why the pill read as a form control dropped on
+          the well rather than the old "Chase it" pill pressed into it.
+          .nm-field is the app's own field (pages/Settings.js, pages/Leave.js,
+          pages/MyWork.js): WHITE at 80%, a 1px inset hairline and a 2px inner
+          shadow off the top edge — white and concave at once, which is exactly
+          what was asked for. It also carries the app's OWN focus treatment
+          (index.css .nm-field:focus-within — ring-2 ring-neutral-900/25), so
+          the hand-rolled ring-kr-ink/60 goes: that was the black outline, and
+          it was black because it was written here instead of taken from the
+          recipe. Focus is not lost — NM-4 §5 still has its visible ring, in
+          the neutral every other field in the app uses.
           KM-53 — while transcribing it is read-only: the words arrive as a
           setDraft that would wipe anything typed in the gap. */}
       <div
@@ -625,11 +713,10 @@ export function DeskDexWell({ className, testid, growToRef, onExpandedChange, on
            44px below lg (index.css --control-h-sm), so the pill never sits
            shorter than its neighbours on a phone. */
         className={cn(
-          "nm-inset flex min-h-[var(--control-h-sm)] min-w-0 flex-1 items-center overflow-hidden focus-within:ring-2 focus-within:ring-kr-ink/60",
+          "nm-field flex min-h-[var(--control-h-sm)] min-w-0 flex-1 items-center overflow-hidden rounded-pill",
           // A fixed 40px while it draws the wave; as a field it takes the
-          // field's own height (one line or two) and rounds less at two.
-          recording ? "h-10" : "h-auto",
-          twoLines ? "rounded-[1.375rem]" : "rounded-pill"
+          // field's own height, one line or two.
+          recording ? "h-10" : "h-auto"
         )}
       >
         {!recording ? (

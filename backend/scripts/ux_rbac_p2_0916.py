@@ -13,7 +13,8 @@ Refuses to run unless the signed-in tenant carries the scratch marker "rbac".
                    currency on Business; "While you're away" hands approvals to Priya,
                    who then approves a task that names the owner; making someone an
                    owner asks in the app's own dialog; /people lands on Team.
-  Sales (desktop)  Language, Theme and the hand-over card in Settings; no AI-priority toggle.
+  Sales (desktop)  Language and the hand-over card in Settings, no Appearance card; no
+                   AI-priority toggle.
   Owner (phone)    the Workspace tab and its cards fit 390px.
 """
 import json
@@ -212,8 +213,11 @@ with sync_playwright() as pw:
     r = api(p, f"/tasks/{task_id}/approve", "POST")
     rec("delegate-approves", r["status"] == 200 and (r["body"] or {}).get("approval_status") == "approved", r["status"])
     p.goto(f"{BASE}/settings")
-    rec("teammate-language-theme-handover", wait_id(p, "settings-language-card", 20000) and wait_id(p, "settings-theme-card")
+    # The Appearance card went with the theme switch (ASK-33 Phase 5, 2eed722:
+    # the app is light-only), so Account is language, profile, password, hand-over.
+    rec("teammate-language-handover", wait_id(p, "settings-language-card", 20000)
         and wait_id(p, "settings-delegation-card"), "cards shown")
+    rec("no-theme-card", p.locator('[data-testid="settings-theme-card"]').count() == 0, "the app is light-only")
     p.goto(f"{BASE}/my-work")
     p.wait_for_timeout(3000)
     rec("no-ai-priority-for-teammate", p.locator('[data-testid="ai-priority-toggle"]').count() == 0, "toggle hidden")

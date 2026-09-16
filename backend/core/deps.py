@@ -108,6 +108,9 @@ async def get_current_user(
         # ...unless a membership row exists for this workspace (removed,
         # suspended, pending): then that row is the answer.
         if await _legacy_access_allowed(db, user, claimed_tenant):
+            # RBAC P2 (2026-09-16): an older account can hold someone's approvals too.
+            from services.delegation import acting_for as _legacy_acting_for
+            user["_acting_for"] = await _legacy_acting_for(db, claimed_tenant, user["id"])
             set_usage_tenant(user.get("tenant_id"))
             return user
         raise HTTPException(
@@ -141,6 +144,9 @@ async def get_current_user(
     # auto-routes to the delegate. Approval-routing sites (_can_approve_*,
     # push_notification of pending approvals) read user['_acting_as'].
     user["_acting_as"] = user.get("acting_as") or {}
+    # RBAC P2 (2026-09-16): whose approvals this person holds right now.
+    from services.delegation import acting_for as _acting_for
+    user["_acting_for"] = await _acting_for(db, claimed_tenant, user["id"])
     set_usage_tenant(user.get("tenant_id"))
     return user
 

@@ -106,12 +106,18 @@ def test_brain_export_owner_only_by_omission():
     assert "brain_export" in user_perms(_u("owner"))   # owner gets ALL keys
 
 
-def test_brain_export_absent_from_frontend_permissions_ui():
-    """No UI checkbox -> a tenant admin can't grant it; only the owner (who has
-    every key) or a direct API override can. Documents the by-omission design."""
-    if not _FRONTEND_PERMS.exists():
-        pytest.skip("frontend/src/lib/perms.js not present in this checkout")
-    assert "brain_export" not in _FRONTEND_PERMS.read_text(encoding="utf-8")
+def test_brain_export_toggle_is_owner_grantable_only():
+    """The toggle was left out so a tenant admin couldn't grant it. RBAC P0/P2
+    (2026-09-15/16): the server now refuses a non-owner giving access they don't
+    hold (routers.team._refuse_ungrantable), and no role default includes
+    brain_export — so the Team screen shows the toggle and only an owner (or
+    someone who already holds it) can hand it out."""
+    import inspect
+    import routers.team as team
+    if _FRONTEND_PERMS.exists():
+        assert "brain_export" in _FRONTEND_PERMS.read_text(encoding="utf-8")
+    src = inspect.getsource(team._refuse_ungrantable)
+    assert 'user.get("role") == "owner"' in src and "You can only give access you have yourself" in src
 
 
 # ---------------------------------------------------------------------------

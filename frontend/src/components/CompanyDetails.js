@@ -17,7 +17,6 @@ const FIELDS = [
   { key: "company_size", label: "Team size" },
   { key: "phone", label: "Company mobile" },
   { key: "region", label: "Region" },
-  { key: "currency", label: "Currency" },
   { key: "gst", label: "GST / Tax ID" },
   { key: "branches", label: "Branches" },
 ];
@@ -41,20 +40,18 @@ export function CompanyDetails() {
   // WE-02 (2026-08-16): workflows state removed. Pipeline editing lives
   // in the Operating Model editor (single source of truth).
   const [opTasks, setOpTasks] = useState([]);
-  const [approvalRules, setApprovalRules] = useState([]);
   const [osBusy, setOsBusy] = useState(false);
 
   useEffect(() => {
     if (!tenant) return;
     setForm({
       name: tenant.name || "", industry: tenant.industry || "", company_size: tenant.company_size || "",
-      phone: tenant.phone || "", region: tenant.region || "", currency: tenant.currency || "", gst: tenant.gst || "", branches: tenant.branches || "",
+      phone: tenant.phone || "", region: tenant.region || "", gst: tenant.gst || "", branches: tenant.branches || "",
     });
     setProducts((tenant.products || []).map((p) => ({ name: p.name || "", description: p.description || "", _key: uid() })));
     setRoles((tenant.roles || []).map((r) => ({ ...r })));
     // WE-02: setWorkflows removed.
     setOpTasks((tenant.operational_task_templates || []).map((t) => ({ title: t.title || "", category: t.category || "Other", _key: uid() })));
-    setApprovalRules((tenant.approval_rules || []).map((r) => ({ name: r.name || "", description: r.description || "", _key: uid() })));
   }, [tenant]);
 
   const setRoleLabel = (key, label) => setRoles((rs) => rs.map((r) => (r.key === key ? { ...r, label } : r)));
@@ -68,7 +65,7 @@ export function CompanyDetails() {
       setRoles((data.roles || []).map((r) => ({ ...r })));
       setRoleInput("");
       await refreshTenant();
-      toast.success(`Role "${label}" added`);
+      toast.success(`Team "${label}" added`);
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Couldn't add role");
     } finally { setRoleBusy(false); }
@@ -82,7 +79,7 @@ export function CompanyDetails() {
       const { data } = await api.patch(`/tenant/roles/${key}`, { label: l });
       setRoles((data.roles || []).map((r) => ({ ...r })));
       await refreshTenant();
-      toast.success("Role renamed");
+      toast.success("Team renamed");
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Couldn't rename role");
       setRoles((tenant?.roles || []).map((r) => ({ ...r })));
@@ -95,7 +92,7 @@ export function CompanyDetails() {
       const { data } = await api.delete(`/tenant/roles/${key}`);
       setRoles((data.roles || []).map((r) => ({ ...r })));
       await refreshTenant();
-      toast.success("Role deleted");
+      toast.success("Team deleted");
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Couldn't delete role");
     } finally { setRoleBusy(false); }
@@ -110,9 +107,6 @@ export function CompanyDetails() {
   const addOpTask = () => setOpTasks((t) => [...t, { title: "", category: "Other", _key: uid() }]);
   const setOpTaskField = (i, k, v) => setOpTasks((t) => t.map((it, idx) => (idx === i ? { ...it, [k]: v } : it)));
   const removeOpTask = (i) => setOpTasks((t) => t.filter((_, idx) => idx !== i));
-  const addRule = () => setApprovalRules((r) => [...r, { name: "", description: "", _key: uid() }]);
-  const setRuleField = (i, k, v) => setApprovalRules((r) => r.map((it, idx) => (idx === i ? { ...it, [k]: v } : it)));
-  const removeRule = (i) => setApprovalRules((r) => r.filter((_, idx) => idx !== i));
 
   const saveOs = async () => {
     setOsBusy(true);
@@ -121,8 +115,9 @@ export function CompanyDetails() {
         // WE-02: workflow_templates key removed (backend Pydantic
         // input no longer defines it; extra fields are silently
         // dropped on the server side).
+        // RBAC P1 (2026-09-15): free-text approval rules removed — nothing
+        // enforced them. Approvals live on each task and on workflow stages.
         operational_task_templates: opTasks.filter((t) => t.title.trim()),
-        approval_rules: approvalRules.filter((r) => r.name.trim()),
       });
       await refreshTenant();
       toast.success("Operating system updated");
@@ -229,10 +224,11 @@ export function CompanyDetails() {
       <div className="mt-4">
         <div className="flex items-center gap-2 mb-1">
           <UsersThree size={18} weight="bold" className="text-muted-foreground" />
-          <h3 className="font-medium">Team Roles</h3>
+          {/* RBAC P2 (2026-09-16): one name — "Team" — everywhere on screen. */}
+          <h3 className="font-medium">Teams</h3>
         </div>
         <p className="text-xs text-muted-foreground mb-2">
-          Owner is always present. {isOwner ? "Access sets what people in a role can open. " : ""}A role can't be deleted while members are still assigned to it — reassign them first.
+          Owner is always present. {isOwner ? "Access sets what people in a team can open. " : ""}A team can't be deleted while people are still in it — move them first. Currency is set in the Money tab.
         </p>
         <div className="space-y-2" data-testid="roles-manage-list">
           {roles.map((r) => (
@@ -242,7 +238,7 @@ export function CompanyDetails() {
                   onChange={(e) => setRoleLabel(r.key, e.target.value)}
                   onBlur={(e) => canManage && renameRole(r.key, e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } }}
-                  placeholder="Role name" />
+                  placeholder="Team name" />
                 <span className="label-mono text-muted-foreground shrink-0 hidden sm:inline">{r.key}</span>
                 {isOwner && (
                   <button type="button" onClick={() => setOpenRole(openRole === r.key ? null : r.key)} aria-expanded={openRole === r.key}
@@ -271,7 +267,7 @@ export function CompanyDetails() {
             <input data-testid="role-add-input" className={inp} value={roleInput} disabled={roleBusy}
               onChange={(e) => setRoleInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addRole(); } }}
-              placeholder="Add a role (e.g. Marketing)" />
+              placeholder="Add a team (e.g. Marketing)" />
             <button onClick={addRole} disabled={roleBusy || !roleInput.trim()} data-testid="role-add-button"
               className="flex items-center gap-1 border border-nm-edge/40 px-3 text-sm font-semibold uppercase hover:bg-accent transition-colors disabled:opacity-50">
               <Plus size={14} weight="bold" /> Add
@@ -292,9 +288,9 @@ export function CompanyDetails() {
                 different things. This section owns free-standing
                 task templates + org-wide approval rules; the new
                 name says that. */}
-            <h3 className="font-medium">Rules &amp; templates</h3>
+            <h3 className="font-medium">Task templates</h3>
           </div>
-          <p className="text-xs text-muted-foreground mb-3">Free-standing task templates and org-wide approval rules. Pipelines and per-stage rules live in the Operations tab.</p>
+          <p className="text-xs text-muted-foreground mb-3">Free-standing task templates. Approvals are set on each task (before work starts, or before it&rsquo;s marked done) and on workflow stages in the Operations tab.</p>
 
           {/* WE-02 (2026-08-16): "Workflows" list removed from this
               card. It was a free-text brainstorm list that never drove
@@ -322,25 +318,12 @@ export function CompanyDetails() {
           </div>
           <button onClick={addOpTask} data-testid="os-optask-add" className="mt-1.5 flex items-center gap-1 text-sm text-brand-blue font-semibold hover:underline"><Plus size={14} weight="bold" /> Add operational task</button>
 
-          <label className="label-mono text-muted-foreground flex items-center gap-1.5 mt-4"><ShieldCheck size={13} weight="bold" /> Approval rules</label>
-          <div className="space-y-2 mt-1.5" data-testid="os-rules-list">
-            {approvalRules.map((r, i) => (
-              <div key={r._key || i} className="border border-nm-edge/40 p-2" data-testid={`os-rule-${i}`}>
-                <div className="flex gap-2">
-                  <input data-testid={`os-rule-name-${i}`} className={inp} value={r.name} onChange={(e) => setRuleField(i, "name", e.target.value)} placeholder="Rule name" />
-                  <button onClick={() => removeRule(i)} data-testid={`os-rule-remove-${i}`} className="border border-nm-edge/40 p-2 hover:bg-kr-accent hover:text-white transition-colors shrink-0"><Trash size={14} weight="bold" /></button>
-                </div>
-                <input data-testid={`os-rule-desc-${i}`} className={`${inp} mt-2`} value={r.description} onChange={(e) => setRuleField(i, "description", e.target.value)} placeholder="When does it apply?" />
-              </div>
-            ))}
-          </div>
-          <button onClick={addRule} data-testid="os-rule-add" className="mt-1.5 flex items-center gap-1 text-sm text-brand-blue font-semibold hover:underline"><Plus size={14} weight="bold" /> Add approval rule</button>
 
           {/* U7-11.1: label the two SAVE buttons on this card by scope
               so owners know which changes each one commits. Was
               "Save operating system" + "Save changes" -- both vague. */}
           <button onClick={saveOs} disabled={osBusy} data-testid="os-save-button" className="mt-4 border border-nm-edge/40 px-4 py-2 text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50">
-            {osBusy ? "Saving…" : "Save rules & templates"}
+            {osBusy ? "Saving…" : "Save task templates"}
           </button>
         </div>
       )}
@@ -387,7 +370,7 @@ function RoleAccessEditor({ role, members, onSaved }) {
   return (
     <div className="mt-2 rounded-2xl bg-white/60 p-3 ring-1 ring-inset ring-slate-900/[0.06]" data-testid={`role-access-${role.key}`}>
       <p className="text-xs text-muted-foreground">
-        {inRole.length} {inRole.length === 1 ? "person" : "people"} in this role · {custom ? "custom access" : "built-in default"} · owners always have everything
+        {inRole.length} {inRole.length === 1 ? "person" : "people"} in this team · {custom ? "custom access" : "built-in default"} · owners always have everything
       </p>
       <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
         {PERMISSIONS.map((p) => {
@@ -407,7 +390,7 @@ function RoleAccessEditor({ role, members, onSaved }) {
           <input type="checkbox" checked={applyAll} onChange={(e) => setApplyAll(e.target.checked)} className="mt-0.5 accent-neutral-900"
             data-testid={`role-apply-all-${role.key}`} />
           <span>
-            Also make {ownAccess.length === 1 ? `${ownAccess[0].name}, who has their own access,` : `the ${ownAccess.length} people who have their own access`} follow this role
+            Also make {ownAccess.length === 1 ? `${ownAccess[0].name}, who has their own access,` : `the ${ownAccess.length} people who have their own access`} follow this team
           </span>
         </label>
       )}

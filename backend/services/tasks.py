@@ -276,12 +276,23 @@ FOLLOWUP_MANAGER_DAYS = 2
 FOLLOWUP_OWNER_DAYS = 4
 
 
-def followup_level(days_overdue: int) -> int:
+def followup_days(tenant: Optional[dict]) -> tuple:
+    """The company's escalation days as (manager, owner) — Settings › Operations ›
+    Overdue work, owner only. 2026-09-16 (RBAC P2): the 2 / 4 defaults were fixed
+    in code. The owner always hears after the manager."""
+    t = tenant or {}
+    manager = int(t.get("followup_manager_days") or FOLLOWUP_MANAGER_DAYS)
+    owner = int(t.get("followup_owner_days") or FOLLOWUP_OWNER_DAYS)
+    return manager, max(owner, manager + 1)
+
+
+def followup_level(days_overdue: int, manager_days: int = FOLLOWUP_MANAGER_DAYS,
+                   owner_days: int = FOLLOWUP_OWNER_DAYS) -> int:
     if days_overdue < 1:
         return 1
-    if days_overdue < FOLLOWUP_MANAGER_DAYS:
+    if days_overdue < manager_days:
         return 2
-    if days_overdue < FOLLOWUP_OWNER_DAYS:
+    if days_overdue < owner_days:
         return 3
     return 4
 
@@ -465,10 +476,13 @@ def task_list_query(user: dict, mine: bool = False, view: Optional[str] = None,
         if not status:
             q["status"] = {"$nin": ["done", "cancelled"]}
         if user.get("role") != "owner":
+            # RBAC P2 (2026-09-16): plus approvals handed to me while someone is away.
+            held = list(user.get("_acting_for") or [])
+            mine_q = {"$in": [uid, *held]} if held else uid
             if can_approve_any:
-                q["$or"] = [{"approver_id": uid}, {"approver_id": None}, {"approver_id": ""}]
+                q["$or"] = [{"approver_id": mine_q}, {"approver_id": None}, {"approver_id": ""}]
             else:
-                q["approver_id"] = uid
+                q["approver_id"] = mine_q
         return q
     if view == "team":
         ids = [i for i in (team_ids or []) if i]

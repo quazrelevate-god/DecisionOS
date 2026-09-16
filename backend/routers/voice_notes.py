@@ -88,6 +88,10 @@ async def transcribe_only(file: UploadFile = File(...), language: str = Form("au
     reboot) instead of the shared UPLOAD_DIR avoids polluting the
     tenant-scoped upload namespace with throwaway files.
     """
+    # RBAC P2 (2026-09-16): dictation feeds Ask or a capture, so it needs one of those.
+    from core import user_perms
+    if user.get("role") != "owner" and not ({"ask", "voice_capture"} & user_perms(user)):
+        raise HTTPException(status_code=403, detail="Dictation needs Ask AI or Voice capture. Ask an owner.")
     import tempfile
     ext = (file.filename or "audio.webm").split(".")[-1]
     data = await file.read()

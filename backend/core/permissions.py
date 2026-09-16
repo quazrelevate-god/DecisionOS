@@ -57,8 +57,10 @@ def user_perms(user: dict) -> set:
     else:
         # 2. Explicit per-user override wins over any role default.
         p = user.get("permissions")
-        if isinstance(p, list) and len(p) > 0:
-            base = {k for k in p if k in PERMISSION_KEYS}
+        # 2026-09-15: `permissions_custom` marks a deliberate own list, so an
+        # empty one means "No access" rather than "use the role's access".
+        if user.get("permissions_custom") or (isinstance(p, list) and len(p) > 0):
+            base = {k for k in (p or []) if k in PERMISSION_KEYS}
         else:
             # 3. Tenant-level role permissions.
             role_map = user.get("_role_perms_map") or {}

@@ -1559,7 +1559,11 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
   const cancelledRef = useRef(false);
   const proofAtts = (t.attachments || []).filter((a) => a.kind !== "reference");
   const hasEvidence = proofAtts.length > 0;
-  const canApprove = t.approval_required && (user?.role === "owner" || user?.id === t.approver_id || (!t.approver_id && userPerms(user).includes("approvals")));
+  // RBAC P1 (2026-09-15): nobody approves their own work (owners exempt) — the server's rule.
+  const ownWork = user?.role !== "owner" && [t.assignee_id, t.created_by, ...(t.co_assignee_ids || [])].includes(user?.id);
+  const canApprove = t.approval_required && !ownWork && (user?.role === "owner" || user?.id === t.approver_id
+    || (user?._acting_for || []).includes(t.approver_id) // RBAC P2: handed to me while they're away
+    || (!t.approver_id && userPerms(user).includes("approvals")));
   // ASK-28 TK-05 — when the approval happens. Before work starts locks the work
   // until approved; before it's marked done leaves the work open and waits
   // only once the doer completes it (status Under review, approval pending).
@@ -3185,7 +3189,10 @@ export default function MyWork() {
   const mine = !(canSeeAll && scope === "all");
   // AI priority ranks the work YOU have to do; Asked by me and My team are
   // other people's work, so the ranking and its columns are off there.
-  const aiOn = aiPriority && !asked && !team;
+  // RBAC P2 (2026-09-16): scoring runs AI for the whole list, so it's for owners
+  // and Manage team (the server's rule); the toggle no longer shows then fails.
+  const canPrioritize = user?.role === "owner" || userPerms(user).includes("team_manage");
+  const aiOn = canPrioritize && aiPriority && !asked && !team;
   // ASK-24 — with Person set, every card would repeat the same name.
   const showAssignee = ((canSeeAll && scope === "all") || team) && !personFilter;
   const tasksQ = useQuery({
@@ -3610,7 +3617,7 @@ export default function MyWork() {
               — reorder it, filter it — sit together, in the same shape, in
               the same place. */}
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
-            {inSegmentView && (
+            {inSegmentView && canPrioritize && (
               <button type="button" onClick={() => { setAiPriority((v) => !v); setView("mywork"); }}
                 aria-pressed={aiPriority} data-testid="work-mobile-priority"
                 aria-label={aiPriority ? t("mywork.ai_priority_on", "AI priority on") : t("mywork.ai_priority", "AI priority")}
@@ -3859,7 +3866,7 @@ export default function MyWork() {
             }
             return (
               <div className="flex flex-wrap items-center gap-2.5" data-testid="mywork-lens-group">
-                {view === "mywork" && !asked && !team && (
+                {view === "mywork" && !asked && !team && canPrioritize && (
                   <button onClick={() => setAiPriority((v) => !v)} data-testid="ai-priority-toggle"
                     aria-pressed={aiPriority}
                     aria-label={aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
@@ -3928,7 +3935,9 @@ export default function MyWork() {
             // The same rule as tasks.py's _can_approve_task, mirrored so the
             // Desk's count, this list and the card's buttons all agree.
             const canApproveTask = (t) =>
-              isOwner || (t.approver_id ? user?.id === t.approver_id : userPerms(user).includes("approvals"));
+              isOwner || (![t.assignee_id, t.created_by, ...(t.co_assignee_ids || [])].includes(user?.id)
+                && (t.approver_id ? (user?.id === t.approver_id || (user?._acting_for || []).includes(t.approver_id))
+                  : userPerms(user).includes("approvals")));
             // ASK-28 TK-02 — oldest request first: whoever has waited longest
             // to start is the one to unblock next.
             const apprAll = (Array.isArray(apprTasksQ.data) ? apprTasksQ.data : [])
@@ -4064,7 +4073,7 @@ export default function MyWork() {
               They sat in the fixed header region above the scroller, so with
               AI priority on they took ~150px of a phone's height away from the
               list for as long as you stayed. Captions and behaviour unchanged. */}
-          {inSegmentView && aiPriority && (
+          {inSegmentView && aiPriority && canPrioritize && (
             <div className="mb-3 flex flex-col gap-2 lg:hidden" data-testid="work-mobile-lenses">
               <div>
                 <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-foreground/70">

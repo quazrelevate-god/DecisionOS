@@ -193,6 +193,19 @@ async def update_tenant_settings(inp: TenantSettingsInput, user: dict = Depends(
         updates["require_owner_signoff"] = bool(inp.require_owner_signoff)
     if inp.currency is not None:
         updates["currency"] = inp.currency.strip().upper()
+    # RBAC P2 (2026-09-16): overdue work escalation days and owner alert emails.
+    if inp.followup_manager_days is not None or inp.followup_owner_days is not None:
+        cur = await db.tenants.find_one({"id": user["tenant_id"]},
+                                        {"_id": 0, "followup_manager_days": 1, "followup_owner_days": 1}) or {}
+        manager = inp.followup_manager_days if inp.followup_manager_days is not None else (cur.get("followup_manager_days") or 2)
+        owner = inp.followup_owner_days if inp.followup_owner_days is not None else (cur.get("followup_owner_days") or 4)
+        if not (1 <= manager <= 30 and 1 <= owner <= 60):
+            raise HTTPException(status_code=400, detail="Use 1 to 30 days for the manager and 1 to 60 for the owner")
+        if owner <= manager:
+            raise HTTPException(status_code=400, detail="The owner should hear after the manager — give the owner more days")
+        updates["followup_manager_days"], updates["followup_owner_days"] = int(manager), int(owner)
+    if inp.owner_alert_email is not None:
+        updates["owner_alert_email"] = bool(inp.owner_alert_email)
     if not updates:
         raise HTTPException(status_code=400, detail="Nothing to update")
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": updates})
@@ -297,13 +310,14 @@ async def update_role_permissions(key: str, inp: RolePermissionsInput,
     members_updated = 0
     if inp.apply_to_members:
         res = await db.users.update_many(
-            {"tenant_id": user["tenant_id"], "role": key, "permissions": {"$nin": [[], None]}},
-            {"$set": {"permissions": [], "updated_at": now_iso()}},
+            {"tenant_id": user["tenant_id"], "role": key,
+             "$or": [{"permissions": {"$nin": [[], None]}}, {"permissions_custom": True}]},
+            {"$set": {"permissions": [], "permissions_custom": False, "updated_at": now_iso()}},
         )
         members_updated = getattr(res, "modified_count", 0)
         await db.memberships.update_many(
             {"tenant_id": user["tenant_id"], "role": key},
-            {"$set": {"permissions": [], "updated_at": now_iso()}},
+            {"$set": {"permissions": [], "permissions_custom": False, "updated_at": now_iso()}},
         )
     await log_activity(
         user["tenant_id"], user["id"], "role_permissions_updated",
@@ -384,7 +398,9 @@ async def revoke_ai_consent(request: Request,
         raise HTTPException(status_code=400, detail="No active AI consent to revoke")
     await db.tenants.update_one(
         {"id": user["tenant_id"]},
-        {"$set": _consent.build_revoke_patch(), "updated_at": now_iso()},
+        # 2026-09-16: updated_at sat outside $set, so Mongo refused every revoke
+        # ("Unknown modifier: updated_at") — turning AI off always failed with a 500.
+        {"$set": {**_consent.build_revoke_patch(), "updated_at": now_iso()}},
     )
     _ctx = _audit.context_from(request, user)
     await _audit.record(
@@ -525,6 +541,37 @@ async def delete_tenant_ai_key(provider: str, request: Request,
     return {"providers": summarize_tenant_ai_keys(tenant)}
 
 
+from models.tenant import TenantAIKeyInput  # noqa: E402
+
+
+@router.patch("/tenant/ai-keys/{provider}")
+async def set_tenant_ai_key(provider: str, inp: TenantAIKeyInput, request: Request,
+                            user: dict = Depends(require_role("owner"))):
+    """Owner-only: set or rotate ONE provider's key and keep the others.
+    2026-09-16 (RBAC P2): PUT replaces the whole map, and Settings only ever
+    sees the other keys masked, so it could not send them back."""
+    from services.tenant_ai_keys import CUSTOMIZABLE_PROVIDERS, normalize_ai_key_map, summarize_tenant_ai_keys
+    from services import audit_log as _audit
+    if provider not in CUSTOMIZABLE_PROVIDERS:
+        raise HTTPException(status_code=400, detail=f"Unknown provider {provider!r}")
+    key = (inp.key or "").strip()
+    if len(key) < 8:
+        raise HTTPException(status_code=400, detail="Paste the full key")
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "ai_keys": 1})
+    keys = dict((tenant or {}).get("ai_keys") or {})
+    had_it = bool((keys.get(provider) or "").strip()) if isinstance(keys.get(provider), str) else False
+    keys[provider] = key
+    await db.tenants.update_one({"id": user["tenant_id"]},
+                                {"$set": {"ai_keys": normalize_ai_key_map(keys), "updated_at": now_iso()}})
+    _ctx = _audit.context_from(request, user)
+    await _audit.record(db, action="ai_key_updated", entity_type="tenant", entity_id=user["tenant_id"],
+                        meta={"provider": provider, "had_old": had_it, "has_new": True, "was_rotated": had_it}, **_ctx)
+    await log_activity(user["tenant_id"], user["id"], "ai_keys_updated",
+                       f"{user['name']} {'replaced' if had_it else 'added'} the company's {provider} key")
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    return {"providers": summarize_tenant_ai_keys(tenant)}
+
+
 # FIX-004-D (RBAC-15): owner exclusion list. Lets a tenant opt an
 # owner OUT of specific permissions. Solves the "co-founder with
 # everything EXCEPT finance visibility" ask that early-stage founders
@@ -543,6 +590,9 @@ async def update_owner_exclusions(inp: OwnerExclusionsInput, request: Request,
         {"id": user["tenant_id"]}, {"_id": 0, "owner_exclusions": 1},
     )
     excl = clean_perms(inp.exclusions)
+    # RBAC P2 (2026-09-16): excluding Manage team would leave nobody able to run the team.
+    if "team_manage" in excl:
+        raise HTTPException(status_code=400, detail="Owners always keep Manage team, or nobody could manage the team.")
     await db.tenants.update_one(
         {"id": user["tenant_id"]}, {"$set": {"owner_exclusions": excl}},
     )

@@ -41,9 +41,10 @@ async def _decision_participants(tenant_id: str, d: dict) -> set:
         ids.add(d["created_by"])
     if d.get("approver_id"):  # ASK-32: the person who has to decide can open it
         ids.add(d["approver_id"])
-    async for t in db.tasks.find({"decision_id": d["id"]}, {"_id": 0, "assignee_id": 1}):
+    async for t in db.tasks.find({"decision_id": d["id"]}, {"_id": 0, "assignee_id": 1, "co_assignee_ids": 1}):
         if t.get("assignee_id"):
             ids.add(t["assignee_id"])
+        ids.update(t.get("co_assignee_ids") or [])  # 2026-09-15: helpers are on it too
     return ids
 
 
@@ -61,6 +62,14 @@ async def list_decisions(status: Optional[str] = None, user: dict = Depends(get_
     q = {"tenant_id": user["tenant_id"]}
     if status:
         q["status"] = status
+    if user.get("role") != "owner":
+        # RBAC P1 (2026-09-15): only decisions this person can open — the same
+        # people get_decision lets in. Every title in the company was listed.
+        mine = [t["decision_id"] async for t in db.tasks.find(
+            {"tenant_id": user["tenant_id"], "decision_id": {"$nin": [None, ""]},
+             "$or": [{"assignee_id": user["id"]}, {"co_assignee_ids": user["id"]}]},
+            {"_id": 0, "decision_id": 1})]
+        q["$or"] = [{"created_by": user["id"]}, {"approver_id": user["id"]}, {"id": {"$in": mine}}]
     decisions = await db.decisions.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
     # FIX-003-B (S2-05): explicit tenant_id makes the defense-in-depth
     # filter unconditional even in the (unlikely) case where a decision
@@ -124,6 +133,10 @@ async def add_decision_task(decision_id: str, inp: TaskCreateInput, user: dict =
     d = await db.decisions.find_one({"id": decision_id, "tenant_id": user["tenant_id"]})
     if not d:
         raise HTTPException(status_code=404, detail="Not found")
+    # RBAC P1 (2026-09-15): only someone on the decision, or who may decide it.
+    from services.decision_flow import can_decide
+    if user["id"] not in await _decision_participants(user["tenant_id"], d) and not can_decide(user, d):
+        raise HTTPException(status_code=403, detail="You don't have access to this decision")
     troles = await tenant_role_keys(user["tenant_id"])
     assignee_id = inp.assignee_id
     role = inp.assignee_role if inp.assignee_role in troles else None
@@ -137,6 +150,10 @@ async def add_decision_task(decision_id: str, inp: TaskCreateInput, user: dict =
             assignee_id = None
         else:
             role = member["role"]
+    # RBAC P1 (2026-09-15): the same rule as New Task — work goes only to people
+    # (or the team) this person may give work to.
+    from routers.tasks import _check_assignable
+    await _check_assignable(user, assignee_id, role if (role and not assignee_id) else None)
     due = None
     if isinstance(inp.due_in_days, int):
         due = (datetime.now(timezone.utc) + timedelta(days=inp.due_in_days)).isoformat()

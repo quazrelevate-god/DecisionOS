@@ -18,6 +18,7 @@ class UserCreateInput(BaseModel):
     permissions: Optional[List[str]] = None
     reporting_manager_id: Optional[str] = None
     title: Optional[str] = None               # job title on the Team tree, e.g. "Sales Lead"
+    follow_role: Optional[bool] = None        # True: the role's access; False: their own list (empty = no access)
 
 
 class UserUpdateInput(BaseModel):
@@ -26,6 +27,9 @@ class UserUpdateInput(BaseModel):
     phone: Optional[str] = None
     reporting_manager_id: Optional[str] = None
     title: Optional[str] = None               # "" clears it
+    name: Optional[str] = None
+    email: Optional[str] = None               # owner only (it is how they sign in)
+    follow_role: Optional[bool] = None        # True: the role's access; False: their own list (empty = no access)
 
 
 class AttendanceInput(BaseModel):

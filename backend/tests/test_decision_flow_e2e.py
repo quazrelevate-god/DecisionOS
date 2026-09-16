@@ -77,6 +77,8 @@ STUBS = {"services.voice.ai_extract": fake_extract, "services.voice.transcribe_a
 async def _setup(db):
     await seed_tenant_and_users(db)
     await db.users.update_one({"id": "u-finance"}, {"$set": {"permissions": FIN["permissions"]}})
+    # Access is read from the membership, as when Finance signs in (2026-09-15).
+    await db.memberships.update_one({"user_id": "u-finance", "tenant_id": T}, {"$set": {"permissions": FIN["permissions"]}})
     from services.ai.generators import tenant_operating_model
     om = await tenant_operating_model(T)
     STATE["pipeline"] = om["pipelines"][0]["key"]

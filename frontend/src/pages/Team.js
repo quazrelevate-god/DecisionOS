@@ -131,6 +131,44 @@ function InviteLinkModal({ info, onClose }) {
   );
 }
 
+/* RBAC P1 (2026-09-15) — someone added with a password got no hand-off at all.
+   This is the message to pass on: where to sign in and with which email. The
+   password is never in it; the owner shares that separately. */
+function WelcomeModal({ info, company, onClose }) {
+  const login = `${window.location.origin}/login`;
+  const first = (info?.name || "").split(" ")[0];
+  const msg = info
+    ? `Hi ${first}, you've been added to ${company || "our company"} on DecisionOS. Sign in at ${login} with ${info.email}. `
+      + "I'll share your password separately. You can change it in Settings › Account after you sign in."
+    : "";
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(msg); toast.success("Welcome message copied"); }
+    catch { toast.error("Couldn't copy — select and copy manually"); }
+  };
+  return (
+    <Dialog open={!!info} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className={`max-w-md ${SHEET}`} data-testid="welcome-modal">
+        <SheetHead title={`Welcome ${first}`} onClose={onClose} closeTestid="welcome-close">
+          {info?.name} is added. Send them this so they know where to sign in.
+        </SheetHead>
+        <textarea readOnly value={msg} rows={5} data-testid="welcome-message" aria-label="Welcome message"
+          className={`${DRAWER_FIELD} min-h-28 resize-none text-sm leading-relaxed`} onFocus={(e) => e.target.select()} />
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={copy} data-testid="copy-welcome"
+            className={`flex h-11 flex-1 items-center justify-center gap-1.5 rounded-pill px-4 text-sm font-medium ${INK_PILL}`}>
+            <Copy size={15} weight="bold" aria-hidden="true" /> Copy message
+          </button>
+          <a href={`https://wa.me/?text=${encodeURIComponent(msg)}`} target="_blank" rel="noreferrer" data-testid="welcome-whatsapp-share"
+            className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
+            <WhatsappLogo size={16} weight="bold" aria-hidden="true" /> WhatsApp
+          </a>
+        </div>
+        <p className="text-xs text-neutral-500">The password isn&rsquo;t in the message. Tell them in person or on a call.</p>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 const MENU_PREVIEW = [
   { label: "Decision Desk", perm: "inbox" },
   { label: "CEO Brief", perm: null },
@@ -145,7 +183,7 @@ const MENU_PREVIEW = [
 /* Add a member, or edit one (`initial`). `defaultRole` pre-sets the team when
    the dialog opens from that team's branch; `defaultManagerId` pre-sets
    "Reports to" when it opens from a node in the desktop tree. */
-function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOptions, onSaved, onInvite, members = [], inviteAfterSave = false }) {
+function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOptions, onSaved, onInvite, onWelcome, members = [], inviteAfterSave = false }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const { user: me } = useAuth();
@@ -170,8 +208,9 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
       setForm({
         name: initial.name, email: initial.email, title: initial.title || "", password: "",
         phone: initial.phone || "", passwordless: false, role: initial.role,
-        permissions: Array.isArray(initial.permissions) && initial.permissions.length ? [...initial.permissions] : roleDefaultPerms(initial.role, roleOptions),
-        follow_role: !(Array.isArray(initial.permissions) && initial.permissions.length),
+        permissions: initial.permissions_custom || (Array.isArray(initial.permissions) && initial.permissions.length)
+          ? [...(initial.permissions || [])] : roleDefaultPerms(initial.role, roleOptions),
+        follow_role: !initial.permissions_custom && !(Array.isArray(initial.permissions) && initial.permissions.length),
         reporting_manager_id: initial.reporting_manager_id || "",
       });
     } else {
@@ -188,11 +227,17 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
   }));
   const togglePerm = (key) => setForm((f) => ({ ...f, permissions: f.permissions.includes(key) ? f.permissions.filter((k) => k !== key) : [...f.permissions, key] }));
 
-  const save = async () => {
+  const [ownerConfirm, setOwnerConfirm] = useState(null);
+  const save = async (confirmed = false) => {
     const promotingToOwner = form.role === "owner" && (!editing || initial.role !== "owner");
-    if (promotingToOwner && !window.confirm("This makes them a co-owner with FULL control of the company account — including managing team, finances and all data. Continue?")) return;
     const demotingOwner = editing && initial.role === "owner" && form.role !== "owner";
-    if (demotingOwner && !window.confirm(`Remove Owner access from ${initial.name}? They will lose full control. At least one owner must remain.`)) return;
+    // RBAC P2 (2026-09-16): the app's own dialog, not the browser's confirm box.
+    if ((promotingToOwner || demotingOwner) && confirmed !== true) {
+      setOwnerConfirm(promotingToOwner
+        ? { title: `Make ${form.name || "them"} an owner?`, body: "They get full control of the company account — the team, finances and all data.", action: "Make owner" }
+        : { title: `Remove owner access from ${initial.name}?`, body: "They lose full control. At least one owner must remain.", action: "Remove owner access" });
+      return;
+    }
     if (!editing) {
       if (!form.name.trim() || !form.email.trim()) { toast.error("Name and email are required"); return; }
       if (form.passwordless && form.phone.replace(/\D/g, "").length < 10) { toast.error("A valid mobile number is required for OTP login"); return; }
@@ -201,7 +246,11 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
     setBusy(true);
     try {
       if (editing) {
+        if (!form.name.trim()) { toast.error("Enter a name"); setBusy(false); return; }
         await api.patch(`/users/${initial.id}`, {
+          // RBAC P1 (2026-09-15): name can be corrected; email by an owner only.
+          name: form.name.trim(), ...(me?.role === "owner" ? { email: form.email.trim() } : {}),
+          follow_role: !!form.follow_role,
           role: form.role, permissions: form.follow_role ? [] : form.permissions, phone: form.phone,
           reporting_manager_id: form.reporting_manager_id, title: form.title.trim(),
         });
@@ -223,6 +272,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
       const base = {
         name: form.name, email: form.email, title: form.title.trim() || null, role: form.role,
         // An empty list means "the role's access" on the server.
+        follow_role: !!form.follow_role,
         permissions: form.follow_role ? [] : form.permissions, phone: form.phone, reporting_manager_id: form.reporting_manager_id || null,
       };
       const res = await api.post("/users", form.passwordless ? base : { ...base, password: form.password });
@@ -232,6 +282,8 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
       if (res?.data?.invite_token && onInvite) {
         const d = form.phone.replace(/\D/g, "");
         onInvite({ token: res.data.invite_token, name: form.name, phone_masked: d.length >= 4 ? "•••• " + d.slice(-4) : "••••" });
+      } else if (!form.passwordless && onWelcome) {
+        onWelcome({ name: form.name.trim(), email: form.email.trim().toLowerCase() });
       }
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Failed");
@@ -252,18 +304,19 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
 
         <div className="space-y-5">
           <section className="space-y-3">
-            {!editing && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Name" htmlFor="member-name">
-                  <input id="member-name" data-testid="member-name-input" className={NM_FIELD} placeholder="e.g. Priya Nair"
-                    value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-                </Field>
-                <Field label="Email" htmlFor="member-email">
-                  <input id="member-email" data-testid="member-email-input" className={NM_FIELD} type="email" placeholder="name@company.com"
-                    value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-                </Field>
-              </div>
-            )}
+            {/* RBAC P1 (2026-09-15): name and email show when editing too. Email is
+                how they sign in, so only an owner changes it. */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Name" htmlFor="member-name">
+                <input id="member-name" data-testid="member-name-input" className={NM_FIELD} placeholder="e.g. Priya Nair"
+                  value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </Field>
+              <Field label="Email" htmlFor="member-email">
+                <input id="member-email" data-testid="member-email-input" className={NM_FIELD} type="email" placeholder="name@company.com"
+                  disabled={editing && me?.role !== "owner"} title={editing && me?.role !== "owner" ? "Only an owner can change an email" : undefined}
+                  value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              </Field>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Job title" htmlFor="member-title">
                 <input id="member-title" data-testid="member-title-input" className={NM_FIELD} placeholder="e.g. Sales Lead" maxLength={80}
@@ -337,11 +390,13 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                       setForm((f) => ({ ...f, follow_role: follow, permissions: follow ? f.permissions : [...roleDefaultPerms(f.role, roleOptions)] }));
                     }} />
                   <span className="min-w-0 text-sm text-neutral-800">
-                    <span className="font-semibold">Use the {roleName(form.role)} role's access</span>
+                    <span className="font-semibold">Use the {roleName(form.role)} team's access</span>
                     <span className="mt-0.5 block text-xs text-neutral-500">
                       {form.follow_role
-                        ? "When the owner changes this role's access in Settings › Team roles, it reaches them too."
-                        : "Their own access, chosen below. Changes to the role won't reach them."}
+                        ? "When the owner changes this team's access in Settings › Teams, it reaches them too."
+                        : form.permissions.length
+                          ? "Their own access, chosen below. Changes to the team won't reach them."
+                          : "No access: they can sign in but can't open anything until you tick something."}
                     </span>
                   </span>
                 </label>
@@ -358,7 +413,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                       && (selfEdit || !rolePerms.includes(p.key));
                     return (
                       <button key={p.key} type="button" data-testid={`perm-${p.key}`} aria-pressed={on} disabled={locked || form.follow_role}
-                        title={form.follow_role ? "Set by the role — untick “Use the role’s access” to choose" : locked ? "Only an owner can give access you don't have" : undefined}
+                        title={form.follow_role ? "Set by the team — untick “Use the team’s access” to choose" : locked ? "Only an owner can give access you don't have" : undefined}
                         onClick={() => togglePerm(p.key)}
                         className={`flex min-h-11 items-center justify-between gap-2 rounded-2xl px-3.5 py-2 text-left text-[13px] transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 disabled:cursor-not-allowed disabled:opacity-45 ${on ? `${NM_PRESSED} font-semibold text-slate-900` : `${NM_RAISED} font-medium text-slate-600 hover:text-slate-900`}`}>
                         <span>{p.label}</span>
@@ -389,12 +444,27 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
           </section>
         </div>
 
+        {/* RBAC P2 (2026-09-16): the owner change is confirmed right here, above
+            the buttons — a second dialog stacked under this one. */}
+        {ownerConfirm && (
+          <div role="alertdialog" aria-labelledby="owner-confirm-title" aria-describedby="owner-confirm-body"
+            data-testid="owner-confirm" className={`space-y-3 px-4 py-4 ${DRAWER_CARD}`}>
+            <p id="owner-confirm-title" className="text-sm font-semibold text-neutral-900">{ownerConfirm.title}</p>
+            <p id="owner-confirm-body" className="text-xs leading-relaxed text-neutral-600">{ownerConfirm.body}</p>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" data-testid="owner-confirm-cancel" onClick={() => setOwnerConfirm(null)}
+                className={`h-10 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>Keep as is</button>
+              <button type="button" data-testid="owner-confirm-go" onClick={() => { setOwnerConfirm(null); save(true); }}
+                className={`h-10 rounded-pill px-4 text-sm font-medium ${INK_PILL}`}>{ownerConfirm.action}</button>
+            </div>
+          </div>
+        )}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={() => setOpen(false)} disabled={busy} data-testid="member-cancel"
             className={`h-11 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-shadow active:shadow-[inset_3px_3px_7px_hsl(226_18%_76%),inset_-3px_-3px_7px_hsl(0_0%_100%/0.95)] disabled:opacity-40 ${NM_RAISED}`}>
             Cancel
           </button>
-          <button type="button" data-testid="member-save-submit" onClick={save} disabled={busy}
+          <button type="button" data-testid="member-save-submit" onClick={() => save()} disabled={busy || !!ownerConfirm}
             className={`h-11 rounded-pill px-6 text-sm font-medium disabled:opacity-50 ${INK_PILL}`}>
             {busy ? "Saving…" : editing ? "Save" : "Add member"}
           </button>
@@ -538,6 +608,7 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
     [tenantRoles, isOwner],
   );
   const [invite, setInvite] = useState(null);
+  const [welcome, setWelcome] = useState(null);
   // U7-09.TEAM v2 (2026-08-17): the profile dialog every card opens.
   const [profileUser, setProfileUser] = useState(null);
   const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
@@ -648,7 +719,7 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
   );
   const renderAdd = canManageTeam
     ? (b) => (tenantRoles.some((r) => r.key === b.key) ? (
-      <MemberDialog roleOptions={roleOptions} members={members} defaultRole={b.key} onSaved={refresh} onInvite={setInvite}
+      <MemberDialog roleOptions={roleOptions} members={members} defaultRole={b.key} onSaved={refresh} onInvite={setInvite} onWelcome={setWelcome}
         trigger={<AddMemberTile data-testid={`team-add-${b.key}`} aria-label={`Add member to ${b.label}`} />} />
     ) : null)
     : null;
@@ -671,6 +742,7 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
   return (
     <div data-testid="team-panel">
       <InviteLinkModal info={invite} onClose={() => setInvite(null)} />
+      <WelcomeModal info={welcome} company={tenant?.name} onClose={() => setWelcome(null)} />
 
       <div className="mb-6 flex flex-col gap-6 lg:mb-8 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
         {title ? (
@@ -710,7 +782,7 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
             )}
           </div>
           {canManageTeam && (
-            <MemberDialog roleOptions={roleOptions} members={members} onSaved={refresh} onInvite={setInvite}
+            <MemberDialog roleOptions={roleOptions} members={members} onSaved={refresh} onInvite={setInvite} onWelcome={setWelcome}
               trigger={
                 <button type="button" data-testid="add-user-button"
                   className={`flex h-12 shrink-0 items-center gap-2 rounded-pill px-5 text-sm font-medium ${INK_PILL}`}>

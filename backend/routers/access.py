@@ -42,13 +42,10 @@ router = APIRouter(prefix="/api")
 
 
 def _is_active_now(from_iso: str, to_iso: str) -> bool:
-    """Inclusive window check. Empty ends mean 'no bound on that side'."""
-    now = datetime.now(timezone.utc).isoformat()
-    if from_iso and now < from_iso:
-        return False
-    if to_iso and now > to_iso + "T23:59:59+00:00":
-        return False
-    return True
+    """Inclusive window check. Empty ends mean 'no bound on that side'.
+    2026-09-16: the one rule in services.delegation (timezone-tolerant)."""
+    from services.delegation import is_active_now
+    return is_active_now({"delegate_user_id": "-", "from": from_iso or "", "to": to_iso or ""})
 
 
 async def resolve_delegate(tenant_id: str, user_id: str) -> Optional[str]:

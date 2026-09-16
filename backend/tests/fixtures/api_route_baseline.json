@@ -1,6 +1,6 @@
 {
-  "count": 328,
-  "sha": "7cb6a91a35b0c8c970b4b7324a6cbeaecfb929ebc86ddde91b86a68c7d2d9b00",
+  "count": 329,
+  "sha": "29c1678de3b2a562ed967103b70f7c11c1e655b5e4b5c0f69b8a0dc9c41c4a8d",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -181,6 +181,7 @@
     "PATCH /api/tasks/{task_id}",
     "PATCH /api/tasks/{task_id}/execution-plan",
     "PATCH /api/tenant",
+    "PATCH /api/tenant/ai-keys/{provider}",
     "PATCH /api/tenant/finance-categories",
     "PATCH /api/tenant/leave-approvers",
     "PATCH /api/tenant/lexicon",

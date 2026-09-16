@@ -176,8 +176,13 @@ async def _maybe_auto_invoice(tenant_id: str, actor_id: str,
 def _can_approve_task(user: dict, t: dict) -> bool:
     if user["role"] == "owner":
         return True
+    # RBAC P1 (Yokesh 2026-09-15): nobody approves their own work — the doer, a
+    # helper or the person who asked. Owners are exempt.
+    if user["id"] in (t.get("assignee_id"), t.get("created_by"), *(t.get("co_assignee_ids") or [])):
+        return False
     if t.get("approver_id"):
-        return user["id"] == t.get("approver_id")
+        # RBAC P2 (2026-09-16): or the approver handed their approvals to me while away.
+        return user["id"] == t.get("approver_id") or t.get("approver_id") in (user.get("_acting_for") or [])
     # No specific approver assigned → anyone granted the "approvals" access can approve.
     return "approvals" in user_perms(user)
 
@@ -189,20 +194,20 @@ async def _member_can_approve(tenant_id: str, member: dict) -> bool:
     include `approvals`."""
     if member.get("role") == "owner":
         return True
-    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "roles": 1})
-    role_map = {r["key"]: list(r["permissions"]) for r in ((tenant or {}).get("roles") or [])
-                if r.get("key") and isinstance(r.get("permissions"), list) and r.get("permissions")}
-    return "approvals" in user_perms({**member, "_role_perms_map": role_map})
+    # 2026-09-15 (RBAC P1): what they can really open — membership, role
+    # settings, temporary grants — not the bare user record.
+    from services.auth.membership import members_effective_perms
+    return "approvals" in (await members_effective_perms(db, tenant_id, [member])).get(member.get("id"), set())
 
 
-async def _default_task_approver(user: dict) -> Optional[str]:
+async def _default_task_approver(user: dict, on_task=frozenset()) -> Optional[str]:
     """Yokesh 2026-09-15 — a task that needs approval always names who approves.
     Nobody picked: the creator's reporting manager when the manager may approve
-    tasks, else the owner (the creator when they are an owner; with several
-    owners, the first one)."""
+    tasks and isn't on the task, else the owner (the creator when they are an
+    owner; with several owners, the first one)."""
     tid = user["tenant_id"]
     mid = user.get("reporting_manager_id")
-    if user.get("role") != "owner" and mid and mid != user["id"]:
+    if user.get("role") != "owner" and mid and mid != user["id"] and mid not in on_task:
         manager = await db.users.find_one({"id": mid, "tenant_id": tid},
                                           {"_id": 0, "id": 1, "role": 1, "permissions": 1})
         if manager and await _member_can_approve(tid, manager):
@@ -274,10 +279,13 @@ async def _resolve_task_handoff(user, t, task_id, action, text, step_text, inp):
         member = await db.users.find_one({"id": inp.to_id, "tenant_id": tenant_id}, {"_id": 0})
         if not member:
             raise HTTPException(status_code=404, detail="Team member not found")
+        # RBAC P2 (2026-09-16): a hand-off gives work, so it follows the assign rules.
+        await _check_assignable(user, member["id"])
         to_id, to_name, to_role = member["id"], member.get("name"), member.get("role")
     elif inp.to_role:
         if inp.to_role not in await tenant_role_keys(tenant_id):
             raise HTTPException(status_code=400, detail="Invalid role")
+        await _check_assignable(user, None, inp.to_role)
         to_role, to_name = inp.to_role, inp.to_role
     else:
         raise HTTPException(status_code=400, detail="Choose a person or team to hand off to")
@@ -517,6 +525,11 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
         approver = await db.users.find_one({"id": inp.approver_id, "tenant_id": user["tenant_id"]},
                                            {"_id": 0, "id": 1, "name": 1, "role": 1, "permissions": 1})
         if approver:
+            # RBAC P1 (2026-09-15): the approver can't be on the task (owners exempt).
+            if approver.get("role") != "owner" and approver["id"] in {user["id"], assignee_id, *co_ids}:
+                raise HTTPException(status_code=400, detail=(
+                    f"{approver.get('name') or 'That person'} is on this task, so they can't approve it. "
+                    "Pick someone else, or leave it to their manager."))
             if not await _member_can_approve(user["tenant_id"], approver):
                 raise HTTPException(status_code=400, detail=(
                     f"{approver.get('name') or 'That person'} can't approve tasks. Pick someone with approval "
@@ -525,7 +538,7 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
     progress = max(0, min(100, inp.progress)) if isinstance(inp.progress, int) else 0
     needs_approval = bool(inp.approval_required)
     if needs_approval and not approver_id:
-        approver_id = await _default_task_approver(user)
+        approver_id = await _default_task_approver(user, {user["id"], assignee_id, *co_ids} - {None})
     # ASK-28 TK-05: approval before work starts locks the task now; approval
     # before closing leaves it open to work and asks only when it is completed.
     stage = (inp.approval_stage if inp.approval_stage in APPROVAL_STAGES else "start") if needs_approval else None
@@ -849,20 +862,22 @@ async def _after_task_done(user: dict, t: dict, task_id: str) -> None:
 # Assignment
 # ---------------------------------------------------------------------------
 @router.post("/tasks/{task_id}/reassign")
-async def reassign_task(task_id: str, inp: TaskReassignInput, user: dict = Depends(require_perm("team_manage"))):
+async def reassign_task(task_id: str, inp: TaskReassignInput, user: dict = Depends(get_current_user)):
     """Change who a task is assigned to — a specific member or a whole role/team.
 
-    FIX-004-C (RBAC-07): decorator now requires team_manage permission.
-    Previously any employee could reassign any task (auth-only), which
-    let a disgruntled assignee dump their work back on the requester.
+    RBAC P2 (2026-09-16): the same people who may change who is on a task in
+    PATCH /tasks/{id} (item 7: the person who asked, the manager, Manage team,
+    the owner), then the assign rules. It used to need Manage team, with a
+    second rule that could never run.
     """
     from services.notifications import push_notification
-    perms = user_perms(user)
-    if not (user["role"] == "owner" or "team_manage" in perms or "decisions_approve" in perms):
-        raise HTTPException(status_code=403, detail="You can't reassign this task")
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]})
     if not t:
         raise HTTPException(status_code=404, detail="Not found")
+    if user.get("role") != "owner" and not task_edit_rights(user, t, await _team_ids(user), user_perms(user))["people"]:
+        raise HTTPException(status_code=403, detail=(
+            "Only the person who asked for it, the manager, someone with Manage Team or the owner "
+            "can change who is on this task."))
     # ASK-28 TK-06: a person chose where it goes now, not the least-busy rule.
     updates = {"updated_at": now_iso(), "last_action": "Reassigned", "auto_assigned": None}
     new_assignee_id = None

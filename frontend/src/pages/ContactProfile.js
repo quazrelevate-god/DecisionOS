@@ -111,7 +111,8 @@ export default function ContactProfile() {
   });
 
   // Epic 2 Sprint 1 (E2-08): CRM activity timeline.
-  const canWriteActivity = user?.role === "owner" || user?.role === "sales";
+  // RBAC P1 (2026-09-15): People access, not the role name (the server's rule).
+  const canWriteActivity = hasPerm(user, "people");
   const { data: activities } = useQuery({
     queryKey: ["crm-activity", id],
     queryFn: () => api.get(`/crm/activity/${id}`).then((r) => r.data),

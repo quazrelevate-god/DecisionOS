@@ -68,7 +68,9 @@ function buildTiles({ user, t, counts }) {
       perm: "people",
       blurb: "Buyers, suppliers, complaints",
     },
-    { key: "team", to: "/team", label: t("nav.team", "Team"), icon: UsersThree, size: "small", perm: "team_manage" },
+    // RBAC P1 (2026-09-15): /team is open to everyone (read-only without Manage
+    // team), so the tile is too — it hid the page from teammates on a phone.
+    { key: "team", to: "/team", label: t("nav.team", "Team"), icon: UsersThree, size: "small" },
     {
       key: "operating-score",
       to: "/operating-score",

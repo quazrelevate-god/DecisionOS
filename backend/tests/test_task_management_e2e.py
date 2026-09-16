@@ -188,10 +188,53 @@ def test_before_done_approver_who_completes_closes_directly(with_test_db):
     async def scenario(db):
         await _seed(db)
         with e2e_env(db, stubs=STUBS, keep=KEEP):
-            t = await _create(OWNER, title="Sign the supplier contract", assignee_id="u-fin",
-                              approval_required=True, approval_stage="close", approver_id="u-fin")
-            out = await tasks.update_task(t["id"], TaskUpdateInput(status="done"), user=FIN)
+            # 2026-09-15: only an owner approves their own work, so the owner does it here.
+            t = await _create(OWNER, title="Sign the supplier contract", assignee_id="u-owner",
+                              approval_required=True, approval_stage="close", approver_id="u-owner")
+            out = await tasks.update_task(t["id"], TaskUpdateInput(status="done"), user=OWNER)
             assert (out["status"], out["approval_status"]) == ("done", "approved")
+            return True
+    assert with_test_db(scenario) is True
+
+
+def test_nobody_approves_their_own_work_owners_exempt(with_test_db):
+    """RBAC P1 (Yokesh 2026-09-15): a non-owner can't approve a task they do,
+    help on or asked for — naming them is refused, the default skips them, and
+    older tasks that name them wait for someone else. Owners are exempt."""
+    async def scenario(db):
+        await _seed(db)
+        # Ravi reports to Sunita and may give work to anyone (so he can ask his manager).
+        ravi_perms = ["inbox", "tasks", "tasks_assign_any"]
+        await db.users.update_one({"id": "u-prod"}, {"$set": {"reporting_manager_id": "u-fin", "permissions": ravi_perms}})
+        prod = {**PROD, "reporting_manager_id": "u-fin", "permissions": ravi_perms}
+        with e2e_env(db, stubs=STUBS, keep=KEEP):
+            # Naming yourself, or the doer, is refused.
+            assert "on this task" in await _refused(_create(FIN, title="Pay myself back", assignee_id="u-fin",
+                                                            approval_required=True, approver_id="u-fin"), 400)
+            # Amit reports to Priya, so she may add him as a helper — but not name him approver.
+            assert "on this task" in await _refused(_create(SALES, title="Discount", assignee_id="u-sales",
+                                                            approval_required=True, approver_id="u-ops",
+                                                            co_assignee_ids=["u-ops"]), 400)
+            # The default skips a manager who is on the task: Ravi asks Sunita (his manager) -> the owner approves.
+            t = await _create(prod, title="Sunita checks the lot", assignee_id="u-fin", approval_required=True)
+            assert t["approver_id"] == "u-owner"
+
+            # An older task that names its own doer as approver: the doer can't approve it; the owner can.
+            await db.tasks.insert_one({"id": "old-1", "tenant_id": T, "title": "Old one", "assignee_id": "u-fin",
+                                       "created_by": "u-sales", "approval_required": True, "approval_stage": "start",
+                                       "approval_status": "pending", "approver_id": "u-fin", "status": "blocked",
+                                       "created_at": now_iso()})
+            await _refused(tasks.approve_task("old-1", user=FIN))
+            await tasks.approve_task("old-1", user=OWNER)
+            # Completing a "before done" task you'd approve yourself sends it for sign-off instead.
+            await db.tasks.insert_one({"id": "old-2", "tenant_id": T, "title": "Old close", "assignee_id": "u-fin",
+                                       "created_by": "u-owner", "approval_required": True, "approval_stage": "close",
+                                       "approver_id": "u-fin", "status": "in_progress", "created_at": now_iso()})
+            out = await tasks.update_task("old-2", TaskUpdateInput(status="done"), user=FIN)
+            assert (out["status"], out["approval_status"]) == ("review", "pending")
+            # The owner approves their own.
+            own = await _create(OWNER, title="Owner's own", assignee_id="u-owner", approval_required=True, approver_id="u-owner")
+            await tasks.approve_task(own["id"], user=OWNER)
             return True
     assert with_test_db(scenario) is True
 

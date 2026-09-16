@@ -373,9 +373,9 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
   // preview). So a "Workflows" stat here is always 0 — drop it and show the
   // three categories the blueprint actually produces.
   const counts = bp ? [
-    { n: (bp.departments || []).length, label: "Departments" },
+    { n: (bp.departments || []).length, label: "Teams" },
     { n: (bp.operational_tasks || []).length, label: "Recurring tasks" },
-    { n: (bp.approval_rules || []).length, label: "Approval rules" },
+    // RBAC P1 (2026-09-15): free-text approval rules are no longer shown — nothing enforced them.
   ] : [];
 
   // Kept reading `bp.workflows` deliberately, and it is expected to be empty:
@@ -439,9 +439,8 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
         .map(norm).filter((k) => k && !before.has(k))
     );
     const moved = new Set(
-      [["Departments", (prev.departments || []).length, (bp.departments || []).length],
-       ["Recurring tasks", (prev.operational_tasks || []).length, (bp.operational_tasks || []).length],
-       ["Approval rules", (prev.approval_rules || []).length, (bp.approval_rules || []).length]]
+      [["Teams", (prev.departments || []).length, (bp.departments || []).length],
+       ["Recurring tasks", (prev.operational_tasks || []).length, (bp.operational_tasks || []).length]]
         .filter(([, a, b]) => a !== b).map(([label]) => label)
     );
     if (!fresh.size && !moved.size) return undefined;
@@ -580,7 +579,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                 exactly its own size behind, so nothing reflows when it
                 arrives. */}
             <div className="relative" data-testid="build-counts">
-              <div className="grid grid-cols-3 gap-3 sm:gap-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 {counts.map((c, i) => (
                   <CountTile key={c.label} c={c} index={i} landed={i < placed}
                     settled={settled} still={still}
@@ -767,7 +766,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
               {payload.company_name} now runs on DecisionOS.
             </h1>
             {welcome && <p data-testid="build-welcome-line" className="text-base leading-relaxed mb-8 max-w-xl">{welcome}</p>}
-            <div className="mb-6 grid grid-cols-3 gap-3" data-testid="build-counts">
+            <div className="mb-6 grid grid-cols-2 gap-3" data-testid="build-counts">
               {counts.map((c, i) => (
                 <motion.div key={c.label} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 + i * 0.1 }}
                   /* KM-65 — .kr-frost-min: a flat tile drawn by its hairline,

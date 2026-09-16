@@ -189,6 +189,7 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
   /* ASK-32 Phase 2 — only the person it waits on (or an owner) decides it or
      hands it to someone else; anyone else who can open it sees who decides. */
   const mayDecide = canDecide && (user?.role === "owner" || d?.approver_id === user?.id
+    || (!!d?.approver_id && (user?._acting_for || []).includes(d.approver_id)) // RBAC P2: handed to me while away
     || (!d?.approver_id && userPerms(user).includes("decisions_approve")));
   const waitingOn = d?.approver_id && d.approver_id === user?.id ? "Waiting on you"
     : d?.approver_name ? `Waiting on ${d.approver_name}` : "Waiting on an owner";

@@ -53,6 +53,15 @@ class TenantSettingsInput(BaseModel):
     high_value_threshold: Optional[float] = None
     require_owner_signoff: Optional[bool] = None
     currency: Optional[str] = None
+    # 2026-09-16 (RBAC P2): overdue work — days late before the doer's manager,
+    # then the owner, hears; and whether owners also get the alert by email.
+    followup_manager_days: Optional[int] = None
+    followup_owner_days: Optional[int] = None
+    owner_alert_email: Optional[bool] = None
+
+
+class TenantAIKeyInput(BaseModel):
+    key: str
 
 
 class RoleLabelInput(BaseModel):

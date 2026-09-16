@@ -120,12 +120,13 @@ api.interceptors.response.use(
       if (now - _consentToastShownAt > 8000) {
         _consentToastShownAt = now;
         toast.error(
-          "AI features need your DPDP consent. Open Settings → AI Consent to enable, then try again.",
+          "AI features need the owner's consent. Open Settings › Business › AI processing to turn them on, then try again.",
           {
             duration: 8000,
             action: {
               label: "Open Settings",
-              onClick: () => { window.location.href = "/settings#ai-consent"; },
+              // RBAC P1 (2026-09-15): the section this points at now exists.
+              onClick: () => { window.location.href = "/settings?tab=business#ai-consent"; },
             },
           }
         );

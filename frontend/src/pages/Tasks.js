@@ -124,15 +124,19 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
   const teams = roleOptions.filter((r) => r.key !== "owner" && canAssignTeam(user, r.key));
   const assignable = members.filter((m) => canAssignPerson(user, m));
   const helperChoices = assignable.filter((m) => m.id !== personId && !form.co_assignee_ids.includes(m.id));
-  const approvers = members.filter((m) => m.role === "owner" || userPerms(m).includes("approvals"));
+  // RBAC P1 (2026-09-15): an approver who isn't an owner can't be on the task —
+  // not the person asking, the doer or a helper (the server refuses the same).
+  const approvers = members.filter((m) => m.role === "owner"
+    || (userPerms(m).includes("approvals") && m.id !== user?.id && m.id !== personId && !form.co_assignee_ids.includes(m.id)));
   // Yokesh 2026-09-15 — nobody picked: the server names your reporting manager
   // when they may approve tasks, else the owner. Say who that will be.
   const myManagerId = user?.reporting_manager_id || members.find((m) => m.id === user?.id)?.reporting_manager_id;
   const myManager = myManagerId ? members.find((m) => m.id === myManagerId) : null;
   const firstOwner = members.find((m) => m.role === "owner");
+  const managerOnTask = !!myManager && (myManager.id === personId || form.co_assignee_ids.includes(myManager.id));
   const defaultApproverLabel = user?.role === "owner" ? "You"
-    : myManager && approvers.some((a) => a.id === myManager.id) ? `${myManager.name} · your manager`
-    : myManager ? "Your manager, or the owner if they can't approve"
+    : myManager && !managerOnTask && approvers.some((a) => a.id === myManager.id) ? `${myManager.name} · your manager`
+    : myManager && !managerOnTask ? "Your manager, or the owner if they can't approve"
     : firstOwner ? `${firstOwner.name} · owner` : "The owner";
   const pickAssign = (v) => {
     const pid = v.startsWith("u:") ? v.slice(2) : "";

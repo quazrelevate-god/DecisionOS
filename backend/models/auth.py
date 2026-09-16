@@ -83,9 +83,17 @@ class TransferOwnershipInput(BaseModel):
 
 
 class ProfileUpdateInput(BaseModel):
+    """Your own details (2026-09-16). Role and access are NOT here — those are a
+    manager's call and live on PATCH /users. `email` is the sign-in id, so it
+    needs `current_password` (or `otp_code` for a member who signs in by mobile)."""
     name: Optional[str] = None
     phone: Optional[str] = None
     language: Optional[str] = None
+    title: Optional[str] = None
+    about: Optional[str] = None
+    email: Optional[EmailStr] = None
+    current_password: Optional[str] = None
+    otp_code: Optional[str] = None
 
 
 class ChangePasswordInput(BaseModel):

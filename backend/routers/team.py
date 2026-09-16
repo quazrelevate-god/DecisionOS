@@ -321,6 +321,20 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email already registered")
     phone = (inp.phone or "").strip()
+    # 2026-09-16: one mobile, one member — inside this workspace. The number is
+    # the sign-in and the WhatsApp route, so two people sharing one means codes
+    # and captures land on the wrong account. The same number in ANOTHER
+    # workspace is fine and stays fine (a consultant with two clients).
+    if len(_norm_phone(phone)) >= 10:
+        _clash = await db.users.find_one(
+            {"tenant_id": user["tenant_id"], "phone_norm": _norm_phone(phone)},
+            {"_id": 0, "name": 1},
+        )
+        if _clash:
+            raise HTTPException(
+                status_code=400,
+                detail=f"That mobile number is already {_clash.get('name')}'s in this workspace.",
+            )
     pwd = (inp.password or "").strip()
     passwordless = not pwd
     if passwordless:
@@ -481,8 +495,35 @@ async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(r
         # the user after an admin updates their phone.
         from services.auth.phone import norm_phone as _np
         _p = inp.phone.strip()
+        _new_norm = _np(_p)
+        _old_norm = _np(target.get("phone") or "")
+        if _new_norm != _old_norm:
+            # 2026-09-16: the mobile IS the sign-in — a code goes to it and
+            # whoever reads that code is in. So Manage team may FILL IN a number
+            # for someone who has none (they cannot sign in at all until then,
+            # and the invite link needs one), but changing a number that is
+            # already set would be a way to point a colleague's account at your
+            # own phone and sign in as them — the "Manage team cannot raise
+            # access" rule (1fca68d) walked around. Owner only, the same line
+            # email draws.
+            if len(_old_norm) >= 10 and not acting_is_owner:
+                raise HTTPException(
+                    status_code=403,
+                    detail=("Only an owner can change someone's mobile number, because it's how they sign in. "
+                            "Ask an owner to update it."),
+                )
+            if len(_new_norm) >= 10:
+                _clash = await db.users.find_one(
+                    {"tenant_id": user["tenant_id"], "phone_norm": _new_norm, "id": {"$ne": user_id}},
+                    {"_id": 0, "name": 1},
+                )
+                if _clash:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"That mobile number is already {_clash.get('name')}'s in this workspace.",
+                    )
         updates["phone"] = _p
-        updates["phone_norm"] = _np(_p)
+        updates["phone_norm"] = _new_norm
     if inp.reporting_manager_id is not None:
         rm = inp.reporting_manager_id.strip()
         if rm and rm != user_id:

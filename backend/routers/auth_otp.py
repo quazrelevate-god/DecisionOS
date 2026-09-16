@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Response
 
 from core import db, now_iso, create_token, set_auth_cookie, login_response
-from services.otp import _issue_otp, _hash_otp, OTP_MAX_ATTEMPTS
+from services.otp import _issue_otp, consume_otp
 from models.auth import OtpRequestInput, OtpVerifyInput
 from services.whatsapp import _norm_phone
 
@@ -150,21 +150,10 @@ async def verify_otp(inp: OtpVerifyInput, response: Response):
             },
         )
     tenant_id = target["tenant_id"]
-    key = {"phone": norm, "tenant_id": tenant_id}
-    rec = await db.otp_codes.find_one(key, {"_id": 0})
-    if not rec:
-        raise HTTPException(status_code=400, detail="Request an OTP first")
-    if datetime.now(timezone.utc) > datetime.fromisoformat(rec["expires_at"]):
-        await db.otp_codes.delete_one(key)
-        raise HTTPException(status_code=400, detail="OTP expired. Request a new one")
-    if rec.get("attempts", 0) >= OTP_MAX_ATTEMPTS:
-        await db.otp_codes.delete_one(key)
-        raise HTTPException(status_code=429, detail="Too many attempts. Request a new OTP")
-    if _hash_otp((inp.code or "").strip(), norm) != rec["code_hash"]:
-        await db.otp_codes.update_one(key, {"$inc": {"attempts": 1}})
-        raise HTTPException(status_code=401, detail="Incorrect OTP")
-
-    await db.otp_codes.delete_one(key)
+    # The code check lives in services.otp so the one other place that has to
+    # prove "this really is you" — changing your own sign-in email with no
+    # password to confirm it — asks in exactly the same way (2026-09-16).
+    await consume_otp(norm, tenant_id, inp.code)
     # FIX-003-A: fetch the exact user in the chosen tenant. Even if
     # target["user_id"] is populated from the choices list, re-fetch
     # so we get the full user record (roles, name, avatar, etc.) and

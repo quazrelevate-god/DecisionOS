@@ -97,6 +97,32 @@ async def _send_otp_sms(phone: str, code: str) -> bool:
         return False
 
 
+async def consume_otp(norm: str, tenant_id: str, code: str) -> None:
+    """Check a code against the live OTP for (phone, tenant) and spend it.
+
+    Raises the same HTTPExceptions the sign-in door does — no row (400), expired
+    (400), too many tries (429), wrong code (401, and the attempt is counted).
+    Returns None when the code was right; the row is deleted, so a code is good
+    once. Extracted 2026-09-16 so a second place that has to prove "this really
+    is you" — changing your own sign-in email when you have no password — asks
+    the question exactly the way /auth/otp/verify does.
+    """
+    key = {"phone": norm, "tenant_id": tenant_id}
+    rec = await db.otp_codes.find_one(key, {"_id": 0})
+    if not rec:
+        raise HTTPException(status_code=400, detail="Request an OTP first")
+    if datetime.now(timezone.utc) > datetime.fromisoformat(rec["expires_at"]):
+        await db.otp_codes.delete_one(key)
+        raise HTTPException(status_code=400, detail="OTP expired. Request a new one")
+    if rec.get("attempts", 0) >= OTP_MAX_ATTEMPTS:
+        await db.otp_codes.delete_one(key)
+        raise HTTPException(status_code=429, detail="Too many attempts. Request a new OTP")
+    if _hash_otp((code or "").strip(), norm) != rec["code_hash"]:
+        await db.otp_codes.update_one(key, {"$inc": {"attempts": 1}})
+        raise HTTPException(status_code=401, detail="Incorrect OTP")
+    await db.otp_codes.delete_one(key)
+
+
 async def _issue_otp(norm: str, display_phone: str, tenant_id: str, enforce_cooldown: bool = True):
     """Generate + store a 6-digit OTP for a normalized phone (scoped to a
     tenant) and try to send it.

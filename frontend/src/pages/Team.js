@@ -13,7 +13,7 @@ import { useAuth } from "../context/AuthContext";
 import { PERMISSIONS, hasPerm, roleDefaultPerms, userPerms } from "../lib/perms";
 import { toast } from "sonner";
 import {
-  AirplaneTakeoff, Briefcase, Camera, Check, Copy, EnvelopeSimple, Eye, LinkSimple, MagnifyingGlass,
+  AirplaneTakeoff, Briefcase, Camera, ChatText, Check, Copy, EnvelopeSimple, Eye, LinkSimple, MagnifyingGlass,
   PencilSimple, Phone, Plus, Pulse, ShieldCheck, Trash, User, WhatsappLogo, X,
 } from "@phosphor-icons/react";
 import { PersonAvatar } from "../components/karma/PersonAvatar";
@@ -198,6 +198,9 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
   });
   const [form, setForm] = useState(blankForm);
   const roleName = (key) => roleOptions.find((r) => r.key === key)?.label || key;
+  // A number already on file changes only by an owner's hand — it is the sign-in.
+  const phoneLocked = editing && me?.role !== "owner" && me?.id !== initial?.id
+    && (initial?.phone || "").replace(/\D/g, "").length >= 10;
   const rolePerms = roleDefaultPerms(form.role, roleOptions);
   const shownPerms = form.follow_role ? rolePerms : form.permissions;
 
@@ -251,7 +254,9 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
           // RBAC P1 (2026-09-15): name can be corrected; email by an owner only.
           name: form.name.trim(), ...(me?.role === "owner" ? { email: form.email.trim() } : {}),
           follow_role: !!form.follow_role,
-          role: form.role, permissions: form.follow_role ? [] : form.permissions, phone: form.phone,
+          role: form.role, permissions: form.follow_role ? [] : form.permissions,
+          // Left out when it is locked, so a save of the other fields still goes through.
+          ...(phoneLocked ? {} : { phone: form.phone }),
           reporting_manager_id: form.reporting_manager_id, title: form.title.trim(),
         });
         toast.success(`${initial.name}'s access updated`);
@@ -323,9 +328,20 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                   value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
               </Field>
               <Field label="Mobile number" htmlFor="member-phone">
+                {/* 2026-09-16 — the number is a sign-in: a code goes to it and
+                    whoever reads that code is in. So Manage team can fill in a
+                    number for someone who has none, but changing one that is
+                    already set is the owner's call (the server holds the same
+                    rule). Their own number is theirs to change in Settings. */}
                 <input id="member-phone" data-testid="member-phone-input" className={NM_FIELD} type="tel"
+                  disabled={phoneLocked}
                   placeholder={form.passwordless ? "Required for OTP login" : "For OTP login"}
                   value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                {phoneLocked && (
+                  <p className="mt-1.5 text-xs text-neutral-500" data-testid="member-phone-locked">
+                    Only an owner can change someone's mobile number — it's how they sign in.
+                  </p>
+                )}
               </Field>
             </div>
             {!editing && (
@@ -1009,6 +1025,9 @@ function MemberProfileDialog({
               } />
               {/* No "Direct reports" here (founder, 2026-09-16): the tree already shows them. */}
               <ContactRow icon={User} label="Reports to" value={manager ? manager.name : "No one"} />
+              {/* 2026-09-16 — in their own words, from Settings > Your Profile:
+                  what to bring them. Only shown once they have written it. */}
+              {u.about && <ContactRow icon={ChatText} label="Handles" value={u.about} wide />}
             </div>
           </section>
 

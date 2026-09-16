@@ -844,18 +844,69 @@ async def me(user: dict = Depends(get_current_user)):
 
 @router.patch("/profile")
 async def update_profile(inp: ProfileUpdateInput, user: dict = Depends(get_current_user)):
+    """Your own details: name, job title, what you handle, mobile, email, language.
+
+    2026-09-16 — a person keeps their own details current without going through
+    a manager. What is NOT here, and never will be: role, permissions, reporting
+    line. Those are someone else's call about you and live on PATCH /users, so
+    nobody can edit their own way into more of the app.
+    """
     updates = {}
     if inp.name is not None and inp.name.strip():
-        updates["name"] = inp.name.strip()
+        updates["name"] = inp.name.strip()[:80]
+    if inp.title is not None:
+        # The line under your name on the Team page. Yours to keep current; a
+        # team manager can still set it for you.
+        updates["title"] = inp.title.strip()[:80] or None
+    if inp.about is not None:
+        # One line on what you look after, in your own words.
+        updates["about"] = inp.about.strip()[:280] or None
     if inp.phone is not None:
         # Changing your number should re-enable WhatsApp matching for it.
         from services.auth.phone import norm_phone  # FIX-002-A
         _new_phone = inp.phone.strip()
+        _new_norm = norm_phone(_new_phone)
+        if _new_norm != norm_phone(user.get("phone") or "") and len(_new_norm) >= 10:
+            # One mobile, one member, inside this workspace: the number is a
+            # sign-in and a WhatsApp route, so taking a colleague's number would
+            # send their codes and captures to your account.
+            clash = await db.users.find_one(
+                {"tenant_id": user["tenant_id"], "phone_norm": _new_norm, "id": {"$ne": user["id"]}},
+                {"_id": 0, "name": 1},
+            )
+            if clash:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"That mobile number is already {clash.get('name')}'s in this workspace.",
+                )
         updates["phone"] = _new_phone
-        updates["phone_norm"] = norm_phone(_new_phone)  # keep index-searchable form in sync
+        updates["phone_norm"] = _new_norm  # keep index-searchable form in sync
         updates["wa_phone_obsolete"] = False
     if inp.language is not None and inp.language in ("en", "hi", "ta"):
         updates["language"] = inp.language
+    if inp.email is not None and inp.email.strip().lower() != (user.get("email") or "").lower():
+        email = inp.email.strip().lower()
+        # The email is how you sign in, so prove it is you at the keyboard: your
+        # password, or — for a member who signs in by mobile and has none — a
+        # code to your own number, asked the same way the sign-in door asks.
+        full = await db.users.find_one({"id": user["id"]})
+        if (full or {}).get("passwordless"):
+            from services.auth.phone import norm_phone as _np
+            from services.otp import consume_otp
+            norm = _np((full or {}).get("phone") or "")
+            if len(norm) < 10:
+                raise HTTPException(status_code=400, detail="Add your mobile number first, then change your email.")
+            if not inp.otp_code:
+                raise HTTPException(status_code=400, detail="Enter the code we texted you to confirm the change.")
+            await consume_otp(norm, user["tenant_id"], inp.otp_code)
+        else:
+            if not inp.current_password or not verify_password(inp.current_password, (full or {}).get("password_hash", "")):
+                raise HTTPException(status_code=400, detail="Enter your current password to change your email")
+        if await db.users.find_one({"email": email, "id": {"$ne": user["id"]}}, {"_id": 0, "id": 1}):
+            raise HTTPException(status_code=400, detail="That email is already used by another account")
+        updates["email"] = email
+        # A new address is unproven until they click the link we send.
+        updates["email_verified_at"] = None
     if not updates:
         raise HTTPException(status_code=400, detail="Nothing to update")
     updates["updated_at"] = now_iso()

@@ -366,19 +366,30 @@ class TestOtpHandlerContract:
         )
 
     def test_verify_otp_source_uses_compound_key(self):
+        """2026-09-16: the code check moved into services.otp.consume_otp, so a
+        member with no password can confirm an email change the same way the
+        sign-in door asks. The rule is unchanged and is checked where it now
+        lives: verify_otp resolves the tenant and hands it over, and the checker
+        keys the otp_codes row by (phone, tenant_id) — never by phone alone."""
         import inspect
         import server
+        from services.otp import consume_otp
         src = inspect.getsource(_shim_verify_otp)
-        # Compound key used for lookup + all delete/update calls.
-        assert 'key = {"phone": norm, "tenant_id": tenant_id}' in src, (
-            "verify_otp must build its otp_codes key as (phone, tenant_id)"
+        assert "consume_otp(norm, tenant_id" in src, (
+            "verify_otp must check the code for the tenant it just resolved"
         )
-        # Regression: none of the mutation calls key by just phone.
-        assert 'otp_codes.delete_one({"phone": norm})' not in src
-        assert 'otp_codes.update_one({"phone": norm},' not in src
         # Explicit 409 for cross-tenant ambiguity.
         assert 'status_code=409' in src
         assert '"ambiguous_tenant"' in src
+
+        checker = inspect.getsource(consume_otp)
+        assert 'key = {"phone": norm, "tenant_id": tenant_id}' in checker, (
+            "consume_otp must build its otp_codes key as (phone, tenant_id)"
+        )
+        # Regression: none of the mutation calls key by just phone.
+        for source in (src, checker):
+            assert 'otp_codes.delete_one({"phone": norm})' not in source
+            assert 'otp_codes.update_one({"phone": norm},' not in source
 
     def test_request_otp_source_returns_ambiguous_payload(self):
         import inspect

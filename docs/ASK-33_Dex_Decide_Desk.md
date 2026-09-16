@@ -450,7 +450,8 @@ depend on a conversation summary. Branch `karma-redesign`, built on `bb0a9e8`.*
 
 ### The two fixes carried by `e638b86` (Phase 3)
 
-**[+] pointer-events fix — a Phase 1 defect.** The shut [+] reveal's two
+**[+] pointer-events fix — a Phase 1 defect.** (RETIRED 2026-09-16: the new
+composer row has no reveal — see "Outstanding, next session".) The shut [+] reveal's two
 circles had `pointer-events-none`, but the absolutely positioned `<div>` that
 holds them did not, and it keeps their layout size. On desktop that box sits
 over the area above [+] — exactly where an outcome's actions (Got it, Review,
@@ -470,7 +471,8 @@ for the next capture became invisible. Fix: chips render whenever
 
 ### Fixes inside `e40aff4` (Phase 1) that the diff does not explain
 
-- **[+] containment invariant** (founder, 2026-09-15): the reveal must stay
+- **[+] containment invariant** (founder, 2026-09-15; RETIRED 2026-09-16 with
+  the reveal itself): the reveal must stay
   inside the well at every width. Phone well is 150px and [+] sits ~73px from
   its top, so a vertical stack of two 44px circles escapes onto the KPI strip
   → **below lg the circles swap inline into the composer's slot** (the pill
@@ -487,8 +489,10 @@ for the next capture became invisible. Fix: chips render whenever
 
 ### Phase 5 list (accumulated — do not lose)
 
-*Phase 5 (2026-09-16): items 1–6, 8 and 9 were addressed — see "Phase 5 as
-built". Still open: item 10 (the dock's placeholder, a copy call).*
+*All of this is now done or retired — Phase 5 addressed the rest, ASK-33.1 did
+the dock's placeholder (the last open one), and three entries were retired with
+the [+] itself (see the note under the list). Kept as the record of what was
+found and why.*
 
 1. **Composer field grows to at most TWO lines** so the founder can read back
    the sentence before sending. It is a resize, so it belongs to Phase 5.
@@ -500,36 +504,43 @@ built". Still open: item 10 (the dock's placeholder, a copy call).*
    `str(exception)`; only the consent message has been checked for wrapping.
    Check a long technical reason wraps/scrolls in its container, and whether it
    needs friendlier copy (may be a copy decision — stop and ask if so).
-4. **Phone inline swap hides the typed draft** while [+] is open (the pill
-   fades under the two circles). Check it reads acceptably by eye.
-5. **Attachment chips on the phone**: the remove button becomes 44×44 via the
+4. **Attachment chips on the phone**: the remove button becomes 44×44 via the
    global rule, so a chip grows to its 176px max quickly — check spacing and the
    horizontal scroll of several chips at 360.
-6. **Touch tiers on the phone's outcomes** (4-B, DexChat): Review, Retry, Got it
+5. **Touch tiers on the phone's outcomes** (4-B, DexChat): Review, Retry, Got it
    and Not now are h-11 (44px); the ticket wants 56px for anything that commits
    (Retry). Desktop outcome buttons are h-10. The Settings link in the ink
    bubble is inline text that the global `a[data-testid]` rule makes 44px tall —
    check it by eye.
-7. ~~Harness: `npm run verify:dex` missing~~ — resolved in 4-B. The script was
+6. ~~Harness: `npm run verify:dex` missing~~ — resolved in 4-B. The script was
    testing the unmounted DexSheet; it was rewritten against DexChat and the npm
    entry landed with it.
-8. **Dark mode on the sheet's outcome messages and the late-ending toasts**
+7. **Dark mode on the sheet's outcome messages and the late-ending toasts**
    (4-B): the ink bubble is the same in both themes, but the rose warning glyph,
    the white Review/Retry pill and Sonner's error toast need a look.
-9. **Late-ending toasts at 360** (4-B): Sonner draws them at the top. Seen at
+8. **Late-ending toasts at 360** (4-B): Sonner draws them at the top. Seen at
    360x640: the persistent failure toast (a three-line reason) wraps cleanly
    but sits over the score row and the notification bell until it is
    dismissed. Whether that is acceptable, or the toast belongs elsewhere on a
    phone, is a design call — ask.
-10. **The dock's placeholder contradicts the one-door rule** (seen after 4-A):
+9. **The dock's placeholder contradicts the one-door rule** (seen after 4-A;
+    done in ASK-33.1):
     on the Ask sheet the dock's text field reads "Ask Dex, or state a
     decision…", but a decision stated there goes to POST /ask and creates
     nothing — Decide is the Desk's well now. FloatingDock is outside ASK-33's
     edits, so it was not changed. A copy decision: a placeholder per channel, or
     plain "Ask Dex…".
 
-Resolved and therefore NOT on the list: the [+] overlapping the KPI strip on
-the phone (fixed in Phase 1 by the inline swap).
+**RETIRED by the new composer row (founder, 2026-09-16).** Three entries existed
+only because [+] expanded, and the row that replaces it has no reveal at all —
+attach is its own circle (see "Outstanding, next session"):
+- the [+] circles overlapping the KPI strip on the phone (Phase 1's inline swap,
+  and the containment invariant that produced it);
+- the [+] pointer-events / invisible-hitbox fix (carried by `e638b86`);
+- the typed draft hidden while [+] is open on a phone (was item 4 of this list;
+  Phase 5's draft peek).
+The records of each stay below as history — there is simply nothing left in them
+to do, and the code they describe goes when the row is rebuilt.
 
 ### Phase 4 — the split (revised 2026-09-16 against the REAL sheet)
 
@@ -1029,3 +1040,91 @@ them:
   file ids, even when the original was a held voice note.
 - The Phase 1 interim toast (Dex's reply text) is still how a phone sees an
   ending until 4-B lands.
+
+---
+
+## Outstanding, next session
+
+*Recorded 2026-09-16 at the founder's instruction, after ASK-33.1 (`6c1b6e6`).
+Nothing here was started. Nothing is pushed — the founder decides when the eight
+ASK-33 commits go to Railway.*
+
+### 1 · The greeting does not render at rest on desktop — UNVERIFIED, verify first
+
+The screenshots that raised this compared **production data** (tenant "Rajesh
+Sharma") against **fixtures** (tenant "Rajesh Kumar"), so it may be a fixture
+artifact rather than a bug.
+
+**First job of the session, before any fix:** screenshot the resting Desk at 1440
+on `bb0a9e8` and on HEAD **against the same fixture data**, Company scope, and
+describe in words what differs. **Only fix it if the greeting renders on
+`bb0a9e8` and not on HEAD.** (Phase 1 commented out the `deskInsight` wiring in
+`pages/Desk.js`, and Phase 2 fades `desk-brief-greeting` via `.kr-dex-fade` while
+the well is the workspace — both are places to look if it is real.)
+
+### 2 · The well's resting height — a consequence of 1, almost certainly
+
+ASK-25 gives the well `lg:flex-1`, so it absorbs whatever the left column has
+left over. Railway: greeting ~90px, well ~155px. The build: greeting 0, well
+~265px — the difference is the greeting. **Do not hardcode a height.** Re-measure
+after 1 is settled; if the greeting comes back, this should follow it.
+
+### 3 · The composer field must be SUNKEN, not raised — real regardless of data
+
+It inherited `.kr-pop` from the "Chase it" button it replaced, and KM-62 / KM-65
+both reserve that raised recipe for things you press. An input takes the sunken
+recipe. `[attach]` and the mic stay raised. Desktop and phone. **Do this together
+with the new composer row below — they are the same row.**
+
+### The composer row, rebuilt — SUPERSEDES the [+] design from Phase 1
+
+Three elements, no expansion:
+
+    [attach]   [ ——— text field ——— ]   [mic / stop / send]
+
+1. **Delete [+] and everything it revealed.** The attach icon takes its place
+   directly — a `.kr-pop` circle, one tap opens the file picker. No circles
+   animating above it, no reveal container, no inline swap.
+2. **The field is a text field by default**, sunken (item 3). Tap it and type.
+   There is no "type mode" to switch into.
+3. **The right icon has three states**, following DexFab's existing `intent`
+   pattern — read it and match it, do not invent a second one:
+   - empty and not recording → **mic** (tap starts recording)
+   - recording → **stop** (tap stops; the transcript lands in the field for
+     review, KM-51)
+   - the field has text → **send**
+   Tapping the mic turns the field into the DexWave surface while recording, and
+   back into the text field when it stops.
+4. **Delete the type/voice mode toggle entirely** — the mic is the mode switch
+   now. Remove `desk-dex-mode` and `desk-dex-plus`; keep `desk-dex-attach` and
+   `desk-dex-mic`. Record both removed test ids in the commit message.
+5. **Three Phase 5 entries retire with it** — already struck from the list above,
+   with the reason.
+6. **Attachment chips are unchanged** — they still appear, still removable.
+
+Keep the regression tests that cover the composer row itself; delete the ones
+that only tested the reveal (`verify-well.mjs`'s [+] reveal checks, the Phase 3
+tap-the-composer's-left-edge check, and the draft-peek checks in
+`verify-p5.mjs`). Desktop and phone both, the same four gates, then report.
+Do not push.
+
+### For Yokesh — not for us to fix
+
+- **`error_code` on the note.** A consent refusal is currently identified by
+  substring-matching a stringified Python dict inside `error`
+  (`"451: {'code': 'ai_consent_required', …}"`). That is 14 of 15 real failures
+  riding on an exception's `repr()`. A first-class `error_code` on the voice note
+  would change exactly one place in the client: `failureReason()` in
+  `frontend/src/lib/dexOutcome.js` (the `raw.includes(AI_CONSENT_CODE)` test),
+  with `readNote()` carrying the new field through.
+- **The 451 is definitive, but it is retried.** `_ResilientChat.send_message`
+  (`backend/integrations/llm.py:79-138`) retries every key and then every
+  fallback model before giving up, so a consent-blocked capture spends the whole
+  retry ladder on an answer that cannot change.
+
+### Decided, not to be revisited
+
+- **Phone toasts stay where they are.** Top-anchored, above everything, so a
+  transient ending toast covers an overlay's close X for its four seconds. That
+  is app-wide behaviour, outside this ticket, and the persistent notice already
+  covers the case that mattered. The note stays in "ASK-33.1" as the record.

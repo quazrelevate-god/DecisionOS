@@ -134,8 +134,12 @@ function TimelineDialog({ decisionId, open, onClose }) {
 function DayEntries({ day, onOpen }) {
   return (
     <>
+      {/* ASK-34 C2 — MORE COLUMNS AS THE PAGE GETS WIDER, not wider cards. At
+          1920 two columns made each card 796px holding one line of title, which
+          is why the desktop read as the phone stretched. `xl:` and `2xl:` only
+          — below lg this is still the single column the phone has. */}
       {day.decisions.length > 0 && (
-        <div className="mb-3 grid gap-2.5 lg:grid-cols-2">
+        <div className="mb-3 grid gap-2.5 lg:grid-cols-2 xl:grid-cols-3">
           {day.decisions.map((d) => (
             <button
               key={d.id}
@@ -156,8 +160,11 @@ function DayEntries({ day, onOpen }) {
         </div>
       )}
 
+      {/* A note is prose, and prose has a measure. Full width it ran to 1,603px
+          on a 1920 screen with the text stopping two thirds of the way across
+          an empty card. Capped on desktop only; the phone's is already 358. */}
       {day.notes.length > 0 && (
-        <div className="kr-bento divide-y divide-nm-edge/40 rounded-cardlg" data-testid={`journal-notes-${day.date}`}>
+        <div className="kr-bento divide-y divide-nm-edge/40 rounded-cardlg lg:max-w-3xl" data-testid={`journal-notes-${day.date}`}>
           {day.notes.map((n) => (
             <div key={n.id} className="flex items-start gap-3 p-3.5">
               <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-amber-50 text-amber-600">
@@ -243,11 +250,29 @@ export default function Journal() {
     <div data-testid="journal-page">
       <PageHeader eyebrow="Your decision diary" title="CEO Journal" />
 
+      {/* ASK-34 C2 · THE DESKTOP FRAME — A RAIL AND A FEED.
+          The page was ONE full-width column at every size, so at 1920 the day
+          rule ran 1,603px with its count at the far end, a decision card was
+          796px holding one line, and the search and the Timeline/Calendar
+          switch scrolled away at the top of it. Nothing here is rebuilt: the
+          same children, in a grid that only exists from lg. Below lg
+          `lg:grid` does not apply and they stack exactly as the phone has them.
+          The rail is sticky because its three controls — search, the framing,
+          and the week strip that picks a day — are the page's navigation, and a
+          diary is a thing you scroll; `top-8` is the content wrapper's own
+          lg:p-8. It works because <main> is not a scroll container on desktop
+          (KR-8.4 kept overflow-x:clip precisely so position:sticky still tracks
+          the document). */}
+      <div className="lg:grid lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start lg:gap-8">
+      <div className="lg:sticky lg:top-8 lg:self-start" data-testid="journal-rail">
+
       {/* Search — .kr-pressed field and an ink pill, off the retired
           nm-tile + bg-primary pair. */}
       <form
         onSubmit={(e) => { e.preventDefault(); setTerm(q); }}
-        className="mb-4 flex max-w-xl items-center gap-2"
+        /* max-w-xl was the whole page's measure; in the rail the field and
+           its button share 17rem, so they stack there and stay a row below lg. */
+        className="mb-4 flex max-w-xl items-center gap-2 lg:max-w-none lg:flex-col lg:items-stretch"
       >
         <div className="kr-pressed flex min-w-0 flex-1 items-center rounded-pill">
           <MagnifyingGlass size={16} weight="regular" aria-hidden="true" className="ml-3.5 shrink-0 text-muted-foreground" />
@@ -262,7 +287,7 @@ export default function Journal() {
         <button
           type="submit"
           data-testid="journal-search-btn"
-          className="kr-lift flex h-11 shrink-0 items-center rounded-pill bg-kr-ink px-5 text-sm font-medium text-white"
+          className="kr-lift flex h-11 shrink-0 items-center justify-center rounded-pill bg-kr-ink px-5 text-sm font-medium text-white"
         >
           Search
         </button>
@@ -331,6 +356,10 @@ export default function Journal() {
         </div>
       )}
 
+      </div>
+
+      {/* THE FEED — one column of days inside the track the rail leaves it. */}
+      <div className="min-w-0" data-testid="journal-feed">
       {isLoading ? (
         <div className="space-y-3" aria-hidden="true">
           {[0, 1, 2].map((i) => <div key={i} className="ds-skeleton h-24 rounded-cardlg" />)}
@@ -387,6 +416,9 @@ export default function Journal() {
           )}
         </div>
       )}
+
+      </div>
+      </div>
 
       <TimelineDialog decisionId={openId} open={!!openId} onClose={() => setOpenId(null)} />
     </div>

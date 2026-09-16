@@ -19,6 +19,7 @@ import {
   Bell,
   Briefcase,
   GearSix,
+  BookOpen,
   Tray,
   Wallet,
   Gauge, // Epic 2 E2-15: Ops nav entry (Operating Score)
@@ -441,6 +442,18 @@ export default function Layout({ children }) {
   // requests on open). If that panel work does not land, delete this too.
   useQuery({ queryKey: ["fires-count"], queryFn: () => api.get("/brief?period=morning").then((r) => r.data), refetchInterval: 60000, enabled: user?.role === "owner" });
   const { data: capPending } = useQuery({ queryKey: ["captures-pending"], queryFn: () => api.get("/captures/pending-count").then((r) => r.data), refetchInterval: 30000 });
+  /* ASK-34 C3 — WHO SEES THE JOURNAL IS THE BACKEND'S ANSWER, NOT OURS.
+     desk.py has returned `shortcuts: { ceo_journal: is_owner, … }` all along and
+     the frontend has ignored it, so the rule lived in two places waiting to
+     disagree. The menu entry reads it. Same query key as pages/desk/
+     useDeskMetrics, so on /inbox this costs nothing at all and elsewhere it is
+     one request that the rest of the shortcuts can also be hung off later. */
+  const { data: deskSummary } = useQuery({
+    queryKey: ["desk-summary"],
+    queryFn: () => api.get("/desk/summary").then((r) => r.data),
+    refetchInterval: 60000,
+  });
+  const showJournal = !!deskSummary?.shortcuts?.ceo_journal;
   const captureCount = capPending?.count || 0;
 
   const openNotif = async (n) => {
@@ -665,6 +678,20 @@ export default function Layout({ children }) {
                 )}
               </div>
               <div className="p-1.5">
+                {/* ASK-34 C3 — the Journal's way in. It had none: /journal was
+                    reachable only by typing the URL. It sits above Settings
+                    because it is something you READ about the company, next to
+                    the identity and workspace blocks it follows, where Settings
+                    is configuration. Shown on the backend's own flag. */}
+                {showJournal && (
+                  <button
+                    onClick={() => navigate("/journal")}
+                    data-testid="nav-journal"
+                    className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-900/[0.06] hover:text-slate-900"
+                  >
+                    <BookOpen size={15} /> {t("nav.journal", "Journal")}
+                  </button>
+                )}
                 {user?.role === "owner" && (
                   <button
                     onClick={() => navigate("/settings")}

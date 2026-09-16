@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api")
 
 def _brain_can_finance(user: dict) -> bool:
     """Whether a user may see financial records in Company Brain (Search + Ask)."""
-    return bool({"finance", "ledger"} & user_perms(user))
+    return "finance" in user_perms(user)
 
 
 def _brain_privileged(user: dict) -> bool:

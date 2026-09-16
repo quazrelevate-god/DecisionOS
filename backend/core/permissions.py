@@ -23,7 +23,7 @@ from config import PERMISSION_KEYS  # noqa: F401
 _BASE_PERMS = {"inbox", "data_input", "workflows", "tasks", "brain", "ask"}
 ROLE_DEFAULT_PERMS = {
     "sales": _BASE_PERMS,
-    "finance": _BASE_PERMS | {"finance", "ledger"},
+    "finance": _BASE_PERMS | {"finance"},
 }
 
 

@@ -28,8 +28,8 @@ _BASELINE = {"policy", "personal", "general"}
 # Role / permission → additional intent grants (union'd with baseline).
 _ROLE_GRANTS = {
     "owner":        set(INTENTS),                             # sees everything
+    # One Finance permission since 2026-09-16; "ledger" folded into it.
     "finance":      {"finance", "procurement", "operations", "org_analytics"},
-    "ledger":       {"finance", "procurement", "org_analytics"},
     "sales":        {"sales"},
     "hr":           {"hr", "org_analytics"},
     "team_manage":  {"hr", "org_analytics"},

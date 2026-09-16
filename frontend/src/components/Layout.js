@@ -80,7 +80,7 @@ const NAV = [
   { to: "/brain", label: "Dex", tkey: "brain", icon: BrainIcon, testid: "nav-brain", perm: "brain" },
   // Epic 2 Sprint 4 (E2-27): 'Capture' nav retired; Finance is now the
   // single home for money + document capture. Route rename /ledger -> /finance.
-  { to: "/finance", label: "Finance", tkey: "finance", icon: Wallet, testid: "nav-ledger", perms: ["ledger", "finance", "data_input"] },
+  { to: "/finance", label: "Finance", tkey: "finance", icon: Wallet, testid: "nav-ledger", perms: ["finance", "data_input"] },
   // Epic 2 Sprint 3 (E2-31): 'Meeting Notes' hidden from sidebar per
   // founder ask 2026-08-14 ('we are not going use in this phase').
   // Meetings.js + /api/meetings endpoints stay alive for a future

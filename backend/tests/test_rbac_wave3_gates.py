@@ -139,11 +139,17 @@ class TestPermissionKeys:
         from core import PERMISSION_KEYS
         must_exist = {
             "inbox", "voice_capture", "data_input", "people", "finance",
-            "ledger", "workflows", "tasks", "brain", "ask", "brain_export",
+            "workflows", "tasks", "brain", "ask", "brain_export",
             "approvals", "decisions_approve", "leave_approve", "team_manage",
         }
         for k in must_exist:
             assert k in PERMISSION_KEYS, f"Missing permission key {k!r}"
+        # 2026-09-16: Finance is ONE permission. "ledger" was a second toggle
+        # for the same page and nothing enforced the split it promised.
+        assert "ledger" not in PERMISSION_KEYS, (
+            "the ledger permission was merged into finance — a second key "
+            "brings back two toggles that mean the same thing"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -293,15 +299,15 @@ class TestCrossRolePermissionMatrix:
             assert k in p, f"sales must have {k!r} by default"
         # Elevated perms absent — including "people" post-FIX-FUP-51
         # (contact list requires explicit grant even for sales).
-        for k in ("people", "finance", "ledger", "team_manage", "brain_export",
+        for k in ("people", "finance", "team_manage", "brain_export",
                    "leave_approve", "decisions_approve", "approvals",
                    "voice_capture"):
             assert k not in p, f"sales must NOT have {k!r} by default"
 
     def test_finance_default_perms(self):
-        """Finance gets _BASE_PERMS + {finance, ledger}. 'people' opt-in."""
+        """Finance gets _BASE_PERMS + {finance}. 'people' opt-in."""
         p = _perms_for_role("finance")
-        for k in ("finance", "ledger", "inbox", "data_input", "brain", "ask"):
+        for k in ("finance", "inbox", "data_input", "brain", "ask"):
             assert k in p, f"finance must have {k!r} by default"
         # Elevated + opt-in perms absent — finance role doesn't imply
         # team_manage, brain_export, OR people (contact list, FIX-FUP-51).
@@ -323,11 +329,11 @@ class TestCrossRolePermissionMatrix:
         assert "leave_approve" not in p
 
     def test_explicit_permission_grant_overrides_role_default(self):
-        """A user with role='sales' but explicit ['finance', 'ledger']
+        """A user with role='sales' but explicit ['finance', 'people']
         gets those perms. Wired via user.permissions[]/membership.permissions[]."""
-        p = _perms_for_role("sales", permissions=["finance", "ledger"])
+        p = _perms_for_role("sales", permissions=["finance", "people"])
         assert "finance" in p
-        assert "ledger" in p
+        assert "people" in p
         # Base perms are NOT re-added on top — explicit permissions[]
         # replaces the role default per user_perms contract.
         # (See core.user_perms comment.)

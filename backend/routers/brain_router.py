@@ -176,7 +176,7 @@ async def _tool_mongo_query(query: str, user: dict) -> dict:
         scope = {
             "tenant_id": user["tenant_id"], "uid": user.get("id"),
             "role": user.get("role"),
-            "can_finance": bool({"finance", "ledger"} & user_perms(user)),
+            "can_finance": "finance" in user_perms(user),
             "privileged": user.get("role") == "owner" or "team_manage" in user_perms(user),
         }
         plan = await _ask_plan(query, None, user.get("language"))

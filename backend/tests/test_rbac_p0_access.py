@@ -70,11 +70,11 @@ def test_manage_team_cannot_raise_its_own_access(with_test_db):
             mgr = {**MGR, "permissions": ["inbox", "tasks", "team_manage"]}
 
             # Someone else: only what the manager holds, what they already have, or their role's defaults.
-            assert "ledger" in await _refused(team.update_user("u-priya", UserUpdateInput(
-                permissions=["inbox", "tasks", "ledger"]), user=mgr))
+            assert "finance" in await _refused(team.update_user("u-priya", UserUpdateInput(
+                permissions=["inbox", "tasks", "finance"]), user=mgr))
             await team.update_user("u-priya", UserUpdateInput(permissions=["inbox", "tasks"]), user=mgr)
             await team.update_user("u-priya", UserUpdateInput(
-                role="finance", permissions=["inbox", "tasks", "finance", "ledger"]), user=mgr)
+                role="finance", permissions=["inbox", "tasks", "finance"]), user=mgr)
             assert (await db.users.find_one({"id": "u-priya"}))["role"] == "finance"
             # A new member: same rule.
             await _refused(team.create_user(UserCreateInput(

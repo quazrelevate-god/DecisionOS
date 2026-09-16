@@ -74,7 +74,7 @@ Owners and people with **Manage team** see all tabs. Everyone else sees only Pro
   - The "Inbox" permission is the Decision Desk. *Labelled Decision Desk.*
   - "Approve tasks" also approves WhatsApp captures. *Labelled "Approve tasks & WhatsApp captures".*
   - Brain export has no toggle. *Added: "Export Company Brain".*
-- [ ] **Open:** Finance and ledger can't be separated. The Finance page has no per-tab permission and 31 ledger endpoints accept either permission, so splitting them needs the Finance tabs gated one by one. Kept as its own item.
+- [x] **Finance is one permission.** *Closed 2026-09-16 by merging, not splitting.* There were two toggles — "Finance (invoices, payments, 360°)" and "Finance Ledger (expenses, assets, inventory)" — and nothing behind them: all 31 ledger endpoints let you through on either key, and the Finance page has no per-tab gate, so ticking one gave the other. Splitting them for real would mean gating six tabs and re-pointing 31 endpoints. Founder's call (Yokesh, 2026-09-16): a small business has one finance person, so one permission is enough. `ledger` is gone from the key list, the Finance endpoints ask for `finance`, and a boot migration gives `finance` to everyone who held `ledger` — in their own list, in their membership, in a tenant's own role — so nobody loses a page they were using. An owner shut out of the ledger stays shut out of Finance.
 
 ## 5. Task access (My Work)
 

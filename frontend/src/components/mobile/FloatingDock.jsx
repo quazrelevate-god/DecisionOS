@@ -36,7 +36,7 @@ import { cn } from "@/lib/utils";
 export function dockSlots(user, t = (k, d) => d) {
   const canInbox = hasPerm(user, "inbox");
   const canMoney =
-    hasPerm(user, "ledger") || hasPerm(user, "finance") || hasPerm(user, "data_input");
+    hasPerm(user, "finance") || hasPerm(user, "data_input");
 
   // Without the `inbox` permission there is no Desk to show, so Work takes slot
   // 1 and the dock collapses to three destinations plus More — the dedupe below

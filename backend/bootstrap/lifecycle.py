@@ -20,6 +20,7 @@ from services import obj_store
 from models.workflows import WORKFLOW_OWNER_ROLE
 from bootstrap.seed import seed_demo, fixup_demo_tenant, write_test_credentials
 from bootstrap.migrations import (
+    merge_ledger_into_finance,
     migrate_tenants,
     migrate_local_disk_uploads_to_obj_store,
     seed_platform_admin,
@@ -267,6 +268,23 @@ async def _bootstrap():
                 f"[FIX-004-D] rename_production_to_operations: "
                 f"tenants={renamed_tenants} users={renamed_users} memberships={renamed_memberships}"
             )
+
+        # 2026-09-16 — Finance is ONE permission. "ledger" promised a wall the
+        # app never built (every ledger endpoint took either key, and the
+        # Finance page had no per-tab gate), so it is gone. Everyone who held
+        # it gets "finance" instead: nobody loses a page they were using, and
+        # the dead key is cleared from every list that carried it.
+        try:
+            _lres = await _apply_migration(
+                db,
+                "merge_ledger_into_finance_v1",
+                merge_ledger_into_finance,
+                description="Finance is one permission: anyone holding 'ledger' now holds 'finance'",
+            )
+            if _lres == "applied":
+                logger.info("Migration applied: merge_ledger_into_finance_v1")
+        except Exception as e:
+            logger.exception(f"merge_ledger_into_finance migration: {e}")
 
         try:
             _rres = await _apply_migration(

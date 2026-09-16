@@ -36,7 +36,7 @@ async def _finance_user_ids(tenant_id: str) -> list:
     FIX-001-B for the workflow→Finance handoff on procurement completion."""
     ids = set(await _owner_ids(tenant_id))
     async for u in db.users.find(
-        {"tenant_id": tenant_id, "permissions": {"$in": ["finance", "ledger"]}},
+        {"tenant_id": tenant_id, "permissions": "finance"},
         {"_id": 0, "id": 1},
     ):
         ids.add(u["id"])

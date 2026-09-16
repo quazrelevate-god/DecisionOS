@@ -38,7 +38,7 @@ router = APIRouter(prefix="/api")
 # Permission scope (reuse existing flags)
 # ---------------------------------------------------------------------------
 def _can_finance(user: dict) -> bool:
-    return bool({"finance", "ledger"} & user_perms(user))
+    return "finance" in user_perms(user)
 
 
 def _privileged(user: dict) -> bool:

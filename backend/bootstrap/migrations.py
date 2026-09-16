@@ -41,6 +41,54 @@ async def migrate_tenants():
         )
 
 
+async def merge_ledger_into_finance(_db):
+    """2026-09-16 — Finance is ONE permission. "ledger" promised a wall the app
+    never built (every ledger endpoint took either key, and the Finance page had
+    no per-tab gate), so it is gone. Everyone who held it gets "finance" instead:
+    nobody loses a page they were using, and the dead key is cleared from every
+    list that carried it. Run once, through the migration ledger, at boot."""
+    touched = {"users": 0, "memberships": 0, "tenant_roles": 0, "owner_exclusions": 0}
+    for coll in ("users", "memberships"):
+        _res = await _db[coll].update_many(
+            {"permissions": "ledger"},
+            {"$addToSet": {"permissions": "finance"}},
+        )
+        await _db[coll].update_many(
+            {"permissions": "ledger"},
+            {"$pull": {"permissions": "ledger"}},
+        )
+        touched[coll] = getattr(_res, "modified_count", 0)
+    async for _t in _db.tenants.find(
+        {"$or": [{"roles.permissions": "ledger"}, {"owner_exclusions": "ledger"}]},
+        {"_id": 0, "id": 1, "roles": 1, "owner_exclusions": 1},
+    ):
+        roles, changed = [], False
+        for _r in (_t.get("roles") or []):
+            perms = _r.get("permissions")
+            if isinstance(perms, list) and "ledger" in perms:
+                kept = [p for p in perms if p != "ledger"]
+                if "finance" not in kept:
+                    kept.append("finance")
+                _r = {**_r, "permissions": kept}
+                changed = True
+            roles.append(_r)
+        patch = {}
+        if changed:
+            patch["roles"] = roles
+            touched["tenant_roles"] += 1
+        excl = _t.get("owner_exclusions")
+        if isinstance(excl, list) and "ledger" in excl:
+            # An owner shut out of the ledger stays shut out of Finance.
+            kept = [p for p in excl if p != "ledger"]
+            if "finance" not in kept:
+                kept.append("finance")
+            patch["owner_exclusions"] = kept
+            touched["owner_exclusions"] += 1
+        if patch:
+            await _db.tenants.update_one({"id": _t["id"]}, {"$set": patch})
+    logger.info(f"[RBAC] merge_ledger_into_finance: {touched}")
+
+
 async def migrate_local_disk_uploads_to_obj_store(_db):
     """FIX-002-E: one-shot migration. Copy every legacy local-disk upload
     referenced by voice_notes/meetings/ingestions/expenses/assets to

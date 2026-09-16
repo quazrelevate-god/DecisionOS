@@ -338,8 +338,14 @@ def embed_model_for(task: str = "default"):
 # role/membership to 'operations' at boot.
 ROLES = ["owner", "sales", "operations", "finance"]
 
+# 2026-09-16 — "ledger" is GONE: it promised a wall (invoices/payments on one
+# side, expenses/assets/inventory on the other) that nothing enforced — every
+# ledger endpoint accepted either key and the Finance page had no per-tab gate.
+# A small business has one finance person, so it is one permission. Anyone who
+# held only "ledger" is given "finance" by the merge_ledger_into_finance_v1
+# migration; clean_perms drops the dead key from anything still carrying it.
 PERMISSION_KEYS = [
-    "inbox", "voice_capture", "data_input", "people", "finance", "ledger",
+    "inbox", "voice_capture", "data_input", "people", "finance",
     "workflows", "tasks", "brain", "ask", "brain_export",
     "approvals", "decisions_approve", "leave_approve", "team_manage",
     # ASK-28 TK-08 (plan Phase 6): opt-in task access, off for every role by

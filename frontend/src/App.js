@@ -241,7 +241,7 @@ function App() {
                 for Finance + document Capture. Old /ledger + /ingest redirect
                 here. Gate broadened to also accept data_input so users who
                 had Capture-only access aren't locked out of the Inbox tab. */}
-            <Route path="/finance" element={<Protected perms={["ledger", "finance", "data_input"]}><Ledger /></Protected>} />
+            <Route path="/finance" element={<Protected perms={["finance", "data_input"]}><Ledger /></Protected>} />
             <Route path="/ledger" element={<Navigate to="/finance" replace />} />
             <Route path="/ask" element={<Navigate to="/brain" replace />} />
             {/* U7-09.TEAM (2026-08-17): Team is now visible to any authenticated

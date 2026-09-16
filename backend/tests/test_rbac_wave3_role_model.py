@@ -37,10 +37,10 @@ class TestPerRolePermissions:
         p = user_perms({
             "role": "warehouse_manager",
             "_role_perms_map": {
-                "warehouse_manager": ["finance", "ledger", "tasks"],
+                "warehouse_manager": ["finance", "people", "tasks"],
             },
         })
-        assert p == {"finance", "ledger", "tasks"}, (
+        assert p == {"finance", "people", "tasks"}, (
             f"tenant role permissions must replace role defaults; got {p}"
         )
 
@@ -51,7 +51,7 @@ class TestPerRolePermissions:
             "role": "warehouse_manager",
             "permissions": ["ask"],   # explicit user override
             "_role_perms_map": {
-                "warehouse_manager": ["finance", "ledger"],
+                "warehouse_manager": ["finance", "people"],
             },
         })
         assert p == {"ask"}, (
@@ -122,9 +122,9 @@ class TestOwnerExclusions:
     def test_owner_excluded_from_specific_perm(self):
         """Owner with finance in exclusions gets everything BUT finance."""
         from core import user_perms
-        p = user_perms({"role": "owner", "_owner_exclusions": ["finance", "ledger"]})
+        p = user_perms({"role": "owner", "_owner_exclusions": ["finance", "people"]})
         assert "finance" not in p
-        assert "ledger" not in p
+        assert "people" not in p
         # Other perms intact
         assert "team_manage" in p
         assert "workflows" in p

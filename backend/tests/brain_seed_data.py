@@ -48,7 +48,7 @@ DOCS = [
     },
     {
         "id": "gst_filing", "title": "GST Filing Procedure FY26", "kind": "filing",
-        "department": "finance", "visibility": "private", "roles_allowed": ["finance", "ledger"],
+        "department": "finance", "visibility": "private", "roles_allowed": ["finance"],
         "body": "GST compliance for FY26. GSTR-1 is filed monthly by the 11th and GSTR-3B by "
                 "the 20th. Input tax credit is reconciled every quarter against GSTR-2B. The "
                 "company GSTIN is 33AABCW1234R1Z9. Any mismatch above 5 percent is escalated to "

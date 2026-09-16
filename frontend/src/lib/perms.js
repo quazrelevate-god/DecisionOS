@@ -4,8 +4,10 @@ export const PERMISSIONS = [
   { key: "voice_capture", label: "Voice Box (Decision Desk capture)" },
   { key: "data_input", label: "Data Input" },
   { key: "people", label: "People / Contacts" },
-  { key: "finance", label: "Finance (invoices, payments, 360°)" },
-  { key: "ledger", label: "Finance Ledger (expenses, assets, inventory)" },
+  // 2026-09-16 — one Finance permission. "Finance Ledger" was a second toggle
+  // for the same page: every ledger endpoint accepted either key and the page
+  // had no per-tab gate. A small business has one finance person.
+  { key: "finance", label: "Finance (invoices, payments, expenses, assets, inventory)" },
   { key: "workflows", label: "Workflows" },
   { key: "tasks", label: "Tasks" },
   { key: "brain", label: "Company Brain" },
@@ -28,7 +30,7 @@ export const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 const BASE = ["inbox", "data_input", "workflows", "tasks", "brain", "ask"];
 export const ROLE_DEFAULT_PERMS = {
   sales: [...BASE],
-  finance: [...BASE, "finance", "ledger"],
+  finance: [...BASE, "finance"],
 };
 
 export function defaultPermsForRole(role) {

@@ -617,12 +617,13 @@ async def reconcile_payment(tenant_id: str, payment: dict, matched_by: str = "au
 
 # --- Access control ---------------------------------------------------------
 async def require_ledger(user: dict = Depends(get_current_user)) -> dict:
+    """Finance is one permission (2026-09-16). This used to accept "ledger" OR
+    "finance", which is how two toggles came to mean the same thing."""
     if user.get("role") == "owner":
         return user
-    perms = user_perms(user)
-    if "ledger" in perms or "finance" in perms:
+    if "finance" in user_perms(user):
         return user
-    raise HTTPException(status_code=403, detail="You don't have access to the Ledger")
+    raise HTTPException(status_code=403, detail="You don't have access to Finance")
 
 
 # --- Input models -----------------------------------------------------------

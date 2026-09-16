@@ -44,7 +44,8 @@ def test_tenant_role_map_when_no_explicit_perms():
 
 def test_role_defaults_sales_and_finance():
     assert user_perms({"role": "sales"}) == set(ROLE_DEFAULT_PERMS["sales"])
-    assert user_perms({"role": "finance"}) == set(_BASE_PERMS) | {"finance", "ledger"}
+    # One Finance permission since 2026-09-16 ("ledger" merged into it).
+    assert user_perms({"role": "finance"}) == set(_BASE_PERMS) | {"finance"}
 
 
 def test_unknown_custom_role_falls_back_to_base():

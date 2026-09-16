@@ -24,21 +24,22 @@ def test_owner_gets_all_permission_keys():
 
 def test_owner_exclusions_subtract():
     """A tenant can opt an owner OUT of specific perms (e.g. finance visibility)."""
-    perms = user_perms({"role": "owner", "_owner_exclusions": ["finance", "ledger"]})
-    assert "finance" not in perms and "ledger" not in perms
+    perms = user_perms({"role": "owner", "_owner_exclusions": ["finance", "people"]})
+    assert "finance" not in perms and "people" not in perms
     assert "tasks" in perms
 
 
 def test_sales_gets_base_only():
     perms = user_perms({"role": "sales"})
     assert perms == set(_BASE_PERMS)
-    for denied in ("finance", "ledger", "people", "approvals", "team_manage"):
+    for denied in ("finance", "people", "approvals", "team_manage"):
         assert denied not in perms
 
 
-def test_finance_gets_base_plus_finance_ledger():
+def test_finance_gets_base_plus_finance():
+    """2026-09-16 — one Finance permission; "ledger" was merged into it."""
     perms = user_perms({"role": "finance"})
-    assert perms == set(_BASE_PERMS) | {"finance", "ledger"}
+    assert perms == set(_BASE_PERMS) | {"finance"}
     for denied in ("team_manage", "approvals", "decisions_approve", "people"):
         assert denied not in perms
 
@@ -46,7 +47,7 @@ def test_finance_gets_base_plus_finance_ledger():
 def test_operations_role_has_no_default_perms_entry():
     """GAP (T10-03.4): 'operations' is a canonical role + in DEFAULT_ROLES,
     but has NO entry in ROLE_DEFAULT_PERMS -> it silently falls back to
-    _BASE_PERMS. An operations member gets NO people/finance/ledger by
+    _BASE_PERMS. An operations member gets NO people/finance by
     default. This test pins that reality; product decision: intended or a gap?"""
     assert "operations" not in ROLE_DEFAULT_PERMS
     perms = user_perms({"role": "operations"})
@@ -74,10 +75,10 @@ def test_tenant_role_map_used_when_no_override():
 def test_override_beats_tenant_role_map():
     perms = user_perms({
         "role": "sales",
-        "permissions": ["ledger"],
+        "permissions": ["finance"],
         "_role_perms_map": {"sales": ["people"]},
     })
-    assert perms == {"ledger"}
+    assert perms == {"finance"}
 
 
 def test_temp_grant_unions_on_top():

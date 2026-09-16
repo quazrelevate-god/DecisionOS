@@ -139,6 +139,54 @@ def proposal_is_empty(proposal: Optional[dict]) -> bool:
     return not any((proposal or {}).get(k) for k in PROPOSAL_KINDS)
 
 
+# What the proposal would actually CREATE, as opposed to remember.
+ACTIONABLE_KINDS = ("tasks", "workflows", "meetings", "reminders")
+
+
+def decision_worthy(extracted: Optional[dict], proposal: Optional[dict]) -> bool:
+    """Is this capture a decision, or just news?
+
+    2026-09-16 — the Desk was raising decisions for remarks. "The new office
+    chairs arrived and everyone likes them" came back as a decision titled
+    "Office chairs received and approved by team": nothing to do, nothing to
+    choose, and an owner asked to approve it. The old gate only refused a
+    capture that produced NOTHING at all, so a single memory note was enough to
+    put a card on someone's desk.
+
+    A decision is work being directed, or a rule being set:
+      * anything the proposal would CREATE — a task, a workflow move, a meeting,
+        a reminder — is work, so it is a decision;
+      * with nothing to create, it is a decision only if the owner stated one:
+        a directive, an approval, or a policy. The AI's own "observation" type
+        (and a capture it read as no decision at all) is news, not a decision.
+
+    News with a lasting fact in it is kept in the company brain instead — see
+    the `noted` outcome in process_voice_note. Nothing is lost; nobody is asked
+    to approve the weather.
+    """
+    if any((proposal or {}).get(k) for k in ACTIONABLE_KINDS):
+        return True
+    items = [i for i in ((extracted or {}).get("decisions") or []) if isinstance(i, dict)]
+    return any((i.get("type") or "directive") != "observation" for i in items)
+
+
+async def save_memory_notes(tenant_id: str, user_id: str, notes, decision_id=None) -> int:
+    """Keep the lasting facts from a capture in the company brain. Returns how
+    many were written. Used both when a decision is approved and when a capture
+    turned out to be news worth remembering rather than a decision."""
+    written = 0
+    for m in (notes or []):
+        if not (m or {}).get("text"):
+            continue
+        await db.memory.insert_one({
+            "id": new_id(), "tenant_id": tenant_id, "text": m["text"],
+            "tag": m.get("tag", "note"), "created_by": user_id, "created_at": now_iso(),
+            "decision_id": decision_id,
+        })
+        written += 1
+    return written
+
+
 def _words(text: str) -> set:
     return set(re.findall(r"[a-z0-9]+", (text or "").lower()))
 
@@ -339,13 +387,8 @@ async def _create_reminders_and_memory(tenant_id, note, proposal):
             "priority": "medium", "status": "todo", "due_date": r.get("due_date"),
             "decision_id": note.get("decision_id"), "source": "reminder", "created_at": now_iso(),
         })
-    for m in (proposal.get("memory_notes") or []):
-        if m.get("text"):
-            await db.memory.insert_one({
-                "id": new_id(), "tenant_id": tenant_id, "text": m["text"],
-                "tag": m.get("tag", "note"), "created_by": note["created_by"], "created_at": now_iso(),
-                "decision_id": note.get("decision_id"),
-            })
+    await save_memory_notes(tenant_id, note["created_by"], proposal.get("memory_notes"),
+                            decision_id=note.get("decision_id"))
 
 
 async def _create_meetings(tenant_id, note, decision_id, meetings):
@@ -518,12 +561,26 @@ async def process_voice_note(note_id: str, hold: bool = False):
         proposal = await build_proposal(tenant_id, extracted, troles, members, cat_keys, om["pipelines"])
 
         # ASK-32 1.4 — a question, a greeting or "no directive" is not a decision.
-        if proposal_is_empty(proposal):
+        # 2026-09-16 — nor is a remark about how things are going. News that
+        # carries a lasting fact is kept in the company brain and said so;
+        # nobody is asked to approve it.
+        if not decision_worthy(extracted, proposal):
+            notes = [m for m in (proposal or {}).get("memory_notes") or [] if m.get("text")]
+            kept = await save_memory_notes(tenant_id, note["created_by"], notes)
+            if kept:
+                first = notes[0]["text"].strip()
+                said = (f"Kept in the Company Brain: {first}" if kept == 1
+                        else f"Kept {kept} notes in the Company Brain. {first}")
+                outcome, event = "noted", "capture_noted"
+                logline = f"Kept {kept} note(s) from a capture: {first[:80]}"
+            else:
+                said = extracted.get("summary", "")
+                outcome, event = "nothing_to_decide", "capture_nothing_to_decide"
+                logline = f"Nothing to decide in a capture: {(extracted.get('summary') or '')[:80]}"
             await db.voice_notes.update_one({"id": note_id}, {"$set": {
-                "status": "done", "outcome": "nothing_to_decide", "decision_id": None,
-                "summary": extracted.get("summary", ""), "processed_at": now_iso()}})
-            await log_activity(tenant_id, note["created_by"], "capture_nothing_to_decide",
-                               f"Nothing to decide in a capture: {(extracted.get('summary') or '')[:80]}", "voice_note", note_id)
+                "status": "done", "outcome": outcome, "decision_id": None,
+                "summary": said, "processed_at": now_iso()}})
+            await log_activity(tenant_id, note["created_by"], event, logline, "voice_note", note_id)
             return
 
         decision_id = new_id()

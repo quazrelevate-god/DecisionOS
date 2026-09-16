@@ -8,6 +8,56 @@ Numbers below are from the live owner company (Sharma), read-only, 2026-09-15.
 
 ---
 
+## What raises a decision (2026-09-16)
+
+Driven in the browser on a live workspace — sign in, Desk, type, watch, approve,
+follow the task — and the AI's reading was good: the right people, the right due
+dates, a Tanglish directive understood. One thing was wrong at the root.
+
+**"The new office chairs arrived and everyone likes them" became a decision.**
+Titled "Office chairs received and approved by team", 0 tasks, 0 approvals,
+sitting on the owner's desk waiting to be approved. The AI had read it correctly
+— type `observation`, confidence 0.95 — and the pipeline raised a decision
+anyway: the only gate asked whether the capture produced *nothing at all*, and a
+single memory note was enough to get past it. This is the "23 of 79 decisions
+had nothing to do" number in ASK-33, at its source.
+
+The rule now, in two halves:
+
+1. **The prompt** (`extraction.extract` 1.1) opens with a decision guard. A
+   decision is what an owner DECIDED or is DIRECTING — it changes what the
+   company will do or the rules it works by. Named as not decisions, with
+   examples: a report on how things are; small talk, thanks, a test; a question;
+   thinking out loud with no conclusion ("we MIGHT move" is not "we ARE
+   moving"); an unintelligible fragment. A lasting business fact may leave ONE
+   memory note; a greeting leaves nothing. And it may never invent a "follow up
+   on" / "monitor" / "inform the team about" task to wrap around a remark.
+2. **The pipeline** (`services.voice.decision_worthy`) decides regardless of
+   what the model returns: a decision is raised when the proposal would CREATE
+   something — a task, a workflow move, a meeting, a reminder — or when the
+   owner stated a directive, an approval or a policy. A rule with no work
+   attached ("never buy from Ravi Packers again") stays a decision, because a
+   policy that slipped into the company brain unapproved is worse than one extra
+   card. News with a fact in it is kept in the Company Brain and the Desk says
+   so; chatter is kept nowhere.
+
+Live acceptance, real LLM calls: `backend/scripts/ux_capture_guard_0916.py` —
+ten captures, 10/10. A meeting, a vendor switch, a policy, a discount and a
+Tanglish directive raise decisions; two status remarks, a greeting, a question
+and a musing raise none.
+
+### Still open from the same run
+
+- **A capture the AI could not read says "Nothing to decide in that."** With AI
+  processing off the server logs `ai_consent_required`, the capture is marked
+  done with no proposal, and the Desk reports it as a benign outcome. It is the
+  first thing a new workspace hits, because consent starts off. Next.
+- **An approved meeting is half a to-do.** Approving writes a real
+  `calendar_events` row (it does show on /calendar) *and* a companion task
+  titled "Meeting with X (Tomorrow at 4:00 PM)" on the capturer with no due
+  date. Verified 2026-09-16; deferred at the founder's call.
+
+
 ## Where it stands today
 
 **The flow**

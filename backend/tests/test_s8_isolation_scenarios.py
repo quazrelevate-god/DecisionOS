@@ -213,6 +213,19 @@ def test_otp_is_keyed_by_phone_and_tenant(with_test_db):
 
     async def scenario(db):
         restore = _use_db(db, otp)
+        # 2026-09-16 — stub the gateway. _issue_otp calls the APM SMS provider
+        # for real, and .env carries a live key, so every run of this test was
+        # texting a login code to whoever owns the number below. The test is
+        # about the (phone, tenant) key, not about sending anything.
+        saved_send = (otp._apm_send_and_fetch_otp, otp._send_otp_sms)
+
+        async def _no_gateway(_norm):
+            return None
+
+        async def _no_sms(_phone, _code):
+            return True
+
+        otp._apm_send_and_fetch_otp, otp._send_otp_sms = _no_gateway, _no_sms
         try:
             phone_norm, disp = "9820011122", "+91 98200 11122"
             await otp._issue_otp(phone_norm, disp, tenant_id="A", enforce_cooldown=False)
@@ -220,6 +233,7 @@ def test_otp_is_keyed_by_phone_and_tenant(with_test_db):
             rows = await db.otp_codes.find({"phone": phone_norm}, {"_id": 0, "tenant_id": 1}).to_list(10)
             return sorted(r["tenant_id"] for r in rows)
         finally:
+            otp._apm_send_and_fetch_otp, otp._send_otp_sms = saved_send
             restore()
 
     tenants = with_test_db(scenario)

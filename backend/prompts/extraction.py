@@ -7,7 +7,13 @@ from prompts.base import Prompt, register
 # --- ai_extract: founder directive -> structured operational JSON -------------
 EXTRACT = register(Prompt(
     name="extraction.extract",
-    version="1.0",
+    # 1.1 (2026-09-16) — the decision guard. A live workspace was raising
+    # decisions for remarks: "the new office chairs arrived and everyone likes
+    # them" came back as a decision titled "Office chairs received and approved
+    # by team", 0 tasks, waiting for an owner's approval. This channel is where
+    # an owner records what they DECIDED; a report on how things are going is
+    # not a decision, and the prompt now says so with examples.
+    version="1.1",
     intent="Convert a founder's spoken/written directive into structured decisions/tasks/workflow_events/reminders/meeting_events/memory_notes JSON.",
     template=(
         "You are the extraction engine of DecisionOS, an operating brain for small businesses. "
@@ -25,6 +31,34 @@ EXTRACT = register(Prompt(
         '"meeting_events": [{"title": string, "when": string, "due_in_days": integer or null}], '
         '"memory_notes": [{"text": string, "tag": string}]}. '
         "${members_line}"
+        # --- the guard: what is, and is not, a decision -------------------
+        "\n\nWHAT COUNTS AS A DECISION — read this before anything else. "
+        "This is the channel where the owner of a small business records what they have DECIDED or what they are "
+        "DIRECTING someone to do. Something belongs here only if it changes what the company will DO, or the rules "
+        "it works by. Raise decisions and tasks for: work someone must carry out; a choice the owner has made (a "
+        "supplier, a price, a discount, a hire, a payment); a rule from now on; something to be scheduled; a "
+        "follow-up somebody must remember. "
+        "\nThese are NOT decisions. For every one of them, \"decisions\" and \"tasks\" MUST be empty arrays: "
+        "(a) a report on how things are — 'the new chairs arrived and everyone likes them', 'the Delhi shipment "
+        "reached', 'sales were good last month', 'the team is happy'; "
+        "(b) small talk, greetings, thanks, or a test — 'good morning', 'thank you', 'ok', 'testing one two'; "
+        "(c) a question — 'how many invoices are pending?', 'what did we decide about Kapoor?'; "
+        "(d) thinking out loud with no conclusion — 'maybe we should look at new packaging some day', 'we could "
+        "try a second shift'. 'We MIGHT move to Anand Industries' is not a decision; 'we ARE moving to Anand "
+        "Industries' is; "
+        "(e) a fragment you cannot understand, or an empty/near-empty transcript. "
+        "\nFor (a) and (e): if the capture carries a durable business FACT worth remembering later — a supplier let "
+        "us down, a customer prefers something, a price moved — return ONE memory_note and nothing else. For (b), "
+        "(c) and (d) return every array empty, memory_notes included: a greeting is not a company record. "
+        "\nNEVER invent work to wrap around a remark. No 'follow up on', 'monitor', 'note that', 'acknowledge' or "
+        "'inform the team about' task unless the owner actually asked for it. If they did not ask for work, there "
+        "is no task. And never write a decision whose whole content is that something happened. "
+        "\nUse type \"observation\" ONLY in the rare case where the owner is recording a judgement they want on the "
+        "record but nothing follows from it. If nothing follows and it is just news, it is not a decision at all — "
+        "leave \"decisions\" empty. "
+        "\nWhen you are unsure whether a capture is a decision, prefer empty arrays and a lower \"confidence\": a "
+        "missed decision costs the owner one retype; an invented one puts a card on their desk asking them to "
+        "approve something nobody decided.\n\n"
         "Use 'reminders' for simple personal follow-ups (e.g. 'call Kumar tomorrow', 'follow up with Toyota next Monday'). "
         "Use 'meeting_events' for meetings/reviews/calls to be scheduled (e.g. 'arrange a sales review on Friday', 'set up a vendor call Monday'). Keep meetings OUT of reminders. "
         "Use 'workflow_events' ONLY for concrete multi-step operational pipelines this business tracks on the board. "

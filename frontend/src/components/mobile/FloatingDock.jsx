@@ -66,72 +66,57 @@ export function dockSlots(user, t = (k, d) => d) {
   return slots.filter((s) => (seen.has(s.to) ? false : seen.add(s.to)));
 }
 
-function DockItem({ to, label, icon: Icon, testid, active, named = true, onClick }) {
+function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
   /* KM-49 — THE SELECTED SLOT IS FLAT, and it is an INDICATOR rather than a
      treatment of the whole slot. Founder: "the neumorphic styled option is not
      nice in the bottom fab bar so make it a usual materialistic flat style menu
-     selection design."
+     selection design." KM-32's inset pair made a 56px slot look dented, and
+     depth is the app's grammar for a CONTROL you push, not for where you are.
 
-     KM-32 pressed the live slot in with a hand-rolled inset pair, on the
-     argument that depth survives a translucent bar over a moving bloom better
-     than colour does. It does — but it also made a 56px slot look dented, and
-     depth is the app's grammar for a CONTROL you push, not for where you
-     currently are. Material's answer is better here: a filled pill behind the
-     live slot, which reads at a glance without pretending the bar has a surface
-     you can press into.
+     ASK-39 — EVERY SLOT IS NAMED, and the pill goes back behind the ICON only.
+     ASK-37 put the label inside the live pill and left the rest as icons, on
+     the founder's reference. Their call now is the opposite and it is the
+     better one at five slots: an unlabelled icon is a guess, and four guesses
+     beside one word is a worse bar than five words. It also retires the whole
+     measure-and-yield apparatus ASK-38 needed — with every slot the same shape
+     there is nothing left to overflow, so "Money" cannot push "Desk" into an
+     ellipsis and the bar needs no ResizeObserver to know it.
 
-     ASK-37 — ONLY THE LIVE SLOT IS NAMED. Every slot used to carry its label
-     stacked under its icon, so the bar printed four words at once and the one
-     that mattered had to be found among them. The founder's reference puts the
-     label INSIDE the active pill, beside its icon, and leaves the rest as
-     icons. Two things follow from that and both are the point:
-       · the pill is the only text in the bar, so "where am I" is answered by
-         reading rather than by comparing four brightnesses;
-       · the three inactive slots stop reserving room for words they are not
-         showing, which is where the width for the expanded one comes from.
-     The colour, the icons and the opacities are exactly what they were —
-     bg-white/[.22] on the pill, white on the live slot, white/55 on the rest,
-     `fill` for the live icon and `regular` for the others.
-
-     THE LABEL IS STILL ANNOUNCED when it is not drawn: an icon-only control is
-     nameless to a screen reader, so the name moves to aria-label rather than
-     being lost with the text. */
+     DECLUTTERED means the two lines are one object: the icon sits in a 24px
+     pill that is the indicator, the label sits directly under it, and the gap
+     between them is 2px rather than the 4 a stacked pair defaults to — close
+     enough to read as one control, not an icon with a caption. */
   const content = (
     <>
-      <Icon size={22} weight={active ? "fill" : "regular"} aria-hidden="true" />
-      {active && named && (
-        /* truncate + the min-w-0 above it: below 360 there is genuinely not
-           enough bar for four targets and a whole word, and a clipped label on
-           a slot you are already standing in is a better failure than a bar
-           that overflows its own pill. */
-        <span data-dock-label="" className="min-w-0 truncate text-[length:var(--text-label)] font-semibold leading-none">
-          {label}
-        </span>
-      )}
+      <span
+        aria-hidden="true"
+        className={cn(
+          "grid h-6 w-11 place-items-center rounded-pill transition-colors duration-200",
+          active ? "bg-white/[.22]" : "bg-transparent"
+        )}
+      >
+        <Icon size={20} weight={active ? "fill" : "regular"} />
+      </span>
+      <span className="max-w-full truncate text-[length:var(--text-label)] font-semibold leading-none">
+        {label}
+      </span>
     </>
   );
-  /* .dock-item carries the >= 56x56 sizing (§8) — see index.css for why it is
-     a class rather than Tailwind min-w/min-h utilities. `min-w-0` alongside it
-     lets the ACTIVE slot give way first on a narrow screen: the pill's label
-     truncates before any of the three icon slots is squeezed under the touch
-     floor, because a clipped word is recoverable and a 40px tap target is not.
-     A flat fill and padding both interpolate, so the expansion can carry a
-     transition where KM-32's inset/outset pair could not. */
+  // .dock-item carries the >= 56x56 sizing (§8) — see index.css for why it is a
+  // class rather than Tailwind min-w/min-h utilities. --dock-item-min drops the
+  // WIDTH to the 44px floor MPWA-01 §5.1 requires, because five slots and five
+  // words do not fit five 56px boxes on a 360px phone; the height is untouched.
   const cls = cn(
-    "dock-item flex min-w-0 items-center justify-center gap-1.5 rounded-pill",
-    "transition-[background-color,color,padding] duration-200 motion-reduce:transition-none",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-    active ? cn("bg-white/[.22] text-white", named ? "px-3" : "px-0") : "px-0 text-white/55 hover:text-white/80"
+    "dock-item flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5",
+    "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+    active ? "text-white" : "text-white/55 hover:text-white/80"
   );
   const common = {
-    // The icon-only slots give their reserved width back to the live one.
-    style: active && named ? undefined : { "--dock-item-min": "2.75rem" },
+    style: { "--dock-item-min": "2.75rem" },
     "data-testid": testid,
     "data-active": active ? "true" : undefined,
     className: cls,
     "aria-current": active ? "page" : undefined,
-    // Named either way: the live slot by its visible label, the rest by this.
-    "aria-label": active ? undefined : label,
   };
   if (onClick) {
     return <button type="button" onClick={onClick} {...common}>{content}</button>;
@@ -178,41 +163,6 @@ export function FloatingDock({
       ? location.pathname === "/inbox" || location.pathname === "/"
       : location.pathname.startsWith(to);
 
-  const rowRef = React.useRef(null);
-  const [cramped, setCramped] = React.useState(false);
-  const activeKey = slots.find((s) => isActive(s.to))?.to || "";
-  /* ASK-38 — ONE NAMED SLOT, EVER. `More` being open is a different kind of
-     "active" from a route being active, and while the panel is up BOTH were
-     drawing a pill with a word in it — two names in a bar whose whole point is
-     that one slot is named, and at 390 the second one pushed the first into
-     clipping. The open panel is the thing you are in, so it takes the name and
-     the route slot keeps its fill only. */
-  const named = (isRoute) => !cramped && (moreOpen ? !isRoute : true);
-  // Pass 1: forget what we decided, so pass 2 always measures the NAMED layout.
-  React.useLayoutEffect(() => { setCramped(false); }, [activeKey, dexActive, moreOpen]);
-  React.useLayoutEffect(() => {
-    const row = rowRef.current;
-    if (!row || cramped || dexActive) return undefined;
-    /* THE SIGNAL IS THE LABEL BEING CUT, not the row overflowing. `min-w-0`
-       lets the pill give way first, so at 360 the row measured a tidy zero
-       while the pill itself was crushed to its icon with "Desk" clipped inside
-       it. Asking the label whether it fits is asking the actual question. */
-    const measure = () => {
-      const lbl = row.querySelector("[data-dock-label]");
-      setCramped((!!lbl && lbl.scrollWidth > lbl.clientWidth + 1) || row.scrollWidth > row.clientWidth + 1);
-    };
-    measure();
-    /* Again next frame, and again once the webfont has landed. A layout effect
-       runs before the browser has necessarily laid the label out with its real
-       face, and Inter is wider than the fallback — measured on /my-work, where
-       the first pass saw a label that fit and the founder saw "Wo…". */
-    const raf = requestAnimationFrame(measure);
-    let live = true;
-    document.fonts?.ready?.then(() => { if (live) measure(); });
-    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => setCramped(false));
-    ro?.observe(row);
-    return () => { live = false; cancelAnimationFrame(raf); ro?.disconnect(); };
-  }, [cramped, dexActive, activeKey, moreOpen]);
 
   return (
     <nav
@@ -226,7 +176,7 @@ export function FloatingDock({
       aria-label={t("nav.primary", "Primary")}
     >
       <div
-        ref={(el) => { barRef.current = el; rowRef.current = el; }}
+        ref={barRef}
         className={cn(
           // KR-14.3 · GLASS DOCK — the pill widens edge-to-edge (via
           // `app-dock-right` also anchoring the right side) and takes a
@@ -238,11 +188,15 @@ export function FloatingDock({
              edge plus a soft outer halo in the same warm white. That is the
              glow the founder liked in the reference — theirs was blue, and blue
              is not in this palette. */
-          /* ASK-38 — px-2 and gap-0.5, down from px-3 and gap-1. CRM makes a
-             fifth slot, and five 44px targets plus a word is 28px more than a
-             360px phone's bar holds; this is the 20px of the bar's own chrome
-             that can be given back without the pill touching its rounded end. */
-          "flex h-[4.5rem] w-full items-center justify-around gap-0.5 rounded-pill px-2",
+          /* ASK-38 — px-2 and gap-0.5, down from px-3 and gap-1: CRM makes a
+             fifth slot and the bar's own chrome is where the width came from.
+             ASK-39 — A SQUIRCLE, not a pill. `rounded-pill` on a 72px bar is a
+             36px end cap, which is a lozenge; the founder wants a rounded
+             rectangle. --radius-card (28px) is the app's own largest corner and
+             at this height it reads as the squircle they asked for without
+             becoming a capsule. The Dex FAB takes the same value, so the two
+             objects on this baseline are cut to one shape. */
+          "flex h-[4.5rem] w-full items-stretch justify-around gap-0.5 rounded-[var(--radius-card)] px-2",
           "bg-kr-ink/55 backdrop-blur-2xl backdrop-saturate-150",
           "border border-[hsl(40_30%_92%/.28)]",
           "shadow-[0_8px_32px_rgba(0,0,0,0.35),inset_0_1px_0_hsl(40_40%_96%/.22),0_0_20px_-4px_hsl(40_35%_92%/.30)]",
@@ -257,15 +211,6 @@ export function FloatingDock({
             exactly the right material, so it should do the work rather than be
             duplicated. py-2 is the "adequate spacing above and below" so the
             ribbons never touch the pill's edge. */}
-        {/* ASK-38 — THE LABEL YIELDS TO THE MEASUREMENT, not to a breakpoint.
-            With CRM in the bar there are five targets, and whether the live
-            one can also hold its word depends on the width, the slot count
-            (CRM and Money are both permission-gated) and the word itself —
-            "Money" is wider than "CRM". So it is measured rather than guessed:
-            the row is laid out named, and if that overflows, the labels go and
-            the pill falls back to the fill-only indicator KM-49 shipped. Two
-            passes and it settles; re-run whenever the width or the live slot
-            changes, so widening the window brings the word back. */}
         {dexActive ? (
           /* KM-51 — the field also appears when there is a DRAFT, whatever the
              mode. After a voice capture the transcript lands here as a preview:
@@ -321,7 +266,7 @@ export function FloatingDock({
           )
         ) : (
           slots.map((s) => (
-            <DockItem key={s.to} {...s} active={isActive(s.to)} named={named(true)} />
+            <DockItem key={s.to} {...s} active={isActive(s.to)} />
           ))
         )}
         <div className={cn("relative", dexActive && "hidden")}>
@@ -329,7 +274,6 @@ export function FloatingDock({
             to="#more"
             label={t("bottomnav.more", "More")}
             icon={DotsThree}
-            named={named(false)}
             testid="dock-more"
             active={moreOpen}
             onClick={onMore}

@@ -123,8 +123,21 @@ export function DexFab({ onOpen, recording = false, seconds = 0, onStop, intent 
         // MPWA-14: `app-fab-right` anchors to the centred shell's right edge so
         // it stays paired with the dock on a wide display; collapses to the
         // original 1rem on a phone.
-        "lg:hidden fixed app-fab-right z-[10000] bottom-safe-4",
-        "grid place-items-center rounded-pill shadow-brutal-lg transition-colors",
+        /* ASK-39 — SAME SHAPE, SAME CENTRE LINE AS THE DOCK.
+           Shape: --radius-card, the value the bar took, so the two objects on
+           this baseline are cut to one corner rather than a capsule beside a
+           rounded rectangle.
+           Alignment: both were `bottom-safe-4`, which aligns their FLOORS — and
+           the bar is 4.5rem tall against this button's 4rem, so its centre sat
+           4px below the bar's and the founder could see it. The offset is the
+           bar's height less this one's, halved, added to the same expression
+           `.bottom-safe-4` carries, so the pair stays centred if either height
+           ever moves. Under 360px the button drops to 3.75rem and the gap
+           becomes 6px, which is why the number is derived and not typed. */
+        "lg:hidden fixed app-fab-right z-[10000]",
+        "bottom-[calc(1rem+env(safe-area-inset-bottom,0px)+((4.5rem-4rem)/2))]",
+        "max-[359px]:bottom-[calc(1rem+env(safe-area-inset-bottom,0px)+((4.5rem-3.75rem)/2))]",
+        "grid place-items-center rounded-[var(--radius-card)] shadow-brutal-lg transition-colors",
         // No double-tap-to-zoom wait on this button — it is a control, and the
         // delay is time the browser spends deciding whether the tap was a
         // gesture before it will deliver the click.

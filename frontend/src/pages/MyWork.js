@@ -3433,9 +3433,19 @@ export default function MyWork() {
     ...(showApprovalsView
       ? [{ key: "approvals", label: t("mywork.view_approvals"), count: waitingOnMe, pick: () => goView(null, "approvals") }]
       : []),
+    /* ASK-39 — WORKFLOWS IS IN THIS LIST NOW, and the circle ASK-38 gave it is
+       gone. The circle was the right shape for "another surface" and the wrong
+       place for it: this dropdown is already where every top-level view of this
+       page is chosen, the sheet NAMES each one, and a wordless cycle icon on
+       the right had to be learned. It is last because it is the one entry that
+       is not a view of TASKS — the list reads as the task lenses, then the
+       board. */
+    ...(canSeeWorkflows
+      ? [{ key: "workflows", label: t("mywork.view_workflows"), pick: () => goView(null, "workflows") }]
+      : []),
   ];
   const mobileViewLabel = mobileViewOptions.find((o) => o.key === mobileView)?.label
-    || (mobileView === "workflows" ? t("mywork.view_workflows") : t("mywork.my_tasks"));
+    || t("mywork.my_tasks");
   // The filter dropdown lists only tabs that have items — same rule the old
   // chip strip used. "Completed" appears when any completed task exists.
   /* KM-49 — EVERY category, not just the ones with work in them. The `> 0`
@@ -3617,28 +3627,6 @@ export default function MyWork() {
               — reorder it, filter it — sit together, in the same shape, in
               the same place. */}
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
-            {/* ASK-38 — WORKFLOWS IS BACK IN THIS ROW, as a circle. KM-31 took
-                the Workflows pill out of here and made it a More tile, on the
-                argument that a pipeline board is a destination rather than a
-                lens on the task list — and the measurement above records that
-                Row 2 genuinely could not hold six controls while it was a
-                78px worded pill. A 44px circle is not that pill: it costs the
-                row 44px rather than 78, which is exactly what the AI toggle
-                beside it costs, and the row has held both since New Task moved
-                off it. The founder's call is that the board belongs beside the
-                controls of the page it shares, and the circle is the shape this
-                row already uses for "another surface". The route and the view
-                state are untouched; only the way in moved. */}
-            {canSeeWorkflows && (
-              <button type="button" data-testid="work-mobile-workflows"
-                onClick={() => goView(null, view === "workflows" ? "mywork" : "workflows")}
-                aria-pressed={view === "workflows"}
-                aria-label={t("mywork.view_workflows")}
-                title={t("mywork.view_workflows")}
-                className={`${MCIRCLE} ${view === "workflows" ? "kr-pressed" : "kr-pop"}`}>
-                <FlowArrow size={15} weight={view === "workflows" ? "fill" : "bold"} aria-hidden="true" />
-              </button>
-            )}
             {inSegmentView && canPrioritize && (
               <button type="button" onClick={() => { setAiPriority((v) => !v); setView("mywork"); }}
                 aria-pressed={aiPriority} data-testid="work-mobile-priority"
@@ -3667,15 +3655,27 @@ export default function MyWork() {
                 filters (Department, Person, Priority, Status); what is set is
                 named in the caption row underneath, not squeezed into this
                 pill, which Row 2 has no width for. */}
+            {/* ASK-39 — A CIRCLE, like the AI toggle beside it. KM-48 made
+                  this a worded pill because the thing it replaced was "an
+                  unlabelled sliders circle" nobody could read — and that was
+                  true of a circle sitting alone. It is not alone now: it is the
+                  second of a pair of 44px circles in a row whose left half
+                  names the view, and the caption under the row already says
+                  what is filtered in words. The count it carried moves to a
+                  dot, so "something is filtered" still shows without a number
+                  competing with the view pill's badge. */}
             {inSegmentView && (
               <button type="button" data-testid="work-mobile-category"
                 onClick={() => setFilterSheetOpen(true)}
                 aria-label={filtersActive ? `Filters: ${filterSummary}` : "Filters"}
                 aria-haspopup="dialog"
-                className={`${filtersActive ? "kr-pressed" : "kr-pop"} flex h-11 min-w-0 shrink items-center gap-1.5 rounded-pill pl-3 pr-3 text-[12px] font-medium`}>
-                <SlidersHorizontal size={14} weight="bold" aria-hidden="true" />
-                <span>Filter</span>
-                <span className="tabular-nums opacity-55">{tasksLoading ? "—" : list.length}</span>
+                title={filtersActive ? `Filters: ${filterSummary}` : "Filters"}
+                className={`${MCIRCLE} relative ${filtersActive ? "kr-pressed" : "kr-pop"}`}>
+                <SlidersHorizontal size={15} weight="bold" aria-hidden="true" />
+                {filtersActive && (
+                  <span aria-hidden="true"
+                    className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-kr-accent" />
+                )}
               </button>
             )}
             {/* ASK-6: leave spacer retired -- the view branch is gone. */}

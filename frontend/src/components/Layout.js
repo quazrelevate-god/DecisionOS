@@ -806,10 +806,28 @@ export default function Layout({ children }) {
              doubling to 64px, which read as dead space once main stopped being
              the scroller and its box could no longer scroll that padding away. */
           data-app-scroller=""
-          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-dock app-canvas lg:overflow-x-clip lg:pb-0"
+          /* ASK-39 1 — /inbox DROPS `pb-dock` ON A PHONE, and it has to for the
+             Desk to stop scrolling. `.pb-dock` is 7.5rem of clearance so the
+             last row of a scrolling page is never trapped under the floating
+             dock; the Desk's black sheet has carried that same clearance INSIDE
+             itself since ASK-35 1.2, so here it was being paid twice — and the
+             second payment is 120px of empty document below a page that now
+             measures exactly one screen, which is the whole of the overflow.
+             Every other route keeps it: they scroll, and they have no sheet. */
+          className={cn(
+            "min-h-0 flex-1 overflow-y-auto overflow-x-hidden app-canvas lg:overflow-x-clip lg:pb-0",
+            location.pathname.startsWith("/inbox") ? "lg:pb-dock" : "pb-dock"
+          )}
         >
           <AnnouncementBanner />
-          <div className="p-4 lg:p-8 px-gutter-safe lg:h-full lg:min-h-0 lg:flex lg:flex-col">{children}</div>
+          {/* ASK-39 1 — and /inbox drops the wrapper's own bottom padding on a
+              phone too, for the same reason: the Desk's sheet runs to the floor
+              and carries its own clearance, so 1rem of wrapper below it is 1rem
+              the page would have to scroll. */}
+          <div className={cn(
+            "p-4 lg:p-8 px-gutter-safe lg:h-full lg:min-h-0 lg:flex lg:flex-col",
+            location.pathname.startsWith("/inbox") && "max-lg:pb-0"
+          )}>{children}</div>
         </main>
       </div>
 

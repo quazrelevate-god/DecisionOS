@@ -420,27 +420,69 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
    on a phone: the inner one swallows the gesture and the page appears stuck.
    The card shows what fits and a control opens the rest in place, so there is
    only ever one thing scrolling — the page. */
-function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, children }) {
+function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, onExpandedChange, children }) {
   const [showAll, setShowAll] = useState(false);
   // A new tab starts closed; the last tab's "show everything" is not a claim
   // about this one.
   useEffect(() => { setShowAll(false); }, [tab]);
 
-  /* ASK-35 1.1 — THREE, AND THEN A CONTROL. ASK-34 B3 measured this: the
-     viewport, less the dock clearance, less the card's chrome, divided by a
-     real row. It was right about the constraint and wrong about the answer —
-     on a tall phone it filled the sheet with nine rows, which is a list, not a
-     summary, and the whole point of the tabbed card is that the Desk says what
-     is waiting rather than showing it all. A constant says that in one line,
-     and it took a ResizeObserver, two refs and a guarded setState with it. */
-  const shown = showAll ? rows : rows.slice(0, PHONE_ROWS);
+  /* ASK-35 1.1 — THREE, AND THEN A CONTROL: the Desk's job on a phone is to say
+     what is waiting, not to show it all.
+     ASK-39 — AND NO MORE THAN FIT, because the page no longer scrolls at rest.
+     A constant alone was right on a 390x844 phone and wrong on a 360x640 one,
+     where three rows plus the hero above them are ~100px taller than the screen
+     — and a fixed page that overflows is worse than a scrolling one. So the
+     count is `min(3, what the card's own box holds)`. This is ASK-34 B3's
+     machinery again with the lesson kept: it measures the CONTAINER it is in,
+     not the viewport, and it is capped at three, so it can only ever show
+     FEWER than the summary promises — never nine. */
+  const listRef = useRef(null);
+  const [fit, setFit] = useState(PHONE_ROWS);
+  /* True when even the trimmed card does not fit its box — see the note by the
+     effect that sets it. */
+  const [cramped, setCramped] = useState(false);
+  useEffect(() => {
+    const list = listRef.current;
+    const box = list?.parentElement;              // the card
+    if (!list || !box || typeof ResizeObserver === "undefined") return undefined;
+    const measure = () => {
+      const row = list.querySelector("[data-row]");
+      const rowH = row?.offsetHeight || 0;
+      if (!rowH) return;
+      // Whatever the card is that the list is not: the padding and the control.
+      const chrome = box.offsetHeight - list.offsetHeight;
+      /* Down to ZERO, not one. On a 360x640 phone the hero leaves the card
+         ~54px, and forcing a row it cannot draw makes the card overflow the
+         sheet — a card holding only "Show all 32" is the honest picture of
+         that screen, and the list is one tap away. */
+      const next = Math.max(0, Math.min(PHONE_ROWS, Math.floor((box.clientHeight - chrome) / rowH)));
+      setFit((f) => (f === next ? f : next));
+      /* THE PAGE IS FIXED TO ONE SCREEN UNLESS IT GENUINELY CANNOT HOLD THE
+         SUMMARY. On a 360x640 phone the hero leaves this card ~38px — less than
+         the "Show all" control by itself — and crushing it there is a worse
+         answer than letting that one page scroll. The signal is the card's own
+         content against its own box, asked after the row count has been
+         trimmed, so it only fires when trimming was not enough. */
+      setCramped(box.scrollHeight > box.clientHeight + 1);
+    };
+    const ro = new ResizeObserver(measure);
+    ro.observe(box);
+    measure();
+    return () => ro.disconnect();
+  }, [rows.length, tab, showAll]);
+
+  // Either the founder asked for the whole list, or the screen cannot hold the
+  // summary: both hand the page's height back so it can scroll.
+  useEffect(() => { onExpandedChange?.(showAll || cramped); }, [showAll, cramped, onExpandedChange]);
+
+  const shown = showAll ? rows : rows.slice(0, fit);
   const hidden = rows.length - shown.length;
 
   return (
     /* min-w-0: a grid item defaults to min-width:auto, i.e. its min-content,
        and a truncated title's min-content is the WHOLE title — which grew this
        card to 568px inside a 358px board. */
-    <div className={`min-w-0 ${TONE[tone]}`} data-testid={testid}>
+    <div className={`flex min-h-0 min-w-0 flex-1 flex-col ${TONE[tone]}`} data-testid={testid}>
       {/* THE TITLE ROW IS THE TABS. One segment material app-wide (KM-54..60):
           this is ScopeSlider, the Company/You control, cut for ink and sharing
           the width three ways. --tabs-trigger-h is the app's own tab height
@@ -470,7 +512,8 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, ch
           IT HUGS ITS CONTENT: no flex-1, no min-height. It ends where the last
           row or the show-all control ends, and the sheet's own padding-bottom
           (index.css, ASK-35 1.2) is what holds it clear of the dock. */}
-      <div className={cn(PHONE_CARD_INK, "mt-3 rounded-tile p-3")} data-testid={`${testid}-card`}>
+      <div className={cn(PHONE_CARD_INK, "mt-3 min-h-0 flex-1 rounded-tile p-3", showAll && "flex-none")} data-testid={`${testid}-card`}>
+        <div ref={listRef}>
         {children || (
           <>
             {loading && (
@@ -487,6 +530,7 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, ch
             ))}
           </>
         )}
+        </div>
 
         {/* THE MORE CONTROL — it opens the rest HERE, in place, and the page
             scrolls as it always does. Nothing new to learn and nothing nested. */}
@@ -732,6 +776,9 @@ export default function Desk() {
      Its badge is the three counts together, because the tab is the three feeds
      together. */
   const [phoneTab, setPhoneTab] = useState("decisions");
+  /* ASK-39 1 — "Show all" is the one thing that makes the phone's Desk taller
+     than a screen, so the page has to know about it. */
+  const [phoneExpanded, setPhoneExpanded] = useState(false);
   /* ASK-36 2 — the ids of decisions set aside with "Later". Subscribed rather
      than read once, because the well writes to the store while this page is
      mounted. */
@@ -829,20 +876,36 @@ export default function Desk() {
        takes its natural height and the desk below takes the rest, so the
        whole Desk sits inside the viewport and nothing scrolls. Below lg the
        same tree simply stacks and the phone scrolls. */
-    /* ASK-36 3 — THE SHEET REACHES THE FLOOR WHATEVER THE LISTS HOLD. ASK-35
-       1.2 gave the board a negative bottom margin that cancels main's dock
-       padding, which makes it run off the screen — but only when the page is
-       already at least a screen tall. On the Approvals tab with one row the
-       document is SHORTER than the viewport, so the black stopped where its
-       content did and the gradient showed under it (founder's screenshot).
-       The page takes a floor of one viewport below lg and the board takes the
-       slack: `100svh` (the small viewport, so a phone's collapsing URL bar
-       cannot make it overflow), less the top inset the page-header-slot adds
-       and the content wrapper's own `p-4` top and bottom. Nothing here applies
-       at lg, where ASK-35 G3 made it a card on a page on purpose. */
+    /* ASK-36 3 / ASK-39 1 — THE PHONE'S DESK IS ONE SCREEN, AND ONLY "SHOW ALL"
+       MAKES IT SCROLL.
+       ASK-36 gave the page a FLOOR of one viewport so the black sheet always
+       reached the bottom of the screen. A floor is not a ceiling: the hero and
+       the sheet together came to more than a screen, so the page scrolled and
+       the greeting slid away under the status bar (the founder's two
+       screenshots are the same page at two scroll positions). It is an exact
+       height now — from the page's own top to the bottom of the screen — so at
+       rest there is nothing to scroll, and the sheet still reaches the floor
+       because its negative bottom margin (index.css) bleeds it over the dock
+       clearance below.
+       THE TOP is what the header slot and the wrapper put above it:
+       env(safe-area-inset-top) + 0.5rem (the slot's own padding on /inbox,
+       Layout.js) + 1rem (the wrapper's p-4). Written as that sum rather than
+       as the 24px it computes to, so it follows if either moves.
+       `100svh`, the SMALL viewport, so a phone's collapsing URL bar can only
+       ever leave room rather than take it.
+       WHEN "SHOW ALL" IS OPEN the height comes off entirely and the page grows
+       to its content — which is the one moment the founder asked to be able to
+       scroll. Nothing here applies at lg, where ASK-35 G3 made the board a card
+       on a page on purpose. */
     <div
       data-testid="desk-page"
-      className="flex flex-col gap-6 max-lg:min-h-[calc(100svh-env(safe-area-inset-top,0px)-2.5rem)] lg:min-h-0 lg:flex-1"
+      data-phone-expanded={phoneExpanded ? "true" : undefined}
+      className={cn(
+        "flex flex-col gap-6 lg:min-h-0 lg:flex-1",
+        phoneExpanded
+          ? "max-lg:min-h-[calc(100svh-env(safe-area-inset-top,0px)-1.5rem)]"
+          : "max-lg:h-[calc(100svh-env(safe-area-inset-top,0px)-1.5rem)]"
+      )}
     >
       {/* ── LIGHT ZONE ───────────────────────────────────────────────── */}
       {/* KR-8.6 — the split and the gaps are MEASURED off the reference:
@@ -1105,7 +1168,13 @@ export default function Desk() {
            grid's right — enough to read as a wider plane than the content on
            it, and 12 of the wrapper's 32px of padding, so it can never reach
            the page edge. */
-        className={`kr-desk-board grid gap-5 max-lg:flex-1 lg:-mx-3 lg:-mb-2 lg:min-h-0 lg:flex-1 lg:gap-0 lg:grid-rows-[minmax(0,1fr)] ${showDecisions ? "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]" : ""}`}
+        /* ASK-39 1 — `max-lg:grid-rows-[minmax(0,1fr)]` is what makes the
+           sheet take the page's remaining height rather than its content's.
+           The board is a GRID, so the phone card's own `flex-1` is inert on it:
+           a grid item is sized by its row, and an auto row is never shrunk
+           below its content. It is the same fix ASK-34 7.2 made at lg, for the
+           same reason, one breakpoint down. */
+        className={`kr-desk-board grid gap-5 ${phoneExpanded ? "" : "max-lg:min-h-0 max-lg:flex-1 max-lg:grid-rows-[minmax(0,1fr)]"} lg:-mx-3 lg:-mb-2 lg:min-h-0 lg:flex-1 lg:gap-0 lg:grid-rows-[minmax(0,1fr)] ${showDecisions ? "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]" : ""}`}
       >
         {/* ASK-34 B — THE PHONE'S CARD. One card, three tabs, the same rows the
             desktop columns use. */}
@@ -1116,6 +1185,7 @@ export default function Desk() {
           tabs={phoneTabs}
           tab={phoneTab}
           onTab={setPhoneTab}
+          onExpandedChange={setPhoneExpanded}
           loading={phoneTab === "decisions" ? decisionsLoading : phoneTab === "approvals" ? !m.tasks : false}
           empty={phoneTab === "decisions" ? SECTIONS[0].empty : "Nothing waiting for your sign-off"}
           rows={phoneTab === "decisions" ? decisionRows : phoneTab === "approvals" ? approvalRows : []}

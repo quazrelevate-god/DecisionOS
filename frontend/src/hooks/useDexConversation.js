@@ -157,7 +157,7 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
      leaves the polling to the caller — whoever ends up showing the ending. */
   const ask = useCallback(async (question, { follow = true } = {}) => {
     const text = String(question || "").trim();
-    const withFiles = channel === "decide" && pendingFiles.length > 0;
+    const withFiles = pendingFiles.length > 0;
     if ((!text && !withFiles) || busy) return null;
     /* ASK-33.1 — ONE CAPTURE AT A TIME, enforced where the capture is made.
        A second send does reach the pipeline, so its decision still lands in the
@@ -196,8 +196,18 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
         onCommitted?.();
         return { ...sent, ok: true, noteId: data?.id || null };
       }
+      /* ASK-39 4 — the staged files leave with the question. /ask's contract is
+         {question, context_id} and nothing else, so the files do not ride the
+         request — they were uploaded into the Company Brain when they were
+         attached, and `_retrieve` searches that store by the plan's keywords
+         and by embedding. Naming them in the question is what points the
+         retrieval at them; it is also what the founder just said out loud, so
+         the transcript already reads that way. */
+      const named = pendingFiles.map((f) => f.name).join(", ");
+      const question = named ? `${text} (about the attached file${pendingFiles.length > 1 ? "s" : ""}: ${named})` : text;
+      setPendingFiles([]);
       // Verified shape: { type, answer, missing_information, suggested_questions }.
-      const { data } = await api.post("/ask", { question: text, context_id: ctxId });
+      const { data } = await api.post("/ask", { question, context_id: ctxId });
       if (data.query_context_id) setCtxId(data.query_context_id);
       push({
         role: "dex",
@@ -216,32 +226,57 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
     }
   }, [busy, channel, ctxId, dex, onCommitted, oneAtATime, pendingFiles, push]);
 
+  /* ASK-39 4 — ASK STAGES A FILE, IT DOES NOT SEND ONE.
+     Both channels used to post the moment a file was picked: a "File: x.webp"
+     turn from you and, on Ask, "Saved to your files. Open Decide if you want
+     Dex to act on it." That message was TRUE of where the bytes went — /files
+     is a bare reference store that nothing reads — and it was the wrong place
+     to send them. It also meant attaching was itself a send: no preview, no
+     chance to say what you wanted asked about it.
+     Ask now behaves exactly as Decide does. The file is uploaded (an id is
+     needed either way) and STAGED as a pending chip; nothing is posted to the
+     transcript; and you then speak or type the question that goes with it.
+     WHERE THE BYTES GO IS THE OTHER HALF. On Ask they go to
+     /api/brain/documents, not /files. That endpoint runs every upload through
+     services/files._read_reference_text — which sends images and PDFs to
+     services/vision.ai_read_image_general — then chunks and embeds the text
+     into the same store /ask already searches (routers/brain.py `_retrieve`
+     reads brain_documents). So "what does this invoice say" is a question the
+     backend can already answer; the sheet was simply posting to the endpoint
+     that files things away rather than the one that reads them. No backend
+     change: this is two existing endpoints wired the right way round. */
   const attach = useCallback(async (file, label = "File") => {
     if (!file) return;
-    push({ role: "user", text: `${label}: ${file.name}` });
     setBusy(true);
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const { data } = await api.post("/files", fd, { headers: { "Content-Type": "multipart/form-data" } });
-      const id = data?.id || data?.file?.id;
-      if (channel === "decide" && id) {
-        /* ASK-33 — the entry also keeps the File and its type, so the Desk
-           well can draw a preview chip. DexChat still reads only the name. */
-        setPendingFiles((p) => [...p, { id, name: file.name, type: file.type || "", file }]);
-        push({ role: "dex", text: "Attached. Say or type what to do with it — or press send and I'll read it." });
+      let data;
+      if (channel === "decide") {
+        ({ data } = await api.post("/files", fd, { headers: { "Content-Type": "multipart/form-data" } }));
       } else {
-        push({ role: "dex", text: "Saved to your files. Open Decide if you want Dex to act on it." });
+        // The Company Brain reads what it is given; /files only keeps it.
+        fd.append("title", file.name);
+        fd.append("kind", "other");
+        fd.append("visibility", "private");
+        ({ data } = await api.post("/brain/documents", fd, { headers: { "Content-Type": "multipart/form-data" } }));
       }
-      // An upload that came back without an id attached nothing on the decide
-      // channel, whatever it said above; the caller must not treat it as done.
-      return channel === "decide" && !id ? { ok: false, message: "That upload didn't go through." } : { ok: true, id };
+      const id = data?.id || data?.file?.id;
+      if (id) {
+        /* ASK-33 — the entry also keeps the File and its type, so the Desk
+           well can draw a preview chip. DexChat reads the name and the type. */
+        setPendingFiles((p) => [...p, { id, name: file.name, type: file.type || "", file }]);
+      }
+      // An upload that came back without an id attached nothing, whatever it
+      // said; the caller must not treat it as done.
+      return id ? { ok: true, id } : { ok: false, message: "That upload didn't go through." };
     } catch (err) {
       const detail = err.response?.data?.detail;
       const message = typeof detail === "string" && detail ? detail : "That upload didn't go through.";
+      // A failure DOES belong in the transcript when there is one — it is the
+      // only place the founder would see it — and it is handed back as well,
+      // because the Desk well has no transcript to print it in.
       push({ role: "dex", text: message });
-      // ASK-33 — the Desk well has no transcript to print this in, so the
-      // reason is also handed back to the caller. DexChat ignores it.
       return { ok: false, message };
     } finally {
       setBusy(false);
@@ -331,7 +366,10 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
     return true;
   }, [dex, oneAtATime]);
 
-  const canSendFiles = channel === "decide" && pendingFiles.length > 0;
+  /* ASK-39 4 — a staged file is something to send on EITHER channel now: on
+     Decide it rides with the capture, on Ask it is already in the Brain and the
+     question points at it. */
+  const canSendFiles = pendingFiles.length > 0;
 
   /** What the FAB does right now — the single source for its icon and action.
       KM-51 — A DRAFT NOW OUTRANKS THE MODE: recording wins (stop), then any

@@ -139,6 +139,45 @@ function Outcome({ o, onReview, onRetry, onDismiss, retryDisabled }) {
   );
 }
 
+/* ASK-39 4 — one staged file, waiting for the question that goes with it.
+   An image previews itself (the founder attaches photographs of paperwork, and
+   a filename is not a preview of a photograph); everything else shows the
+   paperclip and its name. The object URL is revoked on unmount — these are
+   megabyte-sized blobs and the sheet can hold several. */
+function AttachedChip({ file, onRemove, disabled }) {
+  const isImage = !!file.file && (file.type || "").startsWith("image/");
+  const [src, setSrc] = React.useState(null);
+  React.useEffect(() => {
+    if (!isImage) return undefined;
+    const url = URL.createObjectURL(file.file);
+    setSrc(url);
+    return () => URL.revokeObjectURL(url);
+  }, [isImage, file.file]);
+  return (
+    <li className="flex h-8 max-w-[11rem] items-center gap-1.5 rounded-pill bg-white/15 pl-1 pr-0.5 text-[11px] text-white/85">
+      {src
+        ? <img src={src} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />
+        : (
+          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white/10">
+            <Paperclip size={11} weight="bold" aria-hidden="true" />
+          </span>
+        )}
+      <span className="min-w-0 truncate" title={file.name}>{file.name}</span>
+      {/* 24px drawn; the app's touch rule gives the button 44px below lg and
+          the row's own height keeps it from colliding with the chip beside it. */}
+      <button
+        type="button"
+        onClick={onRemove}
+        disabled={disabled}
+        aria-label={`Remove ${file.name}`}
+        className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-white/60 hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-40"
+      >
+        <X size={11} weight="bold" aria-hidden="true" />
+      </button>
+    </li>
+  );
+}
+
 /** One turn in the transcript. */
 function Bubble({ m, index }) {
   const mine = m.role === "user";
@@ -284,7 +323,7 @@ function Bubble({ m, index }) {
  * @param {object}   dex     the shared useDexCapture instance from Layout
  */
 export function DexChat({ open, onClose, dex, chat, channel }) {
-  const { log, busy, mode, setMode, ask, attach, retry, canRetry, pendingFiles = [] } = chat;
+  const { log, busy, mode, setMode, ask, attach, removeFile, retry, canRetry, pendingFiles = [] } = chat;
   const navigate = useNavigate();
   /* ASK-33 Phase 4 — Review opens the decision the way the phone already opens
      one: /inbox?decision=<id>, which the Desk raises in DecisionDialog, as it
@@ -449,11 +488,20 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                 />
               ))}
               {busy && <Bubble m={{ role: "dex", text: "Thinking…", pending: true }} index={log.length} />}
+              {/* ASK-39 4 — THE PREVIEW, not a sent message. A file used to
+                  post itself into the transcript the instant it was picked;
+                  it is staged now, and this is what staged looks like — an
+                  image shows itself, anything else shows its glyph and its
+                  name, and either can be taken off before the question goes.
+                  The same chip the Desk well has had since ASK-33, in this
+                  sheet's palette. */}
               {pendingFiles.length > 0 && (
-                <p data-testid="dex-attached" className="self-end rounded-pill bg-white/15 px-3 py-1 text-[11px] text-white/85">
-                  <Paperclip size={11} weight="bold" className="mr-1 inline" aria-hidden="true" />
-                  {pendingFiles.map((f) => f.name).join(", ")}
-                </p>
+                <ul data-testid="dex-attached" aria-label="Attached files"
+                  className="flex flex-wrap justify-end gap-1.5 self-end">
+                  {pendingFiles.map((f) => (
+                    <AttachedChip key={f.id} file={f} onRemove={() => removeFile?.(f.id)} disabled={busy} />
+                  ))}
+                </ul>
               )}
               <div ref={endRef} />
             </div>

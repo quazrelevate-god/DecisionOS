@@ -3060,8 +3060,15 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         .kr-desk-board {
             margin-left:  calc(-1 * max(1rem, env(safe-area-inset-left, 0px)));
             margin-right: calc(-1 * max(1rem, env(safe-area-inset-right, 0px)));
-            margin-bottom: calc(-1rem - 7.5rem - env(safe-area-inset-bottom, 0px)
-                                - var(--dex-notice-space, 0px));
+            /* ASK-39 1 — NO NEGATIVE BOTTOM MARGIN AT ALL NOW. It used to
+               cancel the content wrapper's p-4 AND main's `.pb-dock`, because
+               the page scrolled and both sat below the sheet. /inbox drops both
+               of those on a phone (Layout.js), so the clearance is paid exactly
+               once — by the padding-bottom below, inside the sheet — and a
+               margin still cancelling them pushed the sheet's box past the
+               bottom of a page that now measures exactly one screen, which was
+               the whole of the overflow. The sheet's floor IS the page's floor
+               IS the screen's floor. */
             padding-bottom: calc(7.5rem + env(safe-area-inset-bottom, 0px)
                                 + var(--dex-notice-space, 0px));
             border-radius: calc((var(--tabs-trigger-h) + 0.5rem) / 2)

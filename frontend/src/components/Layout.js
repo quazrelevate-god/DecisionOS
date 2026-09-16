@@ -108,7 +108,9 @@ const NAV = [
 /* MW-18 — routes that opt OUT of the shell's 1400px cap. Keep this short and
    make a page earn its place: the cap exists because most pages are composed
    against it, and a page that goes edge-to-edge has to be built for it. */
-const WIDE_ROUTES = ["/my-work"];
+// 2026-09-16: /team opts in — the desktop org chart is a pannable canvas that
+// uses the whole width, the founder's reference drawn edge to edge.
+const WIDE_ROUTES = ["/my-work", "/team"];
 
 export default function Layout({ children }) {
   const { user, tenant, logout } = useAuth();

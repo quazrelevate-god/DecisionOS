@@ -40,7 +40,7 @@ const ABSENCE_REASONS = [
    icon, and its actions are the task drawer's pills (components/karma/glass).
    Waiting on a decision is amber, as a waiting task is; a question back to the
    requester is violet, so the two open states never read alike. */
-const STATUS_META = {
+export const STATUS_META = {
   pending: { label: "Pending", tone: "bg-amber-50 text-amber-800 ring-amber-100", icon: Clock },
   approved: { label: "Approved", tone: "bg-emerald-50 text-emerald-700 ring-emerald-100", icon: CheckCircle },
   rejected: { label: "Rejected", tone: "bg-rose-50 text-rose-700 ring-rose-100", icon: XCircle },
@@ -48,7 +48,7 @@ const STATUS_META = {
 };
 const LEAVE_SECONDARY = `flex h-11 items-center gap-1.5 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`;
 const inp = "w-full nm-field px-3 py-2 text-sm";
-const typeLabel = (k) => LEAVE_TYPES.find((t) => t.key === k)?.label || k;
+export const typeLabel = (k) => LEAVE_TYPES.find((t) => t.key === k)?.label || k;
 const fmtRange = (lv) => lv.from_date === lv.to_date ? lv.from_date : `${lv.from_date} → ${lv.to_date}`;
 
 function RequestLeaveDialog({ onDone }) {

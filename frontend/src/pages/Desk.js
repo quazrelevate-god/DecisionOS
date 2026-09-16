@@ -33,6 +33,8 @@ import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { inrCompact } from "../lib/format";
 import { cn } from "../lib/utils";
+// ASK-36 2 — which decisions the founder read and set aside (see the file).
+import { clearDeferred, deferDecision, getDeferred, pruneDeferred, subscribeDeferred } from "../lib/deferredDecisions";
 import { selfScore } from "../lib/karmaScore";
 import { isDemoTenant, demoDelta } from "./_operatingScoreDemo";
 import {
@@ -214,11 +216,30 @@ function DeskRow({ r, first, testid }) {
       onClick={r.onOpen}
       onKeyDown={(e) => { if (e.key === "Enter") r.onOpen(); }}
       data-testid={`${testid}-row-${r.id}`}
-      className={`flex cursor-pointer items-center justify-between gap-3 py-[7px] ${first ? "" : "border-t border-white/[.14]"}`}
+      data-deferred={r.deferred ? "true" : undefined}
+      /* ASK-36 2 — A ROW THE FOUNDER SET ASIDE. Dex finished reading their
+         capture, they pressed "Later" instead of Review, and until now the
+         decision landed back in this column indistinguishable from the ones
+         that arrived while they were not looking. It is marked: the section's
+         own hue as a 2px bar down the left edge and the faintest wash behind
+         it, the title lifted from neutral-300 to full white. Not a chip and not
+         a colour on the text — the row is dense and already carries an amount,
+         two actions and a link, and this has to read at a glance without
+         competing with any of them. The mark is spoken too, in the meta line,
+         so it is not colour alone. */
+      className={`flex cursor-pointer items-center justify-between gap-3 py-[7px] ${first ? "" : "border-t border-white/[.14]"} ${
+        r.deferred ? "-mx-2 rounded-lg border-l-2 border-l-[hsl(var(--kr-glass-from))] bg-white/[.05] pl-2 pr-2" : ""
+      }`}
     >
       <div className="flex min-w-0 flex-col gap-0.5">
-        <p className="truncate text-[15px] font-medium leading-5 tracking-[-0.006em] text-neutral-300">{r.title}</p>
-        {r.meta && <p className="truncate text-xs leading-4 text-neutral-500">{r.meta}</p>}
+        <p className={`truncate text-[15px] font-medium leading-5 tracking-[-0.006em] ${r.deferred ? "text-white" : "text-neutral-300"}`}>{r.title}</p>
+        {(r.meta || r.deferred) && (
+          <p className="truncate text-xs leading-4 text-neutral-500">
+            {r.deferred && <span className="font-medium text-neutral-300">Set aside</span>}
+            {r.deferred && r.meta ? " · " : ""}
+            {r.meta}
+          </p>
+        )}
       </div>
       {/* ASK-34 7.3 — the amount, then the two actions, then the open icon, all
           in one row with a 10px trough between them (the two actions are 8px
@@ -699,11 +720,23 @@ export default function Desk() {
      the count from the moment it is tapped; the refetch after the commit makes
      it true. An Undo puts both back. */
   const liveDecisions = decisionCards.filter((c) => !retiring.has(c.id));
+  /* Anything that has left the feed has been decided, so it stops being
+     deferred. Pruned from the FULL feed, not the live slice, or a row hidden by
+     an undo window in flight would lose its mark and get it back. */
+  /* Keyed on target_id, which IS the decision's id — desk.py writes the same
+     value into `id` and `target_id`, and `target_id` is the one the well's
+     ending hands back, so this is the field that can never drift. */
+  useEffect(() => { if (decisionCards.length) pruneDeferred(decisionCards.map((c) => c.target_id || c.id)); }, [decisionCards]);
   /* ASK-34 B1 — the phone's three tabs. `watch` is the group that was three
      stacked cards under the two columns: Due today, Leave requests, Slipping.
      Its badge is the three counts together, because the tab is the three feeds
      together. */
   const [phoneTab, setPhoneTab] = useState("decisions");
+  /* ASK-36 2 — the ids of decisions set aside with "Later". Subscribed rather
+     than read once, because the well writes to the store while this page is
+     mounted. */
+  const [deferred, setDeferred] = useState(getDeferred);
+  useEffect(() => subscribeDeferred(setDeferred), []);
   const watchCount = (counters?.due_today || 0) + (canApproveLeave ? pendingLeaves.length : 0) + (counters?.on_fire || 0);
   const decisionCount = counters
     ? Math.max(0, counters.needs_decision - decisionCards.filter((c) => retiring.has(c.id)).length)
@@ -746,7 +779,9 @@ export default function Desk() {
     title: c.title,
     meta: c.context_line,
     amount: Number(c.amount) > 0 ? inrCompact(c.amount) : null,
-    onOpen: () => setOpenDecisionId(c.target_id),
+    onOpen: () => { clearDeferred(c.target_id); setOpenDecisionId(c.target_id); },
+    // ASK-36 2 — read, then set aside. The row says so.
+    deferred: deferred.includes(c.target_id),
     /* ASK-32 1.3 and 2.4 — ONLY WHAT IS MINE TO DECIDE. The feed already draws
        that line and it draws it on the server: desk.py marks a card "review"
        when it sits in my approver queue (or is unassigned and I am an owner)
@@ -757,8 +792,8 @@ export default function Desk() {
     actions: c.cta === "review" ? (
       <RowActions
         what={c.title}
-        onApprove={() => approveRow(c.id, () => api.post(`/decisions/${c.target_id}/approve`), `Approved — ${c.title}`)}
-        onReject={() => rejectRow(c.id, () => api.post(`/decisions/${c.target_id}/reject`), `Rejected — ${c.title}`)}
+        onApprove={() => { clearDeferred(c.target_id); approveRow(c.id, () => api.post(`/decisions/${c.target_id}/approve`), `Approved — ${c.title}`); }}
+        onReject={() => { clearDeferred(c.target_id); rejectRow(c.id, () => api.post(`/decisions/${c.target_id}/reject`), `Rejected — ${c.title}`); }}
       />
     ) : null,
   }));
@@ -794,7 +829,21 @@ export default function Desk() {
        takes its natural height and the desk below takes the rest, so the
        whole Desk sits inside the viewport and nothing scrolls. Below lg the
        same tree simply stacks and the phone scrolls. */
-    <div data-testid="desk-page" className="flex flex-col gap-6 lg:min-h-0 lg:flex-1">
+    /* ASK-36 3 — THE SHEET REACHES THE FLOOR WHATEVER THE LISTS HOLD. ASK-35
+       1.2 gave the board a negative bottom margin that cancels main's dock
+       padding, which makes it run off the screen — but only when the page is
+       already at least a screen tall. On the Approvals tab with one row the
+       document is SHORTER than the viewport, so the black stopped where its
+       content did and the gradient showed under it (founder's screenshot).
+       The page takes a floor of one viewport below lg and the board takes the
+       slack: `100svh` (the small viewport, so a phone's collapsing URL bar
+       cannot make it overflow), less the top inset the page-header-slot adds
+       and the content wrapper's own `p-4` top and bottom. Nothing here applies
+       at lg, where ASK-35 G3 made it a card on a page on purpose. */
+    <div
+      data-testid="desk-page"
+      className="flex flex-col gap-6 max-lg:min-h-[calc(100svh-env(safe-area-inset-top,0px)-2.5rem)] lg:min-h-0 lg:flex-1"
+    >
       {/* ── LIGHT ZONE ───────────────────────────────────────────────── */}
       {/* KR-8.6 — the split and the gaps are MEASURED off the reference:
           36 / 56 with a wide 8% trough between. */}
@@ -895,7 +944,8 @@ export default function Desk() {
                covering the greeting, the score cluster and the KPI strip. */
             growToPhoneRef={heroRef}
             onExpandedChange={setDexExpanded}
-            onReview={(id) => setOpenDecisionId(id)}
+            onReview={(id) => { clearDeferred(id); setOpenDecisionId(id); }}
+            onLater={(id) => { deferDecision(id); setDeferred(getDeferred()); }}
           />
         </div>
 
@@ -1055,7 +1105,7 @@ export default function Desk() {
            grid's right — enough to read as a wider plane than the content on
            it, and 12 of the wrapper's 32px of padding, so it can never reach
            the page edge. */
-        className={`kr-desk-board grid gap-5 lg:-mx-3 lg:-mb-2 lg:min-h-0 lg:flex-1 lg:gap-0 lg:grid-rows-[minmax(0,1fr)] ${showDecisions ? "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]" : ""}`}
+        className={`kr-desk-board grid gap-5 max-lg:flex-1 lg:-mx-3 lg:-mb-2 lg:min-h-0 lg:flex-1 lg:gap-0 lg:grid-rows-[minmax(0,1fr)] ${showDecisions ? "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]" : ""}`}
       >
         {/* ASK-34 B — THE PHONE'S CARD. One card, three tabs, the same rows the
             desktop columns use. */}

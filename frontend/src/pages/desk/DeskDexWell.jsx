@@ -117,11 +117,13 @@ function AttachmentChip({ file, onRemove, disabled }) {
  * @param {Function}        [onExpandedChange] told true/false as the well becomes
  *                                             and stops being the workspace, so
  *                                             the Desk can fade what it covers
+ * @param {Function}        [onLater]          ASK-36 2 — told the decision id
+ *                                             when a ready one is set aside
  * @param {Function}        [onReview]         ASK-33 Phase 3 — opens a ready
  *                                             decision in the Desk's existing
  *                                             DecisionDialog
  */
-export function DeskDexWell({ className, testid, growToRef, growToPhoneRef, onExpandedChange, onReview }) {
+export function DeskDexWell({ className, testid, growToRef, growToPhoneRef, onExpandedChange, onReview, onLater }) {
   const { user } = useAuth();
   // The gate every Dex capture surface uses (DexFab, DexCaptureBar). This used to
   // list DexSheet too; DexSheet was removed from Layout in 97c2bfc (KM-23) and is
@@ -162,7 +164,16 @@ export function DeskDexWell({ className, testid, growToRef, growToPhoneRef, onEx
      when the recording stops (KM-51). There is no mode to switch into. */
   const recording = !!dex.recording;
   const canSend = !!chat.draft.trim() || chat.pendingFiles.length > 0;
-  const intent = dex.recording ? "stop" : canSend ? "send" : "mic";
+  /* ASK-36 1 — AN ATTACHMENT MUST NOT EAT THE MICROPHONE. `canSend` drove this,
+     and pendingFiles makes canSend true — so the moment a document was attached
+     the mic turned into a send arrow and the only way left to say what to do
+     with it was to type. On the very screen whose own words are "Attached. Say
+     or type what to do with it". Only TEXT in the field turns it into send now;
+     a file on its own leaves the mic a mic, which is the whole point of
+     attaching something and then speaking about it. Sending a bare file with no
+     instruction is still possible — the field's Enter key sends whatever
+     `canSend` allows — it just is not what the button offers. */
+  const intent = dex.recording ? "stop" : chat.draft.trim() ? "send" : "mic";
 
   /* ASK-33 Phase 5 — THE FIELD GROWS TO TWO LINES, no further, so a decision
      can be read back whole before it is sent (at 360px one line holds about
@@ -465,7 +476,9 @@ export function DeskDexWell({ className, testid, growToRef, growToPhoneRef, onEx
     // Upload or transcript still on its way: a tap here would record over the
     // words that are about to come back (KM-51).
     if (dex.sending || chat.busy) return;
-    if (canSend) { send(); return; }
+    // The button does what its glyph says, and its glyph follows the FIELD, not
+    // the attachments (see `intent`).
+    if (chat.draft.trim()) { send(); return; }
     dex.startRecording();
   };
 
@@ -538,7 +551,18 @@ export function DeskDexWell({ className, testid, growToRef, growToPhoneRef, onEx
         <button type="button" data-testid="desk-dex-review" onClick={() => onReview?.(outcome.decisionId)} className={inkPill}>
           Review
         </button>
-        <button type="button" onClick={collapse} className={quietPill}>Later</button>
+        {/* ASK-36 2 — "Later" is a decision about the decision: it was read,
+            understood and set aside. The Desk's Decisions column marks the rows
+            that happened to, so the founder can find what they walked away
+            from instead of hunting for it among everything else. */}
+        <button
+          type="button"
+          data-testid="desk-dex-later"
+          onClick={() => { onLater?.(outcome.decisionId); collapse(); }}
+          className={quietPill}
+        >
+          Later
+        </button>
       </div>
     </div>
   ) : outcome.kind === "nothing" ? (

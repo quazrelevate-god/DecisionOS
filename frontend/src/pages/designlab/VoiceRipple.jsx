@@ -1,4 +1,4 @@
-/* ASK-44 · VoiceRipple — a neumorphic ripple that listens.
+/* ASK-44 / ASK-45 · VoiceRipple — a neumorphic ripple that listens.
  *
  * LAB ONLY, ON PURPOSE. The founder: "don't place it anywhere in our mobile
  * PWA, use the design lab page — once we finalize it we will add it to our web
@@ -18,13 +18,22 @@
  * surface, lit from where everything else in the app is lit from — the wave
  * reads as the stage itself moving rather than as ink on top of it.
  *
- * ── AND WHAT MAKES IT FLUID ──────────────────────────────────────────────
- * A ring is not a circle. Its radius is r(θ) = R · (1 + Σ aᵢ·sin(kᵢθ + ωᵢt)),
- * three harmonics, and the amplitudes scale with how loud the room was when
- * that ring was born — so a quiet room sends out near-perfect circles and a
- * raised voice sends out something that wobbles as it travels. Soft edges come
- * from the blur on both strokes plus a fade that runs to zero at the rim, so
- * nothing ever ends on a hard line.
+ * ── ASK-45 · WHAT MAKES IT WATER RATHER THAN A CIRCLE ────────────────────
+ * It was three fixed sine harmonics, which is a wobble with a period: watch it
+ * for ten seconds and the eye finds the repeat. Every ring now carries its own
+ * RANDOM shape — a handful of control points around the circle, smoothed with
+ * a Catmull-Rom curve so there are no corners, and each ring gets a fresh set.
+ * Two of them, in fact: the ring is born with one and morphs into the second as
+ * it travels, which is what stops the outline being a rigid object flying
+ * outward. `water` is how far those points are allowed to push (0 is a perfect
+ * circle), and the deformation RELAXES as the ring ages — surface tension pulls
+ * a real wave back toward round, so this one does too.
+ *
+ * ── ASK-45 · AND THE ELASTIC RETURN ──────────────────────────────────────
+ * The radius is a damped spring rather than a ramp: it rushes out, overshoots,
+ * pulls back and settles into its travel. `elastic` is the size of that
+ * overshoot, and the same spring rings through the ridge's depth, so a wave
+ * that springs back also breathes darker and lighter as it goes.
  *
  * ── THE LEVEL IS REAL ────────────────────────────────────────────────────
  * AnalyserNode on the live stream, RMS per frame, then the app's own curve
@@ -34,10 +43,10 @@
  * difference between fluid and jittery.
  *
  * ── REDUCED MOTION ───────────────────────────────────────────────────────
- * Nothing travels. The stage draws its rim once and the level is shown as a
- * single ring that thickens — the app's rule since ASK-34 is that a decorative
- * animation does not run when the system asks for stillness, and a ripple is
- * decorative even when the data behind it is real.
+ * Nothing travels. One ring answers the level by thickening — the app's rule
+ * since ASK-34 is that a decorative animation does not run when the system asks
+ * for stillness, and a ripple is decorative even when the data behind it is
+ * real.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -48,16 +57,55 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const LEVEL = (rms) => Math.min(1, Math.pow(rms * 3.2, 0.65));
 const ATTACK = 0.34;   // how fast the envelope rises toward a louder frame
 const RELEASE = 0.07;  // …and how slowly it falls back
-const RING_MS_LOUD = 190;   // cadence at full voice
+const RING_MS_LOUD = 190;   // cadence at full voice, before `density`
 const RING_MS_QUIET = 620;  // …and in a quiet room
-const LIFE_MS = 2600;       // how long a ring takes to reach the rim and go
+const LIFE_MS = 2600;       // a ring's travel time, before `speed`
+const POINTS = 7;           // control points around a ring's outline
+
+/* ASK-45 · THE DEFAULTS ARE THE THING BEING JUDGED, so they live here in one
+   block rather than scattered through the drawing code. The lab's knobs write
+   these same keys; whatever the founder settles on is what gets pasted back. */
+export const RIPPLE_DEFAULTS = {
+  gain: 1,        // how hard a voice pushes the surface
+  thickness: 1,   // how heavy a wave's ridge is
+  softness: 1,    // how far the ridge blurs into the page
+  water: 0.55,    // 0 = a circle · 1 = a wave with its own mind
+  elastic: 0.45,  // the overshoot-and-settle as it travels
+  speed: 1,       // travel time
+  density: 1,     // how many waves are in flight at once
+};
 
 const reduced = () =>
   typeof window !== "undefined" &&
   !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-export function VoiceRipple({ size = 320, gain = 1, softness = 1, simulate = false }) {
-  const wrapRef = useRef(null);
+/* A ring's own outline: POINTS random offsets around the circle. Two sets per
+   ring (see the header) so the shape can morph while it travels. */
+const seed = () => Array.from({ length: POINTS }, () => Math.random() * 2 - 1);
+
+/* Catmull-Rom through the control points — the curve that reads as water.
+   Linear interpolation would give the outline corners, and cosine gives it a
+   regular bulge at every control point; this one passes through the points with
+   a continuous tangent, which is why the result looks poured rather than
+   drawn. */
+const smooth = (ring, th) => {
+  const k = ring.length;
+  const x = (th / (Math.PI * 2)) * k;
+  const i = Math.floor(x);
+  const f = x - i;
+  const p0 = ring[(i - 1 + k) % k];
+  const p1 = ring[i % k];
+  const p2 = ring[(i + 1) % k];
+  const p3 = ring[(i + 2) % k];
+  return 0.5 * (
+    (2 * p1) +
+    (-p0 + p2) * f +
+    (2 * p0 - 5 * p1 + 4 * p2 - p3) * f * f +
+    (-p0 + 3 * p1 - 3 * p2 + p3) * f * f * f
+  );
+};
+
+export function VoiceRipple({ size = 320, config = RIPPLE_DEFAULTS, simulate = false }) {
   const canvasRef = useRef(null);
   const stageRef = useRef(null);
   const [live, setLive] = useState(false);
@@ -68,12 +116,12 @@ export function VoiceRipple({ size = 320, gain = 1, softness = 1, simulate = fal
      60fps and React does not need to hear about any of it (the same reason
      Layout drives the dock's wave from `dexLevelsRef`). */
   const levelRef = useRef(0);      // the smoothed envelope, 0..1
-  const ringsRef = useRef([]);     // { born, push }
+  const ringsRef = useRef([]);     // { born, push, a, b, spin }
   const audioRef = useRef(null);   // { ctx, stream, analyser, data }
   const rafRef = useRef(0);
   const lastRingRef = useRef(0);
-  const knobsRef = useRef({ gain, softness, simulate, live: false });
-  knobsRef.current = { gain, softness, simulate, live };
+  const cfgRef = useRef({ ...RIPPLE_DEFAULTS, simulate, live: false });
+  cfgRef.current = { ...RIPPLE_DEFAULTS, ...config, simulate, live };
 
   /* ── the microphone ──────────────────────────────────────────────────── */
   const stop = useCallback(() => {
@@ -116,11 +164,10 @@ export function VoiceRipple({ size = 320, gain = 1, softness = 1, simulate = fal
 
   useEffect(() => stop, [stop]);
 
-  /* ── the frame loop: read the room, move the rings, draw the surface ──── */
+  /* ── the frame loop: read the room, move the waves, draw the surface ──── */
   useEffect(() => {
     const canvas = canvasRef.current;
-    const wrap = wrapRef.current;
-    if (!canvas || !wrap) return undefined;
+    if (!canvas) return undefined;
     const ctx2d = canvas.getContext("2d");
     /* Canvas `filter` is the cleanest blur there is, and Safari only learned it
        in 17. Where it is missing the softness comes from a shadow of the
@@ -149,17 +196,14 @@ export function VoiceRipple({ size = 320, gain = 1, softness = 1, simulate = fal
     const ro = new ResizeObserver(refit);
     ro.observe(canvas);
     /* AND ON WINDOW RESIZE, which is not the same event. The observer fires
-       when the canvas's OWN size changes; the app's zoom step changes on
-       resize (hooks/useUiScale) and that leaves the element's own size exactly
-       where it was — 320 own pixels before and after — so nothing above would
-       have said the backing store is now the wrong number of real ones. The
-       first render of this page proved it: the pane opened narrow, the canvas
-       was sized for a 0.8 scale, and when the window grew into a 0.9 one the
-       store stayed at 256 where it should have been 288. */
+       when the canvas's OWN size changes; the app's zoom step changes on resize
+       (hooks/useUiScale) and that leaves the element's own size exactly where it
+       was, so nothing above would have said the backing store is now the wrong
+       number of real pixels. */
     window.addEventListener("resize", refit);
 
     const read = (now) => {
-      const { gain: g, simulate: sim, live: isLive } = knobsRef.current;
+      const { gain, simulate: sim, live: isLive } = cfgRef.current;
       let raw = 0;
       if (sim) {
         /* A stand-in so the motion can be judged without granting the mic:
@@ -179,26 +223,23 @@ export function VoiceRipple({ size = 320, gain = 1, softness = 1, simulate = fal
         }
         raw = LEVEL(Math.sqrt(sum / data.length));
       }
-      const target = Math.min(1, raw * g);
+      const target = Math.min(1, raw * gain);
       // Fast up, slow down: a voice's attack is sharp and its tail is not.
       const k = target > levelRef.current ? ATTACK : RELEASE;
       levelRef.current += (target - levelRef.current) * k;
       return levelRef.current;
     };
 
-    const drawRing = (cx, cy, R, alpha, relief, wobble, phase, soft) => {
+    /* One wave. `shape` is the ring's own outline (two random sets, blended by
+       age), `amp` how far it is allowed to push, `relief` how deep the ridge
+       is, `weight` the line, `soft` the blur. */
+    const drawWave = (cx, cy, R, alpha, relief, shape, amp, spin, weight, soft) => {
       if (R <= 2 || alpha <= 0.002) return;
-      const STEPS = 96;
+      const STEPS = 128;
       const path = new Path2D();
       for (let i = 0; i <= STEPS; i += 1) {
         const th = (i / STEPS) * Math.PI * 2;
-        /* Three harmonics — 2, 3 and 5 — so the shape never repeats into
-           something that reads as a pattern. */
-        const w = 1
-          + wobble * 0.55 * Math.sin(2 * th + phase * 1.10)
-          + wobble * 0.30 * Math.sin(3 * th - phase * 0.80)
-          + wobble * 0.15 * Math.sin(5 * th + phase * 1.60);
-        const r = R * w;
+        const r = R * (1 + amp * shape(th + spin));
         const x = cx + Math.cos(th) * r;
         const y = cy + Math.sin(th) * r;
         if (i === 0) path.moveTo(x, y); else path.lineTo(x, y);
@@ -207,11 +248,10 @@ export function VoiceRipple({ size = 320, gain = 1, softness = 1, simulate = fal
 
       /* THE RIDGE. Dark down-and-right, white up-and-left, both blurred — the
          same light the rest of the app is lit by (.kr-pressed's inset pair). */
-      const off = 1 + 2.2 * relief;
-      ctx2d.lineWidth = 1 + 2.6 * relief;
-      ctx2d.lineJoin = "round";
-
+      const off = (1 + 2.2 * relief) * Math.min(1.6, weight);
       const blur = 0.6 + 2.4 * soft * (1 - relief * 0.4);
+      ctx2d.lineWidth = (1 + 2.6 * relief) * weight;
+      ctx2d.lineJoin = "round";
       const ridge = (dx, dy, colour) => {
         ctx2d.save();
         if (hasFilter) ctx2d.filter = `blur(${blur.toFixed(2)}px)`;
@@ -227,17 +267,17 @@ export function VoiceRipple({ size = 320, gain = 1, softness = 1, simulate = fal
 
     const frame = (now) => {
       rafRef.current = requestAnimationFrame(frame);
-      const { softness: soft } = knobsRef.current;
+      const { softness, thickness, water, elastic, speed, density } = cfgRef.current;
       const level = read(now);
       const cx = box / 2;
       const cy = box / 2;
       const hub = box * 0.135;             // the mic's own radius
-      const rim = box * 0.5 - 6;           // where a ring dies
+      const rim = box * 0.5 - 6;           // where a wave dies
       ctx2d.clearRect(0, 0, box, box);
 
-      /* The aura under the mic: a soft radial bloom that breathes with the
-         voice. It is the one part that is a fill rather than a ridge, because
-         what it represents is light spilling out of the hub, not a ripple. */
+      /* The aura under the mic: a soft bloom that breathes with the voice. It
+         is the one part that is a fill rather than a ridge, because what it
+         represents is light spilling out of the hub, not a wave. */
       const auraR = hub * (1.15 + 0.9 * level);
       const aura = ctx2d.createRadialGradient(cx, cy, hub * 0.6, cx, cy, auraR);
       aura.addColorStop(0, `hsl(0 0% 100% / ${(0.40 + 0.35 * level).toFixed(3)})`);
@@ -248,34 +288,60 @@ export function VoiceRipple({ size = 320, gain = 1, softness = 1, simulate = fal
       ctx2d.fill();
 
       if (still) {
-        /* Reduced motion: one ring, no travel. Its thickness is the level, so
-           the surface still answers a voice — it just does not move. */
-        drawRing(cx, cy, hub + (rim - hub) * 0.42, 0.55, 0.25 + 0.55 * level, 0, 0, soft);
+        /* Reduced motion: one ring, no travel. Its weight is the level, so the
+           surface still answers a voice — it just does not move. */
+        const s = seedShape(ringsRef.current[0] || (ringsRef.current[0] = newRing(0, 0.5)), 1);
+        drawWave(cx, cy, hub + (rim - hub) * 0.42, 0.55, 0.25 + 0.55 * level,
+          s, water * 0.05, 0, thickness, softness);
         return;
       }
 
-      // Emit: louder rooms send rings more often and push them harder.
-      const cadence = RING_MS_QUIET - (RING_MS_QUIET - RING_MS_LOUD) * level;
+      // Emit: louder rooms send waves more often, and `density` scales that.
+      const cadence = (RING_MS_QUIET - (RING_MS_QUIET - RING_MS_LOUD) * level) / Math.max(0.2, density);
       if (now - lastRingRef.current > cadence) {
         lastRingRef.current = now;
-        ringsRef.current.push({ born: now, push: 0.12 + 0.88 * level });
+        ringsRef.current.push(newRing(now, 0.12 + 0.88 * level));
       }
 
       const rings = ringsRef.current;
       for (let i = rings.length - 1; i >= 0; i -= 1) {
         const ring = rings[i];
-        // Life runs faster when the ring was born loud: a shout travels.
-        const age = (now - ring.born) / (LIFE_MS * (1.25 - 0.45 * ring.push));
+        // Life runs faster when the wave was born loud: a shout travels.
+        const age = (now - ring.born) / ((LIFE_MS / Math.max(0.2, speed)) * (1.25 - 0.45 * ring.push));
         if (age >= 1) { rings.splice(i, 1); continue; }
-        /* Ease-out so a ring leaves the hub quickly and drifts at the rim,
-           which is what water does and what a linear ramp never looks like. */
-        const t = 1 - Math.pow(1 - age, 2.2);
+
+        /* ASK-45 · THE ELASTIC RETURN. The base travel is an ease-out — quick
+           away from the hub, drifting at the rim. On top of it rides a damped
+           oscillation: the wave overshoots, pulls back, overshoots less, and
+           settles. `elastic` is how much of that is allowed, and the same term
+           rings through the ridge's depth below, so a wave that springs also
+           breathes darker and lighter as it goes. */
+        const ease = 1 - Math.pow(1 - age, 2.2);
+        const spring = Math.exp(-3.4 * age) * Math.sin(age * Math.PI * 3.1);
+        const t = Math.max(0, Math.min(1.08, ease + elastic * 0.18 * spring));
         const R = hub + (rim - hub) * t;
+
         // Fades to nothing at the rim; nothing ends on a hard line.
         const alpha = ring.push * Math.pow(1 - age, 1.35);
-        drawRing(cx, cy, R, alpha, (1 - age) * ring.push, 0.035 * ring.push, now / 900, soft);
+        const relief = (1 - age) * ring.push * (1 + elastic * 0.35 * spring);
+        /* Surface tension: the outline relaxes toward round as it travels, so a
+           wave is at its most irregular where it is born. */
+        const amp = water * 0.11 * ring.push * (1 - age * 0.55);
+        drawWave(cx, cy, R, alpha, Math.max(0, relief), seedShape(ring, age), amp,
+          ring.spin * age, thickness, softness);
       }
     };
+
+    /* A ring's outline at a given age: its first random set morphing into its
+       second, so the shape is alive while it travels rather than a rigid
+       object flying outward. */
+    function seedShape(ring, age) {
+      const w = Math.min(1, age * 1.2);
+      return (th) => smooth(ring.a, th) * (1 - w) + smooth(ring.b, th) * w;
+    }
+    function newRing(born, push) {
+      return { born, push, a: seed(), b: seed(), spin: (Math.random() - 0.5) * 1.2 };
+    }
 
     rafRef.current = requestAnimationFrame(frame);
     return () => {
@@ -309,21 +375,21 @@ export function VoiceRipple({ size = 320, gain = 1, softness = 1, simulate = fal
   }, []);
 
   return (
-    <div className="flex flex-col items-center gap-3" ref={wrapRef}>
+    <div className="flex flex-col items-center gap-3">
       <div
         ref={stageRef}
-        className="relative grid place-items-center rounded-full"
+        className="relative grid place-items-center"
         style={{ width: size, height: size }}
         data-testid="voice-ripple"
         data-live={live ? "true" : undefined}
       >
-        {/* THE STAGE IS A WELL. .kr-pressed is the app's "pushed in" material
-            and that is what a ripple needs to happen inside — a dish, lit from
-            the top-left, with the waves running across it. */}
-        <div className="kr-pressed absolute inset-0 rounded-full" aria-hidden="true" />
+        {/* ASK-45 — NO DISH. The stage was a .kr-pressed well, which drew a hard
+            circular rim around the whole thing; the founder's call is that the
+            rim goes. The waves now happen on the page's own ground and the only
+            edges on screen are the ones the sound makes. */}
         <canvas
           ref={canvasRef}
-          className="absolute inset-0 h-full w-full rounded-full"
+          className="absolute inset-0 h-full w-full"
           style={{ width: size, height: size }}
           aria-hidden="true"
         />
@@ -369,7 +435,7 @@ export function VoiceRipple({ size = 320, gain = 1, softness = 1, simulate = fal
         {error
           ? <span className="text-kr-accent">{error}</span>
           : still
-            ? "Reduced motion is on, so the ripple holds still — the ring answers the level instead."
+            ? "Reduced motion is on, so the surface holds still — the ring answers the level instead."
             : live
               ? "Listening — speak, and the surface answers."
               : simulate

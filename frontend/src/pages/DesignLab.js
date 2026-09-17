@@ -31,7 +31,7 @@ import { DexWave } from "../components/mobile/DexWave";
    founder asked for it here first ("once we finalize it we will add it to our
    web application"), so this page is its only call site and the component sits
    in pages/designlab/ rather than in components/ where the app would find it. */
-import { VoiceRipple } from "./designlab/VoiceRipple";
+import { VoiceRipple, RIPPLE_DEFAULTS } from "./designlab/VoiceRipple";
 
 const SCREENS = [
   { path: "/inbox", label: "Desk · now" },
@@ -381,63 +381,112 @@ function KarmaGallery() {
   );
 }
 
-/* ASK-44 · the ripple, with the two knobs it is being judged on.
-   Gain is how hard a voice pushes the surface and Softness is how far the
-   ridges blur — the two things that decide whether this reads as neumorphic
-   water or as a glowing ring, which is the call the founder is making here. The
-   simulate switch exists so the motion can be watched without granting the
-   microphone; it is labelled, because a fake level presented as a real one
-   would be the one dishonest thing on this page. */
+/* ASK-44 / ASK-45 · the ripple, with the knobs it is being judged on.
+   Seven, because seven is what the founder asked to be able to turn and each
+   one changes a different thing about the same wave: how hard a voice pushes
+   it, how heavy its ridge is, how far that ridge blurs, how far it is allowed
+   to stop being a circle, how much it springs back as it travels, how fast it
+   travels and how many are in flight at once. The values are printed under the
+   panel in the shape the component takes, so whatever is settled on can be
+   pasted straight back rather than described. The simulate switch exists so the
+   motion can be watched without granting the microphone; it is labelled,
+   because a fake level presented as a real one would be the one dishonest
+   thing on this page. */
+const RIPPLE_KNOBS = [
+  { key: "gain", label: "Gain", min: 0.4, max: 2.2, step: 0.05, hint: "how hard a voice pushes" },
+  { key: "thickness", label: "Thickness", min: 0.3, max: 3, step: 0.05, hint: "the weight of the ridge" },
+  { key: "softness", label: "Softness", min: 0, max: 2.5, step: 0.05, hint: "how far it blurs" },
+  { key: "water", label: "Water", min: 0, max: 1, step: 0.02, hint: "0 is a circle, 1 has a mind" },
+  { key: "elastic", label: "Elastic", min: 0, max: 1, step: 0.02, hint: "overshoot and settle" },
+  { key: "speed", label: "Speed", min: 0.4, max: 2.2, step: 0.05, hint: "travel time" },
+  { key: "density", label: "Density", min: 0.3, max: 2.5, step: 0.05, hint: "waves in flight" },
+];
+
 function VoiceRippleLab() {
-  const [gain, setGain] = useState(1);
-  const [softness, setSoftness] = useState(1);
+  const [cfg, setCfg] = useState(RIPPLE_DEFAULTS);
   const [simulate, setSimulate] = useState(false);
-  const knob = (label, value, set, min, max, step) => (
-    <label className="flex min-w-[11rem] flex-col gap-1 text-sm">
-      <span className="flex items-baseline justify-between gap-2 text-muted-foreground">
-        {label}
-        <span className="font-mono text-xs tabular-nums text-foreground">{value.toFixed(2)}</span>
-      </span>
-      {/* accentColor keeps the native control in the app's palette — a Chrome
-          blue slider beside a neumorphic dish is the one thing on this card
-          that would not be ours. */}
-      <input
-        type="range" min={min} max={max} step={step} value={value}
-        onChange={(e) => set(Number(e.target.value))}
-        data-testid={`lab-ripple-${label.toLowerCase()}`}
-        aria-label={label}
-        style={{ accentColor: "hsl(var(--kr-ink))" }}
-      />
-    </label>
-  );
+  const [copied, setCopied] = useState(false);
+  const set = (key) => (e) => setCfg((c) => ({ ...c, [key]: Number(e.target.value) }));
+  const json = JSON.stringify(cfg, null, 0).replace(/","/g, '", "');
+
   return (
     <section className="mb-7 rounded-cardlg border border-border bg-background p-5" data-testid="lab-voice-ripple">
-      <h2 className="font-heading text-lg font-bold tracking-tight">Voice ripple · ASK-44</h2>
+      <h2 className="font-heading text-lg font-bold tracking-tight">Voice ripple · ASK-44/45</h2>
       <p className="mt-1 max-w-[62ch] text-sm text-muted-foreground">
-        A well in the page&rsquo;s own material with the mic at its centre. Every ring is drawn as a
+        The mic at the centre, and the surface around it answering what it hears. Every wave is a
         ridge — white up-and-left, blue-grey down-and-right, both blurred — so it is lit from the
         same corner as <code>.kr-pressed</code> and reads as the surface moving rather than as ink
-        on it. The radius carries three harmonics whose amplitude is the loudness the ring was born
-        at, which is where the fluid edge comes from. The level is a real AnalyserNode on the live
-        stream, through the same RMS curve the dock&rsquo;s wave uses. Nothing travels under
-        prefers-reduced-motion. Not in the app yet — this page is its only call site.
+        on it. Each one carries its OWN random outline (control points on a Catmull-Rom curve, a
+        fresh set per wave, morphing as it travels), springs past its mark and settles, and relaxes
+        back toward round as it goes, the way surface tension pulls at real water. The level is a
+        real AnalyserNode on the live stream, through the same RMS curve the dock&rsquo;s wave uses.
+        Nothing travels under prefers-reduced-motion. Not in the app — this page is its only call
+        site.
       </p>
-      <div className="mt-4 flex flex-wrap items-center gap-6">
-        <VoiceRipple size={320} gain={gain} softness={softness} simulate={simulate} />
-        <div className="flex flex-col gap-4">
-          {knob("Gain", gain, setGain, 0.4, 2.2, 0.05)}
-          {knob("Softness", softness, setSoftness, 0, 2, 0.05)}
-          <button
-            type="button"
-            onClick={() => setSimulate((v) => !v)}
-            data-testid="lab-ripple-simulate"
-            className={`rounded-pill border px-3.5 text-sm font-semibold ${
-              simulate ? "border-transparent bg-foreground text-background" : "border-border bg-card"
-            }`}
-            style={{ minHeight: "var(--control-h-sm)" }}
-          >
-            {simulate ? "Simulated level: on" : "Simulate a level"}
-          </button>
+      <div className="mt-4 flex flex-wrap items-start gap-8">
+        <VoiceRipple size={340} config={cfg} simulate={simulate} />
+        <div className="min-w-[22rem] flex-1">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+            {RIPPLE_KNOBS.map((k) => (
+              <label key={k.key} className="flex flex-col gap-0.5 text-sm">
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="font-medium text-foreground">{k.label}</span>
+                  <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                    {cfg[k.key].toFixed(2)}
+                  </span>
+                </span>
+                {/* accentColor keeps the native control in the app's palette — a
+                    Chrome blue slider beside a neumorphic wave is the one thing
+                    on this card that would not be ours. */}
+                <input
+                  type="range" min={k.min} max={k.max} step={k.step} value={cfg[k.key]}
+                  onChange={set(k.key)}
+                  data-testid={`lab-ripple-${k.key}`}
+                  aria-label={`${k.label} — ${k.hint}`}
+                  style={{ accentColor: "hsl(var(--kr-ink))" }}
+                />
+                <span className="text-[length:var(--text-label)] leading-4 text-muted-foreground">{k.hint}</span>
+              </label>
+            ))}
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSimulate((v) => !v)}
+              data-testid="lab-ripple-simulate"
+              className={`rounded-pill border px-3.5 text-sm font-semibold ${
+                simulate ? "border-transparent bg-foreground text-background" : "border-border bg-card"
+              }`}
+              style={{ minHeight: "var(--control-h-sm)" }}
+            >
+              {simulate ? "Simulated level: on" : "Simulate a level"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setCfg(RIPPLE_DEFAULTS); setCopied(false); }}
+              data-testid="lab-ripple-reset"
+              className="rounded-pill border border-border bg-card px-3.5 text-sm font-semibold"
+              style={{ minHeight: "var(--control-h-sm)" }}
+            >
+              Reset
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard?.writeText(json).then(() => setCopied(true)).catch(() => setCopied(false));
+              }}
+              data-testid="lab-ripple-copy"
+              className="rounded-pill border border-border bg-card px-3.5 text-sm font-semibold"
+              style={{ minHeight: "var(--control-h-sm)" }}
+            >
+              {copied ? "Copied" : "Copy settings"}
+            </button>
+          </div>
+
+          <p className="mt-3 break-all font-mono text-xs text-muted-foreground" data-testid="lab-ripple-json">
+            {json}
+          </p>
         </div>
       </div>
     </section>

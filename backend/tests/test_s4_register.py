@@ -30,11 +30,15 @@ class _Req:
 
 def _reg_patch(testdb):
     saved = (auth.db,
+             aset.db,
              aset.ai_generate_lexicon_with_status,
              aset.ai_generate_operating_model_with_status,
              aset.ai_generate_finance_categories_with_status,
              captcha_mod.verify_captcha)
     auth.db = testdb
+    # 2026-09-17: the AI setup runs AFTER the response now, from
+    # services.ai.ai_setup — it writes the tenant through that module's own db.
+    aset.db = testdb
 
     async def _lex(*a, **k):
         return {"terms": ["bulk order", "dispatch"]}, aset.STATUS_GENERATED
@@ -55,6 +59,7 @@ def _reg_patch(testdb):
 
     def restore():
         (auth.db,
+         aset.db,
          aset.ai_generate_lexicon_with_status,
          aset.ai_generate_operating_model_with_status,
          aset.ai_generate_finance_categories_with_status,
@@ -119,6 +124,12 @@ def test_register_full_happy_path_and_reveal_counts(with_test_db):
 
     # plan + AI setup
     assert tenant["plan"] == "trial" and tenant.get("trial_ends_at"), "fresh tenant starts on the 14-day trial"
+    # 2026-09-17 — the AI setup no longer runs inside the request. Registration
+    # hands back a finished workspace and the generators fill in behind it, so
+    # a client that gives up (the proxy used to, at 60s) can no longer leave a
+    # founder with an account they were told did not exist. Called directly,
+    # with no request to attach a background task to, register runs them inline
+    # — so by here they have landed either way.
     assert tenant["ai_setup_status"] == {"lexicon": "generated", "operating_model": "generated",
                                          "finance_categories": "generated"}
     assert tenant["operating_model"]["pipelines"] and tenant["lexicon"]["terms"], "AI fields are stored"
@@ -184,38 +195,53 @@ def test_duplicate_email_sequential_and_concurrent_no_orphan(with_test_db):
         # real unique index so the loser of a true race hits DuplicateKeyError
         await db.users.create_index("email", unique=True)
         try:
-            # 1. sequential: second register with the same email is refused (400),
-            #    and does NOT create a second tenant.
+            # 1. sequential: a second register for the same email.
+            #    2026-09-17 — with the SAME password this is the founder whose
+            #    first answer never arrived (the proxy giving up at 60s, a phone
+            #    changing network, a double tap). They are signed into the
+            #    workspace they already have instead of being refused. With a
+            #    DIFFERENT password the email belongs to somebody else, and the
+            #    refusal carries a code the signup screen turns into "Sign in
+            #    instead". Neither creates a second tenant.
             await auth.register(_inp("dup@race.in"), _Req(ip="10.2.0.1"), Response())
-            seq_status = None
+            same_pw = await auth.register(_inp("dup@race.in"), _Req(ip="10.2.0.2"), Response())
+            other_status, other_code = None, None
             try:
-                await auth.register(_inp("dup@race.in"), _Req(ip="10.2.0.2"), Response())
+                _other = _inp("dup@race.in")
+                _other.password = "a-different-password"
+                await auth.register(_other, _Req(ip="10.2.0.3"), Response())
             except HTTPException as e:
-                seq_status = e.status_code
+                other_status = e.status_code
+                other_code = (e.detail or {}).get("code") if isinstance(e.detail, dict) else None
             tenants_after_seq = await db.tenants.count_documents({"name": "Race Co"})
+            users_after_seq = await db.users.count_documents({"email": "dup@race.in"})
 
             # 2. concurrent race on a fresh email + a DISTINCT company name so the
-            #    orphan check is unambiguous: exactly one wins, no orphan tenant.
+            #    orphan check is unambiguous: one user, one tenant, no 500s.
             results = await asyncio.gather(
                 auth.register(_inp("race@race.in", "Racer Co"), _Req(ip="10.3.0.1"), Response()),
                 auth.register(_inp("race@race.in", "Racer Co"), _Req(ip="10.3.0.2"), Response()),
                 return_exceptions=True)
-            wins = sum(1 for r in results if not isinstance(r, Exception))
             fails = [r for r in results if isinstance(r, Exception)]
             users_race = await db.users.count_documents({"email": "race@race.in"})
             tenants_race = await db.tenants.count_documents({"name": "Racer Co"})
-            return seq_status, tenants_after_seq, wins, fails, users_race, tenants_race
+            return (same_pw, other_status, other_code, tenants_after_seq, users_after_seq,
+                    fails, users_race, tenants_race)
         finally:
             restore()
 
-    seq_status, tenants_after_seq, wins, fails, users_race, tenants_race = with_test_db(scenario)
+    (same_pw, other_status, other_code, tenants_after_seq, users_after_seq,
+     fails, users_race, tenants_race) = with_test_db(scenario)
 
-    assert seq_status == 400, "a second registration with an existing email is refused"
-    assert tenants_after_seq == 1, "the refused registration creates no second tenant"
+    assert same_pw.get("user", {}).get("email") == "dup@race.in", \
+        "pressing Create again with the same password signs the founder in"
+    assert other_status == 400 and other_code == "email_registered", \
+        "somebody else's email is refused, with the code the screen turns into a Sign in button"
+    assert tenants_after_seq == 1, "neither ending creates a second tenant"
+    assert users_after_seq == 1, "and there is still one account"
 
-    assert wins == 1, "exactly one of the racing registrations succeeds"
     assert all(isinstance(e, HTTPException) and e.status_code == 400 for e in fails), \
-        "the loser gets a clean 400, not a 500"
+        "a racing loser gets a clean 400, not a 500"
     assert users_race == 1, "the unique email index admits exactly one user"
     # the whole point of the rollback: the loser rolled back the tenant it created
     # before its failed insert, so the race leaves exactly one 'Racer Co' tenant.

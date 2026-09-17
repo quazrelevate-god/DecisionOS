@@ -1,5 +1,6 @@
 import { createElement, forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Link } from "react-router-dom";
 import {
   ArrowRight, Sparkle, Stop, PaperPlaneRight, PencilSimple,
 } from "@phosphor-icons/react";
@@ -224,7 +225,7 @@ function PillSection({ label, items, tint, testid, startAt, stagger, still, newK
 
 // Generates the personalized OS blueprint from the interview, lets the founder
 // refine it, then registers the workspace and reveals it. Dex keeps the wait alive.
-export function BuildReveal({ sessionId, languageCode, payload, register, onEnter }) {
+export function BuildReveal({ sessionId, languageCode, payload, register, signIn, onEnter }) {
   const [pct, setPct] = useState(0);
   const [line, setLine] = useState(0);
   // stage: 'building' → 'preview' (refine) → 'registering' → 'reveal'
@@ -232,6 +233,8 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
   const [bp, setBp] = useState(null);        // current blueprint (may be regenerated)
   const [welcome, setWelcome] = useState("");
   const [error, setError] = useState("");
+  // The email turned out to be taken: the way forward is signing in, not retrying.
+  const [takenEmail, setTakenEmail] = useState(false);
   const [refineText, setRefineText] = useState("");
   const [refining, setRefining] = useState(false);
   const [showRefine, setShowRefine] = useState(false);
@@ -324,8 +327,21 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
 
   const confirmAndRegister = async () => {
     if (!bp || stage === "registering") return;
-    setStage("registering"); setError("");
+    setStage("registering"); setError(""); setTakenEmail(false);
     try {
+      // 2026-09-17 — ask once more, right before the long call: the email was
+      // checked back on the sign-in step and a founder can spend minutes in the
+      // interview. Cheap, and it turns "Couldn't create your workspace" into a
+      // sentence that says what to do.
+      try {
+        const { data: avail } = await api.post("/signup/check-email", { email: payload.email });
+        if (avail && avail.available === false) {
+          setTakenEmail(true);
+          setError("This email already has a workspace. Sign in instead, or go back and use a different email.");
+          setStage("preview");
+          return;
+        }
+      } catch (e) { console.debug("email re-check skipped (network) — register decides", e); }
       const products = (bp.products || payload.products || []).filter((p) => (p.name || "").trim());
       await register({
         company_name: payload.company_name, name: payload.name, email: payload.email,
@@ -344,8 +360,31 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
       });
       setStage("reveal");
     } catch (e) {
+      const detail = e.response?.data?.detail;
+      // 2026-09-17 — a founder whose first press was lost (the proxy giving up
+      // at 60s, a phone changing network, a double tap) has an account already,
+      // and the password in their hands. Try the door before showing them a
+      // wall: it also carries them past the registration rate limit, which
+      // counts attempts per network and would otherwise refuse the very person
+      // trying to recover their own workspace.
+      if (signIn) {
+        try {
+          await signIn(payload.email, payload.password);
+          setStage("reveal");
+          return;
+        } catch (signInErr) {
+          console.debug("recovery sign-in did not apply", signInErr);
+        }
+      }
       setStage("preview");
-      setError(formatApiError(e.response?.data?.detail) || "Couldn't create your workspace. Please try again.");
+      // The one failure a founder can act on: the email is taken. Say so, and
+      // offer the door — pressing "Create" again cannot help.
+      if (detail?.code === "email_registered" || /already ha[sd] a workspace|already registered/i.test(formatApiError(detail) || "")) {
+        setTakenEmail(true);
+        setError(formatApiError(detail) || "This email already has a workspace. Sign in instead.");
+      } else {
+        setError(formatApiError(detail) || "Couldn't create your workspace. Please try again.");
+      }
     }
   };
 
@@ -726,8 +765,16 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                   instead of vanishing into a small red line. */}
               {error && (
                 <div className="rounded-2xl border border-danger-600/40 bg-danger-600/10 p-4" data-testid="build-error-banner">
-                  <p className="mb-1 text-sm font-bold text-danger-600">Couldn&apos;t create your workspace</p>
+                  <p className="mb-1 text-sm font-bold text-danger-600">
+                    {takenEmail ? "That email already has a workspace" : "Couldn't create your workspace"}
+                  </p>
                   <p className="text-sm text-danger-600 font-semibold" data-testid="build-error">{error}</p>
+                  {takenEmail && (
+                    <Link to="/login" data-testid="build-error-signin"
+                      className="mt-3 inline-flex h-10 items-center rounded-pill bg-kr-ink px-5 text-sm font-medium text-white">
+                      Sign in instead
+                    </Link>
+                  )}
                 </div>
               )}
 

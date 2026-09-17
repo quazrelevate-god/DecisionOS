@@ -23,6 +23,10 @@ Outcomes:
 """
 from typing import Tuple
 
+# The module's own db handle, the way every other service binds it — so a test
+# can rebind THIS name and the background write lands in the test's database.
+from core import db, logger, set_usage_tenant
+
 
 # Status literals — kept here (not an Enum) for JSON-friendliness and easy
 # equality checks across the codebase.
@@ -150,3 +154,55 @@ def summarize_ai_setup_status(status_map: dict) -> dict:
         "needs_retry": needs_retry,
         "detail": dict(status_map or {}),
     }
+
+# ---------------------------------------------------------------------------
+# The three generators, run OFF the signup request (2026-09-17).
+# ---------------------------------------------------------------------------
+STATUS_PENDING = "pending"
+
+
+async def generate_tenant_setup(tenant_id: str, *, industry: str, company_size: str,
+                                 roles: list, description: str) -> dict:
+    """Generate a new workspace's lexicon, operating model and finance
+    categories, and write them onto the tenant.
+
+    Runs as a background task after registration has already returned. It used
+    to run INSIDE the signup request, which is how a founder could lose a
+    workspace they had just created: the three calls took 14s on a warm
+    developer machine and up to the proxy's 60s ceiling on a phone, and if the
+    client gave up first the request carried on and created the account anyway —
+    so the screen said "Couldn't create your workspace" and the next press said
+    "Email already registered" (KM-61 recorded exactly that pair in the Railway
+    log). The account is now made first and this fills in behind it.
+
+    Every generator already reports its own status and degrades to a documented
+    default, so a failure here leaves a usable workspace with `ai_setup_status`
+    marking what to retry (POST /api/tenant/ai-setup/retry).
+    """
+    import asyncio
+
+    set_usage_tenant(tenant_id)
+    lex_r, om_r, fc_r = await asyncio.gather(
+        ai_generate_lexicon_with_status(industry, company_size, roles, description),
+        ai_generate_operating_model_with_status(industry, company_size, roles, description),
+        ai_generate_finance_categories_with_status(industry, company_size, roles, description),
+        return_exceptions=True,
+    )
+
+    def _unpack(res, what):
+        if isinstance(res, Exception):
+            logger.error(f"tenant setup: {what} generation failed: {res}")
+            return None, STATUS_FAILED
+        return res
+
+    lexicon, lex_status = _unpack(lex_r, "lexicon")
+    om, om_status = _unpack(om_r, "operating_model")
+    fc, fc_status = _unpack(fc_r, "finance_categories")
+    status = {"lexicon": lex_status, "operating_model": om_status,
+              "finance_categories": fc_status}
+    await db.tenants.update_one({"id": tenant_id}, {"$set": {
+        "lexicon": lexicon, "operating_model": om, "finance_categories": fc,
+        "ai_setup_status": status,
+    }})
+    logger.info(f"tenant setup generated for {tenant_id}: {status}")
+    return status

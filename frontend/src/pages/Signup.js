@@ -46,7 +46,10 @@ const PHASES = [
 // read because their dark shadows do the work alone, but they read quieter
 // than the same components do inside the app.
 export default function Signup() {
-  const { register } = useAuth();
+  // `login` is here for the recovery in BuildReveal: when creating the
+  // workspace answers with an error but the account already exists (their first
+  // press was lost), signing in with the same details is the way in.
+  const { register, login } = useAuth();
   const navigate = useNavigate();
 
   const [phase, setPhase] = useState("basics");
@@ -213,7 +216,7 @@ export default function Signup() {
               />
             )}
             {phase === "build" && (
-              <BuildReveal sessionId={sessionId} languageCode={languageCode} payload={buildPayload} register={register} onEnter={enterApp} />
+              <BuildReveal sessionId={sessionId} languageCode={languageCode} payload={buildPayload} register={register} signIn={login} onEnter={enterApp} />
             )}
           </motion.div>
         </AnimatePresence>

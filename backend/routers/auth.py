@@ -12,7 +12,7 @@ inside each handler to avoid the circular import between `server.py` and
 its own routers.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, BackgroundTasks
 
 from core import (
     db, get_current_user, hash_password, verify_password, create_token,
@@ -95,7 +95,8 @@ from models.auth import (  # noqa: F401
 # Endpoints
 # ---------------------------------------------------------------------------
 @router.post("/register")
-async def register(inp: RegisterInput, request: Request, response: Response):
+async def register(inp: RegisterInput, request: Request, response: Response,
+                    background: BackgroundTasks = None):
     # FIX-004-A (RBAC-02): rate-limit registrations per IP + verify
     # CAPTCHA before any DB work. Prevents bot-driven tenant creation
     # + AI credit burn + storage cost.
@@ -104,9 +105,17 @@ async def register(inp: RegisterInput, request: Request, response: Response):
     ip = client_ip(request)
     ok, retry_after = await check_rate_limit(ip, 3, 3600, bucket="register")
     if not ok:
+        # 2026-09-17 — say how long, and name the other door. Three workspaces
+        # an hour is per NETWORK, so an office behind one address reaches it
+        # quickly, and "try again later" left a founder with nothing to do and
+        # no idea when. Anyone who already has a workspace wants sign-in, not
+        # this endpoint.
+        _mins = max(1, round(retry_after / 60))
         raise HTTPException(
             status_code=429,
-            detail="Too many registrations from this network. Try again later.",
+            detail=(f"Three workspaces have already been created from this network in the last hour. "
+                    f"Try again in about {_mins} minute{'s' if _mins != 1 else ''} — "
+                    f"or sign in if you already have a workspace."),
             headers={"Retry-After": str(retry_after)},
         )
     cap_ok, cap_reason = await verify_captcha(inp.captcha_token, remote_ip=ip)
@@ -158,8 +167,33 @@ async def register(inp: RegisterInput, request: Request, response: Response):
     #     back the tenant we just created so the loser's failed race
     #     leaves NOTHING behind.
     email = inp.email.lower()
-    if await db.users.find_one({"email": email}):
-        raise HTTPException(status_code=400, detail="Email already registered")
+    _existing = await db.users.find_one({"email": email})
+    if _existing:
+        # 2026-09-17 — the founder pressing "Create workspace" a second time is
+        # almost never someone else's account: it is the same person, because
+        # their first attempt's answer never arrived (KM-61 measured a 499 at
+        # the proxy's 60s ceiling followed by a 400 on the retry). Registration
+        # had already created them, so the screen said "Couldn't create your
+        # workspace" and every press after that said "Email already registered"
+        # — about an account they could have signed straight into.
+        #
+        # So: if the password they just typed opens that account, this IS them.
+        # Finish the job the first attempt started and hand them their
+        # workspace. If it does not, the email genuinely belongs to someone
+        # else — say so with the words the signup form uses at the email step,
+        # and a code the screen can turn into a "Sign in instead" button.
+        if verify_password(inp.password, _existing.get("password_hash", "")):
+            _tid = _existing.get("tenant_id")
+            _tok = create_token(_existing["id"], _tid, _existing.get("role") or "owner")
+            set_auth_cookie(response, _tok)
+            _u = await db.users.find_one({"id": _existing["id"]}, {"_id": 0, "password_hash": 0})
+            _t = await db.tenants.find_one({"id": _tid}, {"_id": 0}) if _tid else None
+            logger.info(f"register: same credentials for an existing account ({email}) — signing them in")
+            return login_response(_tok, user=_u, tenant=_t)
+        raise HTTPException(status_code=400, detail={
+            "code": "email_registered",
+            "message": "This email already has a workspace. Sign in instead, or use a different email.",
+        })
     tenant_id = new_id()
     set_usage_tenant(tenant_id)
     bp = normalize_os_blueprint(inp.os_blueprint) if inp.os_blueprint else None
@@ -193,66 +227,37 @@ async def register(inp: RegisterInput, request: Request, response: Response):
         ip=(request.client.host if request.client else None),
         ua=(request.headers.get("user-agent") or "")[:500],
     )
-    await db.tenants.insert_one({
-        "id": tenant_id, "name": inp.company_name,
-        "industry": inp.industry or "General",
-        "ai_consent": _stub_consent,
-        "created_at": now_iso(),
-    })
 
-    # FIX-001-D: use status-aware AI wrappers so a silent LLM failure /
-    # default-fallback is RECORDED on the tenant doc as `ai_setup_status`.
-    # Frontend can then show "AI setup incomplete — click to regenerate."
-    # The `/api/tenant/ai-setup/retry` endpoint uses the same wrappers.
-    # KM-61 — THE THREE AI CALLS RUN CONCURRENTLY, and that is a bug fix.
+    # 2026-09-17 — THE ACCOUNT IS MADE BEFORE THE AI RUNS, not after.
     #
-    # They were sequential, so registration cost lexicon + operating model +
-    # finance categories end to end. Measured on Railway's HTTP log, one real
-    # signup from an iPhone:
+    # The three setup generators (lexicon, operating model, finance categories)
+    # used to run here, inside the request, BEFORE the user row existed: 14s on
+    # a warm developer machine, and KM-61 caught a real signup where the
+    # frontend's proxy gave up at its 60s ceiling —
     #
     #   POST /api/auth/register  499  totalDuration 60000
-    #     "client has closed the request before the server could send a response"
     #   POST /api/auth/register  400  totalDuration 26     <- the retry
     #
-    # 499 at exactly 60,000ms is the frontend's proxy giving up (server.js sets
-    # proxyTimeout: 60000). The backend never knew — it carried on, finished,
-    # and committed the tenant and the user. So the founder saw "Couldn't
-    # create your workspace", pressed again, got "Email already registered",
-    # and could then log in with credentials the UI had told them failed.
+    # The backend never knew the client had gone; it finished and committed the
+    # workspace. So the founder read "Couldn't create your workspace", pressed
+    # again, and got "Email already registered" for an account that existed and
+    # whose password worked. Making the calls concurrent (KM-61) narrowed that
+    # window; it could not close it, because the window IS the AI latency.
     #
-    # These three calls share no data and none reads another's output, so
-    # nothing but habit made them serial. Gathering them makes the wall clock
-    # the SLOWEST of the three instead of their sum.
-    #
-    # return_exceptions=True on purpose: each wrapper already reports a status
-    # the tenant doc records, and one provider hiccup must not throw away a
-    # registration that is otherwise complete. A failed one degrades to its
-    # documented fallback exactly as it would have alone.
-    import asyncio as _asyncio
-    _lex_r, _om_r, _fc_r = await _asyncio.gather(
-        ai_setup_svc.ai_generate_lexicon_with_status(
-            inp.industry, inp.company_size, clean_roles, inp.description or ""),
-        ai_setup_svc.ai_generate_operating_model_with_status(
-            inp.industry, inp.company_size, clean_roles, inp.description or ""),
-        ai_setup_svc.ai_generate_finance_categories_with_status(
-            inp.industry, inp.company_size, clean_roles, inp.description or ""),
-        return_exceptions=True,
-    )
-
-    def _unpack(res, what):
-        if isinstance(res, Exception):
-            logger.error(f"register: {what} generation failed: {res}")
-            return None, "failed"
-        return res
-
-    lexicon, lex_status = _unpack(_lex_r, "lexicon")
-    om, om_status = _unpack(_om_r, "operating_model")
-    fc, fc_status = _unpack(_fc_r, "finance_categories")
+    # Now registration writes the tenant, the owner and the membership — all
+    # deterministic, all fast — hands back the session, and generates the AI
+    # setup behind it (services.ai.ai_setup.generate_tenant_setup, scheduled at
+    # the end of this function). Every reader already tolerates the gap:
+    # tenant_operating_model() falls back to DEFAULT_OPERATING_MODEL, and a
+    # None lexicon was already a supported state because a failed generator
+    # stored exactly that. `ai_setup_status` says "pending" until it lands.
+    from services.ai.ai_setup import STATUS_PENDING as _AI_PENDING
     ai_setup_status = {
-        "lexicon": lex_status,
-        "operating_model": om_status,
-        "finance_categories": fc_status,
+        "lexicon": _AI_PENDING,
+        "operating_model": _AI_PENDING,
+        "finance_categories": _AI_PENDING,
     }
+    lexicon = om = fc = None
 
     # FIX-005-A (S3-02): initialize plan fields on fresh registration.
     # Trial for 14 days, no overrides. Grandfathered tenants get their
@@ -285,19 +290,15 @@ async def register(inp: RegisterInput, request: Request, response: Response):
         "operating_model": om,
         "finance_categories": fc,
         "ai_setup_status": ai_setup_status,  # FIX-001-D
-        "ai_consent": _stub_consent,  # preserve the stub-time consent record
+        "ai_consent": _stub_consent,  # the signup click IS the consent event
         "created_at": now_iso(),
         # FIX-005-A (S3-02): plan defaults (plan / trial_ends_at /
         # seat_limit_override / usage_quotas / feature_flags).
         **_plan_fields,
     }
-    # Update the stub instead of insert (row already exists thanks to
-    # the pre-AI ai_consent stub above).
-    _stub_only = {"id", "name", "industry", "ai_consent", "created_at"}
-    await db.tenants.update_one(
-        {"id": tenant_id},
-        {"$set": {k: v for k, v in tenant_doc.items() if k not in _stub_only}},
-    )
+    # One write, complete: nothing slow happened before it, so there is no
+    # stub to patch up.
+    await db.tenants.insert_one(dict(tenant_doc))
     user_id = new_id()
     # FIX-002-A: also write phone_norm so OTP login + WhatsApp routing
     # can query by exact-match on the indexed field.
@@ -400,6 +401,24 @@ async def register(inp: RegisterInput, request: Request, response: Response):
         # Never fail registration on an email hiccup — the user is
         # already logged in with a valid JWT below.
         pass
+
+    # The workspace exists and the founder is about to be handed their session;
+    # the AI setup fills in behind them (see the note above the tenant write).
+    from services.ai.ai_setup import generate_tenant_setup as _gen_setup
+    if background is not None:
+        background.add_task(
+            _gen_setup, tenant_id, industry=inp.industry or "General",
+            company_size=inp.company_size or "", roles=clean_roles or DEFAULT_ROLES,
+            description=inp.description or "")
+    else:
+        # No request context (a test or a script calling register directly):
+        # run it inline so behaviour is identical, just slower.
+        try:
+            await _gen_setup(tenant_id, industry=inp.industry or "General",
+                             company_size=inp.company_size or "", roles=clean_roles or DEFAULT_ROLES,
+                             description=inp.description or "")
+        except Exception as _setup_err:
+            logger.error(f"register: inline AI setup failed: {_setup_err}")
 
     token = create_token(user_id, tenant_id, "owner")
     user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})

@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
-import { UserCircle, FloppyDisk, Lock } from "@phosphor-icons/react";
+import { UserCircle, FloppyDisk, Lock, CheckCircle, Envelope } from "@phosphor-icons/react";
 
 const inp = "w-full border border-border rounded-lg px-3 py-2 text-sm mt-1 bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
 
@@ -13,6 +13,8 @@ export function ProfileForm({ onSaved }) {
   const [confirmWith, setConfirmWith] = useState("");   // password, or the texted code
   const [codeSent, setCodeSent] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [verifySent, setVerifySent] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   // 2026-09-16 — your own details are yours to keep current: name, job title,
   // what you handle, mobile, email. Role, access and reporting line are NOT
   // here: those are a manager's call about you, on the Team page.
@@ -41,6 +43,23 @@ export function ProfileForm({ onSaved }) {
       else toast.success("We texted a code to your mobile");
     } catch (e) {
       toast.error(e.response?.data?.detail || "Could not send the code");
+    }
+  };
+
+  /* 2026-09-17 (U7-24.10) — POST /auth/email/send-verification shipped with
+     FIX-003-D and had no caller anywhere, and nothing in the app read
+     email_verified_at, so someone whose welcome email was lost was never told
+     the address was unconfirmed and had no way to ask for another link. */
+  const sendVerification = async () => {
+    setVerifying(true);
+    try {
+      const { data } = await api.post("/auth/email/send-verification");
+      if (data?.already_verified) { await refreshMe(); toast.success("That address is already confirmed"); }
+      else { setVerifySent(true); toast.success("Link sent — check your inbox"); }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not send the link");
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -104,6 +123,29 @@ export function ProfileForm({ onSaved }) {
         <p className="label-mono text-muted-foreground mt-1">
           Your sign-in ID. Change it and we'll email the new address a link to confirm it.
         </p>
+        {/* Whether the address on file is confirmed, and the way to fix it if
+            not. Hidden while the field is mid-edit: this is about the saved
+            address, not the one being typed. */}
+        {!emailChanged && (user?.email_verified_at ? (
+          <p className="label-mono mt-2 flex items-center gap-1.5 text-success-600" data-testid="profile-email-verified">
+            <CheckCircle size={13} weight="fill" aria-hidden="true" /> Confirmed
+          </p>
+        ) : verifySent ? (
+          <p className="label-mono mt-2 flex items-center gap-1.5 text-muted-foreground" data-testid="profile-email-verify-sent">
+            <Envelope size={13} weight="bold" aria-hidden="true" /> Link sent — it lasts three days.
+          </p>
+        ) : (
+          <div className="mt-2 flex flex-wrap items-center gap-2" data-testid="profile-email-unverified">
+            <span className="label-mono text-caution-600">Not confirmed yet</span>
+            {/* An underlined text button, the way the reset screens ask for
+                another link: a bordered chip on this near-white card reads as
+                a label, not something to press. */}
+            <button type="button" onClick={sendVerification} disabled={verifying} data-testid="profile-email-verify-send"
+              className="text-xs font-semibold text-foreground underline underline-offset-2 hover:opacity-70 disabled:opacity-50">
+              {verifying ? "Sending…" : "Send the link"}
+            </button>
+          </div>
+        ))}
       </div>
       {/* The email is the sign-in, so prove it is you at the keyboard — the same
           question the sign-in door asks: your password, or a code to your mobile

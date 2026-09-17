@@ -13,6 +13,7 @@ import Signup from "./pages/Signup";
 // sign-in page had no link, and the link in every reset email we sent
 // landed on a route that did not exist.
 import { ForgotPassword, ResetPassword } from "./pages/PasswordReset";
+import VerifyEmail from "./pages/EmailVerify";
 import DecisionReview from "./pages/DecisionReview";
 import { useUiScale } from "./hooks/useUiScale";
 import Workflows from "./pages/Workflows";
@@ -177,6 +178,9 @@ function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             {/* The URL the reset email carries (routers/auth.py). */}
             <Route path="/reset-password" element={<ResetPassword />} />
+            {/* And the URL every welcome email has carried since FIX-003-D,
+                which until now was a 404 (U7-24.10). */}
+            <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/admin" element={<AdminPortal />} />
             <Route path="/admin/*" element={<AdminPortal />} />
             <Route path="/" element={<Home />} />

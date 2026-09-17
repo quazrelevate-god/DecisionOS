@@ -29,13 +29,19 @@ API's promise, kept in the copy), points a mobile-OTP member at the door that
 does open, and a link that is spent, expired or half-copied offers a new one
 instead of a form that will keep failing.
 
-**The verification email links to a page that does not exist.** Registration
-emails `{APP_BASE_URL}/verify-email?token=…` (routers/auth.py). `App.js` has no
-`/verify-email` route, so that link lands on a 404. The endpoint behind it is
-`GET /auth/email/verify/{token}` — the page reads the query parameter and calls
-that. `POST /auth/email/send-verification` (re-send from Settings) is unused too,
-and nothing in the app reads `email_verified_at`, so a founder is never told the
-address is unconfirmed. Split out as U7-24.10 when the reset half shipped.
+**The verification email links to a page that does not exist.**
+~~Registration emails `{APP_BASE_URL}/verify-email?token=…` (routers/auth.py).
+`App.js` has no `/verify-email` route, so that link lands on a 404. `POST
+/auth/email/send-verification` (re-send from Settings) is unused too, and
+nothing in the app reads `email_verified_at`, so a founder is never told the
+address is unconfirmed.~~ **Done 2026-09-17 (U7-24.10).** `/verify-email` is a
+route, and it spends the token where the endpoint actually takes it — `GET
+/auth/email/verify/{token}`, a path parameter, not the query the link carries.
+Settings › Your Profile now says whether the sign-in address is confirmed and
+can send another link; asking for one that is already confirmed is not an
+error. A spent or expired link offers a new one to someone signed in and says
+where to get one to someone who is not, because the re-send emails the address
+on the account rather than one typed into a page.
 
 **A second workspace is unreachable.** Memberships are per workspace, `GET
 /auth/me/workspaces` and `POST /auth/me/switch-workspace` exist, and `/auth/login`
@@ -131,12 +137,12 @@ request path built in Epic 9 S9).
 
 ## What I would take first
 
-1. ~~**Forgot password**~~ (done) and **the verify-email route** — the reset
-   half shipped; the verification link in every registration email is still a
-   404, and it is the same shape of work.
+1. ~~**Forgot password** and **the verify-email route**~~ — both done
+   2026-09-17 (U7-24.06, U7-24.10). Nothing an inbox links to is a dead end
+   any more.
 2. **The workspace picker** — a person in two workspaces cannot reach the second.
 3. **The company's notes** — we tell founders we kept something; show it.
 4. **Meetings** — a whole feature sitting behind a redirect.
 
-Each is small. The first two are an afternoon together — half of it is
-spent.
+Each is small. The first two were an afternoon together, and it is spent:
+what remains is 2–4.

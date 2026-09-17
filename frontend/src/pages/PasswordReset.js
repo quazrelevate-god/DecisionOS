@@ -18,49 +18,10 @@
  */
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { ArrowLeft, DeviceMobile, CheckCircle } from "@phosphor-icons/react";
+import { DeviceMobile, CheckCircle } from "@phosphor-icons/react";
 import api, { formatApiError } from "../lib/api";
-import { KarmaLogo } from "../components/karma/Logo";
-
-const inputCls =
-  "kr-pressed h-12 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-1 focus:ring-foreground/40";
-const labelCls = "text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground";
-const primaryCls =
-  "kr-lift flex h-12 w-full items-center justify-center rounded-pill bg-kr-ink text-sm font-medium text-white disabled:opacity-50";
-
-/** The shell both halves sit in, so this page looks like the sign-in it came from.
- *
- *  `login-stage` is load-bearing, not decoration (KM-42): .kr-well is
- *  neumorphic, and neumorphism needs a ground it can be lighter AND darker
- *  than. Against the plain page the pane turns into a ghost — which is exactly
- *  what the first pass of this screen was, a transparent card floating over a
- *  skyline. The stage carries the picture and the glass treatment measured
- *  against it, and this errand starts on the sign-in page, so it wears the
- *  sign-in page's stage rather than signup's. */
-function Shell({ children, testid }) {
-  return (
-    <div className="login-stage relative isolate flex min-h-[calc(100vh/var(--ui-scale,1))] flex-col bg-white text-foreground">
-      <div className="app-sky__art app-sky__art--aside" aria-hidden="true" />
-      <header className="flex items-center justify-between px-5 py-5 sm:px-8">
-        <Link to="/" className="flex shrink-0 items-center gap-2.5" data-testid="reset-logo">
-          <KarmaLogo />
-        </Link>
-        <Link to="/login" data-testid="reset-back-to-signin"
-          className="kr-pop flex h-10 items-center gap-2 rounded-pill px-4 text-sm font-medium">
-          <ArrowLeft size={15} weight="bold" aria-hidden="true" /> Back to sign in
-        </Link>
-      </header>
-      <main className="flex flex-1 items-center justify-center px-5 pb-16">
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-          className="kr-well w-full max-w-md" data-testid={testid}>
-          <div className="kr-well__pane rounded-[1.75rem] p-6 sm:p-8">{children}</div>
-        </motion.div>
-      </main>
-    </div>
-  );
-}
+import Shell, { inputCls, labelCls, primaryCls } from "../components/auth/AuthShell";
 
 /* ------------------------------------------------------------------ */
 /* /forgot-password — ask for the link                                 */

@@ -290,6 +290,14 @@ export default function Login() {
               <input data-testid="login-password-input" type="password" className={inputCls} placeholder="Password" value={form.password} onChange={set("password")} required />
               {error && <p data-testid="auth-error" className="text-sm text-danger-600 font-semibold">{error}</p>}
               <button type="submit" disabled={busy} data-testid="auth-submit-button" className="kr-lift flex h-12 w-full items-center justify-center rounded-pill bg-kr-ink text-sm font-medium text-white disabled:opacity-50">{busy ? "…" : "Sign in"}</button>
+              {/* 2026-09-17 — where a person looks for it: under the password
+                  they just failed to remember. */}
+              <div className="text-center">
+                <Link to="/forgot-password" data-testid="login-forgot-password"
+                  className="text-sm font-semibold text-foreground/80 underline-offset-2 hover:text-foreground hover:underline">
+                  Forgot your password?
+                </Link>
+              </div>
             </form>
           )}
 

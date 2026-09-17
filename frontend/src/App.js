@@ -9,6 +9,10 @@ import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+// 2026-09-17 — forgetting a password had a backend and no screens: the
+// sign-in page had no link, and the link in every reset email we sent
+// landed on a route that did not exist.
+import { ForgotPassword, ResetPassword } from "./pages/PasswordReset";
 import DecisionReview from "./pages/DecisionReview";
 import { useUiScale } from "./hooks/useUiScale";
 import Workflows from "./pages/Workflows";
@@ -170,6 +174,9 @@ function App() {
             <Route path="/app" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            {/* The URL the reset email carries (routers/auth.py). */}
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/admin" element={<AdminPortal />} />
             <Route path="/admin/*" element={<AdminPortal />} />
             <Route path="/" element={<Home />} />

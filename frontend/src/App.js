@@ -280,12 +280,25 @@ function App() {
             {process.env.NODE_ENV !== "production" && (
               <Route path="/__mobile-kit" element={<Protected><MobileKitchenSink /></Protected>} />
             )}
-            {/* MPWA-12a (§6): not wrapped in <Protected> — the lab renders the
-                real screens inside iframes, and each of those enforces its own
-                auth. Gating the shell too would just double the redirect. */}
-            {process.env.NODE_ENV !== "production" && (
-              <Route path="/design-lab" element={<DesignLab />} />
-            )}
+            {/* MPWA-12a (§6): not wrapped in <Protected> in development — the
+                lab renders the real screens inside iframes, and each of those
+                enforces its own auth. Gating the shell too would just double
+                the redirect.
+                ASK-44 — AND IT IS REACHABLE IN PRODUCTION NOW, owner-only. The
+                lab is where the founder reviews something before it goes into
+                the app ("use the design lab page… once we finalize it we will
+                add it to our web application"), and they review on the deployed
+                site, not a dev server — a review surface nobody can reach is
+                not a review surface. In production it goes behind the same
+                owner gate as the Journal, so the page is the founder's and no
+                signed-out visitor sees the workbench. Unlinked either way:
+                nothing in the app navigates here. */}
+            <Route
+              path="/design-lab"
+              element={process.env.NODE_ENV === "production"
+                ? <Protected ownerOnly><DesignLab /></Protected>
+                : <DesignLab />}
+            />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           </ErrorBoundary>

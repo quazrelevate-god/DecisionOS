@@ -27,6 +27,11 @@ import { DexForge } from "./onboarding/DexForge";
 // inside the dock while the mic is live, so this is the one place the idle,
 // thinking and speaking states can be looked at without recording something.
 import { DexWave } from "../components/mobile/DexWave";
+/* ASK-44 — the voice ripple under review. It is NOT wired into the app: the
+   founder asked for it here first ("once we finalize it we will add it to our
+   web application"), so this page is its only call site and the component sits
+   in pages/designlab/ rather than in components/ where the app would find it. */
+import { VoiceRipple } from "./designlab/VoiceRipple";
 
 const SCREENS = [
   { path: "/inbox", label: "Desk · now" },
@@ -376,6 +381,69 @@ function KarmaGallery() {
   );
 }
 
+/* ASK-44 · the ripple, with the two knobs it is being judged on.
+   Gain is how hard a voice pushes the surface and Softness is how far the
+   ridges blur — the two things that decide whether this reads as neumorphic
+   water or as a glowing ring, which is the call the founder is making here. The
+   simulate switch exists so the motion can be watched without granting the
+   microphone; it is labelled, because a fake level presented as a real one
+   would be the one dishonest thing on this page. */
+function VoiceRippleLab() {
+  const [gain, setGain] = useState(1);
+  const [softness, setSoftness] = useState(1);
+  const [simulate, setSimulate] = useState(false);
+  const knob = (label, value, set, min, max, step) => (
+    <label className="flex min-w-[11rem] flex-col gap-1 text-sm">
+      <span className="flex items-baseline justify-between gap-2 text-muted-foreground">
+        {label}
+        <span className="font-mono text-xs tabular-nums text-foreground">{value.toFixed(2)}</span>
+      </span>
+      {/* accentColor keeps the native control in the app's palette — a Chrome
+          blue slider beside a neumorphic dish is the one thing on this card
+          that would not be ours. */}
+      <input
+        type="range" min={min} max={max} step={step} value={value}
+        onChange={(e) => set(Number(e.target.value))}
+        data-testid={`lab-ripple-${label.toLowerCase()}`}
+        aria-label={label}
+        style={{ accentColor: "hsl(var(--kr-ink))" }}
+      />
+    </label>
+  );
+  return (
+    <section className="mb-7 rounded-cardlg border border-border bg-background p-5" data-testid="lab-voice-ripple">
+      <h2 className="font-heading text-lg font-bold tracking-tight">Voice ripple · ASK-44</h2>
+      <p className="mt-1 max-w-[62ch] text-sm text-muted-foreground">
+        A well in the page&rsquo;s own material with the mic at its centre. Every ring is drawn as a
+        ridge — white up-and-left, blue-grey down-and-right, both blurred — so it is lit from the
+        same corner as <code>.kr-pressed</code> and reads as the surface moving rather than as ink
+        on it. The radius carries three harmonics whose amplitude is the loudness the ring was born
+        at, which is where the fluid edge comes from. The level is a real AnalyserNode on the live
+        stream, through the same RMS curve the dock&rsquo;s wave uses. Nothing travels under
+        prefers-reduced-motion. Not in the app yet — this page is its only call site.
+      </p>
+      <div className="mt-4 flex flex-wrap items-center gap-6">
+        <VoiceRipple size={320} gain={gain} softness={softness} simulate={simulate} />
+        <div className="flex flex-col gap-4">
+          {knob("Gain", gain, setGain, 0.4, 2.2, 0.05)}
+          {knob("Softness", softness, setSoftness, 0, 2, 0.05)}
+          <button
+            type="button"
+            onClick={() => setSimulate((v) => !v)}
+            data-testid="lab-ripple-simulate"
+            className={`rounded-pill border px-3.5 text-sm font-semibold ${
+              simulate ? "border-transparent bg-foreground text-background" : "border-border bg-card"
+            }`}
+            style={{ minHeight: "var(--control-h-sm)" }}
+          >
+            {simulate ? "Simulated level: on" : "Simulate a level"}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function DesignLab() {
   const [screen, setScreen] = useState(SCREENS[0].path);
   const [states, setStates] = useState(FIXTURE_NAMES);
@@ -415,6 +483,8 @@ export default function DesignLab() {
           . The choice sticks for the tab.
         </p>
       </header>
+
+      <VoiceRippleLab />
 
       <KarmaGallery />
 

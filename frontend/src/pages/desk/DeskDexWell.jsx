@@ -28,6 +28,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Microphone, Stop, PaperPlaneRight, Paperclip, X, Check, WarningCircle, File as FileGlyph,
+  Keyboard,
 } from "@phosphor-icons/react";
 import api from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
@@ -38,6 +39,8 @@ import { cn } from "../../lib/utils";
 import { useDexCapture } from "../../hooks/useDexCapture";
 import { useDexConversation } from "../../hooks/useDexConversation";
 import { InsightWell } from "../../components/karma";
+// ASK-47 — the ripple the founder signed off in the lab, now the phone's mic.
+import { VoiceRipple } from "../../components/karma/VoiceRipple";
 import { DexWave } from "../../components/mobile/DexWave";
 // ASK-34 item 5 — the same picture the founder met at signup (BuildReveal).
 import { DexForgeFit } from "../onboarding/DexForge";
@@ -123,7 +126,14 @@ function AttachmentChip({ file, onRemove, disabled }) {
  *                                             decision in the Desk's existing
  *                                             DecisionDialog
  */
-export function DeskDexWell({ className, testid, growToRef, growToPhoneRef, onExpandedChange, onReview, onLater }) {
+/* ASK-47 — `phone` IS THE WHOLE OF THE NEW ARRANGEMENT. On a phone this well
+   is a big, near-square container with the ripple mic at its centre, a
+   voice-first floor, and NO growth: it is the same box in every state, because
+   the founder's rearrangement gives the screen's other half to a card that
+   pops. On desktop nothing here changes — the well still grows to the top of
+   the KPI grid, still shows what was said and the stages it is passing, and
+   the row of controls at its foot is the one ASK-33 drew. */
+export function DeskDexWell({ className, testid, phone = false, growToRef, growToPhoneRef, onExpandedChange, onReview, onLater }) {
   const { user } = useAuth();
   // The gate every Dex capture surface uses (DexFab, DexCaptureBar). This used to
   // list DexSheet too; DexSheet was removed from Layout in 97c2bfc (KM-23) and is
@@ -242,6 +252,8 @@ export function DeskDexWell({ className, testid, growToRef, growToPhoneRef, onEx
   const [steps, setSteps] = useState([]);
   const [sentText, setSentText] = useState("");
   const [outcome, setOutcome] = useState(null);
+  // ASK-47 — the phone's stand-in for `growing`; see `workspace` below.
+  const [phoneWorking, setPhoneWorking] = useState(false);
   const growing = !!grow;
   const growPhase = grow?.phase;
 
@@ -261,6 +273,11 @@ export function DeskDexWell({ className, testid, growToRef, growToPhoneRef, onEx
 
   const expand = () => {
     setSteps([]);
+    /* ASK-47 — a phone's well does not grow. It is a fixed box in every state;
+       what changes inside it is what it is showing. The founder: "remove the
+       entire growing feature of the dex card to the entire screen to the top.
+       Make it static." */
+    if (phone) { setPhoneWorking(true); return; }
     // Already the workspace (a second capture sent from it): stay open.
     if (grow && grow.phase !== "closing") return;
     const m = measure();
@@ -269,9 +286,12 @@ export function DeskDexWell({ className, testid, growToRef, growToPhoneRef, onEx
   };
 
   const collapse = useCallback(() => {
+    // ASK-47 — on a phone there is nothing to shrink; the well just stops
+    // showing the capture and goes back to being an invitation.
+    if (phone) { setPhoneWorking(false); return; }
     if (prefersReducedMotion()) { setGrow(null); return; }
     setGrow((g) => (g ? { ...g, phase: "closing" } : g));
-  }, []);
+  }, [phone]);
 
   /* ASK-35 2.2 — RE-MEASURE ONCE THE PANE IS OUT OF THE FLOW. expand() measures
      inside the send handler, when the composer may still be two lines tall with
@@ -328,14 +348,21 @@ export function DeskDexWell({ className, testid, growToRef, growToPhoneRef, onEx
     return () => window.removeEventListener("resize", onResize);
   }, [growing, measure]);
 
+  /* ASK-47 — WHAT `growing` MEANT, ON A PHONE, WITHOUT GROWING. Everything
+     that made the workspace work — the stage list, the endings, the reset on
+     the way out — hung off `growing`, which is now false on a phone by
+     construction. `workspace` is that same idea with the geometry taken out of
+     it: the well is showing a capture rather than an invitation. On desktop it
+     IS `growing`, unchanged. */
+  const workspace = phone ? phoneWorking : growing;
   const expanded = growing && growPhase !== "closing";
   useEffect(() => { onExpandedChange?.(expanded); }, [expanded, onExpandedChange]);
 
   // The REAL stages the note walks, as the poll reports them — not a spinner.
   useEffect(() => {
-    if (!growing || !stage || ENDINGS.includes(stage)) return;
+    if (!workspace || !stage || ENDINGS.includes(stage)) return;
     setSteps((s) => (s.includes(stage) ? s : [...s, stage]));
-  }, [growing, stage]);
+  }, [workspace, stage]);
 
   /* ASK-33 Phase 3 — THE ENDINGS (plan 5.1, 5.2). When the note ends while the
      well is the workspace, lib/dexOutcome reads what it came to — a decision
@@ -343,13 +370,13 @@ export function DeskDexWell({ className, testid, growToRef, growToPhoneRef, onEx
      of settling back down. It is read here, in the render the ending arrives
      in, because useDexConversation clears the understanding straight after. */
   const growingRef = useRef(false);
-  growingRef.current = growing;
+  growingRef.current = workspace;
   useEffect(() => {
-    if (!growing || !ENDINGS.includes(stage)) return;
+    if (!workspace || !ENDINGS.includes(stage)) return;
     setOutcome(captureOutcome(dex.understanding));
-  }, [growing, stage, dex.understanding]);
+  }, [workspace, stage, dex.understanding]);
   // Collapsed is done with: the next send starts clean.
-  useEffect(() => { if (!growing) setOutcome(null); }, [growing]);
+  useEffect(() => { if (!workspace) setOutcome(null); }, [workspace]);
 
   /* A ready decision is read live, on DecisionDialog's own cache key, so the
      counts follow any edit made in Review — and once it is decided (approved or
@@ -499,6 +526,56 @@ export function DeskDexWell({ className, testid, growToRef, growToPhoneRef, onEx
   const MicGlyph = intent === "stop" ? Stop : intent === "send" ? PaperPlaneRight : Microphone;
   const micLabel = intent === "stop" ? "Stop recording" : intent === "send" ? "Send to Dex" : "Speak to Dex";
 
+  /* ASK-47 — WHAT THE RIPPLE READS. useDexCapture keeps a rolling window of
+     samples for the dock's wave (`levelsRef`); the ripple wants one number, so
+     it takes the newest. A ref read on the ripple's own frame, which is why
+     this costs the well no renders at all. */
+  const readLevel = useCallback(() => {
+    const bars = dex.levelsRef?.current;
+    return Array.isArray(bars) ? bars[bars.length - 1] || 0 : 0;
+  }, [dex.levelsRef]);
+  /* And how big it is drawn: the well measures itself so the ripple fills what
+     the page gave it, whatever phone that turns out to be — the founder's
+     "maintain this layout and scale on every screen". */
+  /* ASK-47 — VOICE FIRST, AND THE KEYBOARD IS A DOOR. On a phone the field is
+     not on screen until there is something to type or something to read: the
+     founder chose it over a field that is always there, and it is what makes
+     the ripple the centre of the well rather than a decoration above a form.
+     It opens three ways — the keyboard button, a transcript coming back, or a
+     draft that already exists — and closes when the draft is sent or cleared. */
+  const [typing, setTyping] = useState(false);
+  const fieldOpen = !phone || typing || !!chat.draft || transcribing;
+  // Sent or cleared: the door closes again and the ripple has the well back.
+  useEffect(() => {
+    if (!phone || !typing) return;
+    if (!chat.draft && !transcribing && !dex.recording && !chat.busy) {
+      const t = setTimeout(() => setTyping(false), 2500);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [phone, typing, chat.draft, transcribing, dex.recording, chat.busy]);
+  const [rippleSize, setRippleSize] = useState(220);
+  useEffect(() => {
+    if (!phone) return undefined;
+    const el = wellRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const fit = () => {
+      /* The square the well can hold: its own width less the pane's padding,
+         its height less the label, the prompt and the floor. In the element's
+         OWN pixels (offsetWidth), which is the space the ripple is drawn in. */
+      const room = Math.min(el.offsetWidth - 40, el.offsetHeight - 128);
+      setRippleSize((s) => {
+        // Never bigger than 300, never smaller than a 44px hub can live in.
+        const next = Math.max(88, Math.min(300, Math.round(room)));
+        return Math.abs(next - s) > 2 ? next : s;
+      });
+    };
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    fit();
+    return () => ro.disconnect();
+  }, [phone]);
+
   /* The line under "Dex". Attached files take its place rather than adding a
      row, so the well never changes height. The row's py-2 / -my-2 pair gives
      each remove its 44px target without moving anything around it. */
@@ -511,10 +588,10 @@ export function DeskDexWell({ className, testid, growToRef, growToPhoneRef, onEx
         <AttachmentChip key={f.id} file={f} onRemove={() => chat.removeFile(f.id)} disabled={chat.busy} />
       ))}
     </ul>
-  ) : growing ? null : (
+  ) : workspace ? null : (
     <p className="mt-1.5 text-sm leading-snug text-foreground/70">
       {canCapture
-        ? "Tell Dex what you decided — speak or type."
+        ? (phone ? "Tell Dex what you decided." : "Tell Dex what you decided — speak or type.")
         : "Ask an owner to turn on Decision Desk capture for you."}
     </p>
   );
@@ -616,7 +693,49 @@ export function DeskDexWell({ className, testid, growToRef, growToPhoneRef, onEx
   );
 
   const shownSteps = ["sending", ...steps];
-  const body = growing ? (
+  /* ASK-47 · THE PHONE'S WELL, WHICH IS THREE THINGS IN ONE BOX.
+       at rest      the ripple, with the mic at its centre — the invitation
+       while it works   DexForge alone, centred, and nothing else
+       when it ends the outcome, exactly as desktop shows it
+     The founder on the middle one: "remove everything and just use that dex
+     forge building animating element in the center that's it and give the
+     result". So the quote of what was said and the list of stages it is
+     passing are not drawn here — the forge IS the progress, and the ending is
+     the report. Both of those still exist on desktop, where there is room for
+     a workspace that narrates itself. */
+  const phoneBody = !phone ? null : outcome ? (
+    <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-y-auto" aria-live="polite">{outcomeView}</div>
+  ) : workspace ? (
+    <div className="grid min-h-0 flex-1" aria-live="polite" data-testid="desk-dex-working">
+      {prefersReducedMotion() ? (
+        <p className="place-self-center text-sm text-foreground/70">{stageLabel(shownSteps[shownSteps.length - 1])}</p>
+      ) : (
+        /* `h-full w-full`, not `flex-1`: this wrapper is a GRID and a grid item
+           has no flex to grow with — the forge came out 0px tall for exactly
+           that reason. The grid stretches it instead, and the forge centres
+           its own drawing inside whatever box it is given. */
+        <DexForgeFit testid="desk-dex-forge" label="Dex is building what you decided" className="h-full min-h-0 w-full min-w-0" />
+      )}
+    </div>
+  ) : (
+    /* THE RIPPLE IS THE INVITATION. It runs off the capture the page already
+       owns — useDexCapture's meter through `readLevel` — rather than opening a
+       second stream onto the same microphone, and pressing its hub is pressing
+       the same control the composer's mic used to be. At rest it breathes;
+       while it is listening it answers the room. */
+    <div className="grid min-h-0 flex-1 place-items-center" data-testid="desk-dex-ripple">
+      <VoiceRipple
+        size={rippleSize}
+        readLevel={readLevel}
+        listening={dex.recording}
+        onPress={onMic}
+        disabled={!canCapture || (!dex.recording && (dex.sending || chat.busy))}
+        label={micLabel}
+      />
+    </div>
+  );
+
+  const body = phone ? phoneBody : growing ? (
     <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-y-auto animate-in fade-in-0 duration-300 motion-reduce:animate-none" aria-live="polite">
       {outcome ? outcomeView : (
       /* ASK-34 item 5 — TWO COLUMNS, NOT ONE LAYER OVER ANOTHER. The stages
@@ -734,6 +853,11 @@ export function DeskDexWell({ className, testid, growToRef, growToPhoneRef, onEx
           the neutral every other field in the app uses.
           KM-53 — while transcribing it is read-only: the words arrive as a
           setDraft that would wipe anything typed in the gap. */}
+      {/* ASK-47 — NOT RENDERED until there is something to type or read. It was
+          `hidden` for one revision, which does nothing here: the attribute is a
+          UA `display: none` and .nm-field sets `display: flex`, so a class beat
+          it and the field stayed on screen. Absent is absent. */}
+      {fieldOpen && (
       <div
         data-testid="desk-dex-composer"
         data-mode={recording ? "voice" : "type"}
@@ -777,8 +901,35 @@ export function DeskDexWell({ className, testid, growToRef, growToPhoneRef, onEx
           </div>
         )}
       </div>
+      )}
 
-      {/* The Brain circle, now the microphone. */}
+      {/* ASK-47 — ON A PHONE THIS CIRCLE IS NO LONGER THE MICROPHONE. The mic
+          is the ripple in the middle of the well, so what belongs here is the
+          other way in: a keyboard, which opens the field. Once there is
+          something in the field — typed or just transcribed — the same circle
+          is the send arrow, because that is the only thing left to do with it.
+          Desktop keeps the mic exactly where ASK-33 put it: there the ripple is
+          not on screen and this is the only way to speak. */}
+      {phone ? (
+        <button
+          type="button"
+          data-testid="desk-dex-keyboard"
+          data-intent={chat.draft.trim() ? "send" : "type"}
+          onClick={() => {
+            if (chat.draft.trim()) { send(); setTyping(false); return; }
+            setTyping(true);
+            requestAnimationFrame(() => fieldRef.current?.focus());
+          }}
+          disabled={!canCapture || chat.busy || dex.recording}
+          aria-label={chat.draft.trim() ? "Send to Dex" : "Type instead"}
+          title={chat.draft.trim() ? "Send to Dex" : "Type instead"}
+          className={CIRCLE}
+        >
+          {chat.draft.trim()
+            ? <PaperPlaneRight size={17} weight="bold" aria-hidden="true" />
+            : <Keyboard size={18} weight="bold" aria-hidden="true" />}
+        </button>
+      ) : (
       <button
         type="button"
         data-testid="desk-dex-mic"
@@ -793,6 +944,7 @@ export function DeskDexWell({ className, testid, growToRef, growToPhoneRef, onEx
       >
         <MicGlyph size={18} weight={intent === "stop" ? "fill" : "bold"} aria-hidden="true" />
       </button>
+      )}
 
       <span className="sr-only" aria-live="polite">
         {dex.recording ? "Recording" : transcribing ? "Transcribing" : chat.busy ? "Sending to Dex" : ""}

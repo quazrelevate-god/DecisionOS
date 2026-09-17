@@ -31,7 +31,7 @@ import { DexWave } from "../components/mobile/DexWave";
    founder asked for it here first ("once we finalize it we will add it to our
    web application"), so this page is its only call site and the component sits
    in pages/designlab/ rather than in components/ where the app would find it. */
-import { VoiceRipple, RIPPLE_DEFAULTS } from "./designlab/VoiceRipple";
+import { VoiceRipple, RIPPLE_DEFAULTS } from "../components/karma/VoiceRipple";
 
 const SCREENS = [
   { path: "/inbox", label: "Desk · now" },

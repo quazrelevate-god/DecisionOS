@@ -97,23 +97,39 @@ const sheetGone = (page) => until(async () => (await sheet(page).count()) === 0,
 
 /** Type into the well and press Enter. ASK-33.2 — the field is a text field by
     default: there is no mode to switch into, and no [+] to open first. */
+/* ASK-47 — the field is behind a door on a phone: voice is the default and the
+   keyboard circle is what opens a place to type. Everything below that used to
+   reach straight for the textarea goes through here. */
+async function openField(page) {
+  if ((await page.getByTestId('desk-dex-composer').count()) === 0) {
+    await page.getByTestId('desk-dex-keyboard').click();
+    await page.getByTestId('desk-dex-composer').waitFor({ timeout: 4000 });
+  }
+  return page.getByTestId('desk-dex-composer').locator('textarea');
+}
+
 async function typeAndSend(page, words) {
-  const input = page.getByTestId('desk-dex-composer').locator('textarea');
+  const input = await openField(page);
   await input.fill(words);
   await input.press('Enter');
 }
 
-/** The handful of numbers ASK-35 G2 turns on, all in CSS px. */
+/* The handful of numbers this suite turns on, all in CSS px.
+   ASK-47 — the well no longer GROWS, so what these numbers are for has flipped:
+   they used to prove the pane reached the top of the hero, and they now prove
+   that nothing about the well's box changes between resting, listening,
+   working and ended. `floorTop` is the row of controls at its foot — the
+   keyboard circle, which is the one control that is always there. */
 const geometry = (page) => page.evaluate(() => {
   const T = (s) => { const e = document.querySelector(s); return e ? Math.round(e.getBoundingClientRect().top) : null; };
   const well = document.querySelector('[data-testid="desk-insight"]');
-  const pane = well.querySelector('.kr-well__pane');
+  const box = well.getBoundingClientRect();
   return {
-    wellTop: T('[data-testid="desk-insight"]'), wellHeight: Math.round(well.getBoundingClientRect().height),
-    paneTop: Math.round(pane.getBoundingClientRect().top), heroTop: T('.kr-hero'),
-    micTop: T('[data-testid="desk-dex-mic"]'), boardTop: T('[data-testid="desk-board"]'),
-    greetFaded: document.querySelector('[data-testid="desk-brief-greeting"]')?.closest('[data-dex-faded]')?.dataset.dexFaded,
-    kpiFaded: document.querySelector('[data-testid="desk-kpi-strip"]')?.dataset.dexFaded,
+    wellTop: Math.round(box.top), wellHeight: Math.round(box.height),
+    boardTop: T('[data-testid="desk-board"]'),
+    floorTop: T('[data-testid="desk-dex-keyboard"]'),
+    ripple: !!document.querySelector('[data-testid="desk-dex-ripple"]'),
+    working: !!document.querySelector('[data-testid="desk-dex-working"]'),
   };
 });
 
@@ -127,12 +143,19 @@ const geometry = (page) => page.evaluate(() => {
    compliant control read as 35 and every check fail. "Stays on screen" is the
    opposite: it is about the glass, so it keeps the rect. One check, two spaces,
    each measured where it means something. */
-const touchAndFold = (page, testid, viewport) => page.evaluate(([t, vh]) => {
+/* ASK-47 — AND THE FOLD IS ASSERTED FROM 390 UP. The well is a fixed box now,
+   and on a 360x640 phone that box is about 110 own pixels: an ending's controls
+   live in its own scroller there, reachable by a thumb but below the well's
+   fold. The founder scoped that away in writing — "nobody uses a 5.4 inch
+   device… focus on 6 inch plus screens and keep the exact layout" — so it is
+   recorded here rather than designed around. The 44px FLOOR still holds at
+   every width; only the on-screen half is narrowed. */
+const touchAndFold = (page, testid, viewport, fold = true) => page.evaluate(([t, vh, checkFold]) => {
   const el = document.querySelector(`[data-testid="${t}"]`);
   if (!el) return false;
   return [...el.querySelectorAll('button,a')].every((b) =>
-    b.offsetHeight >= 44 && b.getBoundingClientRect().bottom <= vh);
-}, [testid, viewport.height]);
+    b.offsetHeight >= 44 && (!checkFold || b.getBoundingClientRect().bottom <= vh));
+}, [testid, viewport.height, fold]);
 
 async function closeSheet(page) {
   await page.getByTestId('dex-chat-close').click();
@@ -145,53 +168,61 @@ async function run(viewport) {
   check(`${w}: signed in`, signedIn);
   const well = page.getByTestId('desk-insight');
   const field = page.getByTestId('desk-dex-composer').locator('textarea');
-  const mic = page.getByTestId('desk-dex-mic');
+  // ASK-47 — the microphone IS the ripple at the centre of the well.
+  const mic = page.getByTestId('voice-ripple-mic');
   const rest = await geometry(page);
+  check(`${w}: the well opens on the ripple, not a form`, rest.ripple === true);
 
   // ------------------------------------------------------------ A · READY
   await setEnding(page, null);
   await mic.click();
   await page.waitForTimeout(1500);
-  check(`${w} A: the well records`, (await mic.getAttribute('data-intent')) === 'stop');
+  check(`${w} A: the ripple records`, (await mic.getAttribute('aria-pressed')) === 'true');
   await mic.click();
-  await until(async () => (await field.inputValue()).length > 0, 20000);
+  await until(async () => (await page.getByTestId('desk-dex-composer').count()) > 0
+    && (await field.inputValue()).length > 0, 20000);
   const said = await field.inputValue().catch(() => '');
   check(`${w} A: the words come back into the well to be read first`, said.length > 0, clip(said, 60));
-  await mic.click();
+  /* ASK-47 — and they come back into a field that was not there a moment ago:
+     the transcript is one of the three things that open it. */
+  check(`${w} A: … in a field the transcript brought with it`,
+    (await page.getByTestId('desk-dex-composer').count()) === 1);
+  check(`${w} A: … with the circle beside it now offering to send`,
+    (await page.getByTestId('desk-dex-keyboard').getAttribute('data-intent')) === 'send');
+  await page.getByTestId('desk-dex-keyboard').click();
   await page.waitForTimeout(1600);
   const open1 = await geometry(page);
 
-  /* ASK-35 2.1 / 2.2 — THE WELL IS THE WORKSPACE. This is the reversal: no
-     sheet, the pane grows to the top of the hero, and the composer the founder
-     just typed into stays exactly where it was. */
-  check(`${w} A: sending expands the well in place`, open1.paneTop < rest.wellTop, `pane ${open1.paneTop} vs well ${rest.wellTop}`);
+  /* ASK-47 — THE WELL IS STILL THE WORKSPACE, AND IT NO LONGER MOVES. ASK-35
+     grew the pane to the top of the hero; the founder's rearrangement puts a
+     card that pops in that half of the screen and makes this half a fixed box.
+     So the assertion is the reverse of the one it replaces: sending changes
+     what the well SHOWS and nothing about where it is. */
+  check(`${w} A: sending leaves the well exactly where it was`,
+    open1.wellTop === rest.wellTop && open1.wellHeight === rest.wellHeight,
+    `${rest.wellTop}/${rest.wellHeight} -> ${open1.wellTop}/${open1.wellHeight}`);
   check(`${w} A: … and the Dex sheet does NOT open`, (await sheet(page).count()) === 0);
-  check(`${w} A: it grows to the top of the hero`, Math.abs(open1.paneTop - open1.heroTop) <= 2,
-    `pane ${open1.paneTop} vs hero ${open1.heroTop}`);
-  check(`${w} A: the composer row does not move`, open1.micTop === rest.micTop, `${rest.micTop} -> ${open1.micTop}`);
+  check(`${w} A: the row of controls does not move`, open1.floorTop === rest.floorTop, `${rest.floorTop} -> ${open1.floorTop}`);
   check(`${w} A: nothing below it shifts`, open1.boardTop === rest.boardTop, `${rest.boardTop} -> ${open1.boardTop}`);
-  check(`${w} A: the greeting and the KPI strip both fade`,
-    open1.greetFaded === 'true' && open1.kpiFaded === 'true', `greeting ${open1.greetFaded} · kpi ${open1.kpiFaded}`);
-  check(`${w} A: what was said is quoted back`, (await well.textContent()).includes(said.slice(0, 24)));
 
-  /* ASK-35 2.5 — the REAL stages, stacked above the forge rather than crammed
-     beside it, and the body is not a nested scroller. */
-  const stages = page.locator('[aria-label="What Dex is doing"]');
-  check(`${w} A: the real stages are printed while it reads`,
-    (await stages.count()) === 1 && /Sending it to Dex/.test(await stages.textContent()),
-    clip(await stages.textContent().catch(() => ''), 90));
+  /* ASK-47 — WHAT IT SHOWS WHILE IT READS IS THE FORGE, alone. The founder:
+     "remove everything and just use that dex forge building animating element
+     in the center that's it and give the result." So: no quote of what was
+     said, no list of stages, and the ripple stands down while it works. */
+  check(`${w} A: while it reads, the forge is what it shows`, open1.working === true);
+  check(`${w} A: … and the ripple stands down`, open1.ripple === false);
   const stacked = await page.evaluate(() => {
-    const st = document.querySelector('[aria-label="What Dex is doing"]');
     const fg = document.querySelector('[data-testid="desk-dex-forge"]');
-    const body = document.querySelector('[data-testid="desk-insight"] [aria-live="polite"]');
-    if (!st || !fg || !body) return null;
-    return { below: fg.getBoundingClientRect().top >= st.getBoundingClientRect().bottom - 1,
-      // ASK-43 — own pixels: the 72 this is checked against is a CSS floor.
-      h: fg.offsetHeight,
-      scrolls: body.scrollHeight > body.clientHeight + 1 };
+    const body = document.querySelector('[data-testid="desk-dex-working"]');
+    if (!fg || !body) return null;
+    return { h: fg.offsetHeight, scrolls: body.scrollHeight > body.clientHeight + 1,
+      stages: !!document.querySelector('[aria-label="What Dex is doing"]'),
+      quote: /[\u201C\u201D]/.test(document.querySelector('[data-testid="desk-insight"]').innerText) };
   });
-  check(`${w} A: the forge sits under them, whole`, !!stacked && stacked.below && stacked.h >= 72,
-    stacked ? `${stacked.h}px tall` : 'not drawn');
+  const forgeFloor = viewport.width >= 390 ? 72 : 36;
+  check(`${w} A: the forge is drawn whole`, !!stacked && stacked.h >= forgeFloor, stacked ? `${stacked.h}px tall` : 'not drawn');
+  check(`${w} A: … with no stage list beside it`, !!stacked && stacked.stages === false);
+  check(`${w} A: … and nothing quoted back`, !!stacked && stacked.quote === false);
   check(`${w} A: … and the body is not a nested scroller`, !!stacked && stacked.scrolls === false);
 
   const ready = well.getByTestId('dex-outcome-ready');
@@ -200,9 +231,13 @@ async function run(viewport) {
   const headline = clip(await ready.getByTestId('desk-dex-summary').textContent().catch(() => ''), 120);
   check(`${w} A: it leads with the 5.1 line`, READY.test(headline), headline);
   check(`${w} A: nothing is toasted while the workspace shows it`, (await page.locator('[data-sonner-toast]').count()) === 0);
-  check(`${w} A: the field is clear for the next one`, (await field.inputValue().catch(() => '')) === '');
+  /* ASK-47 — the field is not merely clear, it is gone: sent, the well goes
+     back to being an invitation with the ripple in the middle of it. */
+  check(`${w} A: the field is put away for the next one`,
+    (await page.getByTestId('desk-dex-composer').count()) === 0
+    || (await field.inputValue().catch(() => '')) === '');
   check(`${w} A: the ending's controls clear the touch floor and stay on screen`,
-    await touchAndFold(page, 'dex-outcome-ready', viewport));
+    await touchAndFold(page, 'dex-outcome-ready', viewport, viewport.width >= 390));
   await ready.getByTestId('desk-dex-review').click();
   await page.getByTestId('decision-dialog').waitFor({ timeout: 8000 }).catch(() => {});
   check(`${w} A: Review opens the decision in DecisionDialog`,
@@ -224,16 +259,20 @@ async function run(viewport) {
   check(`${w} B: not styled as an error`,
     (await nothing.getAttribute('role')) !== 'alert' && (await nothing.locator('svg').count()) === 0);
   check(`${w} B: its control clears the touch floor and stays on screen`,
-    await touchAndFold(page, 'dex-outcome-nothing', viewport));
+    await touchAndFold(page, 'dex-outcome-nothing', viewport, viewport.width >= 390));
 
-  // D · the way out collapses the workspace, checked on this ending
+  /* D · the way out puts the well back to the invitation, checked on this
+     ending. ASK-47 — there is no height to come back to any more, so what is
+     checked is that the ripple returns and the box never moved at all. */
   await nothing.getByRole('button').click();
-  check(`${w} D: "Got it" puts the well back to its resting height`,
-    await until(async () => { const g = await geometry(page); return g.wellHeight === rest.wellHeight && g.paneTop >= rest.wellTop - 1; }, 6000),
-    `${rest.wellHeight}px`);
-  check(`${w} D: … and the greeting and the strip come back`,
-    await until(async () => { const g = await geometry(page); return g.greetFaded === 'false' && g.kpiFaded === 'false'; }, 4000));
-  check(`${w} D: … with the composer still where it was`, (await geometry(page)).micTop === rest.micTop);
+  check(`${w} D: "Got it" gives the well back to the ripple`,
+    await until(async () => (await geometry(page)).ripple === true, 6000));
+  check(`${w} D: … and the well is the same box it has been throughout`,
+    await until(async () => {
+      const g = await geometry(page);
+      return g.wellHeight === rest.wellHeight && g.wellTop === rest.wellTop;
+    }, 4000), `${rest.wellTop}/${rest.wellHeight}`);
+  check(`${w} D: … with the controls still where they were`, (await geometry(page)).floorTop === rest.floorTop);
 
   // ------------------------------------------- C · FAILED, with a file attached
   await setEnding(page, 'consent');
@@ -266,15 +305,15 @@ async function run(viewport) {
   check(`${w} C: … and that link is a 44px target on a phone`, !!linkBox && linkBox.height >= 44,
     linkBox ? `${Math.round(linkBox.height)}px` : 'no box');
   check(`${w} C: the failure's controls clear the touch floor and stay on screen`,
-    await touchAndFold(page, 'dex-outcome-failed', viewport));
+    await touchAndFold(page, 'dex-outcome-failed', viewport, viewport.width >= 390));
   await failed.getByTestId('dex-outcome-retry').click();
   check(`${w} C: Retry re-sends without asking to say it again, and thinks again`,
-    await until(async () => (await stages.count()) === 1, 6000));
+    await until(async () => (await geometry(page)).working === true, 6000));
   check(`${w} C: the re-sent capture reaches its own ending`,
     await until(async () => (await failed.count()) === 1, 25000));
   await failed.getByRole('button', { name: 'Not now' }).click();
-  check(`${w} D: "Not now" collapses it too`,
-    await until(async () => (await geometry(page)).wellHeight === rest.wellHeight, 6000));
+  check(`${w} D: "Not now" gives the well back to the ripple too`,
+    await until(async () => (await geometry(page)).ripple === true, 6000));
   await gotoDesk(page);
 
   // --------------------------------------------------- E · one note at a time
@@ -292,12 +331,12 @@ async function run(viewport) {
   check(`${w} E: the first capture still reaches its ending`,
     await until(async () => (await well.getByTestId('dex-outcome-ready').count()) === 1));
   await well.getByRole('button', { name: 'Later' }).click();
-  check(`${w} D: "Later" collapses it as well`,
-    await until(async () => (await geometry(page)).wellHeight === rest.wellHeight, 6000));
+  check(`${w} D: "Later" gives it back as well`,
+    await until(async () => (await geometry(page)).ripple === true, 6000));
   await page.waitForTimeout(800);
   await typeAndSend(page, 'Ask Priya to book the Tirupur truck for Thursday');
   check(`${w} E: and the next send goes through once it has`,
-    await until(async () => (await stages.count()) === 1, 8000));
+    await until(async () => (await geometry(page)).working === true, 8000));
 
   // ------------------------------------------------- F · the sheet is Ask-only
   check(`${w} F: no decide path opened the sheet, all run long`, (await sheet(page).count()) === 0);

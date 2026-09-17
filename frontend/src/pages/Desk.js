@@ -71,6 +71,11 @@ import {
    the Desk's job on a phone is to say what is waiting, and the rest is one tap
    away. */
 const PHONE_ROWS = 3;
+/* ASK-47 · the pop. How long the card takes to grow out over the page and back
+   — the app's own 260ms on its own ease — and the gap it leaves above the dock
+   when it is open. It must never cover the bar. */
+const POP_MS = 260;
+const POP_SEAM = 10;
 /* The gap the phone card leaves between its last pixel and the top of the
    floating dock. One seam, not a margin: the sheet's own dock clearance is what
    keeps the two apart, and this is only what the measurement holds back so the
@@ -434,11 +439,16 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
    on a phone: the inner one swallows the gesture and the page appears stuck.
    The card shows what fits and a control opens the rest in place, so there is
    only ever one thing scrolling — the page. */
-function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, onExpandedChange, children }) {
-  const [showAll, setShowAll] = useState(false);
-  // A new tab starts closed; the last tab's "show everything" is not a claim
-  // about this one.
-  useEffect(() => { setShowAll(false); }, [tab]);
+/* ASK-47 — TWO FLAGS, NOT ONE, and the difference is what makes the pop
+   measurable. `open` says the whole list is rendered; `scrolls` says the card
+   has reached its full size and the list inside it is now the scroller. They
+   are one frame apart on purpose: the page measures the card between them,
+   when every row is in the DOM and nothing is yet clipping them, which is the
+   only moment the content's real height can be read. Tied together, the
+   measurement read the height of three rows and the card grew to exactly the
+   size it already was. */
+function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, open, scrolls, onToggleExpanded, children }) {
+  const showAll = open;
 
   /* ASK-35 1.1 — THREE, AND THEN A CONTROL: the Desk's job on a phone is to say
      what is waiting, not to show it all.
@@ -452,10 +462,11 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, on
      page's question (`tooTall`, in Desk below). What is left of this component
      is what it draws.
 
-     "Show all" is still the one thing in this card that can make the page
-     taller than a screen, so the page hears about that and nothing else. */
-  useEffect(() => { onExpandedChange?.(showAll); }, [showAll, onExpandedChange]);
-
+     ASK-47 — AND OPEN/CLOSED IS THE PAGE'S STATE NOW, not this card's. Opening
+     no longer grows a list inside a page; it pops this whole card out over the
+     page, and the page is what dims behind it, what closes it when tapped, and
+     what knows where the card has to grow to. A card cannot own a state the
+     page has to act on. */
   // ASK-42 A — three, always (see the measure above); "Show all" is the rest.
   const shown = showAll ? rows : rows.slice(0, PHONE_ROWS);
   const hidden = rows.length - shown.length;
@@ -503,8 +514,19 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, on
           where its content ends and the slack is the sheet's own black. The
           measurement never needed the stretch — it is taken against the dock's
           line, not the card's box. */}
-      <div className={cn(PHONE_CARD_INK, "mt-1.5 min-h-0 rounded-tile p-2.5")} data-testid={`${testid}-card`}>
-        <div>
+      {/* ASK-47 — WHEN THE CARD IS POPPED, THIS FILLS IT AND THE LIST SCROLLS.
+          At rest the card hugs its three rows (ASK-46) and nothing inside it
+          scrolls; open, it is the height of the screen and the list is the only
+          thing in the app that has more than it can show, so the list is where
+          the scrolling goes. `min-h-0` on both is what lets a flex child be
+          shorter than its content — without it the list would push the card
+          past the bottom of the screen instead of scrolling inside it. */}
+      <div
+        className={cn(PHONE_CARD_INK, "mt-1.5 min-h-0 rounded-tile p-2.5",
+          scrolls && "flex flex-1 flex-col")}
+        data-testid={`${testid}-card`}
+      >
+        <div className={scrolls ? "kr-scroll-quiet min-h-0 flex-1 overflow-y-auto" : undefined}>
         {children || (
           <>
             {loading && (
@@ -537,7 +559,7 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, on
           <button
             type="button"
             data-testid="desk-phone-more"
-            onClick={() => setShowAll((v) => !v)}
+            onClick={onToggleExpanded}
             aria-expanded={showAll}
             className="mt-1 flex h-11 w-full items-center justify-center gap-1 text-[13px] font-medium text-white/70 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-0"
           >
@@ -734,8 +756,97 @@ export default function Desk() {
      together. */
   const [phoneTab, setPhoneTab] = useState("decisions");
   /* ASK-39 1 — "Show all" is the one thing that makes the phone's Desk taller
-     than a screen, so the page has to know about it. */
+     than a screen, so the page has to know about it.
+     ASK-47 — and it no longer makes it taller: the card POPS instead, out over
+     the page, growing from where it sits toward the top and the dock at the
+     same time. This is the state that drives all of it. */
   const [phoneExpanded, setPhoneExpanded] = useState(false);
+  // A new tab starts closed: the last tab's "show everything" is not a claim
+  // about this one.
+  useEffect(() => { setPhoneExpanded(false); }, [phoneTab]);
+  /* THE POP'S GEOMETRY, in the element's own pixels. `rest` is where the card
+     sits on the page, measured the moment it is opened; `full` is the screen
+     between the top bar and the dock. The card is rendered fixed at `rest` for
+     one frame and then at `full`, so the browser has two values to transition
+     between and the card grows UP and DOWN at once — which is the thing the
+     founder asked for and the thing a height animation alone cannot do. */
+  const boardRef = useRef(null);
+  const [pop, setPop] = useState(null); // { rest, full, at: "rest" | "full" }
+  useEffect(() => {
+    if (!isMobile) { setPop(null); return undefined; }
+    const board = boardRef.current;
+    if (!board) return undefined;
+
+    if (!phoneExpanded) {
+      // Closing: back to the resting geometry, then out of fixed altogether.
+      setPop((p) => (p ? { ...p, at: "rest" } : null));
+      const t = setTimeout(() => setPop(null), POP_MS);
+      return () => clearTimeout(t);
+    }
+
+    const rect = board.getBoundingClientRect();
+    /* ASK-43's two spaces again: a fixed element inside the zoomed app is
+       positioned in the app's OWN pixels, and every rect here is in visual
+       ones. `k` converts, and is exactly 1 wherever there is no zoom. */
+    const scaleVar = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale"));
+    const k = scaleVar > 0 ? 1 / scaleVar : (rect.width ? board.offsetWidth / rect.width : 1);
+    const dock = document.querySelector('[data-testid="floating-dock"]');
+    const topBar = document.querySelector('[data-testid="desk-topbar"]');
+    const topOwn = (topBar ? topBar.getBoundingClientRect().top : rect.top) * k;
+    const dockTopOwn = dock ? dock.getBoundingClientRect().top * k : window.innerHeight * k;
+    /* Converted from the rect, NOT read off offsetWidth/offsetHeight: those are
+       rounded to whole pixels, and the spacer below stands in for this box in
+       the flow. A rounded height there left half a pixel between them, which
+       nudged Dex up by one screen pixel when the card lifted. */
+    const rest = {
+      top: rect.top * k,
+      left: rect.left * k,
+      width: rect.width * k,
+      height: rect.height * k,
+    };
+    /* AS TALL AS THE LIST IS, AND NO TALLER. The founder: "it should grow
+       according to the list of items it has… depending upon the list of items
+       it will cover the entire screen". So the target height is the card's own
+       natural height with every row in it, capped at the screen between the top
+       bar and the dock — six decisions open a card of six, thirty open a full
+       screen with the list scrolling inside it.
+       It is measured one frame LATER, with the whole list already rendered at
+       the resting geometry: scrollHeight then reports what the content wants.
+       (Which is also why the inner list only becomes a scroller at `full` —
+       measuring a scroller would report the box, not the content.) */
+    setPop({ rest, full: rest, at: "rest" });
+    const raf = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const maxH = Math.max(rest.height, dockTopOwn - POP_SEAM - topOwn);
+        /* How much MORE the content wants than the box it is in. The board is
+           a grid whose row is minmax(0,1fr), so the overflow does not surface
+           on the board itself — it surfaces on the first descendant the row
+           squeezes, which is the list's own card. Take whichever reports it. */
+        const inner = board.querySelector(`[data-testid="desk-phone-card-card"]`);
+        const extra = Math.max(
+          board.scrollHeight - board.clientHeight,
+          inner ? inner.scrollHeight - inner.clientHeight : 0,
+          0
+        );
+        const height = Math.min(rest.height + extra, maxH);
+        /* AND IT GROWS FROM ITS CENTRE — up and down at once, which is the
+           whole of the founder's ask. Held inside the same two lines: never
+           above the top bar, never over the dock. */
+        const centre = rest.top + rest.height / 2;
+        const top = Math.max(topOwn, Math.min(centre - height / 2, dockTopOwn - POP_SEAM - height));
+        setPop((prev) => (prev ? { ...prev, full: { ...rest, top, height }, at: "full" } : prev));
+      });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [phoneExpanded, isMobile, phoneTab]);
+
+  // Escape closes it, like every other layer in the app.
+  useEffect(() => {
+    if (!phoneExpanded) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") setPhoneExpanded(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [phoneExpanded]);
   /* ASK-36 2 — the ids of decisions set aside with "Later". Subscribed rather
      than read once, because the well writes to the store while this page is
      mounted. */
@@ -828,14 +939,28 @@ export default function Desk() {
        into rises by the difference — the exact 7px ASK-35 2.2 spent a
        ticket removing. Anything at or above the content height pins the
        well and the composer cannot move. */
+    /* ASK-47 — ON A PHONE IT TAKES WHAT IS LEFT. The founder wants the space
+       between the card and the dock filled by Dex rather than left empty, and
+       filled with a near-square container: the ripple mic needs a square to
+       live in, not the compact strip a composer needs. `flex-1` hands it every
+       pixel the hero and the card did not use, with a floor so it is never
+       less than a well; on the screens the founder cares about (6"+) that is a
+       square or better, and on the shortest phones it simply gets smaller,
+       which is what they said to do with those. */
     className={cn(
-      "min-h-[128px]",
       isMobile
-        // At the foot of the page, pushed to the bottom of the column.
-        ? "mt-auto flex flex-col"
-        : "order-4 max-lg:flex max-lg:flex-col lg:order-none lg:min-h-0 lg:flex-1"
+        /* `min-h-0`, not a floor. A floor is the one thing that can push this
+           page past the screen, and the founder's answer for the phones too
+           short to hold a square was "scale down to fit exact" — so the well
+           takes what is left and the ripple inside it is drawn at whatever
+           that turns out to be. On 6" and up that is a square; on a 5.4" it is
+           a letterbox with a smaller mic in it, and nothing scrolls either
+           way. */
+        ? "min-h-0 flex-1 flex flex-col"
+        : "order-4 min-h-[128px] max-lg:flex max-lg:flex-col lg:order-none lg:min-h-0 lg:flex-1"
     )}
     testid="desk-insight"
+    phone={isMobile}
     growToRef={kpiGridRef}
     /* ASK-35 2.2 — below lg the well grows to the top of the HERO,
        covering the greeting, the score cluster and the KPI strip. */
@@ -885,7 +1010,10 @@ export default function Desk() {
            bar's height on every phone. Layout gives this page's wrapper main's
            own height below lg, so `h-full` is the true one and stays true
            whatever else the shell grows above it. */
-        phoneExpanded ? "max-lg:min-h-full" : "max-lg:h-full"
+        /* ASK-47 — always h-full below lg. The page used to grow when the
+           list opened; the list pops over it now, so the page is one screen in
+           every state and there is nothing left that can make it scroll. */
+        "max-lg:h-full"
       )}
     >
       {/* ── LIGHT ZONE ───────────────────────────────────────────────── */}
@@ -1151,6 +1279,27 @@ export default function Desk() {
 
           The headings sit flat at the top of their columns, over a
           hairline. */}
+      {/* ASK-47 — NOTHING ELSE MOVES. The card goes `position: fixed` when it
+          pops, which takes it out of the page's column; this holds its place at
+          exactly the height it had, so the tiles above and Dex below stay
+          where the founder left them. Without it the page would reflow the
+          moment the card lifted, which is the one thing this rearrangement is
+          not allowed to do. */}
+      {pop && <div aria-hidden="true" style={{ height: pop.rest.height }} data-testid="desk-board-spacer" />}
+      {/* THE PAGE BEHIND IT, dimmed and blurred — subtly, both. It sits under
+          the card (9001) and under the dock (10000), so the bar keeps its own
+          material and its own sharpness: the blur only ever touches what is
+          BEHIND the backdrop, and the dock is not. Tapping it closes the card,
+          which is the gesture every other layer in this app answers to. */}
+      {pop && (
+        <div
+          data-testid="desk-board-scrim"
+          onClick={() => setPhoneExpanded(false)}
+          aria-hidden="true"
+          className="fixed inset-0 z-[9000] bg-kr-ink/[0.10] backdrop-blur-[3px] transition-opacity duration-[260ms] lg:hidden"
+          style={{ opacity: pop.at === "full" ? 1 : 0 }}
+        />
+      )}
       <section
         aria-label="Decision desk"
         data-testid="desk-board"
@@ -1180,7 +1329,28 @@ export default function Desk() {
            a grid item is sized by its row, and an auto row is never shrunk
            below its content. It is the same fix ASK-34 7.2 made at lg, for the
            same reason, one breakpoint down. */
-        className={`kr-desk-board grid gap-5 lg:-mx-3 lg:-mb-2 lg:min-h-0 lg:flex-1 lg:gap-0 lg:grid-rows-[minmax(0,1fr)] ${showDecisions ? "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]" : ""}`}
+        ref={boardRef}
+        /* ASK-47 — THE SAME CARD, LIFTED. When it pops it is this element that
+           goes `position: fixed` — not a copy of it in a portal — so the tabs
+           the founder was looking at, the row they were reading and the card's
+           own material all survive the transition, because they never left.
+           `data-popped` is what the page reads to dim behind it. */
+        data-popped={pop?.at === "full" ? "true" : undefined}
+        style={pop ? {
+          position: "fixed",
+          zIndex: 9001,
+          left: pop[pop.at].left,
+          top: pop[pop.at].top,
+          width: pop[pop.at].width,
+          height: pop[pop.at].height,
+          transition: `top ${POP_MS}ms cubic-bezier(.22,1,.36,1), height ${POP_MS}ms cubic-bezier(.22,1,.36,1)`,
+        } : undefined}
+        className={cn(
+          "kr-desk-board grid gap-5 lg:-mx-3 lg:-mb-2 lg:min-h-0 lg:flex-1 lg:gap-0 lg:grid-rows-[minmax(0,1fr)]",
+          showDecisions && "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]",
+          // Popped, the card is a column: tab strip on top, list filling the rest.
+          pop && "max-lg:grid-rows-[minmax(0,1fr)]"
+        )}
       >
         {/* ASK-34 B — THE PHONE'S CARD. One card, three tabs, the same rows the
             desktop columns use. */}
@@ -1191,7 +1361,9 @@ export default function Desk() {
           tabs={phoneTabs}
           tab={phoneTab}
           onTab={setPhoneTab}
-          onExpandedChange={setPhoneExpanded}
+          open={!!pop}
+          scrolls={pop?.at === "full"}
+          onToggleExpanded={() => setPhoneExpanded((v) => !v)}
           loading={phoneTab === "decisions" ? decisionsLoading : phoneTab === "approvals" ? !m.tasks : false}
           empty={phoneTab === "decisions" ? SECTIONS[0].empty : "Nothing waiting for your sign-off"}
           rows={phoneTab === "decisions" ? decisionRows : phoneTab === "approvals" ? approvalRows : []}

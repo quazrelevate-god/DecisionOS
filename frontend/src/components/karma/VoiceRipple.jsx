@@ -1,11 +1,21 @@
-/* ASK-44 / ASK-45 · VoiceRipple — a neumorphic ripple that listens.
+/* ASK-44 / ASK-45 / ASK-47 · VoiceRipple — a neumorphic ripple that listens.
  *
- * LAB ONLY, ON PURPOSE. The founder: "don't place it anywhere in our mobile
- * PWA, use the design lab page — once we finalize it we will add it to our web
- * application." So it lives under pages/designlab/, /design-lab is its only
- * call site, and it imports nothing from the app's capture pipeline: one file,
- * its own microphone, its own frame loop. Dropping it into the app later means
- * moving this file and passing it a level — nothing here reaches outward.
+ * IT IS IN THE APP NOW. ASK-44 built it in the design lab on the founder's
+ * instruction ("once we finalize it we will add it to our web application"),
+ * and ASK-47 is that: it is the centrepiece of the Desk's Dex well on a phone.
+ * The move is the one the header promised — the file changed folder and gained
+ * a way to be handed a level from outside. Nothing else about it moved.
+ *
+ * TWO WAYS TO DRIVE IT.
+ *   · Its own microphone, which is what the lab uses: press the hub, it opens
+ *     a stream, reads it and closes it again.
+ *   · Somebody else's, which is what the Desk uses: `readLevel` is a function
+ *     returning 0..1 and `listening` says whether that source is live, so the
+ *     ripple runs off the capture the page already owns (useDexCapture's meter)
+ *     instead of opening a second stream onto the same microphone. `onPress`
+ *     then belongs to the page too.
+ * Give it neither and it is self-contained; give it both and it never touches
+ * getUserMedia at all.
  *
  * ── WHAT MAKES IT NEUMORPHIC RATHER THAN A GLOWING CIRCLE ────────────────
  * The app's neumorphism has one light source and it is the top-left corner:
@@ -105,7 +115,21 @@ const smooth = (ring, th) => {
   );
 };
 
-export function VoiceRipple({ size = 320, config = RIPPLE_DEFAULTS, simulate = false }) {
+export function VoiceRipple({
+  size = 320,
+  config = RIPPLE_DEFAULTS,
+  simulate = false,
+  // The external drive (see the header). `readLevel` present ⇒ no own mic.
+  readLevel = null,
+  listening = false,
+  onPress = null,
+  disabled = false,
+  label,
+  // How alive the surface is when nothing is being said. The founder asked for
+  // "subtly waving" at rest, which is this and not zero.
+  idle = 0.13,
+}) {
+  const external = typeof readLevel === "function";
   const canvasRef = useRef(null);
   const stageRef = useRef(null);
   const [live, setLive] = useState(false);
@@ -121,7 +145,11 @@ export function VoiceRipple({ size = 320, config = RIPPLE_DEFAULTS, simulate = f
   const rafRef = useRef(0);
   const lastRingRef = useRef(0);
   const cfgRef = useRef({ ...RIPPLE_DEFAULTS, simulate, live: false });
-  cfgRef.current = { ...RIPPLE_DEFAULTS, ...config, simulate, live };
+  cfgRef.current = {
+    ...RIPPLE_DEFAULTS, ...config, simulate,
+    live: external ? listening : live,
+    external, readLevel, idle,
+  };
 
   /* ── the microphone ──────────────────────────────────────────────────── */
   const stop = useCallback(() => {
@@ -203,9 +231,17 @@ export function VoiceRipple({ size = 320, config = RIPPLE_DEFAULTS, simulate = f
     window.addEventListener("resize", refit);
 
     const read = (now) => {
-      const { gain, simulate: sim, live: isLive } = cfgRef.current;
+      const { gain, simulate: sim, live: isLive, external: ext, readLevel: rl, idle: idleAmp } = cfgRef.current;
       let raw = 0;
-      if (sim) {
+      if (ext) {
+        /* Somebody else's meter. It is already the app's own curve (the Desk
+           hands over useDexCapture's, the same one this file's own reader
+           uses), so it is taken as given — and when that source is not live,
+           the surface breathes instead of dying, which is the "subtly waving"
+           the founder asked for at rest. */
+        raw = isLive ? Math.max(0, Math.min(1, Number(rl()) || 0)) : 0;
+        if (!isLive) raw = idleAmp * (0.55 + 0.45 * Math.sin(now / 1400));
+      } else if (sim) {
         /* A stand-in so the motion can be judged without granting the mic:
            two slow sines and a little noise, which is roughly the envelope of
            someone talking. Labelled in the UI — it is never a fallback for a
@@ -408,14 +444,16 @@ export function VoiceRipple({ size = 320, config = RIPPLE_DEFAULTS, simulate = f
         />
         <button
           type="button"
-          onClick={() => (live ? stop() : start())}
+          onClick={onPress || (() => (live ? stop() : start()))}
+          disabled={disabled}
           data-testid="voice-ripple-mic"
-          aria-pressed={live}
-          aria-label={live ? "Stop listening" : "Start listening"}
+          aria-pressed={external ? listening : live}
+          aria-label={label || ((external ? listening : live) ? "Stop listening" : "Start listening")}
           className={[
             "relative grid place-items-center rounded-full transition-[box-shadow,transform] duration-150",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60",
-            live ? "kr-pressed" : "kr-pop",
+            (external ? listening : live) ? "kr-pressed" : "kr-pop",
+            disabled && "opacity-50",
           ].join(" ")}
           style={{ width: size * 0.27, height: size * 0.27 }}
         >
@@ -431,6 +469,7 @@ export function VoiceRipple({ size = 320, config = RIPPLE_DEFAULTS, simulate = f
         </button>
       </div>
 
+      {!external && (
       <p className="text-center text-sm text-muted-foreground" role="status">
         {error
           ? <span className="text-kr-accent">{error}</span>
@@ -442,6 +481,7 @@ export function VoiceRipple({ size = 320, config = RIPPLE_DEFAULTS, simulate = f
                 ? "Simulated level. Press the mic for the real one."
                 : "Press the mic and speak."}
       </p>
+      )}
     </div>
   );
 }

@@ -27,6 +27,23 @@ const page = await ctx.newPage();
 page.on('pageerror', (e) => check('no page errors', false, e.message.split('\n')[0]));
 
 check('signed in', await signIn(page, BASE));
+/* ASK-43 — THE FLOORS ARE MEASURED IN THE APP'S OWN PIXELS. The phone shell is
+   CSS-zoomed to 0.8 (hooks/useUiScale), so a rect returns VISUAL pixels: a
+   compliant 44px control read back as 35 and every floor in this file failed on
+   controls that had not changed. 44/48/56 are rules about the app's own pixels —
+   the same numbers the CSS writes — so they are read with offsetHeight, and
+   distances between elements are converted with the scale the app publishes.
+   ASK-42/46 — AND THE PAGE ITSELF NO LONGER SCROLLS: the shell is one screen
+   tall with <main> as its scroller, so window.scrollY is 0 everywhere. */
+const ownH = (loc) => loc.evaluate((el) => el.offsetHeight);
+const ownWH = (loc) => loc.evaluate((el) => ({ w: el.offsetWidth, h: el.offsetHeight }));
+const scale = (page) => page.evaluate(() => {
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ui-scale'));
+  return v > 0 ? 1 / v : 1;
+});
+const scrollTopOf = (page) => page.evaluate(() =>
+  Math.round((document.querySelector('main') || document.scrollingElement).scrollTop));
+
 await page.goto(`${BASE}/__mobile-kit`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('[data-testid="mobile-kitchen-sink"]', { timeout: 15000 });
 await page.waitForTimeout(400);
@@ -57,10 +74,10 @@ check('MobileCard is one tap target', await page.locator('[data-testid="kit-card
 ), `${chevrons} svg(s) inside, 0 nested controls`);
 
 // ------------------------------------------------- BottomSheet contract (§7)
-await page.evaluate(() => window.scrollTo(0, 900));
+await page.evaluate(() => { (document.querySelector('main') || window).scrollTo(0, 900); });
 await page.waitForTimeout(250);
-const beforeY = await page.evaluate(() => Math.round(window.scrollY));
-check('scrolled before opening', beforeY > 300, `scrollY=${beforeY}`);
+const beforeY = await scrollTopOf(page);
+check('scrolled before opening', beforeY > 300, `scrollTop=${beforeY}`);
 
 await page.locator('[data-testid="kit-card-1"]').click();
 await page.waitForSelector('[data-testid="bottom-sheet"]', { timeout: 5000 });
@@ -69,23 +86,22 @@ await page.waitForTimeout(450);
 check('sheet has a visible close button (not only a handle)',
   await page.locator('[data-testid="bottom-sheet-close"]').isVisible());
 
-const closeBox = await page.locator('[data-testid="bottom-sheet-close"]').boundingBox();
-check('close button clears 44px', closeBox.width >= 44 && closeBox.height >= 44,
-  `${Math.round(closeBox.width)}x${Math.round(closeBox.height)}`);
+const closeBox = await ownWH(page.locator('[data-testid="bottom-sheet-close"]'));
+check('close button clears 44px', closeBox.w >= 44 && closeBox.h >= 44, `${closeBox.w}x${closeBox.h}`);
 
 const scrim = await page.locator('[data-testid="bottom-sheet-scrim"]')
   .evaluate((el) => getComputedStyle(el).backgroundColor);
 const [sr, sg, sb] = scrim.match(/\d+/g).map(Number);
 check('scrim is neutral, not tinted', Math.max(sr, sg, sb) - Math.min(sr, sg, sb) <= 12, scrim);
 
-// Background scroll must be locked. NB: the lock pins the body with
-// `position: fixed`, so window.scrollY is 0 *by definition* while a sheet is
-// open — that is the signature of the technique, not a failure. What matters
-// is that the page does not visually move, so measure a reference element's
-// viewport position across a wheel event instead.
+/* Background scroll must be locked. This used to read the SIGNATURE of one
+   technique — the body pinned with position:fixed and a negative top — which
+   stopped being how it works when the shell became one screen tall with its
+   own scroller: there is no window scroll left to pin. The claim underneath is
+   unchanged and is what is asserted now: the page behind does not move, and
+   the scroller it lives in does not take the wheel. */
 const lockSig = await page.evaluate(() => ({
-  bodyPosition: getComputedStyle(document.body).position,
-  bodyTop: document.body.style.top,
+  scrollerTop: Math.round((document.querySelector('main') || document.scrollingElement).scrollTop),
   refTop: Math.round(
     document.querySelector('[data-testid="kit-emptystate"]').getBoundingClientRect().top
   ),
@@ -96,8 +112,8 @@ const afterWheel = await page.evaluate(() =>
   Math.round(document.querySelector('[data-testid="kit-emptystate"]').getBoundingClientRect().top)
 );
 check('background is pinned, not merely overflow-hidden',
-  lockSig.bodyPosition === 'fixed' && lockSig.bodyTop === `-${beforeY}px`,
-  `body position=${lockSig.bodyPosition} top=${lockSig.bodyTop}`);
+  (await scrollTopOf(page)) === lockSig.scrollerTop,
+  `scroller ${lockSig.scrollerTop} -> ${await scrollTopOf(page)}`);
 check('background does not scroll behind the sheet',
   Math.abs(afterWheel - lockSig.refTop) <= 2,
   `reference element top ${lockSig.refTop} -> ${afterWheel}`);
@@ -126,7 +142,7 @@ check('sheet body contains its own overscroll', bodyScrolled?.overscroll === 'co
   JSON.stringify(bodyScrolled));
 
 // money-committing action sits on the 56px tier (§5.1)
-const approve = await page.locator('[data-testid="kit-sheet-approve"]').boundingBox();
+const approve = { height: await ownH(page.locator('[data-testid="kit-sheet-approve"]')) };
 check('Approve button is on the 56px tier', Math.round(approve.height) >= 56,
   `${Math.round(approve.height)}px`);
 const approveText = await page.locator('[data-testid="kit-sheet-approve"]').innerText();
@@ -137,7 +153,7 @@ await page.keyboard.press('Escape');
 await page.waitForTimeout(600);
 check('Escape closes the sheet',
   (await page.locator('[data-testid="bottom-sheet"]').count()) === 0);
-const afterY = await page.evaluate(() => Math.round(window.scrollY));
+const afterY = await scrollTopOf(page);
 check('scroll position restored on close', Math.abs(afterY - beforeY) <= 2,
   `${beforeY} -> ${afterY}`);
 
@@ -147,8 +163,8 @@ check('SheetSelect shows the current value', before.includes('In progress'), bef
 await page.locator('[data-testid="sheet-select"]').click();
 await page.waitForSelector('[data-testid="sheet-select-sheet"]', { timeout: 5000 });
 await page.waitForTimeout(350);
-const optBox = await page.locator('[data-testid="sheet-select-option-waiting"]').boundingBox();
-check('options clear 44px', optBox.height >= 44, `${Math.round(optBox.height)}px`);
+const optBox = { height: await ownH(page.locator('[data-testid="sheet-select-option-waiting"]')) };
+check('options clear 44px', optBox.height >= 44, `${optBox.height}px`);
 await page.locator('[data-testid="sheet-select-option-waiting"]').click();
 await page.waitForTimeout(450);
 const after = await page.locator('[data-testid="kit-sheetselect"]').innerText();
@@ -166,10 +182,12 @@ await page.locator('[data-testid="kit-undo-trigger"]').click();
 await page.waitForSelector('[data-testid="undo-snackbar"]', { timeout: 5000 });
 const snack = await page.locator('[data-testid="undo-snackbar"]').boundingBox();
 const vh = page.viewportSize().height;
-check('undo sits above the dock line', vh - (snack.y + snack.height) >= 88,
-  `${Math.round(vh - (snack.y + snack.height))}px from the bottom`);
-const undoBox = await page.locator('[data-testid="undo-snackbar-undo"]').boundingBox();
-check('Undo button clears 44px', undoBox.height >= 44, `${Math.round(undoBox.height)}px`);
+const K = await scale(page);
+// The dock line is an own-pixel number (--dock-clear), so the gap converts too.
+const gapOwn = (vh - (snack.y + snack.height)) * K;
+check('undo sits above the dock line', gapOwn >= 88, `${gapOwn.toFixed(0)}px from the bottom`);
+const undoBox = { height: await ownH(page.locator('[data-testid="undo-snackbar-undo"]')) };
+check('Undo button clears 44px', undoBox.height >= 44, `${undoBox.height}px`);
 const t0 = await page.locator('[data-testid="undo-snackbar-undo"]').innerText();
 await page.waitForTimeout(2100);
 const t1 = await page.locator('[data-testid="undo-snackbar-undo"]').innerText();

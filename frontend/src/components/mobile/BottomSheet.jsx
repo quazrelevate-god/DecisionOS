@@ -36,7 +36,7 @@ import { cn } from "@/lib/utils";
 // decision sheet must not capture scrollY 0 (the pinned value) and reset the
 // outer sheet's position when it closes.
 // ---------------------------------------------------------------------------
-const lockState = { depth: 0, y: 0, prev: null, lastY: 0, tracking: false };
+const lockState = { depth: 0, y: 0, prev: null, lastY: 0, tracking: false, scrollerTop: 0, lastScrollerTop: null, holdTop: null };
 
 // Why we track scroll ourselves instead of reading window.scrollY at lock time:
 // React runs child effects before parent effects, so Radix's RemoveScroll (a
@@ -57,13 +57,36 @@ function startTrackingScroll() {
     },
     { passive: true }
   );
+  /* ASK-47 — and the SAME reasoning for the app scroller, for the same reason:
+     by the time this component's effect freezes it, the sheet's focus move has
+     already scrolled it to 0. A scroll event does not bubble, so this listens
+     in the capture phase; like the window tracker above it ignores anything
+     that happens while a surface is open, which is exactly the jump we must
+     not record. */
+  document.addEventListener(
+    "scroll",
+    (e) => {
+      const el = e.target;
+      if (lockState.depth === 0 && el && el.nodeType === 1 && el.hasAttribute?.("data-app-scroller")) {
+        lockState.lastScrollerTop = el.scrollTop;
+      }
+    },
+    true
+  );
 }
 
 // Mobile PWA (2026-09-14) — below lg the page scrolls <main data-app-scroller>,
 // not the document (Layout), so pinning the body locked nothing: a drag on the
 // More panel's scrim scrolled the page behind it. When the app scroller is the
-// one scrolling, freeze it instead — overflow hidden keeps its scrollTop, so
-// there is nothing to restore. The body pin stays for the document case.
+// one scrolling, freeze it instead. The body pin stays for the document case.
+//
+// ASK-47 — AND ITS POSITION HAS TO BE HELD, which the freeze alone does not do.
+// Freezing keeps scrollTop on its own; what does not is what happens a frame
+// later, when the sheet moves focus into itself and the browser scrolls this
+// element to bring the focused control into view. Measured on /__mobile-kit:
+// 900 -> 0 with the scroller already frozen and its scrollHeight unchanged. The
+// page behind the sheet snapped to the top, and closing left it there — open a
+// sheet from a row halfway down a long list and you came back to the beginning.
 function appScroller() {
   const el = document.querySelector("[data-app-scroller]");
   if (!el) return null;
@@ -77,7 +100,15 @@ function lockBodyScroll() {
   if (scroller) {
     lockState.scroller = scroller;
     lockState.prevOverflow = scroller.style.getPropertyValue("overflow-y");
+    // Nothing behind a modal surface is allowed to move, so anything that moves
+    // this element while it is locked is put straight back. The guard makes the
+    // correction's own scroll event a no-op, so it settles in one frame.
+    lockState.scrollerTop = lockState.lastScrollerTop ?? scroller.scrollTop;
+    lockState.holdTop = () => {
+      if (scroller.scrollTop !== lockState.scrollerTop) scroller.scrollTop = lockState.scrollerTop;
+    };
     scroller.style.setProperty("overflow-y", "hidden", "important");
+    scroller.addEventListener("scroll", lockState.holdTop, { passive: true });
     return;
   }
   const body = document.body;
@@ -103,9 +134,14 @@ function unlockBodyScroll() {
   lockState.depth = 0;
   if (lockState.scroller) {
     const s = lockState.scroller;
+    if (lockState.holdTop) s.removeEventListener("scroll", lockState.holdTop);
     s.style.removeProperty("overflow-y");
     if (lockState.prevOverflow) s.style.setProperty("overflow-y", lockState.prevOverflow);
+    // Put the page back where it was read from, the same promise the body pin
+    // above keeps with its scrollTo.
+    s.scrollTop = lockState.scrollerTop;
     lockState.scroller = null;
+    lockState.holdTop = null;
     return;
   }
   const body = document.body;

@@ -219,13 +219,17 @@ await page2.goto(`${BASE}/inbox`, { waitUntil: 'domcontentloaded' }).catch(() =>
 await page2.waitForTimeout(3000);
 const shell = await page2.evaluate(() => ({
   hasRoot: !!document.getElementById('root'),
+  // A STRUCTURAL fingerprint, not words. This used to look for "Decision Desk"
+  // in the body text; the screen has been rewritten twice since and says
+  // "Decisions · Approvals · Watch" now, so a fully cached Desk read as a
+  // browser error. The board is the Desk.
+  hasDesk: !!document.querySelector('[data-testid="desk-board"]'),
   text: (document.body.innerText || '').replace(/\s+/g, ' ').slice(0, 140),
   isOfflinePage: /You're offline/i.test(document.body.innerText || ''),
 }));
 check('offline cold start renders something', shell.hasRoot || shell.isOfflinePage, shell.text);
 check('offline cold start shows the cached Desk, not a browser error',
-  /Decision Desk|decisions waiting/i.test(shell.text) || shell.isOfflinePage,
-  shell.text);
+  shell.hasDesk || shell.isOfflinePage, shell.text);
 
 // 4. Offline GET is served from cache with the stamp intact.
 const offlineGet = await page2.evaluate(async () => {

@@ -881,7 +881,22 @@ export default function Layout({ children }) {
               turns out to be. */}
           <div className={cn(
             "p-4 lg:p-8 px-gutter-safe lg:h-full lg:min-h-0 lg:flex lg:flex-col",
-            onInbox && "max-lg:pb-0 max-lg:h-full"
+            /* ASK-46 — /inbox carries the dock's clearance again below lg. It
+               dropped it in ASK-39 because the black sheet ran to the floor and
+               held the clearance inside itself; the sheet is a card in the
+               middle of the page now (index.css) and Dex sits under it, so the
+               floor is the page's to keep clear. `h-full` and the padding
+               together are what put Dex just above the bar: the page is exactly
+               one screen, and its last row ends where the clearance starts.
+               --dock-clear, not .pb-dock: 7.5rem is the clearance a SCROLLING
+               page leaves so its last row sails past the bar, and this page
+               does not scroll — it wants the bar's height, its inset and a
+               seam, which is what that token is (index.css). And it has to be
+               read as a variable rather than a class, because `.pb-dock` is
+               hand-written CSS and Tailwind cannot build a `max-lg:` variant of
+               a class it does not know — `lg:pb-dock` on <main> above has been
+               generating nothing for exactly as long as it has been there. */
+            onInbox && "max-lg:h-full max-lg:pb-[var(--dock-clear)]"
           )}>{children}</div>
         </main>
       </div>

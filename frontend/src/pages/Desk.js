@@ -63,7 +63,7 @@ import { DecisionDialog } from "../components/DecisionDialog";
 // untouched, for possible reuse.
 // import { deskInsight } from "../lib/deskInsight";
 import {
-  ArrowSquareOut, CaretRight, Timer,
+  ArrowSquareOut, CaretRight, CaretDown, Timer,
   ChatCircleText, Gauge as GaugeIcon, Receipt, HandCoins, TrendUp,
 } from "@phosphor-icons/react";
 
@@ -442,128 +442,19 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, on
 
   /* ASK-35 1.1 — THREE, AND THEN A CONTROL: the Desk's job on a phone is to say
      what is waiting, not to show it all.
-     ASK-42 A — AND THREE IS A FLOOR, NOT A CEILING. ASK-39 made it
-     `min(3, what fits)`, which reads as prudence and behaved as a leak: on the
-     founder's 6.1" phone — where a 47px notch inset and a 34px home indicator
-     take 81px that a 390x844 Chrome window does not — what fitted was nought,
-     and the card showed a "Show all 34" control over an empty list. The rule is
-     the founder's: three rows in any tab, on any phone. What the measurement
-     below decides is not how many rows but whether the PAGE has to give its
-     height back so the three of them fit. */
-  const listRef = useRef(null);
-  /* True when the card's three rows do not fit the room above the dock — see
-     the note by the effect that sets it. */
-  const [cramped, setCramped] = useState(false);
-  useEffect(() => {
-    const list = listRef.current;
-    const box = list?.parentElement;              // the card
-    if (!list || !box || typeof ResizeObserver === "undefined") return undefined;
-    const measure = () => {
-      /* ASK-40 — THE OLD SUM COULD ONLY EVER AGREE WITH ITSELF.
-         It was `chrome = box.offsetHeight - list.offsetHeight`, which reads as
-         "the card minus its list", i.e. the padding and the control. It is not:
-         the card is `flex-1` and therefore STRETCHED, so that subtraction is
-         the card's leftover SLACK, and (clientHeight - slack) / rowH hands back
-         the row count already on screen. Three rows in, three rows out, on
-         every screen — which is why a 360x640 phone kept three rows it had no
-         room for and this trim never once fired, and why `cramped` never fired
-         either. Worse, once the list did overflow the card the slack went
-         NEGATIVE and the sum asked for MORE rows. */
-      const cs = getComputedStyle(box);
-      const padTop = parseFloat(cs.paddingTop) || 0;
-      const padBottom = parseFloat(cs.paddingBottom) || 0;
-      const ctrl = box.querySelector("[data-more-control]");
-      const ctrlH = ctrl
-        ? ctrl.offsetHeight + (parseFloat(getComputedStyle(ctrl).marginTop) || 0)
-        : 0;
-      /* AND THE BUDGET IS THE SCREEN ABOVE THE DOCK, NOT THE CARD'S OWN BOX.
-         The sheet reserves a flat 7.5rem of dock clearance (index.css, KM-32 /
-         ASK-35 1.2) and the dock is 72px tall on a 16px inset, so the card's
-         box stops ~32px higher than the dock actually starts. Sized against the
-         box, the card gives that band back to nobody and loses a whole row for
-         it; sized against the dock, the list ends one seam above the bar, which
-         is what the eye reads as "it fits". The box is still the floor
-         and it cuts BOTH ways: on a 360x640 phone the sheet runs past the
-         bottom of the screen, so the card's box is partly UNDER the dock and
-         the box would happily size rows nobody can see. The dock's top is the
-         one line that is true in both directions. The box is the fallback only
-         while the bar is not in the DOM. */
-      const dock = document.querySelector('[data-testid="floating-dock"]');
-      const dockTop = dock ? dock.getBoundingClientRect().top : null;
-      const boxRoom = box.clientHeight - padTop - padBottom;
-      /* ASK-43 — AND THE TWO SPACES ARE RECONCILED BEFORE THEY ARE ADDED.
-         getBoundingClientRect reports VISUAL pixels; clientHeight, offsetHeight
-         and the computed padding are the element's OWN. They were the same
-         number until the phone became a 0.8 zoom step, and then this sum was
-         adding a dock 25% closer than it is to paddings at full size — three
-         rows would have fitted a card that could not hold them. `k` is the one
-         the element sees per pixel on the glass, read off the box itself, so it
-         is right at any scale and exactly 1 wherever there is no zoom. */
-      const boxRect = box.getBoundingClientRect();
-      const k = boxRect.height ? box.offsetHeight / boxRect.height : 1;
-      const room = dockTop == null
-        ? boxRoom
-        : (dockTop - boxRect.top) * k - DOCK_SEAM - padTop - padBottom;
-      /* ASK-42 A — AND THE ROW TRIM IS GONE. It divided the room by a row and
-         showed however many came out, which on a 6.1" screen — where the notch
-         inset and the home indicator take 81px Chrome does not emulate — came
-         out at nought: the founder's card held a "Show all 34" control and no
-         list at all. Three rows in any tab is the founder's floor and a floor
-         is not something a measurement gets to negotiate, so the card always
-         shows three (PHONE_ROWS) and what the measurement decides now is the
-         OTHER thing: whether the page has to give its height back for them to
-         fit. Big screens stay fixed to one screen and show three; a small one
-         scrolls by the difference and still shows three. */
-      /* THE PAGE IS FIXED TO ONE SCREEN UNLESS IT GENUINELY CANNOT HOLD THE
-         SUMMARY. On a 360x640 phone the hero leaves this card less than the
-         "Show all" control by itself, and crushing it there is a worse answer
-         than letting that one page scroll. Same budget as the trim, asked after
-         the trim, so it only fires when trimming was not enough.
-         ASK-41 2 — AND THIS IS WHAT GIVES THE WATCH TAB ITS HEIGHT. Its three
-         feeds are a fixed set: there is no trimming them to fit and no "show
-         all" to press, so when Due today, Leave requests and Slipping together
-         come to more than the room above the dock, the only honest answer is
-         for the sheet to grow by the difference. Handing the page's height back
-         does exactly that — the board stops being pinned to one screen, the
-         sheet takes its content's height, and the last card clears the bar. */
-      setCramped(list.offsetHeight + ctrlH > room + 1);
-    };
-    const ro = new ResizeObserver(measure);
-    ro.observe(box);
-    /* ASK-41 2 — the CONTENT too, not just the box. The card is `flex-1`, so
-       its box does not move when what is inside it does: the Watch tab's leave
-       and slipping feeds arrive after the first paint and grow the list without
-       the card changing size at all, and a measurement that only watches the
-       box would never hear about it. */
-    ro.observe(list);
-    measure();
-    /* ASK-42 A — AND AGAIN ONCE THE PAGE HAS SETTLED. The first pass runs the
-       moment the rows arrive, and at that moment two things it depends on may
-       not be true yet: the floating dock — the line this whole budget is
-       measured against — is rendered by Layout and can still be absent, in
-       which case the sum falls back to the card's own box and the card's box is
-       deliberately SMALLER than the room above the bar (the sheet reserves the
-       dock's clearance as padding); and the webfont has not swapped, so a row
-       is not yet the height it will end up. Neither resizes the card, so the
-       ResizeObserver never hears about either, and the count stayed one row
-       short of what fits — a resize nudge or a tab switch corrected it, which
-       is exactly the signature of a measurement taken too early. A frame, a
-       beat, and the font's own promise: whichever lands last is right. */
-    const raf = requestAnimationFrame(measure);
-    const settle = setTimeout(measure, 400);
-    let alive = true;
-    document.fonts?.ready?.then(() => { if (alive) measure(); }).catch(() => {});
-    return () => {
-      alive = false;
-      ro.disconnect();
-      cancelAnimationFrame(raf);
-      clearTimeout(settle);
-    };
-  }, [rows.length, tab, showAll]);
+     ASK-46 — AND THE CARD IS THE HEIGHT OF THREE ROWS NOW, so there is nothing
+     left in here to measure. It used to stretch to the sheet's floor, which is
+     why three tickets ran on arithmetic about the room left above the dock: a
+     trim that could only agree with itself (ASK-40), a budget taken against the
+     dock's own line (ASK-41), a floor of three the budget was not allowed to
+     negotiate away (ASK-42). The founder's call here retires the lot — the card
+     hugs its three rows, the page places it, and whether the PAGE fits is the
+     page's question (`tooTall`, in Desk below). What is left of this component
+     is what it draws.
 
-  // Either the founder asked for the whole list, or the screen cannot hold the
-  // summary: both hand the page's height back so it can scroll.
-  useEffect(() => { onExpandedChange?.(showAll || cramped); }, [showAll, cramped, onExpandedChange]);
+     "Show all" is still the one thing in this card that can make the page
+     taller than a screen, so the page hears about that and nothing else. */
+  useEffect(() => { onExpandedChange?.(showAll); }, [showAll, onExpandedChange]);
 
   // ASK-42 A — three, always (see the measure above); "Show all" is the rest.
   const shown = showAll ? rows : rows.slice(0, PHONE_ROWS);
@@ -613,7 +504,7 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, on
           measurement never needed the stretch — it is taken against the dock's
           line, not the card's box. */}
       <div className={cn(PHONE_CARD_INK, "mt-1.5 min-h-0 rounded-tile p-2.5")} data-testid={`${testid}-card`}>
-        <div ref={listRef}>
+        <div>
         {children || (
           <>
             {loading && (
@@ -633,19 +524,25 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, on
         </div>
 
         {/* THE MORE CONTROL — it opens the rest HERE, in place, and the page
-            scrolls as it always does. Nothing new to learn and nothing nested. */}
+            scrolls as it always does. Nothing new to learn and nothing nested.
+            ASK-46 — AND IT IS TEXT WITH A CARET, NOT A PILL. The founder's call:
+            a filled bar across the foot of the card was reading as the card's
+            main action when what it does is reveal the rest of a list. A line of
+            type with a chevron under it says the same thing at a fraction of
+            the weight — and the row keeps the 44px touch floor, so what changed
+            is what it looks like, not what a thumb gets. The chevron points
+            down to open and up to close, which is the one thing a caret is
+            unambiguous about. */}
         {!children && !loading && (hidden > 0 || showAll) && (
           <button
             type="button"
             data-testid="desk-phone-more"
-            /* The row trim above has to subtract this control's height, and it
-               cannot do that by name without hard-coding 44 + 8 in two files. */
-            data-more-control=""
             onClick={() => setShowAll((v) => !v)}
-            className="mt-2 flex h-11 w-full items-center justify-center gap-1.5 rounded-pill bg-white/[.08] text-[13px] font-semibold text-white/85 transition-colors hover:bg-white/[.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+            aria-expanded={showAll}
+            className="mt-1 flex h-11 w-full items-center justify-center gap-1 text-[13px] font-medium text-white/70 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-0"
           >
             {showAll ? "Show fewer" : `Show all ${rows.length}`}
-            <CaretRight size={12} weight="bold" aria-hidden="true" className={showAll ? "-rotate-90" : "rotate-90"} />
+            <CaretDown size={12} weight="bold" aria-hidden="true" className={showAll ? "rotate-180" : ""} />
           </button>
         )}
       </div>
@@ -900,6 +797,55 @@ export default function Desk() {
     onOpen: () => setOpenTaskId(t.id),
   }));
 
+  /* ASK-46 — one well, two places (see the call sites). The className is the
+     only thing that differs: in the hero it takes the column's remaining
+     height; at the foot of the page `mt-auto` pushes it down to sit just above
+     the dock, which is where the founder wants Dex to live. */
+  const dexWell = (
+    <DeskDexWell
+    /* ASK-35 2.2 — `max-lg:flex max-lg:flex-col` is what stops the
+       composer row moving when the workspace opens. The pane is
+       `h-full`, and a percentage height against a parent that has only
+       a MIN-height computes to auto — so on a phone the pane was
+       content-sized (133px) inside a 150px well, sitting 17px clear of
+       its own floor, and the moment it went position:absolute it
+       anchored to the well's real bottom and took the composer 17px
+       down with it. As a column flex parent the well stretches the pane
+       to its full box at rest, so the two agree before and after. On
+       desktop `lg:flex-1` already gives the well a definite height and
+       nothing changes. */
+    /* ASK-42 A — 138px below lg, down from 150. What the well has to
+       hold at rest is its label, one line of invitation and the 48px
+       composer row inside 16px of padding; 138 fits that with the
+       composer still on its own line, and the 12 it gives back go to
+       the list. lg keeps flex-1 and is untouched. */
+    /* ASK-42 A — 128px below lg, and the number is not free choice: it
+       has to be AT LEAST the well's own resting content height (125 with
+       the phone's 12px pane padding). The pane lifts out of the flow
+       when the workspace opens and anchors to the well's bottom; if the
+       min-height is under the content, the well collapses to it the
+       instant the pane leaves and the composer the founder just typed
+       into rises by the difference — the exact 7px ASK-35 2.2 spent a
+       ticket removing. Anything at or above the content height pins the
+       well and the composer cannot move. */
+    className={cn(
+      "min-h-[128px]",
+      isMobile
+        // At the foot of the page, pushed to the bottom of the column.
+        ? "mt-auto flex flex-col"
+        : "order-4 max-lg:flex max-lg:flex-col lg:order-none lg:min-h-0 lg:flex-1"
+    )}
+    testid="desk-insight"
+    growToRef={kpiGridRef}
+    /* ASK-35 2.2 — below lg the well grows to the top of the HERO,
+       covering the greeting, the score cluster and the KPI strip. */
+    growToPhoneRef={heroRef}
+    onExpandedChange={setDexExpanded}
+    onReview={(id) => { clearDeferred(id); setOpenDecisionId(id); }}
+    onLater={(id) => { deferDecision(id); setDeferred(getDeferred()); }}
+          />
+  );
+
   return (
     /* ASK-25 — ONE SCREEN. On desktop the page is a flex column that fills
        the frame Layout hands it (lg:h-full on the content wrapper): the hero
@@ -1059,47 +1005,15 @@ export default function Desk() {
             />
           </div>
 
-          {/* KM-1 — order-4 puts the well AFTER the KPI grid on a phone.
-              ASK-25 — on lg it takes the column's remaining height, so its
-              floor and the tile grid's floor are the same line.
-              ASK-33 — the same box, classes and testid; what it holds is
-              Dex's Decide composer instead of today's read. */}
-          <DeskDexWell
-            /* ASK-35 2.2 — `max-lg:flex max-lg:flex-col` is what stops the
-               composer row moving when the workspace opens. The pane is
-               `h-full`, and a percentage height against a parent that has only
-               a MIN-height computes to auto — so on a phone the pane was
-               content-sized (133px) inside a 150px well, sitting 17px clear of
-               its own floor, and the moment it went position:absolute it
-               anchored to the well's real bottom and took the composer 17px
-               down with it. As a column flex parent the well stretches the pane
-               to its full box at rest, so the two agree before and after. On
-               desktop `lg:flex-1` already gives the well a definite height and
-               nothing changes. */
-            /* ASK-42 A — 138px below lg, down from 150. What the well has to
-               hold at rest is its label, one line of invitation and the 48px
-               composer row inside 16px of padding; 138 fits that with the
-               composer still on its own line, and the 12 it gives back go to
-               the list. lg keeps flex-1 and is untouched. */
-            /* ASK-42 A — 128px below lg, and the number is not free choice: it
-               has to be AT LEAST the well's own resting content height (125 with
-               the phone's 12px pane padding). The pane lifts out of the flow
-               when the workspace opens and anchors to the well's bottom; if the
-               min-height is under the content, the well collapses to it the
-               instant the pane leaves and the composer the founder just typed
-               into rises by the difference — the exact 7px ASK-35 2.2 spent a
-               ticket removing. Anything at or above the content height pins the
-               well and the composer cannot move. */
-            className="order-4 min-h-[128px] max-lg:flex max-lg:flex-col lg:order-none lg:min-h-0 lg:flex-1"
-            testid="desk-insight"
-            growToRef={kpiGridRef}
-            /* ASK-35 2.2 — below lg the well grows to the top of the HERO,
-               covering the greeting, the score cluster and the KPI strip. */
-            growToPhoneRef={heroRef}
-            onExpandedChange={setDexExpanded}
-            onReview={(id) => { clearDeferred(id); setOpenDecisionId(id); }}
-            onLater={(id) => { deferDecision(id); setDeferred(getDeferred()); }}
-          />
+          {/* ASK-46 — ON DESKTOP THE WELL IS STILL HERE, in the hero's left
+              column under the score, exactly as ASK-25 placed it. On a phone it
+              is not: the founder moved it to the foot of the page, above the
+              dock, and the black card took its place. `isMobile` decides which
+              of the two call sites renders, so only ever ONE instance exists —
+              the well owns the Dex workspace's state and two of them would be
+              two conversations. Crossing the lg line remounts it, which a
+              breakpoint change does to this whole page anyway. */}
+          {!isMobile && dexWell}
         </div>
 
         {/* KR-14.20 · MOBILE — the KPIs are four rounded rectangles in a
@@ -1266,7 +1180,7 @@ export default function Desk() {
            a grid item is sized by its row, and an auto row is never shrunk
            below its content. It is the same fix ASK-34 7.2 made at lg, for the
            same reason, one breakpoint down. */
-        className={`kr-desk-board grid gap-5 ${phoneExpanded ? "" : "max-lg:min-h-0 max-lg:flex-1 max-lg:grid-rows-[minmax(0,1fr)]"} lg:-mx-3 lg:-mb-2 lg:min-h-0 lg:flex-1 lg:gap-0 lg:grid-rows-[minmax(0,1fr)] ${showDecisions ? "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]" : ""}`}
+        className={`kr-desk-board grid gap-5 lg:-mx-3 lg:-mb-2 lg:min-h-0 lg:flex-1 lg:gap-0 lg:grid-rows-[minmax(0,1fr)] ${showDecisions ? "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]" : ""}`}
       >
         {/* ASK-34 B — THE PHONE'S CARD. One card, three tabs, the same rows the
             desktop columns use. */}
@@ -1410,6 +1324,14 @@ export default function Desk() {
         </div>
         )}
       </section>
+
+      {/* ASK-46 — AND DEX IS THE LAST THING ON A PHONE. The founder's
+          rearrangement: the black card takes the well's old place under the
+          tiles, and the well comes down here — not to the floor of the screen,
+          which belongs to the dock, but to just above it. `mt-auto` inside the
+          page's column is what puts it there, and the page's own bottom
+          clearance (Layout, /inbox below lg) is what keeps the dock off it. */}
+      {isMobile && dexWell}
 
       {openDecisionId && (
         <DecisionDialog decisionId={openDecisionId} open onClose={closeDecision} />

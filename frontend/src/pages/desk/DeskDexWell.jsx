@@ -603,10 +603,19 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
      has the rows, the people and dates to change, what was said and the links
      to what approval creates (ASK-32 Phase 3). */
   const outcomeCounts = decisionCounts(readyDecision);
+  /* ASK-47 — AN ENDING'S CONTROLS ARE NEVER THE PART THAT SCROLLS. A phone's
+     well is a fixed box now, and a ready decision — headline, title, four count
+     tiles — is taller than it. The whole ending was one scroller, so Review and
+     Later sat below its fold: on screen by their coordinates, invisible to the
+     eye and to a thumb. What scrolls is what there is to READ; the row of
+     buttons is pinned under it, always whole, always reachable. `contents` on
+     desktop, where the well grows and nothing needed splitting. */
+  const readPane = phone ? "kr-scroll-quiet min-h-0 flex-1 overflow-y-auto" : "contents";
   const quietPill = "kr-pop flex h-10 items-center rounded-pill px-4 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60";
   const inkPill = "flex h-10 items-center rounded-pill bg-kr-ink px-5 text-sm font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60 disabled:opacity-40";
   const outcomeView = !outcome ? null : outcome.kind === "ready" ? (
     <div data-testid="dex-outcome-ready" className="flex min-h-0 flex-1 flex-col">
+      <div className={readPane}>
       <p data-testid="desk-dex-summary" className="text-[17px] font-semibold leading-snug text-foreground">
         {readyLine(readyDecision, user?.id)}
       </p>
@@ -624,7 +633,8 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
           </div>
         ))}
       </dl>
-      <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
+      </div>
+      <div className="mt-auto flex shrink-0 flex-wrap items-center gap-2 pt-4">
         <button type="button" data-testid="desk-dex-review" onClick={() => onReview?.(outcome.decisionId)} className={inkPill}>
           Review
         </button>
@@ -645,11 +655,13 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
   ) : outcome.kind === "nothing" ? (
     /* Not an error, and it must not look like one: plain words, one way out. */
     <div data-testid="dex-outcome-nothing" className="flex min-h-0 flex-1 flex-col">
-      <p className="text-[17px] font-semibold leading-snug text-foreground">{OUTCOME_COPY.nothing}</p>
-      {outcome.answer && (
-        <p className="mt-2 whitespace-pre-line break-words text-[15px] leading-relaxed text-foreground/80">{outcome.answer}</p>
-      )}
-      <div className="mt-auto pt-4">
+      <div className={readPane}>
+        <p className="text-[17px] font-semibold leading-snug text-foreground">{OUTCOME_COPY.nothing}</p>
+        {outcome.answer && (
+          <p className="mt-2 whitespace-pre-line break-words text-[15px] leading-relaxed text-foreground/80">{outcome.answer}</p>
+        )}
+      </div>
+      <div className="mt-auto shrink-0 pt-4">
         <button type="button" onClick={collapse} className={quietPill}>Got it</button>
       </div>
     </div>
@@ -685,8 +697,10 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
     </div>
   ) : (
     <div className="flex min-h-0 flex-1 flex-col">
-      <p className="text-[15px] leading-relaxed text-foreground/80">{OUTCOME_COPY.slow}</p>
-      <div className="mt-auto pt-4">
+      <div className={readPane}>
+        <p className="text-[15px] leading-relaxed text-foreground/80">{OUTCOME_COPY.slow}</p>
+      </div>
+      <div className="mt-auto shrink-0 pt-4">
         <button type="button" onClick={collapse} className={quietPill}>OK</button>
       </div>
     </div>
@@ -704,7 +718,7 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
      the report. Both of those still exist on desktop, where there is room for
      a workspace that narrates itself. */
   const phoneBody = !phone ? null : outcome ? (
-    <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-y-auto" aria-live="polite">{outcomeView}</div>
+    <div className="mt-2 flex min-h-0 flex-1 flex-col" aria-live="polite">{outcomeView}</div>
   ) : workspace ? (
     <div className="grid min-h-0 flex-1" aria-live="polite" data-testid="desk-dex-working">
       {prefersReducedMotion() ? (
@@ -958,7 +972,16 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
       label="Dex"
       prompt={prompt}
       body={body}
-      floor={floor}
+      /* ASK-47 — AND WHILE AN ENDING IS SHOWING, THE PHONE'S WELL IS THE
+         ENDING. The well is a fixed box, and an ending already carries the only
+         things there are to do with it — Review and Later, Got it, Retry and
+         Not now. Keeping the capture floor under that put two rows of controls
+         in one small box: at 360x640 the ending's buttons ended up UNDERNEATH
+         the floor, unclickable, and at 390 they were pushed under the fold of
+         the well's own pane. One at a time, so the way out of the ending is
+         always whole; dismissing it gives the ripple and the floor straight
+         back. Desktop is untouched — there the well grows and both fit. */
+      floor={phone && outcome ? null : floor}
       className={className}
       testid={testid}
       expanded={expanded}

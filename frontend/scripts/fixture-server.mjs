@@ -585,6 +585,40 @@ function resolve(method, path, q) {
     const counters = Object.fromEntries(Object.entries(DESK_BUILDERS).map(([k, f]) => [k, f().length]));
     return { chip, counters, cards: (DESK_BUILDERS[chip] || cardsImportant)() };
   }
+  /* The greeting, the KPI tiles' trends and the counters (routers/desk.py's
+     /desk/summary, same shape). This route was missing, so every fixture run —
+     the audits, the verify suites and every screenshot taken for the founder —
+     showed the Desk with an EMPTY greeting and three tiles reading "…". ASK-42
+     and ASK-43 are both rules about that greeting ("make the greeting text and
+     the score number height same", "the entire greeting should be shown"), and
+     neither could be checked against a blank. Times of day follow the same IST
+     clock the server uses, so a morning run reads "Good morning". */
+  if (p === '/desk/summary') {
+    const hourIst = new Date(Date.now() + 5.5 * 3600 * 1000).getUTCHours();
+    const tod = hourIst < 12 ? 'Good morning' : hourIst < 17 ? 'Good afternoon' : 'Good evening';
+    const firstName = (me.name || '').split(' ')[0] || 'there';
+    const isOwner = me.role === 'owner';
+    return {
+      greeting: `${tod}, ${firstName}`,
+      narrative: 'Three decisions have been waiting more than two days, and Krishna Garments is 31 days late on ₹4,00,000.',
+      trends: {
+        weekly_completion_rate: { value: 18, delta_pct: 12, direction: 'up' },
+        complaints_trend: { value: 3, new_7d: 1, direction: 'down' },
+        cash_flow: {
+          clear: false,
+          overdue_receivables_amount: 400000,
+          unmatched_payments: 2,
+          direction: 'down',
+        },
+      },
+      shortcuts: { ceo_journal: isOwner, ops_health: isOwner, team_leaderboard: isOwner },
+      counters: {
+        delayed: DESK_BUILDERS.on_fire ? DESK_BUILDERS.on_fire().length : 12,
+        completed_yesterday: 7,
+        pending_decisions: DESK_BUILDERS.needs_decision ? DESK_BUILDERS.needs_decision().length : 6,
+      },
+    };
+  }
   if (p.startsWith('/desk/nudge/')) return { sent: true, channel: 'notification', target_id: 'u_sales', target_name: 'Priya Sharma' };
 
   // --- brief / notifications ---

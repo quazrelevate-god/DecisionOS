@@ -143,19 +143,26 @@ const geometry = (page) => page.evaluate(() => {
    compliant control read as 35 and every check fail. "Stays on screen" is the
    opposite: it is about the glass, so it keeps the rect. One check, two spaces,
    each measured where it means something. */
-/* ASK-47 — AND THE FOLD IS ASSERTED FROM 390 UP. The well is a fixed box now,
-   and on a 360x640 phone that box is about 110 own pixels: an ending's controls
-   live in its own scroller there, reachable by a thumb but below the well's
-   fold. The founder scoped that away in writing — "nobody uses a 5.4 inch
-   device… focus on 6 inch plus screens and keep the exact layout" — so it is
-   recorded here rather than designed around. The 44px FLOOR still holds at
-   every width; only the on-screen half is narrowed. */
-const touchAndFold = (page, testid, viewport, fold = true) => page.evaluate(([t, vh, checkFold]) => {
+/* ASK-47 — AND "ON SCREEN" IS ASKED OF THE GLASS, NOT OF THE COORDINATES. The
+   well is a fixed box now and an ending is taller than it, so a control can sit
+   inside the viewport by its rect and still be scrolled out of sight inside the
+   well's own pane — which is exactly what happened to Review and Later, and
+   this check passed them. The question a founder asks is "can I see it and can
+   I hit it", so that is what is asked here: the point in the middle of the
+   control is the control. It catches clipping, covering and the fold at once,
+   at every width, 360 included — the well gives an ending the whole box while
+   it is showing, so there is no width where the way out is out of reach. */
+const touchAndFold = (page, testid, viewport) => page.evaluate(([t, vh]) => {
   const el = document.querySelector(`[data-testid="${t}"]`);
   if (!el) return false;
-  return [...el.querySelectorAll('button,a')].every((b) =>
-    b.offsetHeight >= 44 && (!checkFold || b.getBoundingClientRect().bottom <= vh));
-}, [testid, viewport.height, fold]);
+  return [...el.querySelectorAll('button,a')].every((b) => {
+    if (b.offsetHeight < 44) return false;
+    const r = b.getBoundingClientRect();
+    if (r.bottom > vh || r.top < 0) return false;
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return !!hit && (b === hit || b.contains(hit));
+  });
+}, [testid, viewport.height]);
 
 async function closeSheet(page) {
   await page.getByTestId('dex-chat-close').click();
@@ -237,7 +244,7 @@ async function run(viewport) {
     (await page.getByTestId('desk-dex-composer').count()) === 0
     || (await field.inputValue().catch(() => '')) === '');
   check(`${w} A: the ending's controls clear the touch floor and stay on screen`,
-    await touchAndFold(page, 'dex-outcome-ready', viewport, viewport.width >= 390));
+    await touchAndFold(page, 'dex-outcome-ready', viewport));
   await ready.getByTestId('desk-dex-review').click();
   await page.getByTestId('decision-dialog').waitFor({ timeout: 8000 }).catch(() => {});
   check(`${w} A: Review opens the decision in DecisionDialog`,
@@ -259,7 +266,7 @@ async function run(viewport) {
   check(`${w} B: not styled as an error`,
     (await nothing.getAttribute('role')) !== 'alert' && (await nothing.locator('svg').count()) === 0);
   check(`${w} B: its control clears the touch floor and stays on screen`,
-    await touchAndFold(page, 'dex-outcome-nothing', viewport, viewport.width >= 390));
+    await touchAndFold(page, 'dex-outcome-nothing', viewport));
 
   /* D · the way out puts the well back to the invitation, checked on this
      ending. ASK-47 — there is no height to come back to any more, so what is
@@ -305,7 +312,7 @@ async function run(viewport) {
   check(`${w} C: … and that link is a 44px target on a phone`, !!linkBox && linkBox.height >= 44,
     linkBox ? `${Math.round(linkBox.height)}px` : 'no box');
   check(`${w} C: the failure's controls clear the touch floor and stay on screen`,
-    await touchAndFold(page, 'dex-outcome-failed', viewport, viewport.width >= 390));
+    await touchAndFold(page, 'dex-outcome-failed', viewport));
   await failed.getByTestId('dex-outcome-retry').click();
   check(`${w} C: Retry re-sends without asking to say it again, and thinks again`,
     await until(async () => (await geometry(page)).working === true, 6000));

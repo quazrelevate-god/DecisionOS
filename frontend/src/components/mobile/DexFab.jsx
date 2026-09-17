@@ -135,8 +135,8 @@ export function DexFab({ onOpen, recording = false, seconds = 0, onStop, intent 
            ever moves. Under 360px the button drops to 3.75rem and the gap
            becomes 6px, which is why the number is derived and not typed. */
         "lg:hidden fixed app-fab-right z-[10000]",
-        "bottom-[calc(1rem+env(safe-area-inset-bottom,0px)+((4.5rem-4rem)/2))]",
-        "max-[359px]:bottom-[calc(1rem+env(safe-area-inset-bottom,0px)+((4.5rem-3.75rem)/2))]",
+        "bottom-[calc(1rem+var(--sa-bottom)+((4.5rem-4rem)/2))]",
+        "max-[359px]:bottom-[calc(1rem+var(--sa-bottom)+((4.5rem-3.75rem)/2))]",
         "grid place-items-center rounded-[var(--radius-card)] shadow-brutal-lg transition-colors",
         // No double-tap-to-zoom wait on this button — it is a control, and the
         // delay is time the browser spends deciding whether the tap was a

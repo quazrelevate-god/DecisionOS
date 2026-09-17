@@ -694,6 +694,15 @@ function resolve(method, path, q) {
     return q.get('scope') === 'approvals' ? LEAVES.filter((l) => l.status === 'pending') : LEAVES;
   }
   if (p === '/leaves/absence') return ATTENDANCE.filter((a) => a.status === 'absent');
+  /* ASK-43 — /leaves/on-leave is a LIST (backend/routers/team.py
+     leaves_on_leave_today), and it was falling through to the `/leaves/:id`
+     branch below, which answers with a single object. /team then crashed on
+     `out.map is not a function` and rendered its error boundary — against this
+     fixture only; the real endpoint has always returned the list. */
+  if (p === '/leaves/on-leave') {
+    const today = new Date().toISOString().slice(0, 10);
+    return LEAVES.filter((l) => l.status === 'approved' && l.from_date <= today && l.to_date >= today);
+  }
   if (seg[1] === 'leaves' && seg[2]) {
     if (seg[3] === 'impact') return { affected_tasks: 2, affected_workflows: 1, note: 'Two Diwali-run tasks fall in this window.' };
     return { ...OK, leave: LEAVES[0] };

@@ -65,7 +65,7 @@ export function DexFailureNotice({ placement = "dock", className }) {
         /* Literal white and ink rather than theme tokens: the Dex sheet opens
            over /brain, which renders in the dark Dex room. */
         "rounded-3xl bg-[#fff] p-4 text-kr-ink ring-1 ring-slate-900/[0.06] shadow-[0_12px_32px_-12px_hsl(230_30%_18%/.45)]",
-        placement === "dock" && "lg:hidden fixed app-dock-left app-fab-right z-40 bottom-[calc(6.25rem+env(safe-area-inset-bottom,0px))]",
+        placement === "dock" && "lg:hidden fixed app-dock-left app-fab-right z-40 bottom-[calc(6.25rem+var(--sa-bottom))]",
         className
       )}
     >

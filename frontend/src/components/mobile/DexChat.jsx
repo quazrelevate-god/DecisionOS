@@ -527,7 +527,7 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                 `.app-plus-on-fab` (index.css, beside .app-fab-right) does the
                 centring; the menu follows it over so the pills still hang off
                 the button that opened them rather than across the screen. */}
-            <div className="relative flex flex-col items-end px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
+            <div className="relative flex flex-col items-end px-4 pb-[calc(5.75rem+var(--sa-bottom))]">
               <AnimatePresence>
                 {plusOpen && (
                   <motion.div

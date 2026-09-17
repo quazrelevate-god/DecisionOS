@@ -31,7 +31,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
-  CalendarBlank, UsersThree, BookOpen, Gauge, AirplaneTakeoff, CaretRight,
+  UsersThree, BookOpen, Gauge, AirplaneTakeoff, CaretRight,
   ShieldCheck, FlowArrow, GearSix,
 } from "@phosphor-icons/react";
 import { hasPerm } from "@/lib/perms";
@@ -66,9 +66,10 @@ function buildTiles({ user, t }) {
        picked, which is what a destination does and what a lens never should.
        They are pages now (/approvals, /workflows) and this is the door to them,
        side by side because that is the founder's layout.
-       AND CALENDAR AND NOTIFICATIONS LEAVE. The calendar comes back one row
-       down as "Events desk" beside the Journal — the two rooms that read the
-       company by date belong together, and that is the founder's name for it.
+       AND CALENDAR AND NOTIFICATIONS LEAVE. ASK-43 — the calendar is not in
+       this menu at all now: "Events desk" is a pill ON the Journal page, beside
+       its Timeline/Calendar control, which is what the founder meant by the two
+       being one thing. The Journal tile below is the way to both.
        Notifications leaves outright: the bell is back in the Desk's own top bar
        (components/Layout.js), where a count is worth something, rather than
        behind two taps with the count on the menu that hides it. */
@@ -82,7 +83,6 @@ function buildTiles({ user, t }) {
     },
     { key: "workflows", to: "/workflows", label: t("nav.workflows", "Workflows"), icon: FlowArrow, perm: "workflows" },
     { key: "journal", to: "/journal", label: t("nav.journal", "Journal"), icon: BookOpen, ownerOnly: true },
-    { key: "events", to: "/calendar", label: t("allapps.events", "Events desk"), icon: CalendarBlank },
     {
       key: "operating-score",
       to: "/operating-score",
@@ -306,10 +306,10 @@ export function AllAppsPanel({
                More reads as the bar growing rather than a separate card
                arriving over the app. w-[17rem] is the dock's measured width
                (267px at a 375px viewport, four slots plus padding). */
-            "fixed z-[10090] flex max-h-[68vh] w-[var(--app-dock-w,17rem)] flex-col overflow-hidden app-dock-left",
+            "fixed z-[10090] flex max-h-[calc(68vh/var(--ui-scale,1))] w-[var(--app-dock-w,17rem)] flex-col overflow-hidden app-dock-left",
             /* Mobile PWA (2026-09-14): 4.5rem, the dock's real height since
                KM-32 — at 4rem the panel sat flush on the bar with no seam. */
-            "bottom-[calc(1rem+4.5rem+0.5rem+env(safe-area-inset-bottom,0px))]",
+            "bottom-[calc(1rem+4.5rem+0.5rem+var(--sa-bottom))]",
             /* KM-3 — THE PANEL BECOMES AN INK OBJECT.
                It was `bg-background` — the page's own greige — so More opened
                a copy of the page floating over the page, with a hard
@@ -370,7 +370,7 @@ export function AllAppsPanel({
                `pb-safe` resolves to 0 with no bottom inset, so the last row
                sat flush against the edge. Sizes to content now, with a real
                12px floor plus whatever the inset adds. */
-            className="min-h-0 overflow-y-auto overscroll-contain p-3 [padding-bottom:calc(0.75rem+env(safe-area-inset-bottom,0px))]"
+            className="min-h-0 overflow-y-auto overscroll-contain p-3 [padding-bottom:calc(0.75rem+var(--sa-bottom))]"
           >
             {shown.length === 0 && shownUtility.length === 0 && (
               <p className="py-8 text-center text-sm text-muted-foreground" data-testid="allapps-no-match">

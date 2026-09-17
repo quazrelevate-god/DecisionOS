@@ -329,7 +329,7 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
       <DialogContent
         className={`${GLASS_SHEET} flex flex-col gap-0 p-0 outline-none [&>button.absolute]:hidden focus:outline-none focus-visible:outline-none focus-visible:ring-0
                    left-0 top-0 h-full w-full max-w-none translate-x-0 translate-y-0 rounded-none
-                   [padding-top:env(safe-area-inset-top)] [padding-bottom:env(safe-area-inset-bottom)]
+                   [padding-top:var(--sa-top)] [padding-bottom:var(--sa-bottom)]
                    lg:left-[50%] lg:top-[50%] lg:h-[calc(70vh/var(--ui-scale,1))] lg:w-[calc(70vw/var(--ui-scale,1))]
                    lg:min-w-[52rem] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:rounded-[1.75rem]
                    lg:[padding-top:0] lg:[padding-bottom:0]

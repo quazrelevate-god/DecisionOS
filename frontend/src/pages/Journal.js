@@ -21,6 +21,7 @@
 // The mobile entry cap survives, but only in Timeline: in Calendar a single day
 // is bounded by definition, so capping there would hide entries for no reason.
 import { useState, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import api from "../lib/api";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -45,6 +46,7 @@ import {
   CaretLeft,
   CaretRight,
   ArrowRight,
+  CalendarBlank,
 } from "@phosphor-icons/react";
 
 const EVENT_ICON = {
@@ -293,18 +295,38 @@ export default function Journal() {
         </button>
       </form>
 
-      {/* Timeline / Calendar — the same pressed-track control /calendar uses. */}
-      <div className="kr-pressed mb-4 flex w-fit items-center gap-1 rounded-pill p-1"
-           role="group" aria-label="Journal view" data-testid="journal-view">
-        {[{ k: "timeline", l: "Timeline" }, { k: "calendar", l: "Calendar" }].map((v) => (
-          <button key={v.k} type="button" onClick={() => setView(v.k)}
-            aria-pressed={view === v.k} data-testid={`journal-view-${v.k}`}
-            className={`flex h-9 items-center justify-center rounded-pill px-5 text-sm ${
-              view === v.k ? "kr-pop font-semibold text-foreground" : "text-foreground/60"
-            }`}>
-            {v.l}
-          </button>
-        ))}
+      {/* ASK-43 1 — EVENTS DESK SITS ON THIS ROW, on its left.
+          The calendar was a tile in the More menu and then, briefly, a pill
+          there called "Events desk"; the founder's call is that it belongs to
+          the Journal — the two rooms read the company by date, one as what was
+          decided and one as what is coming — so the way in is here, beside the
+          framings of the log rather than three taps away in a menu. It is a
+          LINK, not a third segment: Timeline and Calendar are two views of this
+          page and Events desk is another room, and the shapes say which is
+          which (a .kr-pop pill against a pressed track). */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Link
+          to="/calendar"
+          data-testid="journal-events-desk"
+          className="kr-pop flex h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60"
+        >
+          <CalendarBlank size={16} weight="bold" aria-hidden="true" />
+          Events desk
+        </Link>
+
+        {/* Timeline / Calendar — the same pressed-track control /calendar uses. */}
+        <div className="kr-pressed flex w-fit items-center gap-1 rounded-pill p-1"
+             role="group" aria-label="Journal view" data-testid="journal-view">
+          {[{ k: "timeline", l: "Timeline" }, { k: "calendar", l: "Calendar" }].map((v) => (
+            <button key={v.k} type="button" onClick={() => setView(v.k)}
+              aria-pressed={view === v.k} data-testid={`journal-view-${v.k}`}
+              className={`flex h-9 items-center justify-center rounded-pill px-5 text-sm ${
+                view === v.k ? "kr-pop font-semibold text-foreground" : "text-foreground/60"
+              }`}>
+              {v.l}
+            </button>
+          ))}
+        </div>
       </div>
 
       {view === "calendar" && (

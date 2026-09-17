@@ -172,9 +172,9 @@ export function BottomSheet({
   };
 
   const heights = {
-    auto: "max-h-[85vh]",
-    tall: "h-[85vh]",
-    full: "h-[100dvh] rounded-t-none",
+    auto: "max-h-[calc(85vh/var(--ui-scale,1))]",
+    tall: "h-[calc(85vh/var(--ui-scale,1))]",
+    full: "h-[calc(100dvh/var(--ui-scale,1))] rounded-t-none",
   };
 
   return (

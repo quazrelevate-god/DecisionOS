@@ -2029,7 +2029,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
             every width) holds without the tab. ASK-28: the ⋯ beside it is
             gone on the founder's call — Delete now sits at the bottom of
             the drawer and attachments already show in its body. */}
-        <SheetHeader className="sticky top-0 z-10 flex-row items-start gap-3 space-y-0 bg-[hsl(0_0%_95%/0.85)] px-5 pb-4 pt-[max(1.25rem,env(safe-area-inset-top))] text-left backdrop-blur-xl lg:px-7 lg:pt-6">
+        <SheetHeader className="sticky top-0 z-10 flex-row items-start gap-3 space-y-0 bg-[hsl(0_0%_95%/0.85)] px-5 pb-4 pt-[max(1.25rem,var(--sa-top))] text-left backdrop-blur-xl lg:px-7 lg:pt-6">
           <div className="min-w-0 flex-1 pt-1.5">
             <SheetTitle className="text-left text-[22px] font-semibold leading-tight tracking-tight text-slate-900">{t.title}</SheetTitle>
             {/* The due date sits under the title on desktop (the phone body
@@ -2480,7 +2480,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
         always one thumb away instead of mid-scroll above the plan. */}
     {!isTerminal(t) && !workLocked && !signoffPending && rights.work && (
       <div data-testid={`task-actions-m-${t.id}`}
-        className="sticky bottom-0 z-10 border-t border-white/70 bg-[hsl(0_0%_93%/0.92)] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl lg:hidden">
+        className="sticky bottom-0 z-10 border-t border-white/70 bg-[hsl(0_0%_93%/0.92)] px-4 pb-[max(0.75rem,var(--sa-bottom))] pt-3 backdrop-blur-xl lg:hidden">
         <div className="flex items-center gap-2">
           {rights.finish ? (
             <button type="button" onClick={complete} data-testid={`complete-m-${t.id}`}
@@ -3753,7 +3753,7 @@ export default function MyWork({ only = null }) {
         {/* ASK-28 phone pass — the view picker's sheet. */}
         <Sheet open={viewSheetOpen} onOpenChange={setViewSheetOpen}>
           <SheetContent side="bottom" hideClose data-testid="work-mobile-view-sheet"
-            className="flex max-h-[85dvh] flex-col gap-0 rounded-t-cardlg p-0 lg:hidden">
+            className="flex max-h-[calc(85dvh/var(--ui-scale,1))] flex-col gap-0 rounded-t-cardlg p-0 lg:hidden">
             <SheetHeader className="flex-row items-center justify-between space-y-0 px-5 pb-3 pt-5 text-left">
               <SheetTitle className="text-base">Show</SheetTitle>
               <SheetClose asChild>
@@ -3763,7 +3763,7 @@ export default function MyWork({ only = null }) {
                 </button>
               </SheetClose>
             </SheetHeader>
-            <div className="flex flex-col gap-2 overflow-y-auto px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]" role="group" aria-label="View">
+            <div className="flex flex-col gap-2 overflow-y-auto px-5 pb-[max(1.5rem,var(--sa-bottom))]" role="group" aria-label="View">
               {mobileViewOptions.map((o) => {
                 const on = mobileView === o.key;
                 return (
@@ -3788,7 +3788,7 @@ export default function MyWork({ only = null }) {
 
         <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
           <SheetContent side="bottom" hideClose data-testid="work-mobile-filter-sheet"
-            className="flex max-h-[85dvh] flex-col gap-0 rounded-t-cardlg p-0 lg:hidden">
+            className="flex max-h-[calc(85dvh/var(--ui-scale,1))] flex-col gap-0 rounded-t-cardlg p-0 lg:hidden">
             <SheetHeader className="flex-row items-center justify-between space-y-0 px-5 pb-3 pt-5 text-left">
               <SheetTitle className="text-base">Filter tasks</SheetTitle>
               <SheetClose asChild>
@@ -3812,7 +3812,7 @@ export default function MyWork({ only = null }) {
                 value={filters.status} options={STATUS_FILTER_OPTIONS}
                 counts={(k) => countWith({ status: k })} onSelect={setStatusFilter} loading={tasksLoading} />
             </div>
-            <div className="flex items-center gap-2 border-t border-slate-900/[0.06] px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3">
+            <div className="flex items-center gap-2 border-t border-slate-900/[0.06] px-5 pb-[max(1.5rem,var(--sa-bottom))] pt-3">
               <button type="button" onClick={clearFilters} disabled={!filtersActive}
                 data-testid="work-sheet-clear"
                 className="kr-pop h-11 flex-1 rounded-pill text-[13px] font-medium disabled:opacity-40">
@@ -4051,10 +4051,23 @@ export default function MyWork({ only = null }) {
                     <h1 className="min-w-0 font-display text-3xl leading-none lg:text-4xl">
                       {t("mywork.view_approvals")}
                     </h1>
+                    {/* ASK-43 — the lens is the HEADING's height, not a control
+                        height. It rode this row at 44px segments (52 with the
+                        track) against a 30px word, which made the row read as a
+                        control strip with a title in it rather than a title
+                        with a lens on the end. 28px segments put the track at
+                        36 — the same height as the Tasks/Leave pill below it,
+                        which is this page's own precedent for a segment that is
+                        read more than it is pressed. */}
                     {sub === "tasks" && (
                       <ScopeSlider variant="glass" options={APPR_SCOPES} value={apprScope} onChange={setApprScope}
-                        segWidth={74} segHeight="var(--control-h-sm)" label="Which approvals" testid="approvals-scope"
-                        className="shrink-0" />
+                        segWidth={64} segHeight="1.75rem" label="Which approvals" testid="approvals-scope"
+                        /* [&_button]:min-h-0 is KM-48's documented exception to
+                           the 44px floor, applied here for the same reason it
+                           was written: these are WIDE bars (64px a side), not
+                           small squares, and without it the floor puts the
+                           track back at 52 whatever segHeight says. */
+                        className="shrink-0 [&_button]:min-h-0" />
                     )}
                   </header>
                 )}

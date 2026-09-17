@@ -16,9 +16,28 @@
 //
 // The scale is a TABLE, not a ratio — the founder's numbers, one step per
 // screen class: a 1280 laptop 0.9, the 1440 reference 1.0, 1872 1.1, a 1920
-// monitor 1.2, 2560 and up 1.3. Below 1024 the phone tree renders and the
-// scale is 1 (it has its own breakpoints). Edit STEPS to retune; the widths
-// are the smallest viewport that gets that step.
+// monitor 1.2, 2560 and up 1.3. Edit STEPS to retune; the widths are the
+// smallest viewport that gets that step.
+//
+// ASK-43 — AND THE PHONE IS A STEP TOO, at 0.8. The founder found this
+// themselves: "once I scaled it down from 100% to 75% in my browser and
+// installed it as a PWA it aligns with my screen". Browser zoom at 75% does
+// one thing — it hands the page a bigger CSS viewport and draws everything
+// smaller — and that is exactly what this class already does everywhere else
+// in the app. At 0.8 a 390x844 iPhone lays out as 487x1055 and every phone,
+// whatever its aspect ratio, gets the same proportional room rather than the
+// 6.1" screen being 81px short of the 6.7" one.
+// WHAT THE PHONE NEEDS THAT DESKTOP DID NOT:
+//   · 100dvh is not divided by zoom either, so Layout's phone shell divides
+//     it itself, the same way the desktop shell already divides 100vh;
+//   · env(safe-area-inset-*) IS multiplied by the zoom, so a 47px notch
+//     inset would be drawn at 37.6 and the content would sit under the status
+//     bar. index.css defines --sa-top/-bottom/-left/-right as the inset
+//     divided by the scale, and the mobile chrome reads those;
+//   · anything that measures with getBoundingClientRect (visual px) and
+//     offsetHeight/clientHeight (the element's own px) in the same sum is now
+//     mixing two spaces that differ by 25% — see the Desk's row fitting,
+//     which converts one into the other before it adds them.
 //
 // APP-WIDE: the hook puts the `ui-scale` class on <body>, so the header, the
 // dock, every page and every portal (dialogs, sheets, dropdowns — Radix
@@ -45,10 +64,10 @@ export const UI_SCALE_STEPS = [
   [1872, 1.1],
   [1440, 1.0],
   [LG, 0.9],
+  [0, 0.8], // ASK-43 — every phone and tablet below the desktop tree
 ];
 
 export function computeUiScale(width) {
-  if (width < LG) return 1;
   const row = UI_SCALE_STEPS.find(([min]) => width >= min);
   return row ? row[1] : 1;
 }

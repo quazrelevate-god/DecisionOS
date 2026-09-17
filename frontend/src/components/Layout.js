@@ -161,7 +161,10 @@ export default function Layout({ children }) {
        all four sides; at 24 the flat ran on past the last pill and the founder
        read it as stretched. The curve still starts outside the group either
        way — this only decides how much flat precedes it. */
-    const measure = () => setNavW(Math.round(el.getBoundingClientRect().width) + 36);
+    // ASK-43 — own pixels, not visual ones: navW is used as a CSS width inside
+    // the zoomed shell. Identical at scale 1; a fifth out at the phone's 0.8
+    // (this shelf is desktop-only, so it is correctness rather than a fix).
+    const measure = () => setNavW(Math.round(el.offsetWidth) + 36);
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     measure();
@@ -541,7 +544,11 @@ export default function Layout({ children }) {
      with the theme instead of snapping — see .app-sky::before. */
   return (
     <HeaderSlotContext.Provider value={isMobileShell ? headerSlot : null}>
-    <div className="app-sky flex h-[100dvh] flex-col overflow-hidden bg-nm text-foreground lg:h-[calc(100vh/var(--ui-scale,1))]">
+    {/* ASK-43 — the phone's shell divides by the scale too. Viewport units are
+        not divided by CSS zoom, so at 0.8 a bare 100dvh paints at 80% of the
+        screen and the app stops short of the bottom; the desktop half of this
+        line has divided 100vh since the day the scale existed, for that. */}
+    <div className="app-sky flex h-[calc(100dvh/var(--ui-scale,1))] flex-col overflow-hidden bg-nm text-foreground lg:h-[calc(100vh/var(--ui-scale,1))]">
       {/* The page-artwork layer. Empty and invisible until a room sets
           --sky-art (see "PAGE ARTWORK" in index.css); position:fixed keeps it
           out of this flex column. It is a real element rather than a third
@@ -790,7 +797,7 @@ export default function Layout({ children }) {
           {onInbox && (
             <div
               data-testid="desk-topbar"
-              className="px-gutter-safe flex items-center justify-between gap-3 pt-[calc(env(safe-area-inset-top,0px)+0.375rem)]"
+              className="px-gutter-safe flex items-center justify-between gap-3 pt-[calc(var(--sa-top)+0.375rem)]"
             >
               <KarmaLogo size="sm" className="opacity-60" />
               <Link
@@ -819,7 +826,7 @@ export default function Layout({ children }) {
             data-testid="page-header-slot"
             className={cn(
               "px-gutter-safe",
-              onInbox ? "pt-1" : "pt-[calc(env(safe-area-inset-top,0px)+1.75rem)]",
+              onInbox ? "pt-1" : "pt-[calc(var(--sa-top)+1.75rem)]",
             )}
           />
         </div>

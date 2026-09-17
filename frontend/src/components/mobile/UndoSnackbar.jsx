@@ -64,7 +64,7 @@ export function UndoSnackbar({
         "flex items-center gap-3 rounded-xl border border-neutral-700 bg-neutral-800 px-3.5 py-3 text-white shadow-brutal-lg",
         className
       )}
-      style={{ bottom: "calc(6rem + env(safe-area-inset-bottom, 0px))" }}
+      style={{ bottom: "calc(6rem + var(--sa-bottom))" }}
     >
       <p className="min-w-0 flex-1 text-sm leading-snug">{message}</p>
       <button

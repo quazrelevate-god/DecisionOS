@@ -167,8 +167,13 @@ export function FloatingDock({
   React.useEffect(() => {
     const el = barRef.current;
     if (!el) return;
+    /* ASK-43 — offsetWidth, not the rect's. The number is consumed as a CSS
+       width INSIDE the zoomed tree, so it has to be in the element's own
+       pixels; the rect is in visual ones and at the phone's 0.8 step it would
+       have made the More panel a fifth narrower than the bar it grows out of.
+       offsetWidth is already own-px, which is the same number at scale 1. */
     const publish = () =>
-      document.documentElement.style.setProperty("--app-dock-w", `${Math.round(el.getBoundingClientRect().width)}px`);
+      document.documentElement.style.setProperty("--app-dock-w", `${Math.round(el.offsetWidth)}px`);
     publish();
     const ro = new ResizeObserver(publish);
     ro.observe(el);

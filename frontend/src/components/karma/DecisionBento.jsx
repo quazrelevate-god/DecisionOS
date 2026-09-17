@@ -299,7 +299,7 @@ export function DecisionBento({ sections, verbFor, iconFor, onCard, busyId, done
             <div className={cn(
               "grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-12",
               expanded
-                ? "max-h-[60vh] overflow-y-auto lg:max-h-none lg:overflow-visible"
+                ? "max-h-[calc(60vh/var(--ui-scale,1))] overflow-y-auto lg:max-h-none lg:overflow-visible"
                 : "overflow-hidden"
             )}>
               {s.loading && Array.from({ length: 3 }, (_, i) => (

@@ -131,7 +131,13 @@
            showing on either side. 28rem matches the max-w-md the AllApps panel
            and Install prompt already use, so the content, the sheets, the dock
            and the FAB all line up to one edge. */
-        --app-shell: 28rem;
+        /* ASK-43 — divided by the scale, so the cap stays the same PHYSICAL
+           column whatever the zoom is. The app's own pixels grew by 1/0.8 when
+           the phone became a 0.8 step, so a flat 28rem cap suddenly bit on a
+           390px phone (488 own px against a 448 cap) and put 20px gutters down
+           both sides of a screen that had none. 28rem / 0.8 = 35rem of own
+           pixels = the same 28rem on the glass. */
+        --app-shell: calc(28rem / var(--ui-scale, 1));
 
         /* ---- shadow ----
            RD-1: the reference uses NO shadow on resting surfaces — cards,
@@ -483,20 +489,20 @@
 
    Mobile-only rules live inside the query so `lg:px-8` still wins on desktop.
 --------------------------------------------------------------------------- */
-.pt-safe { padding-top: env(safe-area-inset-top, 0px); }
-.pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.pt-safe { padding-top: var(--sa-top); }
+.pb-safe { padding-bottom: var(--sa-bottom); }
 
 @media (max-width: 1023.98px) {
     /* Page gutter: never tighter than the 16px design gutter, wider when a
        notch eats into the edge in landscape. */
     .px-gutter-safe {
-        padding-left: max(1rem, env(safe-area-inset-left, 0px));
-        padding-right: max(1rem, env(safe-area-inset-right, 0px));
+        padding-left: max(1rem, var(--sa-left));
+        padding-right: max(1rem, var(--sa-right));
     }
     /* Chrome that sets its own asymmetric padding keeps it as the floor. */
     .px-chrome-safe {
-        padding-left: max(1rem, env(safe-area-inset-left, 0px));
-        padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+        padding-left: max(1rem, var(--sa-left));
+        padding-right: max(0.75rem, var(--sa-right));
     }
 }
 
@@ -507,7 +513,7 @@
 }
 
 /* The dock in MPWA-03 floats this far above the home indicator. */
-.bottom-safe-4 { bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
+.bottom-safe-4 { bottom: calc(1rem + var(--sa-bottom)); }
 
 /* ---------------------------------------------------------------------------
    MPWA-14 — the centred app shell (Instagram-style column).
@@ -517,6 +523,10 @@
    tablets in portrait, the PWA in a desktop window below lg) it sits centred
    with the page surface showing on either side.
 
+   ASK-43 — every 100vw here is divided by --ui-scale: viewport units are NOT
+   divided by CSS zoom, so inside the zoomed tree a raw 100vw is the screen's
+   width in the WRONG pixels and these anchors stopped agreeing with the column
+   they are supposed to hug. Identical at scale 1.
    The fixed dock and FAB live outside the column in the flow, so they can't be
    centred by a parent. `.app-dock-left` / `.app-fab-right` recompute their
    horizontal anchor from the same shell width: on a phone the shell is the full
@@ -530,17 +540,17 @@
         margin-inline: auto;
     }
     .app-dock-left {
-        left: calc(max(0px, (100vw - var(--app-shell)) / 2) + 1rem);
+        left: calc(max(0px, (100vw / var(--ui-scale, 1) - var(--app-shell)) / 2) + 1rem);
     }
     /* KR-14.3 — the dock stretches across the shell on mobile, with a right
        anchor that leaves clearance for the Dex FAB (64px + a 12px gap). Paired
        with `app-dock-left`, this widens the pill from a hugging content box
        to a near-edge-to-edge bar. */
     .app-dock-right {
-        right: calc(max(0px, (100vw - var(--app-shell)) / 2) + 1rem + 4.75rem);
+        right: calc(max(0px, (100vw / var(--ui-scale, 1) - var(--app-shell)) / 2) + 1rem + 4.75rem);
     }
     .app-fab-right {
-        right: calc(max(0px, (100vw - var(--app-shell)) / 2) + 1rem);
+        right: calc(max(0px, (100vw / var(--ui-scale, 1) - var(--app-shell)) / 2) + 1rem);
     }
 
     /* KM-53 — the Dex plus moves to the right and lines up ON the FAB.
@@ -560,14 +570,14 @@
        stay paired at every width the shell can take — not only on a phone,
        where it happens to collapse to zero. */
     .app-plus-on-fab {
-        margin-right: calc(max(0px, (100vw - var(--app-shell)) / 2) + 0.625rem);
+        margin-right: calc(max(0px, (100vw / var(--ui-scale, 1) - var(--app-shell)) / 2) + 0.625rem);
     }
 }
 
 /* Under 360px the FAB shrinks to 3.75rem, so its centre moves 2px inward. */
 @media (max-width: 359px) {
     .app-plus-on-fab {
-        margin-right: calc(max(0px, (100vw - var(--app-shell)) / 2) + 0.5rem);
+        margin-right: calc(max(0px, (100vw / var(--ui-scale, 1) - var(--app-shell)) / 2) + 0.5rem);
     }
 }
 @media (min-width: 481px) and (max-width: 1023.98px) {
@@ -584,7 +594,7 @@
 /* ASK-33 Phase 5 — plus the height of a Dex failure notice docked above the
    dock, while one is up (components/mobile/DexFailureNotice sets the variable),
    so whatever it sits over can still be scrolled clear of it. */
-.pb-dock { padding-bottom: calc(7.5rem + env(safe-area-inset-bottom, 0px) + var(--dex-notice-space, 0px)); }
+.pb-dock { padding-bottom: calc(7.5rem + var(--sa-bottom) + var(--dex-notice-space, 0px)); }
 
 /* Mobile PWA (2026-09-14) — the dock, the Dex button, their pickers, the
    vignette and the install prompt step aside while a modal dialog, sheet or
@@ -607,24 +617,41 @@
    type, spacing, controls, cards, the header, the dock, every dialog and
    sheet — grows and shrinks together and the layout REFLOWS at the new
    size (zoom changes used values; a transform would only paint bigger).
-   Desktop only: below lg the phone tree has its own breakpoints and the hook
-   writes 1 anyway. vh is NOT divided by zoom, so desktop vh sizes divide by
-   var(--ui-scale) themselves (the shell in Layout, dialog max-heights). */
-@media (min-width: 1024px) {
-    .ui-scale { zoom: var(--ui-scale, 1); }
+   ASK-43 — EVERY WIDTH, NOT JUST DESKTOP. The phone is a 0.8 step now (see
+   hooks/useUiScale for the founder's reason), so this rule and the popper
+   correction under it come out of the desktop media query. vh/dvh is NOT
+   divided by zoom, so anything sized in viewport units divides by
+   var(--ui-scale) itself (Layout's shell at both breakpoints, dialog
+   max-heights), and the safe-area insets are read through the --sa-* tokens
+   below rather than from env() directly. */
+.ui-scale { zoom: var(--ui-scale, 1); }
 
-    /* Radix poppers (dropdown menus, popovers, tooltips) position their
-       wrapper with a translate that floating-ui computed in VISUAL px; inside
-       the zoomed body that translate is applied in local px and lands
-       scale× too far right and down (measured 47px / 65px at 1.2). So the
-       wrapper cancels the zoom (its translate is now 1:1 with the screen) and
-       its content puts the zoom back — body × 1/s × s — so the menu itself is
-       drawn at the page's scale, just placed correctly. Dialogs and sheets
-       need none of this: they centre with a percentage translate of their
-       own size, which zoom scales consistently. */
-    .ui-scale [data-radix-popper-content-wrapper] { zoom: calc(1 / var(--ui-scale, 1)); }
-    .ui-scale [data-radix-popper-content-wrapper] > * { zoom: var(--ui-scale, 1); }
+/* ASK-43 · THE SAFE-AREA INSETS, CORRECTED FOR THE ZOOM.
+   env(safe-area-inset-*) resolves to a real-pixel length and the zoom then
+   multiplies it like any other: at 0.8 an iPhone's 47px notch inset is drawn
+   at 37.6 and the wordmark sits under the status bar. Divided by the scale it
+   is 47 again on the glass, whatever the scale is. Every piece of mobile
+   chrome that used to say env(safe-area-inset-*) says var(--sa-*) now; they
+   are identical at scale 1, which is every desktop width. */
+:root {
+    --sa-top:    calc(env(safe-area-inset-top, 0px)    / var(--ui-scale, 1));
+    --sa-bottom: calc(env(safe-area-inset-bottom, 0px) / var(--ui-scale, 1));
+    --sa-left:   calc(env(safe-area-inset-left, 0px)   / var(--ui-scale, 1));
+    --sa-right:  calc(env(safe-area-inset-right, 0px)  / var(--ui-scale, 1));
 }
+
+/* Radix poppers (dropdown menus, popovers, tooltips) position their wrapper
+   with a translate that floating-ui computed in VISUAL px; inside the zoomed
+   body that translate is applied in local px and lands scale× too far right
+   and down (measured 47px / 65px at 1.2). So the wrapper cancels the zoom (its
+   translate is now 1:1 with the screen) and its content puts the zoom back —
+   body × 1/s × s — so the menu itself is drawn at the page's scale, just
+   placed correctly. Dialogs and sheets need none of this: they centre with a
+   percentage translate of their own size, which zoom scales consistently.
+   ASK-43 — out of the desktop media query with the zoom itself: the phone has
+   dropdowns too (the view picker, the pipeline picker, every GlassSelect). */
+.ui-scale [data-radix-popper-content-wrapper] { zoom: calc(1 / var(--ui-scale, 1)); }
+.ui-scale [data-radix-popper-content-wrapper] > * { zoom: var(--ui-scale, 1); }
 
 @layer base {
     * {
@@ -2287,7 +2314,7 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
    here still said 16px — and every full-bleed child (the dark band on Desk,
    Operating Score and the rest) under-bled by the difference, leaving an
    un-inked sliver down the notch side. Same expression, same value, always. */
-.app-canvas { --page-pad: max(1rem, env(safe-area-inset-left, 0px)); }
+.app-canvas { --page-pad: max(1rem, var(--sa-left)); }
 @media (min-width: 1024px) { .app-canvas { --page-pad: 2rem; } }
 
 @layer components {
@@ -2329,7 +2356,7 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
            overflow. The gutter comes back as padding, in the same expression
            main uses, so the sheet's contents line up with the page's. */
         margin-inline: 0;
-        padding-inline: max(1rem, env(safe-area-inset-left, 0px));
+        padding-inline: max(1rem, var(--sa-left));
         max-height: 46svh;
         /* The sheet is capped, so its own list is what scrolls once the cap is
            reached — this is the founder's "only the internal section should
@@ -3080,8 +3107,8 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
        Square at the foot, because there is no foot. */
     @media (max-width: 1023.98px) {
         .kr-desk-board {
-            margin-left:  calc(-1 * max(1rem, env(safe-area-inset-left, 0px)));
-            margin-right: calc(-1 * max(1rem, env(safe-area-inset-right, 0px)));
+            margin-left:  calc(-1 * max(1rem, var(--sa-left)));
+            margin-right: calc(-1 * max(1rem, var(--sa-right)));
             /* ASK-42 A — 8px above the tab strip instead of 16. The sheet's
                head is a strip of tabs, not content, and on a 6.1" screen every
                four pixels above the list are pixels the list does not get. */
@@ -3095,7 +3122,7 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
                bottom of a page that now measures exactly one screen, which was
                the whole of the overflow. The sheet's floor IS the page's floor
                IS the screen's floor. */
-            padding-bottom: calc(7.5rem + env(safe-area-inset-bottom, 0px)
+            padding-bottom: calc(7.5rem + var(--sa-bottom)
                                 + var(--dex-notice-space, 0px));
             border-radius: calc((var(--tabs-trigger-h) + 0.5rem) / 2)
                            calc((var(--tabs-trigger-h) + 0.5rem) / 2) 0 0;

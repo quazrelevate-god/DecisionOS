@@ -113,7 +113,7 @@ export function InstallPrompt() {
           className="lg:hidden fixed inset-x-3 z-[10040] mx-auto flex max-w-md items-center gap-3 kr-frost rounded-pill py-2.5 pl-4 pr-2.5 shadow-[0_10px_30px_-12px_hsl(230_30%_18%/.45)]"
           // Sits above the dock, like UndoSnackbar, so it never covers the
           // navigation it is asking him to keep using.
-          style={{ bottom: "calc(6rem + env(safe-area-inset-bottom, 0px))" }}
+          style={{ bottom: "calc(6rem + var(--sa-bottom))" }}
         >
           <DeviceMobile size={24} weight="regular" aria-hidden="true" className="shrink-0 text-primary" />
           <p className="min-w-0 flex-1 text-sm leading-snug">

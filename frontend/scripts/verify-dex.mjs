@@ -119,13 +119,19 @@ const geometry = (page) => page.evaluate(() => {
 
 /** MPWA-01 §5.1 — every control in an ending is a real target, and none of them
  *  is below the fold on the shortest phone we support. */
+/* ASK-43 — THE FLOOR IS MEASURED IN THE APP'S OWN PIXELS, the fold in the
+   screen's. The app is CSS-zoomed (hooks/useUiScale: 0.8 on a phone, 1.2 on a
+   1920 monitor), so getBoundingClientRect returns VISUAL pixels and offsetHeight
+   the element's own. The 44px floor is a design-system rule about the app's own
+   pixels — the same number the CSS writes — and at 0.8 the rect made every
+   compliant control read as 35 and every check fail. "Stays on screen" is the
+   opposite: it is about the glass, so it keeps the rect. One check, two spaces,
+   each measured where it means something. */
 const touchAndFold = (page, testid, viewport) => page.evaluate(([t, vh]) => {
   const el = document.querySelector(`[data-testid="${t}"]`);
   if (!el) return false;
-  return [...el.querySelectorAll('button,a')].every((b) => {
-    const r = b.getBoundingClientRect();
-    return r.height >= 44 && r.bottom <= vh;
-  });
+  return [...el.querySelectorAll('button,a')].every((b) =>
+    b.offsetHeight >= 44 && b.getBoundingClientRect().bottom <= vh);
 }, [testid, viewport.height]);
 
 async function closeSheet(page) {
@@ -180,7 +186,8 @@ async function run(viewport) {
     const body = document.querySelector('[data-testid="desk-insight"] [aria-live="polite"]');
     if (!st || !fg || !body) return null;
     return { below: fg.getBoundingClientRect().top >= st.getBoundingClientRect().bottom - 1,
-      h: Math.round(fg.getBoundingClientRect().height),
+      // ASK-43 — own pixels: the 72 this is checked against is a CSS floor.
+      h: fg.offsetHeight,
       scrolls: body.scrollHeight > body.clientHeight + 1 };
   });
   check(`${w} A: the forge sits under them, whole`, !!stacked && stacked.below && stacked.h >= 72,
@@ -253,8 +260,9 @@ async function run(viewport) {
   const link = failed.getByTestId('dex-outcome-settings');
   check(`${w} C: it links to the AI-consent screen`,
     (await link.getAttribute('href').catch(() => '')) === '/settings?tab=business#ai-consent');
-  /* ASK-35 2.6 — it was a 20px line of text; it is a tap target below lg. */
-  const linkBox = await link.boundingBox();
+  /* ASK-35 2.6 — it was a 20px line of text; it is a tap target below lg.
+     ASK-43 — measured in the app's own pixels, like touchAndFold above. */
+  const linkBox = { height: await link.evaluate((e) => e.offsetHeight).catch(() => 0) };
   check(`${w} C: … and that link is a 44px target on a phone`, !!linkBox && linkBox.height >= 44,
     linkBox ? `${Math.round(linkBox.height)}px` : 'no box');
   check(`${w} C: the failure's controls clear the touch floor and stay on screen`,

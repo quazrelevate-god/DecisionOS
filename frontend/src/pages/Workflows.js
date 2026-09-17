@@ -147,8 +147,8 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
         className="kr-bento flex flex-col border-0 [&>button.absolute]:hidden
                    left-0 top-0 h-full max-h-none w-full max-w-none translate-x-0 translate-y-0
                    [border-radius:0]
-                   [padding-top:max(1rem,env(safe-area-inset-top))]
-                   [padding-bottom:max(1rem,env(safe-area-inset-bottom))]
+                   [padding-top:max(1rem,var(--sa-top))]
+                   [padding-bottom:max(1rem,var(--sa-bottom))]
                    lg:left-[50%] lg:top-[50%] lg:h-auto lg:max-h-[calc(100dvh/var(--ui-scale,1)-2rem)] lg:overflow-y-auto lg:max-w-2xl
                    lg:-translate-x-1/2 lg:-translate-y-1/2
                    lg:[border-radius:var(--radius-card)]

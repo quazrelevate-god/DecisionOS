@@ -265,7 +265,9 @@ function DeskRow({ r, first, testid }) {
 
 function CountPill({ n, onInk = false }) {
   return (
-    <span className={`rounded-pill px-2 py-0.5 text-xs font-semibold tabular-nums ${onInk ? "bg-white/[.10] text-white/80" : "bg-kr-ink/[.08]"}`}>
+    // ASK-43 — 1.5px of vertical padding below lg, so a count inside a Watch
+    // card cannot make that card taller than the decision row it now matches.
+    <span className={`rounded-pill px-2 py-0.5 text-xs font-semibold tabular-nums max-lg:px-1.5 max-lg:py-0 ${onInk ? "bg-white/[.10] text-white/80" : "bg-kr-ink/[.08]"}`}>
       {n ?? "—"}
     </span>
   );
@@ -489,9 +491,19 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, on
       const dock = document.querySelector('[data-testid="floating-dock"]');
       const dockTop = dock ? dock.getBoundingClientRect().top : null;
       const boxRoom = box.clientHeight - padTop - padBottom;
+      /* ASK-43 — AND THE TWO SPACES ARE RECONCILED BEFORE THEY ARE ADDED.
+         getBoundingClientRect reports VISUAL pixels; clientHeight, offsetHeight
+         and the computed padding are the element's OWN. They were the same
+         number until the phone became a 0.8 zoom step, and then this sum was
+         adding a dock 25% closer than it is to paddings at full size — three
+         rows would have fitted a card that could not hold them. `k` is the one
+         the element sees per pixel on the glass, read off the box itself, so it
+         is right at any scale and exactly 1 wherever there is no zoom. */
+      const boxRect = box.getBoundingClientRect();
+      const k = boxRect.height ? box.offsetHeight / boxRect.height : 1;
       const room = dockTop == null
         ? boxRoom
-        : dockTop - DOCK_SEAM - (box.getBoundingClientRect().top + padTop) - padBottom;
+        : (dockTop - boxRect.top) * k - DOCK_SEAM - padTop - padBottom;
       /* ASK-42 A — AND THE ROW TRIM IS GONE. It divided the room by a row and
          showed however many came out, which on a 6.1" screen — where the notch
          inset and the home indicator take 81px Chrome does not emulate — came
@@ -593,7 +605,14 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, on
           (index.css, ASK-35 1.2) is what holds it clear of the dock. */}
       {/* ASK-42 A — p-2.5, not p-3: the last four pixels of the thirty the
           6.1" screen needed. */}
-      <div className={cn(PHONE_CARD_INK, "mt-1.5 min-h-0 flex-1 rounded-tile p-2.5", showAll && "flex-none")} data-testid={`${testid}-card`}>
+      {/* ASK-43 — IT HUGS ITS CONTENT AGAIN, which is what ASK-35 1.4 wrote
+          three lines above and what `flex-1` had quietly undone. At the phone's
+          new 0.8 scale the sheet has room to spare and a stretched card spent
+          it on a field of empty grey under the last row; hugging, the card ends
+          where its content ends and the slack is the sheet's own black. The
+          measurement never needed the stretch — it is taken against the dock's
+          line, not the card's box. */}
+      <div className={cn(PHONE_CARD_INK, "mt-1.5 min-h-0 rounded-tile p-2.5")} data-testid={`${testid}-card`}>
         <div ref={listRef}>
         {children || (
           <>
@@ -648,22 +667,30 @@ function StackCard({ tone, title, count, line, tail, loading, empty, to, testid 
       data-testid={testid}
       className={`kr-glass kr-lift ${TONE[tone]} flex min-h-0 flex-1 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70`}
     >
-      <div className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5">
-        <div className="flex min-w-0 flex-col gap-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full bg-[hsl(var(--kr-glass-from))]" />
-            <h3 className="text-base font-medium tracking-[-0.006em] text-white/85">{title}</h3>
+      {/* ASK-43 — ON A PHONE THIS CARD IS A ROW. Watch's three feeds sat at
+          70px each against the 52px of a decision or an approval in the tabs
+          beside them, so switching tabs changed the scale of the list as well
+          as its contents. Below lg the type, the padding and the dot all step
+          down to DeskRow's — 15px title over a 12px line, 4px of padding, the
+          same 2px between them — and the three cards measure what three rows
+          measure. Desktop is untouched: there the same cards are a column of
+          their own beside the lists, not a substitute for them. */}
+      <div className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 max-lg:gap-2 max-lg:px-2.5 max-lg:py-1.5">
+        <div className="flex min-w-0 flex-col gap-1 max-lg:gap-0.5">
+          <div className="flex min-w-0 items-center gap-2 max-lg:gap-1.5">
+            <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full bg-[hsl(var(--kr-glass-from))] max-lg:h-2 max-lg:w-2" />
+            <h3 className="text-base font-medium tracking-[-0.006em] text-white/85 max-lg:text-[15px] max-lg:leading-5">{title}</h3>
             <CountPill n={count} onInk />
           </div>
           {loading
             ? <div className="ds-skeleton h-4 w-2/3 rounded-control" aria-hidden="true" />
-            : <p className="truncate text-sm text-neutral-300">
+            : <p className="truncate text-sm text-neutral-300 max-lg:text-xs max-lg:leading-4">
                 {line
                   ? <>{line}{tail && <span className="text-neutral-500"> &middot; {tail}</span>}</>
                   : <span className="text-neutral-500">{empty}</span>}
               </p>}
         </div>
-        <CaretRight size={22} weight="bold" aria-hidden="true" className="kr-arrow shrink-0 text-white/50 transition-transform duration-200" />
+        <CaretRight size={22} weight="bold" aria-hidden="true" className="kr-arrow shrink-0 text-white/50 transition-transform duration-200 max-lg:h-[18px] max-lg:w-[18px]" />
       </div>
     </Link>
   );
@@ -940,7 +967,15 @@ export default function Desk() {
               taller, so neither can now push the other down. lg is unchanged —
               there the greeting has its own column and all the room it wants. */}
           <div className="kr-dex-fade order-1 flex items-center justify-between gap-4 lg:order-none lg:block lg:items-start" data-dex-faded={dexExpanded ? "true" : "false"}>
-            <h1 className="line-clamp-2 font-display text-2xl leading-tight lg:line-clamp-none lg:text-[34px] lg:font-light lg:leading-[1.15]" data-testid="desk-brief-greeting">
+            {/* ASK-43 — 22px on a phone, down from 24. The founder's screen was
+                showing "Good afternoon,…" with the name eaten by the clamp; the
+                app's new 0.8 scale (hooks/useUiScale) already gives this line
+                half again as much room in its own pixels, and the two points
+                off the size are the margin — a longer name than Rajesh still
+                lands inside the two lines rather than in an ellipsis. Two lines
+                at 22 is 56px against the score's 60, so it still cannot make
+                this row taller than the score does. */}
+            <h1 className="line-clamp-2 font-display text-[22px] leading-tight lg:line-clamp-none lg:text-[34px] lg:font-light lg:leading-[1.15]" data-testid="desk-brief-greeting">
               {gi === -1
                 ? <span>{greeting || " "}</span>
                 : <>

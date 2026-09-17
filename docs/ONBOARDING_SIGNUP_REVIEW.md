@@ -61,12 +61,38 @@ It also caught a crash I introduced while fixing this: `Signup.js` passed a
 `login` it had not taken from the auth context, which broke the whole signup
 screen at the build step. No unit test would have seen it.
 
+## Closing the tab is no longer starting over (same day)
+
+The draft store had been there since FIX-001-D — create, resume, patch, a signed
+token per draft, a 30-day TTL, and `/register` already merging a draft underneath
+the final call. The wizard never called any of it.
+
+It does now. Each step is saved as it completes (`about`, `scale`,
+`os_blueprint`); the browser keeps the draft id and its token; reopening `/signup`
+restores what was typed and reopens at **the password** — the one field that is
+never stored, because the store refuses it by design. The founder sees why:
+*"Welcome back, Meena — we kept your answers. Just your password again, and
+you're on."* A blueprint that was already built comes back with them rather than
+being generated a second time.
+
+And the order the founder asked for holds: **validate each step, save each step,
+create nothing until the end.** Checked in the browser — after three answers and
+a closed tab, `check-email` still says the address is free; the workspace is
+created once, at the last press.
+
+Edge cases closed with it: a draft that expired, was already used, or whose token
+no longer verifies just starts a clean signup with no error; a browser with
+storage disabled (a private window) signs up exactly as before; and saving is
+best-effort throughout — a draft that cannot be written never blocks the founder.
+
+`backend/scripts/ux_signup_resume_0917.py` (12/12) types the first answers,
+throws the browser away, comes back with only what a real one keeps, and finishes.
+
 ## Still open
 
-- The **interview and website steps are skippable but not resumable**: a founder
-  who closes the tab mid-signup starts again. There is a draft mechanism
-  (`draft_id`, `services/auth/onboarding_drafts.py`) that the wizard does not
-  use.
 - **Nothing tells the founder the AI setup is still filling in.** It takes a few
   seconds after they enter; the status is on the tenant (`ai_setup_status`) and
   there is a retry endpoint, but no screen reads either.
+- **A resumed signup redoes the website and interview steps** unless the
+  blueprint was already built. Their answers are safe; the two AI steps are not
+  saved individually.

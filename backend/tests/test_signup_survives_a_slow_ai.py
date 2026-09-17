@@ -167,3 +167,56 @@ def test_the_signup_screen_offers_the_way_out():
     assert 'data-testid="build-error-signin"' in text, "a Sign in link on the taken-email failure"
     assert 'email_registered' in text, "branch on the code the API returns"
     assert '/signup/check-email' in text, "and re-check the email before the long call"
+
+
+# ---------------------------------------------------------------------------
+# Closing the tab is not starting over (2026-09-17).
+# ---------------------------------------------------------------------------
+def _fe(*parts):
+    from pathlib import Path
+    return (Path(__file__).resolve().parents[2] / "frontend" / "src").joinpath(*parts).read_text(encoding="utf-8")
+
+
+def test_the_wizard_saves_each_step_to_the_draft():
+    """The draft store has been there since FIX-001-D — create, resume, patch,
+    and /register merges it. The wizard simply never called any of it, so a
+    founder who closed the tab typed everything again."""
+    draft = _fe("lib", "onboardingDraft.js")
+    assert "/onboarding/draft" in draft, "create a draft"
+    assert "X-Draft-Token" in draft, "and carry the token every read and write"
+
+    signup = _fe("pages", "Signup.js")
+    assert "startOrResume" in signup and "saveStep" in signup, "the wizard uses it"
+    assert "clearDraft" in signup, "and lets go of it once the workspace exists"
+
+    basics = _fe("pages", "onboarding", "BasicsFlow.js")
+    assert "onStepSaved" in basics, "each step is saved as it completes"
+
+
+def test_the_password_is_never_written_to_a_draft():
+    """The store refuses it (services/auth/onboarding_drafts.py says so in its
+    own docstring); the wizard must not try. A resumed signup asks for it again
+    and nothing else."""
+    import inspect
+    from services.auth import onboarding_drafts as drafts
+    assert "Never contains a password" in (drafts.__doc__ or ""), "the store's own promise"
+    assert "password" not in str(drafts.VALID_STEP_KEYS)
+    merged = drafts.merge_draft_into_register_input(
+        {"step_data": {"about": {"company_name": "Kadal Exports", "password": "should-not-be-here"}}},
+        {"email": "meena@kadal.co"})
+    assert "password" not in merged, "even a draft carrying one must not feed it back into register"
+
+    draft_js = _fe("lib", "onboardingDraft.js")
+    assert "password: \"\"" in draft_js, "the restored form always asks for the password again"
+    src = inspect.getsource(drafts.patch_draft)
+    assert "VALID_STEP_KEYS" in src, "unknown keys are refused, so nothing else can be stashed"
+
+
+def test_a_draft_that_is_gone_starts_a_clean_signup():
+    """Expired (the 30-day TTL), already used, or a token that no longer
+    verifies — to a founder all three mean the same thing, and none of them may
+    show an error on a fresh signup."""
+    draft_js = _fe("lib", "onboardingDraft.js")
+    assert "completed_at" in draft_js, "a draft already turned into a workspace is finished with"
+    assert "clearDraft()" in draft_js
+    assert "catch" in draft_js, "a failed resume falls through to a new draft, silently"

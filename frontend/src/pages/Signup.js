@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
@@ -11,6 +11,7 @@ import { useAuth } from "../context/AuthContext";
 import { KarmaLogo } from "../components/karma/Logo";
 import { Check } from "@phosphor-icons/react";
 import { BasicsFlow } from "./onboarding/BasicsFlow";
+import { startOrResume, saveStep, clearDraft, formFromDraft, hasSavedAnswers } from "../lib/onboardingDraft";
 import { WebsiteIntel } from "./onboarding/WebsiteIntel";
 import { VoiceInterview } from "./onboarding/VoiceInterview";
 import { BuildReveal } from "./onboarding/BuildReveal";
@@ -54,6 +55,13 @@ export default function Signup() {
 
   const [phase, setPhase] = useState("basics");
   const [form, setForm] = useState({ company_name: "", name: "", email: "", password: "", phone: "", team_size: "" });
+  // 2026-09-17 — signup is saved as it goes, so closing the tab is not starting
+  // over. The password is the one thing never stored (the draft store refuses
+  // it), so a returning founder is put back on that step with the rest filled.
+  const [resumed, setResumed] = useState(false);       // show "picked up where you left off"
+  const [basicsStart, setBasicsStart] = useState(0);   // the step to reopen at
+  const [savedBlueprint, setSavedBlueprint] = useState(null);
+  const [draftReady, setDraftReady] = useState(false);
   const [world, setWorld] = useState(null); // { industry, business_model, description, website_summary, products }
   const [sessionId, setSessionId] = useState(null);
   const [languageCode, setLanguageCode] = useState("en-IN");
@@ -66,12 +74,40 @@ export default function Signup() {
     products: world.products,
   };
 
-  const buildPayload = world && {
-    ...form, company_size: form.team_size,
-    industry: world.industry, description: world.description, products: world.products,
-  };
+  // Resumed straight into the build (their blueprint was saved), there is no
+  // `world` from the website step — the draft's own answers stand in.
+  const buildPayload = world
+    ? { ...form, company_size: form.team_size,
+        industry: world.industry, description: world.description, products: world.products }
+    : { ...form, company_size: form.team_size,
+        industry: form.industry || "General", description: form.description || "", products: [] };
+
+  // Resume (or start) the draft once, before the first step is drawn.
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const { stepData } = await startOrResume();
+      if (!live) return;
+      if (hasSavedAnswers(stepData)) {
+        const saved = formFromDraft(stepData);
+        setForm((f) => ({ ...f, ...saved }));
+        setSavedBlueprint((stepData.os_blueprint) || null);
+        // Reopen at the first answer that is missing — which is the password,
+        // every time, because it is never saved.
+        const order = ["company_name", "name", "email", "password", "phone", "team_size"];
+        const firstGap = order.findIndex((k) => k !== "phone" && !String(saved[k] || "").trim());
+        setBasicsStart(firstGap === -1 ? 0 : firstGap);
+        setResumed(true);
+      }
+      setDraftReady(true);
+    })();
+    return () => { live = false; };
+    // Runs once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const enterApp = () => {
+    clearDraft();
     localStorage.setItem("dos_welcome", (form.name || "").trim().split(/\s+/)[0] || "1");
     navigate("/brief");
   };
@@ -195,7 +231,22 @@ export default function Signup() {
           <motion.div key={phase} className="w-full"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
             {phase === "basics" && (
-              <BasicsFlow form={form} setForm={setForm} onDone={() => setPhase("website")} />
+              draftReady ? (
+              <BasicsFlow
+                form={form} setForm={setForm} initialIndex={basicsStart} resumed={resumed}
+                onStepSaved={(key, value, whole) => {
+                  // What they typed is kept as each step completes; the password
+                  // is excluded here and refused by the store besides.
+                  if (key === "team_size") saveStep("scale", { team_size: value });
+                  else if (key !== "password") {
+                    saveStep("about", {
+                      company_name: whole.company_name, name: whole.name,
+                      email: whole.email, phone: whole.phone,
+                    });
+                  }
+                }}
+                onDone={() => setPhase(savedBlueprint ? "build" : "website")} />
+            ) : null
             )}
             {phase === "website" && (
               <WebsiteIntel companyName={form.company_name.trim()} onBack={() => setPhase("basics")} onDone={(w) => { setWorld(w); setPhase("interview"); }} />
@@ -216,7 +267,11 @@ export default function Signup() {
               />
             )}
             {phase === "build" && (
-              <BuildReveal sessionId={sessionId} languageCode={languageCode} payload={buildPayload} register={register} signIn={login} onEnter={enterApp} />
+              <BuildReveal
+                sessionId={sessionId} languageCode={languageCode} payload={buildPayload}
+                register={register} signIn={login} onEnter={enterApp}
+                savedBlueprint={savedBlueprint}
+                onBlueprint={(bp) => saveStep("os_blueprint", bp)} />
             )}
           </motion.div>
         </AnimatePresence>

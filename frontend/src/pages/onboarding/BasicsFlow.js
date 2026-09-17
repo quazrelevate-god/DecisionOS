@@ -59,8 +59,9 @@ const variants = {
   exit: { opacity: 0, y: -24 },
 };
 
-export function BasicsFlow({ form, setForm, onDone }) {
-  const [idx, setIdx] = useState(0);
+export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSaved,
+                             resumed = false }) {
+  const [idx, setIdx] = useState(initialIndex);
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
   const [showPw, setShowPw] = useState(false);
@@ -86,6 +87,8 @@ export function BasicsFlow({ form, setForm, onDone }) {
       setChecking(false);
     }
     setError("");
+    // Keep what they typed, step by step, so closing the tab costs nothing.
+    onStepSaved?.(step.key, v, { ...form, [step.key]: v });
     if (idx + 1 >= STEPS.length) onDone();
     else setIdx(idx + 1);
   };
@@ -96,6 +99,14 @@ export function BasicsFlow({ form, setForm, onDone }) {
   return (
     <div className="kr-well mx-auto w-full max-w-2xl" data-testid="signup-basics">
       <div className="kr-well__pane rounded-[1.75rem] p-6 sm:p-9">
+      {/* 2026-09-17 — a founder who closed the tab reopens here, three answers
+          in, with no idea why. Say it once, on the step they land on. */}
+      {resumed && idx === initialIndex && (
+        <p data-testid="signup-resumed-note" className="mb-5 text-sm text-muted-foreground">
+          Welcome back{first(form.name) ? `, ${first(form.name)}` : ""} — we kept your answers.
+          Just your password again, and you&apos;re on.
+        </p>
+      )}
       <AnimatePresence mode="wait">
         <motion.div key={step.key} variants={variants} initial="enter" animate="center" exit="exit"
           transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}>

@@ -225,7 +225,8 @@ function PillSection({ label, items, tint, testid, startAt, stagger, still, newK
 
 // Generates the personalized OS blueprint from the interview, lets the founder
 // refine it, then registers the workspace and reveals it. Dex keeps the wait alive.
-export function BuildReveal({ sessionId, languageCode, payload, register, signIn, onEnter }) {
+export function BuildReveal({ sessionId, languageCode, payload, register, signIn, onEnter,
+                              savedBlueprint = null, onBlueprint }) {
   const [pct, setPct] = useState(0);
   const [line, setLine] = useState(0);
   // stage: 'building' → 'preview' (refine) → 'registering' → 'reveal'
@@ -286,6 +287,8 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
       }
       setBp(data);
       setWelcome(data.welcome_line || "");
+      // Saved on the draft, so coming back does not mean building it again.
+      onBlueprint?.(data);
       setPct(100);
       setTimeout(() => setStage("preview"), 450);
     } catch (e) {
@@ -391,6 +394,16 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
   useEffect(() => {
     if (ranRef.current) return;
     ranRef.current = true;
+    // 2026-09-17 — a founder returning to a signup they had already built comes
+    // straight back to their OS. Rebuilding it would cost another AI call and
+    // could hand them a different answer than the one they left.
+    if (savedBlueprint) {
+      setBp(savedBlueprint);
+      setWelcome(savedBlueprint.welcome_line || "");
+      setPct(100);
+      setStage("preview");
+      return;
+    }
     generate();
   }, []);
 

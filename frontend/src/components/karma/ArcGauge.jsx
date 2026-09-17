@@ -65,11 +65,26 @@ export function ArcGauge({ value = null, size = 200, className, testid }) {
         />
       )}
       {/* needle + hub — the kr-arcgauge-needle class exists so the global
-          reduced-motion block can kill its sweep. */}
+          reduced-motion block can kill its sweep.
+          ASK-43 — ITS ORIGIN IS A PERCENTAGE OF THE VIEW BOX, not a pixel pair.
+          It was `${c}px ${c}px`, the arc's own centre in user units, which is
+          right until something above this SVG is CSS zoomed: a px length inside
+          a transform resolves in the zoomed space, so at the phone's 0.8 step
+          the needle pivoted about a point 20% short of centre — up and to the
+          left — and swung outside the arc it is meant to be reading.
+          `transform-box: view-box` with percentages is the same point in the
+          one coordinate system the zoom cannot move: 50% across, and c/H down,
+          because the box is cropped to the upper half (H = c + 8) and 50% of
+          THAT is not the centre of the circle. */}
       {needleAngle != null && (
         <g
           className="kr-arcgauge-needle"
-          style={{ transform: `rotate(${needleAngle}deg)`, transformOrigin: `${c}px ${c}px`, transition: "transform 700ms cubic-bezier(.22,1,.36,1)" }}
+          style={{
+            transform: `rotate(${needleAngle}deg)`,
+            transformBox: "view-box",
+            transformOrigin: `50% ${((c / H) * 100).toFixed(3)}%`,
+            transition: "transform 700ms cubic-bezier(.22,1,.36,1)",
+          }}
         >
           <line x1={c + 8} y1={c} x2={c + R + 4} y2={c}
             className="stroke-current" strokeWidth="1" />

@@ -654,6 +654,20 @@
 .ui-scale [data-radix-popper-content-wrapper] > * { zoom: var(--ui-scale, 1); }
 
 @layer base {
+    /* ASK-43 — TEXT AUTOSIZING OFF. WebKit inflates font sizes when it decides
+       a block is wide relative to its text, and a CSS-zoomed page (the app is
+       0.8 on a phone — hooks/useUiScale) is exactly the shape that triggers it:
+       the founder's iPhone drew the Desk's greeting several points larger than
+       the CSS asks, which is why "Good afternoon, Rajesh." wrapped to a third
+       line there and fitted two everywhere we could test. The app sizes its own
+       type by screen class already; this stops the engine from doing it again
+       on top, and it is the one line that makes a phone render what the CSS
+       says. */
+    html {
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+    }
+
     * {
         @apply border-border;
     }

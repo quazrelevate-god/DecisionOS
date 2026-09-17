@@ -975,12 +975,25 @@ export default function Desk() {
                 lands inside the two lines rather than in an ellipsis. Two lines
                 at 22 is 56px against the score's 60, so it still cannot make
                 this row taller than the score does. */}
-            <h1 className="line-clamp-2 font-display text-[22px] leading-tight lg:line-clamp-none lg:text-[34px] lg:font-light lg:leading-[1.15]" data-testid="desk-brief-greeting">
+            <h1 className="min-w-0 font-display text-xl leading-tight lg:text-[34px] lg:font-light lg:leading-[1.15]" data-testid="desk-brief-greeting">
               {gi === -1
-                ? <span>{greeting || " "}</span>
+                ? <span className="block truncate">{greeting || " "}</span>
                 : <>
-                    <span className="lg:block">{greeting.slice(0, gi + 1)}</span>
-                    <span className="text-muted-foreground lg:block lg:text-5xl lg:font-bold lg:leading-[1.08] lg:tracking-[-0.02em] lg:text-foreground">{greeting.slice(gi + 1)}.</span>
+                    {/* ASK-43 — TWO LINES, ONE EACH, AND THE NAME IS ONE OF
+                        THEM. They were inline spans under a two-line clamp, so
+                        the greeting and the name shared whatever wrapping the
+                        column allowed — and on a narrow screen "Good afternoon,"
+                        took both lines and the clamp ate the name, which is the
+                        founder's "the name is totally disappeared". As blocks
+                        they are a line each: the name cannot be pushed off,
+                        because it is not competing for the first line. And each
+                        line truncates on its own, so if anything has to give it
+                        is the end of ONE line rather than the whole of the
+                        second. 20px on a phone (the founder: "it's okay to
+                        shrink the font"), which is what makes "Good afternoon,"
+                        fit a 320px screen with the display zoomed. */}
+                    <span className="block truncate">{greeting.slice(0, gi + 1)}</span>
+                    <span className="block truncate text-muted-foreground lg:text-5xl lg:font-bold lg:leading-[1.08] lg:tracking-[-0.02em] lg:text-foreground">{greeting.slice(gi + 1)}.</span>
                   </>}
             </h1>
 

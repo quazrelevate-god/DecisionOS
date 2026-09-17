@@ -32,8 +32,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   CalendarBlank, UsersThree, BookOpen, Gauge, AirplaneTakeoff, CaretRight,
-  Bell, GearSix, Translate, SignOut, X,
-  MagnifyingGlass, ArrowRight,
+  ShieldCheck, FlowArrow, GearSix,
 } from "@phosphor-icons/react";
 import { hasPerm } from "@/lib/perms";
 import { INK_PLATE } from "@/components/karma/glass";
@@ -59,19 +58,31 @@ import { useBackDismiss } from "@/hooks/useBackDismiss";
  * person has to work out is dead, so it left with them. Nothing else read it —
  * the search filter matches on `label` only.
  */
-function buildTiles({ user, t, counts }) {
+function buildTiles({ user, t }) {
   const tiles = [
-    /* ASK-38 — CRM LEFT THIS PANEL for the dock. It is the screen an owner
-       opens to look somebody up, and behind the dots it cost two taps and a
-       sheet; the rest of More is genuinely occasional. Same `people`
-       permission, carried by the dock slot now (FloatingDock dockSlots), so
-       nobody gains access by the move.
-       WORKFLOWS LEFT TOO, back to My Work. KM-31 brought it here on the
-       argument that a pipeline board is a destination rather than a lens on
-       the task list. It is both, and the founder's call is that the board
-       belongs beside the task filters it shares a page with — it is a circular
-       control in My Work's own control row again (pages/MyWork.js). The route
-       is untouched; only the way in moved. */
+    /* ASK-42 B/C — APPROVALS AND WORKFLOWS ARE THE FIRST ROW. Both were views
+       inside My Work, chosen from a dropdown that otherwise lists lenses on the
+       task list; both replace the whole page with a different subject when
+       picked, which is what a destination does and what a lens never should.
+       They are pages now (/approvals, /workflows) and this is the door to them,
+       side by side because that is the founder's layout.
+       AND CALENDAR AND NOTIFICATIONS LEAVE. The calendar comes back one row
+       down as "Events desk" beside the Journal — the two rooms that read the
+       company by date belong together, and that is the founder's name for it.
+       Notifications leaves outright: the bell is back in the Desk's own top bar
+       (components/Layout.js), where a count is worth something, rather than
+       behind two taps with the count on the menu that hides it. */
+    {
+      key: "approvals",
+      to: "/approvals",
+      label: t("mywork.view_approvals", "Approvals"),
+      icon: ShieldCheck,
+      // The same gate the page itself uses (MyWork's showApprovalsView).
+      perm: "approvals",
+    },
+    { key: "workflows", to: "/workflows", label: t("nav.workflows", "Workflows"), icon: FlowArrow, perm: "workflows" },
+    { key: "journal", to: "/journal", label: t("nav.journal", "Journal"), icon: BookOpen, ownerOnly: true },
+    { key: "events", to: "/calendar", label: t("allapps.events", "Events desk"), icon: CalendarBlank },
     {
       key: "operating-score",
       to: "/operating-score",
@@ -83,31 +94,16 @@ function buildTiles({ user, t, counts }) {
     // RBAC P1 (2026-09-15): /team is open to everyone (read-only without Manage
     // team), so the tile is too — it hid the page from teammates on a phone.
     { key: "team", to: "/team", label: t("nav.team", "Team"), icon: UsersThree },
-    { key: "journal", to: "/journal", label: t("nav.journal", "Journal"), icon: BookOpen, ownerOnly: true },
     // ASK-6 (2026-09-12): the standalone Leave tile lands on /team now.
     // Register lives on Team, approvals on the Decision Desk, per-department
     // config on Settings > Operations. The tile stays because "Leave" is still
     // the reader's mental hook for the concept.
     { key: "leave", to: "/team", label: t("nav.leave", "Leave"), icon: AirplaneTakeoff },
-    /* Mobile PWA (2026-09-14) — Calendar and Notifications, for everyone. A
-       non-owner's More held two tiles (GL-02), Calendar had no way in on a
-       phone, and the More badge counted notifications with no tile inside to
-       open them — this tile carries that count. */
-    { key: "calendar", to: "/calendar", label: t("nav.calendar", "Calendar"), icon: CalendarBlank },
-    {
-      key: "notifications", to: "/notifications", label: t("nav.notifications", "Notifications"),
-      icon: Bell, badge: counts?.notifications || 0,
-    },
-    // §5.7 listed "Send Daily Digest" as a Small tile, and §8 asked for it to sit
-    // nowhere near Sign out. E2-63 (2026-08-15) then deleted
-    // POST /brief/send-digest outright — "the Desk itself is the brief now, so
-    // this email-a-snapshot flow duplicated live data behind an SMTP gate". A
-    // tile whose endpoint is gone is a button that always fails, so it goes with
-    // the endpoint. Eleven entries; the search row stays hidden either way.
   ];
 
   return tiles.filter((tile) => {
     if (tile.ownerOnly && user?.role !== "owner") return false;
+    // An owner passes every permission gate; hasPerm already says so.
     if (tile.perm && !hasPerm(user, tile.perm)) return false;
     return true;
   });
@@ -170,21 +166,12 @@ function Tile({ tile, onPick }) {
       {/* The chevron goes with the description. At this size it would be a
           third object competing for the same 124px, and a menu row does not
           need to be told it leads somewhere. Settings keeps its own — that
-          row is full width and has the room. */}
-      <span className="relative grid h-6 w-6 shrink-0 place-items-center rounded-pill bg-white/[.10] text-white/85">
+          row is full width and has the room.
+          ASK-42 D — and the badge goes with Notifications, the only tile that
+          ever wore one. The count is on the Desk's own top bar now, where it is
+          read rather than hidden behind the menu that hides it. */}
+      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-pill bg-white/[.10] text-white/85">
         <Icon size={15} weight="bold" aria-hidden="true" />
-        {tile.badge > 0 && (
-          /* ON THE ICON, not in the row. Inline it would take 28px out of the
-             name's share and truncate "Notifications"; on the icon's shoulder
-             it is where a badge belongs anyway and it costs the row nothing. */
-          <span
-            data-testid={`allapps-badge-${tile.key}`}
-            aria-label={`${tile.badge} need you`}
-            className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-pill bg-kr-accent px-1 text-[10px] font-bold leading-none text-white"
-          >
-            {Math.min(9, tile.badge)}
-          </span>
-        )}
       </span>
       <span className="min-w-0 flex-1 truncate text-[length:var(--text-label)] font-semibold leading-4 text-white">
         {tile.label}
@@ -199,7 +186,6 @@ function Tile({ tile, onPick }) {
  * @param {object}   user
  * @param {Function} onSignOut
  * @param {Function} onOpenLanguage
- * @param {{notifications?:number}} [counts]  KM-1: myWork was never read by buildTiles.
  */
 export function AllAppsPanel({
   open,
@@ -207,7 +193,6 @@ export function AllAppsPanel({
   user,
   onSignOut,
   onOpenLanguage,
-  counts = {},
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -222,10 +207,7 @@ export function AllAppsPanel({
     if (open) setQ("");
   }, [open]);
 
-  const tiles = React.useMemo(
-    () => buildTiles({ user, t, counts }),
-    [user, t, counts]
-  );
+  const tiles = React.useMemo(() => buildTiles({ user, t }), [user, t]);
   const utility = React.useMemo(() => buildUtility({ user, t }), [user, t]);
 
   const needle = q.trim().toLowerCase();

@@ -632,7 +632,7 @@ export function DeskDexWell({ className, testid, growToRef, growToPhoneRef, onEx
          the stages take the top, full width, and the forge sits under them in
          whatever height is left — with a floor, so a long stage list cannot
          crush it to nothing. */
-      <div className="flex min-h-0 flex-1 gap-6 max-lg:flex-col max-lg:gap-3">
+      <div className="flex min-h-0 flex-1 gap-6 max-lg:flex-col max-lg:gap-2">
         {/* Half each on desktop. The forge is WIDTH-bound at that size —
             measured, the box it gets is wider than 304 only past 2xl — so every
             pixel the stages do not need is a pixel it draws with. */}
@@ -640,17 +640,28 @@ export function DeskDexWell({ className, testid, growToRef, growToPhoneRef, onEx
           {/* Two lines on a phone, three on desktop: the pane is the same 354px
               tall either way, and every line the quote takes is a line the forge
               loses. What was said is still one tap from being read in full. */}
+          {/* ASK-42 A — ONE line on a phone, two from lg, three from xl. The
+              hero above this workspace gave up 46px to the black sheet's third
+              row, and the workspace is measured from the hero's top: it is that
+              much shorter now, and the first thing to give is the echo of words
+              the founder said ten seconds ago. What was said is still in the
+              element, and still one tap from being read in full. */}
           {sentText && (
-            <p className="line-clamp-2 text-[15px] leading-snug text-foreground lg:line-clamp-3">&ldquo;{sentText}&rdquo;</p>
+            <p className="line-clamp-1 text-[15px] leading-snug text-foreground lg:line-clamp-2 xl:line-clamp-3">&ldquo;{sentText}&rdquo;</p>
           )}
           {/* Tighter on a phone: four stages at 10px apart cost 110px of a
               234px body, and every pixel they do not need is a pixel the forge
               under them draws with. */}
-          <ol className="mt-3 space-y-1.5 lg:mt-4 lg:space-y-2.5" aria-label="What Dex is doing">
+          <ol className="mt-2 space-y-1 lg:mt-4 lg:space-y-2.5" aria-label="What Dex is doing">
             {shownSteps.map((s, i) => {
               const current = i === shownSteps.length - 1;
               return (
-                <li key={s} className={cn("flex items-center gap-2.5 text-sm", current ? "font-medium text-foreground" : "text-foreground/55")}>
+                /* ASK-42 A — the stage rows read at 13px with a 16px line on a
+                   phone (the app's own --text-label floor), 14px from lg. Four
+                   stages at the desktop size no longer fit the workspace the
+                   shorter hero leaves, and the choice is between a stage the
+                   founder cannot see and a stage a point smaller. */
+                <li key={s} className={cn("flex items-center gap-2.5 text-[length:var(--text-label)] leading-4 lg:text-sm lg:leading-normal", current ? "font-medium text-foreground" : "text-foreground/55")}>
                   {current ? (
                     <span aria-hidden="true" className="relative grid h-4 w-4 shrink-0 place-items-center">
                       <span className="absolute inset-0 animate-ping rounded-full bg-kr-ink/20 motion-reduce:animate-none" />
@@ -800,7 +811,11 @@ export function DeskDexWell({ className, testid, growToRef, growToPhoneRef, onEx
       testid={testid}
       expanded={expanded}
       wellRef={wellRef}
-      paneClassName={cn("max-lg:flex-1", grow && growPhase !== "start" && "kr-dex-grow")}
+      /* ASK-42 A — 12px of padding on a phone, not 16. The well is the last
+         band above the black sheet and the sheet has a floor of three rows to
+         keep on a 6.1" screen; eight pixels of padding are most of a fourth of
+         one. Desktop keeps p-4 (InsightWell's compact default). */
+      paneClassName={cn("max-lg:flex-1 max-lg:p-3", grow && growPhase !== "start" && "kr-dex-grow")}
       paneStyle={grow
         ? { position: "absolute", left: 0, right: 0, bottom: 0, zIndex: 10, height: growPhase === "open" ? grow.to : grow.from }
         : undefined}

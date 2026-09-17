@@ -643,7 +643,7 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
                         <li key={w.id} className="flex gap-3" data-testid={`decision-workflow-${w.id}`}>
                           <TimelineDot tone="green" check />
                           <div className="min-w-0 flex-1">
-                            <a href={`/my-work?view=workflows&type=${encodeURIComponent(w.type || "")}&focus=${encodeURIComponent(w.id)}`}
+                            <a href={`/workflows?type=${encodeURIComponent(w.type || "")}&focus=${encodeURIComponent(w.id)}`}
                               className="text-sm text-slate-800 underline-offset-2 hover:underline">{w.title}</a>
                             <p className="text-xs capitalize text-slate-500">{String(w.stage || "").replace(/_/g, " ")}</p>
                           </div>

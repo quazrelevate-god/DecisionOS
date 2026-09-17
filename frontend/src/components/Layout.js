@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useMemo, useRef } from "react";
-import { NavLink, useNavigate, useLocation } from "react-router-dom";
+import { NavLink, Link, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
@@ -267,6 +267,9 @@ export default function Layout({ children }) {
      ASK-35 1.5 — what it no longer is: a wordmark row that folds away. */
   const [headerSlot, setHeaderSlot] = useState(null);
   const isMobileShell = useIsMobile();
+  // ASK-42 D — the Desk is the one room with a top bar; several rules below
+  // ask the same question, so it is asked once.
+  const onInbox = location.pathname.startsWith("/inbox");
   /* ASK-35 1.5 — KM-25's `brandGone` / `collapsingShell` / `brandFolded` and
      main's onScroll handler are gone with the row they folded. KM-27 had
      already opted /inbox out of the collapse, and the row existed on no other
@@ -767,20 +770,56 @@ export default function Layout({ children }) {
             and the row existed nowhere else, so `brandGone`/`brandFolded` and
             main's onScroll were computing a state that could never be read. */}
         <div className="lg:hidden shrink-0">
+          {/* ASK-42 D — THE DESK'S OWN TOP BAR IS BACK, and only the Desk's.
+              ASK-35 1.5 deleted the wordmark-and-bell row for 56px of a screen
+              that needed them; the founder wants identity and the bell back,
+              "very subtle and blended, consuming compact space, just for the
+              inbox page". So it is 32px of row, not 56: the wordmark at its
+              smallest step and dropped to 60% ink, the bell at 18px in the same
+              weight, both on the page's own bloom with no bar, no fill, no rule
+              and nothing sticky. It owns the safe-area inset that the slot
+              below used to carry, so the Desk's own content starts where it
+              started — the bar is the 32px, not 32px plus an inset.
+              THE BELL IS A LINK, not a popover: the phone has a whole room for
+              notifications and a dropdown on a 390px screen is a worse version
+              of it. Its target is the 44px floor even though the row is 32 —
+              -my-1.5 lets the box overhang the row rather than setting the
+              row's height, which is the same trick the dock's slots use.
+              Notifications left the More menu in the same breath (AllAppsPanel)
+              — this is where the count lives now. */}
+          {onInbox && (
+            <div
+              data-testid="desk-topbar"
+              className="px-gutter-safe flex items-center justify-between gap-3 pt-[calc(env(safe-area-inset-top,0px)+0.375rem)]"
+            >
+              <KarmaLogo size="sm" className="opacity-60" />
+              <Link
+                to="/notifications"
+                data-testid="desk-topbar-bell"
+                aria-label={bellCount > 0 ? `Notifications, ${bellCount} need you` : "Notifications"}
+                className="relative -my-1.5 -mr-2 grid h-11 w-11 place-items-center rounded-full text-foreground/60 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
+              >
+                <Bell size={18} weight="regular" aria-hidden="true" />
+                {bellCount > 0 && (
+                  <span
+                    data-testid="desk-topbar-bell-dot"
+                    aria-hidden="true"
+                    className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-kr-accent ring-2 ring-[hsl(var(--background))]"
+                  />
+                )}
+              </Link>
+            </div>
+          )}
           {/* A page's header lands here. Zero-height on routes with none.
-              ASK-35 1.5 — this slot owns the top inset on /inbox now, which it
-              did not while the row was above it. The Desk gets a SMALLER one
-              (0.5rem over the safe area, not 1.75rem): every other room opens
-              on a title that wants air above it, and the Desk opens on a
-              greeting that is the top of a composition. */}
+              ASK-42 D — on /inbox the bar above owns the inset, so this slot
+              adds nothing there; every other room still opens on 1.75rem of air
+              over the safe area. */}
           <div
             ref={setHeaderSlot}
             data-testid="page-header-slot"
             className={cn(
               "px-gutter-safe",
-              location.pathname.startsWith("/inbox")
-                ? "pt-[calc(env(safe-area-inset-top,0px)+0.5rem)]"
-                : "pt-[calc(env(safe-area-inset-top,0px)+1.75rem)]",
+              onInbox ? "pt-1" : "pt-[calc(env(safe-area-inset-top,0px)+1.75rem)]",
             )}
           />
         </div>
@@ -816,7 +855,7 @@ export default function Layout({ children }) {
              Every other route keeps it: they scroll, and they have no sheet. */
           className={cn(
             "min-h-0 flex-1 overflow-y-auto overflow-x-hidden app-canvas lg:overflow-x-clip lg:pb-0",
-            location.pathname.startsWith("/inbox") ? "lg:pb-dock" : "pb-dock"
+            onInbox ? "lg:pb-dock" : "pb-dock"
           )}
         >
           <AnnouncementBanner />
@@ -824,9 +863,18 @@ export default function Layout({ children }) {
               phone too, for the same reason: the Desk's sheet runs to the floor
               and carries its own clearance, so 1rem of wrapper below it is 1rem
               the page would have to scroll. */}
+          {/* ASK-42 A/D — and on /inbox the wrapper is main's OWN height below
+              lg (max-lg:h-full), which is what lets the Desk stop guessing.
+              It sized itself with `100svh - safe-inset - 1.5rem`, a copy of
+              this shell's arithmetic kept in another file, and the moment the
+              Desk's top bar went back above main that copy was wrong by the
+              height of the bar — every phone width scrolled by exactly 34px.
+              main is a height-definite flex child, so `h-full` here and on the
+              page inside it is the real number, whatever the chrome above main
+              turns out to be. */}
           <div className={cn(
             "p-4 lg:p-8 px-gutter-safe lg:h-full lg:min-h-0 lg:flex lg:flex-col",
-            location.pathname.startsWith("/inbox") && "max-lg:pb-0"
+            onInbox && "max-lg:pb-0 max-lg:h-full"
           )}>{children}</div>
         </main>
       </div>
@@ -843,11 +891,12 @@ export default function Layout({ children }) {
            keeps. This counted pending WhatsApp captures, but Review Queue is
            not a tile in the panel — it is a TAB inside /finance, which is the
            Money dock slot sitting right beside More. So the founder saw "3",
-           opened More, and found nothing counting to three. Notifications is
-           the only badged tile inside, so the badge is its count.
-           (The capture signal now has no mobile home: it wants a badge on the
-           Money slot, which DockItem does not support yet.) */
-        moreBadge={bellCount}
+           opened More, and found nothing counting to three.
+           ASK-42 D — and by that same rule it is GONE. It became the
+           notification count because Notifications was the one badged tile in
+           the panel; that tile has left for the Desk's top bar, so the number
+           on More now counts something nothing inside More can show. The bell
+           on /inbox carries it. */
         dexActive={dexOpen}
         dexLevels={dex.levels}
         /* KM-60 — the live meter, read on the wave's own animation frame.
@@ -899,7 +948,6 @@ export default function Layout({ children }) {
         user={user}
         onSignOut={doLogout}
         onOpenLanguage={() => setLangOpen(true)}
-        counts={{ notifications: bellCount }}
       />
       {/* MPWA-05: third session, dismissible, above the dock (§8). */}
       <InstallPrompt />

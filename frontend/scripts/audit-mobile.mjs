@@ -95,7 +95,9 @@ const ROUTES = [
   { path: '/brief', label: 'Brief (redirects to the Desk)', redirects: true },
   { path: '/my-work', label: 'My Work', primary: true },
   { path: '/my-work?view=leave', label: 'My Work · leave' },
-  { path: '/my-work?view=workflows', label: 'My Work · workflows' },
+  // ASK-42 C — the board is its own page; auditing it at My Work's address
+  // would now shoot My Work's task list and call it the board.
+  { path: '/workflows', label: 'Workflows' },
   { path: '/crm', label: 'CRM', primary: true },
   { path: '/contacts/c_1', label: 'Contact profile' },
   { path: '/team', label: 'Team' },

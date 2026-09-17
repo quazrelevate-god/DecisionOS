@@ -28,7 +28,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
-import { PageHeader, EmptyState } from "../components/common";
+import { EmptyState } from "../components/common";
 import { ymd, addDays, startOfWeek, DOW, dayTitle } from "../lib/dates";
 import {
   CurrencyCircleDollar, CheckSquare, Truck, Warning, Cake, CalendarBlank,
@@ -96,7 +96,12 @@ export default function Calendar() {
 
   return (
     <div data-testid="calendar-page">
-      <PageHeader eyebrow="Everything with a date, in one place" title="Business Calendar" />
+      {/* ASK-42 D — NO TITLE ROW. The founder reaches this room as "Events
+          desk" from More, where the pill they tapped is the label; a page that
+          then names itself something else ("Business Calendar") over a line
+          explaining what a calendar is spends the top of the screen telling
+          them what they just chose. Everything below is untouched — the Day /
+          Week control is the first thing on the page now. */}
 
       {/* Day / Week — the same pressed-track segmented control the rest of the
           app uses for "pick one of these framings of the same data". */}

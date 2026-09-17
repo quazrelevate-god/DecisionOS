@@ -341,11 +341,14 @@ function StandaloneHeader({ show, title, pipelines, activeKey, counts, onPick, n
 }
 
 /* KM-31 — Workflows is its own PAGE now, reached from the More menu rather
-   than from a pill inside My Work. `embedded` survives for the desktop tree,
-   which still renders it inside /my-work; what changed is the standalone
+   than from a pill inside My Work. ASK-42 C — and `embedded` is GONE with the
+   last thing that used it: My Work's desktop tree rendered this board inside
+   itself under a view pill, which is the arrangement the founder has now
+   retired on both breakpoints. One way in, one header, one layout. What
+   changed when the page became standalone is
    branch, which now looks like every other room: a pinned title, and one row
    under it carrying the pipeline picker and the primary action. */
-export default function Workflows({ embedded = false }) {
+export default function Workflows() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const { tenant, user } = useAuth();
@@ -494,7 +497,7 @@ export default function Workflows({ embedded = false }) {
        phone is untouched — it stacks and scrolls the document as before. */
     <div data-testid="workflows-page" className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
       <StandaloneHeader
-        show={!embedded}
+        show
         title={t("workflows.title")}
         pipelines={pipelines}
         activeKey={activeKey}
@@ -506,25 +509,11 @@ export default function Workflows({ embedded = false }) {
             onCreated={refresh} />
         }
       />
-      <header className={embedded ? "mb-5 flex flex-wrap items-center justify-between gap-3" : "hidden lg:mb-7 lg:flex lg:flex-wrap lg:items-end justify-between gap-4"}>
-        {!embedded && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("workflows.eyebrow")}</p>
-            <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">{t("workflows.title")}</h1>
-          </div>
-        )}
-
-        {/* KR-14.8 · MOBILE — the pipeline pills are folded into MyWork's
-            mobile filter dropdown (via the shared `?wf_type=` param). The
-            "+ New workflow" trigger stays inline as a mobile-only button
-            just below the pill row's caption. */}
-        {embedded && (
-          <div className="flex w-full lg:hidden" data-testid="workflow-mobile-controls">
-            <NewWorkflowDialog
-              type={activeKey} typeLabel={tabLabel} custLabel={L.customer_singular} vendLabel={L.vendor_singular}
-              onCreated={refresh} />
-          </div>
-        )}
+      <header className="hidden lg:mb-7 lg:flex lg:flex-wrap lg:items-end justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("workflows.eyebrow")}</p>
+          <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">{t("workflows.title")}</h1>
+        </div>
 
         {/* Pipeline switch — the same black-hairline pill the nav, the scope
             toggle and Finance's tabs wear. Was a welded bordered block with

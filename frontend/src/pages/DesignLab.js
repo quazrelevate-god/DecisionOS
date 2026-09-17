@@ -33,7 +33,7 @@ const SCREENS = [
   { path: "/inbox?scope=morning", label: "Desk · morning" },
   { path: "/finance", label: "Money" },
   { path: "/my-work", label: "My Work" },
-  { path: "/my-work?view=workflows", label: "My Work · board" },
+  { path: "/workflows", label: "Workflows · board" },
   { path: "/crm", label: "CRM" },
 ];
 

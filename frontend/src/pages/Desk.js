@@ -73,9 +73,13 @@ import {
 const PHONE_ROWS = 3;
 /* The gap the phone card leaves between its last pixel and the top of the
    floating dock. One seam, not a margin: the sheet's own dock clearance is what
-   keeps the two apart, and this is only what the row trim above holds back so
-   the list never runs up against the bar. */
-const DOCK_SEAM = 8;
+   keeps the two apart, and this is only what the measurement holds back so the
+   list never runs up against the bar.
+   ASK-42 A — 4px, not 8. The card's own bottom padding sits inside this and the
+   bar floats on a 16px inset below it, so the gap the eye sees is never this
+   number alone; on a 6.1" screen the other four pixels are the difference
+   between three rows that fit and three rows that make the page scroll. */
+const DOCK_SEAM = 4;
 /* ASK-35 1.4 — the inner card's material, lifted from the recipe the desktop
    top nav shelf is cut from (INK_PILL / .kr-navplate::before) so the two stay
    the same black. Only the fill and the lit top edge: INK_PILL's drop shadow
@@ -218,8 +222,24 @@ function DeskRow({ r, first, testid }) {
          two actions and a link, and this has to read at a glance without
          competing with any of them. The mark is spoken too, in the meta line,
          so it is not colour alone. */
-      className={`flex cursor-pointer items-center justify-between gap-3 py-[7px] ${first ? "" : "border-t border-white/[.14]"} ${
-        r.deferred ? "-mx-2 rounded-lg border-l-2 border-l-[hsl(var(--kr-glass-from))] bg-white/[.05] pl-2 pr-2" : ""
+      /* ASK-42 A — 4px of vertical padding below lg instead of 7. Three rows
+         is the founder's floor for this card and a 6.1" screen is 29px short of
+         holding them; six of those pixels are here, three times over. Desktop
+         keeps its 7 — it has the room and the columns are read at arm's
+         length. */
+      className={`flex cursor-pointer items-center justify-between gap-3 max-lg:py-1 py-[7px] ${first ? "" : "border-t border-white/[.14]"} ${
+        /* ASK-42 E — THE MARK IS LOUDER. It was a 2px bar and a 5% white wash,
+           which on near-black is a shade of the same black: the founder could
+           see it only once they knew where to look. It is the SAME grammar,
+           turned up — the section's own hue instead of white, a 3px bar, a 14%
+           fill of that hue, a hairline ring of it around the whole row, and a
+           soft outer glow in it so the row lifts off the card rather than
+           merely tinting. Still not kr.accent, which is alert grammar and not
+           this; still spoken as "Set aside" in the meta line, so it is not
+           colour alone. */
+        r.deferred
+          ? "-mx-2 rounded-xl border-l-[3px] border-l-[hsl(var(--kr-glass-from))] bg-[hsl(var(--kr-glass-from)/0.16)] px-2 shadow-[inset_0_0_0_1px_hsl(var(--kr-glass-from)/0.30),0_0_16px_-4px_hsl(var(--kr-glass-from)/0.55)]"
+          : ""
       }`}
     >
       <div className="flex min-w-0 flex-col gap-0.5">
@@ -420,18 +440,17 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, on
 
   /* ASK-35 1.1 — THREE, AND THEN A CONTROL: the Desk's job on a phone is to say
      what is waiting, not to show it all.
-     ASK-39 — AND NO MORE THAN FIT, because the page no longer scrolls at rest.
-     A constant alone was right on a 390x844 phone and wrong on a 360x640 one,
-     where three rows plus the hero above them are ~100px taller than the screen
-     — and a fixed page that overflows is worse than a scrolling one. So the
-     count is `min(3, what the card's own box holds)`. This is ASK-34 B3's
-     machinery again with the lesson kept: it measures the CONTAINER it is in,
-     not the viewport, and it is capped at three, so it can only ever show
-     FEWER than the summary promises — never nine. */
+     ASK-42 A — AND THREE IS A FLOOR, NOT A CEILING. ASK-39 made it
+     `min(3, what fits)`, which reads as prudence and behaved as a leak: on the
+     founder's 6.1" phone — where a 47px notch inset and a 34px home indicator
+     take 81px that a 390x844 Chrome window does not — what fitted was nought,
+     and the card showed a "Show all 34" control over an empty list. The rule is
+     the founder's: three rows in any tab, on any phone. What the measurement
+     below decides is not how many rows but whether the PAGE has to give its
+     height back so the three of them fit. */
   const listRef = useRef(null);
-  const [fit, setFit] = useState(PHONE_ROWS);
-  /* True when even the trimmed card does not fit its box — see the note by the
-     effect that sets it. */
+  /* True when the card's three rows do not fit the room above the dock — see
+     the note by the effect that sets it. */
   const [cramped, setCramped] = useState(false);
   useEffect(() => {
     const list = listRef.current;
@@ -473,22 +492,16 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, on
       const room = dockTop == null
         ? boxRoom
         : dockTop - DOCK_SEAM - (box.getBoundingClientRect().top + padTop) - padBottom;
-      /* Down to ZERO, not one. On a 360x640 phone the hero leaves the card
-         ~54px, and forcing a row it cannot draw makes the card overflow the
-         sheet — a card holding only "Show all 32" is the honest picture of
-         that screen, and the list is one tap away.
-         ASK-41 2 — and the row trim only applies to a tab MADE of rows. It used
-         to be the first thing this function did, behind `if (!rowH) return`,
-         which meant the Watch tab — three stacked cards, not rows — was never
-         measured at all. That is why its Slipping card sat half under the dock:
-         nothing was watching. Everything above this line is about the box, so
-         it runs for every tab; only the division into rows is skipped. */
-      const row = list.querySelector("[data-row]");
-      const rowH = row?.offsetHeight || 0;
-      if (rowH) {
-        const next = Math.max(0, Math.min(PHONE_ROWS, Math.floor((room - ctrlH) / rowH)));
-        setFit((f) => (f === next ? f : next));
-      }
+      /* ASK-42 A — AND THE ROW TRIM IS GONE. It divided the room by a row and
+         showed however many came out, which on a 6.1" screen — where the notch
+         inset and the home indicator take 81px Chrome does not emulate — came
+         out at nought: the founder's card held a "Show all 34" control and no
+         list at all. Three rows in any tab is the founder's floor and a floor
+         is not something a measurement gets to negotiate, so the card always
+         shows three (PHONE_ROWS) and what the measurement decides now is the
+         OTHER thing: whether the page has to give its height back for them to
+         fit. Big screens stay fixed to one screen and show three; a small one
+         scrolls by the difference and still shows three. */
       /* THE PAGE IS FIXED TO ONE SCREEN UNLESS IT GENUINELY CANNOT HOLD THE
          SUMMARY. On a 360x640 phone the hero leaves this card less than the
          "Show all" control by itself, and crushing it there is a worse answer
@@ -512,14 +525,36 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, on
        box would never hear about it. */
     ro.observe(list);
     measure();
-    return () => ro.disconnect();
+    /* ASK-42 A — AND AGAIN ONCE THE PAGE HAS SETTLED. The first pass runs the
+       moment the rows arrive, and at that moment two things it depends on may
+       not be true yet: the floating dock — the line this whole budget is
+       measured against — is rendered by Layout and can still be absent, in
+       which case the sum falls back to the card's own box and the card's box is
+       deliberately SMALLER than the room above the bar (the sheet reserves the
+       dock's clearance as padding); and the webfont has not swapped, so a row
+       is not yet the height it will end up. Neither resizes the card, so the
+       ResizeObserver never hears about either, and the count stayed one row
+       short of what fits — a resize nudge or a tab switch corrected it, which
+       is exactly the signature of a measurement taken too early. A frame, a
+       beat, and the font's own promise: whichever lands last is right. */
+    const raf = requestAnimationFrame(measure);
+    const settle = setTimeout(measure, 400);
+    let alive = true;
+    document.fonts?.ready?.then(() => { if (alive) measure(); }).catch(() => {});
+    return () => {
+      alive = false;
+      ro.disconnect();
+      cancelAnimationFrame(raf);
+      clearTimeout(settle);
+    };
   }, [rows.length, tab, showAll]);
 
   // Either the founder asked for the whole list, or the screen cannot hold the
   // summary: both hand the page's height back so it can scroll.
   useEffect(() => { onExpandedChange?.(showAll || cramped); }, [showAll, cramped, onExpandedChange]);
 
-  const shown = showAll ? rows : rows.slice(0, fit);
+  // ASK-42 A — three, always (see the measure above); "Show all" is the rest.
+  const shown = showAll ? rows : rows.slice(0, PHONE_ROWS);
   const hidden = rows.length - shown.length;
 
   return (
@@ -556,7 +591,9 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, on
           IT HUGS ITS CONTENT: no flex-1, no min-height. It ends where the last
           row or the show-all control ends, and the sheet's own padding-bottom
           (index.css, ASK-35 1.2) is what holds it clear of the dock. */}
-      <div className={cn(PHONE_CARD_INK, "mt-3 min-h-0 flex-1 rounded-tile p-3", showAll && "flex-none")} data-testid={`${testid}-card`}>
+      {/* ASK-42 A — p-2.5, not p-3: the last four pixels of the thirty the
+          6.1" screen needed. */}
+      <div className={cn(PHONE_CARD_INK, "mt-1.5 min-h-0 flex-1 rounded-tile p-2.5", showAll && "flex-none")} data-testid={`${testid}-card`}>
         <div ref={listRef}>
         {children || (
           <>
@@ -867,16 +904,26 @@ export default function Desk() {
       data-testid="desk-page"
       data-phone-expanded={phoneExpanded ? "true" : undefined}
       className={cn(
-        "flex flex-col gap-6 lg:min-h-0 lg:flex-1",
-        phoneExpanded
-          ? "max-lg:min-h-[calc(100svh-env(safe-area-inset-top,0px)-1.5rem)]"
-          : "max-lg:h-[calc(100svh-env(safe-area-inset-top,0px)-1.5rem)]"
+        "flex flex-col gap-3 lg:gap-6 lg:min-h-0 lg:flex-1",
+        /* ASK-42 A — h-full, not a copy of the shell's arithmetic. This was
+           `100svh - env(safe-area-inset-top) - 1.5rem`: the viewport, less what
+           the shell puts above <main>, guessed from here. It was right until
+           the Desk's top bar came back (ASK-42 D) and then it was wrong by the
+           bar's height on every phone. Layout gives this page's wrapper main's
+           own height below lg, so `h-full` is the true one and stays true
+           whatever else the shell grows above it. */
+        phoneExpanded ? "max-lg:min-h-full" : "max-lg:h-full"
       )}
     >
       {/* ── LIGHT ZONE ───────────────────────────────────────────────── */}
       {/* KR-8.6 — the split and the gaps are MEASURED off the reference:
           36 / 56 with a wide 8% trough between. */}
-      <div ref={heroRef} className="kr-hero flex flex-col gap-6 lg:grid lg:shrink-0 lg:grid-cols-[minmax(0,29fr)_minmax(0,45fr)] lg:gap-20">
+      {/* ASK-42 A — THE GAPS COME IN ON A PHONE: 16px below lg, the reference's
+          24 from lg up. Three of them stack between the greeting, the tiles and
+          the well, so eight pixels each is 24 handed to the sheet — and on a
+          6.1" screen with a 47px notch inset and a 34px home indicator, 24px is
+          what a row of the list costs. Desktop is untouched. */}
+      <div ref={heroRef} className="kr-hero flex flex-col gap-3 lg:grid lg:shrink-0 lg:grid-cols-[minmax(0,29fr)_minmax(0,45fr)] lg:gap-20">
         {/* LEFT column — greeting, the score row, the well on the floor.
             KR-14.2 · MOBILE — display:contents so its children flow into
             the outer column and the KPI strip can slot between them. */}
@@ -884,8 +931,16 @@ export default function Desk() {
           {/* Greeting on the LEFT, compact score+gauge on the RIGHT on the
               phone; on lg the greeting stands alone, two lines, the name
               carrying the weight (the founder's reference). */}
-          <div className="kr-dex-fade order-1 flex items-start justify-between gap-4 lg:order-none lg:block" data-dex-faded={dexExpanded ? "true" : "false"}>
-            <h1 className="font-display text-2xl leading-tight lg:text-[34px] lg:font-light lg:leading-[1.15]" data-testid="desk-brief-greeting">
+          {/* ASK-42 A — ONE HEIGHT FOR BOTH HALVES. The greeting is a sentence
+              of unknown length and the score is two fixed lines, so the row was
+              whatever the longer one wanted: "Good morning, Rajesh." broke to
+              three lines beside a two-line score and the sheet below paid for
+              the extra one. `line-clamp-2` caps the greeting at the score's own
+              height and `items-center` centres the shorter half against the
+              taller, so neither can now push the other down. lg is unchanged —
+              there the greeting has its own column and all the room it wants. */}
+          <div className="kr-dex-fade order-1 flex items-center justify-between gap-4 lg:order-none lg:block lg:items-start" data-dex-faded={dexExpanded ? "true" : "false"}>
+            <h1 className="line-clamp-2 font-display text-2xl leading-tight lg:line-clamp-none lg:text-[34px] lg:font-light lg:leading-[1.15]" data-testid="desk-brief-greeting">
               {gi === -1
                 ? <span>{greeting || " "}</span>
                 : <>
@@ -894,41 +949,20 @@ export default function Desk() {
                   </>}
             </h1>
 
-            {/* Compact score cluster — mobile only. */}
-            <div className="flex shrink-0 flex-col items-end gap-2 lg:hidden">
-              <div className="flex items-center gap-3" aria-hidden={!scoreReady}>
-                <div className="flex items-baseline">
-                  <span className="font-display text-6xl leading-none">{scoreReady ? shownScore : "—"}</span>
-                  {scoreReady && <span className="ml-1 text-sm text-muted-foreground">/100</span>}
-                </div>
-                <ArcGauge value={scoreReady ? shownScore : null} size={110} className="w-24 shrink-0 text-foreground" />
+            {/* Compact score cluster — mobile only.
+                ASK-42 A — AND THE COMPANY/YOU SWITCH IS OFF THE PHONE AGAIN.
+                ASK-40 put it here on the founder's mark; their call now is that
+                the band it filled is worth more to the list below — 52px of
+                switch plus its gap is a row of decisions on a 6.1" screen. The
+                desktop keeps it (the row below), and `scope` still drives the
+                numeral, so a phone simply shows the company score the Desk has
+                always opened on. */}
+            <div className="flex shrink-0 items-center gap-3 lg:hidden" aria-hidden={!scoreReady}>
+              <div className="flex items-baseline">
+                <span className="font-display text-6xl leading-none">{scoreReady ? shownScore : "—"}</span>
+                {scoreReady && <span className="ml-1 text-sm text-muted-foreground">/100</span>}
               </div>
-              {/* ASK-40 1 — THE COMPANY/YOU SWITCH COMES TO THE PHONE.
-                  It is the desktop control, not a copy of it: the same
-                  ScopeSlider, the same SCOPE_OPTIONS, the same `scope` state
-                  the numeral above it already reads (shownScore), so tapping
-                  it here does exactly what tapping it at 1440 does and there
-                  is no second source of truth to drift. Owner only, like the
-                  desktop one — everybody else has one view and a switch with
-                  one meaning is a lie.
-                  IT COSTS NO ROW. The founder marked the empty band under the
-                  score, which is the space the greeting's second and third
-                  lines already claim on the left; putting the switch there
-                  fills it instead of pushing the page down.
-                  44px segments — var(--tabs-trigger-h) is the app's own tab
-                  height below lg, which is also the touch floor; the desktop
-                  instance keeps its 36px because a mouse is not a thumb. */}
-              {isOwnerView && (
-                <ScopeSlider
-                  options={SCOPE_OPTIONS}
-                  value={scope}
-                  onChange={setScope}
-                  segWidth={80}
-                  segHeight="var(--tabs-trigger-h)"
-                  label="Score scope"
-                  testid="desk-scope-m"
-                />
-              )}
+              <ArcGauge value={scoreReady ? shownScore : null} size={110} className="w-24 shrink-0 text-foreground" />
             </div>
           </div>
 
@@ -994,7 +1028,21 @@ export default function Desk() {
                to its full box at rest, so the two agree before and after. On
                desktop `lg:flex-1` already gives the well a definite height and
                nothing changes. */
-            className="order-4 min-h-[150px] max-lg:flex max-lg:flex-col lg:order-none lg:min-h-0 lg:flex-1"
+            /* ASK-42 A — 138px below lg, down from 150. What the well has to
+               hold at rest is its label, one line of invitation and the 48px
+               composer row inside 16px of padding; 138 fits that with the
+               composer still on its own line, and the 12 it gives back go to
+               the list. lg keeps flex-1 and is untouched. */
+            /* ASK-42 A — 128px below lg, and the number is not free choice: it
+               has to be AT LEAST the well's own resting content height (125 with
+               the phone's 12px pane padding). The pane lifts out of the flow
+               when the workspace opens and anchors to the well's bottom; if the
+               min-height is under the content, the well collapses to it the
+               instant the pane leaves and the composer the founder just typed
+               into rises by the difference — the exact 7px ASK-35 2.2 spent a
+               ticket removing. Anything at or above the content height pins the
+               well and the composer cannot move. */
+            className="order-4 min-h-[128px] max-lg:flex max-lg:flex-col lg:order-none lg:min-h-0 lg:flex-1"
             testid="desk-insight"
             growToRef={kpiGridRef}
             /* ASK-35 2.2 — below lg the well grows to the top of the HERO,
@@ -1036,8 +1084,10 @@ export default function Desk() {
               urgent: m.ledger ? m.ledger.netProfit < 0 : false,
               to: "/finance", testid: "kpi-profit-m" },
           ].map((k) => (
+            /* ASK-42 A — p-2.5 below lg (p-3 from lg up): 4px off each tile is
+               8px off the strip, and the strip is two rows deep. */
             <Link key={k.testid} to={k.to} data-testid={k.testid}
-              className="flex min-w-0 items-center justify-between gap-2 rounded-[1.1rem] bg-white/75 p-3 ring-1 ring-inset ring-white/80 shadow-[0_8px_22px_-14px_hsl(150_15%_20%/0.3)] backdrop-blur-xl">
+              className="flex min-w-0 items-center justify-between gap-2 rounded-[1.1rem] bg-white/75 p-2 lg:p-3 ring-1 ring-inset ring-white/80 shadow-[0_8px_22px_-14px_hsl(150_15%_20%/0.3)] backdrop-blur-xl">
               <p className="min-w-0 truncate text-xs font-medium text-foreground/80">{k.label}</p>
               <span className="flex shrink-0 items-center gap-1.5">
                 <k.icon size={13} weight="regular" aria-hidden="true" className="text-muted-foreground" />
@@ -1207,7 +1257,7 @@ export default function Desk() {
                   line={leaveNames(pendingLeaves)}
                   tail={pendingLeaves[0] ? leaveRange(pendingLeaves[0]) : ""}
                   empty="No leave requests waiting"
-                  to="/my-work?view=approvals&sub=leave"
+                  to="/approvals?sub=leave"
                   testid="desk-leave-m"
                 />
               )}
@@ -1266,7 +1316,7 @@ export default function Desk() {
               rows={approvalRows}
               cta="Approvals"
               /* The pill goes to My Work's Approvals view on MY approvals. */
-              onCta={() => navigate("/my-work?view=approvals&scope=mine")}
+              onCta={() => navigate("/approvals?scope=mine")}
               scroll
               testid="desk-approvals"
               className="lg:border-r lg:border-white/[.14] lg:pr-5"
@@ -1293,7 +1343,7 @@ export default function Desk() {
                 line={leaveNames(pendingLeaves)}
                 tail={pendingLeaves[0] ? leaveRange(pendingLeaves[0]) : ""}
                 empty="No leave requests waiting"
-                to="/my-work?view=approvals&sub=leave"
+                to="/approvals?sub=leave"
                 testid="desk-leave"
               />
             )}

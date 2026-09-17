@@ -119,7 +119,15 @@ function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
   const cls = cn(
     "dock-item my-1 flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-[1.125rem] px-0.5",
     "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-    active ? `text-white ${INK_PLATE}` : "text-white/55 hover:text-white/80"
+    /* ASK-42 F — the bar's old material, on the slot: 55% ink over the bar's
+       own gradient, with the same warm-white lip the bar wears so the shape
+       still reads as lifted rather than as a hole punched in the plate. The
+       blur goes with it in name only — there is an opaque plate behind it now,
+       so what it actually does is darken the gradient by 55%, which is the
+       contrast the live slot needs against a bar that is no longer flat. */
+    active
+      ? "text-white bg-kr-ink/55 backdrop-blur-2xl backdrop-saturate-150 shadow-[inset_0_1px_0_hsl(40_40%_96%/.22)]"
+      : "text-white/55 hover:text-white/80"
   );
   const common = {
     style: { "--dock-item-min": "2.75rem" },
@@ -138,12 +146,11 @@ function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
  * @param {object}   user
  * @param {Function} onMore     opens AllAppsPanel
  * @param {boolean}  moreOpen
- * @param {number}   [moreBadge] count of items needing him behind More (caps at 9)
  * @param {"ask"|"decide"|null} [dexChannel] which Dex the bar is serving, for its
  *        placeholder — the FAB opens Ask, the Desk's Dex well hands over a Decide
  */
 export function FloatingDock({
-  user, onMore, moreOpen = false, moreBadge = 0,
+  user, onMore, moreOpen = false,
   dexActive = false, dexLevels = [], dexLevelsRef, dexMode = "voice", dexWaveState = "idle",
   dexDraft = "", onDexDraft, onDexSubmit, dexTranscribing = false, dexChannel = null,
 }) {
@@ -206,8 +213,17 @@ export function FloatingDock({
              at this height it reads as the squircle they asked for without
              becoming a capsule. The Dex FAB takes the same value, so the two
              objects on this baseline are cut to one shape. */
+          /* ASK-42 F — THE BAR AND ITS LIVE SLOT SWAP MATERIALS. The bar was
+             the translucent one (55% ink under a heavy blur) and the live slot
+             the solid plate; the founder's call is the other way round. So the
+             BAR is the plate now — INK_PLATE's 24%->6% gradient with its white
+             lip — and the SLOT below takes the translucent ink the bar used to
+             wear. Nothing new was drawn for either: the two materials are the
+             ones that were already here, exchanged. The rim, the halo and the
+             squircle are untouched, and the gradient sits under them exactly
+             where the blur used to. */
           "flex h-[4.5rem] w-full items-stretch justify-around gap-0.5 rounded-[var(--radius-card)] px-2",
-          "bg-kr-ink/55 backdrop-blur-2xl backdrop-saturate-150",
+          INK_PLATE,
           "border border-[hsl(40_30%_92%/.28)]",
           "shadow-[0_8px_32px_rgba(0,0,0,0.35),inset_0_1px_0_hsl(40_40%_96%/.22),0_0_20px_-4px_hsl(40_35%_92%/.30)]",
           "max-[359px]:h-16"
@@ -286,7 +302,14 @@ export function FloatingDock({
             the misalignment the founder marked. Same flex-1 as a slot now, so
             the button fills it and the two lines land on the same baselines as
             Desk, Work, Money and CRM. */}
-        <div className={cn("relative flex min-w-0 flex-1", dexActive && "hidden")}>
+        {/* ASK-42 D — THE BADGE IS GONE FROM THIS SLOT. It carried the
+            notification count because Notifications was the one badged tile
+            inside More; that tile has gone to the Desk's own top bar, so a
+            number here would point at a menu with nothing counting to it —
+            which is precisely the rule KM-1 wrote when it moved the badge here
+            in the first place. The wrapper stays: it is what makes the slot a
+            flex item like the four beside it (ASK-41 3). */}
+        <div className={cn("flex min-w-0 flex-1", dexActive && "hidden")}>
           <DockItem
             to="#more"
             label={t("bottomnav.more", "More")}
@@ -295,15 +318,6 @@ export function FloatingDock({
             active={moreOpen}
             onClick={onMore}
           />
-          {moreBadge > 0 && (
-            <span
-              data-testid="dock-more-badge"
-              aria-label={`${moreBadge} items need you`}
-              className="pointer-events-none absolute right-0 top-0 grid h-5 min-w-5 place-items-center rounded-pill bg-kr-accent px-1 text-[length:var(--text-label)] font-bold leading-none text-white"
-            >
-              {Math.min(9, moreBadge)}
-            </span>
-          )}
         </div>
       </div>
     </nav>

@@ -18,7 +18,7 @@ const ROUTES = [
   ['desk-now', '/inbox'],
   ['desk-morning', '/inbox?scope=morning'],
   ['my-work', '/my-work'],
-  ['my-work-board', '/my-work?view=workflows'],
+  ['workflows-board', '/workflows'],
   ['money', '/finance'],
   ['money-income', '/finance?tab=revenue'],
   ['crm', '/crm'],

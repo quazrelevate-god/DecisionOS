@@ -30,7 +30,7 @@ page.on('pageerror', (e) => check('no page errors', false, e.message.split('\n')
 check('signed in', await signIn(page, BASE));
 
 // ============================================================ the stage board
-await page.goto(`${BASE}/my-work?view=workflows&fixture=busy`, { waitUntil: 'domcontentloaded' });
+await page.goto(`${BASE}/workflows?fixture=busy`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('[data-testid="workflow-board"]', { timeout: 15000 });
 await page.waitForTimeout(1200);
 

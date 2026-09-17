@@ -12,6 +12,8 @@ import Signup from "./pages/Signup";
 import DecisionReview from "./pages/DecisionReview";
 import { useUiScale } from "./hooks/useUiScale";
 import Workflows from "./pages/Workflows";
+// ASK-42 B — /approvals is a room of its own now, not a redirect into My Work.
+import Approvals from "./pages/Approvals";
 // ASK-6 (2026-09-12): Leave default export no longer routed. The named
 // exports (LeaveCard, ApproverConfig, dialogs) are consumed directly by
 // Desk / Team / Settings; nothing renders /leave any more.
@@ -197,7 +199,10 @@ function App() {
                 and leave) live as a view inside My Work, beside My Tasks /
                 All Tasks / Workflows. The standalone path stays as a deep
                 link that lands there. */}
-            <Route path="/approvals" element={<Navigate to="/my-work?view=approvals" replace />} />
+            {/* ASK-42 B — the approvals hub is its own page, reached from More.
+                The old address IS this page now, so every link ever made to
+                /approvals lands where it always meant to. */}
+            <Route path="/approvals" element={<Protected><Approvals /></Protected>} />
             <Route path="/settings" element={<Protected><Settings /></Protected>} />
             <Route path="/review" element={<Navigate to="/ingest" replace />} />
             <Route path="/notifications" element={<Protected><Notifications /></Protected>} />

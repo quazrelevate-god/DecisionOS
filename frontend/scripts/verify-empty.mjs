@@ -26,7 +26,7 @@ const ROUTES = [
   { path: '/inbox?scope=morning', composed: true, explains: true },
   { path: '/my-work', composed: true, explains: true },
   { path: '/my-work?view=leave' },
-  { path: '/my-work?view=workflows' },
+  { path: '/workflows' },
   { path: '/crm', composed: true, explains: true },
   { path: '/team' },
   { path: '/finance', composed: true, explains: true },

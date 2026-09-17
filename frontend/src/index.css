@@ -3082,6 +3082,10 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         .kr-desk-board {
             margin-left:  calc(-1 * max(1rem, env(safe-area-inset-left, 0px)));
             margin-right: calc(-1 * max(1rem, env(safe-area-inset-right, 0px)));
+            /* ASK-42 A — 8px above the tab strip instead of 16. The sheet's
+               head is a strip of tabs, not content, and on a 6.1" screen every
+               four pixels above the list are pixels the list does not get. */
+            padding-top: 0.375rem;
             /* ASK-39 1 — NO NEGATIVE BOTTOM MARGIN AT ALL NOW. It used to
                cancel the content wrapper's p-4 AND main's `.pb-dock`, because
                the page scrolled and both sat below the sheet. /inbox drops both

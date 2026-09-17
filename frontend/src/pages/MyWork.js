@@ -17,7 +17,6 @@ import { NewTaskDialog } from "./Tasks";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "../components/ui/sheet";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel } from "../components/ui/dropdown-menu";
-import Workflows from "./Workflows";
 // ASK-25 — the Approvals view: every approval that is not a decision. Task
 // sign-offs render in the SAME grid and cards as the task list (a card
 // opened there carries Approve / Request changes / Ask clarification
@@ -107,7 +106,11 @@ const SEG_OFF = "kr-pop text-foreground/70";
 // ASK-25 — the Approvals view's Tasks sub-tab lenses. ALL is everything this
 // person may sign off (an owner: the whole tenant); MINE is only what was
 // routed to them by name (approver_id).
-const APPR_SCOPES = [{ key: "all", label: "All approvals" }, { key: "mine", label: "My approvals" }];
+/* ASK-42 B — "All" and "Mine", not "All approvals" and "My approvals". The
+   lens rides the heading's own row now and the heading already says the noun;
+   repeating it twice more in a control beside it is 128px of segment for one
+   word of meaning. */
+const APPR_SCOPES = [{ key: "all", label: "All" }, { key: "mine", label: "Mine" }];
 const SECTION_BTN = "flex h-10 items-center justify-center gap-1.5 rounded-pill px-4 text-xs font-medium leading-tight lg:text-sm";
 
 /* ASK-11 (2026-09-13): terminal states removed from the desktop status
@@ -2250,7 +2253,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
     {t.workflow_summary && t.workflow_summary.id && (
       <div>
         <a
-          href={`/my-work?view=workflows&type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
+          href={`/workflows?type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
           data-testid={`wf-chip-full-${t.id}`}
           className="inline-flex items-center gap-1.5 nm-tile px-2.5 py-1 text-xs font-mono bg-nm-sunken hover:bg-accent transition-colors"
           title={`Open workflow: ${t.workflow_summary.title}`}
@@ -2735,7 +2738,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                  tint lives on the inner span instead: the link keeps the floor,
                  the pill keeps the shape of its neighbours. */
               <a
-                href={`/my-work?view=workflows&type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
+                href={`/workflows?type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
                 onClick={(e) => e.stopPropagation()}
                 data-testid={`wf-chip-${t.id}`}
                 className="group/wf inline-flex shrink-0 items-center rounded-pill focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/40"
@@ -3039,7 +3042,18 @@ function matchesFilters(t, { tab, person, status }) {
   return true;
 }
 
-export default function MyWork() {
+/* ASK-42 B — `only="approvals"` IS THE APPROVALS PAGE.
+   The founder's call is that approvals stop being a lens on My Work and become
+   a room of their own, reached from More. Everything that room needs — the
+   approvals feed, the leave feed, the task grid, the drawer, the people and
+   role lists the drawer's Reassign wants, the focus-task deep link — is already
+   wired here and is a page's worth of query plumbing to rebuild elsewhere. So
+   the page is this component in a mode: it pins the view to approvals, drops My
+   Work's own chrome (the eyebrow, the lens group, the filters, the [+]), and
+   the approvals hub draws its own heading. /approvals renders it (App.js), and
+   pages/Approvals.js is the two lines that say so. */
+export default function MyWork({ only = null }) {
+  const approvalsPage = only === "approvals";
   // MPWA-08: rebuilt below lg (§8). Above lg the original tree renders
   // unchanged, keeping §9.2's desktop diff empty by construction.
   const qc = useQueryClient();
@@ -3066,11 +3080,13 @@ export default function MyWork() {
   // retired; Leave lives on /team now). Deep links to ?view=leave land the
   // reader on their task list rather than a 404; the App.js redirect for the
   // standalone /leave route sends them onward to /team.
-  const initialView = rawView === "board" ? "workflows"
-    : rawView === "workflows" ? "workflows"
-    // ASK-25 — ?view=approvals is where the Desk's Approvals pill and leave chip land.
-    : rawView === "approvals" ? "approvals"
-    : "mywork";
+  /* ASK-42 B/C — TWO VIEWS LEFT THIS PAGE. Workflows is its own page (it has
+     been since KM-31; what goes now is the desktop tree that still drew it
+     inside here) and approvals is its own page as of this ticket. Old links —
+     ?view=workflows, ?view=board, ?view=approvals — are answered by App.js,
+     which redirects them to /workflows and /approvals rather than leaving a
+     branch here that nothing can reach. */
+  const initialView = approvalsPage || rawView === "approvals" ? "approvals" : "mywork";
   // ASK-28 TK-02 — ?view=approvals&task=<id> (the approval-requested
   // notification) opens the task INSIDE Approvals, where it is guaranteed to
   // be; any other ?task= link still lands on the task list.
@@ -3083,7 +3099,6 @@ export default function MyWork() {
   // only the pipelines view remains. Retained a no-op reference to
   // rawView so eslint's no-unused-vars doesn't fire on line above.
   void rawView;
-  const canSeeWorkflows = isOwner || userPerms(user).includes("workflows");
   // ASK-25 — Approvals shows for anyone who can sign something off: tasks
   // (the "approvals" access) or leave ("leave_approve"). Owners always.
   const canApprove = isOwner || userPerms(user).includes("approvals") || userPerms(user).includes("leave_approve");
@@ -3251,7 +3266,7 @@ export default function MyWork() {
   const viewSyncMounted = useRef(false);
   useEffect(() => {
     if (!viewSyncMounted.current) { viewSyncMounted.current = true; return; }
-    setView(rawView === "workflows" || rawView === "board" ? "workflows" : rawView === "approvals" ? "approvals" : "mywork");
+    setView(approvalsPage || rawView === "approvals" ? "approvals" : "mywork");
     const s = scopeFromUrl(rawView);
     if (s) setScope(s);
     else if (!rawView && URL_SCOPES.includes(scope)) setScope(savedScope);
@@ -3432,7 +3447,6 @@ export default function MyWork() {
   // The two circles on the right of Row 2, and the [+] in the lens group.
   const MCIRCLE = "grid h-9 w-9 shrink-0 place-items-center rounded-full text-foreground";
   const mobileView = (() => {
-    if (view === "workflows") return "workflows";
     // ASK-25 — in the Approvals view neither lens pill is pressed; the list
     // controls (AI priority, filters) hide because there is no task list.
     if (view === "approvals") return "approvals";
@@ -3456,19 +3470,12 @@ export default function MyWork() {
     { key: "asked", label: t("mywork.asked_by_me", "Asked by me"), pick: () => goView("asked") },
     ...(hasReports ? [{ key: "team", label: t("mywork.my_team", "My team"), pick: () => goView("team") }] : []),
     ...(canSeeAll ? [{ key: "all", label: t("mywork.all_tasks"), pick: () => goView("all") }] : []),
-    ...(showApprovalsView
-      ? [{ key: "approvals", label: t("mywork.view_approvals"), count: waitingOnMe, pick: () => goView(null, "approvals") }]
-      : []),
-    /* ASK-39 — WORKFLOWS IS IN THIS LIST NOW, and the circle ASK-38 gave it is
-       gone. The circle was the right shape for "another surface" and the wrong
-       place for it: this dropdown is already where every top-level view of this
-       page is chosen, the sheet NAMES each one, and a wordless cycle icon on
-       the right had to be learned. It is last because it is the one entry that
-       is not a view of TASKS — the list reads as the task lenses, then the
-       board. */
-    ...(canSeeWorkflows
-      ? [{ key: "workflows", label: t("mywork.view_workflows"), pick: () => goView(null, "workflows") }]
-      : []),
+    /* ASK-42 B/C — APPROVALS AND WORKFLOWS ARE NOT IN THIS LIST. Both are
+       pages now, reached from More; this dropdown holds the lenses on THIS
+       page's task list and nothing else. ASK-39 put Workflows here on the
+       argument that the sheet names every view — true, and the founder's call
+       now is that naming a different product in a list of task filters is what
+       made it confusing in the first place. */
   ];
   const mobileViewLabel = mobileViewOptions.find((o) => o.key === mobileView)?.label
     || t("mywork.my_tasks");
@@ -3572,6 +3579,12 @@ export default function MyWork() {
        that never move, so they need no sticky offset and no backdrop blur —
        nothing passes behind them. */
     <div className="lg:h-full lg:min-h-0 lg:flex lg:flex-col lg:overflow-hidden">
+      {/* ASK-42 B — on the approvals page neither of this page's headers runs.
+          The room has one heading and it is drawn by the hub below, with the
+          All/Mine lens on its line; My Work's own title, eyebrow, lens group,
+          filter circle and [+] are controls for a task list that is not on
+          this screen. */}
+      {!approvalsPage && <>
       {/* ─── MOBILE HEADER (below lg) ───────────────────────────────────── */}
       {/* KM-48 — gap-2 and mb-2: one 8px rhythm for every gap in this header,
           where it used to be 10px between rows and then whatever the body's
@@ -3829,13 +3842,13 @@ export default function MyWork() {
               repeated the title ("WORKFLOWS" over "Workflows"). Approvals
               (ASK-25) had the same echo, so it goes there too; the task
               views keep "Your day, simplified". */}
-          {view !== "workflows" && view !== "approvals" && (
+          {view !== "approvals" && (
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               {t("mywork.eyebrow")}
             </p>
           )}
           <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">
-            {view === "workflows" ? t("mywork.view_workflows") : view === "approvals" ? t("mywork.view_approvals") : t("mywork.title")}
+            {view === "approvals" ? t("mywork.view_approvals") : t("mywork.title")}
           </h1>
         </div>
         <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:items-center" data-testid="mywork-controls">
@@ -3921,19 +3934,11 @@ export default function MyWork() {
                links and the view itself are untouched. */
             return (
               <div className="flex flex-wrap items-center gap-2.5" data-testid="mywork-lens-group">
-                {canSeeWorkflows && (
-                  <button
-                    type="button"
-                    onClick={() => go(null, view === "workflows" ? "mywork" : "workflows")}
-                    data-testid="work-view-workflows"
-                    aria-pressed={view === "workflows"}
-                    aria-label={t("mywork.view_workflows")}
-                    title={t("mywork.view_workflows")}
-                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground ${view === "workflows" ? "kr-pressed" : "kr-pop"}`}
-                  >
-                    <FlowArrow size={17} weight={view === "workflows" ? "fill" : "bold"} aria-hidden="true" />
-                  </button>
-                )}
+                {/* ASK-42 C — the Workflows circle is gone from this row too.
+                    ASK-38 made it a circle here rather than a segment because a
+                    board is "another surface"; the founder's call now is that
+                    another surface belongs at another address. /workflows, from
+                    More. */}
                 {view === "mywork" && !asked && !team && canPrioritize && (
                   <button onClick={() => setAiPriority((v) => !v)} data-testid="ai-priority-toggle"
                     aria-pressed={aiPriority}
@@ -3974,6 +3979,7 @@ export default function MyWork() {
           })()}
         </div>
       </header>
+      </>}
 
       {focusDenied && (
         /* ASK-28 TK-04 — say which it is (a task that no longer exists, or one
@@ -3994,7 +4000,14 @@ export default function MyWork() {
         </div>
       )}
 
-      {view === "approvals" && showApprovalsView ? (
+      {/* ASK-42 B — on the page itself the hub always renders. `showApprovalsView`
+          decides whether My Work OFFERS approvals as one of its views; at the
+          room's own address the answer is already yes, and falling through to a
+          task list with no header (this page's own chrome is off here) would be
+          a broken screen for anyone who reached it by URL without the
+          permission. They get the hub and its empty state instead, and the
+          server's own rule still decides what is in it. */}
+      {view === "approvals" && (showApprovalsView || approvalsPage) ? (
         // ASK-25 — the approvals that are not decisions. Two sub-tabs: Tasks
         // (the All/My lens, cards in the task grid) and Leave (the register's
         // cards). Decisions stay on the Desk and /decisions/:id.
@@ -4027,6 +4040,24 @@ export default function MyWork() {
                     chosen tab a white glass pill, and the lens is the same track
                     (ScopeSlider variant="glass"). min-h pins the row so it does
                     not jump when Leave (no lens) is chosen. */}
+                {/* ASK-42 B — THE HEADING ROW: the page's name on the left, the
+                    All/Mine lens on the right, on one line, and the Tasks/Leave
+                    pill on the row below. Only on the page — a deep link that
+                    still lands on /my-work?view=approvals keeps My Work's own
+                    header above, and a second title under it would be one too
+                    many. */}
+                {approvalsPage && (
+                  <header className="mb-4 flex items-center justify-between gap-3" data-testid="approvals-header">
+                    <h1 className="min-w-0 font-display text-3xl leading-none lg:text-4xl">
+                      {t("mywork.view_approvals")}
+                    </h1>
+                    {sub === "tasks" && (
+                      <ScopeSlider variant="glass" options={APPR_SCOPES} value={apprScope} onChange={setApprScope}
+                        segWidth={74} segHeight="var(--control-h-sm)" label="Which approvals" testid="approvals-scope"
+                        className="shrink-0" />
+                    )}
+                  </header>
+                )}
                 <div className="mb-5 flex min-h-[48px] flex-wrap items-center gap-3" data-testid="approvals-controls">
                   <div role="tablist" aria-label="Approvals" className={`inline-flex items-center gap-1 rounded-pill p-1 ${DRAWER_TRACK}`} data-testid="approvals-sub">
                     {subs.map((s) => {
@@ -4045,9 +4076,9 @@ export default function MyWork() {
                       );
                     })}
                   </div>
-                  {sub === "tasks" && (
+                  {sub === "tasks" && !approvalsPage && (
                     <ScopeSlider variant="glass" options={APPR_SCOPES} value={apprScope} onChange={setApprScope}
-                      segWidth={128} label="Which approvals" testid="approvals-scope" className="ml-auto" />
+                      segWidth={96} label="Which approvals" testid="approvals-scope" className="ml-auto" />
                   )}
                 </div>
 
@@ -4101,18 +4132,6 @@ export default function MyWork() {
               </>
             );
           })()}
-        </div>
-      ) : view === "workflows" && canSeeWorkflows ? (
-        // WE-14 (2026-08-16): "Board" sub-tab retired. The pipelines
-        // view now carries inline task lists per card (WE-12), so a
-        // separate role-lane kanban was a redundant lens on the same
-        // data. Any /my-work?view=workflows&wf_tab=board deep link
-        // now silently lands on the pipelines view -- the wf_tab
-        // param is intentionally ignored below.
-        // ASK-25 — the hub no longer scrolls as a whole: it hands its height
-        // down so each STAGE COLUMN scrolls on its own (Workflows.js).
-        <div data-testid="workflows-hub" className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
-          <Workflows embedded />
         </div>
       ) : (
       <div data-testid="mywork-list" className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">

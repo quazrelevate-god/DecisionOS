@@ -24,9 +24,14 @@ _spec.loader.exec_module(mig)
 RUN_ISO = "2026-09-14T00:00:00+00:00"
 
 
-def make_ctx(options=None, uploaded=None, tenant_user_ids=None):
+def make_ctx(options=None, uploaded=None, tenant_user_ids=None, tenant_phone_counts=None):
     stats = mig.CollectionStats("test", "transform")
-    lookups = {"options": options or {}, "uploaded": uploaded or {}, "tenant_user_ids": tenant_user_ids or {}}
+    lookups = {
+        "options": options or {},
+        "uploaded": uploaded or {},
+        "tenant_user_ids": tenant_user_ids or {},
+        "tenant_phone_counts": tenant_phone_counts or {},
+    }
     return mig.Ctx(stats, lookups, RUN_ISO)
 
 
@@ -56,6 +61,11 @@ class TestParityWithKarmaSource:
     def test_max_co_assignees(self):
         m = re.search(r"MAX_CO_ASSIGNEES\s*=\s*(\d+)", self._src("services/tasks.py"))
         assert m and int(m.group(1)) == mig.MAX_CO_ASSIGNEES
+
+    def test_norm_phone(self):
+        assert "return _NON_DIGITS.sub(\"\", p)[-10:]" in self._src("services/auth/phone.py")
+        assert mig.norm_phone("+91 98200 10001") == "9820010001"
+        assert mig.norm_phone(None) == "" and mig.norm_phone("") == ""
 
     def test_storage_key_format(self):
         assert re.search(r'APP_NAME\s*=\s*"decisionos"', self._src("integrations/storage.py"))
@@ -170,9 +180,16 @@ class TestTenantTransform:
 
     def test_active_consent_kept(self):
         active = {"granted_at": "a", "revoked_at": None, "version": mig.AI_CONSENT_VERSION}
-        ctx = make_ctx({"ai_consent": "grandfather"})
+        ctx = make_ctx({"ai_consent": "grandfather"}, tenant_user_ids={"t1": {"u1"}})
         out = run_pure(mig.transform_tenant, {"_id": 1, "id": "t1", "ai_consent": active}, ctx)
         assert out["ai_consent"] == active and not ctx.stats.issues
+
+    def test_tenant_without_users_flagged_but_copied(self):
+        ctx = make_ctx()
+        doc = {"_id": 1, "id": "t1", "name": "TEST_Isolation", "plan": "grandfathered"}
+        out = run_pure(mig.transform_tenant, doc, ctx)
+        assert out is not None and out["name"] == "TEST_Isolation"
+        assert "warn:tenant_without_users" in issue_codes(ctx)
 
 
 # =============================================================================
@@ -208,6 +225,17 @@ class TestUserTransform:
             ctx,
         )
         assert "warn:demo_account_present" in issue_codes(ctx)
+
+    def test_phone_shared_inside_one_workspace_flagged(self):
+        user = {"_id": 1, "id": "u", "tenant_id": "t", "email": "a@b.c", "created_at": "x", "phone": "+91 70105 70560"}
+        ctx = make_ctx(tenant_phone_counts={("t", "7010570560"): 2})
+        out = run_pure(mig.transform_user, user, ctx)
+        assert out["phone"] == user["phone"]
+        assert "warn:phone_shared_in_tenant" in issue_codes(ctx)
+        # the same number in another workspace is normal (one person, several companies)
+        ctx = make_ctx(tenant_phone_counts={("t", "7010570560"): 1, ("t2", "7010570560"): 1})
+        run_pure(mig.transform_user, user, ctx)
+        assert "warn:phone_shared_in_tenant" not in issue_codes(ctx)
 
 
 class TestTaskTransform:

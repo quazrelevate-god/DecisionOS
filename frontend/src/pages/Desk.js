@@ -1279,10 +1279,21 @@ export default function Desk() {
 
           The headings sit flat at the top of their columns, over a
           hairline. */}
+      {/* ASK-48 — AND THEY TRADE PLACES AGAIN. ASK-46 sent Dex to the foot of
+          the page and gave the card its old seat under the tiles; the founder
+          has looked at that on a phone and wants it the other way round —
+          "move the dex well on top of the black card and move the black card
+          below the dex well". So the well is the middle of the screen, where a
+          thumb rests and where a mic the size of this one belongs, and the
+          card is the last thing above the dock. Only the ORDER changes: the
+          well still takes whatever height is left over (flex-1) and the card
+          is still the fixed three rows it has been since ASK-46. */}
+      {isMobile && dexWell}
+
       {/* ASK-47 — NOTHING ELSE MOVES. The card goes `position: fixed` when it
           pops, which takes it out of the page's column; this holds its place at
-          exactly the height it had, so the tiles above and Dex below stay
-          where the founder left them. Without it the page would reflow the
+          exactly the height it had, so the tiles above and Dex — now above it —
+          stay where the founder left them. Without it the page would reflow the
           moment the card lifted, which is the one thing this rearrangement is
           not allowed to do. */}
       {pop && <div aria-hidden="true" style={{ height: pop.rest.height }} data-testid="desk-board-spacer" />}
@@ -1497,13 +1508,6 @@ export default function Desk() {
         )}
       </section>
 
-      {/* ASK-46 — AND DEX IS THE LAST THING ON A PHONE. The founder's
-          rearrangement: the black card takes the well's old place under the
-          tiles, and the well comes down here — not to the floor of the screen,
-          which belongs to the dock, but to just above it. `mt-auto` inside the
-          page's column is what puts it there, and the page's own bottom
-          clearance (Layout, /inbox below lg) is what keeps the dock off it. */}
-      {isMobile && dexWell}
 
       {openDecisionId && (
         <DecisionDialog decisionId={openDecisionId} open onClose={closeDecision} />

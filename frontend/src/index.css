@@ -3193,6 +3193,41 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
             inset -7px -7px 14px hsl(0 0% 100% / .62);
     }
 
+    /* ASK-48 · THE PHONE'S DEX WELL IS SUNK INTO THE PAGE, not floated on it.
+       Founder: "the well looks very transparent, maybe we can add inside the
+       well a little bit dimness", and "can you make it more in pressed state
+       kind of thing".
+
+       Both of those are the same problem, and it is measurable. Photographed
+       with every foreground layer hidden, the app's own sky runs 213 at the
+       top-left to 233 at the middle-left and 163-171 down the amber right: the
+       light in the picture comes from the LEFT, which is the direction this
+       recipe's inset pair already assumes (dark from the top-left, light from
+       the bottom-right — the app's grammar, .kr-pressed). The angle was never
+       the problem. The CONTRAST was: at a 34%/20% white wash the pane is so
+       transparent that the sky behind it outweighs a 7px shadow, and the well's
+       edges measured 222 on the left and 198 on the right — tracking the
+       BLOOM, not the shadow. A shadow you cannot see is not a shadow.
+
+       So: a thin neutral wash under the white one to give the light something
+       to be lighter than, and a deeper, wider inset pair — 12px/24px at .30
+       against 7px/14px at .20. The white side goes to .78 because it now has
+       to read over a dimmed ground. Measured after the change, over the hottest
+       part of the bloom: "Dex" 6.65:1 and "Tell Dex what you decided." 5.95:1,
+       both over the 4.5 floor the original wash was cut to hold. */
+    .kr-well__pane.kr-well--sunk {
+        background:
+            linear-gradient(160deg,
+                hsl(230 14% 26% / .10),
+                hsl(230 14% 26% / .15)),
+            linear-gradient(160deg,
+                hsl(0 0% 100% / .34),
+                hsl(0 0% 100% / .20));
+        box-shadow:
+            inset 12px 12px 24px hsl(230 22% 34% / .30),
+            inset -12px -12px 24px hsl(0 0% 100% / .78);
+    }
+
     /* ASK-33 Phase 2 — the Dex well's expansion on the Desk (lg only).
        On send the well's pane lifts out of the flow, anchored to the well's
        floor, and its height runs from the resting box up to the top of the KPI

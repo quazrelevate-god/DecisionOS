@@ -85,6 +85,22 @@ export const RIPPLE_DEFAULTS = {
   density: 1,     // how many waves are in flight at once
 };
 
+/* ASK-48 — THE FOUNDER'S OWN NUMBERS, dialled in the design lab and handed
+   over as JSON. This is what the Desk's well runs; RIPPLE_DEFAULTS stays the
+   lab's starting point so the knobs still open on neutral ground. A heavier
+   push (gain), a much heavier ridge (thickness), water all the way up and no
+   elastic at all — a swell rather than a ping — travelling at a little under
+   half speed. */
+export const DESK_RIPPLE = {
+  gain: 1.8,
+  thickness: 3,
+  softness: 1.7,
+  water: 1,
+  elastic: 0,
+  speed: 0.45,
+  density: 0.8,
+};
+
 const reduced = () =>
   typeof window !== "undefined" &&
   !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -118,6 +134,9 @@ const smooth = (ring, th) => {
 export function VoiceRipple({
   size = 320,
   config = RIPPLE_DEFAULTS,
+  /* ASK-48 — the mic, as a share of the stage. It was 0.27 and the founder
+     asked for thirty per cent more of it. */
+  hub = 0.351,
   simulate = false,
   // The external drive (see the header). `readLevel` present ⇒ no own mic.
   readLevel = null,
@@ -431,15 +450,29 @@ export function VoiceRipple({
         />
         {/* The hub's own swell — a ridge of the surface right at the mic's
             edge, so the button looks seated in something that is moving. */}
+        {/* ASK-48 — NO EDGE ON IT. This was a hairline ring and a small pair of
+            shadows, which drew a button sitting ON the surface. The founder
+            wants the mic to be the same material as the waves: "not a distinct
+            button… just like how we have the fluid like ripple effect, that
+            soft edged popping up kind of neumorphic button style". So the ring
+            is gone and the swell is a radial that fades out before it reaches
+            its own boundary — the surface rising, with nothing to say where it
+            stops. The shadow pair keeps the app's light (top-left), wider and
+            softer than the ring's was so the rise reads as a rise. */}
         <span
           aria-hidden="true"
           className="pointer-events-none absolute rounded-full"
           style={{
-            width: size * 0.27,
-            height: size * 0.27,
+            width: size * hub * 1.28,
+            height: size * hub * 1.28,
             transform: "scale(calc(1 + 0.085 * var(--vr-level, 0)))",
-            boxShadow:
-              "0 0 0 1px hsl(0 0% 100% / .9), 3px 3px 10px hsl(230 22% 34% / .16), -3px -3px 10px hsl(0 0% 100% / .9)",
+            /* No box-shadow anywhere near this. A shadow is drawn at the
+               element's BOUNDARY, so it redraws the very edge the founder
+               asked to lose — the first cut of this had a soft gradient with a
+               crisp ring around it, which is worse than the ring it replaced.
+               The mound is radials only, and a radial has no edge. */
+            background:
+              "radial-gradient(circle at 50% 50%, hsl(0 0% 100% / .40) 0%, hsl(0 0% 100% / .18) 52%, hsl(0 0% 100% / 0) 76%)",
           }}
         />
         <button
@@ -450,16 +483,41 @@ export function VoiceRipple({
           aria-pressed={external ? listening : live}
           aria-label={label || ((external ? listening : live) ? "Stop listening" : "Start listening")}
           className={[
-            "relative grid place-items-center rounded-full transition-[box-shadow,transform] duration-150",
+            "relative grid place-items-center rounded-full transition-[box-shadow,transform,background] duration-150",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60",
-            (external ? listening : live) ? "kr-pressed" : "kr-pop",
             disabled && "opacity-50",
           ].join(" ")}
-          style={{ width: size * 0.27, height: size * 0.27 }}
+          /* The button itself is the soft rise, drawn here rather than by
+             .kr-pop: that recipe ends in a hard circle, which is the thing the
+             founder asked to lose. Pressed, the light swaps sides and the
+             gradient sinks — the same grammar as .kr-pressed, without a rim. */
+          /* THREE RADIALS AND NOTHING ELSE — no border, no ring, no shadow, so
+             there is no boundary anywhere: a highlight up at the top-left, a
+             shade down at the bottom-right, and a body that fades out before
+             it reaches the element's own circle. That is a mound of the same
+             surface rather than a button placed on it, which is what the
+             founder asked for. Pressed, the highlight and the shade swap
+             corners and the body dips — .kr-pressed's grammar, drawn in light
+             instead of in edges. */
+          style={{
+            width: size * hub,
+            height: size * hub,
+            background: (external ? listening : live)
+              ? [
+                  "radial-gradient(circle at 68% 72%, hsl(0 0% 100% / .92), hsl(0 0% 100% / 0) 58%)",
+                  "radial-gradient(circle at 34% 28%, hsl(230 22% 34% / .26), hsl(230 22% 34% / 0) 56%)",
+                  "radial-gradient(circle at 50% 50%, hsl(0 0% 100% / .30) 0%, hsl(0 0% 100% / .12) 54%, hsl(0 0% 100% / 0) 78%)",
+                ].join(", ")
+              : [
+                  "radial-gradient(circle at 36% 30%, hsl(0 0% 100% / .98), hsl(0 0% 100% / 0) 60%)",
+                  "radial-gradient(circle at 70% 74%, hsl(230 22% 34% / .20), hsl(230 22% 34% / 0) 56%)",
+                  "radial-gradient(circle at 50% 50%, hsl(0 0% 100% / .72) 0%, hsl(0 0% 100% / .42) 50%, hsl(0 0% 100% / 0) 78%)",
+                ].join(", "),
+          }}
         >
           {/* The glyph is the app's own mic, drawn rather than imported so this
               file stays standalone (Phosphor's Microphone, same geometry). */}
-          <svg viewBox="0 0 24 24" width={size * 0.1} height={size * 0.1} aria-hidden="true"
+          <svg viewBox="0 0 24 24" width={size * hub * 0.48} height={size * hub * 0.48} aria-hidden="true"
             fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
             className="text-foreground">
             <rect x="9" y="2.5" width="6" height="11" rx="3" />

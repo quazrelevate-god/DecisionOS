@@ -60,7 +60,11 @@ export function InsightWell({
         style={paneStyle}
         onTransitionEnd={onPaneTransitionEnd}
       >
-        <span className="text-xs font-semibold tracking-wide text-foreground/75">{label}</span>
+        {/* ASK-48 — a well may carry its title somewhere else. The Desk's phone
+            well puts "Dex" and its prompt in the floor, centred between the two
+            circles, so the top of the pane is nothing but the ripple; passing
+            no label has to leave no line behind. */}
+        {label && <span className="text-xs font-semibold tracking-wide text-foreground/75">{label}</span>}
         {prompt}
         {body}
         {floor && (

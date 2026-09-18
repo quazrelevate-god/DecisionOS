@@ -40,7 +40,7 @@ import { useDexCapture } from "../../hooks/useDexCapture";
 import { useDexConversation } from "../../hooks/useDexConversation";
 import { InsightWell } from "../../components/karma";
 // ASK-47 — the ripple the founder signed off in the lab, now the phone's mic.
-import { VoiceRipple } from "../../components/karma/VoiceRipple";
+import { VoiceRipple, DESK_RIPPLE } from "../../components/karma/VoiceRipple";
 import { DexWave } from "../../components/mobile/DexWave";
 // ASK-34 item 5 — the same picture the founder met at signup (BuildReveal).
 import { DexForgeFit } from "../onboarding/DexForge";
@@ -582,19 +582,26 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
   /* ASK-33 Phase 3 — files attached for the NEXT capture show while the well
      is the workspace too, now that it stays open on an ending; only the prompt
      line gives way there. */
-  const prompt = chat.pendingFiles.length > 0 ? (
+  /* ASK-48 — SPLIT IN TWO, because only half of it moved. The phone's PROMPT
+     LINE is in the floor now, centred between the circles; the attachment chips
+     are not a prompt, they are what is going to be sent, and they stay at the
+     top of the pane where both surfaces have always shown them. Passing the
+     whole of `prompt` as null on a phone took the chips with it — attach a file
+     and nothing appeared. */
+  const attachments = chat.pendingFiles.length > 0 ? (
     <ul aria-label="Attached files" className="-mb-2 -mt-0.5 flex min-w-0 gap-touch-gap overflow-x-auto py-2 [scrollbar-width:none]">
       {chat.pendingFiles.map((f) => (
         <AttachmentChip key={f.id} file={f} onRemove={() => chat.removeFile(f.id)} disabled={chat.busy} />
       ))}
     </ul>
-  ) : workspace ? null : (
+  ) : null;
+  const prompt = attachments || (workspace ? null : (
     <p className="mt-1.5 text-sm leading-snug text-foreground/70">
       {canCapture
         ? (phone ? "Tell Dex what you decided." : "Tell Dex what you decided — speak or type.")
         : "Ask an owner to turn on Decision Desk capture for you."}
     </p>
-  );
+  ));
 
   /* ASK-33 Phase 2 — the workspace while the proposal builds: what was sent,
      then each stage the note has reached, the current one live. */
@@ -740,6 +747,8 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
     <div className="grid min-h-0 flex-1 place-items-center" data-testid="desk-dex-ripple">
       <VoiceRipple
         size={rippleSize}
+        // ASK-48 — the founder's own settings, dialled in the lab.
+        config={DESK_RIPPLE}
         readLevel={readLevel}
         listening={dex.recording}
         onPress={onMic}
@@ -826,6 +835,26 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
       )}
     </div>
   ) : null;
+
+  /* ASK-48 — THE TITLE COMES DOWN INTO THE FLOOR. "Dex" and "Tell Dex what you
+     decided." sat at the top-left of the well, above the ripple, which left the
+     mic off-centre in what is left and the two circles huddled at the bottom
+     left. The founder: keep attach on the left, put the keyboard at the right
+     END of the well, and fit the two lines centred BETWEEN them. So the floor
+     is a three-part row — one circle, the words, one circle — the words take
+     the space between and centre in it, and the top of the well is nothing but
+     the ripple. On desktop the title stays where InsightWell has always put
+     it. */
+  const phoneTitle = (
+    <div className="pointer-events-none min-w-0 flex-1 px-2 text-center">
+      <span className="block text-xs font-semibold tracking-wide text-foreground/75">Dex</span>
+      {!workspace && !outcome && (
+        <span className="mt-0.5 block truncate text-[13px] leading-snug text-foreground/70">
+          {canCapture ? "Tell Dex what you decided." : "Ask an owner to turn on capture."}
+        </span>
+      )}
+    </div>
+  );
 
   const floor = (
     <>
@@ -917,6 +946,11 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
       </div>
       )}
 
+      {/* ASK-48 — and on a phone the words go here, between the two circles,
+          taking the space they leave. The field, when it is open, takes that
+          same space — so the two never fight for it. */}
+      {phone && !fieldOpen && phoneTitle}
+
       {/* ASK-47 — ON A PHONE THIS CIRCLE IS NO LONGER THE MICROPHONE. The mic
           is the ripple in the middle of the well, so what belongs here is the
           other way in: a keyboard, which opens the field. Once there is
@@ -969,8 +1003,10 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
   return (
     <InsightWell
       compact
-      label="Dex"
-      prompt={prompt}
+      /* ASK-48 — on a phone the title and the prompt line are in the floor row
+         instead; the attachment chips still belong at the top of the pane. */
+      label={phone ? null : "Dex"}
+      prompt={phone ? attachments : prompt}
       body={body}
       /* ASK-47 — AND WHILE AN ENDING IS SHOWING, THE PHONE'S WELL IS THE
          ENDING. The well is a fixed box, and an ending already carries the only
@@ -990,7 +1026,9 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
          band above the black sheet and the sheet has a floor of three rows to
          keep on a 6.1" screen; eight pixels of padding are most of a fourth of
          one. Desktop keeps p-4 (InsightWell's compact default). */
-      paneClassName={cn("max-lg:flex-1 max-lg:p-3", grow && growPhase !== "start" && "kr-dex-grow")}
+      /* ASK-48 — `kr-well--sunk` below lg: a dimmer wash and a deeper press.
+         See index.css — the founder's "the well looks very transparent". */
+      paneClassName={cn("max-lg:flex-1 max-lg:p-3", phone && "kr-well--sunk", grow && growPhase !== "start" && "kr-dex-grow")}
       paneStyle={grow
         ? { position: "absolute", left: 0, right: 0, bottom: 0, zIndex: 10, height: growPhase === "open" ? grow.to : grow.from }
         : undefined}

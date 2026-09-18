@@ -90,15 +90,18 @@ export const RIPPLE_DEFAULTS = {
    lab's starting point so the knobs still open on neutral ground. A heavier
    push (gain), a much heavier ridge (thickness), water all the way up and no
    elastic at all — a swell rather than a ping — travelling at a little under
-   half speed. */
+   half speed. Second pass, 2026-09-18: harder push, the ridge blurred much
+   further into the page (softness 1.7 -> 2.5) and fewer waves in flight
+   (density .8 -> .55) — softer and less busy, the same swell with more room
+   around it. */
 export const DESK_RIPPLE = {
-  gain: 1.8,
+  gain: 2,
   thickness: 3,
-  softness: 1.7,
+  softness: 2.5,
   water: 1,
   elastic: 0,
   speed: 0.45,
-  density: 0.8,
+  density: 0.55,
 };
 
 const reduced = () =>

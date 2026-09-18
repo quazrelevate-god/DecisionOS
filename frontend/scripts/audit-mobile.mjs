@@ -65,6 +65,11 @@ const FIXTURE_STATES = SWEEP
 // screenshot — byte-stable across runs. Override with --anchor 2026-08-14.
 const ANCHOR_DAY = String(flag('anchor', new Date().toISOString().slice(0, 10)));
 const FROZEN_NOW = new Date(`${ANCHOR_DAY}T09:12:00.000Z`);
+/* PROGRESS, ON STDERR. The report is one write at the very end — which is the
+   right shape for a report and the wrong shape for a fifteen-minute run: when
+   this hung, it had printed nothing for seven hours and looked identical to
+   working. stderr keeps stdout byte-for-byte the report it always was. */
+const step = (s) => process.stderr.write(`  ${new Date().toISOString().slice(11, 19)}  ${s}\n`);
 const BASELINE_DIR = path.join(FRONTEND, '.audit-desktop-baseline');
 const ARTIFACT_DIR = path.join(FRONTEND, '.audit-artifacts');
 
@@ -717,6 +722,7 @@ async function desktopBaseline(browser, report) {
       if (overlay) {
         report.notes.push(`[${vp.name}] ${route.path} rendered a runtime error — desktop shot excludes the overlay: ${overlay}`);
       }
+      step(`[${vp.name}] ${route.path} — shot`);
       const shot = await page.screenshot({ fullPage: true });
 
       if (UPDATE_DESKTOP || !fs.existsSync(file)) {
@@ -811,6 +817,7 @@ for (const vp of SKIP_MOBILE ? [] : MOBILE_VIEWPORTS) {
   // §8: composition checks run against every fixture state, so the same route is
   // walked once per state. `null` means "whatever the API returns".
   for (const fixture of FIXTURE_STATES) {
+    step(`[${vp.name}${fixture ? `/${fixture}` : ''}] signing in`);
     const authed = await ensureAuth(page, fixture);
     if (!authed) {
       report.notes.push(`[${vp.name}${fixture ? `/${fixture}` : ''}] Could not authenticate — authed routes skipped.`);
@@ -827,6 +834,7 @@ for (const vp of SKIP_MOBILE ? [] : MOBILE_VIEWPORTS) {
         report.notes.push(`[${tag}] ${route.path} bounced to /login (permission gate?)`);
         continue;
       }
+      step(`[${tag}] ${route.path} -> ${landed}`);
       const overlay = await takeErrorOverlay(page);
       if (overlay) {
         report.findings.push({
@@ -850,11 +858,14 @@ for (const vp of SKIP_MOBILE ? [] : MOBILE_VIEWPORTS) {
       }
     }
   }
+  step(`[${vp.name}] closing the context`);
   await ctx.close();
 }
 
-if (!SKIP_DESKTOP) await desktopBaseline(browser, report);
+if (!SKIP_DESKTOP) { step('desktop baseline'); await desktopBaseline(browser, report); }
+step('closing the browser');
 await browser.close();
+step('writing the report');
 
 // ---------------------------------------------------------------------------
 // Report

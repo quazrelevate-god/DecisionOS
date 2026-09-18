@@ -23,6 +23,8 @@ MODES
 TYPICAL SEQUENCE
     cd backend
     # 0. copy prod's backend/uploads directory to this machine (e.g. ./prod_uploads)
+    #    When the source is a JSON dump rather than a live DB, first load it into
+    #    its own database (scripts/load_json_dump.py) and use that as --source-db.
     # 1. dry run -- fix every BLOCKING issue it reports, re-run until clean
     .venv/Scripts/python.exe scripts/migrate_main_to_karma.py plan --uploads-dir ./prod_uploads
     # 2. rehearsal on the target cluster
@@ -136,6 +138,11 @@ MONEY_FIELDS = ("amount", "amount_paid", "purchase_amount", "unit_cost", "applie
 RUN_OPTIONS: dict[str, Any] = {}
 
 
+def norm_phone(p) -> str:
+    """= services/auth/phone.py norm_phone (pinned by a test): the last 10 digits."""
+    return re.sub(r"\D", "", p)[-10:] if isinstance(p, str) else ""
+
+
 def transform_tenant(doc: dict, ctx: "Ctx") -> dict:
     out = dict(doc)
 
@@ -207,6 +214,11 @@ def transform_tenant(doc: dict, ctx: "Ctx") -> dict:
             ctx.warn("ai_consent_grandfathered", doc)
         else:
             ctx.warn("ai_consent_required", doc, "AI features return 451 until the owner grants consent")
+
+    # Copied, not dropped (deleting a workspace is the operator's call): prod
+    # carries TEST_* workspaces that test runs left behind with nobody in them.
+    if not ctx.lookups["tenant_user_ids"].get(out.get("id")):
+        ctx.warn("tenant_without_users", doc, f"name={out.get('name')!r}: nobody can sign in to it")
     return out
 
 
@@ -233,6 +245,11 @@ def transform_user(doc: dict, ctx: "Ctx") -> dict:
         out["created_at"] = ctx.run_started_iso
     if not out.get("tenant_id"):
         ctx.warn("user_without_tenant", doc, "gets no membership, so no workspace access")
+    # Karma resolves an OTP login / WhatsApp sender by (phone_norm, tenant):
+    # two people sharing a number inside one workspace cannot both be reached.
+    phone = norm_phone(out.get("phone"))
+    if phone and ctx.lookups["tenant_phone_counts"].get((out.get("tenant_id"), phone), 0) > 1:
+        ctx.warn("phone_shared_in_tenant", doc, f"another user of this workspace has the phone ...{phone[-4:]}")
     return out
 
 
@@ -523,9 +540,20 @@ async def _load_tenant_user_ids(src: "ReadOnlySource") -> dict[str, set]:
     return by_tenant
 
 
+async def _load_tenant_phone_counts(src: "ReadOnlySource") -> dict[tuple, int]:
+    counts: dict[tuple, int] = {}
+    async for u in src.find("users", {}, projection={"_id": 0, "tenant_id": 1, "phone": 1}):
+        phone = norm_phone(u.get("phone"))
+        if phone:
+            key = (u.get("tenant_id"), phone)
+            counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
 # name -> async loader(source) -> value, exposed to transforms as ctx.lookups[name].
 PRELOADS: dict[str, Callable[["ReadOnlySource"], Awaitable[Any]]] = {
     "tenant_user_ids": _load_tenant_user_ids,
+    "tenant_phone_counts": _load_tenant_phone_counts,
 }
 
 # Collections main's code writes. A source collection outside this set (and not

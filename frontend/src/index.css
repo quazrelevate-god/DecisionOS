@@ -714,6 +714,36 @@
     html {
         -webkit-text-size-adjust: 100%;
         text-size-adjust: 100%;
+
+        /* THE WHOLE PAGE STOPS RUBBER-BANDING (founder, 2026-09-19: "if i
+           scroll down or up the entire page itself like elastic in any tab").
+
+           Nothing was scrolling. The shell is a fixed-height, overflow-hidden
+           box — measured, documentElement.scrollHeight - clientHeight is 0 on
+           every route, at every --ui-scale step, on the phone as well as the
+           desktop. What moved was the browser's own overscroll affordance on
+           the root: a wheel or trackpad gesture that reaches a scroller with
+           nowhere left to go gets an elastic bounce, and with the root at the
+           default `auto` the whole app rode it.
+
+           It reaches the root two ways, which is why it happened everywhere:
+           over the greater part of the page there is no scroller at all, so
+           the gesture goes straight there; and where there IS one, reaching
+           its end CHAINS the rest of the gesture up to the root. The one rule
+           that would stop the chaining (.overflow-y-auto below) lives inside
+           the max-width:1023.98px block, so it never applied on a desktop —
+           measured there, the inner scroller computes `auto` while the same
+           element on a phone computes `contain`.
+
+           `none` rather than `contain`: contain only stops a child chaining
+           OUT, and the root is bouncing on its own account. On a document with
+           zero scrollable overflow the bounce can only ever reveal the page
+           background, so there is nothing to lose by refusing it.
+           WHAT THIS DOES COST: pull-to-refresh in a mobile BROWSER TAB, which
+           an installed PWA does not offer anyway, and which the note further
+           down already calls the most disorienting thing on a long feed. The
+           app has no pull-to-refresh of its own to break. */
+        overscroll-behavior: none;
     }
 
     * {

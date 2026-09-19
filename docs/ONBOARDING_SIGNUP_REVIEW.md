@@ -211,6 +211,15 @@ and both ways in afterwards.
 **Seen along the way, not changed:** saves took 6–8 s in these runs while the
 Desk behind them was loading its AI calls. Worth its own look (U7-24.18).
 
+**The Add member form, checked (same day, U7-24.19).** Required: name, a real
+mobile, department (pre-selected). Optional: email, job title, reports to;
+access defaults to the department's. The email is saved and shown on the
+profile, the card and in search. Fixed: whoever manages the team can now add,
+fix or clear a mobile member's email (an email someone signs in with stays an
+owner's call and can't be removed); a bad email is flagged under the field
+before Save; a member without one shows "Not added" instead of an empty box.
+`scripts/ux_member_email_0919.py` 11/11.
+
 ## Still open
 
 - **Nothing tells the founder the AI setup is still filling in.** It takes a few

@@ -161,6 +161,14 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
   });
   const [form, setForm] = useState(blankForm);
   const roleName = (key) => roleOptions.find((r) => r.key === key)?.label || key;
+  // 2026-09-19 — an email is a sign-in only for someone with a password (an
+  // owner). For a member who signs in by mobile it is contact detail, so
+  // whoever manages the team may add, fix or clear it; the server holds the
+  // same line.
+  const emailSignsIn = editing && !initial?.passwordless;
+  const emailLocked = emailSignsIn && me?.role !== "owner";
+  const emailTyped = form.email.trim();
+  const emailBad = !!emailTyped && !/^\S+@\S+\.\S+$/.test(emailTyped);
   // A number already on file changes only by an owner's hand — it is the sign-in.
   const phoneLocked = editing && me?.role !== "owner" && me?.id !== initial?.id
     && (initial?.phone || "").replace(/\D/g, "").length >= 10;
@@ -210,6 +218,10 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
     // number is required and has to be a real one: a typo hands their account
     // to whoever owns it. (The server holds the same rules.)
     const phoneTyped = form.phone.trim();
+    if (emailBad && !emailLocked) { toast.error("That email doesn't look right — fix it or leave it empty"); return; }
+    if (editing && emailSignsIn && !emailTyped && (initial.email || "")) {
+      toast.error("They sign in with this email, so it can be changed but not removed"); return;
+    }
     if (!editing) {
       if (!form.name.trim()) { toast.error("Enter their name"); return; }
       if (!normIndianMobile(phoneTyped)) { toast.error("Enter their 10-digit Indian mobile number — it's how they sign in"); return; }
@@ -221,8 +233,9 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
       if (editing) {
         if (!form.name.trim()) { toast.error("Enter a name"); setBusy(false); return; }
         await api.patch(`/users/${initial.id}`, {
-          // RBAC P1 (2026-09-15): name can be corrected; email by an owner only.
-          name: form.name.trim(), ...(me?.role === "owner" ? { email: form.email.trim() } : {}),
+          // RBAC P1 (2026-09-15): name can be corrected. The email goes when
+          // this person may change it (see emailLocked).
+          name: form.name.trim(), ...(emailLocked ? {} : { email: emailTyped }),
           follow_role: !!form.follow_role,
           role: form.role, permissions: form.follow_role ? [] : form.permissions,
           // Left out when it is locked, so a save of the other fields still goes through.
@@ -278,8 +291,10 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
 
         <div className="space-y-5">
           <section className="space-y-3">
-            {/* RBAC P1 (2026-09-15): name and email show when editing too. Email is
-                how they sign in, so only an owner changes it. */}
+            {/* RBAC P1 (2026-09-15): name and email show when editing too.
+                2026-09-19 — members sign in by mobile, so their email is contact
+                detail anyone managing the team may fix; an owner's email is a
+                sign-in, and only an owner changes it. */}
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Name" htmlFor="member-name">
                 <input id="member-name" data-testid="member-name-input" className={NM_FIELD} placeholder="e.g. Priya Nair"
@@ -287,8 +302,13 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
               </Field>
               <Field label="Email (optional)" htmlFor="member-email">
                 <input id="member-email" data-testid="member-email-input" className={NM_FIELD} type="email" placeholder="name@company.com"
-                  disabled={editing && me?.role !== "owner"} title={editing && me?.role !== "owner" ? "Only an owner can change an email" : undefined}
+                  disabled={emailLocked} title={emailLocked ? "They sign in with this email — only an owner can change it" : undefined}
                   value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                {emailBad && !emailLocked && (
+                  <p className="mt-1.5 text-xs text-danger-600" data-testid="member-email-invalid">
+                    That email doesn't look right — fix it or leave it empty
+                  </p>
+                )}
               </Field>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -997,7 +1017,9 @@ function MemberProfileDialog({
             {/* Each fact is its own glass tile; email spans the row, since it
                 is the long value people copy. */}
             <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-              <ContactRow icon={EnvelopeSimple} label="Email" value={u.email} wide />
+              {/* Optional since members sign in by mobile (2026-09-19): say so
+                  rather than show an empty box. */}
+              <ContactRow icon={EnvelopeSimple} label="Email" value={u.email || "Not added"} muted={!u.email} wide />
               {u.phone && <ContactRow icon={Phone} label="Phone" value={formatPhone(u.phone)} />}
               <ContactRow icon={Briefcase} label="Department" value={roleName(u.role)} />
               <ContactRow icon={Pulse} label="Status" value={
@@ -1284,7 +1306,7 @@ function AvatarEditor({ u, canChange, onChanged, size = 120 }) {
 // NM-16: label ABOVE value, not a fixed column beside it — the email is the
 // field someone actually needs to copy, so it is never truncated.
 // 2026-09-16, founder: each fact is a glass tile with its icon in a glass chip.
-function ContactRow({ icon: Icon, label, value, wide = false }) {
+function ContactRow({ icon: Icon, label, value, wide = false, muted = false }) {
   return (
     <div className={`flex min-w-0 items-start gap-3 px-3.5 py-3 ${PROFILE_TILE} ${wide ? "sm:col-span-2" : ""}`}>
       <span aria-hidden="true"
@@ -1293,7 +1315,8 @@ function ContactRow({ icon: Icon, label, value, wide = false }) {
       </span>
       <div className="min-w-0">
         <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
-        <p className="mt-0.5 break-words text-sm text-slate-800">{value}</p>
+        <p className={`mt-0.5 break-words text-sm ${muted ? "text-slate-400" : "text-slate-800"}`}
+          data-testid={muted ? "contact-row-empty" : undefined}>{value}</p>
       </div>
     </div>
   );

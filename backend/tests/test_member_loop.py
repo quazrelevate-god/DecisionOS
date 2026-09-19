@@ -367,3 +367,53 @@ def test_every_new_password_screen_uses_the_rule():
     for parts in (("pages", "onboarding", "BasicsFlow.js"), ("pages", "PasswordReset.js"),
                   ("components", "ProfileDialog.js"), ("components", "auth", "OwnerCredentialsGate.js")):
         assert "passwordProblem" in _fe(*parts), parts[-1]
+
+
+# ---------------------------------------------------------------------------
+# A member's email on Team (2026-09-19, the form check): contact detail for a
+# member who signs in by mobile, a sign-in for anyone with a password.
+# ---------------------------------------------------------------------------
+MANAGER = {"id": "u-mgr", "tenant_id": TENANT, "name": "Mani", "role": "sales", "permissions": ["team_manage"]}
+
+
+def test_a_manager_can_add_fix_and_clear_a_mobile_members_email(with_test_db):
+    async def body(db, texted):
+        out = await _add("Ravi", "9820070011")
+        await team.update_user(out["id"], UserUpdateInput(email="Ravi@Looms.in"), user=MANAGER)
+        added = await db.users.find_one({"id": out["id"]}, {"_id": 0})
+        await team.update_user(out["id"], UserUpdateInput(email="ravi.das@looms.in"), user=MANAGER)
+        fixed = await db.users.find_one({"id": out["id"]}, {"_id": 0})
+        await team.update_user(out["id"], UserUpdateInput(email=""), user=MANAGER)
+        cleared = await db.users.find_one({"id": out["id"]}, {"_id": 0})
+        # a second member can go without one too — cleared means absent, not ""
+        other = await _add("Arun", "9820070012")
+        await team.update_user(other["id"], UserUpdateInput(email="arun@looms.in"), user=MANAGER)
+        await team.update_user(other["id"], UserUpdateInput(email=""), user=MANAGER)
+        return added, fixed, cleared, await db.users.find_one({"id": other["id"]}, {"_id": 0})
+    added, fixed, cleared, other = _run(with_test_db, body)
+    assert added["email"] == "ravi@looms.in" and added["email_verified_at"] is None
+    assert fixed["email"] == "ravi.das@looms.in", "a typo can be fixed by whoever manages the team"
+    assert "email" not in cleared and "email" not in other, "and removed, leaving nothing behind"
+
+
+def test_an_email_someone_signs_in_with_stays_an_owners_call_and_stays_put(with_test_db):
+    async def body(db, texted):
+        # a member from before members were mobile-only: they have a password
+        await db.users.insert_one({"id": "u-pw", "tenant_id": TENANT, "name": "Old Hand", "role": "sales",
+                                   "email": "old@looms.in", "passwordless": False})
+        by_manager = await _refused(team.update_user("u-pw", UserUpdateInput(email="new@looms.in"), user=MANAGER))
+        cleared_by_owner = await _refused(team.update_user("u-pw", UserUpdateInput(email=""), user=OWNER))
+        await team.update_user("u-pw", UserUpdateInput(email="new@looms.in"), user=OWNER)
+        return by_manager, cleared_by_owner, await db.users.find_one({"id": "u-pw"}, {"_id": 0})
+    by_manager, cleared_by_owner, row = _run(with_test_db, body)
+    assert by_manager[0] == 403
+    assert cleared_by_owner[0] == 400 and "not removed" in cleared_by_owner[1]
+    assert row["email"] == "new@looms.in", "an owner can still change it"
+
+
+def test_the_member_form_says_so_before_saving_and_the_profile_says_not_added():
+    team_js = _fe("pages", "Team.js")
+    assert "const emailLocked = emailSignsIn && me?.role !== \"owner\"" in team_js
+    assert 'data-testid="member-email-invalid"' in team_js, "a bad email is flagged under the field"
+    assert 'value={u.email || "Not added"}' in team_js, "no empty box on the profile"
+    assert "Email is\n                how they sign in, so only an owner changes it" not in team_js

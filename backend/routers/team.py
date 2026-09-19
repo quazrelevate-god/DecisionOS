@@ -556,29 +556,49 @@ async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(r
     if inp.title is not None:
         # 2026-09-14 — the job title on the Team tree; an empty string clears it.
         updates["title"] = inp.title.strip()[:80] or None
-    # RBAC P1 (2026-09-15): name and email can be corrected. Email is how they
-    # sign in, so only an owner changes it, and it must be free.
+    # RBAC P1 (2026-09-15): name and email can be corrected, and an email must
+    # be free. 2026-09-19 — whose call it is depends on what the email DOES:
+    # for someone with a password it is their sign-in, so only an owner
+    # changes it and it can't be removed; for a member who signs in by mobile
+    # it is contact detail, so whoever manages the team may add, fix or clear
+    # it (they could already set it when adding the member).
     if inp.name is not None:
         name = inp.name.strip()
         if not name:
             raise HTTPException(status_code=400, detail="Enter a name")
         updates["name"] = name[:80]
+    unsets = {}
     if inp.email is not None and inp.email.strip().lower() != (target.get("email") or "").lower():
-        if not acting_is_owner:
+        email_signs_in = not target.get("passwordless")
+        if email_signs_in and not acting_is_owner:
             raise HTTPException(status_code=403, detail="Only an owner can change someone's email, because it's how they sign in.")
         email = inp.email.strip().lower()
-        local, _, domain = email.partition("@")
-        if not local or "." not in domain:
-            raise HTTPException(status_code=400, detail="Enter a valid email")
-        if await db.users.find_one({"email": email, "id": {"$ne": user_id}}, {"_id": 0, "id": 1}):
-            raise HTTPException(status_code=400, detail="That email is already used by another account")
-        updates["email"] = email
-    if updates:
+        if not email:
+            if email_signs_in:
+                raise HTTPException(status_code=400, detail="They sign in with this email, so it can be changed but not removed.")
+            # Absent rather than empty: users.email is unique among real
+            # addresses only (bootstrap/lifecycle.py).
+            unsets.update({"email": "", "email_verified_at": ""})
+        else:
+            local, _, domain = email.partition("@")
+            if not local or "." not in domain:
+                raise HTTPException(status_code=400, detail="Enter a valid email, or leave it empty")
+            if await db.users.find_one({"email": email, "id": {"$ne": user_id}}, {"_id": 0, "id": 1}):
+                raise HTTPException(status_code=400, detail="That email is already used by another account")
+            updates["email"] = email
+            # A different address is unconfirmed until its owner clicks the link.
+            updates["email_verified_at"] = None
+    if updates or unsets:
         # E2-57: tenant scope on the write (defense-in-depth; target was
         # already loaded from this tenant above).
+        _write = {}
+        if updates:
+            _write["$set"] = updates
+        if unsets:
+            _write["$unset"] = unsets
         await db.users.update_one(
             {"id": user_id, "tenant_id": user["tenant_id"]},
-            {"$set": updates},
+            _write,
         )
         # FIX-004-B (RBAC-13): mirror role/permissions changes into
         # the membership row for THIS tenant so the authoritative

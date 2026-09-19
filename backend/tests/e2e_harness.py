@@ -121,9 +121,13 @@ def member(role, tenant="t1"):
 
 async def seed_tenant_and_users(testdb, tenant="t1", roles=("finance", "sales", "operations")):
     from shared.ids import now_iso
+    from services.ai_consent import build_grant_payload
+    # An onboarded workspace has agreed to AI processing. Since 2026-09-16 a
+    # capture checks that before anything else and fails without it.
     await testdb.tenants.insert_one({
         "id": tenant, "company_name": "Weave Co", "industry": "Textile Manufacturing",
-        "plan": "business", "created_at": now_iso()})
+        "plan": "business", "created_at": now_iso(),
+        "ai_consent": build_grant_payload(actor_user_id="u-owner", actor_email=f"owner@{tenant}.test")})
     await testdb.users.insert_one({
         "id": "u-owner", "tenant_id": tenant, "role": "owner", "name": "Owner",
         "email": f"owner@{tenant}.test", "created_at": now_iso()})

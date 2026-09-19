@@ -380,7 +380,7 @@ def test_sign_in_asks_which_workspace_instead_of_claiming_a_code_was_sent():
     assert handler.index("data.ambiguous") < handler.index("setOtpSent(true)"), \
         "and handled before the page claims a code went out"
     assert 'data-testid="otp-workspace-picker"' in login
-    assert "loginWithOtp(otpPhone, otpCode, otpTenant)" in login, "verify names the workspace it chose"
+    assert "loginWithOtp(otpPhone, otpCode, otpTenant" in login, "verify names the workspace it chose"
     assert "tenant_id: tenantId" in _fe("context", "AuthContext.js")
 
 

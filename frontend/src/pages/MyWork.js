@@ -1,6 +1,6 @@
 import { Fragment, useRef, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import api from "../lib/api";
 import { timeAgo, fullTime } from "../lib/format";
@@ -3268,6 +3268,14 @@ export default function MyWork({ only = null }) {
   // RBAC P2 (2026-09-16): scoring runs AI for the whole list, so it's for owners
   // and Manage team (the server's rule); the toggle no longer shows then fails.
   const canPrioritize = user?.role === "owner" || userPerms(user).includes("team_manage");
+  // 2026-09-19 — Yokesh: the Workflows way in from My Work was lost (ASK-42 C
+  // took it out when /workflows became a page of its own), and on desktop
+  // nothing else reaches that page — it is not in the top nav. It comes back
+  // as a way IN, not a second copy of the board: a pill on desktop and an
+  // entry in the phone's view menu, both opening /workflows. Same gate as the
+  // More menu's tile and the page's own data.
+  const navigate = useNavigate();
+  const canSeeWorkflows = user?.role === "owner" || userPerms(user).includes("workflows");
   const aiOn = canPrioritize && aiPriority && !asked && !team;
   // ASK-24 — with Person set, every card would repeat the same name.
   const showAssignee = ((canSeeAll && scope === "all") || team) && !personFilter;
@@ -3505,12 +3513,11 @@ export default function MyWork({ only = null }) {
     { key: "asked", label: t("mywork.asked_by_me", "Asked by me"), pick: () => goView("asked") },
     ...(hasReports ? [{ key: "team", label: t("mywork.my_team", "My team"), pick: () => goView("team") }] : []),
     ...(canSeeAll ? [{ key: "all", label: t("mywork.all_tasks"), pick: () => goView("all") }] : []),
-    /* ASK-42 B/C — APPROVALS AND WORKFLOWS ARE NOT IN THIS LIST. Both are
-       pages now, reached from More; this dropdown holds the lenses on THIS
-       page's task list and nothing else. ASK-39 put Workflows here on the
-       argument that the sheet names every view — true, and the founder's call
-       now is that naming a different product in a list of task filters is what
-       made it confusing in the first place. */
+    /* ASK-42 B/C took Approvals and Workflows out of this list. 2026-09-19 —
+       Workflows is back, last and marked as a way out (it opens its own page,
+       it does not filter this list). Approvals stays in More. */
+    ...(canSeeWorkflows ? [{ key: "workflows", label: t("mywork.view_workflows", "Workflows"), leaves: true,
+      pick: () => navigate("/workflows") }] : []),
   ];
   const mobileViewLabel = mobileViewOptions.find((o) => o.key === mobileView)?.label
     || t("mywork.my_tasks");
@@ -3805,7 +3812,10 @@ export default function MyWork({ only = null }) {
                   <button key={o.key} type="button" aria-pressed={on} data-testid={`work-mobile-view-${o.key}`}
                     onClick={() => { o.pick(); setViewSheetOpen(false); }}
                     className={`flex h-12 items-center justify-between gap-3 rounded-pill px-5 text-[15px] ${on ? "kr-pressed font-semibold" : "kr-pop font-medium"}`}>
-                    <span className="truncate">{o.label}</span>
+                    <span className="flex min-w-0 items-center gap-2 truncate">
+                      {o.leaves && <FlowArrow size={16} weight="bold" aria-hidden="true" className="shrink-0 opacity-70" />}
+                      {o.label}
+                    </span>
                     <span className="flex shrink-0 items-center gap-2">
                       {o.count > 0 && (
                         <span className="grid h-6 min-w-[1.5rem] place-items-center rounded-full bg-kr-ink px-2 text-xs font-semibold tabular-nums text-white">
@@ -3969,11 +3979,17 @@ export default function MyWork({ only = null }) {
                links and the view itself are untouched. */
             return (
               <div className="flex flex-wrap items-center gap-2.5" data-testid="mywork-lens-group">
-                {/* ASK-42 C — the Workflows circle is gone from this row too.
-                    ASK-38 made it a circle here rather than a segment because a
-                    board is "another surface"; the founder's call now is that
-                    another surface belongs at another address. /workflows, from
-                    More. */}
+                {/* 2026-09-19 — the Workflows pill is back (ASK-42 C had removed
+                    it). It opens /workflows — another surface at its own address,
+                    as ASK-42 intended — and wears a label, not just ASK-38's
+                    icon circle, so it reads as a place rather than a filter. */}
+                {canSeeWorkflows && (
+                  <Link to="/workflows" data-testid="work-open-workflows"
+                    className="kr-pop flex h-10 shrink-0 items-center gap-2 rounded-pill px-4 text-sm font-medium text-foreground">
+                    <FlowArrow size={16} weight="bold" aria-hidden="true" />
+                    {t("mywork.view_workflows", "Workflows")}
+                  </Link>
+                )}
                 {view === "mywork" && !asked && !team && canPrioritize && (
                   <button onClick={() => setAiPriority((v) => !v)} data-testid="ai-priority-toggle"
                     aria-pressed={aiPriority}

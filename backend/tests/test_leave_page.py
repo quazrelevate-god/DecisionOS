@@ -52,6 +52,7 @@ def test_my_work_on_desktop_can_request_leave():
 def test_a_decision_on_your_leave_opens_your_request():
     notif = _fe("lib", "notif.js")
     # the approver's "X asked for leave" still goes to the queue ...
-    assert 'n?.type === "approval") return `/inbox?leave=${n.entity_id}`' in notif
+    assert 'n?.type === "approval" || n?.type === "leave_withdrawn")' in notif
+    assert "return `/inbox?leave=${n.entity_id}`" in notif
     # ... and "your leave was approved / rejected / needs info" opens yours
     assert "return `/leave?leave=${n.entity_id}`" in notif

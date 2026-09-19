@@ -7,7 +7,7 @@ import { PageHeader, StickyHeader, EmptyState } from "../components/common";
 import { timeAgo } from "../lib/format";
 import { toast } from "sonner";
 import {
-  Plus, WarningOctagon, CheckCircle, XCircle, ChatCircleText, Gear, Clock,
+  Plus, WarningOctagon, CheckCircle, XCircle, ChatCircleText, Gear, Clock, ArrowCounterClockwise, PaperPlaneTilt,
   CalendarBlank,
   // ASK-4 (2026-09-12): AI Impact Analysis retired at the leave-card level.
   // Sparkle / ArrowsClockwise / CalendarPlus / Eye / CircleNotch were the
@@ -44,7 +44,16 @@ export const STATUS_META = {
   approved: { label: "Approved", tone: "bg-emerald-50 text-emerald-700 ring-emerald-100", icon: CheckCircle },
   rejected: { label: "Rejected", tone: "bg-rose-50 text-rose-700 ring-rose-100", icon: XCircle },
   info_requested: { label: "Info Requested", tone: "bg-violet-50 text-violet-700 ring-violet-100", icon: ChatCircleText },
+  // 2026-09-19 — taken back by the person who asked. Stored as "cancelled"
+  // (routers/team.py LEAVE_WITHDRAWN); quiet grey, because it is over.
+  cancelled: { label: "Withdrawn", tone: "bg-slate-100 text-slate-600 ring-slate-200", icon: ArrowCounterClockwise },
 };
+
+/* Your own request can be taken back while it waits on a decision, or once
+   approved but before it starts. The server holds the same line. */
+export const canWithdraw = (lv, today = new Date().toISOString().slice(0, 10)) =>
+  lv.status === "pending" || lv.status === "info_requested"
+  || (lv.status === "approved" && (lv.from_date || "") > today);
 const LEAVE_SECONDARY = `flex h-11 items-center gap-1.5 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`;
 const inp = "w-full nm-field px-3 py-2 text-sm";
 export const typeLabel = (k) => LEAVE_TYPES.find((t) => t.key === k)?.label || k;
@@ -185,9 +194,49 @@ function AbsenceDialog({ onDone }) {
 // ASK-6/-7 (2026-09-12): named export so Desk and Team can render individual
 // leave requests without duplicating the card markup. The default export
 // (the Leave page) is scheduled for retirement once the register move lands.
-export function LeaveCard({ lv, canAct, onRefresh, highlight }) {
+/* `mine` — the card is on the requester's own Leave page: it can answer the
+   approver's question and withdraw the request (2026-09-19). */
+export function LeaveCard({ lv, canAct, onRefresh, highlight, mine = false }) {
   const [action, setAction] = useState(null); // reject | info
   const [note, setNote] = useState("");
+  const [reply, setReply] = useState("");
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawNote, setWithdrawNote] = useState("");
+  const [sending, setSending] = useState(false);
+  const qc = useQueryClient();
+  // Show the server's answer on the card at once, then reload to confirm: a
+  // slow list reload used to leave "Info Requested" up after the answer was
+  // saved (seen in the browser, 2026-09-19).
+  const applyNow = (updated) => {
+    if (!updated?.id) return;
+    qc.setQueriesData({ queryKey: ["leaves"] }, (old) => (
+      Array.isArray(old) ? old.map((x) => (x.id === updated.id ? updated : x)) : old));
+  };
+
+  const answer = async () => {
+    if (!reply.trim()) return toast.error("Write your answer first");
+    setSending(true);
+    try {
+      const { data } = await api.post(`/leaves/${lv.id}/respond`, { note: reply.trim() });
+      applyNow(data);
+      toast.success("Answer sent — it's back with your approver");
+      setReply("");
+      onRefresh();
+    } catch (e) { toast.error(e.response?.data?.detail || "Could not send"); }
+    finally { setSending(false); }
+  };
+
+  const withdraw = async () => {
+    setSending(true);
+    try {
+      const { data } = await api.post(`/leaves/${lv.id}/withdraw`, { note: withdrawNote.trim() });
+      applyNow(data);
+      toast.success("Request withdrawn — your approver was told");
+      setWithdrawing(false); setWithdrawNote("");
+      onRefresh();
+    } catch (e) { toast.error(e.response?.data?.detail || "Could not withdraw"); }
+    finally { setSending(false); }
+  };
   // ASK-4 (2026-09-12): impactOpen state removed with the dialog itself.
   const st = STATUS_META[lv.status] || STATUS_META.pending;
 
@@ -224,11 +273,63 @@ export function LeaveCard({ lv, canAct, onRefresh, highlight }) {
       <p className="mt-2.5 flex items-center gap-1.5 text-xs text-neutral-500">
         <Clock size={12} weight="bold" aria-hidden="true" /> {timeAgo(lv.created_at)}{lv.approver_name ? ` · Approver: ${lv.approver_name}` : ""}
       </p>
-      {lv.status === "info_requested" && lv.info_note && (
+      {/* The question, and — once given — the answer, kept together so both
+          sides can read the whole exchange (2026-09-19). */}
+      {lv.info_note && (lv.status === "info_requested" || lv.reply_note) && (
         <div className="mt-3 flex items-start gap-2 rounded-2xl bg-violet-50/80 px-3 py-2.5 text-xs text-violet-950 ring-1 ring-inset ring-violet-100" data-testid={`leave-info-note-${lv.id}`}>
           <ChatCircleText size={14} weight="bold" aria-hidden="true" className="mt-px shrink-0 text-violet-700" />
-          <p><span className="font-semibold">Info requested:</span> {lv.info_note}</p>
+          <p><span className="font-semibold">{lv.approver_name ? `${lv.approver_name} asked` : "Info requested"}:</span> {lv.info_note}</p>
         </div>
+      )}
+      {lv.reply_note && (
+        <div className="mt-2 flex items-start gap-2 rounded-2xl bg-white/70 px-3 py-2.5 text-xs text-neutral-800 ring-1 ring-inset ring-neutral-200" data-testid={`leave-reply-note-${lv.id}`}>
+          <PaperPlaneTilt size={14} weight="bold" aria-hidden="true" className="mt-px shrink-0 text-neutral-500" />
+          <p><span className="font-semibold">{mine ? "Your answer" : `${(lv.user_name || "They").split(" ")[0]} answered`}:</span> {lv.reply_note}</p>
+        </div>
+      )}
+      {lv.status === "cancelled" && lv.withdrawn_note && (
+        <p className="mt-2 text-xs text-neutral-500" data-testid={`leave-withdrawn-note-${lv.id}`}>Withdrawn: {lv.withdrawn_note}</p>
+      )}
+
+      {/* The requester's side: answer the question, or take the request back. */}
+      {mine && lv.status === "info_requested" && (
+        <div className={`mt-3 space-y-2.5 rounded-[1.25rem] p-3 ${DRAWER_TRACK}`} data-testid={`leave-reply-${lv.id}`}>
+          <textarea data-testid={`leave-reply-input-${lv.id}`} className={`${DRAWER_FIELD} resize-none text-sm`} rows={2}
+            aria-label="Your answer" placeholder="Your answer" maxLength={1000}
+            value={reply} onChange={(e) => setReply(e.target.value)} />
+          <button onClick={answer} disabled={sending} data-testid={`leave-reply-send-${lv.id}`}
+            className={`flex h-10 w-full items-center justify-center gap-1.5 rounded-pill px-4 text-sm font-medium disabled:opacity-50 ${INK_PILL}`}>
+            <PaperPlaneTilt size={15} weight="bold" aria-hidden="true" /> {sending ? "Sending…" : "Send answer"}
+          </button>
+        </div>
+      )}
+      {mine && canWithdraw(lv) && (
+        withdrawing ? (
+          <div className={`mt-3 space-y-2.5 rounded-[1.25rem] p-3 ${DRAWER_TRACK}`} data-testid={`leave-withdraw-confirm-${lv.id}`}>
+            <p className="text-sm font-semibold text-neutral-900">Withdraw this request?</p>
+            <p className="text-xs text-neutral-500">
+              {lv.status === "approved"
+                ? "It's approved — withdrawing takes it off the calendar, and your approver is told."
+                : "Your approver is told, and it stays in your history as withdrawn."}
+            </p>
+            <input data-testid={`leave-withdraw-note-${lv.id}`} className={`${DRAWER_FIELD} text-sm`} maxLength={500}
+              placeholder="Why? (optional)" aria-label="Reason for withdrawing"
+              value={withdrawNote} onChange={(e) => setWithdrawNote(e.target.value)} />
+            <div className="flex gap-2">
+              <button onClick={withdraw} disabled={sending} data-testid={`leave-withdraw-go-${lv.id}`}
+                className={`flex h-10 flex-1 items-center justify-center rounded-pill px-4 text-sm font-medium disabled:opacity-50 ${MAROON_PILL}`}>
+                {sending ? "Withdrawing…" : "Withdraw"}
+              </button>
+              <button onClick={() => { setWithdrawing(false); setWithdrawNote(""); }} data-testid={`leave-withdraw-keep-${lv.id}`}
+                className={`h-10 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>Keep it</button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => setWithdrawing(true)} data-testid={`leave-withdraw-${lv.id}`}
+            className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-neutral-600 underline-offset-2 hover:text-neutral-900 hover:underline">
+            <ArrowCounterClockwise size={13} weight="bold" aria-hidden="true" /> Withdraw request
+          </button>
+        )
       )}
 
       {/* ASK-4 (2026-09-12): The per-card AI Impact Analysis button and
@@ -238,7 +339,7 @@ export function LeaveCard({ lv, canAct, onRefresh, highlight }) {
           to team cover. The team-level version is on the backlog as
           ASK-5 (Low priority, parked). */}
 
-      {canAct && lv.status !== "approved" && lv.status !== "rejected" && (
+      {canAct && lv.status !== "approved" && lv.status !== "rejected" && lv.status !== "cancelled" && (
         <div className="mt-4">
           {!action ? (
             <div className="flex flex-wrap gap-2">
@@ -415,7 +516,7 @@ export default function Leave() {
                 Coming up and waiting
               </h2>
               <div className="grid gap-4 md:grid-cols-2">
-                {upcoming.map((lv) => <LeaveCard key={lv.id} lv={lv} canAct={false} onRefresh={refresh} highlight={lv.id === highlightId} />)}
+                {upcoming.map((lv) => <LeaveCard key={lv.id} lv={lv} canAct={false} mine onRefresh={refresh} highlight={lv.id === highlightId} />)}
               </div>
             </section>
           )}
@@ -423,7 +524,7 @@ export default function Leave() {
             <section data-testid="leave-history">
               <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">History</h2>
               <div className="grid gap-4 md:grid-cols-2">
-                {history.map((lv) => <LeaveCard key={lv.id} lv={lv} canAct={false} onRefresh={refresh} highlight={lv.id === highlightId} />)}
+                {history.map((lv) => <LeaveCard key={lv.id} lv={lv} canAct={false} mine onRefresh={refresh} highlight={lv.id === highlightId} />)}
               </div>
             </section>
           )}

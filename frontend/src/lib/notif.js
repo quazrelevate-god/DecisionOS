@@ -31,7 +31,11 @@ export function notifLink(n) {
   // there. The requester's ("your leave was approved / rejected / needs more
   // info") opens their own request on /leave, highlighted — the Desk's queue
   // never showed it to them.
-  if (n?.entity_type === "leave" && n?.entity_id && n?.type === "approval") return `/inbox?leave=${n.entity_id}`;
+  // The approver's side: a new request or an answer to their question
+  // ("approval"), or a request its owner withdrew ("leave_withdrawn").
+  if (n?.entity_type === "leave" && n?.entity_id && (n?.type === "approval" || n?.type === "leave_withdrawn")) {
+    return `/inbox?leave=${n.entity_id}`;
+  }
   if (n?.entity_type === "leave" && n?.entity_id) return `/leave?leave=${n.entity_id}`;
   return null;
 }

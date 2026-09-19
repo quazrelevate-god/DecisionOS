@@ -510,6 +510,7 @@ const LEAVE_DOT = {
   approved: "bg-emerald-500",
   rejected: "bg-rose-500",
   info_requested: "bg-violet-500",
+  cancelled: "bg-slate-300",   // withdrawn by the person who asked (2026-09-19)
 };
 const leaveDay = (d, withYear) =>
   new Date(`${String(d).slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, {

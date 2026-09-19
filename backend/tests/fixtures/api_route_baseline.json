@@ -1,6 +1,6 @@
 {
-  "count": 335,
-  "sha": "4b1f292c3ef25f60a206a0e9dac91852fececc867a90f0efe6df72ce075db08b",
+  "count": 337,
+  "sha": "22949c0a4ac28ee0940cf1538a77e93df17266d508c528b80776cb39ea632a6b",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -277,6 +277,8 @@
     "POST /api/leaves/{leave_id}/approve",
     "POST /api/leaves/{leave_id}/reject",
     "POST /api/leaves/{leave_id}/request-info",
+    "POST /api/leaves/{leave_id}/respond",
+    "POST /api/leaves/{leave_id}/withdraw",
     "POST /api/ledger/ai/{scope}/refresh",
     "POST /api/ledger/ask",
     "POST /api/ledger/reclassify-purchases",

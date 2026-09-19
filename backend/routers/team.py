@@ -68,6 +68,11 @@ router = APIRouter(prefix="/api")
 # ---------------------------------------------------------------------------
 # Router-local helpers (not called from anywhere else)
 # ---------------------------------------------------------------------------
+# 2026-09-19 — a request its owner took back. Stored as "cancelled" (the name
+# the Flutter client's LeaveRequest already knows); the web says "Withdrawn".
+LEAVE_WITHDRAWN = "cancelled"
+
+
 def _can_approve_leave(user: dict, leave: dict) -> bool:
     if user.get("role") == "owner":
         return True
@@ -96,6 +101,10 @@ async def _decide_leave(leave_id, user, new_status, note, ntype, employee_msg):
         raise HTTPException(status_code=404, detail="Not found")
     if not _can_approve_leave(user, lv):
         raise HTTPException(status_code=403, detail="You cannot act on this leave request")
+    # 2026-09-19 — a request its owner withdrew is over; approving it now would
+    # put leave on the calendar that nobody is taking.
+    if lv.get("status") == LEAVE_WITHDRAWN:
+        raise HTTPException(status_code=409, detail=f"{lv.get('user_name') or 'They'} withdrew this request.")
     entry = {"action": new_status, "by": user["id"], "by_name": user.get("name"),
              "note": note or "", "at": now_iso()}
     updates = {"status": new_status, "decided_at": now_iso(), "decided_by": user["id"]}
@@ -818,6 +827,90 @@ async def request_leave_info(leave_id: str, inp: LeaveDecisionInput, user: dict 
     return await _decide_leave(leave_id, user, "info_requested", inp.note, "clarification",
                                f"{user.get('name')} needs more info on your leave request"
                                + (f": {inp.note}" if inp.note else ""))
+
+
+async def _own_leave(leave_id: str, user: dict) -> dict:
+    """A leave request the caller raised themselves. Only the requester may
+    answer a question on it or take it back — not their manager, not an owner."""
+    lv = await db.leaves.find_one({"id": leave_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    if not lv:
+        raise HTTPException(status_code=404, detail="Not found")
+    if lv.get("user_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Only the person who asked for this leave can do that.")
+    return lv
+
+
+@router.post("/leaves/{leave_id}/respond")
+async def respond_to_leave_question(leave_id: str, inp: LeaveDecisionInput,
+                                    user: dict = Depends(get_current_user)):
+    """Answer the approver's "needs more info" (2026-09-19).
+
+    The approver could ask a question and the requester had no way to answer
+    it — their only move was raising a fresh request. The reply goes back on
+    the request, it returns to Pending, and the approver is told as an
+    approval (so their delegate hears too, and it lands in their queue).
+    """
+    from services.notifications import push_notification
+    lv = await _own_leave(leave_id, user)
+    if lv.get("status") != "info_requested":
+        raise HTTPException(status_code=409, detail="This request isn't waiting on an answer from you.")
+    reply = (inp.note or "").strip()
+    if not reply:
+        raise HTTPException(status_code=400, detail="Write your answer first.")
+    reply = reply[:1000]
+    await db.leaves.update_one(
+        {"id": leave_id, "tenant_id": user["tenant_id"]},
+        {"$set": {"status": "pending", "reply_note": reply, "replied_at": now_iso()},
+         "$push": {"history": {"action": "replied", "by": user["id"], "by_name": user.get("name"),
+                               "note": reply, "at": now_iso()}}},
+    )
+    if lv.get("approver_id"):
+        await push_notification(user["tenant_id"], [lv["approver_id"]], 2,
+                                f"{user.get('name')} answered your question about their leave: {reply[:140]}",
+                                entity_type="leave", entity_id=leave_id, ntype="approval",
+                                title=f"{lv.get('leave_type', 'Leave').title()} leave", sender=user.get("name"))
+    await log_activity(user["tenant_id"], user["id"], "leave_replied",
+                       f"{user.get('name')} answered a question on their leave", "leave", leave_id)
+    return await db.leaves.find_one({"id": leave_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+
+
+@router.post("/leaves/{leave_id}/withdraw")
+async def withdraw_leave(leave_id: str, inp: LeaveDecisionInput, user: dict = Depends(get_current_user)):
+    """Take back your own leave request (2026-09-19).
+
+    While it waits on a decision, or once approved but before it starts —
+    plans change. Not after it has started (that is coming back early, which
+    is a conversation with your manager) and not once rejected. The request is
+    kept, marked withdrawn, so the history stays true, and the approver is told.
+    """
+    from services.notifications import push_notification
+    lv = await _own_leave(leave_id, user)
+    status = lv.get("status")
+    today = datetime.now(timezone.utc).date().isoformat()
+    if status == LEAVE_WITHDRAWN:
+        raise HTTPException(status_code=409, detail="You've already withdrawn this request.")
+    if status == "rejected":
+        raise HTTPException(status_code=409, detail="This request was rejected — there's nothing to withdraw.")
+    if status == "approved" and (lv.get("from_date") or "") <= today:
+        raise HTTPException(status_code=409, detail="This leave has already started, so it can't be withdrawn here. Tell your manager if you're back early.")
+    note = (inp.note or "").strip()[:500]
+    await db.leaves.update_one(
+        {"id": leave_id, "tenant_id": user["tenant_id"]},
+        {"$set": {"status": LEAVE_WITHDRAWN, "withdrawn_at": now_iso(), "withdrawn_note": note or None},
+         "$push": {"history": {"action": "withdrawn", "by": user["id"], "by_name": user.get("name"),
+                               "note": note, "at": now_iso()}}},
+    )
+    if lv.get("approver_id"):
+        was = "approved " if status == "approved" else ""
+        await push_notification(user["tenant_id"], [lv["approver_id"]], 1,
+                                f"{user.get('name')} withdrew their {was}leave ({lv.get('from_date')}"
+                                + (f" → {lv.get('to_date')}" if lv.get("to_date") != lv.get("from_date") else "") + ")"
+                                + (f": {note}" if note else ""),
+                                entity_type="leave", entity_id=leave_id, ntype="leave_withdrawn",
+                                title=f"{lv.get('leave_type', 'Leave').title()} leave", sender=user.get("name"))
+    await log_activity(user["tenant_id"], user["id"], "leave_withdrawn",
+                       f"{user.get('name')} withdrew their leave", "leave", leave_id)
+    return await db.leaves.find_one({"id": leave_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
 
 
 @router.get("/leaves/{leave_id}/impact")

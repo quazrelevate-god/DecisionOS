@@ -357,16 +357,38 @@ def summarize_proposal(proposal: dict) -> dict:
     }
 
 
+async def _default_approver_for(tenant_id, decision, on_task):
+    """ASK-50 — who approves a decision's task when the proposal named nobody:
+    exactly who New Task would pick for the person who raised the decision
+    (their reporting manager when the manager may approve and is not on the
+    task, else the owner) — the tasks are created "asked by" them."""
+    from routers.tasks import _default_task_approver
+    creator = await db.users.find_one({"id": decision.get("created_by"), "tenant_id": tenant_id},
+                                      {"_id": 0, "id": 1, "role": 1, "reporting_manager_id": 1}) or {}
+    creator = {**creator, "id": creator.get("id") or decision.get("created_by"), "tenant_id": tenant_id}
+    return await _default_task_approver(creator, frozenset(x for x in on_task if x))
+
+
 async def _create_decision_tasks(tenant_id, decision, items):
-    """Create the decision's tasks on approval; returns their ids."""
+    """Create the decision's tasks on approval; returns their ids.
+    ASK-50 — with the proof and approval the proposal was given
+    (services.proposal_task_settings.creation_fields): the same fields, and the
+    same lock before work starts, that New Task writes."""
+    from services.proposal_task_settings import creation_fields
     task_ids = []
     for t in items or []:
         tid = new_id()
+        default_approver = None
+        if t.get("approval_required") and not t.get("approver_id"):
+            default_approver = await _default_approver_for(
+                tenant_id, decision, {decision.get("created_by"), t.get("assignee_id")})
+        settings = creation_fields(t, default_approver)
         await db.tasks.insert_one({
             "id": tid, "tenant_id": tenant_id, "title": t.get("title") or "Untitled task",
             "description": t.get("description", ""), "assignee_role": t.get("assignee_role"),
             "assignee_id": t.get("assignee_id"), "priority": t.get("priority") or "medium",
-            "status": "todo", "due_date": t.get("due_date"), "decision_id": decision["id"],
+            "due_date": t.get("due_date"), "decision_id": decision["id"],
+            **settings,
             "task_type": t.get("task_type"), "created_by": decision.get("created_by"),
             "source": decision.get("source") or "voice", "created_at": now_iso(),
             # WE-01 / ASK-32 4.2: the workflow the proposal tied it to, else filled

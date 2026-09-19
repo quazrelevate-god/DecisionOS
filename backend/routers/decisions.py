@@ -221,10 +221,15 @@ async def reject_decision(decision_id: str, user: dict = Depends(require_perm("d
 @router.patch("/decisions/{decision_id}/proposal/tasks/{key}")
 async def edit_decision_proposal_task(decision_id: str, key: str, inp: DecisionProposalTaskInput,
                                       user: dict = Depends(get_current_user)):
-    """ASK-32 Phase 3 — before approving: who does a proposed task, and when it is due."""
+    """ASK-32 Phase 3 — before approving: who does a proposed task, and when it is due.
+    ASK-50 — and its priority, whether it needs proof, and whether and when it
+    needs approving; applied when approval creates the task."""
     from services.decision_flow import edit_proposal_task
     from services.enrich import enrich_decision
-    d = await edit_proposal_task(user, decision_id, key, assignee_id=inp.assignee_id, due_date=inp.due_date)
+    d = await edit_proposal_task(user, decision_id, key, assignee_id=inp.assignee_id, due_date=inp.due_date,
+                                 priority=inp.priority, evidence_required=inp.evidence_required,
+                                 approval_required=inp.approval_required, approval_stage=inp.approval_stage,
+                                 approver_id=inp.approver_id)
     return await enrich_decision(d, tenant_id=user["tenant_id"])
 
 

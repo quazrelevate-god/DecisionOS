@@ -400,7 +400,10 @@ def edit_refusal(t: dict, changes: dict, rights: dict) -> Optional[str]:
 #   "close"  approve before it's marked done: the doer works freely, Complete
 #            sends it to the approver, Approve closes it, Request changes sends
 #            it back to In progress with the reason.
-APPROVAL_STAGES = ("start", "close")
+# ASK-50 — one definition, shared with the decision proposal's task settings
+# (services.proposal_task_settings, which has no database import so its rules
+# can be unit-tested). Same two values as always.
+from services.proposal_task_settings import APPROVAL_STAGES  # noqa: E402
 
 
 def approval_stage(t: dict) -> Optional[str]:

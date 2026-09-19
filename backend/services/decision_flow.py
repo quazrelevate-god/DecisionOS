@@ -280,9 +280,16 @@ async def _save_proposal(user: dict, d: dict, label: str) -> dict:
     return await db.decisions.find_one(tenant_filter(d["id"], tid), {"_id": 0})
 
 
-async def edit_proposal_task(user: dict, decision_id: str, key: str, *, assignee_id=None, due_date=None) -> dict:
+async def edit_proposal_task(user: dict, decision_id: str, key: str, *, assignee_id=None, due_date=None,
+                             priority=None, evidence_required=None, approval_required=None,
+                             approval_stage=None, approver_id=None) -> dict:
     """assignee_id: who does it (held to the same rule as giving anyone a task);
-    due_date: "YYYY-MM-DD", or "" for no due date."""
+    due_date: "YYYY-MM-DD", or "" for no due date.
+    ASK-50 — priority, evidence_required, approval_required / approval_stage and
+    approver_id ("" = the usual approver): held on the proposal and applied when
+    approval creates the task (services.voice._create_decision_tasks). The
+    rules are services.proposal_task_settings'; a named approver is held to the
+    same checks New Task makes (routers.tasks.create_task)."""
     import re as _re
     d = await _editable(user, decision_id)
     tid = user["tenant_id"]
@@ -308,6 +315,30 @@ async def edit_proposal_task(user: dict, decision_id: str, key: str, *, assignee
         if (due_date or None) != task.get("due_date"):
             task["due_date"] = due_date or None
             changes.append(f"due {due_date}" if due_date else "no due date")
+    # ASK-50 — the settings New Task has and a proposal did not.
+    from services.proposal_task_settings import apply_settings
+    approver = None
+    if approver_id:
+        approver = await db.users.find_one({"id": approver_id, "tenant_id": tid},
+                                           {"_id": 0, "id": 1, "name": 1, "role": 1, "permissions": 1})
+        if not approver:
+            raise HTTPException(status_code=400, detail="That person isn't in this company.")
+        from routers.tasks import _member_can_approve
+        # RBAC P1 — the approver can't be the one doing it (owners exempt), as in New Task.
+        if approver.get("role") != "owner" and approver["id"] == task.get("assignee_id"):
+            raise HTTPException(status_code=400, detail=(
+                f"{approver.get('name') or 'That person'} is doing this task, so they can't approve it. "
+                "Pick someone else, or leave it to the usual approver."))
+        if not await _member_can_approve(tid, approver):
+            raise HTTPException(status_code=400, detail=(
+                f"{approver.get('name') or 'That person'} can't approve tasks. Pick someone with approval "
+                "access, or leave it to the usual approver."))
+    try:
+        changes += apply_settings(task, priority=priority, evidence_required=evidence_required,
+                                  approval_required=approval_required, approval_stage=approval_stage,
+                                  approver=approver, clear_approver=approver_id == "")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if not changes:
         return d
     return await _save_proposal(user, d, f"Changed before approval: {task.get('title')} — {', '.join(changes)}")
@@ -373,6 +404,21 @@ async def approve_decision_flow(user: dict, decision_id: str, *, authorized: boo
             who = (m or {}).get("name")
         who = who or t.get("assignee_role") or "team"
         await add_decision_event(decision_id, f"Task assigned to {who}: {t['title']}", user["name"], "assigned")
+        # ASK-50 — a task that needs approval before work starts is locked; as
+        # with New Task, the APPROVER hears about it first, and the doer when it
+        # is approved and can actually be started.
+        from services.proposal_task_settings import waits_on_approval
+        if waits_on_approval(t):
+            if t.get("approver_id"):
+                approvers = [t["approver_id"]]
+            else:
+                from services.notifications import _approver_ids
+                approvers = await _approver_ids(tid)
+            approvers = [a for a in approvers if a and a != user["id"]]
+            if approvers:
+                await _notify(tid, approvers, 2, f"Approval needed before work starts: '{t['title']}'", "task", t["id"],
+                              ntype="approval", title=t["title"], sender=user.get("name"))
+            continue
         # ASK-32 2.3 — the person the work went to hears about it.
         if t.get("assignee_id") and t["assignee_id"] != user["id"] and t.get("status") not in ("done", "cancelled"):
             await _notify(tid, [t["assignee_id"]], 1, f"Work assigned to you: '{t['title']}'", "task", t["id"],

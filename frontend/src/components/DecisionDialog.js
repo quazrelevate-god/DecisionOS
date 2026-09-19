@@ -59,6 +59,8 @@ import {
   GLASS_ICON_BTN, GLASS_PILL, GLASS_SHEET, INK_PILL, MAROON_PILL,
 } from "./karma/glass";
 import { GlassSelect } from "./karma/GlassSelect";
+import { ScopeSlider } from "./karma/ScopeSlider";
+import { DesignCheckbox } from "./karma/DesignCheckbox";
 import { useAuth } from "../context/AuthContext";
 import { userPerms } from "../lib/perms";
 import { canAssignPerson } from "../lib/taskAccess";
@@ -129,7 +131,12 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
   const [sending, setSending] = useState(false);
   const [confirmReject, setConfirmReject] = useState(false);
   const { user } = useAuth();
-  const [changing, setChanging] = useState(false);
+  /* ASK-50 — priority and proof for the tasks this decision creates, set here
+     and applied when it is approved (see approveM). null = untouched, and an
+     untouched setting is never sent — so Dex's own priority on a task is kept
+     unless the person approving actually changes it. */
+  const [taskPrio, setTaskPrio] = useState(null);
+  const [taskProof, setTaskProof] = useState(null);
   // Focus lands on the close when the card opens, not on the card itself:
   // Radix focuses the content, and the content's focus ring is the app's
   // lavender outline drawn round the whole popup.
@@ -204,25 +211,23 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
     || (!d?.approver_id && userPerms(user).includes("decisions_approve")));
   const waitingOn = d?.approver_id && d.approver_id === user?.id ? "Waiting on you"
     : d?.approver_name ? `Waiting on ${d.approver_name}` : "Waiting on an owner";
-  const approversQ = useQuery({
-    queryKey: ["decision-approvers", decisionId],
-    queryFn: () => api.get(`/decisions/${decisionId}/approvers`).then((r) => r.data),
-    enabled: !!decisionId && open && changing,
-  });
-  const changeM = useMutation({
-    mutationFn: (approverId) => api.post(`/decisions/${decisionId}/approver`, { approver_id: approverId }),
-    onSuccess: (res) => {
-      toast.success(`Sent to ${res?.data?.approver_name || "them"} to decide`);
-      setChanging(false);
-      invalidate();
-    },
-    onError: (e) => toast.error(e.response?.data?.detail || "Could not change who decides"),
-  });
-
+  /* ASK-50 — "Change who decides" is gone, and its query and mutation with it.
+     The founder: it opened a menu the current UI never drew, and it is not
+     needed — the decision goes to its approver as routed (route_approver on
+     the server), and the Needs-approval settings for the TASKS take its place
+     on this card. Testids that went with it: decision-change-approver,
+     decision-approver-picker, decision-approver-select. */
   /* ASK-32 Phase 3 (DD5) — before approving, whoever decides can change who
      does a task, when it is due, or drop an item. The server holds the same
      rules (and who may be given a task). */
   const editable = proposing && mayDecide;
+  /* ASK-50 — what the priority bar opens on: the priority Dex proposed, when
+     every task in the proposal agrees on one; otherwise medium, the app's
+     default. And who sees the card at all (see its comment below). */
+  const proposedPrios = [...new Set((rows || []).map((r) => r.priority).filter(Boolean))];
+  const proposedPrio = proposedPrios.length === 1 && ["low", "medium", "high"].includes(proposedPrios[0])
+    ? proposedPrios[0] : "medium";
+  const canShapeTasks = editable && rows.length > 0 && (user?.role === "owner" || d?.created_by === user?.id);
   const [editBusy, setEditBusy] = useState(false);
   const [audioUrl, setAudioUrl] = useState(null);
   const membersQ = useQuery({
@@ -283,14 +288,37 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
   ) : null);
 
   const approveM = useMutation({
-    mutationFn: () => api.post(`/decisions/${decisionId}/approve`),
-    onSuccess: (res) => {
+    /* ASK-50 — APPROVE, THEN SHAPE WHAT IT MADE. The server's proposal edit
+       takes only who does a task and when (edit_proposal_task), so priority
+       and proof cannot ride on the proposal; they are applied to the decision's
+       tasks the moment approval creates them, with the same PATCH /tasks/:id
+       the drawer uses — so the same rights hold (who asked for it, or the
+       owner). Only what was touched is sent. A refusal does not undo the
+       approval; it is reported. */
+    mutationFn: async () => {
+      const res = await api.post(`/decisions/${decisionId}/approve`);
+      const patch = {};
+      if (taskPrio !== null) patch.priority = taskPrio;
+      if (taskProof !== null) patch.evidence_required = taskProof;
+      let failed = [];
+      const ids = res?.data?.task_ids || [];
+      if (Object.keys(patch).length && ids.length) {
+        const out = await Promise.allSettled(ids.map((id) => api.patch(`/tasks/${id}`, patch)));
+        failed = out.filter((o) => o.status === "rejected")
+          .map((o) => o.reason?.response?.data?.detail || "Could not update the task");
+      }
+      return { res, failed };
+    },
+    onSuccess: ({ res, failed }) => {
       const c = res?.data?.created_on_approval;
       const made = c ? [
         c.task_ids ? `${c.task_ids} task${c.task_ids === 1 ? "" : "s"}` : null,
         c.workflow_ids ? `${c.workflow_ids} workflow${c.workflow_ids === 1 ? "" : "s"}` : null,
       ].filter(Boolean) : [];
       toast.success(made.length ? `Approved — ${made.join(" and ")} created` : "Approved");
+      if (failed.length) {
+        toast.error(`Approved, but ${failed.length === 1 ? "one task kept" : `${failed.length} tasks kept`} its old settings: ${failed[0]}`);
+      }
       // ASK-32 Phase 3 — stay open: the popup now shows what was created, with links.
       invalidate();
     },
@@ -460,6 +488,31 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
                     </Card>
                   )}
 
+                  {/* ASK-50 — THE TASKS IT CREATES: the New Task card's priority
+                      bar and its Needs proof, for the tasks this approval will
+                      make. Shown to whoever may apply them — the owner, or the
+                      person who raised it (the tasks are theirs: they are
+                      created "asked by" the decision's author) — and only while
+                      it is still a proposal with tasks in it. */}
+                  {canShapeTasks && (
+                    <Card label="The tasks it creates" right={`${rows.length} task${rows.length === 1 ? "" : "s"}`} testid="decision-task-settings">
+                      <p className={DRAWER_LABEL} id="decision-priority-label">Priority</p>
+                      <ScopeSlider fluid label="Priority" testid="decision-priority"
+                        options={[{ key: "low", label: "Low" }, { key: "medium", label: "Medium" }, { key: "high", label: "High" }]}
+                        value={taskPrio ?? proposedPrio} onChange={setTaskPrio}
+                        thumbClassName={`kr-prio-thumb--${taskPrio ?? proposedPrio}`} />
+                      <div className="mt-4">
+                        <DesignCheckbox testid="decision-evidence-required" checked={taskProof ?? false}
+                          onChange={(e) => setTaskProof(e.target.checked)}>
+                          Needs proof (photo, voice note or file) before it can be completed
+                        </DesignCheckbox>
+                      </div>
+                      <p className="mt-3 text-xs text-slate-500" data-testid="decision-task-settings-note">
+                        {rows.length === 1 ? "Set on the task" : rows.length === 2 ? "Set on both tasks" : `Set on all ${rows.length} tasks`} when you approve.
+                      </p>
+                    </Card>
+                  )}
+
                   {mayDecide && (
                     <Card label="Your call" testid="decision-actions-card">
                       <div className="flex flex-wrap gap-2.5" data-testid="decision-actions">
@@ -529,31 +582,6 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
                             <p className="text-xs text-slate-500">
                               {proposing ? "Nothing below is created until it's approved" : "Everything below is blocked"}
                             </p>
-                          )}
-                          {mayDecide && !changing && (
-                            <button type="button" onClick={() => setChanging(true)} data-testid="decision-change-approver"
-                              className="mt-1 text-xs font-medium text-slate-700 underline underline-offset-2 hover:text-slate-900">
-                              Change who decides
-                            </button>
-                          )}
-                          {mayDecide && changing && (
-                            <div className="mt-2 flex items-center gap-2" data-testid="decision-approver-picker">
-                              <div className="min-w-0 flex-1">
-                                <GlassSelect
-                                  value=""
-                                  onChange={(v) => v && changeM.mutate(v)}
-                                  ariaLabel="Who decides"
-                                  testid="decision-approver-select"
-                                  placeholder={approversQ.isLoading ? "Loading…" : "Pick who decides"}
-                                  disabled={changeM.isPending}
-                                  options={(approversQ.data || [])
-                                    .filter((p) => p.id !== d.approver_id)
-                                    .map((p) => ({ value: p.id, label: `${p.name}${p.id === user?.id ? " (you)" : ""}` }))}
-                                />
-                              </div>
-                              <button type="button" onClick={() => setChanging(false)}
-                                className="text-xs text-slate-500 hover:text-slate-800">Cancel</button>
-                            </div>
                           )}
                         </div>
                       </li>

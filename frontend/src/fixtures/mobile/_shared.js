@@ -62,6 +62,16 @@ export function buildWrites() {
     // followed by the same id, so that write answers with it too.
     // ASK-33 — every new capture walks the stages again from the start.
     { match: /^\/voice-notes(\/text|\/[^/]+\/submit)?$/, data: () => { dexReads = 0; return { id: "vn_fixture", status: "queued" }; } },
+    // ASK-50 — approving answers with what the server's approve does
+    // (services/decision_flow.approve_decision_flow): the decision, now
+    // approved, with the task ids it made and the counts. The review card reads
+    // task_ids to set the priority and proof it was given on those tasks; a
+    // bare { ok: true } had no ids, so in fixture mode that step never ran.
+    { match: /^\/decisions\/[^/]+\/approve$/, data: ({ path }) => ({
+      id: path.split("/")[2], status: "approved",
+      task_ids: ["t_approved_1", "t_approved_2"],
+      created_on_approval: { task_ids: 2, workflow_ids: 1, meetings: 0, reminders: 0, memory_notes: 0 },
+    }) },
     // ASK-33 — the Desk well attaches a file by the id this returns; without
     // one there is nothing to send with the note and no chip to show.
     { match: /^\/files$/, data: { id: "file_fixture", filename: "attachment" } },

@@ -97,6 +97,14 @@ class ProfileUpdateInput(BaseModel):
     email: Optional[EmailStr] = None
     current_password: Optional[str] = None
     otp_code: Optional[str] = None
+    # 2026-09-19 — the code /auth/phone/send-code texted to the NEW number.
+    # A mobile is a sign-in and a WhatsApp route, so a new one is saved only
+    # once the person holding it has read that code back.
+    phone_code: Optional[str] = Field(default=None, max_length=12)
+
+
+class PhoneChangeCodeInput(BaseModel):
+    phone: str = Field(max_length=32)
 
 
 class ChangePasswordInput(BaseModel):

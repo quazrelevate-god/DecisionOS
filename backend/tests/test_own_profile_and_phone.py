@@ -175,7 +175,10 @@ def test_a_member_keeps_their_own_details_without_a_manager(with_test_db):
             me = _actor("u-fin", "finance", [])
             await rauth.update_profile(ProfileUpdateInput(
                 name="Sunita Rao", title="Head of Finance",
-                about="GST filings, and every payment over 1 lakh", phone="9820010055"), user=me)
+                about="GST filings, and every payment over 1 lakh",
+                # the whole form comes back on save, number included: the same
+                # number, written differently, is not a change and needs no code
+                phone="+91 98200 10003"), user=me)
             return await db.users.find_one({"id": "u-fin"}, {"_id": 0})
         finally:
             restore()
@@ -184,7 +187,9 @@ def test_a_member_keeps_their_own_details_without_a_manager(with_test_db):
     assert row["name"] == "Sunita Rao"
     assert row["title"] == "Head of Finance", "their own job title, in their own hands"
     assert row["about"].startswith("GST filings"), "and what they handle, for the team to see"
-    assert row["phone_norm"] == "9820010055", "their own number is theirs to change"
+    assert row["phone_norm"] == "9820010003", "an unchanged number rides along untouched"
+    # Changing it is theirs too — confirmed by a code to the new number since
+    # 2026-09-19; see test_own_mobile_change_is_confirmed.py.
     assert row["role"] == "finance" and row["permissions"] == [], "and nothing about their access moved"
 
 

@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import api from "../lib/api";
+import api, { formatApiError } from "../lib/api";
+import { normIndianMobile, displayIndianMobile } from "../lib/phone";
+import OtpBoxes from "./auth/OtpBoxes";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { UserCircle, FloppyDisk, Lock, CheckCircle, Envelope } from "@phosphor-icons/react";
 
@@ -15,11 +17,34 @@ export function ProfileForm({ onSaved }) {
   const [saving, setSaving] = useState(false);
   const [verifySent, setVerifySent] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  // 2026-09-19 (U7-24.14) — a new mobile is saved only with the code texted to
+  // it. phoneCodeFor is the number that code went to; if they then type a
+  // different one, it is a different number and needs its own code.
+  const [phoneCodeFor, setPhoneCodeFor] = useState("");
+  const [phoneCode, setPhoneCode] = useState("");
+  const [phoneResendIn, setPhoneResendIn] = useState(0);
+  const [sendingPhone, setSendingPhone] = useState(false);
   // 2026-09-16 — your own details are yours to keep current: name, job title,
   // what you handle, mobile, email. Role, access and reporting line are NOT
   // here: those are a manager's call about you, on the Team page.
   const passwordless = !!user?.passwordless;
   const emailChanged = form.email.trim().toLowerCase() !== (user?.email || "").toLowerCase();
+  // The whole form comes back on every save; the same number written another
+  // way ("+91 98200 10003" for "9820010003") is not a change, so compare the
+  // last ten digits — the key sign-in and WhatsApp use.
+  const last10 = (v) => String(v || "").replace(/\D/g, "").slice(-10);
+  const storedPhone = user?.phone_norm || last10(user?.phone);
+  const typedPhone = form.phone.trim();
+  const phoneRemoved = !typedPhone && !!storedPhone;
+  const phoneChanged = !!typedPhone && last10(typedPhone) !== storedPhone;
+  const newPhone = phoneChanged ? normIndianMobile(typedPhone) : "";
+  const phoneCodeReady = !!newPhone && phoneCodeFor === newPhone && phoneCode.length === 6;
+
+  useEffect(() => {
+    if (phoneResendIn <= 0) return;
+    const t = setTimeout(() => setPhoneResendIn((n) => n - 1), 1000);
+    return () => clearTimeout(t);
+  }, [phoneResendIn]);
 
   // Fill the form from the account ONCE (and again only if a different person
   // signs in). The auth context hands back a new `user` object on every refresh
@@ -37,7 +62,7 @@ export function ProfileForm({ onSaved }) {
 
   const sendCode = async () => {
     try {
-      const { data } = await api.post("/auth/otp/request", { phone: form.phone.trim() || user?.phone });
+      const { data } = await api.post("/auth/otp/request", { phone: user?.phone });
       setCodeSent(true);
       if (data.dev_otp) { setConfirmWith(data.dev_otp); toast.info(`Dev OTP: ${data.dev_otp}`); }
       else toast.success("We texted a code to your mobile");
@@ -63,8 +88,36 @@ export function ProfileForm({ onSaved }) {
     }
   };
 
+  const sendPhoneCode = async () => {
+    if (!newPhone || sendingPhone) return;
+    setSendingPhone(true);
+    try {
+      const { data } = await api.post("/auth/phone/send-code", { phone: newPhone });
+      setPhoneCodeFor(newPhone);
+      setPhoneCode(data.dev_otp || "");
+      setPhoneResendIn(30);
+      if (data.dev_otp) toast.info(`Dev OTP: ${data.dev_otp} (auto-filled)`);
+      else toast.success(`We texted a code to ${displayIndianMobile(newPhone)}`);
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Could not send the code");
+    } finally {
+      setSendingPhone(false);
+    }
+  };
+
   const save = async () => {
     if (!form.name.trim()) { toast.error("Name can't be empty"); return; }
+    if (phoneChanged && !newPhone) { toast.error("Enter a 10-digit Indian mobile number"); return; }
+    if (phoneChanged && !phoneCodeReady) {
+      toast.error(phoneCodeFor === newPhone
+        ? "Enter the code we texted to your new number"
+        : "Text a code to your new number first, then save");
+      return;
+    }
+    if (phoneRemoved && passwordless) {
+      toast.error("You sign in with this number, so it can be changed but not removed.");
+      return;
+    }
     if (emailChanged && !confirmWith.trim()) {
       toast.error(passwordless ? "Enter the code we texted you" : "Enter your current password to change your email");
       return;
@@ -73,6 +126,7 @@ export function ProfileForm({ onSaved }) {
     try {
       await api.patch("/auth/profile", {
         name: form.name.trim(), title: form.title.trim(), about: form.about.trim(), phone: form.phone.trim(),
+        ...(phoneChanged ? { phone_code: phoneCode } : {}),
         ...(emailChanged ? {
           email: form.email.trim().toLowerCase(),
           ...(passwordless ? { otp_code: confirmWith.trim() } : { current_password: confirmWith }),
@@ -80,10 +134,14 @@ export function ProfileForm({ onSaved }) {
       });
       await refreshMe();
       setConfirmWith(""); setCodeSent(false);
+      if (phoneChanged) setForm((f) => ({ ...f, phone: displayIndianMobile(newPhone) }));
+      setPhoneCodeFor(""); setPhoneCode(""); setPhoneResendIn(0);
       toast.success(emailChanged ? "Saved — check your new address for the link that confirms it" : "Profile updated");
       onSaved?.();
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Could not update profile");
+      // formatApiError: the phone refusals carry {code, message}, and handing
+      // an object to a toast prints nothing useful.
+      toast.error(formatApiError(e.response?.data?.detail) || "Could not update profile");
     } finally {
       setSaving(false);
     }
@@ -115,6 +173,43 @@ export function ProfileForm({ onSaved }) {
         <input id="profile-phone" data-testid="profile-phone-input" value={form.phone} onChange={set("phone")}
           className={inp} placeholder="+91 98765 43210" />
         <p className="label-mono text-muted-foreground mt-1">Used for OTP login and to route your WhatsApp messages to this workspace.</p>
+        {phoneChanged && !newPhone && (
+          <p className="label-mono mt-2 text-danger-600" data-testid="profile-phone-invalid">
+            Enter a 10-digit Indian mobile number
+          </p>
+        )}
+        {newPhone && (
+          <div className="mt-3 space-y-3 rounded-lg border border-border p-3" data-testid="profile-phone-confirm">
+            <p className="text-xs text-muted-foreground">
+              A new number signs you in, so we check it&apos;s yours: we&apos;ll text a code to{" "}
+              <strong className="text-foreground">{displayIndianMobile(newPhone)}</strong>. Your old number keeps
+              working until you save.
+            </p>
+            {phoneCodeFor === newPhone ? (
+              <>
+                <div className="max-w-xs">
+                  <OtpBoxes value={phoneCode} onChange={setPhoneCode} disabled={saving} testid="profile-phone-code-boxes" />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Enter it, then Save changes.{" "}
+                  {phoneResendIn > 0 ? (
+                    <span data-testid="profile-phone-resend-wait">Text it again in {phoneResendIn}s</span>
+                  ) : (
+                    <button type="button" onClick={sendPhoneCode} disabled={sendingPhone} data-testid="profile-phone-resend"
+                      className="font-semibold text-foreground underline underline-offset-2 disabled:opacity-50">
+                      Text it again
+                    </button>
+                  )}
+                </p>
+              </>
+            ) : (
+              <button type="button" onClick={sendPhoneCode} disabled={sendingPhone} data-testid="profile-phone-send-code"
+                className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted disabled:opacity-50">
+                {sendingPhone ? "Sending…" : `Text a code to ${displayIndianMobile(newPhone)}`}
+              </button>
+            )}
+          </div>
+        )}
       </div>
       <div>
         <label className="label-mono text-muted-foreground" htmlFor="profile-email">Email</label>

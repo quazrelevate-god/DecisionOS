@@ -88,6 +88,7 @@ from models.auth import (  # noqa: F401
     RoleItem, ProductItem, RegisterInput, LoginInput, SwitchWorkspaceInput,
     TotpConfirmInput, TotpVerifyLoginInput, TotpDisableInput, TransferOwnershipInput,
     ProfileUpdateInput, ChangePasswordInput, PasswordForgotInput, PasswordResetInput,
+    PhoneChangeCodeInput,
 )
 
 
@@ -909,12 +910,38 @@ async def update_profile(inp: ProfileUpdateInput, user: dict = Depends(get_curre
     if inp.about is not None:
         # One line on what you look after, in your own words.
         updates["about"] = inp.about.strip()[:280] or None
+    # 2026-09-19 (U7-24.14) — a new mobile is saved only with the code texted
+    # to it. It used to be saved on trust after one check (nobody else in the
+    # workspace has it), so a slip locked you out of Mobile OTP and gave the
+    # stranger who owns the mistyped number a sign-in as you, with their
+    # WhatsApp filed as yours; a 5-digit "number" saved too. Signup closed the
+    # same hole the same way (U7-24.11). The code is checked last, just before
+    # the write, so a refusal elsewhere in this form doesn't spend it.
+    _phone_to_confirm = None
     if inp.phone is not None:
-        # Changing your number should re-enable WhatsApp matching for it.
-        from services.auth.phone import norm_phone  # FIX-002-A
-        _new_phone = inp.phone.strip()
-        _new_norm = norm_phone(_new_phone)
-        if _new_norm != norm_phone(user.get("phone") or "") and len(_new_norm) >= 10:
+        from services.auth.phone import norm_phone, valid_indian_mobile, display_indian_mobile
+        _stored = await db.users.find_one({"id": user["id"]}, {"_id": 0, "phone": 1, "phone_norm": 1,
+                                                               "passwordless": 1}) or {}
+        _old_norm = _stored.get("phone_norm") or norm_phone(_stored.get("phone") or "")
+        _typed = inp.phone.strip()
+        if not _typed:
+            if _old_norm:
+                # Taking a number away only narrows what it can do — except for
+                # someone who signs in with nothing else.
+                if _stored.get("passwordless"):
+                    raise HTTPException(status_code=400, detail=(
+                        "You sign in with this number, so it can be changed but not removed."))
+                updates.update({"phone": "", "phone_norm": "", "phone_verified_at": None})
+        elif norm_phone(_typed) == _old_norm:
+            # The whole form comes back on every save, number included. The same
+            # number, however it is written, is not a change — and an old
+            # malformed one is left alone rather than blocking a name edit.
+            pass
+        else:
+            _new_norm = valid_indian_mobile(_typed)
+            if not _new_norm:
+                raise HTTPException(status_code=400, detail={
+                    "code": "phone_invalid", "message": "Enter a 10-digit Indian mobile number."})
             # One mobile, one member, inside this workspace: the number is a
             # sign-in and a WhatsApp route, so taking a colleague's number would
             # send their codes and captures to your account.
@@ -927,9 +954,16 @@ async def update_profile(inp: ProfileUpdateInput, user: dict = Depends(get_curre
                     status_code=400,
                     detail=f"That mobile number is already {clash.get('name')}'s in this workspace.",
                 )
-        updates["phone"] = _new_phone
-        updates["phone_norm"] = _new_norm  # keep index-searchable form in sync
-        updates["wa_phone_obsolete"] = False
+            if not (inp.phone_code or "").strip():
+                raise HTTPException(status_code=400, detail={
+                    "code": "phone_unconfirmed",
+                    "message": "Confirm the new number with the code we text to it."})
+            _phone_to_confirm = (_new_norm, inp.phone_code)
+            updates["phone"] = display_indian_mobile(_new_norm)
+            updates["phone_norm"] = _new_norm  # keep index-searchable form in sync
+            updates["phone_verified_at"] = now_iso()
+            # Changing your number should re-enable WhatsApp matching for it.
+            updates["wa_phone_obsolete"] = False
     if inp.language is not None and inp.language in ("en", "hi", "ta"):
         updates["language"] = inp.language
     if inp.email is not None and inp.email.strip().lower() != (user.get("email") or "").lower():
@@ -957,11 +991,68 @@ async def update_profile(inp: ProfileUpdateInput, user: dict = Depends(get_curre
         updates["email_verified_at"] = None
     if not updates:
         raise HTTPException(status_code=400, detail="Nothing to update")
+    if _phone_to_confirm:
+        from services.otp import consume_otp
+        await consume_otp(_phone_to_confirm[0], _profile_phone_scope(user["id"]), _phone_to_confirm[1])
     updates["updated_at"] = now_iso()
     await db.users.update_one({"id": user["id"]}, {"$set": updates})
     fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0, "password": 0})
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
     return {"user": fresh, "tenant": tenant}
+
+
+def _profile_phone_scope(user_id: str) -> str:
+    """Where a change-your-mobile code lives in otp_codes. Its own scope, not
+    the workspace's: a sign-in code for the new number (if it already signs in
+    elsewhere) must not confirm this change, and this code must never sign
+    anyone in."""
+    return f"profile:{user_id}"
+
+
+# One person, and one number, can be texted this many change codes an hour.
+_PHONE_CHANGE_CODES_PER_USER = (10, 3600)
+_PHONE_CHANGE_CODES_PER_NUMBER = (5, 3600)
+
+
+@router.post("/phone/send-code")
+async def send_phone_change_code(inp: PhoneChangeCodeInput, user: dict = Depends(get_current_user)):
+    """Text a code to the mobile you want to switch to (2026-09-19, U7-24.14).
+
+    Signed-in only, and it answers the questions Save would, before anything is
+    texted: is it a mobile, is it actually different, is it a colleague's.
+    """
+    from services.auth.phone import norm_phone, valid_indian_mobile, display_indian_mobile
+    from services.rate_limit import check_rate_limit
+    from services.otp import _issue_otp
+    norm = valid_indian_mobile(inp.phone)
+    if not norm:
+        raise HTTPException(status_code=400, detail="Enter a 10-digit Indian mobile number")
+    stored = await db.users.find_one({"id": user["id"]}, {"_id": 0, "phone": 1, "phone_norm": 1}) or {}
+    if norm == (stored.get("phone_norm") or norm_phone(stored.get("phone") or "")):
+        raise HTTPException(status_code=400, detail="That's already your number.")
+    clash = await db.users.find_one(
+        {"tenant_id": user["tenant_id"], "phone_norm": norm, "id": {"$ne": user["id"]}},
+        {"_id": 0, "name": 1},
+    )
+    if clash:
+        raise HTTPException(status_code=400,
+                            detail=f"That mobile number is already {clash.get('name')}'s in this workspace.")
+    for key, (limit, window), bucket in (
+        (user["id"], _PHONE_CHANGE_CODES_PER_USER, "profile_phone_code_user"),
+        (norm, _PHONE_CHANGE_CODES_PER_NUMBER, "profile_phone_code_number"),
+    ):
+        ok, retry_after = await check_rate_limit(key, limit, window, bucket=bucket)
+        if not ok:
+            mins = max(1, round(retry_after / 60))
+            raise HTTPException(
+                status_code=429,
+                detail=f"That's a lot of codes in an hour. Try again in about {mins} minute{'s' if mins != 1 else ''}.",
+                headers={"Retry-After": str(retry_after)},
+            )
+    resp = await _issue_otp(norm, norm, tenant_id=_profile_phone_scope(user["id"]))
+    resp.pop("tenant_id", None)
+    resp["phone"] = display_indian_mobile(norm)
+    return resp
 
 
 @router.post("/change-password")

@@ -168,10 +168,20 @@ number in a second workspace the page asks which one and signs into it.
 - **A resumed signup redoes the website and interview steps** unless the
   blueprint was already built. Their answers are safe; the two AI steps are not
   saved individually.
-- **Changing your own mobile in Settings is not confirmed yet.** Settings ›
-  Your Profile still saves a new number on trust (it only checks nobody else
-  in the workspace has it) — the same hole, after signup. Same fix: a code to
-  the NEW number before it is saved.
+- ~~**Changing your own mobile in Settings is not confirmed yet.**~~ **Done
+  2026-09-19 (U7-24.14).** Settings › Your Profile now texts a code to the NEW
+  number (`POST /auth/phone/send-code`, signed-in only) and saves it only with
+  that code; the old number keeps working until then. The same Indian-mobile
+  rule applies (a 5-digit number used to save), a colleague's number is
+  refused before anything is texted, the same number written differently is
+  not a change, an old malformed number rides along untouched until changed,
+  and someone who signs in only by mobile can change their number but not
+  remove it. The code lives in its own scope, so a sign-in code can't confirm a
+  change and a change code can't sign anyone in; it is checked last, so a
+  refusal elsewhere in the form doesn't spend it. Tests:
+  `test_own_mobile_change_is_confirmed.py` (19); browser:
+  `scripts/ux_own_mobile_0919.py` 15/15 — including the old number no longer
+  signing in and the new one signing in by Mobile OTP.
 - **The Flutter app signs in with email and password only.** Mobile OTP exists
   on the web and the installed web app; the native app (on hold) has no OTP
   screen.

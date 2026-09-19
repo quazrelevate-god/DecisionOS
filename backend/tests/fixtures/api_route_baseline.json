@@ -1,6 +1,6 @@
 {
-  "count": 329,
-  "sha": "29c1678de3b2a562ed967103b70f7c11c1e655b5e4b5c0f69b8a0dc9c41c4a8d",
+  "count": 331,
+  "sha": "b81e191a97a1165fc60f1ab86ba9bb3b20a7705dbd287cdc9c4cfa9295cf6cb8",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -297,6 +297,8 @@
     "POST /api/signup/interview/blueprint",
     "POST /api/signup/interview/refine",
     "POST /api/signup/interview/start",
+    "POST /api/signup/phone/send-code",
+    "POST /api/signup/phone/verify",
     "POST /api/signup/stt",
     "POST /api/signup/tts",
     "POST /api/signup/website-intel",

@@ -102,6 +102,11 @@ export function formFromDraft(stepData) {
     name: about.name || "",
     email: about.email || "",
     phone: about.phone || "",
+    // 2026-09-19 — the proof that number was confirmed by a texted code, so a
+    // founder who comes back doesn't get texted again (until it lapses).
+    phone_token: about.phone_token || "",
+    phone_verified_norm: about.phone_verified_norm || "",
+    phone_token_expires_at: about.phone_token_expires_at || "",
     industry: about.industry || "",
     description: about.description || "",
     team_size: scale.team_size || "",

@@ -196,11 +196,19 @@ class TestRegisterWithPhone:
             "phone": phone_digits,
             "industry": "General",
         }
+        # 2026-09-19 — a phone on an account is confirmed by a texted code
+        # first; register refuses one without the proof.
+        sc = s.post(f"{API}/signup/phone/send-code", json={"phone": phone_digits})
+        assert sc.status_code == 200, sc.text
+        pv = s.post(f"{API}/signup/phone/verify", json={"phone": phone_digits, "code": sc.json()["dev_otp"]})
+        assert pv.status_code == 200, pv.text
+        payload["phone_token"] = pv.json()["phone_token"]
         r = s.post(f"{API}/auth/register", json=payload)
         assert r.status_code == 200, r.text
         d = r.json()
         assert d["user"]["email"] == payload["email"]
-        assert d["user"].get("phone") == phone_digits
+        assert d["user"].get("phone_norm") == phone_digits
+        assert d["user"].get("phone") == f"+91 {phone_digits[:5]} {phone_digits[5:]}"
 
         # OTP login for this new user
         r2 = s.post(f"{API}/auth/otp/request", json={"phone": phone_digits})

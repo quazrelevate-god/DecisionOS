@@ -45,8 +45,10 @@ export function AuthProvider({ children }) {
     return data;
   };
 
-  const loginWithOtp = async (phone, code) => {
-    const { data } = await api.post("/auth/otp/verify", { phone, code });
+  // tenantId: which workspace the code was sent for, when the number belongs to
+  // more than one. Without it the API answers 409 and asks.
+  const loginWithOtp = async (phone, code, tenantId) => {
+    const { data } = await api.post("/auth/otp/verify", { phone, code, ...(tenantId ? { tenant_id: tenantId } : {}) });
     persist(data);
     return data;
   };

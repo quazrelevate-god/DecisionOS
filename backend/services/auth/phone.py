@@ -126,3 +126,44 @@ async def find_tenant_choices_for_phone(db, norm: str) -> list:
         }
         for u in picked
     ]
+
+
+# ---------------------------------------------------------------------------
+# 2026-09-19 — what counts as a mobile number we can sign someone in with.
+#
+# `norm_phone` above is deliberately forgiving: it is a LOOKUP key, and it has
+# to find "+91 98200 10001" and "9820010001" as the same person. It is not a
+# validator, and signup had been using nothing stricter than "8 digits" — so a
+# founder could save a number that OTP sign-in then refused (too short), or a
+# foreign number whose last ten digits are somebody else's Indian mobile.
+#
+# The product is India-first and every downstream consumer agrees: norm_phone
+# keeps the last 10 digits, the APM gateway texts a bare 10-digit number, and
+# WhatsApp routing matches on the same key. So the rule is an Indian mobile:
+# ten digits starting 6-9, optionally written with +91, 91 or a leading 0.
+# frontend/src/lib/phone.js mirrors this exactly — keep the two in step.
+# ---------------------------------------------------------------------------
+_INDIAN_MOBILE = re.compile(r"^[6-9]\d{9}$")
+
+
+def valid_indian_mobile(raw) -> str:
+    """Return the 10-digit number if `raw` is an Indian mobile, else "".
+
+    Accepts spaces, dashes, brackets and dots in any arrangement, and one of
+    the prefixes people actually type: +91 / 91 (12 digits) or 0 (11 digits).
+    Anything else — a landline, a short number, another country's code — is
+    refused rather than guessed at.
+    """
+    if not isinstance(raw, str):
+        return ""
+    digits = _NON_DIGITS.sub("", raw)
+    if len(digits) == 12 and digits.startswith("91"):
+        digits = digits[2:]
+    elif len(digits) == 11 and digits.startswith("0"):
+        digits = digits[1:]
+    return digits if _INDIAN_MOBILE.match(digits) else ""
+
+
+def display_indian_mobile(norm: str) -> str:
+    """"+91 98765 43210" — how the number is written back on screen."""
+    return f"+91 {norm[:5]} {norm[5:]}" if len(norm) == 10 else norm

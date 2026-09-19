@@ -226,7 +226,7 @@ function PillSection({ label, items, tint, testid, startAt, stagger, still, newK
 // Generates the personalized OS blueprint from the interview, lets the founder
 // refine it, then registers the workspace and reveals it. Dex keeps the wait alive.
 export function BuildReveal({ sessionId, languageCode, payload, register, signIn, onEnter,
-                              savedBlueprint = null, onBlueprint }) {
+                              savedBlueprint = null, onBlueprint, onFixPhone }) {
   const [pct, setPct] = useState(0);
   const [line, setLine] = useState(0);
   // stage: 'building' → 'preview' (refine) → 'registering' → 'reveal'
@@ -236,6 +236,9 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
   const [error, setError] = useState("");
   // The email turned out to be taken: the way forward is signing in, not retrying.
   const [takenEmail, setTakenEmail] = useState(false);
+  // 2026-09-19 — the mobile's proof lapsed (it lasts a day) or never arrived:
+  // the way forward is confirming it again, which only that step can do.
+  const [phoneIssue, setPhoneIssue] = useState(false);
   const [refineText, setRefineText] = useState("");
   const [refining, setRefining] = useState(false);
   const [showRefine, setShowRefine] = useState(false);
@@ -330,7 +333,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
 
   const confirmAndRegister = async () => {
     if (!bp || stage === "registering") return;
-    setStage("registering"); setError(""); setTakenEmail(false);
+    setStage("registering"); setError(""); setTakenEmail(false); setPhoneIssue(false);
     try {
       // 2026-09-17 — ask once more, right before the long call: the email was
       // checked back on the sign-in step and a founder can spend minutes in the
@@ -348,7 +351,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
       const products = (bp.products || payload.products || []).filter((p) => (p.name || "").trim());
       await register({
         company_name: payload.company_name, name: payload.name, email: payload.email,
-        password: payload.password, phone: payload.phone,
+        password: payload.password, phone: payload.phone, phone_token: payload.phone_token,
         industry: payload.industry || "General", description: payload.description,
         company_size: payload.company_size, currency: "INR",
         business_scale: { employees: payload.company_size },
@@ -382,7 +385,10 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
       setStage("preview");
       // The one failure a founder can act on: the email is taken. Say so, and
       // offer the door — pressing "Create" again cannot help.
-      if (detail?.code === "email_registered" || /already ha[sd] a workspace|already registered/i.test(formatApiError(detail) || "")) {
+      if (detail?.code === "phone_unverified" || detail?.code === "phone_invalid") {
+        setPhoneIssue(true);
+        setError(formatApiError(detail) || "Confirm your mobile number again.");
+      } else if (detail?.code === "email_registered" || /already ha[sd] a workspace|already registered/i.test(formatApiError(detail) || "")) {
         setTakenEmail(true);
         setError(formatApiError(detail) || "This email already has a workspace. Sign in instead.");
       } else {
@@ -779,9 +785,18 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
               {error && (
                 <div className="rounded-2xl border border-danger-600/40 bg-danger-600/10 p-4" data-testid="build-error-banner">
                   <p className="mb-1 text-sm font-bold text-danger-600">
-                    {takenEmail ? "That email already has a workspace" : "Couldn't create your workspace"}
+                    {takenEmail ? "That email already has a workspace"
+                      : phoneIssue ? "Your mobile number needs confirming again"
+                      : "Couldn't create your workspace"}
                   </p>
                   <p className="text-sm text-danger-600 font-semibold" data-testid="build-error">{error}</p>
+                  {phoneIssue && onFixPhone && (
+                    <button type="button" onClick={(e) => { e.stopPropagation(); onFixPhone(); }}
+                      data-testid="build-error-fix-phone"
+                      className="mt-3 inline-flex h-10 items-center rounded-pill bg-kr-ink px-5 text-sm font-medium text-white">
+                      Confirm my mobile
+                    </button>
+                  )}
                   {takenEmail && (
                     <Link to="/login" data-testid="build-error-signin"
                       className="mt-3 inline-flex h-10 items-center rounded-pill bg-kr-ink px-5 text-sm font-medium text-white">

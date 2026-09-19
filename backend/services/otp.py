@@ -159,7 +159,11 @@ async def _issue_otp(norm: str, display_phone: str, tenant_id: str, enforce_cool
         sent = True
         dev = False
     else:
-        sent = await _send_otp_sms(display_phone, code)
+        # 2026-09-19 — Twilio needs E.164. This used to pass the number exactly
+        # as it was typed, so "98765 43210" (how most people write it) was
+        # refused by Twilio and nobody got a code. Every number that reaches
+        # here is a 10-digit Indian mobile, the same key the APM path texts.
+        sent = await _send_otp_sms(f"+91{norm}", code)
         dev = not TWILIO_ENABLED
     await db.otp_codes.update_one(
         key,

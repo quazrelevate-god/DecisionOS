@@ -194,6 +194,32 @@ async def register(inp: RegisterInput, request: Request, response: Response,
             "code": "email_registered",
             "message": "This email already has a workspace. Sign in instead, or use a different email.",
         })
+
+    # 2026-09-19 — the founder's mobile is a sign-in (Mobile OTP, the mobile
+    # app) and a route (WhatsApp from it lands here as the owner). It used to
+    # be stored exactly as typed, with nothing stricter than "8 digits" on the
+    # form: a slip locked the founder out of Mobile OTP, and handed whoever
+    # owns the mistyped number an owner's sign-in to this workspace. So it is
+    # confirmed by a texted code at the step where it is typed, and trusted
+    # here only with the proof /signup/phone/verify issued for THAT number.
+    #
+    # Checked after the same-credentials recovery above on purpose: that path
+    # signs an existing account in and writes no phone.
+    from services.auth.phone import valid_indian_mobile, display_indian_mobile
+    from services.auth.phone_proof import read_phone_proof
+    _phone_norm = ""
+    if (inp.phone or "").strip():
+        _phone_norm = valid_indian_mobile(inp.phone)
+        if not _phone_norm:
+            raise HTTPException(status_code=400, detail={
+                "code": "phone_invalid",
+                "message": "Enter a 10-digit Indian mobile number.",
+            })
+        if read_phone_proof(inp.phone_token) != _phone_norm:
+            raise HTTPException(status_code=400, detail={
+                "code": "phone_unverified",
+                "message": "Confirm your mobile number with the code we text you, then create your workspace.",
+            })
     tenant_id = new_id()
     set_usage_tenant(tenant_id)
     bp = normalize_os_blueprint(inp.os_blueprint) if inp.os_blueprint else None
@@ -302,8 +328,10 @@ async def register(inp: RegisterInput, request: Request, response: Response,
     user_id = new_id()
     # FIX-002-A: also write phone_norm so OTP login + WhatsApp routing
     # can query by exact-match on the indexed field.
-    from services.auth.phone import norm_phone
-    _raw_phone = (inp.phone or "").strip()
+    # Stored the way people write it back ("+91 98765 43210"), whatever
+    # arrangement of spaces and prefixes was typed; the lookup key is the
+    # confirmed 10 digits.
+    _raw_phone = display_indian_mobile(_phone_norm) if _phone_norm else ""
     # FIX-003-B (S2-10): DuplicateKeyError-safe insert. If a concurrent
     # request slipped past the pre-check, this insert loses the race
     # at the unique-index level. Roll back the orphan tenant so the
@@ -317,7 +345,8 @@ async def register(inp: RegisterInput, request: Request, response: Response,
     try:
         await db.users.insert_one({
             "id": user_id, "tenant_id": tenant_id, "name": inp.name, "email": email,
-            "phone": _raw_phone, "phone_norm": norm_phone(_raw_phone),
+            "phone": _raw_phone, "phone_norm": _phone_norm,
+            "phone_verified_at": now_iso() if _phone_norm else None,
             "password_hash": hash_password(inp.password), "role": "owner", "created_at": now_iso(),
         })
     except Exception as _register_err:

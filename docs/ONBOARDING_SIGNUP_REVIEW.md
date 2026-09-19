@@ -88,6 +88,78 @@ best-effort throughout — a draft that cannot be written never blocks the found
 `backend/scripts/ux_signup_resume_0917.py` (12/12) types the first answers,
 throws the browser away, comes back with only what a real one keeps, and finishes.
 
+## The founder's mobile is confirmed before it is trusted (2026-09-19)
+
+Yokesh: the email is the business address for support and receipts; the
+**mobile** is how the founder signs in on the mobile app, so we have to have it
+and it has to be right.
+
+**What was wrong.** Step 05 was optional, and its only check was "at least 8
+digits". The backend stored whatever arrived. But that number is two things at
+once: a **sign-in** (Mobile OTP looks the account up by it) and a **route**
+(WhatsApp from it lands in the workspace as that person). So a one-digit slip:
+
+- locked the founder out of Mobile OTP — "No account is registered with this
+  mobile number", about their own account; and
+- handed whoever owns the mistyped number an OTP sign-in **as the owner** —
+  they request a code, it arrives on their own phone — with their WhatsApp
+  messages filed as the owner's captures.
+
+An 8-digit number was worse: it saved fine and then OTP sign-in refused it as
+invalid, so the founder could never use it.
+
+**What changed.**
+
+- **Required, and a real Indian mobile.** Ten digits starting 6-9, written any
+  way people write them (`+91 98765 43210`, `098765-43210`, `(98765) 43210`).
+  Landlines, short numbers and other countries' codes are refused rather than
+  guessed at — a UAE number's last ten digits are some Indian stranger's
+  mobile. One rule, two copies kept in step:
+  `backend/services/auth/phone.py` and `frontend/src/lib/phone.js`.
+- **Confirmed with a texted code, at that step.** "Text me a code" → six boxes →
+  Confirm (or just type the sixth digit). Wrong codes are refused and counted;
+  five spend the code. Resend after 30 seconds. "Change number" goes back.
+- **Register trusts a phone only with proof.** `/signup/phone/verify` returns a
+  signed proof for that exact number (24 hours; a key derived from the session
+  secret, so it can never pass for a session). `/auth/register` refuses a phone
+  without one (`phone_unverified`) or one that cannot be a mobile
+  (`phone_invalid`), stores it as `+91 98765 43210`, and marks
+  `phone_verified_at`. A proof for your own number does not carry over to a
+  colleague's.
+- **A resumed signup is not texted twice.** The proof rides on the draft with
+  the number; coming back shows *"Confirmed — no need for another code"* until
+  it lapses. If it lapses on the last screen, Create says so and **Confirm my
+  mobile** goes to that one step and straight back to the built OS.
+- **Texting any number is capped.** `/signup/phone/send-code` is the one public
+  endpoint that texts a number nobody registered, so on top of the signup
+  surface's per-network limits it allows five codes an hour **per number**.
+- **The API still accepts a signup with no phone** (tests, scripts). What it
+  enforces is the security property: any phone it stores was proven. The
+  wizard is what makes the mobile required.
+
+**Mobile OTP sign-in, checked end to end.** It works — request, text, verify,
+session — and two faults in it are fixed:
+
+- **A number in two workspaces was told "OTP sent" when nothing was sent.** The
+  API answers that case with a list and sends nothing; the sign-in page ignored
+  the list, showed the code boxes and waited. It now asks *"Which one are you
+  signing in to?"*, texts the code for the one chosen, and signs into that
+  workspace. (Sakthivel's migration found shared numbers in the production
+  dump, so this is not hypothetical.)
+- **Twilio was handed the number as typed.** Twilio needs `+91…`; "98765 43210"
+  was refused and nobody got a code. The APM gateway, the live provider, was
+  unaffected.
+
+**Proof.** `backend/tests/test_founder_mobile_is_confirmed.py` (34) — the rule,
+the proof (forged, lapsed, borrowed, other-purpose), send/verify with a fake
+gateway that texts nothing, the per-number cap, register's three refusals, the
+stored form, and the screens. `backend/scripts/ux_founder_mobile_0919.py`
+(29/29) walks it in a browser on a throwaway database: four bad numbers
+refused, a wrong code refused, the right one moves on, a closed tab comes back
+confirmed without a second text, the workspace is created with the confirmed
+number, the founder signs out and back in by Mobile OTP, and with the same
+number in a second workspace the page asks which one and signs into it.
+
 ## Still open
 
 - **Nothing tells the founder the AI setup is still filling in.** It takes a few
@@ -96,3 +168,10 @@ throws the browser away, comes back with only what a real one keeps, and finishe
 - **A resumed signup redoes the website and interview steps** unless the
   blueprint was already built. Their answers are safe; the two AI steps are not
   saved individually.
+- **Changing your own mobile in Settings is not confirmed yet.** Settings ›
+  Your Profile still saves a new number on trust (it only checks nobody else
+  in the workspace has it) — the same hole, after signup. Same fix: a code to
+  the NEW number before it is saved.
+- **The Flutter app signs in with email and password only.** Mobile OTP exists
+  on the web and the installed web app; the native app (on hold) has no OTP
+  screen.

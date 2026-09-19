@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import api, { formatApiError } from "../lib/api";
 import { KarmaLogo } from "../components/karma/Logo";
+import OtpBoxes from "../components/auth/OtpBoxes";
 import { DeviceMobile, ArrowRight, ArrowLeft } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
@@ -42,64 +43,6 @@ const maskPhone = (raw) => {
   return `••••• ${digits.slice(-4)}`;
 };
 
-// Polished 6-box OTP input with paste + keyboard navigation.
-const OtpBoxes = ({ value, onChange, disabled }) => {
-  const refs = useRef([]);
-  const digits = value.split("").concat(Array(6).fill("")).slice(0, 6);
-
-  const setAt = (i, d) => {
-    const next = digits.slice();
-    next[i] = d;
-    onChange(next.join("").replace(/\D/g, "").slice(0, 6));
-  };
-
-  const handleChange = (i) => (e) => {
-    const d = e.target.value.replace(/\D/g, "");
-    if (!d) return;
-    if (d.length > 1) {
-      // pasted / multi-char: fill from current box
-      const chars = d.slice(0, 6 - i).split("");
-      const next = digits.slice();
-      chars.forEach((c, k) => { next[i + k] = c; });
-      onChange(next.join("").replace(/\D/g, "").slice(0, 6));
-      const focusIdx = Math.min(i + chars.length, 5);
-      refs.current[focusIdx]?.focus();
-      return;
-    }
-    setAt(i, d);
-    if (i < 5) refs.current[i + 1]?.focus();
-  };
-
-  const handleKeyDown = (i) => (e) => {
-    if (e.key === "Backspace") {
-      if (digits[i]) setAt(i, "");
-      else if (i > 0) { setAt(i - 1, ""); refs.current[i - 1]?.focus(); }
-    } else if (e.key === "ArrowLeft" && i > 0) refs.current[i - 1]?.focus();
-    else if (e.key === "ArrowRight" && i < 5) refs.current[i + 1]?.focus();
-  };
-
-  return (
-    <div className="flex gap-2 justify-between" data-testid="otp-boxes">
-      {digits.map((d, i) => (
-        <input
-          key={`otp-${i}`}
-          ref={(el) => (refs.current[i] = el)}
-          data-testid={`otp-box-${i}`}
-          inputMode="numeric"
-          maxLength={6}
-          autoFocus={i === 0}
-          disabled={disabled}
-          value={d}
-          onChange={handleChange(i)}
-          onKeyDown={handleKeyDown(i)}
-          onFocus={(e) => e.target.select()}
-          className="kr-pressed aspect-square w-full min-w-0 rounded-cardlg bg-transparent text-center text-xl font-medium focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:opacity-50"
-        />
-      ))}
-    </div>
-  );
-};
-
 export default function Login() {
   const { login, loginWithOtp } = useAuth();
   const navigate = useNavigate();
@@ -107,6 +50,13 @@ export default function Login() {
   const [otpPhone, setOtpPhone] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
+  // 2026-09-19 — which workspace the code is for. A number can belong to more
+  // than one (a consultant serving two clients, a founder who also works at a
+  // friend's shop). The API then sends NOTHING and answers with a list; this
+  // page used to ignore that answer, say "OTP sent", and wait for a code that
+  // was never coming.
+  const [otpTenant, setOtpTenant] = useState(null);
+  const [otpChoices, setOtpChoices] = useState(null);
   const [resendIn, setResendIn] = useState(0);
   const [invite, setInvite] = useState(null);
   const [form, setForm] = useState({ email: "", password: "" });
@@ -150,6 +100,8 @@ export default function Login() {
         setInvite({ ...data, token });
         const start = await api.post(`/auth/invite/${token}/start`);
         setOtpPhone(start.data.phone);
+        // The invite already names the workspace; carry it to verify.
+        setOtpTenant(start.data.tenant_id || null);
         setOtpSent(true);
         startResendTimer();
         if (start.data.dev_otp) { setOtpCode(start.data.dev_otp); toast.info(`Dev OTP: ${start.data.dev_otp} (auto-filled)`); }
@@ -174,10 +126,18 @@ export default function Login() {
     finally { setBusy(false); }
   };
 
-  const requestOtp = async (e) => {
-    e.preventDefault(); setError(""); setBusy(true);
+  const requestOtp = async (e, pickTenant) => {
+    e?.preventDefault?.(); setError(""); setBusy(true);
+    const tenant = pickTenant || otpTenant;
     try {
-      const { data } = await api.post("/auth/otp/request", { phone: otpPhone });
+      const { data } = await api.post("/auth/otp/request", { phone: otpPhone, ...(tenant ? { tenant_id: tenant } : {}) });
+      if (data.ambiguous) {
+        // No code went out. Ask which workspace, then ask again for that one.
+        setOtpChoices(data.choices || []);
+        return;
+      }
+      setOtpChoices(null);
+      setOtpTenant(data.tenant_id || tenant || null);
       setOtpSent(true);
       startResendTimer();
       if (data.dev_otp) toast.info(`Dev OTP: ${data.dev_otp} (auto-filled)`);
@@ -188,7 +148,7 @@ export default function Login() {
   };
   const submitOtp = async (e) => {
     e.preventDefault(); setError(""); setBusy(true);
-    try { await loginWithOtp(otpPhone, otpCode); navigate("/"); }
+    try { await loginWithOtp(otpPhone, otpCode, otpTenant); navigate("/"); }
     catch (err) { setError(formatApiError(err.response?.data?.detail) || "Failed"); }
     finally { setBusy(false); }
   };
@@ -302,7 +262,7 @@ export default function Login() {
           )}
 
           {loginTab === "otp" && (
-            <form onSubmit={otpSent ? submitOtp : requestOtp} className="space-y-4" data-testid="otp-form">
+            <form onSubmit={otpSent ? submitOtp : (e) => requestOtp(e)} className="space-y-4" data-testid="otp-form">
               {invite && (
                 <div className="kr-pressed rounded-cardlg p-3" data-testid="invite-welcome">
                   <p className="font-medium uppercase tracking-tight text-sm">Welcome, {invite.name}</p>
@@ -313,12 +273,33 @@ export default function Login() {
                 <>
                   <div>
                     <label className={labelCls}>Mobile number</label>
-                    <input data-testid="otp-phone-input" type="tel" className={`${inputCls} mt-1`} placeholder="Registered mobile number" value={otpPhone} onChange={(e) => setOtpPhone(e.target.value)} required />
+                    <input data-testid="otp-phone-input" type="tel" className={`${inputCls} mt-1`} placeholder="Registered mobile number" value={otpPhone}
+                      onChange={(e) => { setOtpPhone(e.target.value); setOtpChoices(null); setOtpTenant(null); }} required />
                   </div>
+                  {otpChoices && (
+                    <div className="space-y-2" data-testid="otp-workspace-picker">
+                      <p className="text-sm text-muted-foreground">
+                        This number is in more than one workspace. Which one are you signing in to?
+                      </p>
+                      {otpChoices.map((c) => (
+                        <button key={c.tenant_id} type="button" disabled={busy}
+                          onClick={() => requestOtp(null, c.tenant_id)}
+                          data-testid={`otp-workspace-${c.tenant_id}`}
+                          className="kr-pop flex w-full items-center justify-between rounded-pill px-4 py-3 text-left text-sm disabled:opacity-50">
+                          <span className="font-semibold">{c.tenant_name || "Workspace"}</span>
+                          {c.user_name && <span className="text-xs text-muted-foreground">as {c.user_name}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {error && <p data-testid="auth-error" className="text-sm text-danger-600 font-semibold">{error}</p>}
-                  <button type="submit" disabled={busy} data-testid="otp-submit-button" className="kr-lift flex h-12 w-full items-center justify-center rounded-pill bg-kr-ink text-sm font-medium text-white disabled:opacity-50">
-                    {busy ? "Sending…" : "Send OTP"}
-                  </button>
+                  {/* While the workspaces are on screen they ARE the buttons:
+                      a Send OTP beside them would only ask the question again. */}
+                  {!otpChoices && (
+                    <button type="submit" disabled={busy} data-testid="otp-submit-button" className="kr-lift flex h-12 w-full items-center justify-center rounded-pill bg-kr-ink text-sm font-medium text-white disabled:opacity-50">
+                      {busy ? "Sending…" : "Send OTP"}
+                    </button>
+                  )}
                 </>
               ) : (
                 <>
@@ -327,7 +308,7 @@ export default function Login() {
                       <DeviceMobile size={16} weight="bold" className="shrink-0 text-foreground/70" />
                       <span className="text-sm font-mono truncate">Code sent to <strong>{invite?.phone_masked || maskPhone(otpPhone)}</strong></span>
                     </div>
-                    <button type="button" onClick={() => { setOtpSent(false); setOtpCode(""); setError(""); setResendIn(0); }} data-testid="otp-change-number"
+                    <button type="button" onClick={() => { setOtpSent(false); setOtpCode(""); setError(""); setResendIn(0); setOtpTenant(null); setOtpChoices(null); }} data-testid="otp-change-number"
                       className="text-xs font-semibold uppercase text-foreground/70 underline-offset-2 hover:text-foreground hover:underline whitespace-nowrap ml-2 shrink-0">Change</button>
                   </div>
                   <div>

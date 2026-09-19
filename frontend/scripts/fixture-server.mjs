@@ -151,21 +151,41 @@ const mkTask = (o) => ({
   assignee_role: byId(o.assignee_id).role,
 });
 
+/* ASK-50 — tasks that belong to a workflow, shaped exactly as the backend's
+   enrich_tasks sends them (services/tasks.py, WE-01/WE-11): the task carries
+   workflow_id and stage_key, and the list adds workflow_summary
+   {id, type, title, stage, short_id}. Until now no fixture task was in a
+   workflow, so the workflow tag had nothing to render against. */
+const wfLink = (id, type, title, stage) => ({
+  workflow_id: id, stage_key: stage,
+  workflow_summary: { id, type, title, stage, short_id: id.toUpperCase() },
+});
+
 const TASKS = [
   mkTask({ id: 't_1', title: 'Collect ₹4,00,000 outstanding from Krishna Garments — 31 days late', assignee_id: 'u_sales', due_date: dateAgo(31), priority: 'high', amount: 400000, status: 'in_progress', progress: 40, department: 'Sales' }),
   mkTask({ id: 't_2', title: 'Reconcile March GST input credit against purchase register', assignee_id: 'u_fin', due_date: dateAgo(9), priority: 'high', status: 'in_progress', progress: 60, department: 'Finance' }),
   mkTask({ id: 't_3', title: 'Fix loom 4 motor tripping — 6 stoppages this month', assignee_id: 'u_store', due_date: dateAgo(4), priority: 'high', source: 'escalation', department: 'Production',
     updates: [{ id: 'up_1', action: 'escalate', actor_id: 'u_prod', to_id: 'u_owner', note: 'Third stoppage this week. I cannot hold the Diwali schedule without a decision on the motor.', created_at: daysAgo(1) }] }),
-  mkTask({ id: 't_4', title: 'Send dispatch plan for Reliance Trends Diwali order', assignee_id: 'u_prod', due_date: TODAY, priority: 'high', amount: 2200000, department: 'Production' }),
+  mkTask({ id: 't_4', title: 'Send dispatch plan for Reliance Trends Diwali order', assignee_id: 'u_prod', due_date: TODAY, priority: 'high', amount: 2200000, department: 'Production',
+    ...wfLink('w_3', 'order_to_cash', 'Reliance Trends — Diwali order', 'quotation_sent') }),
   mkTask({ id: 't_5', title: 'Chase Anand Fabrics for signed reorder confirmation', assignee_id: 'u_sales', due_date: TODAY, priority: 'medium', amount: 600000, department: 'Sales' }),
-  mkTask({ id: 't_6', title: 'Pay Surat Spinners advance before dispatch slot closes', assignee_id: 'u_fin', due_date: TODAY, priority: 'high', amount: 144000, department: 'Finance' }),
+  mkTask({ id: 't_6', title: 'Pay Surat Spinners advance before dispatch slot closes', assignee_id: 'u_fin', due_date: TODAY, priority: 'high', amount: 144000, department: 'Finance',
+    ...wfLink('w_1', 'purchase_payment', 'Surat Spinners — yarn PO', 'quote_received') }),
   mkTask({ id: 't_7', title: 'Count finished-goods stock in godown 2 before audit', assignee_id: 'u_store', due_date: dateAgo(2), priority: 'medium', status: 'in_progress', progress: 25, department: 'Stores' }),
-  mkTask({ id: 't_8', title: 'File TDS return for Q2', assignee_id: 'u_fin', due_date: dateAhead(4), priority: 'medium', department: 'Finance' }),
+  mkTask({ id: 't_8', title: 'File TDS return for Q2', assignee_id: 'u_fin', due_date: dateAhead(4), priority: 'medium', department: 'Finance',
+    ...wfLink('w_2', 'purchase_payment', 'Rajkot Fibres — blend PO', 'payment_due') }),
+  /* ASK-50 — a task that came from a decision (ASK-32 4.4: decision_id, and the
+     list's decision_title), so the drawer's link back to the review has
+     something to show. */
+  mkTask({ id: 't_16', title: 'Share the revised Diwali price list with all buyers', assignee_id: 'u_owner', due_date: dateAhead(2), priority: 'medium', department: 'Sales',
+    description: 'Send the new price list to every active buyer before the Diwali orders open.',
+    decision_id: 'd_1', decision_title: 'Approve ₹4,80,000 yarn purchase from Surat Spinners', created_by: 'u_owner', created_by_name: 'Rajesh Kumar' }),
   mkTask({ id: 't_9', title: 'Renew fire safety certificate for the unit', assignee_id: 'u_store', due_date: dateAhead(12), priority: 'low', department: 'Stores' }),
   mkTask({ id: 't_10', title: 'Approve Priya leave request for Deepavali week', assignee_id: 'u_owner', due_date: dateAhead(2), priority: 'medium', department: 'Management' }),
   mkTask({ id: 't_11', title: 'Handover: Krishna Garments recovery file', assignee_id: 'u_fin', due_date: dateAhead(1), priority: 'high', amount: 115000, source: 'handoff', department: 'Finance',
     updates: [{ id: 'up_2', action: 'handoff', actor_id: 'u_sales', to_id: 'u_owner', note: 'Buyer is not picking up. Passing to you before we decide on write-off.', created_at: daysAgo(2) }] }),
-  mkTask({ id: 't_12', title: 'Quality check on the 400-piece sample lot for Reliance', assignee_id: 'u_prod', due_date: dateAhead(3), priority: 'high', department: 'Production' }),
+  mkTask({ id: 't_12', title: 'Quality check on the 400-piece sample lot for Reliance', assignee_id: 'u_prod', due_date: dateAhead(3), priority: 'high', department: 'Production',
+    ...wfLink('w_3', 'order_to_cash', 'Reliance Trends — Diwali order', 'quotation_sent') }),
   mkTask({ id: 't_13', title: 'Update rate card for cotton blends', assignee_id: 'u_sales', due_date: dateAhead(8), priority: 'low', department: 'Sales' }),
   mkTask({ id: 't_14', title: 'Service the boiler before winter run', assignee_id: 'u_store', due_date: dateAhead(20), priority: 'low', department: 'Stores', status: 'done', progress: 100 }),
 ];

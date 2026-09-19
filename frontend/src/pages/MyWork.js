@@ -1323,7 +1323,12 @@ function AssigneesEditor({ t, members, roleOptions, canEdit, onPatched }) {
   };
   const showAdd = canEdit && !!t.assignee_id && addable.length > 0;
   return (
-    <section data-testid={`task-people-${t.id}`}>
+    /* ASK-50 — A CONTAINER BEHIND IT. The people on a task grow as a list of
+       pills as "Add a person" is used, and on the drawer's bare ground that
+       list had no edge — the founder asked for a rounded container so it reads
+       as one section. The drawer's own card recipe (DRAWER_CARD), so it is the
+       same surface as the context card above it. */
+    <section data-testid={`task-people-${t.id}`} className={`${DRAWER_CARD} p-4 lg:p-5`}>
       <p className={DRAWER_LABEL}>Assigned to</p>
       {/* People on the left, "Add a person" beside them on desktop — the
           reference's two columns. Below lg the drawer is too narrow for that,
@@ -1367,14 +1372,36 @@ function AssigneesEditor({ t, members, roleOptions, canEdit, onPatched }) {
             options={addable.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` }))} />
         )}
       </div>
-      {(t.auto_assigned?.role && t.assignee_id) || t.created_by_name || t.approval_required ? (
+      {(t.auto_assigned?.role && t.assignee_id) || t.created_by_name || t.decision_id || t.approval_required ? (
         <div className="mt-3 flex flex-col gap-1.5 text-sm" data-testid={`task-roles-${t.id}`}>
           {t.auto_assigned?.role && t.assignee_id && (
             <p className="text-slate-500" data-testid={`task-auto-assigned-${t.id}`}>
               Picked automatically: fewest open tasks in {teamLabel(t.auto_assigned.role)}
             </p>
           )}
-          {t.created_by_name && (
+          {/* ASK-50 — AND WHERE IT CAME FROM IS THIS LINE, not a line of its
+              own. A task made by approving a decision used to carry a separate
+              "From decision: …" link further down the drawer; the founder
+              wants that link on the line that says who handed the task over.
+              So on such a task "Asked by" IS the way back to the decision's
+              review (the Desk opens it in DecisionDialog from ?decision=), and
+              the decision's title is its tooltip. `decision-link-*` keeps its
+              testid on its new element. */}
+          {t.decision_id ? (
+            <Link to={`/inbox?decision=${t.decision_id}`} data-testid={`decision-link-${t.id}`}
+              title={t.decision_title ? `Open the decision: ${t.decision_title}` : "Open the decision this task came from"}
+              className="group/dec -mx-1 inline-flex max-w-full items-center gap-1 self-start rounded-lg px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/40">
+              <span data-testid={`task-asked-by-${t.id}`} className="min-w-0 truncate">
+                <span className="text-slate-500">{t.created_by_name ? "Asked by " : "From "}</span>
+                <span className="font-medium text-slate-800">
+                  {t.created_by_name ? (t.created_by === user?.id ? "You" : t.created_by_name) : "a decision"}
+                </span>
+                {t.created_by_name && <span className="text-slate-500"> · from a decision</span>}
+              </span>
+              <ArrowRight size={13} weight="bold" aria-hidden="true"
+                className="shrink-0 text-slate-400 transition-transform group-hover/dec:translate-x-0.5 group-hover/dec:text-slate-700" />
+            </Link>
+          ) : t.created_by_name && (
             <p data-testid={`task-asked-by-${t.id}`}>
               <span className="text-slate-500">Asked by </span>
               <span className="font-medium text-slate-800">{t.created_by === user?.id ? "You" : t.created_by_name}</span>
@@ -2270,16 +2297,8 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       </div>
     )}
 
-    {/* ASK-32 4.4 — the decision this task came from. */}
-    {t.decision_id && t.decision_title && (
-      <div>
-        <Link to={`/inbox?decision=${t.decision_id}`} data-testid={`decision-link-${t.id}`}
-          className="inline-flex max-w-full items-center gap-1 text-xs text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline">
-          <span className="shrink-0">From decision:</span>
-          <span className="min-w-0 truncate font-medium">{t.decision_title}</span>
-        </Link>
-      </div>
-    )}
+    {/* ASK-32 4.4's "From decision:" line is the Assigned to card's "Asked
+        by" line now (ASK-50, AssigneesEditor). */}
 
     {/* ASK-27 — STATUS: the status pill on the left, a rule, and the %
         control on the right. "Set % manually" is no longer behind a
@@ -2297,21 +2316,90 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
           {t.status === "waiting" && <div className="mt-3"><WaitingOn t={t} readOnly /></div>}
         </section>
       ) : (
+      /* ASK-50 — THE STATUS BLOCK, REORDERED TOP TO BOTTOM. The founder's
+         layout: the status menu and the black Complete on ONE row; "Set %
+         manually" under them across the whole card; Document and Voice under
+         that, across the whole card. It was status | % side by side, then
+         Complete | Attach: Document Voice on a row of their own further down.
+         Complete keeps every condition it had (not signed off yet, and only
+         for the person who finishes — otherwise the same hint in its place),
+         and the attach row keeps the ones IT had, file inputs included. */
       <section data-testid={`task-status-${t.id}`}>
         <p className={DRAWER_LABEL}>Status</p>
-        <div className="flex items-stretch gap-5">
-          <GlassSelect testid={`status-select-${t.id}`} ariaLabel="Task status" icon={Clock}
-            value={stageOf(t.status)} onChange={setStatus}
-            options={STATUS_OPTIONS.map((s) => ({ value: s.key, label: s.label }))}
-            triggerClassName="w-56 shrink-0 font-medium text-slate-800" />
-          <span aria-hidden="true" className="w-px shrink-0 bg-slate-900/10" />
-          <ProgressControl value={checklist ? checklist.pct : (t.progress || 0)} onCommit={setProgress}
-            checklist={checklist}
-            testid={`progress-select-${t.id}`} valueTestid={`progress-bar-${t.id}`} />
+        <div className="flex items-center gap-4">
+          <div className="min-w-0 flex-1">
+            <GlassSelect testid={`status-select-${t.id}`} ariaLabel="Task status" icon={Clock}
+              value={stageOf(t.status)} onChange={setStatus}
+              options={STATUS_OPTIONS.map((s) => ({ value: s.key, label: s.label }))}
+              triggerClassName="w-full font-medium text-slate-800" />
+          </div>
+          {!signoffPending && (rights.finish ? (
+            /* FUP-49: don't disable -- always click-through, handler shows a
+               clear toast if evidence is missing. Silent-disabled buttons were
+               the original bug. Item 7: a helper attaches and moves the work,
+               but the doer marks it done. */
+            <button onClick={complete} data-testid={`complete-${t.id}`}
+              title={t.evidence_required && !hasEvidence ? "Add a voice note or file first" : "Mark as complete"}
+              className={`flex h-12 shrink-0 items-center gap-2.5 rounded-pill px-7 text-base font-medium ${t.evidence_required && !hasEvidence ? `${GLASS_PILL} text-slate-500` : INK_PILL}`}>
+              <CheckCircle size={22} weight="fill" aria-hidden="true" /> Complete
+            </button>
+          ) : (
+            <p className="max-w-[12rem] shrink-0 text-sm leading-snug text-slate-500" data-testid={`finish-hint-${t.id}`}>
+              {t.assignee_name || "The doer"} marks this done.
+            </p>
+          ))}
         </div>
         <div className="mt-3">
           <WaitingOn t={t} members={members} onPatched={onPeoplePatched} />
         </div>
+        {evidenceNotice("")}
+        <div className="mt-5">
+          <ProgressControl value={checklist ? checklist.pct : (t.progress || 0)} onCommit={setProgress}
+            checklist={checklist}
+            testid={`progress-select-${t.id}`} valueTestid={`progress-bar-${t.id}`} />
+        </div>
+        {!signoffPending && (
+          <div className="mt-5 flex items-center gap-3">
+            {/* ASK-27 — no camera button on desktop (the founder: a desktop is
+                not where anyone attaches with a camera). Its input stays: the
+                phone body's camera button opens it. */}
+            <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhoto} />
+            <input ref={evidenceRef} type="file" className="hidden" onChange={onEvidence} />
+            <button
+              onClick={() => evidenceRef.current?.click()}
+              disabled={uploading}
+              data-testid={`upload-file-${t.id}`}
+              title="Upload a document"
+              className={`flex h-12 min-w-0 flex-1 basis-0 items-center justify-center gap-2 rounded-pill text-[15px] font-medium text-slate-700 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}
+            >
+              <FileIcon size={19} weight="regular" aria-hidden="true" /> Document
+            </button>
+            <button
+              onClick={toggleVoice}
+              data-testid={`voice-${t.id}`}
+              title={recording ? "Stop and send voice reply" : "Record a voice reply"}
+              aria-label={recording ? "Stop recording and send" : undefined}
+              className={`flex h-12 min-w-0 flex-1 basis-0 items-center justify-center gap-2 rounded-pill text-[15px] font-medium transition-colors ${
+                recording ? "bg-kr-accent text-white" : `text-slate-700 hover:bg-white ${GLASS_PILL}`
+              }`}
+            >
+              {recording
+                ? <><Stop size={17} weight="fill" aria-hidden="true" /> Stop</>
+                : <><Microphone size={19} weight="regular" aria-hidden="true" /> Voice</>}
+            </button>
+            {recording && (
+              <button
+                onClick={cancelVoice}
+                data-testid={`voice-cancel-${t.id}`}
+                title="Discard recording"
+                aria-label="Discard recording"
+                className={GLASS_ICON_BTN}
+              >
+                <X size={18} weight="bold" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        )}
       </section>
       )
     )}
@@ -2334,72 +2422,8 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
         says for each. Shared with the phone body — see approvalBlocks. */}
     {approvalBlocks("")}
 
-    {evidenceNotice("")}
-
-    {!isTerminal(t) && !workLocked && !signoffPending && rights.work && (
-      <div className="flex items-center gap-4">
-        {/* FUP-49: don't disable -- always click-through, handler shows
-            a clear toast if evidence is missing. Silent-disabled
-            buttons were the original bug. Item 7: a helper attaches and
-            moves the work, but the doer marks it done. */}
-        {rights.finish ? (
-          <button onClick={complete} data-testid={`complete-${t.id}`}
-            title={t.evidence_required && !hasEvidence ? "Add a voice note or file first" : "Mark as complete"}
-            className={`flex h-14 shrink-0 items-center gap-2.5 rounded-pill px-7 text-base font-medium ${t.evidence_required && !hasEvidence ? `${GLASS_PILL} text-slate-500` : INK_PILL}`}>
-            <CheckCircle size={22} weight="fill" aria-hidden="true" /> Complete
-          </button>
-        ) : (
-          <p className="max-w-[12rem] shrink-0 text-sm leading-snug text-slate-500" data-testid={`finish-hint-${t.id}`}>
-            {t.assignee_name || "The doer"} marks this done.
-          </p>
-        )}
-
-        <span aria-hidden="true" className="h-8 w-px shrink-0 bg-slate-900/10" />
-        <span className="text-[15px] text-slate-500">Attach:</span>
-        {/* ASK-27 — no camera button on desktop (the founder: a desktop is
-            not where anyone attaches with a camera). Its input stays: the
-            phone body's camera button opens it. */}
-        <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhoto} />
-        <input ref={evidenceRef} type="file" className="hidden" onChange={onEvidence} />
-        {/* ASK-28 — the two circles become two labelled pills, Document and
-            Voice, sharing the rest of the row equally (flex-1 basis-0). */}
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <button
-            onClick={() => evidenceRef.current?.click()}
-            disabled={uploading}
-            data-testid={`upload-file-${t.id}`}
-            title="Upload a document"
-            className={`flex h-12 min-w-0 flex-1 basis-0 items-center justify-center gap-2 rounded-pill text-[15px] font-medium text-slate-700 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}
-          >
-            <FileIcon size={19} weight="regular" aria-hidden="true" /> Document
-          </button>
-          <button
-            onClick={toggleVoice}
-            data-testid={`voice-${t.id}`}
-            title={recording ? "Stop and send voice reply" : "Record a voice reply"}
-            aria-label={recording ? "Stop recording and send" : undefined}
-            className={`flex h-12 min-w-0 flex-1 basis-0 items-center justify-center gap-2 rounded-pill text-[15px] font-medium transition-colors ${
-              recording ? "bg-kr-accent text-white" : `text-slate-700 hover:bg-white ${GLASS_PILL}`
-            }`}
-          >
-            {recording
-              ? <><Stop size={17} weight="fill" aria-hidden="true" /> Stop</>
-              : <><Microphone size={19} weight="regular" aria-hidden="true" /> Voice</>}
-          </button>
-        </div>
-        {recording && (
-          <button
-            onClick={cancelVoice}
-            data-testid={`voice-cancel-${t.id}`}
-            title="Discard recording"
-            aria-label="Discard recording"
-            className={GLASS_ICON_BTN}
-          >
-            <X size={18} weight="bold" aria-hidden="true" />
-          </button>
-        )}
-      </div>
-    )}
+    {/* ASK-50 — Complete, the evidence notice and the Document / Voice row
+        live in the status block above now. */}
 
     {reopenBlock("")}
 
@@ -2731,27 +2755,33 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                 <ArrowBendUpRight size={12} weight="bold" aria-hidden="true" /> Handoff
               </span>
             )}
+          </div>
+          <div className="flex min-w-0 items-center gap-2">
+            {/* ASK-50 — WHICH WORKFLOW THIS TASK BELONGS TO, BY NAME, beside
+                the people on it. The founder asked whether a task knows its
+                workflow; it does — every task carries workflow_id (WE-01) and
+                the task list sends workflow_summary with it (WE-11) — and the
+                row was already drawing a chip from it, but only the STAGE
+                ("quote received"), on the left, which says where a workflow is
+                without saying which one. It moves here and names the workflow;
+                the stage is in its tooltip and in the drawer's full chip.
+                Still the only pill that is a link, so on a phone it is a 44px
+                touch box (a[data-testid] — the MPWA-01 floor in index.css):
+                the tint lives on the inner span so the pill keeps its size. */}
             {t.workflow_summary?.id && (
-              /* The only pill that is a link, so on a phone it is a 44px touch
-                 box (a[data-testid] — the MPWA-01 floor in index.css). With the
-                 tint on the link itself that box drew as a 44px-tall pill. The
-                 tint lives on the inner span instead: the link keeps the floor,
-                 the pill keeps the shape of its neighbours. */
               <a
                 href={`/workflows?type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
                 onClick={(e) => e.stopPropagation()}
                 data-testid={`wf-chip-${t.id}`}
-                className="group/wf inline-flex shrink-0 items-center rounded-pill focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/40"
-                title={`Open workflow: ${t.workflow_summary.title}`}
+                className="group/wf inline-flex min-w-0 items-center rounded-pill focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/40"
+                title={`Workflow: ${t.workflow_summary.title}${t.workflow_summary.stage ? ` · ${t.workflow_summary.stage.replace(/_/g, " ")}` : ""}`}
               >
-                <span className={`${PILL} ${QUIET_PILL} transition-colors group-hover/wf:bg-slate-500/[0.13]`}>
-                  <FlowArrow size={12} weight="bold" aria-hidden="true" />
-                  <span className="max-w-[8rem] truncate capitalize">{(t.workflow_summary.stage || "").replace(/_/g, " ")}</span>
+                <span className={`${PILL} ${QUIET_PILL} min-w-0 transition-colors group-hover/wf:bg-slate-500/[0.13]`}>
+                  <FlowArrow size={12} weight="bold" aria-hidden="true" className="shrink-0" />
+                  <span className="min-w-0 max-w-[8rem] truncate lg:max-w-[11rem]">{t.workflow_summary.title || "Workflow"}</span>
                 </span>
               </a>
             )}
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
             {(t.attachment_count || 0) > 0 && (
               <span className="inline-flex items-center gap-0.5 text-[11px] tabular-nums text-muted-foreground"
                 title={`${t.attachment_count} attached`}>

@@ -1,6 +1,6 @@
 {
-  "count": 334,
-  "sha": "65a215c4082c6b0db9d7a421c7ba4d3761378df50827bb93b046290dcbe2b3ff",
+  "count": 335,
+  "sha": "4b1f292c3ef25f60a206a0e9dac91852fececc867a90f0efe6df72ce075db08b",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -149,6 +149,7 @@
     "GET /api/whatsapp/status",
     "GET /api/work-coach",
     "GET /api/workflows",
+    "GET /api/workflows/counts",
     "GET /docs",
     "GET /docs/oauth2-redirect",
     "GET /health",

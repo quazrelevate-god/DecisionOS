@@ -26,6 +26,25 @@ from models.workflows import (
 )
 
 
+@router.get("/workflows/counts")
+async def workflow_counts(user: dict = Depends(get_current_user)):
+    """How many workflows each pipeline holds: {pipeline_key: n} (2026-09-19).
+
+    The board loads one pipeline at a time (/workflows?type=…), and every
+    pipeline's count used to be taken from that one list — so the pipeline on
+    screen showed its number and every other one showed 0. One grouped count
+    for all of them, the same set /workflows would list, is what the pills
+    and the phone's pipeline menu read now. Same access as the board itself.
+    """
+    # The async client returns the cursor from an awaited aggregate() (see
+    # routers/admin_billing.py) — not a cursor to call .to_list() on directly.
+    cur = await db.workflows.aggregate([
+        {"$match": {"tenant_id": user["tenant_id"]}},
+        {"$group": {"_id": "$type", "n": {"$sum": 1}}},
+    ])
+    return {r["_id"]: r["n"] for r in await cur.to_list(200) if r.get("_id")}
+
+
 @router.get("/workflows")
 async def list_workflows(type: Optional[str] = None,
                          with_tasks: Optional[bool] = False,

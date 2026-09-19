@@ -3,12 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { hasPerm } from "../lib/perms";
 import { PageHeader, StickyHeader, EmptyState } from "../components/common";
 import { timeAgo } from "../lib/format";
 import { toast } from "sonner";
 import {
-  AirplaneTakeoff, Plus, WarningOctagon, CheckCircle, XCircle, ChatCircleText, Gear, GearSix, Clock,
+  Plus, WarningOctagon, CheckCircle, XCircle, ChatCircleText, Gear, Clock,
   CalendarBlank,
   // ASK-4 (2026-09-12): AI Impact Analysis retired at the leave-card level.
   // Sparkle / ArrowsClockwise / CalendarPlus / Eye / CircleNotch were the
@@ -51,7 +50,9 @@ const inp = "w-full nm-field px-3 py-2 text-sm";
 export const typeLabel = (k) => LEAVE_TYPES.find((t) => t.key === k)?.label || k;
 const fmtRange = (lv) => lv.from_date === lv.to_date ? lv.from_date : `${lv.from_date} → ${lv.to_date}`;
 
-function RequestLeaveDialog({ onDone }) {
+/* 2026-09-19 — exported: My Work's desktop toolbar opens this same form.
+   `triggerClassName` lets a host dress the button in its own material. */
+export function RequestLeaveDialog({ onDone, triggerClassName }) {
   const [open, setOpen] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({ leave_type: "casual", from_date: today, to_date: today, day_portion: "full", reason: "" });
@@ -64,7 +65,7 @@ function RequestLeaveDialog({ onDone }) {
       toast.success("Leave request submitted");
       setOpen(false);
       setForm({ leave_type: "casual", from_date: today, to_date: today, day_portion: "full", reason: "" });
-      onDone();
+      onDone?.();
     } catch (e) { toast.error(e.response?.data?.detail || "Could not submit"); }
   };
   return (
@@ -73,7 +74,7 @@ function RequestLeaveDialog({ onDone }) {
         <button
           data-testid="request-leave-button"
           title="Plan time off in advance -- needs approval"
-          className="kr-pop flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium"
+          className={triggerClassName || "kr-pop flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium"}
         >
           <Plus size={16} weight="bold" /> Request Leave
         </button>
@@ -319,114 +320,114 @@ export function ApproverConfig({ roleOptions, members }) {
   );
 }
 
-export default function Leave({ embedded = false }) {
-  const { user, tenant } = useAuth();
+/* How many days a request covers: both ends counted, a half day as 0.5. */
+function daysOf(lv) {
+  if (lv.day_portion === "half") return 0.5;
+  const a = new Date(`${lv.from_date}T00:00:00`);
+  const b = new Date(`${lv.to_date || lv.from_date}T00:00:00`);
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return 0;
+  return Math.max(1, Math.round((b - a) / 86400000) + 1);
+}
+
+const OPEN = new Set(["pending", "info_requested"]);
+
+/* 2026-09-19 — YOUR leave, as a page again.
+   ASK-6 (2026-09-12) retired /leave and sent every link to Team, which holds
+   the company's leave register — so on a phone the "Leave" tile opened Team
+   and there was no way to ask for time off at all. This is the requester's
+   side: raise a request, report an absence today, and see every request you
+   have made. Approving is not here — approvers do that in Approvals — and the
+   approver-per-department setting stays in Settings › Operations (ASK-8). */
+export default function Leave() {
   const qc = useQueryClient();
   const [params] = useSearchParams();
   const highlightId = params.get("leave");
-  const [tab, setTab] = useState("mine");
-  const canApprove = user?.role === "owner" || hasPerm(user, "leave_approve");
-  const canManage = hasPerm(user, "team_manage");
-  const roleOptions = [{ key: "owner", label: "Owner" }, ...(tenant?.roles || [])];
 
   const mineQ = useQuery({ queryKey: ["leaves", "mine"], queryFn: () => api.get("/leaves?scope=mine").then((r) => r.data) });
-  const apprQ = useQuery({ queryKey: ["leaves", "approvals"], queryFn: () => api.get("/leaves?scope=approvals").then((r) => r.data), enabled: canApprove });
-  const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data), enabled: canManage });
-
   const refresh = () => qc.invalidateQueries({ queryKey: ["leaves"] });
   const mine = mineQ.data || [];
-  const approvals = apprQ.data || [];
-  const pendingApprovals = approvals.filter((l) => l.status === "pending" || l.status === "info_requested");
 
-  /* KM-31 — Settings is NOT a tab. My Leave and Approvals are two views of the
-     same list; Settings is a configuration screen that happens to live on this
-     page, and putting it in the same track said all three were peers. It is a
-     gear beside the track now, which is the shape every app uses for exactly
-     this and needs no label to be understood. */
-  const TABS = [
-    { key: "mine", label: "My Leave", n: mine.length },
-    ...(canApprove ? [{ key: "approvals", label: "Approvals", n: pendingApprovals.length }] : []),
-  ];
+  const today = new Date().toISOString().slice(0, 10);
+  const year = today.slice(0, 4);
+  // Coming up = still waiting on a decision, or approved and not over yet.
+  const upcoming = mine
+    .filter((lv) => OPEN.has(lv.status) || (lv.status === "approved" && (lv.to_date || lv.from_date) >= today))
+    .sort((a, b) => (a.from_date || "").localeCompare(b.from_date || ""));
+  const upcomingIds = new Set(upcoming.map((lv) => lv.id));
+  const history = mine
+    .filter((lv) => !upcomingIds.has(lv.id))
+    .sort((a, b) => (b.from_date || "").localeCompare(a.from_date || ""));
+
+  const waiting = mine.filter((lv) => OPEN.has(lv.status)).length;
+  const approvedThisYear = mine.filter((lv) => lv.status === "approved" && (lv.from_date || "").startsWith(year));
+  const daysOff = approvedThisYear.reduce((n, lv) => n + daysOf(lv), 0);
+
+  // A notification about a request lands here (?leave=<id>): bring it into view.
+  useEffect(() => {
+    if (!highlightId || !mine.length) return;
+    const t = setTimeout(() => document.querySelector(`[data-testid="leave-card-${highlightId}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" }), 300);
+    return () => clearTimeout(t);
+  }, [highlightId, mine.length]);
 
   const actions = (
-    <div className="flex items-center gap-2">
-      <AbsenceDialog onDone={refresh} />
+    <div className="flex flex-wrap items-center gap-2" data-testid="leave-actions">
       <RequestLeaveDialog onDone={refresh} />
+      <AbsenceDialog onDone={refresh} />
+    </div>
+  );
+
+  const stat = (label, value, testid) => (
+    <div className="kr-pressed flex min-w-0 flex-1 flex-col rounded-2xl px-4 py-3" data-testid={testid}>
+      <span className="font-display text-2xl tabular-nums leading-none">{value}</span>
+      <span className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">{label}</span>
     </div>
   );
 
   return (
-    <div>
-      {embedded ? (
-        <div className="flex justify-end mb-4">{actions}</div>
+    <div data-testid="leave-page">
+      {/* KM-31 · laid out like every other room: the title pinned on a phone
+          with the actions under it; the desktop header carries them beside. */}
+      <StickyHeader className="mb-3 flex flex-col gap-4 lg:hidden" data-testid="leave-mobile-header">
+        <h1 className="font-display text-3xl">Leave</h1>
+        {actions}
+      </StickyHeader>
+      <div className="hidden lg:block">
+        <PageHeader eyebrow="Time off" title="Leave">{actions}</PageHeader>
+      </div>
+
+      <div className="mb-6 flex gap-3" data-testid="leave-summary">
+        {stat("Waiting", waiting, "leave-summary-waiting")}
+        {stat(`Days off in ${year}`, daysOff % 1 ? daysOff.toFixed(1) : daysOff, "leave-summary-days")}
+        {stat("Requests", mine.length, "leave-summary-total")}
+      </div>
+
+      {mineQ.isLoading && !mineQ.data ? (
+        <p className="text-sm text-muted-foreground">Loading your leave…</p>
+      ) : mine.length === 0 ? (
+        <EmptyState title="No leave requests yet"
+          hint="Use Request Leave to plan time off, or Report Absence Today if you can't come in." />
       ) : (
-        <>
-          {/* KM-31 · the standalone page, laid out like every other room: the
-              title pinned, and one row under it carrying both actions. They
-              used to be black slabs floating to the right of the heading; they
-              are the page's own controls, so they wear its raised material. */}
-          <StickyHeader className="mb-3 flex flex-col gap-6 lg:hidden" data-testid="leave-mobile-header">
-            <h1 className="font-display text-3xl">Leaves</h1>
-            <div className="flex items-center gap-2">{actions}</div>
-          </StickyHeader>
-          <div className="hidden lg:block">
-            <PageHeader eyebrow="Time off & availability" title="Leave & Absence">{actions}</PageHeader>
-          </div>
-        </>
-      )}
-
-      {/* KM-3 — the TRACK is .kr-pressed, not .nm-inset. nm-inset is a flat
-          sunken FILL (bg-nm-sunken, border-0) and draws no shadow at all, so
-          the bar read as a grey rectangle with good buttons sitting on it.
-          .kr-pressed is the real thing: a dark inset from the top-left and a
-          white inset from the bottom-right, i.e. the same held-pressed look a
-          selected control has. The raised .kr-pop tab then sits IN a genuine
-          depression instead of on a painted panel, which is the whole point of
-          a segmented track. */}
-      <div className="mb-6 flex items-center gap-2">
-      <div className="kr-pressed flex w-fit items-center gap-1 rounded-pill p-1" data-testid="leave-tabs">
-        {TABS.map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)} data-testid={`leave-tab-${t.key}`}
-            className={`flex h-9 items-center gap-2 rounded-pill px-4 text-sm font-medium transition-all ${tab === t.key ? "kr-pop text-foreground" : "text-foreground/60 hover:text-foreground/85"}`}>
-            {t.label}
-            {t.n > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-pill px-1 font-mono text-[10px] tabular-nums opacity-60">{t.n}</span>}
-          </button>
-        ))}
-      </div>
-        {/* KM-31 — the gear. Separated from the track by a gap because it is a
-            different kind of thing: the track picks WHICH list, this opens the
-            configuration behind them. .kr-pressed while open, matching the
-            "selected means pushed in" grammar the rest of the app uses. */}
-        {canManage && (
-          <button
-            type="button"
-            onClick={() => setTab((cur) => (cur === "settings" ? "mine" : "settings"))}
-            aria-pressed={tab === "settings"}
-            aria-label="Leave settings"
-            data-testid="leave-settings-toggle"
-            className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${tab === "settings" ? "kr-pressed" : "kr-pop"}`}
-          >
-            <GearSix size={18} weight="bold" aria-hidden="true" />
-          </button>
-        )}
-      </div>
-
-      {tab === "mine" && (
-        <div className="grid md:grid-cols-2 gap-4" data-testid="my-leaves">
-          {mine.length === 0 && <EmptyState title="No leave requests yet" hint="Use Request Leave to plan time off, or Report Absence Today for emergencies." />}
-          {mine.map((lv) => <LeaveCard key={lv.id} lv={lv} canAct={false} onRefresh={refresh} highlight={lv.id === highlightId} />)}
+        <div className="space-y-8">
+          {upcoming.length > 0 && (
+            <section data-testid="leave-upcoming">
+              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Coming up and waiting
+              </h2>
+              <div className="grid gap-4 md:grid-cols-2">
+                {upcoming.map((lv) => <LeaveCard key={lv.id} lv={lv} canAct={false} onRefresh={refresh} highlight={lv.id === highlightId} />)}
+              </div>
+            </section>
+          )}
+          {history.length > 0 && (
+            <section data-testid="leave-history">
+              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">History</h2>
+              <div className="grid gap-4 md:grid-cols-2">
+                {history.map((lv) => <LeaveCard key={lv.id} lv={lv} canAct={false} onRefresh={refresh} highlight={lv.id === highlightId} />)}
+              </div>
+            </section>
+          )}
         </div>
-      )}
-
-      {tab === "approvals" && canApprove && (
-        <div className="grid md:grid-cols-2 gap-4" data-testid="leave-approvals">
-          {approvals.length === 0 && <EmptyState title="Nothing to approve" hint="Leave requests routed to you will appear here." />}
-          {approvals.map((lv) => <LeaveCard key={lv.id} lv={lv} canAct onRefresh={refresh} highlight={lv.id === highlightId} />)}
-        </div>
-      )}
-
-      {tab === "settings" && canManage && (
-        <ApproverConfig roleOptions={roleOptions} members={usersQ.data || []} />
       )}
     </div>
   );

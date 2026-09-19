@@ -27,6 +27,11 @@ export function notifLink(n) {
   // where the approvals queue lives (ASK-7). The ?leave=<id> query param
   // is preserved so LeaveApprovals can highlight the target card the same
   // way it did on the retired /leave page.
-  if (n?.entity_type === "leave" && n?.entity_id) return `/inbox?leave=${n.entity_id}`;
+  // 2026-09-19 — only the APPROVER's notification ("X asked for leave") goes
+  // there. The requester's ("your leave was approved / rejected / needs more
+  // info") opens their own request on /leave, highlighted — the Desk's queue
+  // never showed it to them.
+  if (n?.entity_type === "leave" && n?.entity_id && n?.type === "approval") return `/inbox?leave=${n.entity_id}`;
+  if (n?.entity_type === "leave" && n?.entity_id) return `/leave?leave=${n.entity_id}`;
   return null;
 }

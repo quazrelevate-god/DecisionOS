@@ -38,7 +38,7 @@ import { selfScore } from "../lib/karmaScore";
 import { isDemoTenant, demoDelta } from "./_operatingScoreDemo";
 import {
   ArcGauge, StatTile, ScopeSlider,
-  BigNumeral, KDeltaChip, MiniBars,
+  BigNumeral, KDeltaChip, MiniBars, CircleDots, TinySpark,
 } from "../components/karma";
 import { INK_PLATE } from "../components/karma/glass";
 import { useDeskMetrics } from "./desk/useDeskMetrics";
@@ -64,7 +64,7 @@ import { DecisionDialog } from "../components/DecisionDialog";
 // import { deskInsight } from "../lib/deskInsight";
 import {
   ArrowSquareOut, CaretRight, CaretDown, Timer,
-  ChatCircleText, Gauge as GaugeIcon, HandCoins, TrendUp,
+  ChatCircleText, Gauge as GaugeIcon, Receipt, HandCoins, TrendUp,
 } from "@phosphor-icons/react";
 
 /* ASK-35 1.1 — how many rows the phone's card shows before the control. Three:
@@ -974,17 +974,10 @@ export default function Desk() {
            a letterbox with a smaller mic in it, and nothing scrolls either
            way. */
         ? "min-h-0 flex-1 flex flex-col"
-        /* ASK-49 — on desktop it fills the square cell it is given (below, in
-           the hero), top to bottom and side to side. */
-        : "flex h-full min-h-0 flex-col"
+        : "order-4 min-h-[128px] max-lg:flex max-lg:flex-col lg:order-none lg:min-h-0 lg:flex-1"
     )}
     testid="desk-insight"
-    /* ASK-49 — THE SAME WELL ON BOTH. The founder: "just like how we did for
-       the mobile PWA regarding our DEX container well redesign, we need to
-       apply that to our desktop version also". So desktop gets the ripple mic,
-       the static box, the forge alone and the title in the floor; what differs
-       is where it sits, which is the page's business, not the well's. */
-    square
+    phone={isMobile}
     growToRef={kpiGridRef}
     /* ASK-35 2.2 — below lg the well grows to the top of the HERO,
        covering the greeting, the score cluster and the KPI strip. */
@@ -1048,25 +1041,11 @@ export default function Desk() {
           the well, so eight pixels each is 24 handed to the sheet — and on a
           6.1" screen with a 47px notch inset and a 34px home indicator, 24px is
           what a row of the list costs. Desktop is untouched. */}
-      {/* ASK-49 — THREE COLUMNS ON DESKTOP, AND TWO OF THEM ARE SQUARES. The
-          founder: put the Dex well "into the center of the screen as a square
-          block", make the KPI tiles squares, and let the rest resize around
-          them. So: the greeting and score on the left taking whatever width is
-          left, the well in the middle, the four KPIs as a 2x2 of squares on the
-          right — and both squares are one side, --desk-sq (index.css .kr-hero),
-          which is also the hero's height. It is the height the hero already
-          had on every desktop screen measured (422 of the app's own pixels),
-          so the black board below does not give up a row for this; on a
-          narrow laptop the squares shrink first so the left column keeps 360. */}
-      <div ref={heroRef} className="kr-hero flex flex-col gap-3 lg:grid lg:shrink-0 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:gap-10">
+      <div ref={heroRef} className="kr-hero flex flex-col gap-3 lg:grid lg:shrink-0 lg:grid-cols-[minmax(0,29fr)_minmax(0,45fr)] lg:gap-20">
         {/* LEFT column — greeting, the score row, the well on the floor.
             KR-14.2 · MOBILE — display:contents so its children flow into
             the outer column and the KPI strip can slot between them. */}
-        {/* ASK-49 — on desktop this column is as tall as the squares beside it
-            and the greeting and the score are spread down it — "scale the
-            greeting section and the score section in order to fill the bottom
-            space which left by the dex well". */}
-        <div className="kr-hero__lead contents lg:flex lg:h-[var(--desk-sq)] lg:min-w-0 lg:flex-col lg:justify-between lg:gap-3">
+        <div className="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-3">
           {/* Greeting on the LEFT, compact score+gauge on the RIGHT on the
               phone; on lg the greeting stands alone, two lines, the name
               carrying the weight (the founder's reference). */}
@@ -1087,10 +1066,7 @@ export default function Desk() {
                 lands inside the two lines rather than in an ellipsis. Two lines
                 at 22 is 56px against the score's 60, so it still cannot make
                 this row taller than the score does. */}
-            {/* ASK-49 — on desktop both lines are sized by the column they sit
-                in (index.css .kr-hero__lead), so they grow into the room the
-                well left when it moved to the middle. */}
-            <h1 className="kr-greet-1 min-w-0 font-display text-xl leading-tight lg:font-light lg:leading-[1.15]" data-testid="desk-brief-greeting">
+            <h1 className="min-w-0 font-display text-xl leading-tight lg:text-[34px] lg:font-light lg:leading-[1.15]" data-testid="desk-brief-greeting">
               {gi === -1
                 ? <span className="block truncate">{greeting || " "}</span>
                 : <>
@@ -1108,7 +1084,7 @@ export default function Desk() {
                         shrink the font"), which is what makes "Good afternoon,"
                         fit a 320px screen with the display zoomed. */}
                     <span className="block truncate">{greeting.slice(0, gi + 1)}</span>
-                    <span className="kr-greet-2 block truncate text-muted-foreground lg:font-bold lg:leading-[1.08] lg:tracking-[-0.02em] lg:text-foreground">{greeting.slice(gi + 1)}.</span>
+                    <span className="block truncate text-muted-foreground lg:text-5xl lg:font-bold lg:leading-[1.08] lg:tracking-[-0.02em] lg:text-foreground">{greeting.slice(gi + 1)}.</span>
                   </>}
             </h1>
 
@@ -1132,14 +1108,7 @@ export default function Desk() {
           {/* ASK-25 · the score row, desktop: slider over the numeral on the
               left, the gauge to the right on the same floor. items-end lands
               the gauge's diameter on the numeral's baseline (KR-8.8). */}
-          {/* ASK-49 — AND THE DIAL COMES IN BESIDE THE NUMBER. It was the second
-              column of a grid that spans the whole left column, pushed to its
-              far end (justify-self-end), which is the gap the founder pointed
-              at: "the dial is far to the right side instead of near to the
-              score". Now the numeral and the dial are one row, the dial a fixed
-              step after "/ 100" with its diameter on the numeral's baseline
-              (items-end), and both scale with the column. */}
-          <div className="kr-dex-fade hidden lg:block" data-dex-faded={dexExpanded ? "true" : "false"}>
+          <div className="kr-dex-fade hidden lg:grid lg:grid-cols-[auto_minmax(0,1fr)] lg:items-end lg:gap-5" data-dex-faded={dexExpanded ? "true" : "false"}>
             <div className="flex flex-col items-start gap-2.5">
               {isOwnerView && (
                 <ScopeSlider options={SCOPE_OPTIONS} value={scope} onChange={setScope} label="Score scope" testid="desk-scope" />
@@ -1156,23 +1125,14 @@ export default function Desk() {
                   />
                 </p>
               )}
-              <div className="flex items-end gap-6">
-                <div className="flex items-baseline gap-2.5">
-                  <BigNumeral
-                    text={scoreReady ? String(shownScore) : "—"}
-                    size="fluid"
-                    countUp={scoreReady}
-                    className="kr-score"
-                    testid="desk-score"
-                  />
-                  {scoreReady && <span className="kr-score-of text-muted-foreground">/ 100</span>}
-                </div>
-                <ArcGauge
-                  value={scoreReady ? shownScore : null}
-                  size={206}
-                  className="kr-dial shrink-0 text-foreground"
-                  testid="desk-gauge"
+              <div className="flex items-baseline gap-2.5">
+                <BigNumeral
+                  text={scoreReady ? String(shownScore) : "—"}
+                  size="hero"
+                  countUp={scoreReady}
+                  testid="desk-score"
                 />
+                {scoreReady && <span className="text-2xl text-muted-foreground">/ 100</span>}
               </div>
               {/* KR-8.8 — the caption survives ONLY in the not-enough-data
                   case, where a bare "—" would be a shrug. */}
@@ -1182,8 +1142,23 @@ export default function Desk() {
                 </p>
               )}
             </div>
+            <ArcGauge
+              value={scoreReady ? shownScore : null}
+              size={206}
+              className="w-[206px] shrink-0 justify-self-end text-foreground"
+              testid="desk-gauge"
+            />
           </div>
 
+          {/* ASK-46 — ON DESKTOP THE WELL IS STILL HERE, in the hero's left
+              column under the score, exactly as ASK-25 placed it. On a phone it
+              is not: the founder moved it to the foot of the page, above the
+              dock, and the black card took its place. `isMobile` decides which
+              of the two call sites renders, so only ever ONE instance exists —
+              the well owns the Dex workspace's state and two of them would be
+              two conversations. Crossing the lg line remounts it, which a
+              breakpoint change does to this whole page anyway. */}
+          {!isMobile && dexWell}
         </div>
 
         {/* KR-14.20 · MOBILE — the KPIs are four rounded rectangles in a
@@ -1231,31 +1206,13 @@ export default function Desk() {
           ))}
         </div>
 
-        {/* ASK-49 — THE WELL, IN THE MIDDLE, AS A SQUARE. `isMobile` still
-            decides which of the two call sites renders (the phone's is in the
-            page column, above the black card), so only ever ONE instance exists
-            — the well owns the Dex workspace's state and two of them would be
-            two conversations. */}
-        {!isMobile && (
-          <div className="hidden lg:block lg:h-[var(--desk-sq)] lg:w-[var(--desk-sq)]" data-testid="desk-well-cell">
-            {dexWell}
-          </div>
-        )}
-
         {/* RIGHT — the 3×2 grid. Six honest tiles; Score mix is the glass one.
             KR-8.6 · 3 columns from lg, 12px gutters, auto-rows-fr so the two
             rows are EQUAL and the grid's floor lands on the well's floor.
             ASK-25 — the rows are shorter than they were because the LEFT
             column got shorter (the numeral, the gauge and the well all took a
             step down); the tiles follow, they are not sized on their own. */}
-        {/* ASK-49 — FOUR SQUARES, NOT SIX RECTANGLES. The founder: "resize the
-            six tile KPI grid from almost rectangle box to a square box with the
-            same rounded corners" and take two out to make room for the well —
-            Spend, this month and Complaints. The grid is the well's own side
-            (--desk-sq) in both directions and two tracks each way, so every
-            tile is (side − gap) / 2 square whatever the screen. The phone's
-            strip (above, lg:hidden) is not part of this and keeps its four. */}
-        <div ref={kpiGridRef} className="kr-desk-kpis order-3 hidden min-w-0 gap-3 lg:order-none lg:grid lg:h-[var(--desk-sq)] lg:w-[var(--desk-sq)] lg:grid-cols-2 lg:grid-rows-2" data-testid="desk-kpi-grid">
+        <div ref={kpiGridRef} className="order-3 hidden min-w-0 grid-cols-2 gap-3 lg:order-none lg:grid lg:auto-rows-fr lg:grid-cols-3" data-testid="desk-kpi-grid">
           <StatTile
             icon={Timer}
             label="Delayed"
@@ -1267,8 +1224,18 @@ export default function Desk() {
             countUp
             testid="kpi-delayed"
           />
-          {/* ASK-49 — Complaints (kpi-complaints) is off the desktop grid; it
-              is still on the phone's strip as kpi-complaints-m. */}
+          <StatTile
+            icon={ChatCircleText}
+            label="Complaints"
+            value={String(m.complaints ? m.complaints.value : "…")}
+            urgent={(m.complaints?.new_7d || 0) > 0}
+            alert={m.complaints?.new_7d > 0 ? m.complaints.new_7d : false}
+            viz={m.complaints ? <CircleDots count={m.complaints.new_7d} /> : null}
+            meaning={m.complaints?.new_7d > 0 ? `${m.complaints.new_7d} new this week` : undefined}
+            to="/crm"
+            countUp
+            testid="kpi-complaints"
+          />
           <StatTile
             glass
             icon={GaugeIcon}
@@ -1295,8 +1262,16 @@ export default function Desk() {
             to="/finance"
             testid="kpi-profit"
           />
-          {/* ASK-49 — Spend, this month (kpi-spend) is off the grid on the
-              founder's call; the phone's strip never carried it. */}
+          <StatTile
+            icon={Receipt}
+            label="Spend, this month"
+            value={m.ledger?.lastMonthSpend != null ? inrCompact(m.ledger.lastMonthSpend) : "…"}
+            viz={m.ledger?.byMonth?.length > 1
+              ? <TinySpark points={m.ledger.byMonth.map((x) => x.amount)} tone="neutral" />
+              : null}
+            to="/finance"
+            testid="kpi-spend"
+          />
         </div>
       </div>
 

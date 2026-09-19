@@ -117,7 +117,7 @@ function sameLines(a, b) {
   for (const k of ka) {
     const x = a[k];
     const y = b[k];
-    if (!y || x.h !== y.h || x.y1 !== y.y1 || x.stemHue !== y.stemHue || x.mono !== y.mono || x.gutter !== y.gutter || x.fromPath !== y.fromPath) return false;
+    if (!y || x.h !== y.h || x.y1 !== y.y1 || x.jointY !== y.jointY || x.stemHue !== y.stemHue || x.mono !== y.mono || x.gutter !== y.gutter || x.fromPath !== y.fromPath) return false;
     if (x.kids.length !== y.kids.length) return false;
     for (let i = 0; i < x.kids.length; i++) {
       const p = x.kids[i];
@@ -554,6 +554,22 @@ function columnLayout(items, add, height) {
    Positions come from offsetTop, never from getBoundingClientRect: offsetTop
    is measured against this wrapper and does not move when the column scrolls,
    so there is nothing to recompute per frame. */
+/* Where the spine starts and stops, in the column's content coordinates: far
+   enough to reach every branch, and far enough to meet the stem coming in from
+   the lane. NOT the full content height, which is what it was at first and
+   what the founder saw — a line carrying on past the last person to the bottom
+   of the column, ending on nothing.
+   jointY is where the stem arrives, in the same coordinates: the lane measures
+   it against the viewport, so it moves as the column scrolls, and it is only
+   ever outside the branch range at the extremes (the parent card near an edge
+   with the column scrolled hard the other way). Including it is what keeps the
+   stem and the spine from parting company there. */
+function spineSpan(line) {
+  const ys = line.kids.map((k) => k.y);
+  if (line.jointY == null) return [Math.min(...ys), Math.max(...ys)];
+  return [Math.min(...ys, line.jointY), Math.max(...ys, line.jointY)];
+}
+
 function ColumnConnector({ line }) {
   if (!line || !line.kids.length) return null;
   const structural = tone(ROOT_HUE).line;
@@ -562,12 +578,19 @@ function ColumnConnector({ line }) {
   const dotX = GUTTER_W - 10;
   const colourOf = (k) => (k.add ? ADD_LINE : k.path ? PATH_INK : mono ? structural : tone(k.hue).line);
   const widthOf = (k) => (k.path ? 2 : 1.5);
+  const [top, bottom] = spineSpan(line);
   return (
     <svg aria-hidden="true" width={GUTTER_W}
       className="pointer-events-none absolute left-0 top-0 h-full"
       style={{ overflow: "visible" }}>
-      {/* .75 so a 1.5 stroke sits on the pixel rather than across two */}
-      <line x1="0.75" y1="0" x2="0.75" y2="100%" stroke={trunk} strokeWidth="1.5" />
+      {/* .75 so a 1.5 stroke sits on the pixel rather than across two.
+          Its ENDS are the only thing in this gutter that the scroll handler
+          still rewrites (see paint): the branches and their dots are fixed in
+          content coordinates and ride the compositor, while the span has to
+          follow a joint that lives in the other scroll frame. An end point is
+          also the one place a stale pixel cannot be seen — nobody watches
+          where a vertical line stops mid-flick. */}
+      <line data-org="spine" x1="0.75" y1={top} x2="0.75" y2={bottom} stroke={trunk} strokeWidth="1.5" />
       {line.kids.map((k) => (
         <path key={k.id} d={`M 0.75 ${k.y} H ${GUTTER_W}`} stroke={colourOf(k)} strokeWidth={widthOf(k)}
           fill="none" strokeLinecap="round" strokeDasharray={k.add ? "4 4" : undefined} />
@@ -896,9 +919,19 @@ export function OrgCanvas({ owners = [], teams = [], query = "", matches, teamMa
       const lr = laneEl.getBoundingClientRect();
       const fr = fromEl.getBoundingClientRect();
       const z = zoomOf(laneEl); // visual px -> the lane's own px, where the SVG draws
+      const y1 = Math.round((fr.top + fr.height / 2 - lr.top) / z);
+      /* The stem arrives at y1 measured down the LANE; the gutter draws in the
+         column's content, which is y1 further on by however far it is scrolled.
+         The lane and the column are siblings in the same row and share a top
+         edge, so the two frames differ by exactly scrollTop. Own px on both
+         sides — scrollTop is the element's own, and y1 was already divided. */
+      const contentEl = lane.gutter ? laneEls.current.get(`content-${lane.col}`) : null;
+      const scroller = contentEl ? contentEl.parentElement : null;
       next[lane.key] = {
         h: Math.round(lr.height / z),
-        y1: Math.round((fr.top + fr.height / 2 - lr.top) / z),
+        y1,
+        col: lane.col,
+        jointY: scroller ? Math.round(y1 + scroller.scrollTop) : null,
         stemHue: lane.stemHue,
         mono: !!lane.mono,
         gutter: !!lane.gutter,
@@ -956,6 +989,16 @@ export function OrgCanvas({ owners = [], teams = [], query = "", matches, teamMa
       /* A gutter lane's branches are inside the column and scroll themselves —
          only the stem and its joint are still ours to move. */
       const byId = line.gutter ? new Map() : new Map(g.branches.map((b) => [b.id, b]));
+      if (line.gutter && line.kids.length) {
+        // …and the spine's two ends, which have to keep reaching that joint.
+        const contentEl = laneEls.current.get(`content-${line.col}`);
+        const spine = contentEl && contentEl.querySelector(':scope > svg > [data-org="spine"]');
+        if (spine) {
+          const [top, bottom] = spineSpan(line);
+          spine.setAttribute("y1", String(top));
+          spine.setAttribute("y2", String(bottom));
+        }
+      }
       svg.querySelectorAll("[data-org]").forEach((n) => {
         const part = n.dataset.org;
         if (part === "stem") n.setAttribute("d", g.stemD);

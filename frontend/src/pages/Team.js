@@ -733,6 +733,28 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
 
   const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || "");
 
+  /* U7-09.TEAM v2: without team_manage the roster is read-only, and the page
+     says why rather than looking broken.
+     2026-09-19, founder — it moves UP INTO THE HEADER ROW, between the heading
+     and the search, because that row is mostly empty on a wide screen while
+     the notice was spending a full band of its own below it and pushing the
+     tree down. Declared once here and placed twice: the header slot only
+     exists from lg, where there is room beside a 22rem search field; below
+     that it stays where it was, full width under the row. */
+  const readOnlyNotice = !canManageTeam && !readOnly ? (
+    <div className={`flex items-start gap-3 px-5 py-4 ${DRAWER_CARD}`} data-testid="team-view-only-banner">
+      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-600 ${GLASS_PILL}`}>
+        <Eye size={16} weight="bold" aria-hidden="true" />
+      </span>
+      <div className="min-w-0 text-sm">
+        <p className="font-semibold text-neutral-900">Read-only view</p>
+        <p className="mt-0.5 text-xs text-slate-600">
+          You can see who's on the team and open any card for details. To add members or manage access, ask the owner for the <strong className="font-semibold">Manage Team</strong> permission.
+        </p>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div data-testid="team-panel">
       <InviteLinkModal info={invite} onClose={() => setInvite(null)} />
@@ -747,6 +769,9 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
           <p className="self-center text-sm text-muted-foreground" data-testid="team-count">
             {q ? `${shownCount} of ${members.length} members` : `${members.length} members`}
           </p>
+        )}
+        {readOnlyNotice && (
+          <div className="hidden min-w-0 flex-1 lg:block lg:max-w-2xl">{readOnlyNotice}</div>
         )}
         <div className="flex items-center gap-2.5 lg:shrink-0">
           <div className={`relative flex h-12 min-w-0 flex-1 items-center rounded-pill lg:w-[22rem] lg:flex-none ${GLASS_PILL}`}>
@@ -788,21 +813,7 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
         </div>
       </div>
 
-      {/* U7-09.TEAM v2: without team_manage the roster is read-only, and the
-          page says why rather than looking broken. */}
-      {!canManageTeam && !readOnly && (
-        <div className={`mb-6 flex items-start gap-3 px-5 py-4 ${DRAWER_CARD}`} data-testid="team-view-only-banner">
-          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-600 ${GLASS_PILL}`}>
-            <Eye size={16} weight="bold" aria-hidden="true" />
-          </span>
-          <div className="text-sm">
-            <p className="font-semibold text-neutral-900">Read-only view</p>
-            <p className="mt-0.5 text-xs text-slate-600">
-              You can see who's on the team and open any card for details. To add members or manage access, ask the owner for the <strong className="font-semibold">Manage Team</strong> permission.
-            </p>
-          </div>
-        </div>
-      )}
+      {readOnlyNotice && <div className="mb-6 lg:hidden">{readOnlyNotice}</div>}
 
       {out.length > 0 && <CurrentlyOutStrip people={out} />}
 

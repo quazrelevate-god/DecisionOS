@@ -370,9 +370,17 @@ function RootColumn({ owners, ctx, register }) {
         return (
           <div key={u.id} className="flex flex-col items-center">
             <div ref={single && i === 0 ? (el) => register("root", el) : undefined} className="relative flex w-full justify-center">
+              {/* The stub from the face to the lane. It is drawn here rather
+                  than in the lane because it has to start at the circle's edge,
+                  so it needs the same accent treatment or the chain visibly
+                  begins one segment late. */}
               {single && ctx.hasHeads && (
-                <span aria-hidden="true" className="absolute right-0 top-1/2 h-[1.5px] -translate-y-1/2"
-                  style={{ left: "calc(50% + 78px)", background: tone(ROOT_HUE).line }} />
+                <span aria-hidden="true" className="absolute right-0 top-1/2 -translate-y-1/2"
+                  style={{
+                    left: "calc(50% + 78px)",
+                    height: ctx.ownerOnPath ? PATH_W : LINE_W,
+                    background: ctx.ownerOnPath ? pathTone(null) : tone(ROOT_HUE).line,
+                  }} />
               )}
               <button type="button" onClick={() => ctx.onOpen(u)} data-testid={`team-member-${u.id}`}
                 aria-label={`Open profile for ${u.name}`}
@@ -579,10 +587,35 @@ function columnLayout(items, add, height) {
    ever outside the branch range at the extremes (the parent card near an edge
    with the column scrolled hard the other way). Including it is what keeps the
    stem and the spine from parting company there. */
-function spineSpan(line) {
+function spineGeom(line) {
   const ys = line.kids.map((k) => k.y);
-  if (line.jointY == null) return [Math.min(...ys), Math.max(...ys)];
-  return [Math.min(...ys, line.jointY), Math.max(...ys, line.jointY)];
+  const first = Math.min(...ys);
+  const last = Math.max(...ys);
+  const rawTop = line.jointY == null ? first : Math.min(first, line.jointY);
+  const rawBottom = line.jointY == null ? last : Math.max(last, line.jointY);
+  /* THE SPINE'S TWO ENDS TURN A CORNER rather than meeting a branch square on
+     (founder, 2026-09-19: "the line edges are not curvy"). Everything between
+     the ends is a real T — the spine carries on past it and a T has no corner
+     to round — but where the spine STOPS the line is turning, and the lane
+     outside rounds exactly that turn with ELBOW_R. These are the corners the
+     bounded trunk always drew; they went missing when this gutter took over
+     and drew every branch flat.
+     An end only counts when the spine actually stops at that branch: if the
+     joint has pulled the spine past it, the spine runs on and it is a T like
+     any other. */
+  const curvable = rawBottom - rawTop > 1;
+  const topEnd = curvable && rawTop === first ? first : null;
+  const bottomEnd = curvable && rawBottom === last ? last : null;
+  // Never round more than half the gap to the next branch along.
+  const room = ys.length > 1 ? (last - first) / (ys.length - 1) / 2 : ELBOW_R;
+  const r = Math.max(0, Math.min(ELBOW_R, room));
+  return {
+    top: topEnd == null ? rawTop : rawTop + r,
+    bottom: bottomEnd == null ? rawBottom : rawBottom - r,
+    topEnd,
+    bottomEnd,
+    r,
+  };
 }
 
 function ColumnConnector({ line }) {
@@ -593,7 +626,12 @@ function ColumnConnector({ line }) {
   const dotX = GUTTER_W - 10;
   const colourOf = (k) => (k.add ? ADD_LINE : k.path ? pathTone(k.hue) : mono ? structural : tone(k.hue).line);
   const widthOf = (k) => (k.path ? PATH_W : LINE_W);
-  const [top, bottom] = spineSpan(line);
+  const { top, bottom, topEnd, bottomEnd, r } = spineGeom(line);
+  const branchD = (k) => {
+    if (k.y === topEnd && r > 0) return `M 0.75 ${k.y + r} Q 0.75 ${k.y}, ${0.75 + r} ${k.y} H ${GUTTER_W}`;
+    if (k.y === bottomEnd && r > 0) return `M 0.75 ${k.y - r} Q 0.75 ${k.y}, ${0.75 + r} ${k.y} H ${GUTTER_W}`;
+    return `M 0.75 ${k.y} H ${GUTTER_W}`;
+  };
   return (
     <svg aria-hidden="true" width={GUTTER_W}
       className="pointer-events-none absolute left-0 top-0 h-full"
@@ -607,7 +645,7 @@ function ColumnConnector({ line }) {
           where a vertical line stops mid-flick. */}
       <line data-org="spine" x1="0.75" y1={top} x2="0.75" y2={bottom} stroke={trunk} strokeWidth="1.5" />
       {line.kids.map((k) => (
-        <path key={k.id} d={`M 0.75 ${k.y} H ${GUTTER_W}`} stroke={colourOf(k)} strokeWidth={widthOf(k)}
+        <path key={k.id} d={branchD(k)} stroke={colourOf(k)} strokeWidth={widthOf(k)}
           fill="none" strokeLinecap="round" strokeDasharray={k.add ? "4 4" : undefined} />
       ))}
       {line.kids.map((k) => (
@@ -848,10 +886,19 @@ export function OrgCanvas({ owners = [], teams = [], query = "", matches, teamMa
      their own node. The tree already OPENS on this path (see the `path` state
      below, seeded from pathToPerson) — it just never said so. */
   const myTrail = useMemo(() => trailToPerson(heads, meId), [heads, meId]);
-  const onPath = useMemo(() => new Set(myTrail || []), [myTrail]);
   /* The owner sits above every team, so they are on the path of anyone found
      in the forest — and are the whole path when the owner is the one looking. */
   const ownerOnPath = !!meId && (!!myTrail || owners.some((o) => o.id === meId));
+  /* "root" is in the set, not just the forest ids, and that is what closes the
+     gap the founder saw: lane-0's stem runs out of the OWNER, whose lane id is
+     "root" rather than a user id, so asking the set about it always said no and
+     the chain started a segment late — inked from the first junction rightward
+     with a thin line still joining it to the face it comes from. */
+  const onPath = useMemo(() => {
+    const s = new Set(myTrail || []);
+    if (ownerOnPath) s.add("root");
+    return s;
+  }, [myTrail, ownerOnPath]);
 
   const ctx = {
     meId,
@@ -1009,7 +1056,7 @@ export function OrgCanvas({ owners = [], teams = [], query = "", matches, teamMa
         const contentEl = laneEls.current.get(`content-${line.col}`);
         const spine = contentEl && contentEl.querySelector(':scope > svg > [data-org="spine"]');
         if (spine) {
-          const [top, bottom] = spineSpan(line);
+          const { top, bottom } = spineGeom(line);
           spine.setAttribute("y1", String(top));
           spine.setAttribute("y2", String(bottom));
         }

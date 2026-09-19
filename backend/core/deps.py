@@ -6,6 +6,7 @@ session touch, membership projection, permission maps; require_role /
 require_perm gate endpoints; tenant_role_keys lists a tenant's role keys.
 core re-exports all four.
 """
+import asyncio
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -49,15 +50,43 @@ async def get_current_user(
                 status_code=403,
                 detail="Read-only impersonation: writes are blocked. End impersonation to act as an admin.",
             )
+    # U7-24.18 (2026-09-19): everything below needs only the token's `sub` and
+    # `tenant_id`, so the lookups run side by side -- one database round trip
+    # instead of six in a row. Against a remote database (~200 ms a trip) the
+    # sequence cost every authenticated request ~1.2 s before its handler ran.
+    # The checks are still applied in the order they always were.
+    from services.auth.membership import (
+        find_membership as _find_membership,
+        project_membership_onto_user as _project,
+        LIVE_STATUSES as _LIVE_STATUSES,
+        legacy_access_allowed as _legacy_access_allowed,
+    )
+    from services.auth.session_revocation import is_revoked as _is_revoked
+    from services.delegation import acting_for as _acting_for
+    jti = payload.get("jti")
+    check_jti = bool(jti and not _imp)
+    user_id = payload["sub"]
+    claimed_tenant = payload.get("tenant_id")
+
+    async def _nothing(value=None):
+        return value
+
+    revoked, user, membership, _tenant, acting_for = await asyncio.gather(
+        _is_revoked(db, jti) if check_jti else _nothing(False),
+        db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0}),
+        _find_membership(db, user_id, claimed_tenant, statuses=_LIVE_STATUSES)
+        if claimed_tenant else _nothing(),
+        db.tenants.find_one({"id": claimed_tenant}, {"_id": 0, "roles": 1, "owner_exclusions": 1})
+        if claimed_tenant else _nothing(),
+        # RBAC P2 (2026-09-16): whose approvals this person holds right now.
+        _acting_for(db, claimed_tenant, user_id) if claimed_tenant else _nothing([]),
+    )
     # FIX-003-C (S2-06): revocation check. A user who hit /logout
     # invalidated their jti; the token is still cryptographically
-    # valid until `exp`, but we must refuse to honor it. Deferred
-    # import breaks the core.py <-> services cycle. See
+    # valid until `exp`, but we must refuse to honor it. See
     # services/session_revocation.py for the fail-open contract.
-    jti = payload.get("jti")
-    if jti and not _imp:
-        from services.auth.session_revocation import is_revoked as _is_revoked
-        if await _is_revoked(db, jti):
+    if check_jti:
+        if revoked:
             raise HTTPException(status_code=401, detail="Session ended, please log in again")
         # FIX-004-G (RBAC-21): bump last_seen_at so /me/sessions
         # shows accurate "active X minutes ago". Best-effort — a
@@ -67,7 +96,6 @@ async def get_current_user(
             await _touch(db, jti)
         except Exception:
             pass
-    user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     if user.get("suspended") or user.get("tenant_suspended"):
@@ -86,20 +114,10 @@ async def get_current_user(
     # `user["permissions"]` unchanged. If the user has NO membership
     # in the claimed tenant (removed by admin between login + this
     # request), refuse the token.
-    from services.auth.membership import (
-        find_membership as _find_membership,
-        project_membership_onto_user as _project,
-        LIVE_STATUSES as _LIVE_STATUSES,
-        legacy_access_allowed as _legacy_access_allowed,
-    )
-    claimed_tenant = payload.get("tenant_id")
     if not claimed_tenant:
         # Legacy token issued before FIX-004-B (no tenant_id claim
         # possible — the field has always been present). Fail closed.
         raise HTTPException(status_code=401, detail="Invalid token — please log in again")
-    membership = await _find_membership(
-        db, user["id"], claimed_tenant, statuses=_LIVE_STATUSES,
-    )
     if not membership:
         # Compat: existing users still have the legacy tenant_id/role
         # fields on the user doc until the backfill migration runs.
@@ -109,8 +127,7 @@ async def get_current_user(
         # suspended, pending): then that row is the answer.
         if await _legacy_access_allowed(db, user, claimed_tenant):
             # RBAC P2 (2026-09-16): an older account can hold someone's approvals too.
-            from services.delegation import acting_for as _legacy_acting_for
-            user["_acting_for"] = await _legacy_acting_for(db, claimed_tenant, user["id"])
+            user["_acting_for"] = acting_for
             set_usage_tenant(user.get("tenant_id"))
             return user
         raise HTTPException(
@@ -118,15 +135,11 @@ async def get_current_user(
             detail="You no longer have access to this workspace. Please log in again.",
         )
     user = _project(user, membership)
-    # FIX-004-D (RBAC-14 + RBAC-15): fetch tenant's role permission
-    # overrides + owner exclusions so user_perms() can honor them
-    # WITHOUT another DB round-trip. Kept on the user dict as
+    # FIX-004-D (RBAC-14 + RBAC-15): the tenant's role permission
+    # overrides + owner exclusions (fetched above) so user_perms() can
+    # honor them WITHOUT another DB round-trip. Kept on the user dict as
     # underscore-prefixed keys (private convention) so no existing
     # code reads them by accident.
-    _tenant = await db.tenants.find_one(
-        {"id": claimed_tenant},
-        {"_id": 0, "roles": 1, "owner_exclusions": 1},
-    )
     if _tenant:
         _role_perms_map = {}
         for _r in (_tenant.get("roles") or []):
@@ -145,8 +158,7 @@ async def get_current_user(
     # push_notification of pending approvals) read user['_acting_as'].
     user["_acting_as"] = user.get("acting_as") or {}
     # RBAC P2 (2026-09-16): whose approvals this person holds right now.
-    from services.delegation import acting_for as _acting_for
-    user["_acting_for"] = await _acting_for(db, claimed_tenant, user["id"])
+    user["_acting_for"] = acting_for
     set_usage_tenant(user.get("tenant_id"))
     return user
 

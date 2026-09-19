@@ -26,6 +26,7 @@ Chips explained (all tenant + user scoped):
 
 Deep-linked from front-end Desk.js. Zero server.py churn.
 """
+import asyncio
 from datetime import datetime, timezone, date, timedelta
 from typing import Optional
 
@@ -155,11 +156,11 @@ async def _cash_flow_status(tid: str) -> dict:
     query: real field is `match_status ∈ {unmatched, partial}` (not
     the boolean `matched` the old code checked, which never existed)."""
     from services.finance_signals import _inv_remaining, _overdue_receivables, _unmatched_payments
-    overdue_rows = await _overdue_receivables(tid)
+    overdue_rows, unmatched_rows = await asyncio.gather(
+        _overdue_receivables(tid), _unmatched_payments(tid))
     overdue_receivables = round(sum(_inv_remaining(r) for r in overdue_rows), 2)
     # Unmatched INBOUND payments only (out payments live on a separate
     # workflow; inbound is what the owner "needs to match to reconcile").
-    unmatched_rows = await _unmatched_payments(tid)
     unmatched_count = sum(1 for p in unmatched_rows if p.get("direction") == "in")
     clear = overdue_receivables == 0 and unmatched_count == 0
     return {
@@ -184,8 +185,10 @@ async def _weekly_completion_rate(tid: str, user: dict) -> dict:
     if user.get("role") != "owner":
         scope_this["actor"] = user["id"]
         scope_last["actor"] = user["id"]
-    this_wk = await db.activity.count_documents(scope_this)
-    last_wk = await db.activity.count_documents(scope_last)
+    this_wk, last_wk = await asyncio.gather(
+        db.activity.count_documents(scope_this),
+        db.activity.count_documents(scope_last),
+    )
     if last_wk == 0:
         delta_pct = 100 if this_wk > 0 else 0
     else:
@@ -198,12 +201,10 @@ async def _complaints_trend(tid: str) -> dict:
     """Open complaints (all-time) + how many opened in the last 7 days.
     E2-56: use the IST-aligned 7-day window so the trend arrow flips
     on IST-midnight, not UTC-midnight."""
-    open_now = await db.complaints.count_documents(
-        {"tenant_id": tid, "status": {"$ne": "resolved"}}
-    )
     week_ago, _ = _week_ago_ist_utc()
-    new_7d = await db.complaints.count_documents(
-        {"tenant_id": tid, "created_at": {"$gte": week_ago}}
+    open_now, new_7d = await asyncio.gather(
+        db.complaints.count_documents({"tenant_id": tid, "status": {"$ne": "resolved"}}),
+        db.complaints.count_documents({"tenant_id": tid, "created_at": {"$gte": week_ago}}),
     )
     direction = "up" if new_7d >= 2 else "flat" if new_7d == 1 else "down"
     return {"value": open_now, "new_7d": new_7d, "direction": direction}
@@ -317,12 +318,19 @@ async def desk_summary(user: dict = Depends(get_current_user)):
     tid = user["tenant_id"]
     is_owner = user.get("role") == "owner"
 
-    delayed = await _delayed_count(tid, user)
-    completed_yday = await _completed_yesterday(tid, user)
-    pending_decisions = await _pending_decisions_for(tid, user)
-    cash = await _cash_flow_status(tid)
-    weekly_completion = await _weekly_completion_rate(tid, user)
-    complaints = await _complaints_trend(tid)
+    # U7-24.18 (2026-09-19): the six counters are independent reads, so they
+    # run side by side. One after another they held the request (and a
+    # database connection) for ~7 s against a remote database while the Desk
+    # loaded, and the member's first save queued behind it.
+    (delayed, completed_yday, pending_decisions, cash, weekly_completion,
+     complaints) = await asyncio.gather(
+        _delayed_count(tid, user),
+        _completed_yesterday(tid, user),
+        _pending_decisions_for(tid, user),
+        _cash_flow_status(tid),
+        _weekly_completion_rate(tid, user),
+        _complaints_trend(tid),
+    )
 
     narrative = await ai_desk_narrative(
         delayed=delayed, completed_yday=completed_yday,

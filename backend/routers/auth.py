@@ -12,6 +12,8 @@ inside each handler to avoid the circular import between `server.py` and
 its own routers.
 """
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, BackgroundTasks
 
 from core import (
@@ -1086,8 +1088,11 @@ async def set_owner_credentials(inp: OwnerCredentialsInput, request: Request,
     email = inp.email.strip().lower()
     if await db.users.find_one({"email": email, "id": {"$ne": user["id"]}}, {"_id": 0, "id": 1}):
         raise HTTPException(status_code=400, detail="That email is already used by another account")
+    # bcrypt takes ~0.3 s of CPU; off the event loop, so the Desk's requests
+    # loading behind this screen aren't frozen while it runs (U7-24.18).
+    password_hash = await asyncio.to_thread(hash_password, inp.password)
     await db.users.update_one({"id": user["id"]}, {"$set": {
-        "email": email, "password_hash": hash_password(inp.password), "passwordless": False,
+        "email": email, "password_hash": password_hash, "passwordless": False,
         "email_verified_at": None if email != (full.get("email") or "") else full.get("email_verified_at"),
         "updated_at": now_iso()}})
     # Best-effort: the link that confirms the address, as registration sends.

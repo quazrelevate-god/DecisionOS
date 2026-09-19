@@ -209,7 +209,7 @@ after, promotion to owner asking for email + password (a weak one refused),
 and both ways in afterwards.
 
 **Seen along the way, not changed:** saves took 6–8 s in these runs while the
-Desk behind them was loading its AI calls. Worth its own look (U7-24.18).
+Desk behind them was loading its AI calls. Worth its own look (U7-24.18) — looked at, below.
 
 **The Add member form, checked (same day, U7-24.19).** Required: name, a real
 mobile, department (pre-selected). Optional: email, job title, reports to;
@@ -219,6 +219,26 @@ fix or clear a mobile member's email (an email someone signs in with stays an
 owner's call and can't be removed); a bad email is flagged under the field
 before Save; a member without one shows "Not added" instead of an empty box.
 `scripts/ux_member_email_0919.py` 11/11.
+
+**Saves no longer queue behind the Desk loading (same day, U7-24.18).**
+Measured on a throwaway database against the remote Mongo (~205 ms a round
+trip): the AI calls were not the cause and the event loop was not blocked —
+`GET /api/health` answered in ~10 ms throughout, and a watchdog dumping the
+loop's stack caught only bcrypt. The time went on database round trips made one
+after another, queued on a connection pool that could not grow:
+
+- every signed-in request made six lookups in a row before its handler ran
+  (~1.45 s for a bare `/auth/me`) — now side by side, 2 round trips;
+- `/desk/summary` made nine counts in a row (~7 s) — now side by side;
+- PyMongo opened only 2 connections at a time, so the Desk's dozen requests
+  shared 3–4 connections — now up to 16 (`MONGO_MAX_CONNECTING`);
+- the owner-credentials bcrypt (~0.3 s of CPU) runs off the event loop.
+
+Same browser journey: welcome-card save 6.8 s → 4.1–4.5 s, owner-credentials
+9.4 s → 5.5–5.9 s, `/auth/me` under load 1.46 s → 0.69 s. What remains is the
+browser's 6-connections-per-host limit on local http (the save waits for a free
+connection behind the Desk's requests), the follow-up `/auth/me`, and each
+save's own round trips. Tests: `test_u7_24_18_desk_load_latency.py` (11).
 
 ## Still open
 

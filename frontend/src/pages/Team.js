@@ -55,14 +55,17 @@ const PROFILE_GLASS = "bg-[linear-gradient(160deg,hsl(0_0%_100%/0.62),hsl(0_0%_1
 const PROFILE_TILE = "rounded-2xl bg-white/30 border border-white/55 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.7)]";
 const PROFILE_CHIP = "inline-flex items-center gap-1 rounded-full bg-white/45 border border-white/60 px-2.5 py-1 text-[12px] font-medium text-slate-700";
 /* The add / edit member form sits on the app's glass sheet with glass fields,
-   selects and panels, like every other dialog here. Only its BUTTONS stay
-   neumorphic (founder, 2026-09-20): pushed out with a light and a dark
-   shadow, and a chosen option pressed in. */
+   selects, panels and access options, like every other dialog here. Only its
+   action BUTTONS (close, Cancel, Text a code) stay neumorphic (founder,
+   2026-09-20): pushed out with a light and a dark shadow. */
 const NM_RAISED = "bg-[hsl(226_24%_92%)] shadow-[6px_6px_14px_hsl(226_18%_74%),-6px_-6px_14px_hsl(0_0%_100%/0.95)]";
-const NM_PRESSED = "bg-[hsl(226_24%_92%)] shadow-[inset_4px_4px_9px_hsl(226_18%_76%),inset_-4px_-4px_9px_hsl(0_0%_100%/0.95)]";
 // A glass field that also looks locked when it is (someone else's mobile, an
 // owner's sign-in email, or your own contact details from here).
 const MEMBER_FIELD = `${DRAWER_FIELD} disabled:cursor-not-allowed disabled:bg-white/40 disabled:text-slate-500`;
+// The access areas are options, not actions, so they are glass like the rest
+// of the form (founder, 2026-09-20).
+const PERM_ON = "bg-white font-semibold text-slate-900 ring-1 ring-inset ring-neutral-900/15 shadow-[0_6px_16px_-10px_hsl(216_30%_25%/0.45),inset_0_1px_0_hsl(0_0%_100%/0.9)]";
+const PERM_OFF = "bg-white/45 font-medium text-slate-600 ring-1 ring-inset ring-slate-900/[0.05] hover:bg-white/75 hover:text-slate-900";
 const NM_ICON_BTN = `grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-700 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 active:shadow-[inset_3px_3px_7px_hsl(226_18%_76%),inset_-3px_-3px_7px_hsl(0_0%_100%/0.95)] ${NM_RAISED}`;
 const COLLAPSE_KEY = "team.folded-branches";
 
@@ -543,7 +546,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                     </span>
                   </span>
                 </label>
-                {/* An area that is on is pressed into the sheet; one that is off stands out of it. */}
+                {/* An area that is on is a solid white glass card with the black tick; one that is off is a faint one. */}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2" data-testid="permission-list">
                   {PERMISSIONS.map((p) => {
                     const on = shownPerms.includes(p.key);
@@ -558,7 +561,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                       <button key={p.key} type="button" data-testid={`perm-${p.key}`} aria-pressed={on} disabled={locked || form.follow_role}
                         title={form.follow_role ? "Set by the team — untick “Use the team’s access” to choose" : locked ? "Only an owner can give access you don't have" : undefined}
                         onClick={() => togglePerm(p.key)}
-                        className={`flex min-h-11 items-center justify-between gap-2 rounded-2xl px-3.5 py-2 text-left text-[13px] transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 disabled:cursor-not-allowed disabled:opacity-45 ${on ? `${NM_PRESSED} font-semibold text-slate-900` : `${NM_RAISED} font-medium text-slate-600 hover:text-slate-900`}`}>
+                        className={`flex min-h-11 items-center justify-between gap-2 rounded-2xl px-3.5 py-2 text-left text-[13px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 disabled:cursor-not-allowed disabled:opacity-45 ${on ? PERM_ON : PERM_OFF}`}>
                         <span>{p.label}</span>
                         <span aria-hidden="true" className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${on ? "bg-neutral-900 text-white" : "ring-1 ring-inset ring-slate-900/20"}`}>
                           {on && <Check size={11} weight="bold" />}

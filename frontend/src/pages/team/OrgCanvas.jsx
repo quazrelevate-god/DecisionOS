@@ -67,6 +67,26 @@ const CARD = {
   person: { w: 290, h: 66 },
 };
 const LANE_W = 120; // the connector lane between two columns
+
+/* THE LANE IS SPLIT IN TWO, and the split is what fixes the scroll lag.
+   A column scrolls on the COMPOSITOR: its cards are already drawn at the new
+   offset in the frame the scroll event is delivered, so anything redrawn from
+   that event by main-thread JS is answering a question the compositor has
+   already moved past. Measured off composited frames (CDP screencast, not the
+   DOM — reading getBoundingClientRect cannot see this, because both sides read
+   the same main-thread scroll offset and agree with each other while the screen
+   disagrees with both): redrawing on rAF lagged 20.8px on average, and doing it
+   synchronously in the scroll handler still lagged 11.0px. There is no main-
+   thread schedule that reaches zero.
+   So the branches stop being redrawn and start being SCROLLED: the part of the
+   lane from the trunk rightward moves inside the column, as a left gutter in
+   its scrolling content, and the browser moves it with the cards for free. The
+   stem stays behind in a narrower lane, anchored to the parent card.
+   The widths are a split, not an addition — STEM_W + GUTTER_W === LANE_W — so
+   the tree's horizontal layout is unchanged; only which element owns the 72px
+   changes. */
+const STEM_W = Math.round(LANE_W * 0.4); // 48 — stays in the lane with the stem
+const GUTTER_W = LANE_W - STEM_W;        // 72 — moves into the scrolling column
 const ELBOW_R = 14; // corner radius where a branch leaves the trunk
 const ADD_H = 56; // the "Add member" node at the top of a column
 const ADD_LINE = "hsl(230 16% 74%)"; // its branch: neutral and dashed, not a person
@@ -87,7 +107,7 @@ function sameLines(a, b) {
   for (const k of ka) {
     const x = a[k];
     const y = b[k];
-    if (!y || x.h !== y.h || x.y1 !== y.y1 || x.stemHue !== y.stemHue || x.mono !== y.mono) return false;
+    if (!y || x.h !== y.h || x.y1 !== y.y1 || x.stemHue !== y.stemHue || x.mono !== y.mono || x.gutter !== y.gutter) return false;
     if (x.kids.length !== y.kids.length) return false;
     for (let i = 0; i < x.kids.length; i++) {
       const p = x.kids[i];
@@ -442,11 +462,11 @@ export const AddNode = forwardRef(function AddNode({ label = "Add member", hint,
 
 const columnWidth = (items) => (items.length ? Math.max(...items.map((n) => CARD[n.kind].w)) : CARD.head.w);
 
-/* One level: a full-height column. Cards that fit spread over its height;
-   cards that do not scroll inside it. The "Add member" node, when the viewer
-   may add people, sits at the top. */
-function LevelColumn({ items, add, index, height, ctx, register, onScroll }) {
-  const width = columnWidth(items);
+/* Whether a level's cards fit its height, and the gap that spreads them. Lives
+   out here because the PARENT has to know the answer too: a column that scrolls
+   takes the connector into its own content (see STEM_W/GUTTER_W), and a column
+   that fits keeps the whole lane outside it. */
+function columnLayout(items, add, height) {
   const heights = [...(add ? [ADD_H] : []), ...items.map((n) => CARD[n.kind].h)];
   const count = heights.length;
   const cardsH = heights.reduce((sum, h) => sum + h, 0);
@@ -456,30 +476,95 @@ function LevelColumn({ items, add, index, height, ctx, register, onScroll }) {
   const gap = fits
     ? Math.min(MAX_GAP, Math.max(MIN_GAP, (avail - cardsH) / (count + 1)))
     : MIN_GAP;
+  return { fits, gap };
+}
+
+/* The connector drawn INSIDE a scrolling column, in its content coordinates,
+   so the browser scrolls it with the cards instead of us redrawing it.
+
+   THE TRUNK RUNS THE FULL CONTENT HEIGHT, and that is forced rather than
+   chosen. The stem is anchored to the parent card in the lane outside this
+   scroller; the branches are anchored to cards inside it. The trunk joins the
+   two, so it has to be able to meet the stem at ANY scroll offset — a trunk
+   clipped to its outermost branch would part company with the stem the moment
+   the column moved. A spine with the branches teeing off it is also what the
+   bounded version already converges to once a column holds enough people to
+   scroll, which is the only case this path is used for: at fifteen cards the
+   old trunk already spanned nearly the whole column and its middle branches
+   were already horizontal.
+
+   Positions come from offsetTop, never from getBoundingClientRect: offsetTop
+   is measured against this wrapper and does not move when the column scrolls,
+   so there is nothing to recompute per frame. */
+function ColumnConnector({ line }) {
+  if (!line || !line.kids.length) return null;
+  const structural = tone(ROOT_HUE).line;
+  const mono = !!line.mono;
+  const trunk = mono ? structural : tone(line.stemHue).line;
+  const dotX = GUTTER_W - 10;
+  const colourOf = (k) => (k.add ? ADD_LINE : mono ? structural : tone(k.hue).line);
+  return (
+    <svg aria-hidden="true" width={GUTTER_W}
+      className="pointer-events-none absolute left-0 top-0 h-full"
+      style={{ overflow: "visible" }}>
+      {/* .75 so a 1.5 stroke sits on the pixel rather than across two */}
+      <line x1="0.75" y1="0" x2="0.75" y2="100%" stroke={trunk} strokeWidth="1.5" />
+      {line.kids.map((k) => (
+        <path key={k.id} d={`M 0.75 ${k.y} H ${GUTTER_W}`} stroke={colourOf(k)} strokeWidth="1.5"
+          fill="none" strokeLinecap="round" strokeDasharray={k.add ? "4 4" : undefined} />
+      ))}
+      {line.kids.map((k) => (
+        <circle key={`dot-${k.id}`} cx={dotX} cy={k.y} r="3.5" fill="white"
+          stroke={colourOf(k)} strokeWidth="1.5" />
+      ))}
+    </svg>
+  );
+}
+
+/* One level: a full-height column. Cards that fit spread over its height;
+   cards that do not scroll inside it. The "Add member" node, when the viewer
+   may add people, sits at the top.
+
+   The scroller and the flex box are two elements now: the inner one is the
+   positioning context the gutter connector is absolutely placed in, and it is
+   what offsetTop is measured against. min-h-full keeps `justify-center` doing
+   what it did when the scroller itself was the flex box. */
+function LevelColumn({ items, add, index, height, ctx, register, onScroll, gutter, line, registerContent }) {
+  const width = columnWidth(items);
+  const { fits, gap } = columnLayout(items, add, height);
   return (
     <div
       role="list"
       aria-label={index === 0 ? "Departments" : "Direct reports"}
       data-testid={`team-level-${index + 1}`}
       onScroll={onScroll}
-      className="flex shrink-0 flex-col items-start overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="shrink-0 overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       style={{
-        width,
+        width: width + (gutter ? GUTTER_W : 0),
         height,
-        gap,
-        paddingBlock: COL_PAD_Y,
-        justifyContent: fits ? "center" : "flex-start",
         overflowY: fits ? "hidden" : "auto",
         overflowX: "visible",
       }}
     >
-      {add && (
-        <div ref={(el) => register(add.id, el)} className="shrink-0">{add.element}</div>
-      )}
-      {items.map((n) => {
-        const Card = n.kind === "team" ? TeamCard : PersonCard;
-        return <Card key={n.id} node={n} ctx={ctx} register={register} />;
-      })}
+      <div
+        ref={registerContent}
+        className="relative flex min-h-full flex-col items-start"
+        style={{
+          gap,
+          paddingBlock: COL_PAD_Y,
+          paddingLeft: gutter ? GUTTER_W : 0,
+          justifyContent: fits ? "center" : "flex-start",
+        }}
+      >
+        {gutter && <ColumnConnector line={line} />}
+        {add && (
+          <div ref={(el) => register(add.id, el)} className="shrink-0">{add.element}</div>
+        )}
+        {items.map((n) => {
+          const Card = n.kind === "team" ? TeamCard : PersonCard;
+          return <Card key={n.id} node={n} ctx={ctx} register={register} />;
+        })}
+      </div>
     </div>
   );
 }
@@ -561,11 +646,23 @@ function laneGeom(line) {
 /* data-org / data-id are how the scroll repaint finds these again. They are
    read with dataset rather than an attribute selector so an id carrying a
    colon (team:sales) never has to be escaped. */
-function ConnectorLane({ laneKey, line, register }) {
+function ConnectorLane({ laneKey, line, register, stemOnly }) {
   const g = line && line.kids.length > 0 ? laneGeom(line) : null;
   return (
-    <div ref={(el) => register(laneKey, el)} aria-hidden="true" className="relative shrink-0 self-stretch" style={{ width: LANE_W }}>
-      {g && (
+    <div ref={(el) => register(laneKey, el)} aria-hidden="true" className="relative shrink-0 self-stretch"
+      style={{ width: stemOnly ? STEM_W : LANE_W }}>
+      {/* The column below took the trunk and the branches into its own scroll,
+          so all that is left here is the stem and the joint it ends on. The
+          joint sits exactly on the boundary, which is the gutter's spine —
+          overflow stays visible so the circle is not sliced in half by the
+          lane's edge. */}
+      {g && stemOnly && (
+        <svg className="absolute inset-0" width={STEM_W} height={line.h} style={{ overflow: "visible" }}>
+          <path data-org="stem" d={`M 0 ${g.y1} H ${STEM_W}`} stroke={g.trunkColor} strokeWidth="1.5" fill="none" />
+          <circle data-org="joint" cx={STEM_W} cy={g.y1} r="4" fill="white" stroke={g.trunkColor} strokeWidth="1.5" />
+        </svg>
+      )}
+      {g && !stemOnly && (
         <svg className="absolute inset-0" width={LANE_W} height={line.h} style={{ overflow: "hidden" }}>
           <path data-org="stem" d={g.stemD} stroke={g.trunkColor} strokeWidth="1.5" fill="none" />
           <path data-org="trunk" d={g.trunkD} stroke={g.trunkColor} strokeWidth="1.5" fill="none" />
@@ -692,13 +789,16 @@ export function OrgCanvas({ owners = [], teams = [], query = "", matches, teamMa
 
   // Each lane's branches: the column's "Add member" node first, then its cards.
   const branchesTo = (i) => [...(adds[i] ? [{ id: adds[i].id, add: true }] : []), ...columns[i]];
+  /* A column that scrolls draws its own connector inside itself; one that fits
+     leaves it in the lane. Same maths the column runs, asked one level up. */
+  const scrolls = columns.map((items, i) => !columnLayout(items, adds[i], boxH).fits);
   const lanes = [];
   /* MONO_LANES — how many lanes down from the root stay one colour. 2 covers
      the root's own branches and the level below them; from the third lane the
      branches take their team hue again (see the note on laneGeom). */
   const MONO_LANES = 2;
-  if (owners.length && (heads.length || adds[0])) lanes.push({ key: "lane-0", fromId: "root", stemHue: ROOT_HUE, mono: true, to: branchesTo(0) });
-  opened.forEach((sel, i) => lanes.push({ key: `lane-${i + 1}`, fromId: sel.id, stemHue: sel.hue, mono: i + 1 < MONO_LANES, to: branchesTo(i + 1) }));
+  if (owners.length && (heads.length || adds[0])) lanes.push({ key: "lane-0", fromId: "root", stemHue: ROOT_HUE, mono: true, gutter: scrolls[0], col: 0, to: branchesTo(0) });
+  opened.forEach((sel, i) => lanes.push({ key: `lane-${i + 1}`, fromId: sel.id, stemHue: sel.hue, mono: i + 1 < MONO_LANES, gutter: scrolls[i + 1], col: i + 1, to: branchesTo(i + 1) }));
   const lanesRef = useRef(lanes);
   lanesRef.current = lanes;
 
@@ -721,10 +821,20 @@ export function OrgCanvas({ owners = [], teams = [], query = "", matches, teamMa
         y1: Math.round((fr.top + fr.height / 2 - lr.top) / z),
         stemHue: lane.stemHue,
         mono: !!lane.mono,
+        gutter: !!lane.gutter,
+        /* A GUTTER LANE'S BRANCHES ARE MEASURED WITH offsetTop, not with a
+           rect. offsetTop is relative to the column's content wrapper, so it
+           does not change when the column scrolls — which is the whole point:
+           those branches are drawn inside that wrapper and scroll with it, so
+           they must be positioned in its coordinates and must never be
+           re-measured per frame. Own px on both sides, so no zoom divide. */
         kids: lane.to
           .map((n) => {
             const el = cardEls.current.get(n.id);
             if (!el) return null;
+            if (lane.gutter) {
+              return { id: n.id, hue: n.hue, add: !!n.add, y: Math.round(el.offsetTop + el.offsetHeight / 2) };
+            }
             const r = el.getBoundingClientRect();
             return { id: n.id, hue: n.hue, add: !!n.add, y: Math.round((r.top + r.height / 2 - lr.top) / z) };
           })
@@ -762,7 +872,9 @@ export function OrgCanvas({ owners = [], teams = [], query = "", matches, teamMa
       if (!svg || !line.kids.length) continue;
       const g = laneGeom(line);
       svg.setAttribute("height", String(line.h));
-      const byId = new Map(g.branches.map((b) => [b.id, b]));
+      /* A gutter lane's branches are inside the column and scroll themselves —
+         only the stem and its joint are still ours to move. */
+      const byId = line.gutter ? new Map() : new Map(g.branches.map((b) => [b.id, b]));
       svg.querySelectorAll("[data-org]").forEach((n) => {
         const part = n.dataset.org;
         if (part === "stem") n.setAttribute("d", g.stemD);
@@ -847,9 +959,11 @@ export function OrgCanvas({ owners = [], teams = [], query = "", matches, teamMa
         {columns.map((items, i) => (
           <Fragment key={i === 0 ? "heads" : opened[i - 1].id}>
             {(i > 0 || owners.length > 0) && (
-              <ConnectorLane laneKey={`lane-${i}`} line={lines[`lane-${i}`]} register={registerLane} />
+              <ConnectorLane laneKey={`lane-${i}`} line={lines[`lane-${i}`]} register={registerLane} stemOnly={scrolls[i]} />
             )}
-            <LevelColumn items={items} add={adds[i]} index={i} height={boxH} ctx={ctx} register={registerCard} onScroll={onScrollSync} />
+            <LevelColumn items={items} add={adds[i]} index={i} height={boxH} ctx={ctx} register={registerCard}
+              onScroll={onScrollSync} gutter={scrolls[i]} line={lines[`lane-${i}`]}
+              registerContent={(el) => registerLane(`content-${i}`, el)} />
           </Fragment>
         ))}
         {/* Room past the deepest column, so its cards never sit on the pane's edge. */}

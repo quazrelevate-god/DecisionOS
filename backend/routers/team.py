@@ -317,10 +317,27 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
     # can be capped at 3 owners just as easily as 3 sales.
     from services.plans import enforce_seat_limit
     await enforce_seat_limit(db, user["tenant_id"])
-    email = inp.email.lower()
-    if await db.users.find_one({"email": email}):
-        raise HTTPException(status_code=400, detail="Email already registered")
-    phone = (inp.phone or "").strip()
+    # 2026-09-19 — members sign in with their mobile and a texted code. The
+    # manager used to be able to set a "temporary" password instead, which
+    # nothing ever asked the member to replace, so the manager who typed it
+    # could keep signing in as them. No password is set here any more.
+    if (inp.password or "").strip():
+        raise HTTPException(status_code=400, detail=(
+            "Members sign in with their mobile number and a texted code, so there's no password to set for them."))
+    from services.auth.phone import valid_indian_mobile, display_indian_mobile
+    _member_norm = valid_indian_mobile(inp.phone or "")
+    if not _member_norm:
+        # The number is their sign-in: a mistyped one hands their account to
+        # whoever owns it. Same rule as signup.
+        raise HTTPException(status_code=400, detail="Enter their 10-digit Indian mobile number — it's how they sign in.")
+    email = (inp.email or "").strip().lower()
+    if email:
+        _local, _, _domain = email.partition("@")
+        if not _local or "." not in _domain:
+            raise HTTPException(status_code=400, detail="Enter a valid email, or leave it empty")
+        if await db.users.find_one({"email": email}):
+            raise HTTPException(status_code=400, detail="Email already registered")
+    phone = display_indian_mobile(_member_norm)
     # 2026-09-16: one mobile, one member — inside this workspace. The number is
     # the sign-in and the WhatsApp route, so two people sharing one means codes
     # and captures land on the wrong account. The same number in ANOTHER
@@ -335,18 +352,10 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
                 status_code=400,
                 detail=f"That mobile number is already {_clash.get('name')}'s in this workspace.",
             )
-    pwd = (inp.password or "").strip()
-    passwordless = not pwd
-    if passwordless:
-        if len(_norm_phone(phone)) < 10:
-            raise HTTPException(status_code=400,
-                                detail="A valid mobile number is required for passwordless (OTP) members")
-        # No usable password — this member logs in only via mobile OTP.
-        password_hash = hash_password(new_id() + new_id())
-    else:
-        if len(pwd) < 6:
-            raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
-        password_hash = hash_password(pwd)
+    # No usable password — the member signs in only by mobile OTP. (An owner
+    # added here adds an email and password of their own at first sign-in.)
+    passwordless = True
+    password_hash = hash_password(new_id() + new_id())
     # 2026-09-15: follow the role (empty list), or their own list — which may be
     # empty on purpose ("No access").
     _perms_new = [] if inp.follow_role is True else clean_perms(inp.permissions)
@@ -356,7 +365,7 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
     # FIX-002-A: also write phone_norm for indexed OTP + WhatsApp lookup.
     from services.auth.phone import norm_phone as _np
     doc = {
-        "id": uid, "tenant_id": user["tenant_id"], "name": inp.name, "email": email,
+        "id": uid, "tenant_id": user["tenant_id"], "name": inp.name,
         "phone": phone, "phone_norm": _np(phone), "passwordless": passwordless,
         "password_hash": password_hash, "role": inp.role,
         "permissions": _perms_new, "permissions_custom": _custom_new, "created_at": now_iso(),
@@ -371,6 +380,10 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
     # 2026-09-14 — the job title the Team tree shows under a member's name.
     if inp.title and inp.title.strip():
         doc["title"] = inp.title.strip()[:80]
+    # Absent, not empty, when there isn't one: users.email is unique among
+    # real addresses only (bootstrap/lifecycle.py).
+    if email:
+        doc["email"] = email
     if len(_norm_phone(phone)) >= 10:
         invite_token = new_id()
         doc["invite_token"] = invite_token
@@ -397,8 +410,7 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
     await db.memberships.update_one({"user_id": uid, "tenant_id": user["tenant_id"]},
                                     {"$set": {"permissions_custom": _custom_new}})
     await log_activity(user["tenant_id"], user["id"], "user_added",
-                       f"Added {inp.name} as {inp.role}"
-                       + (" (mobile OTP login)" if passwordless else ""))
+                       f"Added {inp.name} as {inp.role} (mobile sign-in)")
     out = await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0})
     if invite_token:
         out["invite_token"] = invite_token
@@ -493,11 +505,21 @@ async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(r
     if inp.phone is not None:
         # FIX-002-A: keep phone_norm in sync so OTP + WhatsApp still finds
         # the user after an admin updates their phone.
-        from services.auth.phone import norm_phone as _np
+        from services.auth.phone import norm_phone as _np, valid_indian_mobile as _vim, display_indian_mobile as _dim
         _p = inp.phone.strip()
         _new_norm = _np(_p)
         _old_norm = _np(target.get("phone") or "")
         if _new_norm != _old_norm:
+            # 2026-09-19 — the same rule as signup and Team › Add: a new number
+            # is a real Indian mobile, and a member who signs in only by mobile
+            # can't be left without one.
+            if _p:
+                _new_norm = _vim(_p)
+                if not _new_norm:
+                    raise HTTPException(status_code=400, detail="Enter a 10-digit Indian mobile number — it's how they sign in.")
+                _p = _dim(_new_norm)
+            elif target.get("passwordless"):
+                raise HTTPException(status_code=400, detail="They sign in with this number, so it can be changed but not removed.")
             # 2026-09-16: the mobile IS the sign-in — a code goes to it and
             # whoever reads that code is in. So Manage team may FILL IN a number
             # for someone who has none (they cannot sign in at all until then,

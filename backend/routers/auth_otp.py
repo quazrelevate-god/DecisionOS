@@ -16,6 +16,25 @@ from services.whatsapp import _norm_phone
 
 router = APIRouter(prefix="/api")
 
+# 2026-09-19 — a member's number is their whole sign-in, so the first sign-in
+# has to come through the invite link the manager sent. Otherwise a number
+# mistyped on the Team page would open the account to whoever owns it: they'd
+# ask for a code on the sign-in page and it would arrive on their phone. With
+# this rule that stranger gets nothing without the link, and the real member —
+# who has the link but whose code went astray — tells the manager, who fixes it.
+INVITE_FIRST = ("Open the invite link you were sent to sign in the first time. "
+                "After that, your mobile number is all you need.")
+
+
+async def _split_by_invite(choices):
+    """(live, pending): pending = invited here and not yet signed in."""
+    from services.auth.membership import find_membership, STATUS_PENDING
+    live, pending = [], []
+    for c in choices:
+        m = await find_membership(db, c["user_id"], c["tenant_id"])
+        (pending if (m or {}).get("status") == STATUS_PENDING else live).append(c)
+    return live, pending
+
 
 @router.post("/auth/otp/request")
 async def request_otp(inp: OtpRequestInput):
@@ -30,15 +49,22 @@ async def request_otp(inp: OtpRequestInput):
     choices = await find_tenant_choices_for_phone(db, norm)
     if not choices:
         raise HTTPException(status_code=404, detail="No account is registered with this mobile number")
+    # Invited but not yet in: only the invite link opens those (see INVITE_FIRST).
+    live, pending = await _split_by_invite(choices)
     if inp.tenant_id:
         # Caller already knows which workspace to log into (either
         # single-tenant match on a prior attempt, or user picked from
         # the ambiguity picker). Only issue if the hint actually maps
         # to a real membership — never trust a client-supplied id.
-        picked = next((c for c in choices if c["tenant_id"] == inp.tenant_id), None)
+        picked = next((c for c in live if c["tenant_id"] == inp.tenant_id), None)
         if not picked:
+            if any(c["tenant_id"] == inp.tenant_id for c in pending):
+                raise HTTPException(status_code=403, detail=INVITE_FIRST)
             raise HTTPException(status_code=404, detail="This number is not registered in the selected workspace")
         return await _issue_otp(norm, inp.phone, tenant_id=picked["tenant_id"])
+    if not live:
+        raise HTTPException(status_code=403, detail=INVITE_FIRST)
+    choices = live
     if len(choices) == 1:
         # Single-tenant fast path: keeps backward compat with every
         # existing OTP client that doesn't know about tenant_id yet.
@@ -126,7 +152,30 @@ async def verify_otp(inp: OtpVerifyInput, response: Response):
     choices = await find_tenant_choices_for_phone(db, norm)
     if not choices:
         raise HTTPException(status_code=404, detail="Account not found")
-    if inp.tenant_id:
+    invite_user = None
+    if inp.invite_token:
+        # The invite link names its own workspace and member.
+        invite_user = await db.users.find_one(
+            {"invite_token": inp.invite_token, "phone_norm": norm, "wa_phone_obsolete": {"$ne": True}},
+            {"_id": 0})
+        if not invite_user:
+            raise HTTPException(status_code=400, detail="This invite link is invalid or has already been used")
+        _exp = invite_user.get("invite_expires_at")
+        if _exp and datetime.now(timezone.utc) > datetime.fromisoformat(_exp):
+            raise HTTPException(status_code=410, detail="This invite link has expired — ask your admin to resend")
+        choices = [c for c in choices if c["tenant_id"] == invite_user["tenant_id"]]
+        if not choices:
+            raise HTTPException(status_code=404, detail="Account not found")
+    else:
+        live, pending = await _split_by_invite(choices)
+        if not live:
+            raise HTTPException(status_code=403, detail=INVITE_FIRST)
+        if inp.tenant_id and any(c["tenant_id"] == inp.tenant_id for c in pending):
+            raise HTTPException(status_code=403, detail=INVITE_FIRST)
+        choices = live
+    if invite_user:
+        target = choices[0]
+    elif inp.tenant_id:
         target = next((c for c in choices if c["tenant_id"] == inp.tenant_id), None)
         if not target:
             raise HTTPException(status_code=404, detail="Account not found in the selected workspace")
@@ -182,10 +231,20 @@ async def verify_otp(inp: OtpVerifyInput, response: Response):
             {"$set": {"invite_token": None,
                       "invite_expires_at": None,
                       "invite_consumed_at": now_iso(),
+                      # 2026-09-19 — a one-time "welcome, check your details"
+                      # card on their first screen (WelcomeMemberCard.js).
+                      "welcome_pending": True,
                       "updated_at": now_iso()}},
         )
         user.pop("invite_token", None)
         user.pop("invite_expires_at", None)
+        user["welcome_pending"] = True
+    # 2026-09-19 — a code texted to this number was just read back: the number
+    # is theirs. Recorded once; the signup and Settings paths record it too.
+    if not user.get("phone_verified_at"):
+        _pv = now_iso()
+        await db.users.update_one({"id": user["id"]}, {"$set": {"phone_verified_at": _pv}})
+        user["phone_verified_at"] = _pv
     # 2026-09-16: the same moment accepts the MEMBERSHIP. A pending row is not a
     # live one, so without this an invited member got a session token here and a
     # 403 on their next request.

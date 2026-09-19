@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import api, { formatApiError } from "../lib/api";
 import { normIndianMobile, displayIndianMobile } from "../lib/phone";
 import OtpBoxes from "./auth/OtpBoxes";
+import { passwordProblem } from "../lib/password";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { UserCircle, FloppyDisk, Lock, CheckCircle, Envelope } from "@phosphor-icons/react";
 
@@ -13,7 +14,6 @@ export function ProfileForm({ onSaved }) {
   const { user, refreshMe } = useAuth();
   const [form, setForm] = useState({ name: "", title: "", about: "", phone: "", email: "" });
   const [confirmWith, setConfirmWith] = useState("");   // password, or the texted code
-  const [codeSent, setCodeSent] = useState(false);
   const [saving, setSaving] = useState(false);
   const [verifySent, setVerifySent] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -59,17 +59,6 @@ export function ProfileForm({ onSaved }) {
       phone: user.phone || "", email: user.email || "",
     });
   }, [user]);
-
-  const sendCode = async () => {
-    try {
-      const { data } = await api.post("/auth/otp/request", { phone: user?.phone });
-      setCodeSent(true);
-      if (data.dev_otp) { setConfirmWith(data.dev_otp); toast.info(`Dev OTP: ${data.dev_otp}`); }
-      else toast.success("We texted a code to your mobile");
-    } catch (e) {
-      toast.error(e.response?.data?.detail || "Could not send the code");
-    }
-  };
 
   /* 2026-09-17 (U7-24.10) — POST /auth/email/send-verification shipped with
      FIX-003-D and had no caller anywhere, and nothing in the app read
@@ -118,8 +107,8 @@ export function ProfileForm({ onSaved }) {
       toast.error("You sign in with this number, so it can be changed but not removed.");
       return;
     }
-    if (emailChanged && !confirmWith.trim()) {
-      toast.error(passwordless ? "Enter the code we texted you" : "Enter your current password to change your email");
+    if (emailChanged && !passwordless && !confirmWith.trim()) {
+      toast.error("Enter your current password to change your email");
       return;
     }
     setSaving(true);
@@ -129,11 +118,11 @@ export function ProfileForm({ onSaved }) {
         ...(phoneChanged ? { phone_code: phoneCode } : {}),
         ...(emailChanged ? {
           email: form.email.trim().toLowerCase(),
-          ...(passwordless ? { otp_code: confirmWith.trim() } : { current_password: confirmWith }),
+          ...(passwordless ? {} : { current_password: confirmWith }),
         } : {}),
       });
       await refreshMe();
-      setConfirmWith(""); setCodeSent(false);
+      setConfirmWith("");
       if (phoneChanged) setForm((f) => ({ ...f, phone: displayIndianMobile(newPhone) }));
       setPhoneCodeFor(""); setPhoneCode(""); setPhoneResendIn(0);
       toast.success(emailChanged ? "Saved — check your new address for the link that confirms it" : "Profile updated");
@@ -242,27 +231,15 @@ export function ProfileForm({ onSaved }) {
           </div>
         ))}
       </div>
-      {/* The email is the sign-in, so prove it is you at the keyboard — the same
-          question the sign-in door asks: your password, or a code to your mobile
-          when that is how you sign in. */}
-      {emailChanged && (
+      {/* The email is the sign-in for someone with a password, so prove it is
+          you at the keyboard. For someone who signs in by mobile it is contact
+          detail only, and needs no proof (2026-09-19). */}
+      {emailChanged && !passwordless && (
         <div data-testid="profile-email-confirm">
-          <label className="label-mono text-muted-foreground" htmlFor="profile-confirm">
-            {passwordless ? "Code texted to your mobile" : "Your current password"}
-          </label>
-          <div className="flex gap-2">
-            <input id="profile-confirm" data-testid="profile-confirm-input"
-              type={passwordless ? "text" : "password"} inputMode={passwordless ? "numeric" : undefined}
-              value={confirmWith} onChange={(e) => setConfirmWith(e.target.value)}
-              className={inp} placeholder={passwordless ? "6-digit code" : "••••••••"}
-              autoComplete={passwordless ? "one-time-code" : "current-password"} />
-            {passwordless && (
-              <button type="button" onClick={sendCode} data-testid="profile-send-code"
-                className="mt-1 shrink-0 rounded-lg border border-border px-3 text-sm font-medium hover:bg-muted">
-                {codeSent ? "Resend" : "Send code"}
-              </button>
-            )}
-          </div>
+          <label className="label-mono text-muted-foreground" htmlFor="profile-confirm">Your current password</label>
+          <input id="profile-confirm" data-testid="profile-confirm-input" type="password"
+            value={confirmWith} onChange={(e) => setConfirmWith(e.target.value)}
+            className={inp} placeholder="••••••••" autoComplete="current-password" />
         </div>
       )}
       <button onClick={save} disabled={saving} data-testid="profile-save"
@@ -282,15 +259,16 @@ export function ChangePasswordForm() {
 
   if (user?.passwordless) {
     return (
-      <p className="text-xs text-muted-foreground">
-        Your account signs in with mobile OTP, so there's no password to change here.
+      <p className="text-xs text-muted-foreground" data-testid="password-mobile-only">
+        You sign in with your mobile number and a texted code, so there's no password to keep.
       </p>
     );
   }
 
   const submit = async () => {
     if (!current) { toast.error("Enter your current password"); return; }
-    if (next.length < 6) { toast.error("New password must be at least 6 characters"); return; }
+    const problem = passwordProblem(next);   // 8+, a letter and a number
+    if (problem) { toast.error(problem); return; }
     if (next !== confirm) { toast.error("New passwords don't match"); return; }
     setSaving(true);
     try {
@@ -314,7 +292,7 @@ export function ChangePasswordForm() {
       <div>
         <label className="label-mono text-muted-foreground">New password</label>
         <input data-testid="password-new-input" type="password" value={next}
-          onChange={(e) => setNext(e.target.value)} className={inp} placeholder="At least 6 characters" autoComplete="new-password" />
+          onChange={(e) => setNext(e.target.value)} className={inp} placeholder="8+ characters, a letter and a number" autoComplete="new-password" />
       </div>
       <div>
         <label className="label-mono text-muted-foreground">Confirm new password</label>

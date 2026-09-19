@@ -47,8 +47,12 @@ export function AuthProvider({ children }) {
 
   // tenantId: which workspace the code was sent for, when the number belongs to
   // more than one. Without it the API answers 409 and asks.
-  const loginWithOtp = async (phone, code, tenantId) => {
-    const { data } = await api.post("/auth/otp/verify", { phone, code, ...(tenantId ? { tenant_id: tenantId } : {}) });
+  // inviteToken: a member's first sign-in comes through their invite link
+  // (2026-09-19) — until then their number opens nothing on its own.
+  const loginWithOtp = async (phone, code, tenantId, inviteToken) => {
+    const { data } = await api.post("/auth/otp/verify", {
+      phone, code, ...(tenantId ? { tenant_id: tenantId } : {}), ...(inviteToken ? { invite_token: inviteToken } : {}),
+    });
     persist(data);
     return data;
   };

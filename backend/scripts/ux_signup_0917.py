@@ -123,7 +123,7 @@ with sync_playwright() as pw:
     box = p.locator('[data-testid="signup-basics"] input').first
     box.fill("123")
     next_step(p, 700)
-    rec("short-password-refused", "6 characters" in step_error(p), step_error(p))
+    rec("short-password-refused", "8 characters" in step_error(p), step_error(p))
     box.fill(PASSWORD)
     next_step(p)
 

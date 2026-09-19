@@ -297,10 +297,14 @@ class TestRegisterConcurrentRace:
         remove it."""
         import server
         src = inspect.getsource(server._bootstrap)
-        assert 'db.users.create_index("email", unique=True)' in src, (
+        # 2026-09-19 — unique among real addresses (a partial index): members
+        # sign in by mobile and may have no email, and a plain unique index
+        # treats every missing email as the same value.
+        assert 'db.users.create_index("email", unique=True, name="email_1",' in src, (
             "users.email must have a unique index — that's the DB-side "
             "guarantee that makes the race safe"
         )
+        assert 'partialFilterExpression={"email": {"$gt": ""}}' in src
 
 
 # =============================================================================

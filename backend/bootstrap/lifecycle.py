@@ -46,7 +46,22 @@ async def _bootstrap():
     try:
         # Core tenant-scoped indexes (P0 for multi-tenant scale — every read
         # of these collections filters by tenant_id, so unindexed = full scans).
-        await db.users.create_index("email", unique=True)
+        # 2026-09-19 — unique among REAL addresses only. Members sign in by
+        # mobile and may have no email; a plain unique index counts every
+        # missing email as the same value (null), so the second member added
+        # without one would be refused. The old index is swapped once.
+        try:
+            _old_email_ix = (await db.users.index_information()).get("email_1")
+            if _old_email_ix and not _old_email_ix.get("partialFilterExpression"):
+                await db.users.drop_index("email_1")
+        except Exception as _ix_err:
+            logger.warning(f"users.email index swap skipped: {_ix_err}")
+        try:
+            await db.users.create_index("email", unique=True, name="email_1",
+                                        partialFilterExpression={"email": {"$gt": ""}})
+        except Exception as _ix_err:
+            # Never let this one skip the indexes below it.
+            logger.error(f"users.email unique index: {_ix_err}")
         await db.users.create_index([("tenant_id", 1), ("role", 1)])
         # FIX-002-D: TTL index on scheduler_locks so expired leader locks
         # get auto-cleaned by Mongo (no separate GC job needed). Sorts by

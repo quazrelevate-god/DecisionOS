@@ -253,6 +253,6 @@ def test_the_profile_form_texts_the_new_number_and_sends_the_code_on_save():
     assert "phone_code:" in form, "the code travels with Save"
     assert 'testid="profile-phone-code-boxes"' in form
     assert "normIndianMobile" in form, "the same rule as signup"
-    # the email-change code for a mobile-only member goes to the number ON FILE
-    # (which is what the server checks), not whatever is in the phone box
-    assert 'api.post("/auth/otp/request", { phone: user?.phone })' in form
+    # (2026-09-19, later the same day: a mobile-only member's email is contact
+    # detail and needs no code at all, so the email-change code is gone.)
+    assert '"/auth/otp/request"' not in form

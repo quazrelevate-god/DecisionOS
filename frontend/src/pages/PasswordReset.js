@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { DeviceMobile, CheckCircle } from "@phosphor-icons/react";
 import api, { formatApiError } from "../lib/api";
 import Shell, { inputCls, labelCls, primaryCls } from "../components/auth/AuthShell";
+import { passwordProblem } from "../lib/password";
 
 /* ------------------------------------------------------------------ */
 /* /forgot-password — ask for the link                                 */
@@ -118,7 +119,8 @@ export function ResetPassword() {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (pw.length < 6) { setError("At least 6 characters, please"); return; }
+    const problem = passwordProblem(pw);   // 8+, a letter and a number
+    if (problem) { setError(problem); return; }
     if (pw !== confirm) { setError("Those two don't match"); return; }
     setError(""); setBusy(true);
     try {
@@ -166,7 +168,7 @@ export function ResetPassword() {
         <div>
           <label className={labelCls} htmlFor="reset-pw">New password</label>
           <input id="reset-pw" data-testid="reset-password-input" type="password" autoFocus
-            autoComplete="new-password" className={`${inputCls} mt-1`} placeholder="Minimum 6 characters"
+            autoComplete="new-password" className={`${inputCls} mt-1`} placeholder="8+ characters, a letter and a number"
             value={pw} onChange={(e) => { setPw(e.target.value); if (error) setError(""); }} />
         </div>
         <div>

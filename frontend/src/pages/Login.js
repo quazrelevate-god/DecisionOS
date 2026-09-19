@@ -129,6 +129,18 @@ export default function Login() {
   const requestOtp = async (e, pickTenant) => {
     e?.preventDefault?.(); setError(""); setBusy(true);
     const tenant = pickTenant || otpTenant;
+    // 2026-09-19 — an invited member's first sign-in goes through their link;
+    // their number alone opens nothing yet, so "Resend" asks the link again.
+    if (invite?.token) {
+      try {
+        const { data } = await api.post(`/auth/invite/${invite.token}/start`);
+        startResendTimer();
+        if (data.dev_otp) { setOtpCode(data.dev_otp); toast.info(`Dev OTP: ${data.dev_otp} (auto-filled)`); }
+        else toast.success(data.detail || "We texted you a new code");
+      } catch (err) { setError(formatApiError(err.response?.data?.detail) || "Failed"); }
+      finally { setBusy(false); }
+      return;
+    }
     try {
       const { data } = await api.post("/auth/otp/request", { phone: otpPhone, ...(tenant ? { tenant_id: tenant } : {}) });
       if (data.ambiguous) {
@@ -148,7 +160,7 @@ export default function Login() {
   };
   const submitOtp = async (e) => {
     e.preventDefault(); setError(""); setBusy(true);
-    try { await loginWithOtp(otpPhone, otpCode, otpTenant); navigate("/"); }
+    try { await loginWithOtp(otpPhone, otpCode, otpTenant, invite?.token); navigate("/"); }
     catch (err) { setError(formatApiError(err.response?.data?.detail) || "Failed"); }
     finally { setBusy(false); }
   };

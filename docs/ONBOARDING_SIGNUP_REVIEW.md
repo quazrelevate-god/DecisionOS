@@ -160,6 +160,57 @@ confirmed without a second text, the workspace is created with the confirmed
 number, the founder signs out and back in by Mobile OTP, and with the same
 number in a second workspace the page asks which one and signs into it.
 
+## Adding a member, and their first sign-in (2026-09-19)
+
+Yokesh: a manager or HR person adds each member on Team — name, role, mobile —
+and the member makes the account their own. Checking the loop found the first
+half working (add → invite link → OTP → in) and the second half missing:
+
+- a "temporary" password the manager typed, that nothing ever asked the member
+  to replace — so the manager could keep signing in as them;
+- members added "Mobile OTP only" could never add a password;
+- the mobile was never marked confirmed, the email never checked;
+- the Team form took any 10+ digits, and plain Mobile OTP would open a
+  just-invited account to whoever held a mistyped number;
+- the first sign-in landed straight on the Desk.
+
+Yokesh's call: **members sign in with their mobile only; owners have both an
+email + password and a mobile.** So:
+
+- **Team › Add member** has no password and no sign-in toggle. The mobile is
+  required and must be a real Indian mobile (same rule as signup); the email
+  is optional. Saving always hands over the invite link. The API refuses a
+  password for a member, and `users.email` became a partial unique index
+  (unique among real addresses) so members without an email don't collide.
+- **The first sign-in goes through the invite link.** Until then, the
+  member's number alone opens nothing — plain Mobile OTP answers "Open the
+  invite link you were sent…" and texts no one. So a mistyped number gets a
+  stranger nothing, and the real member (link, but no code) tells the
+  manager. A number already live in another workspace keeps signing in there.
+- **Signing in by code marks the mobile confirmed**, and the first time, a
+  one-time **welcome card** shows it confirmed and asks them to check their
+  name and add a job title, what they handle and (optionally) an email. Save
+  or Later; one request; Settings holds the same fields any time.
+- **An email is contact detail for a mobile-only member,** so adding or
+  changing it needs no code (it did, briefly — a code to the phone).
+- **Owners:** someone added as an owner, or promoted to one, is asked for an
+  email and a password at their next sign-in, before anything else — the owner
+  is who can be recovered by email, and who recovers everyone else. The
+  promote dialog says so. After that, both ways in work.
+- **A new password is 8+ characters with a letter and a number** — signup,
+  reset (checked before the link is spent), change, and an owner setting one.
+  Existing passwords keep working until changed.
+
+**Proof.** `tests/test_member_loop.py` (38). Browser, two sessions on a
+throwaway database: `scripts/ux_member_loop_0919.py` 26/26 — the Team form, a
+bad number refused, the invite link handed over, the number alone opening
+nothing, the link signing in, the welcome card saving, plain Mobile OTP working
+after, promotion to owner asking for email + password (a weak one refused),
+and both ways in afterwards.
+
+**Seen along the way, not changed:** saves took 6–8 s in these runs while the
+Desk behind them was loading its AI calls. Worth its own look (U7-24.18).
+
 ## Still open
 
 - **Nothing tells the founder the AI setup is still filling in.** It takes a few

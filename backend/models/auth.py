@@ -107,6 +107,13 @@ class PhoneChangeCodeInput(BaseModel):
     phone: str = Field(max_length=32)
 
 
+class OwnerCredentialsInput(BaseModel):
+    """An owner who came in by mobile (added on Team as an owner, or
+    promoted to one) adds the email and password owners also sign in with."""
+    email: EmailStr
+    password: str = Field(max_length=200)
+
+
 class ChangePasswordInput(BaseModel):
     current_password: str
     new_password: str = Field(min_length=6)
@@ -136,6 +143,9 @@ class OtpRequestInput(BaseModel):
 class OtpVerifyInput(BaseModel):
     phone: str
     code: str
+    # 2026-09-19 — a member's FIRST sign-in comes through their invite link.
+    # Until then their number opens nothing by itself (see routers/auth_otp.py).
+    invite_token: Optional[str] = Field(default=None, max_length=128)
     # FIX-003-A (S2-03): tenant hint. Same rules as OtpRequestInput —
     # the OTP code is keyed by (phone, tenant_id) so verifying without
     # a tenant on a multi-tenant phone is a 409.

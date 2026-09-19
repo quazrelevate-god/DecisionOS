@@ -10,6 +10,7 @@ import { formatPhone, timeAgo } from "../lib/format";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { normIndianMobile } from "../lib/phone";
 import { PERMISSIONS, hasPerm, roleDefaultPerms, userPerms } from "../lib/perms";
 import { toast } from "sonner";
 import {
@@ -131,44 +132,6 @@ function InviteLinkModal({ info, onClose }) {
   );
 }
 
-/* RBAC P1 (2026-09-15) — someone added with a password got no hand-off at all.
-   This is the message to pass on: where to sign in and with which email. The
-   password is never in it; the owner shares that separately. */
-function WelcomeModal({ info, company, onClose }) {
-  const login = `${window.location.origin}/login`;
-  const first = (info?.name || "").split(" ")[0];
-  const msg = info
-    ? `Hi ${first}, you've been added to ${company || "our company"} on DecisionOS. Sign in at ${login} with ${info.email}. `
-      + "I'll share your password separately. You can change it in Settings › Account after you sign in."
-    : "";
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(msg); toast.success("Welcome message copied"); }
-    catch { toast.error("Couldn't copy — select and copy manually"); }
-  };
-  return (
-    <Dialog open={!!info} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className={`max-w-md ${SHEET}`} data-testid="welcome-modal">
-        <SheetHead title={`Welcome ${first}`} onClose={onClose} closeTestid="welcome-close">
-          {info?.name} is added. Send them this so they know where to sign in.
-        </SheetHead>
-        <textarea readOnly value={msg} rows={5} data-testid="welcome-message" aria-label="Welcome message"
-          className={`${DRAWER_FIELD} min-h-28 resize-none text-sm leading-relaxed`} onFocus={(e) => e.target.select()} />
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={copy} data-testid="copy-welcome"
-            className={`flex h-11 flex-1 items-center justify-center gap-1.5 rounded-pill px-4 text-sm font-medium ${INK_PILL}`}>
-            <Copy size={15} weight="bold" aria-hidden="true" /> Copy message
-          </button>
-          <a href={`https://wa.me/?text=${encodeURIComponent(msg)}`} target="_blank" rel="noreferrer" data-testid="welcome-whatsapp-share"
-            className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
-            <WhatsappLogo size={16} weight="bold" aria-hidden="true" /> WhatsApp
-          </a>
-        </div>
-        <p className="text-xs text-neutral-500">The password isn&rsquo;t in the message. Tell them in person or on a call.</p>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 const MENU_PREVIEW = [
   { label: "Decision Desk", perm: "inbox" },
   { label: "CEO Brief", perm: null },
@@ -183,7 +146,7 @@ const MENU_PREVIEW = [
 /* Add a member, or edit one (`initial`). `defaultRole` pre-sets the team when
    the dialog opens from that team's branch; `defaultManagerId` pre-sets
    "Reports to" when it opens from a node in the desktop tree. */
-function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOptions, onSaved, onInvite, onWelcome, members = [], inviteAfterSave = false }) {
+function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOptions, onSaved, onInvite, members = [], inviteAfterSave = false }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const { user: me } = useAuth();
@@ -191,7 +154,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
   const startRole = defaultRole && roleOptions.some((r) => r.key === defaultRole) ? defaultRole : roleOptions[0]?.key || "";
   const startManager = defaultManagerId && members.some((m) => m.id === defaultManagerId) ? defaultManagerId : "";
   const blankForm = () => ({
-    name: "", email: "", title: "", password: "", phone: "", passwordless: false,
+    name: "", email: "", title: "", phone: "",
     role: startRole, permissions: roleDefaultPerms(startRole, roleOptions), reporting_manager_id: startManager,
     // 2026-09-15 — a new member follows their role's access unless unticked.
     follow_role: true,
@@ -209,8 +172,8 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
     if (!o) return;
     if (initial) {
       setForm({
-        name: initial.name, email: initial.email, title: initial.title || "", password: "",
-        phone: initial.phone || "", passwordless: false, role: initial.role,
+        name: initial.name, email: initial.email || "", title: initial.title || "",
+        phone: initial.phone || "", role: initial.role,
         permissions: initial.permissions_custom || (Array.isArray(initial.permissions) && initial.permissions.length)
           ? [...(initial.permissions || [])] : roleDefaultPerms(initial.role, roleOptions),
         follow_role: !initial.permissions_custom && !(Array.isArray(initial.permissions) && initial.permissions.length),
@@ -237,14 +200,21 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
     // RBAC P2 (2026-09-16): the app's own dialog, not the browser's confirm box.
     if ((promotingToOwner || demotingOwner) && confirmed !== true) {
       setOwnerConfirm(promotingToOwner
-        ? { title: `Make ${form.name || "them"} an owner?`, body: "They get full control of the company account — the team, finances and all data.", action: "Make owner" }
+        ? { title: `Make ${form.name || "them"} an owner?`,
+            body: "They get full control of the company account — the team, finances and all data. Owners also sign in with an email and password, so they'll be asked to set theirs the next time they sign in.",
+            action: "Make owner" }
         : { title: `Remove owner access from ${initial.name}?`, body: "They lose full control. At least one owner must remain.", action: "Remove owner access" });
       return;
     }
+    // 2026-09-19 — members sign in with their mobile and a texted code, so the
+    // number is required and has to be a real one: a typo hands their account
+    // to whoever owns it. (The server holds the same rules.)
+    const phoneTyped = form.phone.trim();
     if (!editing) {
-      if (!form.name.trim() || !form.email.trim()) { toast.error("Name and email are required"); return; }
-      if (form.passwordless && form.phone.replace(/\D/g, "").length < 10) { toast.error("A valid mobile number is required for OTP login"); return; }
-      if (!form.passwordless && form.password.length < 6) { toast.error("Set a 6+ char password, or switch to mobile OTP login"); return; }
+      if (!form.name.trim()) { toast.error("Enter their name"); return; }
+      if (!normIndianMobile(phoneTyped)) { toast.error("Enter their 10-digit Indian mobile number — it's how they sign in"); return; }
+    } else if (!phoneLocked && phoneTyped && phoneTyped !== (initial.phone || "") && !normIndianMobile(phoneTyped)) {
+      toast.error("Enter a 10-digit Indian mobile number"); return;
     }
     setBusy(true);
     try {
@@ -280,15 +250,14 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
         follow_role: !!form.follow_role,
         permissions: form.follow_role ? [] : form.permissions, phone: form.phone, reporting_manager_id: form.reporting_manager_id || null,
       };
-      const res = await api.post("/users", form.passwordless ? base : { ...base, password: form.password });
+      if (!form.email.trim()) delete base.email;
+      const res = await api.post("/users", base);
       toast.success(`${form.name} added`);
       setOpen(false);
       onSaved();
       if (res?.data?.invite_token && onInvite) {
         const d = form.phone.replace(/\D/g, "");
         onInvite({ token: res.data.invite_token, name: form.name, phone_masked: d.length >= 4 ? "•••• " + d.slice(-4) : "••••" });
-      } else if (!form.passwordless && onWelcome) {
-        onWelcome({ name: form.name.trim(), email: form.email.trim().toLowerCase() });
       }
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Failed");
@@ -316,7 +285,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                 <input id="member-name" data-testid="member-name-input" className={NM_FIELD} placeholder="e.g. Priya Nair"
                   value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </Field>
-              <Field label="Email" htmlFor="member-email">
+              <Field label="Email (optional)" htmlFor="member-email">
                 <input id="member-email" data-testid="member-email-input" className={NM_FIELD} type="email" placeholder="name@company.com"
                   disabled={editing && me?.role !== "owner"} title={editing && me?.role !== "owner" ? "Only an owner can change an email" : undefined}
                   value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
@@ -335,38 +304,23 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                     rule). Their own number is theirs to change in Settings. */}
                 <input id="member-phone" data-testid="member-phone-input" className={NM_FIELD} type="tel"
                   disabled={phoneLocked}
-                  placeholder={form.passwordless ? "Required for OTP login" : "For OTP login"}
+                  placeholder="+91 98765 43210"
                   value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-                {phoneLocked && (
+                {phoneLocked ? (
                   <p className="mt-1.5 text-xs text-neutral-500" data-testid="member-phone-locked">
                     Only an owner can change someone's mobile number — it's how they sign in.
+                  </p>
+                ) : form.phone.trim() && !normIndianMobile(form.phone) ? (
+                  <p className="mt-1.5 text-xs text-danger-600" data-testid="member-phone-invalid">
+                    Enter a 10-digit Indian mobile number
+                  </p>
+                ) : !editing && (
+                  <p className="mt-1.5 text-xs text-neutral-500" data-testid="member-phone-hint">
+                    It's how they sign in — we text them a code. Check it twice.
                   </p>
                 )}
               </Field>
             </div>
-            {!editing && (
-              <div>
-                <p className={DRAWER_LABEL}>Sign-in</p>
-                <div className={`flex gap-2 rounded-pill p-1.5 ${NM_PRESSED}`} data-testid="login-method-toggle" role="group" aria-label="Sign-in method">
-                  {[["password", "Password", false], ["otp", "Mobile OTP", true]].map(([key, label, passwordless]) => {
-                    const on = form.passwordless === passwordless;
-                    return (
-                      <button key={key} type="button" aria-pressed={on} data-testid={`login-method-${key}`}
-                        onClick={() => setForm({ ...form, passwordless })}
-                        className={`flex h-10 flex-1 items-center justify-center rounded-pill text-sm font-medium transition-shadow ${on ? `${NM_RAISED} text-slate-900` : "text-slate-600 hover:text-slate-900"}`}>
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-                {form.passwordless ? (
-                  <p className="mt-2 text-xs text-neutral-500" data-testid="passwordless-hint">No password needed — they sign in with a one-time code sent to their mobile.</p>
-                ) : (
-                  <input data-testid="member-password-input" className={`${NM_FIELD} mt-3`} type="password" aria-label="Temporary password"
-                    placeholder="Temporary password (min 6)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-                )}
-              </div>
-            )}
           </section>
 
           <section className="space-y-2">
@@ -629,7 +583,6 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
     [tenantRoles, isOwner],
   );
   const [invite, setInvite] = useState(null);
-  const [welcome, setWelcome] = useState(null);
   // U7-09.TEAM v2 (2026-08-17): the profile dialog every card opens.
   const [profileUser, setProfileUser] = useState(null);
   const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
@@ -740,7 +693,7 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
   );
   const renderAdd = canManageTeam
     ? (b) => (tenantRoles.some((r) => r.key === b.key) ? (
-      <MemberDialog roleOptions={roleOptions} members={members} defaultRole={b.key} onSaved={refresh} onInvite={setInvite} onWelcome={setWelcome}
+      <MemberDialog roleOptions={roleOptions} members={members} defaultRole={b.key} onSaved={refresh} onInvite={setInvite}
         trigger={<AddMemberTile data-testid={`team-add-${b.key}`} aria-label={`Add member to ${b.label}`} />} />
     ) : null)
     : null;
@@ -763,7 +716,6 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
   return (
     <div data-testid="team-panel">
       <InviteLinkModal info={invite} onClose={() => setInvite(null)} />
-      <WelcomeModal info={welcome} company={tenant?.name} onClose={() => setWelcome(null)} />
 
       <div className="mb-6 flex flex-col gap-6 lg:mb-8 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
         {title ? (
@@ -803,7 +755,7 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
             )}
           </div>
           {canManageTeam && (
-            <MemberDialog roleOptions={roleOptions} members={members} onSaved={refresh} onInvite={setInvite} onWelcome={setWelcome}
+            <MemberDialog roleOptions={roleOptions} members={members} onSaved={refresh} onInvite={setInvite}
               trigger={
                 <button type="button" data-testid="add-user-button"
                   className={`flex h-12 shrink-0 items-center gap-2 rounded-pill px-5 text-sm font-medium ${INK_PILL}`}>

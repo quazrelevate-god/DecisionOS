@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import api, { formatApiError } from "../../lib/api";
 import { normIndianMobile, displayIndianMobile } from "../../lib/phone";
 import OtpBoxes from "../../components/auth/OtpBoxes";
+import { passwordProblem } from "../../lib/password";
 // ASK-36 5 — the app's one loading animation.
 import { Loader } from "../../components/common";
 
@@ -37,10 +38,11 @@ const STEPS = [
     checkEmail: true,
   },
   {
-    key: "password", eyebrow: "Sign-in", type: "password", placeholder: "Minimum 6 characters",
+    key: "password", eyebrow: "Sign-in", type: "password", placeholder: "8+ characters, a letter and a number",
     q: () => "Set a password for your executive office.",
-    sub: () => "You can also sign in with mobile OTP later.",
-    validate: (v) => (v.length >= 6 ? "" : "At least 6 characters, please"),
+    sub: () => "As the owner you'll sign in with this or your mobile. Your team signs in with their mobile.",
+    // 2026-09-19 — 8+ characters with a letter and a number (lib/password.js).
+    validate: (v) => passwordProblem(v),
   },
   /* 2026-09-19 — required, a real Indian mobile, and confirmed by a texted
      code before we move on. It is how the founder signs in on the mobile app

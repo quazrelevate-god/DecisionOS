@@ -1,6 +1,6 @@
 {
-  "count": 332,
-  "sha": "4f2ab22bae6fdd430555e2a2628286eef25dd7cd10fe1058ed07a95b3561f92a",
+  "count": 334,
+  "sha": "65a215c4082c6b0db9d7a421c7ba4d3761378df50827bb93b046290dcbe2b3ff",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -229,11 +229,13 @@
     "POST /api/auth/me/switch-workspace",
     "POST /api/auth/otp/request",
     "POST /api/auth/otp/verify",
+    "POST /api/auth/owner-credentials",
     "POST /api/auth/password/forgot",
     "POST /api/auth/password/reset",
     "POST /api/auth/phone/send-code",
     "POST /api/auth/register",
     "POST /api/auth/tenant/transfer-ownership",
+    "POST /api/auth/welcome/done",
     "POST /api/billing/checkout",
     "POST /api/billing/webhook",
     "POST /api/brain/agent",

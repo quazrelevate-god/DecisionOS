@@ -34,6 +34,9 @@ import { ProfileDialog } from "./ProfileDialog";
 import AnnouncementBanner from "./AnnouncementBanner";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { WelcomeOverlay } from "./WelcomeOverlay";
+// 2026-09-19 — members sign in by mobile; owners also have email + password.
+import OwnerCredentialsGate from "./auth/OwnerCredentialsGate";
+import WelcomeMemberCard from "./auth/WelcomeMemberCard";
 // MPWA-03: mobile navigation is the floating dock + All Apps panel. The
 // edge-to-edge tab bar and the hamburger drawer are both gone below lg.
 import { FloatingDock } from "./mobile/FloatingDock";
@@ -556,6 +559,10 @@ export default function Layout({ children }) {
           is the Dex sky, and artwork must not drift. */}
       <div className="app-sky__art" aria-hidden="true" />
       <WelcomeOverlay />
+      {/* An owner who came in by mobile adds an email and password first;
+          a member's first screen asks them to check their details. */}
+      <OwnerCredentialsGate />
+      <WelcomeMemberCard />
       {/* KR-5 — the Karma header. Three tracks: logo · centred pill nav ·
           circular controls + the avatar block. The reference's shell exactly,
           which also KILLS two prior decisions on purpose:

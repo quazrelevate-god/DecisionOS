@@ -89,6 +89,7 @@ from models.auth import (  # noqa: F401
     TotpConfirmInput, TotpVerifyLoginInput, TotpDisableInput, TransferOwnershipInput,
     ProfileUpdateInput, ChangePasswordInput, PasswordForgotInput, PasswordResetInput,
     PhoneChangeCodeInput,
+    OwnerCredentialsInput,
 )
 
 
@@ -204,6 +205,13 @@ async def register(inp: RegisterInput, request: Request, response: Response,
     # confirmed by a texted code at the step where it is typed, and trusted
     # here only with the proof /signup/phone/verify issued for THAT number.
     #
+    # 2026-09-19 — a new password is 8+ characters with a letter and a number.
+    # After the recovery above on purpose: an existing password is still valid.
+    from services.auth.passwords import password_problem
+    _pw_problem = password_problem(inp.password)
+    if _pw_problem:
+        raise HTTPException(status_code=400, detail={"code": "password_weak", "message": _pw_problem})
+
     # Checked after the same-credentials recovery above on purpose: that path
     # signs an existing account in and writes no phone.
     from services.auth.phone import valid_indian_mobile, display_indian_mobile
@@ -973,14 +981,12 @@ async def update_profile(inp: ProfileUpdateInput, user: dict = Depends(get_curre
         # code to your own number, asked the same way the sign-in door asks.
         full = await db.users.find_one({"id": user["id"]})
         if (full or {}).get("passwordless"):
-            from services.auth.phone import norm_phone as _np
-            from services.otp import consume_otp
-            norm = _np((full or {}).get("phone") or "")
-            if len(norm) < 10:
-                raise HTTPException(status_code=400, detail="Add your mobile number first, then change your email.")
-            if not inp.otp_code:
-                raise HTTPException(status_code=400, detail="Enter the code we texted you to confirm the change.")
-            await consume_otp(norm, user["tenant_id"], inp.otp_code)
+            # 2026-09-19 — for someone who signs in by mobile the email is
+            # contact detail, not a key: they have no password to sign in or
+            # reset with it. So it needs no proof. (An owner who came in by
+            # mobile adds email + password together, through
+            # /auth/owner-credentials.)
+            pass
         else:
             if not inp.current_password or not verify_password(inp.current_password, (full or {}).get("password_hash", "")):
                 raise HTTPException(status_code=400, detail="Enter your current password to change your email")
@@ -995,7 +1001,10 @@ async def update_profile(inp: ProfileUpdateInput, user: dict = Depends(get_curre
         from services.otp import consume_otp
         await consume_otp(_phone_to_confirm[0], _profile_phone_scope(user["id"]), _phone_to_confirm[1])
     updates["updated_at"] = now_iso()
-    await db.users.update_one({"id": user["id"]}, {"$set": updates})
+    # Saving your details at all is what the one-time welcome card asks for, so
+    # it clears the card in the same write — one request, nothing to leave half
+    # done if they move on before a second call lands (2026-09-19).
+    await db.users.update_one({"id": user["id"]}, {"$set": updates, "$unset": {"welcome_pending": ""}})
     fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0, "password": 0})
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
     return {"user": fresh, "tenant": tenant}
@@ -1055,6 +1064,54 @@ async def send_phone_change_code(inp: PhoneChangeCodeInput, user: dict = Depends
     return resp
 
 
+@router.post("/owner-credentials")
+async def set_owner_credentials(inp: OwnerCredentialsInput, request: Request,
+                                user: dict = Depends(get_current_user)):
+    """An owner who came in by mobile adds an email and password (2026-09-19).
+
+    Members sign in with their mobile only; owners have both, because the owner
+    is who recovers everyone else. Someone added on Team as an owner, or
+    promoted to one, arrives mobile-only — this is where they finish. Asked
+    for by a full-screen step in the app until done (OwnerCredentialsGate.js).
+    """
+    if user.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Only owners add an email and password here.")
+    full = await db.users.find_one({"id": user["id"]}) or {}
+    if not full.get("passwordless") and full.get("email"):
+        raise HTTPException(status_code=400, detail="You already sign in with an email and password.")
+    from services.auth.passwords import password_problem
+    problem = password_problem(inp.password)
+    if problem:
+        raise HTTPException(status_code=400, detail=problem)
+    email = inp.email.strip().lower()
+    if await db.users.find_one({"email": email, "id": {"$ne": user["id"]}}, {"_id": 0, "id": 1}):
+        raise HTTPException(status_code=400, detail="That email is already used by another account")
+    await db.users.update_one({"id": user["id"]}, {"$set": {
+        "email": email, "password_hash": hash_password(inp.password), "passwordless": False,
+        "email_verified_at": None if email != (full.get("email") or "") else full.get("email_verified_at"),
+        "updated_at": now_iso()}})
+    # Best-effort: the link that confirms the address, as registration sends.
+    try:
+        from services.auth import auth_emails
+        from services.email import send_email
+        row = await auth_emails.issue(db, kind=auth_emails.KIND_EMAIL_VERIFY,
+                                      user_id=user["id"], tenant_id=user["tenant_id"], email=email)
+        await send_email(email, "Verify your DecisionOS email",
+                         auth_emails.render_verify_email(full.get("name") or "",
+                                                         f"{_app_base_url()}/verify-email?token={row['token']}"))
+    except Exception:
+        pass
+    fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
+    return {"user": fresh}
+
+
+@router.post("/welcome/done")
+async def welcome_done(user: dict = Depends(get_current_user)):
+    """The member's one-time welcome card was saved or put off (2026-09-19)."""
+    await db.users.update_one({"id": user["id"]}, {"$unset": {"welcome_pending": ""}})
+    return {"ok": True}
+
+
 @router.post("/change-password")
 async def change_password(inp: ChangePasswordInput, user: dict = Depends(get_current_user)):
     if user.get("passwordless"):
@@ -1062,6 +1119,10 @@ async def change_password(inp: ChangePasswordInput, user: dict = Depends(get_cur
     full = await db.users.find_one({"id": user["id"]})
     if not full or not verify_password(inp.current_password, full.get("password_hash", "")):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
+    from services.auth.passwords import password_problem
+    _pw_problem = password_problem(inp.new_password)
+    if _pw_problem:
+        raise HTTPException(status_code=400, detail=_pw_problem)
     if inp.new_password == inp.current_password:
         raise HTTPException(status_code=400, detail="New password must be different from your current password")
     await db.users.update_one(
@@ -1173,6 +1234,11 @@ async def password_reset(inp: PasswordResetInput):
     reset.
     """
     from services.auth import auth_emails
+    # The rule first, so a weak choice doesn't spend the link.
+    from services.auth.passwords import password_problem
+    _pw_problem = password_problem(inp.new_password)
+    if _pw_problem:
+        raise HTTPException(status_code=400, detail=_pw_problem)
     row = await auth_emails.consume(
         db, token=inp.token, kind=auth_emails.KIND_PASSWORD_RESET,
     )

@@ -607,6 +607,25 @@
     --dock-clear: calc(4.5rem + 1rem + 0.75rem + var(--sa-bottom));
 }
 
+/* ASK-49 · THE PHONE'S BLACK CARD IS ONE HEIGHT, WHATEVER IS IN IT.
+   It hugged its content, so it was 308px with three decisions, 279 on Watch,
+   207 with two rows and 146 on an empty tab — and the Dex well above it took
+   up the slack, swinging from 296 to 458 every time a tab was switched. The
+   founder: "it should always show the same height which accommodates three
+   item list even though it's empty".
+
+   So the card's body is fixed at three rows and the show-all slot, built from
+   what a row actually is: the 44px round control and 4px of padding either
+   side (DeskRow, max-lg:py-1), two 1px hairlines between the three, and the
+   show-all line's 44px plus its 4px gap. That is the 206px the three-row state
+   already measured, so a full tab does not move by a pixel — every other tab
+   is brought UP to it. Everything inside lays out within it: rows, the empty
+   line (centred in it), the skeleton, and Watch's three cards. */
+:root {
+    --desk-phone-row: calc(44px + 2 * 4px);
+    --desk-phone-body: calc(3 * var(--desk-phone-row) + 2px + 4px + 44px);
+}
+
 /* Mobile PWA (2026-09-14) — the dock, the Dex button, their pickers, the
    vignette and the install prompt step aside while a modal dialog, sheet or
    drawer is open. They sit at z 10000, above Radix's z-50 overlays, so they

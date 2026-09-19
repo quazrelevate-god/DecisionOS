@@ -521,12 +521,20 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
           the scrolling goes. `min-h-0` on both is what lets a flex child be
           shorter than its content — without it the list would push the card
           past the bottom of the screen instead of scrolling inside it. */}
+      {/* ASK-49 — AT REST THE BODY IS ONE FIXED HEIGHT (index.css,
+          --desk-phone-body): three rows and the show-all slot, in every tab and
+          every state, empty included. The list takes the top of it and the
+          slot the foot, so a tab with nothing in it is the same card as one
+          with thirty. Only while it is OPEN is it released — the pop measures
+          the whole list in that one frame and then sizes the card to it, which
+          a fixed height would have clipped to three rows again. */}
       <div
         className={cn(PHONE_CARD_INK, "mt-1.5 min-h-0 rounded-tile p-2.5",
-          scrolls && "flex flex-1 flex-col")}
+          scrolls ? "flex flex-1 flex-col" : !open && "flex flex-col")}
+        style={!open ? { height: "calc(var(--desk-phone-body) + 1.25rem)" } : undefined}
         data-testid={`${testid}-card`}
       >
-        <div className={scrolls ? "kr-scroll-quiet min-h-0 flex-1 overflow-y-auto" : undefined}>
+        <div className={scrolls ? "kr-scroll-quiet min-h-0 flex-1 overflow-y-auto" : !open ? "flex min-h-0 flex-1 flex-col" : undefined}>
         {children || (
           <>
             {loading && (
@@ -536,7 +544,10 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
               </div>
             )}
             {!loading && rows.length === 0 && (
-              <p className="py-3 text-sm text-neutral-500" data-testid={`${testid}-empty`}>{empty}</p>
+              /* ASK-49 — centred in the three rows' space it is standing in
+                 for, so an empty tab reads as a card with nothing on it rather
+                 than a card with one short line and a hole under it. */
+              <p className="m-auto py-3 text-center text-sm text-neutral-500" data-testid={`${testid}-empty`}>{empty}</p>
             )}
             {!loading && shown.map((r, i) => (
               <DeskRow key={r.id} r={r} first={i === 0} testid={`desk-${tab}`} />
@@ -555,13 +566,19 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
             is what it looks like, not what a thumb gets. The chevron points
             down to open and up to close, which is the one thing a caret is
             unambiguous about. */}
+        {/* ASK-49 — and when there is nothing more to show, its SPACE stays:
+            an empty slot the same 48px, so a tab with two rows is not shorter
+            than a tab with thirty. */}
+        {!children && !open && (loading || !(hidden > 0 || showAll)) && (
+          <div aria-hidden="true" className="mt-1 h-11 shrink-0" data-testid="desk-phone-more-slot" />
+        )}
         {!children && !loading && (hidden > 0 || showAll) && (
           <button
             type="button"
             data-testid="desk-phone-more"
             onClick={onToggleExpanded}
             aria-expanded={showAll}
-            className="mt-1 flex h-11 w-full items-center justify-center gap-1 text-[13px] font-medium text-white/70 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-0"
+            className="mt-1 flex h-11 w-full shrink-0 items-center justify-center gap-1 text-[13px] font-medium text-white/70 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-0"
           >
             {showAll ? "Show fewer" : `Show all ${rows.length}`}
             <CaretDown size={12} weight="bold" aria-hidden="true" className={showAll ? "rotate-180" : ""} />

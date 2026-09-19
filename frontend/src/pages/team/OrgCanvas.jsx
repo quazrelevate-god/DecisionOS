@@ -90,6 +90,16 @@ const GUTTER_W = LANE_W - STEM_W;        // 72 — moves into the scrolling colu
 const ELBOW_R = 14; // corner radius where a branch leaves the trunk
 const ADD_H = 56; // the "Add member" node at the top of a column
 const ADD_LINE = "hsl(230 16% 74%)"; // its branch: neutral and dashed, not a person
+
+/* YOU, AND THE LINE YOU REPORT THROUGH. Graphite rather than a hue, and that
+   is the point: every team already owns a hue (HUE_RULES) and the structural
+   lines own the root lavender, so any colour picked here would read as "this
+   branch belongs to team X" somewhere in the tree. Ink belongs to no team, so
+   it reads as "this one is yours" against all of them. The card you are on
+   takes the solid weight; everyone you report through takes the faint one, so
+   the eye runs up the chain without the ancestors competing with you. */
+const PATH_INK = "hsl(240 6% 22%)";
+const PATH_INK_SOFT = "hsl(240 6% 22% / 0.34)";
 const COL_PAD_Y = 20; // breathing room above and below a column's cards
 const MIN_GAP = 14; // cards never closer than this…
 const MAX_GAP = 56; // …nor further apart when a column has height to spare
@@ -107,12 +117,12 @@ function sameLines(a, b) {
   for (const k of ka) {
     const x = a[k];
     const y = b[k];
-    if (!y || x.h !== y.h || x.y1 !== y.y1 || x.stemHue !== y.stemHue || x.mono !== y.mono || x.gutter !== y.gutter) return false;
+    if (!y || x.h !== y.h || x.y1 !== y.y1 || x.stemHue !== y.stemHue || x.mono !== y.mono || x.gutter !== y.gutter || x.fromPath !== y.fromPath) return false;
     if (x.kids.length !== y.kids.length) return false;
     for (let i = 0; i < x.kids.length; i++) {
       const p = x.kids[i];
       const q = y.kids[i];
-      if (p.id !== q.id || p.y !== q.y || p.hue !== q.hue || p.add !== q.add) return false;
+      if (p.id !== q.id || p.y !== q.y || p.hue !== q.hue || p.add !== q.add || p.path !== q.path) return false;
     }
   }
   return true;
@@ -238,6 +248,28 @@ function pathToPerson(heads, id) {
   return [];
 }
 
+/* The chain from the top of a team down to one person: every node above them
+   AND their own, or null when they are not in the forest at all — which is the
+   case for an owner, who sits above it in the root column.
+   Distinct from pathToPerson above, which answers "what has to be open to show
+   them" and cannot tell "found at the top" from "not found": both are []. */
+function trailToPerson(heads, id) {
+  if (!id) return null;
+  const walk = (n, trail) => {
+    if (n.u?.id === id) return [...trail, n.id];
+    for (const k of n.kids) {
+      const found = walk(k, [...trail, n.id]);
+      if (found) return found;
+    }
+    return null;
+  };
+  for (const h of heads) {
+    const found = walk(h, []);
+    if (found) return found;
+  }
+  return null;
+}
+
 /* The open path -> the columns to draw: the heads, then the reports of each
    person opened along the path. */
 function columnsFor(heads, path) {
@@ -344,6 +376,11 @@ function RootColumn({ owners, ctx, register }) {
                 <span className="relative grid h-[156px] w-[156px] place-items-center rounded-full bg-white/55 ring-1 ring-inset ring-white shadow-[0_20px_44px_-20px_hsl(250_45%_40%/0.55)] backdrop-blur-xl transition-transform duration-200 group-hover:scale-[1.02] motion-reduce:transition-none">
                   <PersonAvatar name={u.name} src={u.avatar_url} size={130} ring={false} />
                 </span>
+                {ctx.ownerOnPath && (
+                  <span aria-hidden="true" data-testid="owner-on-path"
+                    className="pointer-events-none absolute left-1/2 top-1/2 h-[162px] w-[162px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+                    style={{ border: `${u.id === ctx.meId ? 2 : 1.5}px solid ${u.id === ctx.meId ? PATH_INK : PATH_INK_SOFT}` }} />
+                )}
                 <Presence u={u} outToday={ctx.outIds.has(u.id)} big />
                 <span data-testid={`member-title-${u.id}`}
                   className="absolute -bottom-2.5 left-1/2 max-w-[9rem] -translate-x-1/2 truncate rounded-full bg-[linear-gradient(180deg,hsl(250_75%_80%),hsl(252_55%_66%))] px-3.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-white shadow-[0_6px_14px_-6px_hsl(252_55%_45%/0.7)]">
@@ -357,15 +394,30 @@ function RootColumn({ owners, ctx, register }) {
             </p>
             <button type="button" onClick={() => ctx.onOpen(u)}
               className={`mt-3 inline-flex h-9 items-center gap-2 rounded-full px-4 text-[12.5px] text-slate-600 transition-colors hover:bg-white hover:text-slate-900 ${GLASS_PILL} ${FOCUS}`}>
+              {/* No caret (founder, 2026-09-19): the arrow read as "opens the
+                  level below", which is what the count pill ON A CARD does.
+                  This one opens the owner's own profile, the same as clicking
+                  the face above it, so it was pointing at the wrong thing. */}
               {direct > 0
                 ? `${direct} direct ${direct === 1 ? "report" : "reports"}`
                 : `${people} ${people === 1 ? "person" : "people"}`}
-              <CaretRight size={12} weight="bold" aria-hidden="true" />
             </button>
           </div>
         );
       })}
     </div>
+  );
+}
+
+/* The ring that marks you and the people you report through. Its own element
+   rather than a style on the card, for two reasons: the card's `open` state
+   already owns `outline`, and an inline box-shadow would replace the card's
+   depth shadow (NODE sets it as a class) rather than adding to it. */
+function PathRing({ on, mine }) {
+  if (!on) return null;
+  return (
+    <span aria-hidden="true" className="pointer-events-none absolute -inset-px rounded-full"
+      style={{ border: `${mine ? 2 : 1.5}px solid ${mine ? PATH_INK : PATH_INK_SOFT}` }} />
   );
 }
 
@@ -382,10 +434,14 @@ function PersonCard({ node, ctx, register }) {
   const open = ctx.openIds.has(node.id);
   const Shell = head ? "section" : "div";
   const shellProps = head ? { "aria-label": `${team.label} team`, "data-testid": `team-branch-${team.key}` } : {};
+  const mine = u.id === ctx.meId;
+  const onPath = ctx.onPath.has(node.id);
   return (
     <Shell {...shellProps} ref={(el) => register(node.id, el)}
+      data-on-path={onPath ? (mine ? "you" : "above") : undefined}
       className={`relative flex shrink-0 items-center gap-2 rounded-full pl-2 pr-2.5 transition-opacity ${NODE} ${node.dim ? "opacity-45" : ""}`}
       style={{ width: size.w, height: size.h, ...(open ? { outline: `2px solid ${t.line}`, outlineOffset: -2 } : null) }}>
+      <PathRing on={onPath} mine={mine} />
       <button type="button" data-testid={`team-member-${u.id}`}
         onClick={() => ctx.onOpen(u)}
         aria-label={`Open profile for ${u.name}`}
@@ -421,8 +477,10 @@ function TeamCard({ node, ctx, register }) {
   const count = node.kids.length;
   return (
     <section ref={(el) => register(node.id, el)} aria-label={`${team.label} team`} data-testid={`team-branch-${team.key}`}
+      data-on-path={ctx.onPath.has(node.id) ? "above" : undefined}
       className={`relative flex shrink-0 items-center gap-2 rounded-full pl-2 pr-2.5 ${NODE}`}
       style={{ width: CARD.team.w, height: CARD.team.h, ...(open ? { outline: `2px solid ${t.line}`, outlineOffset: -2 } : null) }}>
+      <PathRing on={ctx.onPath.has(node.id)} mine={false} />
       {/* A team has no profile, so the card itself opens its people too. */}
       <button type="button" onClick={() => ctx.toggle(node)} aria-expanded={open}
         aria-label={`${open ? "Hide" : "Show"} the ${team.label} team`}
@@ -502,7 +560,8 @@ function ColumnConnector({ line }) {
   const mono = !!line.mono;
   const trunk = mono ? structural : tone(line.stemHue).line;
   const dotX = GUTTER_W - 10;
-  const colourOf = (k) => (k.add ? ADD_LINE : mono ? structural : tone(k.hue).line);
+  const colourOf = (k) => (k.add ? ADD_LINE : k.path ? PATH_INK : mono ? structural : tone(k.hue).line);
+  const widthOf = (k) => (k.path ? 2 : 1.5);
   return (
     <svg aria-hidden="true" width={GUTTER_W}
       className="pointer-events-none absolute left-0 top-0 h-full"
@@ -510,12 +569,12 @@ function ColumnConnector({ line }) {
       {/* .75 so a 1.5 stroke sits on the pixel rather than across two */}
       <line x1="0.75" y1="0" x2="0.75" y2="100%" stroke={trunk} strokeWidth="1.5" />
       {line.kids.map((k) => (
-        <path key={k.id} d={`M 0.75 ${k.y} H ${GUTTER_W}`} stroke={colourOf(k)} strokeWidth="1.5"
+        <path key={k.id} d={`M 0.75 ${k.y} H ${GUTTER_W}`} stroke={colourOf(k)} strokeWidth={widthOf(k)}
           fill="none" strokeLinecap="round" strokeDasharray={k.add ? "4 4" : undefined} />
       ))}
       {line.kids.map((k) => (
         <circle key={`dot-${k.id}`} cx={dotX} cy={k.y} r="3.5" fill="white"
-          stroke={colourOf(k)} strokeWidth="1.5" />
+          stroke={colourOf(k)} strokeWidth={widthOf(k)} />
       ))}
     </svg>
   );
@@ -622,7 +681,9 @@ function laneGeom(line) {
       y: k.y,
       dy,
       r,
-      color: k.add ? ADD_LINE : mono ? structural : tone(k.hue).line,
+      // Your own line is drawn over the top of the team colouring.
+      color: k.add ? ADD_LINE : k.path ? PATH_INK : mono ? structural : tone(k.hue).line,
+      width: k.path ? 2 : 1.5,
       d,
     };
   });
@@ -637,6 +698,11 @@ function laneGeom(line) {
     dotX,
     y1,
     trunkColor,
+    /* Only the STEM takes the accent, never the trunk: the trunk is shared by
+       every branch in the lane, so inking it would claim the whole level for
+       one person. The stem is the single segment that is actually theirs. */
+    stemColor: line.fromPath ? PATH_INK : trunkColor,
+    stemWidth: line.fromPath ? 2 : 1.5,
     stemD: `M 0 ${y1} H ${jx}`,
     trunkD: trunkBottom - trunkTop > 0.5 ? `M ${jx} ${trunkTop} V ${trunkBottom}` : "",
     branches,
@@ -658,23 +724,23 @@ function ConnectorLane({ laneKey, line, register, stemOnly }) {
           lane's edge. */}
       {g && stemOnly && (
         <svg className="absolute inset-0" width={STEM_W} height={line.h} style={{ overflow: "visible" }}>
-          <path data-org="stem" d={`M 0 ${g.y1} H ${STEM_W}`} stroke={g.trunkColor} strokeWidth="1.5" fill="none" />
-          <circle data-org="joint" cx={STEM_W} cy={g.y1} r="4" fill="white" stroke={g.trunkColor} strokeWidth="1.5" />
+          <path data-org="stem" d={`M 0 ${g.y1} H ${STEM_W}`} stroke={g.stemColor} strokeWidth={g.stemWidth} fill="none" />
+          <circle data-org="joint" cx={STEM_W} cy={g.y1} r="4" fill="white" stroke={g.stemColor} strokeWidth={g.stemWidth} />
         </svg>
       )}
       {g && !stemOnly && (
         <svg className="absolute inset-0" width={LANE_W} height={line.h} style={{ overflow: "hidden" }}>
-          <path data-org="stem" d={g.stemD} stroke={g.trunkColor} strokeWidth="1.5" fill="none" />
+          <path data-org="stem" d={g.stemD} stroke={g.stemColor} strokeWidth={g.stemWidth} fill="none" />
           <path data-org="trunk" d={g.trunkD} stroke={g.trunkColor} strokeWidth="1.5" fill="none" />
           {g.branches.map((b) => (
-            <path key={b.id} data-org="branch" data-id={b.id} d={b.d} stroke={b.color} strokeWidth="1.5"
+            <path key={b.id} data-org="branch" data-id={b.id} d={b.d} stroke={b.color} strokeWidth={b.width}
               fill="none" strokeLinecap="round" strokeDasharray={b.add ? "4 4" : undefined} />
           ))}
           {g.branches.map((b) => (
             <circle key={`dot-${b.id}`} data-org="dot" data-id={b.id} cx={g.dotX} cy={b.y} r="3.5"
-              fill="white" stroke={b.color} strokeWidth="1.5" />
+              fill="white" stroke={b.color} strokeWidth={b.width} />
           ))}
-          <circle data-org="joint" cx={g.jx} cy={g.y1} r="4" fill="white" stroke={g.trunkColor} strokeWidth="1.5" />
+          <circle data-org="joint" cx={g.jx} cy={g.y1} r="4" fill="white" stroke={g.stemColor} strokeWidth={g.stemWidth} />
         </svg>
       )}
     </div>
@@ -740,8 +806,19 @@ export function OrgCanvas({ owners = [], teams = [], query = "", matches, teamMa
     : [];
 
   const everyone = useMemo(() => teams.flatMap((t) => t.members), [teams]);
+  /* Everyone between the logged-in person and the top of their team, plus
+     their own node. The tree already OPENS on this path (see the `path` state
+     below, seeded from pathToPerson) — it just never said so. */
+  const myTrail = useMemo(() => trailToPerson(heads, meId), [heads, meId]);
+  const onPath = useMemo(() => new Set(myTrail || []), [myTrail]);
+  /* The owner sits above every team, so they are on the path of anyone found
+     in the forest — and are the whole path when the owner is the one looking. */
+  const ownerOnPath = !!meId && (!!myTrail || owners.some((o) => o.id === meId));
+
   const ctx = {
     meId,
+    onPath,
+    ownerOnPath,
     outIds: outIds || new Set(),
     titleOf,
     onOpen,
@@ -807,6 +884,9 @@ export function OrgCanvas({ owners = [], teams = [], query = "", matches, teamMa
   // Where every lane's stem and branches currently are. Pure: it reads the
   // DOM and returns, so both the state path and the scroll repaint can call
   // it without one of them having to own the other.
+  const onPathRef = useRef(onPath);
+  onPathRef.current = onPath;
+
   const measureLanes = useCallback(() => {
     const next = {};
     lanesRef.current.forEach((lane) => {
@@ -822,6 +902,7 @@ export function OrgCanvas({ owners = [], teams = [], query = "", matches, teamMa
         stemHue: lane.stemHue,
         mono: !!lane.mono,
         gutter: !!lane.gutter,
+        fromPath: onPathRef.current.has(lane.fromId),
         /* A GUTTER LANE'S BRANCHES ARE MEASURED WITH offsetTop, not with a
            rect. offsetTop is relative to the column's content wrapper, so it
            does not change when the column scrolls — which is the whole point:
@@ -833,10 +914,10 @@ export function OrgCanvas({ owners = [], teams = [], query = "", matches, teamMa
             const el = cardEls.current.get(n.id);
             if (!el) return null;
             if (lane.gutter) {
-              return { id: n.id, hue: n.hue, add: !!n.add, y: Math.round(el.offsetTop + el.offsetHeight / 2) };
+              return { id: n.id, hue: n.hue, add: !!n.add, path: onPathRef.current.has(n.id), y: Math.round(el.offsetTop + el.offsetHeight / 2) };
             }
             const r = el.getBoundingClientRect();
-            return { id: n.id, hue: n.hue, add: !!n.add, y: Math.round((r.top + r.height / 2 - lr.top) / z) };
+            return { id: n.id, hue: n.hue, add: !!n.add, path: onPathRef.current.has(n.id), y: Math.round((r.top + r.height / 2 - lr.top) / z) };
           })
           .filter(Boolean),
       };

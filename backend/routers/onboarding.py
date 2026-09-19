@@ -5,6 +5,7 @@ does NOT import from `server`, so there is no circular dependency.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from services.tenant_ai_keys import TENANT_PUBLIC
 from emergentintegrations.llm.chat import UserMessage
 
 from core import (
@@ -150,7 +151,7 @@ async def update_os_blueprint(inp: OSBlueprintInput, user: dict = Depends(requir
     if updates:
         await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": updates})
         await log_activity(user["tenant_id"], user["id"], "os_blueprint_updated", f"{user['name']} updated the operating system templates")
-    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    return await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
 
 
 # ============================================================================
@@ -226,7 +227,7 @@ async def retry_ai_setup(user: dict = Depends(require_role("owner"))):
     Introduced by FIX-001-D so a founder whose AI setup silently
     fell back to defaults during signup can retry without needing
     admin intervention or starting a new workspace."""
-    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
     if not tenant:
         raise HTTPException(status_code=404, detail="Workspace not found")
 

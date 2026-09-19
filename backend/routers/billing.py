@@ -25,6 +25,7 @@ hmac + hashlib. When BILLING_LANDING_URL is unset, /checkout returns
 503 so the module stays inert in dev/staging without half-wiring.
 """
 import hmac
+from services.tenant_ai_keys import TENANT_PUBLIC
 import hashlib
 import json
 from datetime import datetime, timezone, timedelta
@@ -118,7 +119,7 @@ async def list_plans(user: dict = Depends(get_current_user)):
 @router.get("/status")
 async def billing_status(user: dict = Depends(get_current_user)):
     from services.plans import effective_plan, trial_expired
-    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
     if not tenant:
         raise HTTPException(status_code=404, detail="Workspace not found")
     ep = effective_plan(tenant)

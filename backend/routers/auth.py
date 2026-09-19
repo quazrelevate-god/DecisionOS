@@ -13,6 +13,7 @@ its own routers.
 """
 
 import asyncio
+from services.tenant_ai_keys import TENANT_PUBLIC
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, BackgroundTasks
 
@@ -191,7 +192,7 @@ async def register(inp: RegisterInput, request: Request, response: Response,
             _tok = create_token(_existing["id"], _tid, _existing.get("role") or "owner")
             set_auth_cookie(response, _tok)
             _u = await db.users.find_one({"id": _existing["id"]}, {"_id": 0, "password_hash": 0})
-            _t = await db.tenants.find_one({"id": _tid}, {"_id": 0}) if _tid else None
+            _t = await db.tenants.find_one({"id": _tid}, TENANT_PUBLIC) if _tid else None
             logger.info(f"register: same credentials for an existing account ({email}) — signing them in")
             return login_response(_tok, user=_u, tenant=_t)
         raise HTTPException(status_code=400, detail={
@@ -462,7 +463,7 @@ async def register(inp: RegisterInput, request: Request, response: Response,
 
     token = create_token(user_id, tenant_id, "owner")
     user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
-    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    tenant = await db.tenants.find_one({"id": tenant_id}, TENANT_PUBLIC)
     set_auth_cookie(response, token)
     # FIX-004-G (RBAC-21): record the new session on registration.
     import jwt as _jwt
@@ -632,7 +633,7 @@ async def login(inp: LoginInput, request: Request, response: Response):
             "detail": "Enter your 2FA code to complete sign in.",
         }
     token = create_token(user["id"], tenant_id, role)
-    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    tenant = await db.tenants.find_one({"id": tenant_id}, TENANT_PUBLIC)
     user.pop("_id", None)
     user.pop("password_hash", None)
     # Project the membership onto the returned user dict so the
@@ -707,7 +708,7 @@ async def switch_workspace(inp: SwitchWorkspaceInput, request: Request,
             detail="You don't have access to this workspace.",
         )
     token = create_token(user["id"], inp.tenant_id, target.get("role") or "sales")
-    tenant = await db.tenants.find_one({"id": inp.tenant_id}, {"_id": 0})
+    tenant = await db.tenants.find_one({"id": inp.tenant_id}, TENANT_PUBLIC)
     set_auth_cookie(response, token)
     # FIX-004-G (RBAC-21): the switch mints a NEW jti — record it.
     # The old jti stays valid (a user with 2 tabs open in 2
@@ -877,7 +878,7 @@ async def me(user: dict = Depends(get_current_user)):
     # Deferred so this router doesn't import server.py at module load.
     from services.ai.generators import ai_generate_finance_categories, ai_generate_lexicon, backfill_operating_model
 
-    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
     if tenant and not tenant.get("lexicon"):
         # Backfill industry vocabulary once for pre-existing workspaces.
         lex = await ai_generate_lexicon(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"), tenant.get("description") or "")
@@ -1008,7 +1009,7 @@ async def update_profile(inp: ProfileUpdateInput, user: dict = Depends(get_curre
     # done if they move on before a second call lands (2026-09-19).
     await db.users.update_one({"id": user["id"]}, {"$set": updates, "$unset": {"welcome_pending": ""}})
     fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0, "password": 0})
-    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
     return {"user": fresh, "tenant": tenant}
 
 
@@ -1394,7 +1395,7 @@ async def verify_2fa_on_login(inp: TotpVerifyLoginInput, request: Request,
             raise HTTPException(status_code=401, detail="Invalid 2FA code")
     # Success — issue the real session token, matching /login's tail.
     token = create_token(user_id, tenant_id, role)
-    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    tenant = await db.tenants.find_one({"id": tenant_id}, TENANT_PUBLIC)
     user.pop("_id", None)
     user.pop("password_hash", None)
     set_auth_cookie(response, token)

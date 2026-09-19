@@ -6,6 +6,7 @@ search to find a workspace or user by name/email/phone/id. All routes are gated 
 get_platform_admin and are READ-ONLY (mutations live in the existing admin router).
 """
 from __future__ import annotations
+from services.tenant_ai_keys import TENANT_PUBLIC
 
 import asyncio
 from datetime import datetime, timezone, timedelta
@@ -62,7 +63,7 @@ async def admin_search(q: str = Query("", min_length=0), admin: dict = Depends(g
 async def admin_tenant_360(tenant_id: str, admin: dict = Depends(get_platform_admin)):
     """Consolidated per-workspace view: plan, members, AI spend, entity counts,
     recent activity, and health signals -- one call for the Tenant 360 screen."""
-    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    t = await db.tenants.find_one({"id": tenant_id}, TENANT_PUBLIC)
     if not t:
         raise HTTPException(status_code=404, detail="Workspace not found")
 

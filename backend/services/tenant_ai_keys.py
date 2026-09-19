@@ -34,6 +34,14 @@ from core import get_ai_key, mask_key
 # Providers the tenant can customize. Same set as the platform pool.
 CUSTOMIZABLE_PROVIDERS = tuple(sorted(_AI_KEY_ENV.keys()))
 
+# 2026-09-20 — the projection for any tenant read that goes back to a browser.
+# /auth/me, sign-in and every settings save returned the whole tenant, and with
+# it `ai_keys` in plain text — so every member's browser held the owner's own
+# provider keys, though the Workspace card promises they are never shown in
+# full. Only the /tenant/ai-keys endpoints read the raw map, and they answer
+# with summarize_tenant_ai_keys (masked).
+TENANT_PUBLIC = {"_id": 0, "ai_keys": 0}
+
 
 def resolve_ai_key(tenant: Optional[Dict[str, Any]], provider: str) -> str:
     """Return the API key to use for `provider` for THIS tenant.

@@ -5,6 +5,7 @@ birthdays/meetings) and the tenant leave-approver mapping. Leave-creation
 helpers (_resolve_leave_approver, _create_leave) stay in server.
 """
 from datetime import datetime, timezone, timedelta
+from services.tenant_ai_keys import TENANT_PUBLIC
 
 from fastapi import APIRouter, Depends
 
@@ -32,7 +33,7 @@ async def update_leave_approvers(inp: LeaveApproverMapInput, user: dict = Depend
         if m:
             clean[role] = aid
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"leave_approvers": clean}})
-    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    return await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
 
 
 @router.get("/calendar")

@@ -1,8 +1,9 @@
 import { useState } from "react";
+import { RegenerateWithAi } from "./RegenerateWithAi";
 import { useAuth } from "../context/AuthContext";
-import api from "../lib/api";
+import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
-import { Tag, FloppyDisk, Sparkle, Plus, Trash } from "@phosphor-icons/react";
+import { Tag, FloppyDisk, Plus, Trash } from "@phosphor-icons/react";
 
 let _uid = 0;
 const uid = () => `fc${Date.now()}_${_uid++}`;
@@ -63,7 +64,7 @@ export function FinanceCategoriesEditor() {
       if (refreshTenant) await refreshTenant();
       toast.success("Finance categories saved");
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Could not save");
+      toast.error(formatApiError(e.response?.data?.detail) || "Could not save");
     } finally { setSaving(false); }
   };
   const regenerate = async () => {
@@ -74,7 +75,7 @@ export function FinanceCategoriesEditor() {
       if (refreshTenant) await refreshTenant();
       toast.success("AI regenerated your finance categories");
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Could not regenerate");
+      toast.error(formatApiError(e.response?.data?.detail) || "Could not regenerate");
     } finally { setRegen(false); }
   };
 
@@ -100,10 +101,8 @@ export function FinanceCategoriesEditor() {
           className="flex items-center gap-2 bg-kr-ink text-white px-5 py-2 text-sm font-medium rounded-lg transition-all disabled:opacity-60">
           <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Categories"}
         </button>
-        <button onClick={regenerate} disabled={regen} data-testid="fc-regenerate"
-          className="flex items-center gap-2 border border-nm-edge/40 px-5 py-2 text-sm font-medium rounded-lg hover:bg-accent transition-all disabled:opacity-60">
-          <Sparkle size={16} weight="bold" /> {regen ? "Regenerating…" : "Regenerate with AI"}
-        </button>
+        <RegenerateWithAi onConfirm={regenerate} busy={regen} testid="fc-regenerate"
+          replaces="your expense and asset categories" />
       </div>
     </div>
   );

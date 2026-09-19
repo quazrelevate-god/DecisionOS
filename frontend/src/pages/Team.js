@@ -173,6 +173,12 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
   // Your own email is yours to change (basicOnly) — with your password when it
   // is how you sign in, as Settings asks.
   const emailLocked = emailSignsIn && me?.role !== "owner" && !basicOnly;
+  // 2026-09-20 (Settings audit) — the manager/owner form saves through
+  // PATCH /users, which asks for no code and no password, so your own mobile
+  // and email are not changed from it (the server refuses that too). The
+  // details-only form on your own card is the other path: it saves through
+  // PATCH /auth/profile WITH the code or password, so it stays open.
+  const ownContact = editing && initial?.id === me?.id && !basicOnly;
   const emailTyped = form.email.trim();
   const emailBad = !!emailTyped && !/^\S+@\S+\.\S+$/.test(emailTyped);
   // A number already on file changes only by an owner's hand — it is the sign-in.
@@ -331,11 +337,11 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
         await api.patch(`/users/${initial.id}`, {
           // RBAC P1 (2026-09-15): name can be corrected. The email goes when
           // this person may change it (see emailLocked).
-          name: form.name.trim(), ...(emailLocked ? {} : { email: emailTyped }),
+          name: form.name.trim(), ...(emailLocked || ownContact ? {} : { email: emailTyped }),
           follow_role: !!form.follow_role,
           role: form.role, permissions: form.follow_role ? [] : form.permissions,
           // Left out when it is locked, so a save of the other fields still goes through.
-          ...(phoneLocked ? {} : { phone: form.phone }),
+          ...(phoneLocked || ownContact ? {} : { phone: form.phone }),
           reporting_manager_id: form.reporting_manager_id, title: form.title.trim(),
         });
         toast.success(`${initial.name}'s access updated`);
@@ -400,9 +406,9 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
               </Field>
               <Field label="Email (optional)" htmlFor="member-email">
                 <input id="member-email" data-testid="member-email-input" className={MEMBER_FIELD} type="email" placeholder="name@company.com"
-                  disabled={emailLocked} title={emailLocked ? "They sign in with this email — only an owner can change it" : undefined}
+                  disabled={emailLocked || ownContact} title={emailLocked ? "They sign in with this email — only an owner can change it" : undefined}
                   value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-                {emailBad && !emailLocked ? (
+                {emailBad && !emailLocked && !ownContact ? (
                   <p className="mt-1.5 text-xs text-danger-600" data-testid="member-email-invalid">
                     That email doesn't look right — fix it or leave it empty
                   </p>
@@ -426,10 +432,14 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                     rule). Their own number is theirs to change, here or in
                     Settings, confirmed by a code texted to it. */}
                 <input id="member-phone" data-testid="member-phone-input" className={MEMBER_FIELD} type="tel"
-                  disabled={phoneLocked}
+                  disabled={phoneLocked || ownContact}
                   placeholder="+91 98765 43210"
                   value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-                {phoneLocked ? (
+                {ownContact ? (
+                  <p className="mt-1.5 text-xs text-neutral-500" data-testid="member-contact-in-settings">
+                    Change your own mobile or email in Settings › Your Profile — a new one is confirmed with a code.
+                  </p>
+                ) : phoneLocked ? (
                   <p className="mt-1.5 text-xs text-neutral-500" data-testid="member-phone-locked">
                     Only an owner can change someone's mobile number — it's how they sign in.
                   </p>

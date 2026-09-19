@@ -5,6 +5,7 @@ public invite-link resolve/start flow. OTP infra (_issue_otp, _hash_otp,
 _apm_send_and_fetch_otp, OTP_MAX_ATTEMPTS) + _norm_phone stay in server.
 """
 import re
+from services.tenant_ai_keys import TENANT_PUBLIC
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Response
@@ -253,7 +254,7 @@ async def verify_otp(inp: OtpVerifyInput, response: Response):
     if _accepted:
         user["role"] = _accepted.get("role") or user.get("role")
     token = create_token(user["id"], user["tenant_id"], user["role"])
-    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
     user.pop("_id", None)
     user.pop("password_hash", None)
     set_auth_cookie(response, token)

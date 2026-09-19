@@ -304,7 +304,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
         overlayClassName="bg-slate-900/30" data-testid="member-dialog">
         <SheetHead title={editing ? `Edit ${initial.role === "owner" ? "details" : "access"} — ${initial.name}` : "Add team member"}
           onClose={() => setOpen(false)} closeTestid="member-dialog-close" closeClassName={NM_ICON_BTN}>
-          {editing ? "Job title, team, reporting line and what they can open." : "Who they are, where they sit in the team, and what they can open."}
+          {editing ? "Job title, department, reporting line and what they can open." : "Who they are, where they sit in the team, and what they can open."}
         </SheetHead>
 
         <div className="space-y-5">
@@ -371,8 +371,13 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
 
           <section className="space-y-2">
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Team">
-                <GlassSelect testid="member-role-select" ariaLabel="Team (role)" value={form.role} onChange={setRole} triggerClassName={NM_SELECT}
+              {/* 2026-09-19, founder — "Department", not "Team". The value has
+                  always been the tenant's role key, and the tree groups people
+                  by it into the departments drawn on /team; "Team" read as the
+                  whole company beside "Reports to". Label only — the field, the
+                  value and every consumer are untouched. */}
+              <Field label="Department">
+                <GlassSelect testid="member-role-select" ariaLabel="Department" value={form.role} onChange={setRole} triggerClassName={NM_SELECT}
                   options={roleOptions.map((r) => ({ value: r.key, label: r.label }))} />
               </Field>
               <Field label="Reports to">
@@ -971,10 +976,36 @@ function MemberProfileDialog({
           <div className="absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-[55%]">
             <AvatarEditor u={u} canChange={isMe || canEdit} onChanged={onAvatarChanged} size={120} />
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" data-testid={`profile-close-${u.id}`}
-            className={`absolute right-4 top-4 z-10 ${GLASS_ICON_BTN}`}>
-            <X size={16} weight="bold" aria-hidden="true" />
-          </button>
+          {/* 2026-09-19, founder — Edit sits beside Close, not down in the Access
+              section, and is called "Edit" rather than "Edit access": from up
+              here it opens the whole member form (details AND access), so the
+              old label named only half of what the button does. One cluster so
+              the two controls share a baseline and the card has a single
+              top-right corner rather than a button floating mid-panel. */}
+          <div className="absolute right-4 top-4 z-10 flex items-center gap-2">
+            {canEdit && (
+              <MemberDialog
+                roleOptions={roleOptions}
+                initial={u}
+                members={members}
+                onSaved={onSaved}
+                // A save here can mint an invite token (phone added, or the
+                // member re-invited). Without this it was created and dropped.
+                onInvite={onInvite}
+                trigger={
+                  <button type="button" data-testid={`edit-access-${u.id}`}
+                    aria-label={`Edit ${u.name}`}
+                    className={`inline-flex h-9 items-center gap-1.5 rounded-pill px-3.5 text-xs font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
+                    <PencilSimple size={13} weight="bold" aria-hidden="true" /> Edit
+                  </button>
+                }
+              />
+            )}
+            <button type="button" onClick={onClose} aria-label="Close" data-testid={`profile-close-${u.id}`}
+              className={GLASS_ICON_BTN}>
+              <X size={16} weight="bold" aria-hidden="true" />
+            </button>
+          </div>
 
           {/* Under the photo: their name and their role. Nothing else. */}
           <div className="px-16 pb-5 pt-[4.5rem] text-center">
@@ -1016,7 +1047,7 @@ function MemberProfileDialog({
             <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
               <ContactRow icon={EnvelopeSimple} label="Email" value={u.email} wide />
               {u.phone && <ContactRow icon={Phone} label="Phone" value={formatPhone(u.phone)} />}
-              <ContactRow icon={Briefcase} label="Team" value={roleName(u.role)} />
+              <ContactRow icon={Briefcase} label="Department" value={roleName(u.role)} />
               <ContactRow icon={Pulse} label="Status" value={
                 <span className="inline-flex items-center gap-1.5">
                   <span className={`h-2 w-2 rounded-full ${status.dot}`} aria-hidden="true" />
@@ -1032,27 +1063,11 @@ function MemberProfileDialog({
           </section>
 
           <section>
-            <div className="mb-2.5 flex items-center justify-between gap-3">
+            {/* The edit button used to sit here; it is up beside Close now. */}
+            <div className="mb-2.5 flex items-center gap-3">
               <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
                 <ShieldCheck size={13} weight="bold" aria-hidden="true" /> Access
               </p>
-              {canEdit && (
-                <MemberDialog
-                  roleOptions={roleOptions}
-                  initial={u}
-                  members={members}
-                  onSaved={onSaved}
-                  // A save here can mint an invite token (phone added, or the
-                  // member re-invited). Without this it was created and dropped.
-                  onInvite={onInvite}
-                  trigger={
-                    <button type="button" data-testid={`edit-access-${u.id}`}
-                      className={`inline-flex h-9 items-center gap-1.5 rounded-pill px-3.5 text-xs font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
-                      <PencilSimple size={13} weight="bold" aria-hidden="true" /> {u.role === "owner" ? "Edit details" : "Edit access"}
-                    </button>
-                  }
-                />
-              )}
             </div>
             {u.role === "owner" ? (
               <p className={`px-4 py-3 text-sm text-slate-600 ${PROFILE_TILE}`}>Owner has full access to every part of the app.</p>

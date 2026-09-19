@@ -219,11 +219,33 @@ export function VoiceRipple({
     const canvas = canvasRef.current;
     if (!canvas) return undefined;
     const ctx2d = canvas.getContext("2d");
-    /* Canvas `filter` is the cleanest blur there is, and Safari only learned it
-       in 17. Where it is missing the softness comes from a shadow of the
-       stroke's own colour instead — a slightly tighter edge, no hard line, and
-       nobody sees a crisp ripple on an old phone. */
-    const hasFilter = typeof ctx2d.filter === "string";
+    /* ASK-50 — WHETHER THE BLUR ACTUALLY RENDERS, NOT WHETHER IT EXISTS.
+       Canvas `filter` is the cleanest blur there is, and it is the one the
+       design lab was tuned on — but the founder's iPhone drew the ripple with
+       hard rings. Two faults, both mine. The check was `typeof ctx.filter`,
+       which a browser can pass while drawing no blur at all. And the fallback
+       below it was wrong: it stroked the ring AND added a shadowBlur, which
+       draws the ring crisp and puts a soft halo round it — the hard line this
+       comment used to promise it avoided. Reproduced in Chrome by hiding
+       ctx.filter: the same double rings as the phone's screenshot.
+       So: ask the canvas. Blur a small square into a scratch canvas and look
+       outside it — a working blur has put ink there, a missing or inert one
+       has not. */
+    const filterWorks = (() => {
+      try {
+        const probe = document.createElement("canvas");
+        probe.width = 16;
+        probe.height = 16;
+        const p2d = probe.getContext("2d");
+        if (typeof p2d.filter !== "string") return false;
+        p2d.filter = "blur(3px)";
+        p2d.fillStyle = "#000";
+        p2d.fillRect(6, 6, 4, 4);
+        return p2d.getImageData(3, 8, 1, 1).data[3] > 0;
+      } catch {
+        return false;
+      }
+    })();
 
     /* TWO PIXEL SPACES, RECONCILED — the lesson ASK-43 wrote into the Desk's
        row fit. getBoundingClientRect is in VISUAL pixels (the app is CSS
@@ -231,6 +253,8 @@ export function VoiceRipple({
        the element's own. The backing store has to be sized in visual pixels
        times the device ratio or the ripple is soft in the wrong way; the
        drawing happens in the element's own pixels, which is what `size` means. */
+    // Backing-store pixels per own pixel; the shadow fallback needs it (below).
+    let px = 1;
     const fit = () => {
       const rect = canvas.getBoundingClientRect();
       const own = canvas.offsetWidth || size;
@@ -239,6 +263,7 @@ export function VoiceRipple({
       canvas.width = Math.round(own * scale);
       canvas.height = Math.round(own * scale);
       ctx2d.setTransform(scale, 0, 0, scale, 0, 0);
+      px = scale;
       return own;
     };
     let box = fit();
@@ -312,11 +337,30 @@ export function VoiceRipple({
       ctx2d.lineJoin = "round";
       const ridge = (dx, dy, colour) => {
         ctx2d.save();
-        if (hasFilter) ctx2d.filter = `blur(${blur.toFixed(2)}px)`;
-        else { ctx2d.shadowColor = colour; ctx2d.shadowBlur = blur * 2.4; }
-        ctx2d.translate(dx, dy);
-        ctx2d.strokeStyle = colour;
-        ctx2d.stroke(path);
+        if (filterWorks) {
+          ctx2d.filter = `blur(${blur.toFixed(2)}px)`;
+          ctx2d.translate(dx, dy);
+          ctx2d.strokeStyle = colour;
+          ctx2d.stroke(path);
+        } else {
+          /* ONLY THE SHADOW LANDS. The ring is stroked FAR off the canvas and
+             its shadow is offset back onto it, so what is drawn is the blur and
+             nothing else — no crisp core. The OFFSET is in the backing
+             store's pixels (the transform does not scale it), hence `px`. The
+             BLUR is not multiplied by it, and that was measured, not assumed:
+             the filter's blur(σ) turned out to be σ backing-store pixels too,
+             and with `px` in the fallback came out 2.4x softer than the design
+             lab on a phone. A shadowBlur of b is a Gaussian of σ = b/2 — hence
+             the 2. Side by side at DPR 3 the two paths now match. */
+          const FAR = 4096;
+          ctx2d.shadowColor = colour;
+          ctx2d.shadowBlur = blur * 2;
+          ctx2d.shadowOffsetX = (FAR + dx) * px;
+          ctx2d.shadowOffsetY = dy * px;
+          ctx2d.translate(-FAR, 0);
+          ctx2d.strokeStyle = "#000";
+          ctx2d.stroke(path);
+        }
         ctx2d.restore();
       };
       ridge(off, off, `hsl(230 22% 34% / ${(alpha * 0.30).toFixed(3)})`);

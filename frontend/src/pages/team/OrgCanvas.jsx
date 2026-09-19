@@ -78,6 +78,26 @@ const NODE = "bg-white/80 ring-1 ring-inset ring-white shadow-[0_14px_34px_-18px
 const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30";
 const byName = (a, b) => String(a.name || "").localeCompare(String(b.name || ""));
 
+/* Cheap equality for the measured lanes, replacing a JSON.stringify of the
+   whole set. That ran on every scroll event and serialised every lane to
+   answer a question about a handful of numbers; this compares the numbers. */
+function sameLines(a, b) {
+  const ka = Object.keys(a);
+  if (ka.length !== Object.keys(b).length) return false;
+  for (const k of ka) {
+    const x = a[k];
+    const y = b[k];
+    if (!y || x.h !== y.h || x.y1 !== y.y1 || x.stemHue !== y.stemHue || x.mono !== y.mono) return false;
+    if (x.kids.length !== y.kids.length) return false;
+    for (let i = 0; i < x.kids.length; i++) {
+      const p = x.kids[i];
+      const q = y.kids[i];
+      if (p.id !== q.id || p.y !== q.y || p.hue !== q.hue || p.add !== q.add) return false;
+    }
+  }
+  return true;
+}
+
 /* The page is CSS-zoomed by --ui-scale (hooks/useUiScale): getBoundingClientRect
    reports VISUAL px, while heights and SVG coordinates are set in an element's
    own px. Every measurement divides by this so the pane and the connectors
@@ -470,52 +490,94 @@ function LevelColumn({ items, add, index, height, ctx, register, onScroll }) {
    and a rounded elbow off the trunk into each card it opened. Curves between
    cards spread over a full column turned into near-vertical S-bends all
    leaving one point; straight runs and true corners stay readable at any
-   distance. The trunk takes the opened card's colour (lavender out of the
-   owner, where several teams share it) and each branch turns its own team's
-   colour at its corner. Drawn from measured positions, so it follows each
-   column's scroll. */
+   distance.
+
+   COLOUR, 2026-09-19 (founder): the first two lanes are ONE colour and only
+   the levels below them fan out into team hues. Reading the top of the tree,
+   every branch already carries its team's colour in the card it lands on —
+   coloured lines there as well turned the shallowest, most-looked-at part of
+   the chart into a rainbow with no information in it. Deeper down, where a
+   column can hold people from several teams, the line is the only thing
+   saying which team a branch belongs to, so the hues come back. `mono` is
+   set on the lane, not read from depth here, so the rule lives next to the
+   lanes it describes.
+
+   Drawn from measured positions, so it follows each column's scroll. */
+
+/* One lane's geometry as pure data. React renders this, and the scroll
+   repaint in OrgCanvas rewrites the very same shapes straight onto the DOM —
+   one function so the two can never draw different charts. */
+function laneGeom(line) {
+  const jx = Math.round(LANE_W * 0.4);
+  const dotX = LANE_W - 10;
+  const y1 = line.y1;
+  const structural = tone(ROOT_HUE).line;
+  const mono = !!line.mono;
+  const trunkColor = mono ? structural : tone(line.stemHue).line;
+
+  const branches = line.kids.map((k) => {
+    const dy = k.y - y1;
+    const s = Math.sign(dy);
+    const r = Math.min(ELBOW_R, Math.abs(dy));
+    const flat = Math.abs(dy) < 0.5;
+    /* An "Add member" node hangs off the JOINT on a dashed run of its own.
+       It used to take an elbow off the trunk like anyone else, which meant
+       the trunk was extended upward to reach it — so the branch was dashed
+       but the long vertical leading to it was solid, and the whole connector
+       read as a continuous line into a dashed stub (founder, 2026-09-19).
+       Nothing solid should run to a node that is not a person. */
+    const d = k.add && !flat
+      ? `M ${jx} ${y1} V ${k.y - s * r} Q ${jx} ${k.y}, ${jx + r} ${k.y} H ${LANE_W}`
+      : flat
+        ? `M ${jx} ${k.y} H ${LANE_W}`
+        : `M ${jx} ${k.y - s * r} Q ${jx} ${k.y}, ${jx + r} ${k.y} H ${LANE_W}`;
+    return {
+      id: k.id,
+      add: !!k.add,
+      y: k.y,
+      dy,
+      r,
+      color: k.add ? ADD_LINE : mono ? structural : tone(k.hue).line,
+      d,
+    };
+  });
+
+  // …and so the solid trunk spans the PEOPLE only, never the add node.
+  const people = branches.filter((b) => !b.add);
+  const trunkTop = Math.min(y1, ...people.map((b) => (b.dy < 0 ? b.y + b.r : y1)));
+  const trunkBottom = Math.max(y1, ...people.map((b) => (b.dy > 0 ? b.y - b.r : y1)));
+
+  return {
+    jx,
+    dotX,
+    y1,
+    trunkColor,
+    stemD: `M 0 ${y1} H ${jx}`,
+    trunkD: trunkBottom - trunkTop > 0.5 ? `M ${jx} ${trunkTop} V ${trunkBottom}` : "",
+    branches,
+  };
+}
+
+/* data-org / data-id are how the scroll repaint finds these again. They are
+   read with dataset rather than an attribute selector so an id carrying a
+   colon (team:sales) never has to be escaped. */
 function ConnectorLane({ laneKey, line, register }) {
+  const g = line && line.kids.length > 0 ? laneGeom(line) : null;
   return (
     <div ref={(el) => register(laneKey, el)} aria-hidden="true" className="relative shrink-0 self-stretch" style={{ width: LANE_W }}>
-      {line && line.kids.length > 0 && (
+      {g && (
         <svg className="absolute inset-0" width={LANE_W} height={line.h} style={{ overflow: "hidden" }}>
-          {(() => {
-            const jx = Math.round(LANE_W * 0.4);
-            const dotX = LANE_W - 10;
-            const { y1 } = line;
-            const trunk = tone(line.stemHue).line;
-            // Each branch leaves the trunk through a corner no taller than its drop.
-            const branches = line.kids.map((k) => {
-              const dy = k.y - y1;
-              const r = Math.min(ELBOW_R, Math.abs(dy));
-              return { ...k, dy, r, color: k.add ? ADD_LINE : tone(k.hue).line };
-            });
-            // The trunk runs between the corners furthest above and below the joint.
-            const trunkTop = Math.min(y1, ...branches.map((b) => (b.dy < 0 ? b.y + b.r : y1)));
-            const trunkBottom = Math.max(y1, ...branches.map((b) => (b.dy > 0 ? b.y - b.r : y1)));
-            return (
-              <>
-                <path d={`M 0 ${y1} H ${jx}`} stroke={trunk} strokeWidth="1.5" fill="none" />
-                {trunkBottom - trunkTop > 0.5 && (
-                  <path d={`M ${jx} ${trunkTop} V ${trunkBottom}`} stroke={trunk} strokeWidth="1.5" fill="none" />
-                )}
-                {branches.map((b) => {
-                  const s = Math.sign(b.dy);
-                  const d = Math.abs(b.dy) < 0.5
-                    ? `M ${jx} ${b.y} H ${LANE_W}`
-                    : `M ${jx} ${b.y - s * b.r} Q ${jx} ${b.y}, ${jx + b.r} ${b.y} H ${LANE_W}`;
-                  return (
-                    <path key={b.id} d={d} stroke={b.color} strokeWidth="1.5" fill="none" strokeLinecap="round"
-                      strokeDasharray={b.add ? "4 4" : undefined} />
-                  );
-                })}
-                {branches.map((b) => (
-                  <circle key={`dot-${b.id}`} cx={dotX} cy={b.y} r="3.5" fill="white" stroke={b.color} strokeWidth="1.5" />
-                ))}
-                <circle cx={jx} cy={y1} r="4" fill="white" stroke={trunk} strokeWidth="1.5" />
-              </>
-            );
-          })()}
+          <path data-org="stem" d={g.stemD} stroke={g.trunkColor} strokeWidth="1.5" fill="none" />
+          <path data-org="trunk" d={g.trunkD} stroke={g.trunkColor} strokeWidth="1.5" fill="none" />
+          {g.branches.map((b) => (
+            <path key={b.id} data-org="branch" data-id={b.id} d={b.d} stroke={b.color} strokeWidth="1.5"
+              fill="none" strokeLinecap="round" strokeDasharray={b.add ? "4 4" : undefined} />
+          ))}
+          {g.branches.map((b) => (
+            <circle key={`dot-${b.id}`} data-org="dot" data-id={b.id} cx={g.dotX} cy={b.y} r="3.5"
+              fill="white" stroke={b.color} strokeWidth="1.5" />
+          ))}
+          <circle data-org="joint" cx={g.jx} cy={g.y1} r="4" fill="white" stroke={g.trunkColor} strokeWidth="1.5" />
         </svg>
       )}
     </div>
@@ -631,13 +693,21 @@ export function OrgCanvas({ owners = [], teams = [], query = "", matches, teamMa
   // Each lane's branches: the column's "Add member" node first, then its cards.
   const branchesTo = (i) => [...(adds[i] ? [{ id: adds[i].id, add: true }] : []), ...columns[i]];
   const lanes = [];
-  if (owners.length && (heads.length || adds[0])) lanes.push({ key: "lane-0", fromId: "root", stemHue: ROOT_HUE, to: branchesTo(0) });
-  opened.forEach((sel, i) => lanes.push({ key: `lane-${i + 1}`, fromId: sel.id, stemHue: sel.hue, to: branchesTo(i + 1) }));
+  /* MONO_LANES — how many lanes down from the root stay one colour. 2 covers
+     the root's own branches and the level below them; from the third lane the
+     branches take their team hue again (see the note on laneGeom). */
+  const MONO_LANES = 2;
+  if (owners.length && (heads.length || adds[0])) lanes.push({ key: "lane-0", fromId: "root", stemHue: ROOT_HUE, mono: true, to: branchesTo(0) });
+  opened.forEach((sel, i) => lanes.push({ key: `lane-${i + 1}`, fromId: sel.id, stemHue: sel.hue, mono: i + 1 < MONO_LANES, to: branchesTo(i + 1) }));
   const lanesRef = useRef(lanes);
   lanesRef.current = lanes;
 
   const [lines, setLines] = useState({});
-  const measure = useCallback(() => {
+
+  // Where every lane's stem and branches currently are. Pure: it reads the
+  // DOM and returns, so both the state path and the scroll repaint can call
+  // it without one of them having to own the other.
+  const measureLanes = useCallback(() => {
     const next = {};
     lanesRef.current.forEach((lane) => {
       const laneEl = laneEls.current.get(lane.key);
@@ -650,6 +720,7 @@ export function OrgCanvas({ owners = [], teams = [], query = "", matches, teamMa
         h: Math.round(lr.height / z),
         y1: Math.round((fr.top + fr.height / 2 - lr.top) / z),
         stemHue: lane.stemHue,
+        mono: !!lane.mono,
         kids: lane.to
           .map((n) => {
             const el = cardEls.current.get(n.id);
@@ -660,22 +731,82 @@ export function OrgCanvas({ owners = [], teams = [], query = "", matches, teamMa
           .filter(Boolean),
       };
     });
-    setLines((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+    return next;
   }, []);
 
-  // After every render (a column opened, the pane resized, a search), and
-  // on the next frame after a column scrolls.
-  useLayoutEffect(() => { measure(); });
+  const measure = useCallback(() => {
+    const next = measureLanes();
+    setLines((prev) => (sameLines(prev, next) ? prev : next));
+  }, [measureLanes]);
+
+  /* THE SCROLL REPAINT, and why it does not go through state.
+     A column scrolls on the compositor and its cards are already at their new
+     offset in the frame the scroll event fires in. The old path answered that
+     with requestAnimationFrame -> measure -> setLines -> render, so the lines
+     landed a frame or two behind the cards they point at: scrolling, the
+     founder saw the two moving "in different phase with lag". React's
+     scheduler is the part that cannot be hurried here — a continuous event's
+     update is not guaranteed to be flushed before the next paint.
+     So the positions are written straight onto the SVG instead. A scroll
+     handler runs BEFORE paint, so an attribute set here is composited in the
+     same frame as the scroll that caused it. Structure (which branches exist,
+     what colour they are) still comes from React; only the coordinates are
+     written by hand, and both sides go through laneGeom so they cannot
+     disagree. State catches up when the scrolling stops. */
+  const paint = useCallback(() => {
+    const next = measureLanes();
+    for (const key of Object.keys(next)) {
+      const line = next[key];
+      const laneEl = laneEls.current.get(key);
+      const svg = laneEl && laneEl.querySelector("svg");
+      if (!svg || !line.kids.length) continue;
+      const g = laneGeom(line);
+      svg.setAttribute("height", String(line.h));
+      const byId = new Map(g.branches.map((b) => [b.id, b]));
+      svg.querySelectorAll("[data-org]").forEach((n) => {
+        const part = n.dataset.org;
+        if (part === "stem") n.setAttribute("d", g.stemD);
+        else if (part === "trunk") n.setAttribute("d", g.trunkD);
+        else if (part === "joint") n.setAttribute("cy", String(g.y1));
+        else {
+          const b = byId.get(n.dataset.id);
+          if (!b) return;
+          if (part === "branch") n.setAttribute("d", b.d);
+          else if (part === "dot") n.setAttribute("cy", String(b.y));
+        }
+      });
+    }
+  }, [measureLanes]);
+
+  // After every render (a column opened, the pane resized, a search). measure
+  // may leave state stale for a frame mid-scroll; paint runs after it, and
+  // layout effects run before paint, so the hand-written coordinates always
+  // win over anything React just wrote from an older measurement.
+  useLayoutEffect(() => { measure(); paint(); });
+
   const frame = useRef(0);
   const measureSoon = useCallback(() => {
     cancelAnimationFrame(frame.current);
     frame.current = requestAnimationFrame(measure);
   }, [measure]);
+
+  /* Scrolling: draw now, reconcile later. The settle is what puts the state
+     back in step once the wheel stops, so a later structural render starts
+     from the truth rather than from wherever the lines were when scrolling
+     began. */
+  const settle = useRef(0);
+  const onScrollSync = useCallback(() => {
+    paint();
+    window.clearTimeout(settle.current);
+    settle.current = window.setTimeout(measure, 120);
+  }, [paint, measure]);
+
   useEffect(() => {
     window.addEventListener("resize", measureSoon);
     return () => {
       window.removeEventListener("resize", measureSoon);
       cancelAnimationFrame(frame.current);
+      window.clearTimeout(settle.current);
     };
   }, [measureSoon]);
 
@@ -708,7 +839,7 @@ export function OrgCanvas({ owners = [], teams = [], query = "", matches, teamMa
         ref={paneRef}
         role="region"
         aria-label="Team org chart"
-        onScroll={measureSoon}
+        onScroll={onScrollSync}
         className="flex overflow-x-auto overflow-y-hidden overscroll-x-contain px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         style={{ height: boxH }}
       >
@@ -718,7 +849,7 @@ export function OrgCanvas({ owners = [], teams = [], query = "", matches, teamMa
             {(i > 0 || owners.length > 0) && (
               <ConnectorLane laneKey={`lane-${i}`} line={lines[`lane-${i}`]} register={registerLane} />
             )}
-            <LevelColumn items={items} add={adds[i]} index={i} height={boxH} ctx={ctx} register={registerCard} onScroll={measureSoon} />
+            <LevelColumn items={items} add={adds[i]} index={i} height={boxH} ctx={ctx} register={registerCard} onScroll={onScrollSync} />
           </Fragment>
         ))}
         {/* Room past the deepest column, so its cards never sit on the pane's edge. */}

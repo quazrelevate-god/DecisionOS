@@ -53,16 +53,16 @@ const PROFILE_INK = "antialiased [&_.text-slate-500]:text-slate-700 [&_.text-sla
 const PROFILE_GLASS = "bg-[linear-gradient(160deg,hsl(0_0%_100%/0.62),hsl(0_0%_100%/0.42))] backdrop-blur-[28px] backdrop-saturate-150 border border-white/60 shadow-[0_40px_90px_-30px_hsl(245_35%_15%/0.45),inset_0_1px_0_hsl(0_0%_100%/0.8)]";
 const PROFILE_TILE = "rounded-2xl bg-white/30 border border-white/55 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.7)]";
 const PROFILE_CHIP = "inline-flex items-center gap-1 rounded-full bg-white/45 border border-white/60 px-2.5 py-1 text-[12px] font-medium text-slate-700";
-/* The add / edit member form is neumorphic (founder, 2026-09-16): one soft
-   grey-blue ground; buttons and options are pushed out of it with a light and
-   a dark shadow, and fields, selects and the chosen options are pressed in. */
+/* The add / edit member form sits on the app's glass sheet with glass fields,
+   selects and panels, like every other dialog here. Only its BUTTONS stay
+   neumorphic (founder, 2026-09-20): pushed out with a light and a dark
+   shadow, and a chosen option pressed in. */
 const NM_RAISED = "bg-[hsl(226_24%_92%)] shadow-[6px_6px_14px_hsl(226_18%_74%),-6px_-6px_14px_hsl(0_0%_100%/0.95)]";
 const NM_PRESSED = "bg-[hsl(226_24%_92%)] shadow-[inset_4px_4px_9px_hsl(226_18%_76%),inset_-4px_-4px_9px_hsl(0_0%_100%/0.95)]";
-const NM_SHEET = "gap-5 rounded-[1.75rem] border-0 p-6 sm:rounded-[1.75rem] [&>button.absolute]:hidden bg-[hsl(226_24%_92%)] shadow-[0_30px_80px_-20px_hsl(226_30%_20%/0.5)]";
-const NM_FIELD = `w-full rounded-2xl border-0 px-4 py-3 text-[15px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/20 ${NM_PRESSED}`;
+// A glass field that also looks locked when it is (someone else's mobile, an
+// owner's sign-in email, or your own contact details from here).
+const MEMBER_FIELD = `${DRAWER_FIELD} disabled:cursor-not-allowed disabled:bg-white/40 disabled:text-slate-500`;
 const NM_ICON_BTN = `grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-700 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 active:shadow-[inset_3px_3px_7px_hsl(226_18%_76%),inset_-3px_-3px_7px_hsl(0_0%_100%/0.95)] ${NM_RAISED}`;
-// GlassSelect's pill, pressed in: twMerge swaps its white glass for the ground.
-const NM_SELECT = "ring-0 hover:bg-[hsl(226_24%_92%)] bg-[hsl(226_24%_92%)] shadow-[inset_4px_4px_9px_hsl(226_18%_76%),inset_-4px_-4px_9px_hsl(0_0%_100%/0.95)]";
 const COLLAPSE_KEY = "team.folded-branches";
 
 const humanize = (key) => String(key).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -146,10 +146,10 @@ const MENU_PREVIEW = [
 /* Add a member, or edit one (`initial`). `defaultRole` pre-sets the team when
    the dialog opens from that team's branch; `defaultManagerId` pre-sets
    "Reports to" when it opens from a node in the desktop tree. */
-function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOptions, onSaved, onInvite, members = [], inviteAfterSave = false }) {
+function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOptions, onSaved, onInvite, members = [], inviteAfterSave = false, basicOnly = false }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const { user: me } = useAuth();
+  const { user: me, refreshMe } = useAuth();
   const editing = !!initial;
   const startRole = defaultRole && roleOptions.some((r) => r.key === defaultRole) ? defaultRole : roleOptions[0]?.key || "";
   const startManager = defaultManagerId && members.some((m) => m.id === defaultManagerId) ? defaultManagerId : "";
@@ -218,7 +218,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
     // number is required and has to be a real one: a typo hands their account
     // to whoever owns it. (The server holds the same rules.)
     const phoneTyped = form.phone.trim();
-    if (emailBad && !emailLocked) { toast.error("That email doesn't look right — fix it or leave it empty"); return; }
+    if (emailBad && !emailLocked && !basicOnly) { toast.error("That email doesn't look right — fix it or leave it empty"); return; }
     if (editing && emailSignsIn && !emailTyped && (initial.email || "")) {
       toast.error("They sign in with this email, so it can be changed but not removed"); return;
     }
@@ -232,6 +232,19 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
     try {
       if (editing) {
         if (!form.name.trim()) { toast.error("Enter a name"); setBusy(false); return; }
+        if (basicOnly) {
+          // A member editing their OWN profile without Manage Team goes through
+          // PATCH /auth/profile, which by design never touches department,
+          // reporting line or access (PATCH /users needs team_manage). Mobile and
+          // email are left out: changing either there needs a code or a
+          // password, which Settings › Your Profile asks for.
+          await api.patch("/auth/profile", { name: form.name.trim(), title: form.title.trim() });
+          await refreshMe();
+          toast.success("Details updated");
+          setOpen(false);
+          onSaved();
+          return;
+        }
         await api.patch(`/users/${initial.id}`, {
           // RBAC P1 (2026-09-15): name can be corrected. The email goes when
           // this person may change it (see emailLocked).
@@ -282,11 +295,13 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
   return (
     <Dialog open={open} onOpenChange={openChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className={`max-h-[calc(90dvh/var(--ui-scale,1))] max-w-xl overflow-y-auto ${NM_SHEET}`}
+      <DialogContent className={`max-h-[calc(90dvh/var(--ui-scale,1))] max-w-xl overflow-y-auto ${SHEET}`}
         overlayClassName="bg-slate-900/30" data-testid="member-dialog">
-        <SheetHead title={editing ? `Edit ${initial.role === "owner" ? "details" : "access"} — ${initial.name}` : "Add team member"}
+        <SheetHead title={editing ? `Edit ${basicOnly || initial.role === "owner" ? "details" : "access"} — ${initial.name}` : "Add team member"}
           onClose={() => setOpen(false)} closeTestid="member-dialog-close" closeClassName={NM_ICON_BTN}>
-          {editing ? "Job title, department, reporting line and what they can open." : "Who they are, where they sit in the team, and what they can open."}
+          {basicOnly ? "Your name and job title."
+            : editing ? "Job title, department, reporting line and what they can open."
+            : "Who they are, where they sit in the team, and what they can open."}
         </SheetHead>
 
         <div className="space-y-5">
@@ -297,14 +312,14 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                 sign-in, and only an owner changes it. */}
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Name" htmlFor="member-name">
-                <input id="member-name" data-testid="member-name-input" className={NM_FIELD} placeholder="e.g. Priya Nair"
+                <input id="member-name" data-testid="member-name-input" className={MEMBER_FIELD} placeholder="e.g. Priya Nair"
                   value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </Field>
               <Field label="Email (optional)" htmlFor="member-email">
-                <input id="member-email" data-testid="member-email-input" className={NM_FIELD} type="email" placeholder="name@company.com"
-                  disabled={emailLocked} title={emailLocked ? "They sign in with this email — only an owner can change it" : undefined}
+                <input id="member-email" data-testid="member-email-input" className={MEMBER_FIELD} type="email" placeholder="name@company.com"
+                  disabled={emailLocked || basicOnly} title={emailLocked ? "They sign in with this email — only an owner can change it" : undefined}
                   value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-                {emailBad && !emailLocked && (
+                {emailBad && !emailLocked && !basicOnly && (
                   <p className="mt-1.5 text-xs text-danger-600" data-testid="member-email-invalid">
                     That email doesn't look right — fix it or leave it empty
                   </p>
@@ -313,7 +328,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Job title" htmlFor="member-title">
-                <input id="member-title" data-testid="member-title-input" className={NM_FIELD} placeholder="e.g. Sales Lead" maxLength={80}
+                <input id="member-title" data-testid="member-title-input" className={MEMBER_FIELD} placeholder="e.g. Sales Lead" maxLength={80}
                   value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
               </Field>
               <Field label="Mobile number" htmlFor="member-phone">
@@ -322,11 +337,15 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                     number for someone who has none, but changing one that is
                     already set is the owner's call (the server holds the same
                     rule). Their own number is theirs to change in Settings. */}
-                <input id="member-phone" data-testid="member-phone-input" className={NM_FIELD} type="tel"
-                  disabled={phoneLocked}
+                <input id="member-phone" data-testid="member-phone-input" className={MEMBER_FIELD} type="tel"
+                  disabled={phoneLocked || basicOnly}
                   placeholder="+91 98765 43210"
                   value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-                {phoneLocked ? (
+                {basicOnly ? (
+                  <p className="mt-1.5 text-xs text-neutral-500" data-testid="member-contact-in-settings">
+                    Change your mobile or email in Settings › Your Profile — a new one is confirmed with a code.
+                  </p>
+                ) : phoneLocked ? (
                   <p className="mt-1.5 text-xs text-neutral-500" data-testid="member-phone-locked">
                     Only an owner can change someone's mobile number — it's how they sign in.
                   </p>
@@ -343,6 +362,9 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
             </div>
           </section>
 
+          {/* Department, reporting line and access are a manager's to set —
+              hidden when a member edits their own basic details. */}
+          {!basicOnly && (<>
           <section className="space-y-2">
             <div className="grid gap-3 sm:grid-cols-2">
               {/* 2026-09-19, founder — "Department", not "Team". The value has
@@ -351,11 +373,11 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                   whole company beside "Reports to". Label only — the field, the
                   value and every consumer are untouched. */}
               <Field label="Department">
-                <GlassSelect testid="member-role-select" ariaLabel="Department" value={form.role} onChange={setRole} triggerClassName={NM_SELECT}
+                <GlassSelect testid="member-role-select" ariaLabel="Department" value={form.role} onChange={setRole}
                   options={roleOptions.map((r) => ({ value: r.key, label: r.label }))} />
               </Field>
               <Field label="Reports to">
-                <GlassSelect testid="member-manager-select" ariaLabel="Reporting manager" value={form.reporting_manager_id} triggerClassName={NM_SELECT}
+                <GlassSelect testid="member-manager-select" ariaLabel="Reporting manager" value={form.reporting_manager_id}
                   onChange={(v) => setForm({ ...form, reporting_manager_id: v })}
                   options={[
                     { value: "", label: "No one (team approver)" },
@@ -371,13 +393,13 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
               <ShieldCheck size={13} weight="bold" aria-hidden="true" /> Access
             </p>
             {form.role === "owner" ? (
-              <div className={`rounded-[1.4rem] px-4 py-3.5 text-sm ${NM_PRESSED}`} data-testid="owner-access-note">
+              <div className={`px-4 py-3.5 text-sm ${DRAWER_CARD}`} data-testid="owner-access-note">
                 <p className="flex items-center gap-1.5 font-semibold text-neutral-900"><ShieldCheck size={15} weight="bold" aria-hidden="true" /> Full company access</p>
                 <p className="mt-1 text-xs text-neutral-600">Owners can open and manage everything — team, finances, workflows and all data. Individual permissions don't apply.</p>
               </div>
             ) : (
               <>
-                <label className={`mb-3 flex cursor-pointer items-start gap-3 rounded-[1.4rem] px-4 py-3 ${NM_PRESSED}`} data-testid="member-follow-role">
+                <label className={`mb-3 flex cursor-pointer items-start gap-3 px-4 py-3 ${DRAWER_CARD}`} data-testid="member-follow-role">
                   <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-neutral-900" checked={!!form.follow_role}
                     data-testid="member-follow-role-toggle"
                     onChange={(e) => {
@@ -437,6 +459,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
               </>
             )}
           </section>
+          </>)}
         </div>
 
         {/* RBAC P2 (2026-09-16): the owner change is confirmed right here, above
@@ -924,7 +947,13 @@ function MemberProfileDialog({
   const denied = PERMISSIONS.filter((pp) => !perms.includes(pp.key));
   const manager = (members || []).find((m) => m.id === u.reporting_manager_id);
   // Only an owner edits another owner — the rule PATCH /users holds too.
-  const canEdit = canManageTeam && (u.role !== "owner" || isOwner);
+  const canManageMember = canManageTeam && (u.role !== "owner" || isOwner);
+  // Without Manage Team a member still edits their OWN basic details here
+  // (name, job title) — never their department, reporting line or access.
+  const canEdit = canManageMember || isMe;
+  const basicOnly = !canManageMember;
+  // Someone's access is a team manager's to see; everyone else sees only their own.
+  const showAccess = canManageTeam || isMe;
   // ASK-6: leave is for team managers and for the person themselves.
   const showLeave = canManageTeam || isMe;
   // Every member but an owner gets the invite-link icon from a team manager
@@ -976,6 +1005,7 @@ function MemberProfileDialog({
                 // A save here can mint an invite token (phone added, or the
                 // member re-invited). Without this it was created and dropped.
                 onInvite={onInvite}
+                basicOnly={basicOnly}
                 trigger={
                   <button type="button" data-testid={`edit-access-${u.id}`}
                     aria-label={`Edit ${u.name}`}
@@ -1048,7 +1078,8 @@ function MemberProfileDialog({
             </div>
           </section>
 
-          <section>
+          {showAccess && (
+          <section data-testid={`profile-access-${u.id}`}>
             {/* The edit button used to sit here; it is up beside Close now. */}
             <div className="mb-2.5 flex items-center gap-3">
               <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
@@ -1076,6 +1107,7 @@ function MemberProfileDialog({
               </div>
             )}
           </section>
+          )}
 
             </div>
 

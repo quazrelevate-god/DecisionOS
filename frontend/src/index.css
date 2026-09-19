@@ -1547,6 +1547,31 @@ html[data-page="team"] {
        Waves"), same arrangement as /my-work: >= 1024px loads the landscape
        WebP, the phone keeps its portrait file and never fetches this one. */
     --sky-art-lg: url("/sky/team-lg.webp");
+
+    /* 2026-09-19, founder — the room read "violet, like AI slop"; they asked
+       for warm or white. THE VIOLET IS IN THE PICTURE, not in the gradient,
+       which is the part worth writing down: measured, team-lg.webp is hue 240
+       at 66% saturation and it sits ON TOP of the stops, so re-tinting the
+       four stops alone changes nothing — rendered side by side, a fully warm
+       palette under this plate still came out lilac. The picture had to come
+       down before any warmth underneath could be seen.
+       .45 rather than 0: at full strength the plate IS the colour of the room,
+       and at .30 the glass waves are gone and the page is a flat bloom. .45
+       keeps the founder's artwork legible as structure while the warm stops
+       below carry the hue. One knob, no -lg twin — the fallback chain in
+       .app-sky__art means this covers the phone plate and the desktop one. */
+    --sky-art-opacity: .45;
+}
+
+/* ...and the rest of the violet comes out with saturation, the same move
+   /my-work makes above and for the same reason: a filter on the art layer,
+   so public/sky/team*.webp stay the files the founder supplied and this is
+   one line to revert. saturate() ALONE, deliberately — hue-rotate was tried
+   first and is the wrong tool here: rotating a blue-violet negatively runs
+   toward cyan, so the page went cold grey-green rather than warm. Dropping
+   the chroma lets the warm stops below set the hue instead of fighting one. */
+html[data-page="team"] .app-sky__art {
+    filter: saturate(.40);
 }
 
 /* KM-39 — /workflows joins the table. It was the one room in the dock with a
@@ -2072,12 +2097,21 @@ html[data-page="crm"] .app-sky {
     --sky-wash: hsl(208 12% 73% / .22);
 }
 
-/* Team — violet into peach. */
+/* Team — warm sand into gold. Was "violet into peach" until 2026-09-19, when
+   the founder called the room violet and asked for warm or white; the peach
+   was only ever the lift, and under a hue-240 plate it never read.
+   THE ALPHAS ARE UNTOUCHED (.62/.38/.38/.22) — KR-11.1's fixed budget is what
+   keeps every contrast number on this page comparable across a re-tint, so
+   only the hues and the chroma move. Re-measured after the change, secondary
+   text (hsl(40 4% 33%), no per-room override here) against the sky under the
+   page header: 6.09 at the mean and 5.50 at the darkest point, against 6.39
+   and 5.26 before. The worst case comes UP, which is the number that matters —
+   the room gets warmer without spending any of the contrast it had. */
 html[data-page="team"] .app-sky {
-    --sky-core: hsl(262 44% 81% / .62);
-    --sky-deep: hsl(248 38% 75% / .38);
-    --sky-lift: hsl(30 80% 81% / .38);
-    --sky-wash: hsl(258 30% 77% / .22);
+    --sky-core: hsl(30 82% 79% / .62);
+    --sky-deep: hsl(22 68% 75% / .38);
+    --sky-lift: hsl(42 92% 83% / .38);
+    --sky-wash: hsl(32 66% 81% / .22);
 }
 
 /* Settings — cool grey, gold barely present. The quietest room in the app,

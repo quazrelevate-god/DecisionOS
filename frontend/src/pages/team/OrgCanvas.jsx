@@ -618,6 +618,24 @@ function spineGeom(line) {
   };
 }
 
+/* One branch inside the gutter. Pure, because the scroll repaint has to redraw
+   YOUR branch: its far end is a card fixed in content coordinates, but its near
+   end is the joint, which lives in the lane's frame and therefore moves every
+   time the column scrolls. Everyone else's branch is a flat tee that never
+   changes, which is why only this one is rewritten. */
+function gutterBranchD(line, k, g) {
+  const { topEnd, bottomEnd, r } = g;
+  const jy = line.jointY;
+  if (k.path && jy != null && Math.abs(k.y - jy) > 0.5) {
+    const s = Math.sign(k.y - jy);
+    const rr = Math.min(ELBOW_R, Math.abs(k.y - jy));
+    return `M 0.75 ${jy} V ${k.y - s * rr} Q 0.75 ${k.y}, ${0.75 + rr} ${k.y} H ${GUTTER_W}`;
+  }
+  if (k.y === topEnd && r > 0) return `M 0.75 ${k.y + r} Q 0.75 ${k.y}, ${0.75 + r} ${k.y} H ${GUTTER_W}`;
+  if (k.y === bottomEnd && r > 0) return `M 0.75 ${k.y - r} Q 0.75 ${k.y}, ${0.75 + r} ${k.y} H ${GUTTER_W}`;
+  return `M 0.75 ${k.y} H ${GUTTER_W}`;
+}
+
 function ColumnConnector({ line }) {
   if (!line || !line.kids.length) return null;
   const structural = tone(ROOT_HUE).line;
@@ -626,12 +644,8 @@ function ColumnConnector({ line }) {
   const dotX = GUTTER_W - 10;
   const colourOf = (k) => (k.add ? ADD_LINE : k.path ? pathTone(k.hue) : mono ? structural : tone(k.hue).line);
   const widthOf = (k) => (k.path ? PATH_W : LINE_W);
-  const { top, bottom, topEnd, bottomEnd, r } = spineGeom(line);
-  const branchD = (k) => {
-    if (k.y === topEnd && r > 0) return `M 0.75 ${k.y + r} Q 0.75 ${k.y}, ${0.75 + r} ${k.y} H ${GUTTER_W}`;
-    if (k.y === bottomEnd && r > 0) return `M 0.75 ${k.y - r} Q 0.75 ${k.y}, ${0.75 + r} ${k.y} H ${GUTTER_W}`;
-    return `M 0.75 ${k.y} H ${GUTTER_W}`;
-  };
+  const g = spineGeom(line);
+  const { top, bottom } = g;
   return (
     <svg aria-hidden="true" width={GUTTER_W}
       className="pointer-events-none absolute left-0 top-0 h-full"
@@ -645,7 +659,7 @@ function ColumnConnector({ line }) {
           where a vertical line stops mid-flick. */}
       <line data-org="spine" x1="0.75" y1={top} x2="0.75" y2={bottom} stroke={trunk} strokeWidth="1.5" />
       {line.kids.map((k) => (
-        <path key={k.id} d={branchD(k)} stroke={colourOf(k)} strokeWidth={widthOf(k)}
+        <path key={k.id} data-org="branch" data-id={k.id} d={gutterBranchD(line, k, g)} stroke={colourOf(k)} strokeWidth={widthOf(k)}
           fill="none" strokeLinecap="round" strokeDasharray={k.add ? "4 4" : undefined} />
       ))}
       {line.kids.map((k) => (
@@ -746,7 +760,19 @@ function laneGeom(line) {
        but the long vertical leading to it was solid, and the whole connector
        read as a continuous line into a dashed stub (founder, 2026-09-19).
        Nothing solid should run to a node that is not a person. */
-    const d = k.add && !flat
+    /* YOUR BRANCH STARTS AT THE JOINT, not at its own corner, so the vertical
+       run that carries the path down the level is part of the same stroke and
+       is inked and thickened with it. Without this the chain broke at every
+       level change: stem in, branch out, and a normal-weight vertical between
+       them doing the actual travelling (founder, 2026-09-19 — "from owner to
+       user the vertical lines are in normal").
+       The SHARED trunk still is not inked. This is not the trunk: it is the
+       span between the joint and one card, which belongs to that card alone.
+       It is drawn after the trunk, so the 3px covers the 1.5px underneath.
+       The add node takes the same shape for its own reason (nothing solid
+       should run to a node that is not a person). */
+    const fromJoint = (k.add || k.path) && !flat;
+    const d = fromJoint
       ? `M ${jx} ${y1} V ${k.y - s * r} Q ${jx} ${k.y}, ${jx + r} ${k.y} H ${LANE_W}`
       : flat
         ? `M ${jx} ${k.y} H ${LANE_W}`
@@ -1054,11 +1080,21 @@ export function OrgCanvas({ owners = [], teams = [], query = "", matches, teamMa
       if (line.gutter && line.kids.length) {
         // …and the spine's two ends, which have to keep reaching that joint.
         const contentEl = laneEls.current.get(`content-${line.col}`);
-        const spine = contentEl && contentEl.querySelector(':scope > svg > [data-org="spine"]');
-        if (spine) {
-          const { top, bottom } = spineGeom(line);
-          spine.setAttribute("y1", String(top));
-          spine.setAttribute("y2", String(bottom));
+        const csvg = contentEl && contentEl.querySelector(":scope > svg");
+        if (csvg) {
+          const g = spineGeom(line);
+          const spine = csvg.querySelector('[data-org="spine"]');
+          if (spine) {
+            spine.setAttribute("y1", String(g.top));
+            spine.setAttribute("y2", String(g.bottom));
+          }
+          /* And YOUR branch, whose near end is the joint out in the lane —
+             the one branch in here that is not fixed in content coordinates. */
+          const byKid = new Map(line.kids.map((k) => [k.id, k]));
+          csvg.querySelectorAll('[data-org="branch"]').forEach((n) => {
+            const k = byKid.get(n.dataset.id);
+            if (k && k.path) n.setAttribute("d", gutterBranchD(line, k, g));
+          });
         }
       }
       svg.querySelectorAll("[data-org]").forEach((n) => {

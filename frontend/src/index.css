@@ -139,6 +139,24 @@
            pixels = the same 28rem on the glass. */
         --app-shell: calc(28rem / var(--ui-scale, 1));
 
+        /* HOW FAR THE CENTRED SHELL'S EDGE IS FROM THE VIEWPORT'S — signed, so
+           it goes NEGATIVE once the viewport is narrower than the cap. The
+           fixed dock and FAB live outside the shell in the flow, so they
+           cannot be centred by a parent and have to rebuild this offset
+           themselves; it was written out at all five of their anchors, which
+           is the duplication the notes down there apologise for.
+
+           THE CLAMP MOVED OUT of the expression and onto each use, as
+           `max(base, calc(gap + base))` rather than `calc(max(0px, gap) +
+           base)`. Same number either way — the gap is only ever clamped up to
+           zero, and max(0,g) + b === max(b, g + b) — but postcss-calc cannot
+           parse a max() nested inside a calc() and emitted a warning for each
+           of the five, which CI=true turns into a failed build. Hoisting it to
+           a custom property does NOT help: the build inlines custom properties
+           before minifying, so the minifier sees the max() again wherever it
+           is written. Keeping calc() free of max() is what actually fixes it. */
+        --app-shell-gap: calc((100vw / var(--ui-scale, 1) - var(--app-shell)) / 2);
+
         /* ---- shadow ----
            RD-1: the reference uses NO shadow on resting surfaces — cards,
            tables and stat tiles are hairline-only. Shadow survives solely for
@@ -540,17 +558,17 @@
         margin-inline: auto;
     }
     .app-dock-left {
-        left: calc(max(0px, (100vw / var(--ui-scale, 1) - var(--app-shell)) / 2) + 1rem);
+        left: max(1rem, calc(var(--app-shell-gap) + 1rem));
     }
     /* KR-14.3 — the dock stretches across the shell on mobile, with a right
        anchor that leaves clearance for the Dex FAB (64px + a 12px gap). Paired
        with `app-dock-left`, this widens the pill from a hugging content box
        to a near-edge-to-edge bar. */
     .app-dock-right {
-        right: calc(max(0px, (100vw / var(--ui-scale, 1) - var(--app-shell)) / 2) + 1rem + 4.75rem);
+        right: max(calc(1rem + 4.75rem), calc(var(--app-shell-gap) + 1rem + 4.75rem));
     }
     .app-fab-right {
-        right: calc(max(0px, (100vw / var(--ui-scale, 1) - var(--app-shell)) / 2) + 1rem);
+        right: max(1rem, calc(var(--app-shell-gap) + 1rem));
     }
 
     /* KM-53 — the Dex plus moves to the right and lines up ON the FAB.
@@ -570,14 +588,14 @@
        stay paired at every width the shell can take — not only on a phone,
        where it happens to collapse to zero. */
     .app-plus-on-fab {
-        margin-right: calc(max(0px, (100vw / var(--ui-scale, 1) - var(--app-shell)) / 2) + 0.625rem);
+        margin-right: max(0.625rem, calc(var(--app-shell-gap) + 0.625rem));
     }
 }
 
 /* Under 360px the FAB shrinks to 3.75rem, so its centre moves 2px inward. */
 @media (max-width: 359px) {
     .app-plus-on-fab {
-        margin-right: calc(max(0px, (100vw / var(--ui-scale, 1) - var(--app-shell)) / 2) + 0.5rem);
+        margin-right: max(0.5rem, calc(var(--app-shell-gap) + 0.5rem));
     }
 }
 @media (min-width: 481px) and (max-width: 1023.98px) {
@@ -696,6 +714,36 @@
     html {
         -webkit-text-size-adjust: 100%;
         text-size-adjust: 100%;
+
+        /* THE WHOLE PAGE STOPS RUBBER-BANDING (founder, 2026-09-19: "if i
+           scroll down or up the entire page itself like elastic in any tab").
+
+           Nothing was scrolling. The shell is a fixed-height, overflow-hidden
+           box — measured, documentElement.scrollHeight - clientHeight is 0 on
+           every route, at every --ui-scale step, on the phone as well as the
+           desktop. What moved was the browser's own overscroll affordance on
+           the root: a wheel or trackpad gesture that reaches a scroller with
+           nowhere left to go gets an elastic bounce, and with the root at the
+           default `auto` the whole app rode it.
+
+           It reaches the root two ways, which is why it happened everywhere:
+           over the greater part of the page there is no scroller at all, so
+           the gesture goes straight there; and where there IS one, reaching
+           its end CHAINS the rest of the gesture up to the root. The one rule
+           that would stop the chaining (.overflow-y-auto below) lives inside
+           the max-width:1023.98px block, so it never applied on a desktop —
+           measured there, the inner scroller computes `auto` while the same
+           element on a phone computes `contain`.
+
+           `none` rather than `contain`: contain only stops a child chaining
+           OUT, and the root is bouncing on its own account. On a document with
+           zero scrollable overflow the bounce can only ever reveal the page
+           background, so there is nothing to lose by refusing it.
+           WHAT THIS DOES COST: pull-to-refresh in a mobile BROWSER TAB, which
+           an installed PWA does not offer anyway, and which the note further
+           down already calls the most disorienting thing on a long feed. The
+           app has no pull-to-refresh of its own to break. */
+        overscroll-behavior: none;
     }
 
     * {

@@ -88,6 +88,138 @@ best-effort throughout — a draft that cannot be written never blocks the found
 `backend/scripts/ux_signup_resume_0917.py` (12/12) types the first answers,
 throws the browser away, comes back with only what a real one keeps, and finishes.
 
+## The founder's mobile is confirmed before it is trusted (2026-09-19)
+
+Yokesh: the email is the business address for support and receipts; the
+**mobile** is how the founder signs in on the mobile app, so we have to have it
+and it has to be right.
+
+**What was wrong.** Step 05 was optional, and its only check was "at least 8
+digits". The backend stored whatever arrived. But that number is two things at
+once: a **sign-in** (Mobile OTP looks the account up by it) and a **route**
+(WhatsApp from it lands in the workspace as that person). So a one-digit slip:
+
+- locked the founder out of Mobile OTP — "No account is registered with this
+  mobile number", about their own account; and
+- handed whoever owns the mistyped number an OTP sign-in **as the owner** —
+  they request a code, it arrives on their own phone — with their WhatsApp
+  messages filed as the owner's captures.
+
+An 8-digit number was worse: it saved fine and then OTP sign-in refused it as
+invalid, so the founder could never use it.
+
+**What changed.**
+
+- **Required, and a real Indian mobile.** Ten digits starting 6-9, written any
+  way people write them (`+91 98765 43210`, `098765-43210`, `(98765) 43210`).
+  Landlines, short numbers and other countries' codes are refused rather than
+  guessed at — a UAE number's last ten digits are some Indian stranger's
+  mobile. One rule, two copies kept in step:
+  `backend/services/auth/phone.py` and `frontend/src/lib/phone.js`.
+- **Confirmed with a texted code, at that step.** "Text me a code" → six boxes →
+  Confirm (or just type the sixth digit). Wrong codes are refused and counted;
+  five spend the code. Resend after 30 seconds. "Change number" goes back.
+- **Register trusts a phone only with proof.** `/signup/phone/verify` returns a
+  signed proof for that exact number (24 hours; a key derived from the session
+  secret, so it can never pass for a session). `/auth/register` refuses a phone
+  without one (`phone_unverified`) or one that cannot be a mobile
+  (`phone_invalid`), stores it as `+91 98765 43210`, and marks
+  `phone_verified_at`. A proof for your own number does not carry over to a
+  colleague's.
+- **A resumed signup is not texted twice.** The proof rides on the draft with
+  the number; coming back shows *"Confirmed — no need for another code"* until
+  it lapses. If it lapses on the last screen, Create says so and **Confirm my
+  mobile** goes to that one step and straight back to the built OS.
+- **Texting any number is capped.** `/signup/phone/send-code` is the one public
+  endpoint that texts a number nobody registered, so on top of the signup
+  surface's per-network limits it allows five codes an hour **per number**.
+- **The API still accepts a signup with no phone** (tests, scripts). What it
+  enforces is the security property: any phone it stores was proven. The
+  wizard is what makes the mobile required.
+
+**Mobile OTP sign-in, checked end to end.** It works — request, text, verify,
+session — and two faults in it are fixed:
+
+- **A number in two workspaces was told "OTP sent" when nothing was sent.** The
+  API answers that case with a list and sends nothing; the sign-in page ignored
+  the list, showed the code boxes and waited. It now asks *"Which one are you
+  signing in to?"*, texts the code for the one chosen, and signs into that
+  workspace. (Sakthivel's migration found shared numbers in the production
+  dump, so this is not hypothetical.)
+- **Twilio was handed the number as typed.** Twilio needs `+91…`; "98765 43210"
+  was refused and nobody got a code. The APM gateway, the live provider, was
+  unaffected.
+
+**Proof.** `backend/tests/test_founder_mobile_is_confirmed.py` (34) — the rule,
+the proof (forged, lapsed, borrowed, other-purpose), send/verify with a fake
+gateway that texts nothing, the per-number cap, register's three refusals, the
+stored form, and the screens. `backend/scripts/ux_founder_mobile_0919.py`
+(29/29) walks it in a browser on a throwaway database: four bad numbers
+refused, a wrong code refused, the right one moves on, a closed tab comes back
+confirmed without a second text, the workspace is created with the confirmed
+number, the founder signs out and back in by Mobile OTP, and with the same
+number in a second workspace the page asks which one and signs into it.
+
+## Adding a member, and their first sign-in (2026-09-19)
+
+Yokesh: a manager or HR person adds each member on Team — name, role, mobile —
+and the member makes the account their own. Checking the loop found the first
+half working (add → invite link → OTP → in) and the second half missing:
+
+- a "temporary" password the manager typed, that nothing ever asked the member
+  to replace — so the manager could keep signing in as them;
+- members added "Mobile OTP only" could never add a password;
+- the mobile was never marked confirmed, the email never checked;
+- the Team form took any 10+ digits, and plain Mobile OTP would open a
+  just-invited account to whoever held a mistyped number;
+- the first sign-in landed straight on the Desk.
+
+Yokesh's call: **members sign in with their mobile only; owners have both an
+email + password and a mobile.** So:
+
+- **Team › Add member** has no password and no sign-in toggle. The mobile is
+  required and must be a real Indian mobile (same rule as signup); the email
+  is optional. Saving always hands over the invite link. The API refuses a
+  password for a member, and `users.email` became a partial unique index
+  (unique among real addresses) so members without an email don't collide.
+- **The first sign-in goes through the invite link.** Until then, the
+  member's number alone opens nothing — plain Mobile OTP answers "Open the
+  invite link you were sent…" and texts no one. So a mistyped number gets a
+  stranger nothing, and the real member (link, but no code) tells the
+  manager. A number already live in another workspace keeps signing in there.
+- **Signing in by code marks the mobile confirmed**, and the first time, a
+  one-time **welcome card** shows it confirmed and asks them to check their
+  name and add a job title, what they handle and (optionally) an email. Save
+  or Later; one request; Settings holds the same fields any time.
+- **An email is contact detail for a mobile-only member,** so adding or
+  changing it needs no code (it did, briefly — a code to the phone).
+- **Owners:** someone added as an owner, or promoted to one, is asked for an
+  email and a password at their next sign-in, before anything else — the owner
+  is who can be recovered by email, and who recovers everyone else. The
+  promote dialog says so. After that, both ways in work.
+- **A new password is 8+ characters with a letter and a number** — signup,
+  reset (checked before the link is spent), change, and an owner setting one.
+  Existing passwords keep working until changed.
+
+**Proof.** `tests/test_member_loop.py` (38). Browser, two sessions on a
+throwaway database: `scripts/ux_member_loop_0919.py` 26/26 — the Team form, a
+bad number refused, the invite link handed over, the number alone opening
+nothing, the link signing in, the welcome card saving, plain Mobile OTP working
+after, promotion to owner asking for email + password (a weak one refused),
+and both ways in afterwards.
+
+**Seen along the way, not changed:** saves took 6–8 s in these runs while the
+Desk behind them was loading its AI calls. Worth its own look (U7-24.18).
+
+**The Add member form, checked (same day, U7-24.19).** Required: name, a real
+mobile, department (pre-selected). Optional: email, job title, reports to;
+access defaults to the department's. The email is saved and shown on the
+profile, the card and in search. Fixed: whoever manages the team can now add,
+fix or clear a mobile member's email (an email someone signs in with stays an
+owner's call and can't be removed); a bad email is flagged under the field
+before Save; a member without one shows "Not added" instead of an empty box.
+`scripts/ux_member_email_0919.py` 11/11.
+
 ## Still open
 
 - **Nothing tells the founder the AI setup is still filling in.** It takes a few
@@ -96,3 +228,20 @@ throws the browser away, comes back with only what a real one keeps, and finishe
 - **A resumed signup redoes the website and interview steps** unless the
   blueprint was already built. Their answers are safe; the two AI steps are not
   saved individually.
+- ~~**Changing your own mobile in Settings is not confirmed yet.**~~ **Done
+  2026-09-19 (U7-24.14).** Settings › Your Profile now texts a code to the NEW
+  number (`POST /auth/phone/send-code`, signed-in only) and saves it only with
+  that code; the old number keeps working until then. The same Indian-mobile
+  rule applies (a 5-digit number used to save), a colleague's number is
+  refused before anything is texted, the same number written differently is
+  not a change, an old malformed number rides along untouched until changed,
+  and someone who signs in only by mobile can change their number but not
+  remove it. The code lives in its own scope, so a sign-in code can't confirm a
+  change and a change code can't sign anyone in; it is checked last, so a
+  refusal elsewhere in the form doesn't spend it. Tests:
+  `test_own_mobile_change_is_confirmed.py` (19); browser:
+  `scripts/ux_own_mobile_0919.py` 15/15 — including the old number no longer
+  signing in and the new one signing in by Mobile OTP.
+- **The Flutter app signs in with email and password only.** Mobile OTP exists
+  on the web and the installed web app; the native app (on hold) has no OTP
+  screen.

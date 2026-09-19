@@ -3,12 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { hasPerm } from "../lib/perms";
 import { PageHeader, StickyHeader, EmptyState } from "../components/common";
 import { timeAgo } from "../lib/format";
 import { toast } from "sonner";
 import {
-  AirplaneTakeoff, Plus, WarningOctagon, CheckCircle, XCircle, ChatCircleText, Gear, GearSix, Clock,
+  Plus, WarningOctagon, CheckCircle, XCircle, ChatCircleText, Gear, Clock, ArrowCounterClockwise, PaperPlaneTilt,
   CalendarBlank,
   // ASK-4 (2026-09-12): AI Impact Analysis retired at the leave-card level.
   // Sparkle / ArrowsClockwise / CalendarPlus / Eye / CircleNotch were the
@@ -45,13 +44,24 @@ export const STATUS_META = {
   approved: { label: "Approved", tone: "bg-emerald-50 text-emerald-700 ring-emerald-100", icon: CheckCircle },
   rejected: { label: "Rejected", tone: "bg-rose-50 text-rose-700 ring-rose-100", icon: XCircle },
   info_requested: { label: "Info Requested", tone: "bg-violet-50 text-violet-700 ring-violet-100", icon: ChatCircleText },
+  // 2026-09-19 — taken back by the person who asked. Stored as "cancelled"
+  // (routers/team.py LEAVE_WITHDRAWN); quiet grey, because it is over.
+  cancelled: { label: "Withdrawn", tone: "bg-slate-100 text-slate-600 ring-slate-200", icon: ArrowCounterClockwise },
 };
+
+/* Your own request can be taken back while it waits on a decision, or once
+   approved but before it starts. The server holds the same line. */
+export const canWithdraw = (lv, today = new Date().toISOString().slice(0, 10)) =>
+  lv.status === "pending" || lv.status === "info_requested"
+  || (lv.status === "approved" && (lv.from_date || "") > today);
 const LEAVE_SECONDARY = `flex h-11 items-center gap-1.5 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`;
 const inp = "w-full nm-field px-3 py-2 text-sm";
 export const typeLabel = (k) => LEAVE_TYPES.find((t) => t.key === k)?.label || k;
 const fmtRange = (lv) => lv.from_date === lv.to_date ? lv.from_date : `${lv.from_date} → ${lv.to_date}`;
 
-function RequestLeaveDialog({ onDone }) {
+/* 2026-09-19 — exported: My Work's desktop toolbar opens this same form.
+   `triggerClassName` lets a host dress the button in its own material. */
+export function RequestLeaveDialog({ onDone, triggerClassName }) {
   const [open, setOpen] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({ leave_type: "casual", from_date: today, to_date: today, day_portion: "full", reason: "" });
@@ -64,7 +74,7 @@ function RequestLeaveDialog({ onDone }) {
       toast.success("Leave request submitted");
       setOpen(false);
       setForm({ leave_type: "casual", from_date: today, to_date: today, day_portion: "full", reason: "" });
-      onDone();
+      onDone?.();
     } catch (e) { toast.error(e.response?.data?.detail || "Could not submit"); }
   };
   return (
@@ -73,7 +83,7 @@ function RequestLeaveDialog({ onDone }) {
         <button
           data-testid="request-leave-button"
           title="Plan time off in advance -- needs approval"
-          className="kr-pop flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium"
+          className={triggerClassName || "kr-pop flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium"}
         >
           <Plus size={16} weight="bold" /> Request Leave
         </button>
@@ -184,9 +194,49 @@ function AbsenceDialog({ onDone }) {
 // ASK-6/-7 (2026-09-12): named export so Desk and Team can render individual
 // leave requests without duplicating the card markup. The default export
 // (the Leave page) is scheduled for retirement once the register move lands.
-export function LeaveCard({ lv, canAct, onRefresh, highlight }) {
+/* `mine` — the card is on the requester's own Leave page: it can answer the
+   approver's question and withdraw the request (2026-09-19). */
+export function LeaveCard({ lv, canAct, onRefresh, highlight, mine = false }) {
   const [action, setAction] = useState(null); // reject | info
   const [note, setNote] = useState("");
+  const [reply, setReply] = useState("");
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawNote, setWithdrawNote] = useState("");
+  const [sending, setSending] = useState(false);
+  const qc = useQueryClient();
+  // Show the server's answer on the card at once, then reload to confirm: a
+  // slow list reload used to leave "Info Requested" up after the answer was
+  // saved (seen in the browser, 2026-09-19).
+  const applyNow = (updated) => {
+    if (!updated?.id) return;
+    qc.setQueriesData({ queryKey: ["leaves"] }, (old) => (
+      Array.isArray(old) ? old.map((x) => (x.id === updated.id ? updated : x)) : old));
+  };
+
+  const answer = async () => {
+    if (!reply.trim()) return toast.error("Write your answer first");
+    setSending(true);
+    try {
+      const { data } = await api.post(`/leaves/${lv.id}/respond`, { note: reply.trim() });
+      applyNow(data);
+      toast.success("Answer sent — it's back with your approver");
+      setReply("");
+      onRefresh();
+    } catch (e) { toast.error(e.response?.data?.detail || "Could not send"); }
+    finally { setSending(false); }
+  };
+
+  const withdraw = async () => {
+    setSending(true);
+    try {
+      const { data } = await api.post(`/leaves/${lv.id}/withdraw`, { note: withdrawNote.trim() });
+      applyNow(data);
+      toast.success("Request withdrawn — your approver was told");
+      setWithdrawing(false); setWithdrawNote("");
+      onRefresh();
+    } catch (e) { toast.error(e.response?.data?.detail || "Could not withdraw"); }
+    finally { setSending(false); }
+  };
   // ASK-4 (2026-09-12): impactOpen state removed with the dialog itself.
   const st = STATUS_META[lv.status] || STATUS_META.pending;
 
@@ -223,11 +273,63 @@ export function LeaveCard({ lv, canAct, onRefresh, highlight }) {
       <p className="mt-2.5 flex items-center gap-1.5 text-xs text-neutral-500">
         <Clock size={12} weight="bold" aria-hidden="true" /> {timeAgo(lv.created_at)}{lv.approver_name ? ` · Approver: ${lv.approver_name}` : ""}
       </p>
-      {lv.status === "info_requested" && lv.info_note && (
+      {/* The question, and — once given — the answer, kept together so both
+          sides can read the whole exchange (2026-09-19). */}
+      {lv.info_note && (lv.status === "info_requested" || lv.reply_note) && (
         <div className="mt-3 flex items-start gap-2 rounded-2xl bg-violet-50/80 px-3 py-2.5 text-xs text-violet-950 ring-1 ring-inset ring-violet-100" data-testid={`leave-info-note-${lv.id}`}>
           <ChatCircleText size={14} weight="bold" aria-hidden="true" className="mt-px shrink-0 text-violet-700" />
-          <p><span className="font-semibold">Info requested:</span> {lv.info_note}</p>
+          <p><span className="font-semibold">{lv.approver_name ? `${lv.approver_name} asked` : "Info requested"}:</span> {lv.info_note}</p>
         </div>
+      )}
+      {lv.reply_note && (
+        <div className="mt-2 flex items-start gap-2 rounded-2xl bg-white/70 px-3 py-2.5 text-xs text-neutral-800 ring-1 ring-inset ring-neutral-200" data-testid={`leave-reply-note-${lv.id}`}>
+          <PaperPlaneTilt size={14} weight="bold" aria-hidden="true" className="mt-px shrink-0 text-neutral-500" />
+          <p><span className="font-semibold">{mine ? "Your answer" : `${(lv.user_name || "They").split(" ")[0]} answered`}:</span> {lv.reply_note}</p>
+        </div>
+      )}
+      {lv.status === "cancelled" && lv.withdrawn_note && (
+        <p className="mt-2 text-xs text-neutral-500" data-testid={`leave-withdrawn-note-${lv.id}`}>Withdrawn: {lv.withdrawn_note}</p>
+      )}
+
+      {/* The requester's side: answer the question, or take the request back. */}
+      {mine && lv.status === "info_requested" && (
+        <div className={`mt-3 space-y-2.5 rounded-[1.25rem] p-3 ${DRAWER_TRACK}`} data-testid={`leave-reply-${lv.id}`}>
+          <textarea data-testid={`leave-reply-input-${lv.id}`} className={`${DRAWER_FIELD} resize-none text-sm`} rows={2}
+            aria-label="Your answer" placeholder="Your answer" maxLength={1000}
+            value={reply} onChange={(e) => setReply(e.target.value)} />
+          <button onClick={answer} disabled={sending} data-testid={`leave-reply-send-${lv.id}`}
+            className={`flex h-10 w-full items-center justify-center gap-1.5 rounded-pill px-4 text-sm font-medium disabled:opacity-50 ${INK_PILL}`}>
+            <PaperPlaneTilt size={15} weight="bold" aria-hidden="true" /> {sending ? "Sending…" : "Send answer"}
+          </button>
+        </div>
+      )}
+      {mine && canWithdraw(lv) && (
+        withdrawing ? (
+          <div className={`mt-3 space-y-2.5 rounded-[1.25rem] p-3 ${DRAWER_TRACK}`} data-testid={`leave-withdraw-confirm-${lv.id}`}>
+            <p className="text-sm font-semibold text-neutral-900">Withdraw this request?</p>
+            <p className="text-xs text-neutral-500">
+              {lv.status === "approved"
+                ? "It's approved — withdrawing takes it off the calendar, and your approver is told."
+                : "Your approver is told, and it stays in your history as withdrawn."}
+            </p>
+            <input data-testid={`leave-withdraw-note-${lv.id}`} className={`${DRAWER_FIELD} text-sm`} maxLength={500}
+              placeholder="Why? (optional)" aria-label="Reason for withdrawing"
+              value={withdrawNote} onChange={(e) => setWithdrawNote(e.target.value)} />
+            <div className="flex gap-2">
+              <button onClick={withdraw} disabled={sending} data-testid={`leave-withdraw-go-${lv.id}`}
+                className={`flex h-10 flex-1 items-center justify-center rounded-pill px-4 text-sm font-medium disabled:opacity-50 ${MAROON_PILL}`}>
+                {sending ? "Withdrawing…" : "Withdraw"}
+              </button>
+              <button onClick={() => { setWithdrawing(false); setWithdrawNote(""); }} data-testid={`leave-withdraw-keep-${lv.id}`}
+                className={`h-10 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>Keep it</button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => setWithdrawing(true)} data-testid={`leave-withdraw-${lv.id}`}
+            className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-neutral-600 underline-offset-2 hover:text-neutral-900 hover:underline">
+            <ArrowCounterClockwise size={13} weight="bold" aria-hidden="true" /> Withdraw request
+          </button>
+        )
       )}
 
       {/* ASK-4 (2026-09-12): The per-card AI Impact Analysis button and
@@ -237,7 +339,7 @@ export function LeaveCard({ lv, canAct, onRefresh, highlight }) {
           to team cover. The team-level version is on the backlog as
           ASK-5 (Low priority, parked). */}
 
-      {canAct && lv.status !== "approved" && lv.status !== "rejected" && (
+      {canAct && lv.status !== "approved" && lv.status !== "rejected" && lv.status !== "cancelled" && (
         <div className="mt-4">
           {!action ? (
             <div className="flex flex-wrap gap-2">
@@ -319,114 +421,114 @@ export function ApproverConfig({ roleOptions, members }) {
   );
 }
 
-export default function Leave({ embedded = false }) {
-  const { user, tenant } = useAuth();
+/* How many days a request covers: both ends counted, a half day as 0.5. */
+function daysOf(lv) {
+  if (lv.day_portion === "half") return 0.5;
+  const a = new Date(`${lv.from_date}T00:00:00`);
+  const b = new Date(`${lv.to_date || lv.from_date}T00:00:00`);
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return 0;
+  return Math.max(1, Math.round((b - a) / 86400000) + 1);
+}
+
+const OPEN = new Set(["pending", "info_requested"]);
+
+/* 2026-09-19 — YOUR leave, as a page again.
+   ASK-6 (2026-09-12) retired /leave and sent every link to Team, which holds
+   the company's leave register — so on a phone the "Leave" tile opened Team
+   and there was no way to ask for time off at all. This is the requester's
+   side: raise a request, report an absence today, and see every request you
+   have made. Approving is not here — approvers do that in Approvals — and the
+   approver-per-department setting stays in Settings › Operations (ASK-8). */
+export default function Leave() {
   const qc = useQueryClient();
   const [params] = useSearchParams();
   const highlightId = params.get("leave");
-  const [tab, setTab] = useState("mine");
-  const canApprove = user?.role === "owner" || hasPerm(user, "leave_approve");
-  const canManage = hasPerm(user, "team_manage");
-  const roleOptions = [{ key: "owner", label: "Owner" }, ...(tenant?.roles || [])];
 
   const mineQ = useQuery({ queryKey: ["leaves", "mine"], queryFn: () => api.get("/leaves?scope=mine").then((r) => r.data) });
-  const apprQ = useQuery({ queryKey: ["leaves", "approvals"], queryFn: () => api.get("/leaves?scope=approvals").then((r) => r.data), enabled: canApprove });
-  const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data), enabled: canManage });
-
   const refresh = () => qc.invalidateQueries({ queryKey: ["leaves"] });
   const mine = mineQ.data || [];
-  const approvals = apprQ.data || [];
-  const pendingApprovals = approvals.filter((l) => l.status === "pending" || l.status === "info_requested");
 
-  /* KM-31 — Settings is NOT a tab. My Leave and Approvals are two views of the
-     same list; Settings is a configuration screen that happens to live on this
-     page, and putting it in the same track said all three were peers. It is a
-     gear beside the track now, which is the shape every app uses for exactly
-     this and needs no label to be understood. */
-  const TABS = [
-    { key: "mine", label: "My Leave", n: mine.length },
-    ...(canApprove ? [{ key: "approvals", label: "Approvals", n: pendingApprovals.length }] : []),
-  ];
+  const today = new Date().toISOString().slice(0, 10);
+  const year = today.slice(0, 4);
+  // Coming up = still waiting on a decision, or approved and not over yet.
+  const upcoming = mine
+    .filter((lv) => OPEN.has(lv.status) || (lv.status === "approved" && (lv.to_date || lv.from_date) >= today))
+    .sort((a, b) => (a.from_date || "").localeCompare(b.from_date || ""));
+  const upcomingIds = new Set(upcoming.map((lv) => lv.id));
+  const history = mine
+    .filter((lv) => !upcomingIds.has(lv.id))
+    .sort((a, b) => (b.from_date || "").localeCompare(a.from_date || ""));
+
+  const waiting = mine.filter((lv) => OPEN.has(lv.status)).length;
+  const approvedThisYear = mine.filter((lv) => lv.status === "approved" && (lv.from_date || "").startsWith(year));
+  const daysOff = approvedThisYear.reduce((n, lv) => n + daysOf(lv), 0);
+
+  // A notification about a request lands here (?leave=<id>): bring it into view.
+  useEffect(() => {
+    if (!highlightId || !mine.length) return;
+    const t = setTimeout(() => document.querySelector(`[data-testid="leave-card-${highlightId}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" }), 300);
+    return () => clearTimeout(t);
+  }, [highlightId, mine.length]);
 
   const actions = (
-    <div className="flex items-center gap-2">
-      <AbsenceDialog onDone={refresh} />
+    <div className="flex flex-wrap items-center gap-2" data-testid="leave-actions">
       <RequestLeaveDialog onDone={refresh} />
+      <AbsenceDialog onDone={refresh} />
+    </div>
+  );
+
+  const stat = (label, value, testid) => (
+    <div className="kr-pressed flex min-w-0 flex-1 flex-col rounded-2xl px-4 py-3" data-testid={testid}>
+      <span className="font-display text-2xl tabular-nums leading-none">{value}</span>
+      <span className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">{label}</span>
     </div>
   );
 
   return (
-    <div>
-      {embedded ? (
-        <div className="flex justify-end mb-4">{actions}</div>
+    <div data-testid="leave-page">
+      {/* KM-31 · laid out like every other room: the title pinned on a phone
+          with the actions under it; the desktop header carries them beside. */}
+      <StickyHeader className="mb-3 flex flex-col gap-4 lg:hidden" data-testid="leave-mobile-header">
+        <h1 className="font-display text-3xl">Leave</h1>
+        {actions}
+      </StickyHeader>
+      <div className="hidden lg:block">
+        <PageHeader eyebrow="Time off" title="Leave">{actions}</PageHeader>
+      </div>
+
+      <div className="mb-6 flex gap-3" data-testid="leave-summary">
+        {stat("Waiting", waiting, "leave-summary-waiting")}
+        {stat(`Days off in ${year}`, daysOff % 1 ? daysOff.toFixed(1) : daysOff, "leave-summary-days")}
+        {stat("Requests", mine.length, "leave-summary-total")}
+      </div>
+
+      {mineQ.isLoading && !mineQ.data ? (
+        <p className="text-sm text-muted-foreground">Loading your leave…</p>
+      ) : mine.length === 0 ? (
+        <EmptyState title="No leave requests yet"
+          hint="Use Request Leave to plan time off, or Report Absence Today if you can't come in." />
       ) : (
-        <>
-          {/* KM-31 · the standalone page, laid out like every other room: the
-              title pinned, and one row under it carrying both actions. They
-              used to be black slabs floating to the right of the heading; they
-              are the page's own controls, so they wear its raised material. */}
-          <StickyHeader className="mb-3 flex flex-col gap-6 lg:hidden" data-testid="leave-mobile-header">
-            <h1 className="font-display text-3xl">Leaves</h1>
-            <div className="flex items-center gap-2">{actions}</div>
-          </StickyHeader>
-          <div className="hidden lg:block">
-            <PageHeader eyebrow="Time off & availability" title="Leave & Absence">{actions}</PageHeader>
-          </div>
-        </>
-      )}
-
-      {/* KM-3 — the TRACK is .kr-pressed, not .nm-inset. nm-inset is a flat
-          sunken FILL (bg-nm-sunken, border-0) and draws no shadow at all, so
-          the bar read as a grey rectangle with good buttons sitting on it.
-          .kr-pressed is the real thing: a dark inset from the top-left and a
-          white inset from the bottom-right, i.e. the same held-pressed look a
-          selected control has. The raised .kr-pop tab then sits IN a genuine
-          depression instead of on a painted panel, which is the whole point of
-          a segmented track. */}
-      <div className="mb-6 flex items-center gap-2">
-      <div className="kr-pressed flex w-fit items-center gap-1 rounded-pill p-1" data-testid="leave-tabs">
-        {TABS.map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)} data-testid={`leave-tab-${t.key}`}
-            className={`flex h-9 items-center gap-2 rounded-pill px-4 text-sm font-medium transition-all ${tab === t.key ? "kr-pop text-foreground" : "text-foreground/60 hover:text-foreground/85"}`}>
-            {t.label}
-            {t.n > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-pill px-1 font-mono text-[10px] tabular-nums opacity-60">{t.n}</span>}
-          </button>
-        ))}
-      </div>
-        {/* KM-31 — the gear. Separated from the track by a gap because it is a
-            different kind of thing: the track picks WHICH list, this opens the
-            configuration behind them. .kr-pressed while open, matching the
-            "selected means pushed in" grammar the rest of the app uses. */}
-        {canManage && (
-          <button
-            type="button"
-            onClick={() => setTab((cur) => (cur === "settings" ? "mine" : "settings"))}
-            aria-pressed={tab === "settings"}
-            aria-label="Leave settings"
-            data-testid="leave-settings-toggle"
-            className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${tab === "settings" ? "kr-pressed" : "kr-pop"}`}
-          >
-            <GearSix size={18} weight="bold" aria-hidden="true" />
-          </button>
-        )}
-      </div>
-
-      {tab === "mine" && (
-        <div className="grid md:grid-cols-2 gap-4" data-testid="my-leaves">
-          {mine.length === 0 && <EmptyState title="No leave requests yet" hint="Use Request Leave to plan time off, or Report Absence Today for emergencies." />}
-          {mine.map((lv) => <LeaveCard key={lv.id} lv={lv} canAct={false} onRefresh={refresh} highlight={lv.id === highlightId} />)}
+        <div className="space-y-8">
+          {upcoming.length > 0 && (
+            <section data-testid="leave-upcoming">
+              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Coming up and waiting
+              </h2>
+              <div className="grid gap-4 md:grid-cols-2">
+                {upcoming.map((lv) => <LeaveCard key={lv.id} lv={lv} canAct={false} mine onRefresh={refresh} highlight={lv.id === highlightId} />)}
+              </div>
+            </section>
+          )}
+          {history.length > 0 && (
+            <section data-testid="leave-history">
+              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">History</h2>
+              <div className="grid gap-4 md:grid-cols-2">
+                {history.map((lv) => <LeaveCard key={lv.id} lv={lv} canAct={false} mine onRefresh={refresh} highlight={lv.id === highlightId} />)}
+              </div>
+            </section>
+          )}
         </div>
-      )}
-
-      {tab === "approvals" && canApprove && (
-        <div className="grid md:grid-cols-2 gap-4" data-testid="leave-approvals">
-          {approvals.length === 0 && <EmptyState title="Nothing to approve" hint="Leave requests routed to you will appear here." />}
-          {approvals.map((lv) => <LeaveCard key={lv.id} lv={lv} canAct onRefresh={refresh} highlight={lv.id === highlightId} />)}
-        </div>
-      )}
-
-      {tab === "settings" && canManage && (
-        <ApproverConfig roleOptions={roleOptions} members={usersQ.data || []} />
       )}
     </div>
   );

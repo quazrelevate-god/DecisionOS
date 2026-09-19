@@ -175,7 +175,10 @@ def test_a_member_keeps_their_own_details_without_a_manager(with_test_db):
             me = _actor("u-fin", "finance", [])
             await rauth.update_profile(ProfileUpdateInput(
                 name="Sunita Rao", title="Head of Finance",
-                about="GST filings, and every payment over 1 lakh", phone="9820010055"), user=me)
+                about="GST filings, and every payment over 1 lakh",
+                # the whole form comes back on save, number included: the same
+                # number, written differently, is not a change and needs no code
+                phone="+91 98200 10003"), user=me)
             return await db.users.find_one({"id": "u-fin"}, {"_id": 0})
         finally:
             restore()
@@ -184,7 +187,9 @@ def test_a_member_keeps_their_own_details_without_a_manager(with_test_db):
     assert row["name"] == "Sunita Rao"
     assert row["title"] == "Head of Finance", "their own job title, in their own hands"
     assert row["about"].startswith("GST filings"), "and what they handle, for the team to see"
-    assert row["phone_norm"] == "9820010055", "their own number is theirs to change"
+    assert row["phone_norm"] == "9820010003", "an unchanged number rides along untouched"
+    # Changing it is theirs too — confirmed by a code to the new number since
+    # 2026-09-19; see test_own_mobile_change_is_confirmed.py.
     assert row["role"] == "finance" and row["permissions"] == [], "and nothing about their access moved"
 
 
@@ -239,43 +244,26 @@ def test_changing_your_own_email_asks_for_your_password(with_test_db):
     assert taken == 400, "an address already in use is refused"
 
 
-def test_a_mobile_only_member_confirms_their_email_with_a_texted_code(with_test_db):
+def test_a_mobile_only_member_sets_their_email_without_a_code(with_test_db):
+    """2026-09-19 — members sign in with their mobile only. For them the email
+    is contact detail: no password signs in or resets with it. So adding or
+    changing it needs no proof (it did on 2026-09-16, when a mobile-only
+    member's email was still treated as a sign-in). It stays unconfirmed until
+    they click the link."""
     async def scenario(db):
         restore = _patch(db, rauth, otpmod)
         try:
             await _seed(db)
             await db.users.update_one({"id": "u-fin"}, {"$set": {"passwordless": True}})
             me = _actor("u-fin", "finance", [])
-            try:
-                await rauth.update_profile(ProfileUpdateInput(email="otp@sharma.co"), user=me)
-                bare = None
-            except HTTPException as e:
-                bare = e.status_code
-            # the code the sign-in door would have texted them
-            from services.otp import _hash_otp
-            from datetime import datetime, timezone, timedelta
-            await db.otp_codes.insert_one({
-                "phone": "9820010003", "tenant_id": TENANT,
-                "code_hash": _hash_otp("424242", "9820010003"),
-                "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
-                "created_at": datetime.now(timezone.utc).isoformat(), "attempts": 0,
-            })
-            try:
-                await rauth.update_profile(
-                    ProfileUpdateInput(email="otp@sharma.co", otp_code="000000"), user=me)
-                wrong = None
-            except HTTPException as e:
-                wrong = e.status_code
-            await rauth.update_profile(
-                ProfileUpdateInput(email="otp@sharma.co", otp_code="424242"), user=me)
-            row = await db.users.find_one({"id": "u-fin"}, {"_id": 0, "email": 1})
-            spent = await db.otp_codes.count_documents({"phone": "9820010003"})
-            return bare, wrong, row["email"], spent
+            await rauth.update_profile(ProfileUpdateInput(email="otp@sharma.co"), user=me)
+            row = await db.users.find_one({"id": "u-fin"}, {"_id": 0, "email": 1, "email_verified_at": 1})
+            texted = await db.otp_codes.count_documents({})
+            return row, texted
         finally:
             restore()
 
-    bare, wrong, email, spent = with_test_db(scenario)
-    assert bare == 400, "a member with no password is asked for a code instead"
-    assert wrong == 401, "a wrong code is refused the same way the sign-in door refuses it"
-    assert email == "otp@sharma.co", "the right code saves the change"
-    assert spent == 0, "and the code is spent, so it can't be replayed"
+    row, texted = with_test_db(scenario)
+    assert row["email"] == "otp@sharma.co", "saved on its own say-so"
+    assert row["email_verified_at"] is None, "and unconfirmed until the link is clicked"
+    assert texted == 0, "nobody was texted for it"

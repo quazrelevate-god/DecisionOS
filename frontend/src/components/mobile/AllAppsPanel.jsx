@@ -94,11 +94,10 @@ function buildTiles({ user, t }) {
     // RBAC P1 (2026-09-15): /team is open to everyone (read-only without Manage
     // team), so the tile is too — it hid the page from teammates on a phone.
     { key: "team", to: "/team", label: t("nav.team", "Team"), icon: UsersThree },
-    // ASK-6 (2026-09-12): the standalone Leave tile lands on /team now.
-    // Register lives on Team, approvals on the Decision Desk, per-department
-    // config on Settings > Operations. The tile stays because "Leave" is still
-    // the reader's mental hook for the concept.
-    { key: "leave", to: "/team", label: t("nav.leave", "Leave"), icon: AirplaneTakeoff },
+    // 2026-09-19 — Leave opens YOUR leave: raise a request, report an absence,
+    // see your history. It used to land on Team (ASK-6), so a phone had no way
+    // to ask for time off.
+    { key: "leave", to: "/leave", label: t("nav.leave", "Leave"), icon: AirplaneTakeoff },
   ];
 
   return tiles.filter((tile) => {

@@ -123,15 +123,17 @@ with sync_playwright() as pw:
     box = p.locator('[data-testid="signup-basics"] input').first
     box.fill("123")
     next_step(p, 700)
-    rec("short-password-refused", "6 characters" in step_error(p), step_error(p))
+    rec("short-password-refused", "8 characters" in step_error(p), step_error(p))
     box.fill(PASSWORD)
     next_step(p)
 
-    # ---- phone (optional) ----
+    # ---- mobile: required and confirmed by a code since 2026-09-19 ----
     box = p.locator('[data-testid="signup-basics"] input').first
-    if box.count():
-        box.fill("5550000001")
-    next_step(p)
+    box.fill("98200 " + str(int(time.time()))[-5:])
+    next_step(p, 2500)
+    code = "".join(p.locator('[data-testid="signup-phone-code-boxes"] input').nth(i).input_value() for i in range(6))
+    p.locator('[data-testid="signup-phone-confirm"]').first.click()
+    p.wait_for_timeout(2500)
 
     # ---- team size: a chip ----
     chips = p.locator('[data-testid^="team-size-"]')

@@ -21,7 +21,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 // sign-offs render in the SAME grid and cards as the task list (a card
 // opened there carries Approve / Request changes / Ask clarification
 // natively); leave uses the LeaveCard the register uses.
-import { LeaveCard } from "./Leave";
+import { LeaveCard, RequestLeaveDialog } from "./Leave";
 import { ScopeSlider } from "../components/karma";
 // ASK-6 (2026-09-12): Leave no longer embedded here. Register lives on
 // Team, approvals live on Desk, config lives on Settings > Operations.
@@ -627,9 +627,14 @@ function ExecutionPlan({ t, onChange, onPatched, members = [], roleOptions = [] 
   useEffect(() => () => clearTimeout(glowTimer.current), []);
   const reduceMotion = useReducedMotion();
 
+  /* Deliberately the two FIELDS rather than t.execution_plan itself: the task
+     is refetched often and arrives as a new object each time, so depending on
+     the object would throw away whatever the person was editing every time a
+     poll landed. updated_at/status are what actually mean "the plan changed". */
   useEffect(() => {
     setSteps(t.execution_plan?.steps || []);
     setEditing(!t.execution_plan || t.execution_plan.status === "draft");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t.execution_plan?.updated_at, t.execution_plan?.status]);
 
   const total = steps.length;
@@ -4297,11 +4302,19 @@ export default function MyWork({ only = null }) {
                 </button>
               )}
             </div>
-            <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members} defaultType={tab}
-              onOpenChange={(o) => { if (o) setOpenId(null); }}
-              /* 2026-09-14, founder — the same black ink pill as the drawer's
-                 Complete and Log update or hand off. */
-              triggerClassName={`${SECTION_BTN} ${INK_PILL}`} />
+            <div className="flex shrink-0 items-center gap-2">
+              {/* 2026-09-19 — asking for time off from where the work is. The
+                  same form as the Leave page; the glass pill, not ink, so
+                  New task stays the page's main action. */}
+              <RequestLeaveDialog
+                onDone={() => qc.invalidateQueries({ queryKey: ["leaves"] })}
+                triggerClassName={`${SECTION_BTN} text-slate-800 transition-colors hover:bg-white ${GLASS_PILL}`} />
+              <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members} defaultType={tab}
+                onOpenChange={(o) => { if (o) setOpenId(null); }}
+                /* 2026-09-14, founder — the same black ink pill as the drawer's
+                   Complete and Log update or hand off. */
+                triggerClassName={`${SECTION_BTN} ${INK_PILL}`} />
+            </div>
           </div>
           {/* ASK-20 (2026-09-13): THE ONLY SCROLLER on desktop. Everything
               above this — page header, lens slider, filter row — is a fixed

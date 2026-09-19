@@ -88,6 +88,8 @@ from models.auth import (  # noqa: F401
     RoleItem, ProductItem, RegisterInput, LoginInput, SwitchWorkspaceInput,
     TotpConfirmInput, TotpVerifyLoginInput, TotpDisableInput, TransferOwnershipInput,
     ProfileUpdateInput, ChangePasswordInput, PasswordForgotInput, PasswordResetInput,
+    PhoneChangeCodeInput,
+    OwnerCredentialsInput,
 )
 
 
@@ -194,6 +196,39 @@ async def register(inp: RegisterInput, request: Request, response: Response,
             "code": "email_registered",
             "message": "This email already has a workspace. Sign in instead, or use a different email.",
         })
+
+    # 2026-09-19 — the founder's mobile is a sign-in (Mobile OTP, the mobile
+    # app) and a route (WhatsApp from it lands here as the owner). It used to
+    # be stored exactly as typed, with nothing stricter than "8 digits" on the
+    # form: a slip locked the founder out of Mobile OTP, and handed whoever
+    # owns the mistyped number an owner's sign-in to this workspace. So it is
+    # confirmed by a texted code at the step where it is typed, and trusted
+    # here only with the proof /signup/phone/verify issued for THAT number.
+    #
+    # 2026-09-19 — a new password is 8+ characters with a letter and a number.
+    # After the recovery above on purpose: an existing password is still valid.
+    from services.auth.passwords import password_problem
+    _pw_problem = password_problem(inp.password)
+    if _pw_problem:
+        raise HTTPException(status_code=400, detail={"code": "password_weak", "message": _pw_problem})
+
+    # Checked after the same-credentials recovery above on purpose: that path
+    # signs an existing account in and writes no phone.
+    from services.auth.phone import valid_indian_mobile, display_indian_mobile
+    from services.auth.phone_proof import read_phone_proof
+    _phone_norm = ""
+    if (inp.phone or "").strip():
+        _phone_norm = valid_indian_mobile(inp.phone)
+        if not _phone_norm:
+            raise HTTPException(status_code=400, detail={
+                "code": "phone_invalid",
+                "message": "Enter a 10-digit Indian mobile number.",
+            })
+        if read_phone_proof(inp.phone_token) != _phone_norm:
+            raise HTTPException(status_code=400, detail={
+                "code": "phone_unverified",
+                "message": "Confirm your mobile number with the code we text you, then create your workspace.",
+            })
     tenant_id = new_id()
     set_usage_tenant(tenant_id)
     bp = normalize_os_blueprint(inp.os_blueprint) if inp.os_blueprint else None
@@ -302,8 +337,10 @@ async def register(inp: RegisterInput, request: Request, response: Response,
     user_id = new_id()
     # FIX-002-A: also write phone_norm so OTP login + WhatsApp routing
     # can query by exact-match on the indexed field.
-    from services.auth.phone import norm_phone
-    _raw_phone = (inp.phone or "").strip()
+    # Stored the way people write it back ("+91 98765 43210"), whatever
+    # arrangement of spaces and prefixes was typed; the lookup key is the
+    # confirmed 10 digits.
+    _raw_phone = display_indian_mobile(_phone_norm) if _phone_norm else ""
     # FIX-003-B (S2-10): DuplicateKeyError-safe insert. If a concurrent
     # request slipped past the pre-check, this insert loses the race
     # at the unique-index level. Roll back the orphan tenant so the
@@ -317,7 +354,8 @@ async def register(inp: RegisterInput, request: Request, response: Response,
     try:
         await db.users.insert_one({
             "id": user_id, "tenant_id": tenant_id, "name": inp.name, "email": email,
-            "phone": _raw_phone, "phone_norm": norm_phone(_raw_phone),
+            "phone": _raw_phone, "phone_norm": _phone_norm,
+            "phone_verified_at": now_iso() if _phone_norm else None,
             "password_hash": hash_password(inp.password), "role": "owner", "created_at": now_iso(),
         })
     except Exception as _register_err:
@@ -880,12 +918,38 @@ async def update_profile(inp: ProfileUpdateInput, user: dict = Depends(get_curre
     if inp.about is not None:
         # One line on what you look after, in your own words.
         updates["about"] = inp.about.strip()[:280] or None
+    # 2026-09-19 (U7-24.14) — a new mobile is saved only with the code texted
+    # to it. It used to be saved on trust after one check (nobody else in the
+    # workspace has it), so a slip locked you out of Mobile OTP and gave the
+    # stranger who owns the mistyped number a sign-in as you, with their
+    # WhatsApp filed as yours; a 5-digit "number" saved too. Signup closed the
+    # same hole the same way (U7-24.11). The code is checked last, just before
+    # the write, so a refusal elsewhere in this form doesn't spend it.
+    _phone_to_confirm = None
     if inp.phone is not None:
-        # Changing your number should re-enable WhatsApp matching for it.
-        from services.auth.phone import norm_phone  # FIX-002-A
-        _new_phone = inp.phone.strip()
-        _new_norm = norm_phone(_new_phone)
-        if _new_norm != norm_phone(user.get("phone") or "") and len(_new_norm) >= 10:
+        from services.auth.phone import norm_phone, valid_indian_mobile, display_indian_mobile
+        _stored = await db.users.find_one({"id": user["id"]}, {"_id": 0, "phone": 1, "phone_norm": 1,
+                                                               "passwordless": 1}) or {}
+        _old_norm = _stored.get("phone_norm") or norm_phone(_stored.get("phone") or "")
+        _typed = inp.phone.strip()
+        if not _typed:
+            if _old_norm:
+                # Taking a number away only narrows what it can do — except for
+                # someone who signs in with nothing else.
+                if _stored.get("passwordless"):
+                    raise HTTPException(status_code=400, detail=(
+                        "You sign in with this number, so it can be changed but not removed."))
+                updates.update({"phone": "", "phone_norm": "", "phone_verified_at": None})
+        elif norm_phone(_typed) == _old_norm:
+            # The whole form comes back on every save, number included. The same
+            # number, however it is written, is not a change — and an old
+            # malformed one is left alone rather than blocking a name edit.
+            pass
+        else:
+            _new_norm = valid_indian_mobile(_typed)
+            if not _new_norm:
+                raise HTTPException(status_code=400, detail={
+                    "code": "phone_invalid", "message": "Enter a 10-digit Indian mobile number."})
             # One mobile, one member, inside this workspace: the number is a
             # sign-in and a WhatsApp route, so taking a colleague's number would
             # send their codes and captures to your account.
@@ -898,9 +962,16 @@ async def update_profile(inp: ProfileUpdateInput, user: dict = Depends(get_curre
                     status_code=400,
                     detail=f"That mobile number is already {clash.get('name')}'s in this workspace.",
                 )
-        updates["phone"] = _new_phone
-        updates["phone_norm"] = _new_norm  # keep index-searchable form in sync
-        updates["wa_phone_obsolete"] = False
+            if not (inp.phone_code or "").strip():
+                raise HTTPException(status_code=400, detail={
+                    "code": "phone_unconfirmed",
+                    "message": "Confirm the new number with the code we text to it."})
+            _phone_to_confirm = (_new_norm, inp.phone_code)
+            updates["phone"] = display_indian_mobile(_new_norm)
+            updates["phone_norm"] = _new_norm  # keep index-searchable form in sync
+            updates["phone_verified_at"] = now_iso()
+            # Changing your number should re-enable WhatsApp matching for it.
+            updates["wa_phone_obsolete"] = False
     if inp.language is not None and inp.language in ("en", "hi", "ta"):
         updates["language"] = inp.language
     if inp.email is not None and inp.email.strip().lower() != (user.get("email") or "").lower():
@@ -910,14 +981,12 @@ async def update_profile(inp: ProfileUpdateInput, user: dict = Depends(get_curre
         # code to your own number, asked the same way the sign-in door asks.
         full = await db.users.find_one({"id": user["id"]})
         if (full or {}).get("passwordless"):
-            from services.auth.phone import norm_phone as _np
-            from services.otp import consume_otp
-            norm = _np((full or {}).get("phone") or "")
-            if len(norm) < 10:
-                raise HTTPException(status_code=400, detail="Add your mobile number first, then change your email.")
-            if not inp.otp_code:
-                raise HTTPException(status_code=400, detail="Enter the code we texted you to confirm the change.")
-            await consume_otp(norm, user["tenant_id"], inp.otp_code)
+            # 2026-09-19 — for someone who signs in by mobile the email is
+            # contact detail, not a key: they have no password to sign in or
+            # reset with it. So it needs no proof. (An owner who came in by
+            # mobile adds email + password together, through
+            # /auth/owner-credentials.)
+            pass
         else:
             if not inp.current_password or not verify_password(inp.current_password, (full or {}).get("password_hash", "")):
                 raise HTTPException(status_code=400, detail="Enter your current password to change your email")
@@ -928,11 +997,119 @@ async def update_profile(inp: ProfileUpdateInput, user: dict = Depends(get_curre
         updates["email_verified_at"] = None
     if not updates:
         raise HTTPException(status_code=400, detail="Nothing to update")
+    if _phone_to_confirm:
+        from services.otp import consume_otp
+        await consume_otp(_phone_to_confirm[0], _profile_phone_scope(user["id"]), _phone_to_confirm[1])
     updates["updated_at"] = now_iso()
-    await db.users.update_one({"id": user["id"]}, {"$set": updates})
+    # Saving your details at all is what the one-time welcome card asks for, so
+    # it clears the card in the same write — one request, nothing to leave half
+    # done if they move on before a second call lands (2026-09-19).
+    await db.users.update_one({"id": user["id"]}, {"$set": updates, "$unset": {"welcome_pending": ""}})
     fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0, "password": 0})
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
     return {"user": fresh, "tenant": tenant}
+
+
+def _profile_phone_scope(user_id: str) -> str:
+    """Where a change-your-mobile code lives in otp_codes. Its own scope, not
+    the workspace's: a sign-in code for the new number (if it already signs in
+    elsewhere) must not confirm this change, and this code must never sign
+    anyone in."""
+    return f"profile:{user_id}"
+
+
+# One person, and one number, can be texted this many change codes an hour.
+_PHONE_CHANGE_CODES_PER_USER = (10, 3600)
+_PHONE_CHANGE_CODES_PER_NUMBER = (5, 3600)
+
+
+@router.post("/phone/send-code")
+async def send_phone_change_code(inp: PhoneChangeCodeInput, user: dict = Depends(get_current_user)):
+    """Text a code to the mobile you want to switch to (2026-09-19, U7-24.14).
+
+    Signed-in only, and it answers the questions Save would, before anything is
+    texted: is it a mobile, is it actually different, is it a colleague's.
+    """
+    from services.auth.phone import norm_phone, valid_indian_mobile, display_indian_mobile
+    from services.rate_limit import check_rate_limit
+    from services.otp import _issue_otp
+    norm = valid_indian_mobile(inp.phone)
+    if not norm:
+        raise HTTPException(status_code=400, detail="Enter a 10-digit Indian mobile number")
+    stored = await db.users.find_one({"id": user["id"]}, {"_id": 0, "phone": 1, "phone_norm": 1}) or {}
+    if norm == (stored.get("phone_norm") or norm_phone(stored.get("phone") or "")):
+        raise HTTPException(status_code=400, detail="That's already your number.")
+    clash = await db.users.find_one(
+        {"tenant_id": user["tenant_id"], "phone_norm": norm, "id": {"$ne": user["id"]}},
+        {"_id": 0, "name": 1},
+    )
+    if clash:
+        raise HTTPException(status_code=400,
+                            detail=f"That mobile number is already {clash.get('name')}'s in this workspace.")
+    for key, (limit, window), bucket in (
+        (user["id"], _PHONE_CHANGE_CODES_PER_USER, "profile_phone_code_user"),
+        (norm, _PHONE_CHANGE_CODES_PER_NUMBER, "profile_phone_code_number"),
+    ):
+        ok, retry_after = await check_rate_limit(key, limit, window, bucket=bucket)
+        if not ok:
+            mins = max(1, round(retry_after / 60))
+            raise HTTPException(
+                status_code=429,
+                detail=f"That's a lot of codes in an hour. Try again in about {mins} minute{'s' if mins != 1 else ''}.",
+                headers={"Retry-After": str(retry_after)},
+            )
+    resp = await _issue_otp(norm, norm, tenant_id=_profile_phone_scope(user["id"]))
+    resp.pop("tenant_id", None)
+    resp["phone"] = display_indian_mobile(norm)
+    return resp
+
+
+@router.post("/owner-credentials")
+async def set_owner_credentials(inp: OwnerCredentialsInput, request: Request,
+                                user: dict = Depends(get_current_user)):
+    """An owner who came in by mobile adds an email and password (2026-09-19).
+
+    Members sign in with their mobile only; owners have both, because the owner
+    is who recovers everyone else. Someone added on Team as an owner, or
+    promoted to one, arrives mobile-only — this is where they finish. Asked
+    for by a full-screen step in the app until done (OwnerCredentialsGate.js).
+    """
+    if user.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Only owners add an email and password here.")
+    full = await db.users.find_one({"id": user["id"]}) or {}
+    if not full.get("passwordless") and full.get("email"):
+        raise HTTPException(status_code=400, detail="You already sign in with an email and password.")
+    from services.auth.passwords import password_problem
+    problem = password_problem(inp.password)
+    if problem:
+        raise HTTPException(status_code=400, detail=problem)
+    email = inp.email.strip().lower()
+    if await db.users.find_one({"email": email, "id": {"$ne": user["id"]}}, {"_id": 0, "id": 1}):
+        raise HTTPException(status_code=400, detail="That email is already used by another account")
+    await db.users.update_one({"id": user["id"]}, {"$set": {
+        "email": email, "password_hash": hash_password(inp.password), "passwordless": False,
+        "email_verified_at": None if email != (full.get("email") or "") else full.get("email_verified_at"),
+        "updated_at": now_iso()}})
+    # Best-effort: the link that confirms the address, as registration sends.
+    try:
+        from services.auth import auth_emails
+        from services.email import send_email
+        row = await auth_emails.issue(db, kind=auth_emails.KIND_EMAIL_VERIFY,
+                                      user_id=user["id"], tenant_id=user["tenant_id"], email=email)
+        await send_email(email, "Verify your DecisionOS email",
+                         auth_emails.render_verify_email(full.get("name") or "",
+                                                         f"{_app_base_url()}/verify-email?token={row['token']}"))
+    except Exception:
+        pass
+    fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
+    return {"user": fresh}
+
+
+@router.post("/welcome/done")
+async def welcome_done(user: dict = Depends(get_current_user)):
+    """The member's one-time welcome card was saved or put off (2026-09-19)."""
+    await db.users.update_one({"id": user["id"]}, {"$unset": {"welcome_pending": ""}})
+    return {"ok": True}
 
 
 @router.post("/change-password")
@@ -942,6 +1119,10 @@ async def change_password(inp: ChangePasswordInput, user: dict = Depends(get_cur
     full = await db.users.find_one({"id": user["id"]})
     if not full or not verify_password(inp.current_password, full.get("password_hash", "")):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
+    from services.auth.passwords import password_problem
+    _pw_problem = password_problem(inp.new_password)
+    if _pw_problem:
+        raise HTTPException(status_code=400, detail=_pw_problem)
     if inp.new_password == inp.current_password:
         raise HTTPException(status_code=400, detail="New password must be different from your current password")
     await db.users.update_one(
@@ -1053,6 +1234,11 @@ async def password_reset(inp: PasswordResetInput):
     reset.
     """
     from services.auth import auth_emails
+    # The rule first, so a weak choice doesn't spend the link.
+    from services.auth.passwords import password_problem
+    _pw_problem = password_problem(inp.new_password)
+    if _pw_problem:
+        raise HTTPException(status_code=400, detail=_pw_problem)
     row = await auth_emails.consume(
         db, token=inp.token, kind=auth_emails.KIND_PASSWORD_RESET,
     )

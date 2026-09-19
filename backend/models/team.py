@@ -11,10 +11,13 @@ ABSENCE_REASONS = {"sick", "family_emergency", "personal", "other"}
 
 class UserCreateInput(BaseModel):
     name: str
-    email: str
+    # 2026-09-19 — members sign in with their mobile and a texted code, so an
+    # email is contact detail only and may be left out. The mobile is required.
+    email: Optional[str] = None
     role: str
     phone: Optional[str] = ""
-    password: Optional[str] = None            # empty ⇒ passwordless (mobile-OTP only) member
+    # Refused if sent: a password a manager chose is one the manager knows.
+    password: Optional[str] = None
     permissions: Optional[List[str]] = None
     reporting_manager_id: Optional[str] = None
     title: Optional[str] = None               # job title on the Team tree, e.g. "Sales Lead"

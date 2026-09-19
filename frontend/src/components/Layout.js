@@ -24,7 +24,6 @@ import {
   Wallet,
   Gauge, // Epic 2 E2-15: Ops nav entry (Operating Score)
   UsersThree, // Epic 2 E2-01: Team nav entry (Employees list)
-  MagnifyingGlass, // KR-5: the search circle that opens the ⌘K dialog
 } from "@phosphor-icons/react";
 // KR-5/KR-8.2 — the Karma shell pieces.
 import { PillNav } from "./karma";
@@ -34,6 +33,9 @@ import { ProfileDialog } from "./ProfileDialog";
 import AnnouncementBanner from "./AnnouncementBanner";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { WelcomeOverlay } from "./WelcomeOverlay";
+// 2026-09-19 — members sign in by mobile; owners also have email + password.
+import OwnerCredentialsGate from "./auth/OwnerCredentialsGate";
+import WelcomeMemberCard from "./auth/WelcomeMemberCard";
 // MPWA-03: mobile navigation is the floating dock + All Apps panel. The
 // edge-to-edge tab bar and the hamburger drawer are both gone below lg.
 import { FloatingDock } from "./mobile/FloatingDock";
@@ -556,6 +558,10 @@ export default function Layout({ children }) {
           is the Dex sky, and artwork must not drift. */}
       <div className="app-sky__art" aria-hidden="true" />
       <WelcomeOverlay />
+      {/* An owner who came in by mobile adds an email and password first;
+          a member's first screen asks them to check their details. */}
+      <OwnerCredentialsGate />
+      <WelcomeMemberCard />
       {/* KR-5 — the Karma header. Three tracks: logo · centred pill nav ·
           circular controls + the avatar block. The reference's shell exactly,
           which also KILLS two prior decisions on purpose:
@@ -595,11 +601,48 @@ export default function Layout({ children }) {
           (88 - P - 40) / 2, and setting that equal to the gap below the pills
           (74.73 - 40 - top) solves to P = 13.26. */}
       <header
-        className="kr-navplate hidden lg:grid h-[88px] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 pb-[13px] bg-transparent"
+        /* minmax(0,1fr) on the LEFT track only. A bare 1fr has an `auto`
+           minimum, so the workspace name grew the cell to its own max-content
+           and ran on underneath the nav plate instead of ellipsing — measured
+           at 1280 with a long name, the cell's right edge was 687 against a
+           nav starting at 371. The right track keeps its auto minimum on
+           purpose: the controls in it are fixed-size and must never be
+           squeezed, and with room to spare both tracks still take an equal
+           share, so the pills stay on the centre line. */
+        className="kr-navplate hidden lg:grid h-[88px] shrink-0 grid-cols-[minmax(0,1fr)_auto_1fr] items-center gap-4 px-6 pb-[13px] bg-transparent"
         style={navW ? { "--navplate-w": `${navW}px` } : undefined}
       >
-        <div className="flex items-center justify-self-start">
-          <KarmaLogo />
+        {/* 2026-09-19, founder — the workspace's name sits after the wordmark,
+            a pipe between them: the left cell of this header has been empty
+            since the rail went, and which company you are looking at was
+            otherwise only inside the account menu. min-w-0 + truncate because
+            this cell is a 1fr grid track — a long workspace name has to cut
+            rather than push the centred pill strip off its axis. */}
+        {/* NO justify-self here. With `justify-self: start` the cell is sized
+            shrink-to-fit, which resolved to its max-content and left the flex
+            box wider than its own grid track — so nothing ever pressed on the
+            name and the ellipsis could not engage, however many min-w-0s were
+            added inside it (measured: a 740px cell in a 373px track). Letting
+            it stretch makes the box exactly the track, and the content still
+            sits left because flex-start is the default. */}
+        <div className="flex min-w-0 items-center gap-2.5 overflow-hidden">
+          <KarmaLogo className="shrink-0" />
+          {tenant?.name && (
+            <>
+              <span aria-hidden="true" className="shrink-0 select-none text-[17px] font-light leading-none text-foreground/25">|</span>
+              {/* min-w-0 on the SPAN, not only on the flex box around it.
+                  `truncate` sets overflow/ellipsis/nowrap but NOT min-width,
+                  and a flex item defaults to min-width:auto — so without this
+                  the name refuses to shrink below its longest word, overflows
+                  its grid track and runs on under the nav plate. The wordmark
+                  and the pipe are shrink-0 so the name is the only thing that
+                  gives. */}
+              <span data-testid="header-workspace" title={tenant.name}
+                className="min-w-0 truncate text-[15px] font-medium leading-none text-foreground/70">
+                {tenant.name}
+              </span>
+            </>
+          )}
         </div>
 
         <PillNav
@@ -618,16 +661,10 @@ export default function Layout({ children }) {
         />
 
         <div className="flex items-center gap-2.5 justify-self-end">
-          <button
-            type="button"
-            data-testid="global-search-open"
-            aria-label={t("header.search_ph", "Find anything…")}
-            title={`${t("header.search_ph", "Find anything…")} (⌘K)`}
-            onClick={() => setSearchOpen(true)}
-            className="h-10 w-10 rounded-full border border-kr-ink/55 grid place-items-center text-foreground/90 transition-colors hover:bg-white/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
-          >
-            <MagnifyingGlass size={18} weight="regular" />
-          </button>
+          {/* 2026-09-19, founder — the global search circle is HIDDEN. Only
+              the button: ⌘K still opens the same dialog (the key handler and
+              CommandDialog below are untouched), so nothing is lost, and this
+              is one line to put back. */}
           <LanguageSwitcher />
           <Bellicon />
 

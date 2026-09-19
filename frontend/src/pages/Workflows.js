@@ -303,9 +303,10 @@ function OverrideReasonDialog({ open, onOpenChange, wfTitle, blockedReason, targ
    two visual weights for what is really one control strip.
    The action is .kr-pop, not a filled slab: it is the page's own control, and
    the app paints those in depth rather than in fill. */
-function StandaloneHeader({ show, title, pipelines, activeKey, counts, onPick, newDialog }) {
+function StandaloneHeader({ show, title, pipelines, activeKey, countOf, onPick, newDialog }) {
   if (!show) return null;
   const active = pipelines.find((p) => p.key === activeKey);
+  const activeCount = countOf(activeKey);
   return (
     <StickyHeader className="mb-3 flex flex-col gap-6 lg:hidden" data-testid="workflows-mobile-header">
       <h1 className="font-display text-3xl">{title}</h1>
@@ -317,6 +318,12 @@ function StandaloneHeader({ show, title, pipelines, activeKey, counts, onPick, n
               className="kr-pop flex h-11 min-w-0 flex-1 items-center gap-2 rounded-pill px-4 text-sm font-medium">
               <ListBullets size={16} weight="bold" aria-hidden="true" className="shrink-0" />
               <span className="min-w-0 flex-1 truncate text-left">{active?.label || "Pipeline"}</span>
+              {/* 2026-09-19 — the phone showed which pipeline, never how many. */}
+              {activeCount != null && (
+                <span className="shrink-0 font-mono text-xs tabular-nums opacity-60" data-testid="workflows-pipeline-menu-count">
+                  {activeCount}
+                </span>
+              )}
               <CaretDown size={12} weight="bold" aria-hidden="true" className="shrink-0 opacity-60" />
             </button>
           </DropdownMenuTrigger>
@@ -327,9 +334,7 @@ function StandaloneHeader({ show, title, pipelines, activeKey, counts, onPick, n
                 data-testid={`workflows-pipeline-${pip.key}`}
                 className={`${GLASS_MENU_ITEM} justify-between gap-3 ${activeKey === pip.key ? "font-semibold text-slate-900" : ""}`}>
                 <span>{pip.label}</span>
-                <span className="tabular-nums text-xs text-slate-500">
-                  {counts.filter((w) => w.type === pip.key).length}
-                </span>
+                <span className="tabular-nums text-xs text-slate-500">{countOf(pip.key) ?? ""}</span>
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -374,6 +379,19 @@ export default function Workflows() {
     queryKey: ["workflows", activeKey, "with_tasks"],
     queryFn: () => api.get(`/workflows?type=${activeKey}&with_tasks=true`).then((r) => r.data),
   });
+  /* 2026-09-19 — every pipeline's count, from the server. The board above
+     loads one pipeline at a time, and the counts used to be taken from that
+     one list: the pipeline on screen showed its number and every other one
+     showed 0 until you clicked it (desktop pills and the phone's menu alike). */
+  const { data: pipelineCounts } = useQuery({
+    queryKey: ["workflows-counts"],
+    queryFn: () => api.get("/workflows/counts").then((r) => r.data),
+  });
+  // Until the counts arrive, the pipeline on screen can still say its own
+  // number; the others say nothing rather than a wrong 0.
+  const countOf = (key) => (pipelineCounts
+    ? (pipelineCounts[key] || 0)
+    : (key === activeKey && data ? data.length : null));
 
   useEffect(() => {
     if (!focusWf || !data) return;
@@ -408,6 +426,7 @@ export default function Workflows() {
 
   const refresh = useCallback(() => {
     qc.invalidateQueries({ queryKey: ["workflows", activeKey, "with_tasks"] });
+    qc.invalidateQueries({ queryKey: ["workflows-counts"] });
     qc.invalidateQueries({ queryKey: ["dashboard"] });
     qc.invalidateQueries({ queryKey: ["tasks"] });
   }, [qc, activeKey]);
@@ -501,7 +520,7 @@ export default function Workflows() {
         title={t("workflows.title")}
         pipelines={pipelines}
         activeKey={activeKey}
-        counts={data || []}
+        countOf={countOf}
         onPick={(k) => setTab(k)}
         newDialog={
           <NewWorkflowDialog
@@ -526,7 +545,7 @@ export default function Workflows() {
             above takes over. */}
         <div className="hidden flex-wrap items-center gap-2 lg:flex" data-testid="workflow-pipelines">
           {pipelines.map((pip) => {
-            const count = (data || []).filter((w) => w.type === pip.key).length;
+            const count = countOf(pip.key);
             const active = activeKey === pip.key;
             return (
               /* KR-11.3 — neumorphic, not hairline. The founder could not tell
@@ -545,7 +564,9 @@ export default function Workflows() {
                   active ? "kr-pressed font-semibold text-foreground" : "kr-pop text-foreground/75"
                 }`}>
                 {pip.label}
-                <span className={`font-mono text-xs tabular-nums ${active ? "opacity-70" : "opacity-55"}`}>{count}</span>
+                {count != null && (
+                  <span className={`font-mono text-xs tabular-nums ${active ? "opacity-70" : "opacity-55"}`}>{count}</span>
+                )}
               </button>
             );
           })}

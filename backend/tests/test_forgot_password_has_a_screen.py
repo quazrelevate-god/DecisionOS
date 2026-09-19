@@ -116,5 +116,7 @@ def test_both_forms_write_their_own_error_line():
 def test_the_new_password_is_checked_before_the_round_trip():
     page = _fe("pages", "PasswordReset.js")
     body = page[page.index("export function ResetPassword"):]
-    assert "pw.length < 6" in body, "the API's own floor, said early"
+    # 2026-09-19 — the rule is 8+ with a letter and a number, shared with the
+    # server (lib/password.js / services/auth/passwords.py).
+    assert "passwordProblem(pw)" in body, "the API's own rule, said early"
     assert "pw !== confirm" in body, "and the two fields have to agree"

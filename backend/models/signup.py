@@ -45,3 +45,13 @@ class InterviewRefineInput(BaseModel):
 class TTSInput(BaseModel):
     text: str = Field(max_length=1200)
     language_code: Optional[str] = Field(default="en-IN", max_length=16)
+
+
+# 2026-09-19 — confirming the founder's mobile at the step where it is typed.
+class PhoneCodeInput(BaseModel):
+    phone: str = Field(max_length=32)
+
+
+class PhoneVerifyInput(BaseModel):
+    phone: str = Field(max_length=32)
+    code: str = Field(max_length=12)

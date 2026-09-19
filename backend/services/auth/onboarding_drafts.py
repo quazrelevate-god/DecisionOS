@@ -132,6 +132,9 @@ def merge_draft_into_register_input(draft: dict, provided: dict) -> dict:
         ("name", about.get("name")),
         ("email", about.get("email")),
         ("phone", about.get("phone")),
+        # 2026-09-19 — the proof that number was confirmed rides with it, so a
+        # resumed signup doesn't have to text the founder again.
+        ("phone_token", about.get("phone_token")),
         ("industry", about.get("industry")),
         ("description", about.get("description")),
         ("region", about.get("region")),

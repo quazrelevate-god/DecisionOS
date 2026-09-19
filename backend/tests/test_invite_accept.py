@@ -89,7 +89,7 @@ def test_otp_sign_in_accepts_the_pending_invite(with_test_db):
         try:
             await _seed_invited(db)
             await aotp.invite_start("tok-invite")
-            await aotp.verify_otp(OtpVerifyInput(phone=PHONE, code=CODE), Response())
+            await aotp.verify_otp(OtpVerifyInput(phone=PHONE, code=CODE, invite_token="tok-invite"), Response())
             row = await find_membership(db, "u-invited", "tA")
             live = await find_membership(db, "u-invited", "tA", statuses=LIVE_STATUSES)
             # get_current_user's other door: with a membership row present the
@@ -139,7 +139,7 @@ def test_a_full_workspace_still_admits_someone_already_invited(with_test_db):
                                         role="sales", permissions=[], status=STATUS_ACTIVE)
             await db.tenants.update_one({"id": "tA"}, {"$set": {"seats_used": 3}})
             await aotp.invite_start("tok-invite")
-            await aotp.verify_otp(OtpVerifyInput(phone=PHONE, code=CODE), Response())
+            await aotp.verify_otp(OtpVerifyInput(phone=PHONE, code=CODE, invite_token="tok-invite"), Response())
             row = await find_membership(db, "u-invited", "tA")
             tenant = await db.tenants.find_one({"id": "tA"}, {"_id": 0, "seats_used": 1})
             return row["status"], tenant.get("seats_used")
@@ -216,7 +216,7 @@ def test_invite_link_keeps_the_otp_cooldown_without_dead_ending(with_test_db):
             row2 = await db.otp_codes.find_one({"phone": PHONE}, {"_id": 0})
             n = await db.otp_codes.count_documents({"phone": PHONE})
             # the code from the FIRST send still works
-            await aotp.verify_otp(OtpVerifyInput(phone=PHONE, code=CODE), Response())
+            await aotp.verify_otp(OtpVerifyInput(phone=PHONE, code=CODE, invite_token="tok-invite"), Response())
             return (first.get("phone"), second.get("phone"), second.get("name"),
                     row1["created_at"] == row2["created_at"], n)
         finally:

@@ -54,7 +54,12 @@ export default function Signup() {
   const navigate = useNavigate();
 
   const [phase, setPhase] = useState("basics");
-  const [form, setForm] = useState({ company_name: "", name: "", email: "", password: "", phone: "", team_size: "" });
+  const [form, setForm] = useState({
+    company_name: "", name: "", email: "", password: "", phone: "", team_size: "",
+    // 2026-09-19 — the proof the mobile was confirmed by a texted code; register
+    // refuses a phone without one (services/auth/phone_proof.py).
+    phone_token: "", phone_verified_norm: "", phone_token_expires_at: "",
+  });
   // 2026-09-17 — signup is saved as it goes, so closing the tab is not starting
   // over. The password is the one thing never stored (the draft store refuses
   // it), so a returning founder is put back on that step with the rest filled.
@@ -95,7 +100,7 @@ export default function Signup() {
         // Reopen at the first answer that is missing — which is the password,
         // every time, because it is never saved.
         const order = ["company_name", "name", "email", "password", "phone", "team_size"];
-        const firstGap = order.findIndex((k) => k !== "phone" && !String(saved[k] || "").trim());
+        const firstGap = order.findIndex((k) => !String(saved[k] || "").trim());
         setBasicsStart(firstGap === -1 ? 0 : firstGap);
         setResumed(true);
       }
@@ -242,6 +247,8 @@ export default function Signup() {
                     saveStep("about", {
                       company_name: whole.company_name, name: whole.name,
                       email: whole.email, phone: whole.phone,
+                      phone_token: whole.phone_token, phone_verified_norm: whole.phone_verified_norm,
+                      phone_token_expires_at: whole.phone_token_expires_at,
                     });
                   }
                 }}
@@ -271,7 +278,14 @@ export default function Signup() {
                 sessionId={sessionId} languageCode={languageCode} payload={buildPayload}
                 register={register} signIn={login} onEnter={enterApp}
                 savedBlueprint={savedBlueprint}
-                onBlueprint={(bp) => saveStep("os_blueprint", bp)} />
+                onBlueprint={(bp) => { setSavedBlueprint(bp); saveStep("os_blueprint", bp); }}
+                /* The mobile's proof lapsed while they sat on this screen (it
+                   lasts a day). Back to that one step, then straight back here
+                   to the OS they built — not through the interview again. */
+                onFixPhone={() => {
+                  setForm((f) => ({ ...f, phone_token: "", phone_verified_norm: "", phone_token_expires_at: "" }));
+                  setBasicsStart(4); setResumed(false); setPhase("basics");
+                }} />
             )}
           </motion.div>
         </AnimatePresence>

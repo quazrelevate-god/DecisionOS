@@ -193,6 +193,10 @@ export function DocumentsPanel() {
       setLoading(false);
     }
   };
+  // `load` is redeclared every render and closes over q/kind, so listing it
+  // would re-run this on every render — an endless refetch. Typing in the
+  // search box calls load() itself, debounced, just below.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); /* initial load */ }, []);
 
   const onQChange = (v) => {

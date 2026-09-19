@@ -19,9 +19,11 @@ import { useUiScale } from "./hooks/useUiScale";
 import Workflows from "./pages/Workflows";
 // ASK-42 B — /approvals is a room of its own now, not a redirect into My Work.
 import Approvals from "./pages/Approvals";
-// ASK-6 (2026-09-12): Leave default export no longer routed. The named
-// exports (LeaveCard, ApproverConfig, dialogs) are consumed directly by
-// Desk / Team / Settings; nothing renders /leave any more.
+// 2026-09-19 — /leave is YOUR leave again: raise a request, report an
+// absence, see every request you have made. (ASK-6 had retired it to Team,
+// which left a phone with no way to ask for time off.) Approving stays in
+// Approvals; the company's register stays on Team.
+import Leave from "./pages/Leave";
 // E2-73 (2026-08-15): legacy Inbox.js retired. Sprint 2 shipped the
 // new Decision Desk at /inbox; the old Inbox page had no users left.
 // /inbox-legacy now redirects to /inbox so any lingering bookmarks work.
@@ -201,11 +203,10 @@ function App() {
             <Route path="/brief" element={<Navigate to="/inbox?scope=morning" replace />} />
             <Route path="/journal" element={<Protected ownerOnly><Journal /></Protected>} />
             <Route path="/my-work" element={<Protected><MyWork /></Protected>} />
-            {/* ASK-6 (2026-09-12): /leave retired. Register moves to Team,
-                approvals move to the Decision Desk, per-department config
-                moves to Settings > Operations. Deep links land readers on
-                /team, which is now the home for the leave register. */}
-            <Route path="/leave" element={<Navigate to="/team" replace />} />
+            {/* 2026-09-19 — your leave: request, absence, history. The
+                register stays on Team, approving in Approvals, per-department
+                approvers in Settings > Operations. */}
+            <Route path="/leave" element={<Protected><Leave /></Protected>} />
             {/* ASK-25 F3 — the approvals that aren't decisions (task sign-offs
                 and leave) live as a view inside My Work, beside My Tasks /
                 All Tasks / Workflows. The standalone path stays as a deep

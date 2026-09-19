@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, ArrowLeft, Eye, EyeSlash } from "@phosphor-icons/react";
-import api from "../../lib/api";
+import { toast } from "sonner";
+import api, { formatApiError } from "../../lib/api";
+import { normIndianMobile, displayIndianMobile } from "../../lib/phone";
+import OtpBoxes from "../../components/auth/OtpBoxes";
+import { passwordProblem } from "../../lib/password";
 // ASK-36 5 — the app's one loading animation.
 import { Loader } from "../../components/common";
 
@@ -34,16 +38,25 @@ const STEPS = [
     checkEmail: true,
   },
   {
-    key: "password", eyebrow: "Sign-in", type: "password", placeholder: "Minimum 6 characters",
+    key: "password", eyebrow: "Sign-in", type: "password", placeholder: "8+ characters, a letter and a number",
     q: () => "Set a password for your executive office.",
-    sub: () => "You can also sign in with mobile OTP later.",
-    validate: (v) => (v.length >= 6 ? "" : "At least 6 characters, please"),
+    sub: () => "As the owner you'll sign in with this or your mobile. Your team signs in with their mobile.",
+    // 2026-09-19 — 8+ characters with a letter and a number (lib/password.js).
+    validate: (v) => passwordProblem(v),
   },
+  /* 2026-09-19 — required, a real Indian mobile, and confirmed by a texted
+     code before we move on. It is how the founder signs in on the mobile app
+     (Mobile OTP), and WhatsApp from it lands in the workspace as them. It used
+     to be optional with an "8 digits" check and stored on trust: a slip locked
+     the founder out of Mobile OTP and gave whoever owns the mistyped number an
+     owner's sign-in. The email stays the business address for support and
+     receipts; this is the phone in their hand. */
   {
-    key: "phone", eyebrow: "Optional", type: "tel", placeholder: "+91 98765 43210", optional: true,
+    key: "phone", eyebrow: "Mobile sign-in", type: "tel", placeholder: "+91 98765 43210",
     q: () => "Your mobile number?",
-    sub: () => "For one-tap OTP login and WhatsApp updates. Skip if you like.",
-    validate: (v) => (!v.trim() || v.replace(/\D/g, "").length >= 8 ? "" : "That number looks too short"),
+    sub: () => "You'll sign in with it on the mobile app. We'll text a code to confirm it's yours.",
+    validate: (v) => (normIndianMobile(v) ? "" : "Enter a 10-digit Indian mobile number"),
+    confirmByCode: true,
   },
   {
     key: "team_size", eyebrow: "Your team", type: "chips",
@@ -65,9 +78,72 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
   const [showPw, setShowPw] = useState(false);
+  // The mobile step's second half: the number a code was texted to (""
+  // while the number is still being typed), what they have entered, and
+  // the resend clock (30s, the server's own cooldown).
+  const [codeFor, setCodeFor] = useState("");
+  const [code, setCode] = useState("");
+  const [resendIn, setResendIn] = useState(0);
+  const [sending, setSending] = useState(false);
   const inputRef = useRef(null);
   const step = STEPS[idx];
   const value = form[step.key] || "";
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn((n) => n - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
+
+  /* A proof we already hold for exactly this number, with time to spare —
+     a resumed signup, or Back then Continue — means no second text. Five
+     minutes of margin so it cannot lapse between here and Create. */
+  const alreadyConfirmed = (norm) =>
+    !!norm && form.phone_verified_norm === norm && !!form.phone_token &&
+    (!form.phone_token_expires_at || new Date(form.phone_token_expires_at).getTime() > Date.now() + 5 * 60 * 1000);
+
+  const next = (whole) => {
+    setError("");
+    onStepSaved?.(step.key, whole[step.key], whole);
+    if (idx + 1 >= STEPS.length) onDone();
+    else setIdx(idx + 1);
+  };
+
+  const sendCode = async (norm) => {
+    setSending(true); setError("");
+    try {
+      const { data } = await api.post("/signup/phone/send-code", { phone: norm });
+      setCodeFor(norm);
+      setCode(data.dev_otp || "");
+      setResendIn(30);
+      if (data.dev_otp) toast.info(`Dev OTP: ${data.dev_otp} (auto-filled)`);
+    } catch (e) {
+      setError(formatApiError(e.response?.data?.detail) || "Couldn't text a code. Try again in a moment.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const confirmCode = async (typed) => {
+    const c = (typed ?? code).trim();
+    if (c.length !== 6 || sending) return;
+    setSending(true); setError("");
+    try {
+      const { data } = await api.post("/signup/phone/verify", { phone: codeFor, code: c });
+      const whole = {
+        ...form, phone: data.phone, phone_token: data.phone_token,
+        phone_verified_norm: codeFor, phone_token_expires_at: data.expires_at,
+      };
+      setForm(whole);
+      setCodeFor(""); setCode(""); setResendIn(0);
+      next(whole);
+    } catch (e) {
+      setCode("");
+      setError(formatApiError(e.response?.data?.detail) || "That code didn't work. Try again.");
+    } finally {
+      setSending(false);
+    }
+  };
 
   useEffect(() => {
     const t = setTimeout(() => inputRef.current?.focus(), 380);
@@ -78,6 +154,12 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
     const v = override !== undefined ? override : value;
     const err = step.validate(v);
     if (err) { setError(err); return; }
+    if (step.confirmByCode) {
+      const norm = normIndianMobile(v);
+      if (alreadyConfirmed(norm)) { next({ ...form, [step.key]: displayIndianMobile(norm) }); return; }
+      await sendCode(norm);
+      return;
+    }
     if (step.checkEmail) {
       setChecking(true);
       try {
@@ -93,7 +175,10 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
     else setIdx(idx + 1);
   };
 
-  const back = () => { if (idx > 0) { setError(""); setIdx(idx - 1); } };
+  const back = () => {
+    if (codeFor) { setCodeFor(""); setCode(""); setError(""); return; }   // back to the number
+    if (idx > 0) { setError(""); setIdx(idx - 1); }
+  };
   const setVal = (v) => { setForm((f) => ({ ...f, [step.key]: v })); if (error) setError(""); };
 
   return (
@@ -117,9 +202,11 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
             {step.eyebrow}
           </p>
           <h1 className="mb-2 font-display text-3xl leading-[1.04] sm:text-4xl lg:text-5xl">
-            {step.q(form)}
+            {step.confirmByCode && codeFor ? "Enter the code we just texted you." : step.q(form)}
           </h1>
-          <p className="mb-7 text-sm text-muted-foreground">{step.sub(form)}</p>
+          <p className="mb-7 text-sm text-muted-foreground">
+            {step.confirmByCode && codeFor ? "Six digits. It works for five minutes." : step.sub(form)}
+          </p>
 
           {step.type === "chips" ? (
             <div className="flex flex-wrap gap-3" data-testid="signup-team-size-chips">
@@ -139,6 +226,42 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
                 </motion.button>
               ))}
             </div>
+          ) : step.confirmByCode && codeFor ? (
+            <div data-testid="signup-phone-code">
+              <div className="kr-pressed flex items-center justify-between gap-3 rounded-pill px-4 py-2.5">
+                <span className="truncate text-sm">
+                  Code sent to <strong data-testid="signup-phone-code-to">{displayIndianMobile(codeFor)}</strong>
+                </span>
+                <button type="button" onClick={back} data-testid="signup-phone-change"
+                  className="shrink-0 text-xs font-semibold text-foreground/80 underline underline-offset-2 hover:text-foreground">
+                  Change number
+                </button>
+              </div>
+              <div className="mt-5 max-w-sm">
+                <OtpBoxes value={code} disabled={sending} testid="signup-phone-code-boxes"
+                  onChange={(v) => { setCode(v); if (error) setError(""); if (v.length === 6) confirmCode(v); }} />
+              </div>
+              <div className="mt-8 flex flex-wrap items-center gap-4">
+                <motion.button onClick={() => confirmCode()} disabled={sending || code.length !== 6}
+                  data-testid="signup-phone-confirm"
+                  whileHover={{ y: -2, scale: 1.03 }} whileTap={{ scale: 0.98 }}
+                  className="kr-pop flex h-12 items-center gap-2 rounded-pill bg-kr-ink px-8 text-sm font-medium text-white disabled:opacity-50">
+                  {sending ? <Loader size={18} /> : null}
+                  Confirm <ArrowRight size={16} weight="bold" />
+                </motion.button>
+                {resendIn > 0 ? (
+                  <span className="text-xs text-muted-foreground" data-testid="signup-phone-resend-wait">
+                    Text it again in <span className="font-semibold tabular-nums">{resendIn}s</span>
+                  </span>
+                ) : (
+                  <button type="button" onClick={() => sendCode(codeFor)} disabled={sending}
+                    data-testid="signup-phone-resend"
+                    className="text-xs font-semibold text-foreground/80 underline underline-offset-2 hover:text-foreground disabled:opacity-50">
+                    Didn&apos;t get it? Text it again
+                  </button>
+                )}
+              </div>
+            </div>
           ) : (
             <div className="relative">
               <input
@@ -155,6 +278,11 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
                    ink says "focus" without dressing up as a border. */
                 className="kr-pressed w-full rounded-2xl bg-transparent px-5 py-4 pr-14 text-xl font-semibold tracking-tight placeholder:font-normal placeholder:text-foreground/25 focus:outline-none focus:ring-1 focus:ring-foreground/40 sm:text-2xl"
               />
+              {step.confirmByCode && alreadyConfirmed(normIndianMobile(value)) && (
+                <p className="mt-3 text-sm font-medium text-success-600" data-testid="signup-phone-confirmed">
+                  Confirmed — no need for another code.
+                </p>
+              )}
               {step.type === "password" && (
                 <button type="button" onClick={() => setShowPw(!showPw)} data-testid="signup-toggle-password"
                   aria-label={showPw ? "Hide password" : "Show password"}
@@ -168,17 +296,19 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
           {error && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} data-testid="signup-basics-error"
             className="mt-3 text-sm font-semibold text-danger-600">{error}</motion.p>}
 
-          {step.type !== "chips" && (
+          {step.type !== "chips" && !(step.confirmByCode && codeFor) && (
             <div className="mt-8 flex items-center gap-4">
               {/* KM-66 follow-up: Continue elevates on hover. -2px lift +
                   1.03 scale via framer whileHover — same grammar as the
                   Login demo pill. No idle animation. */}
-              <motion.button onClick={() => advance()} disabled={checking} data-testid="signup-basics-next"
+              <motion.button onClick={() => advance()} disabled={checking || sending} data-testid="signup-basics-next"
                 whileHover={{ y: -2, scale: 1.03 }}
                 whileTap={{ scale: 0.98 }}
                 className="kr-pop flex h-12 items-center gap-2 rounded-pill bg-kr-ink px-8 text-sm font-medium text-white disabled:opacity-50">
-                {checking ? <Loader size={18} /> : null}
-                {step.optional && !value.trim() ? "Skip" : "Continue"} <ArrowRight size={16} weight="bold" />
+                {checking || sending ? <Loader size={18} /> : null}
+                {step.optional && !value.trim() ? "Skip"
+                  : step.confirmByCode && !alreadyConfirmed(normIndianMobile(value)) ? "Text me a code"
+                  : "Continue"} <ArrowRight size={16} weight="bold" />
               </motion.button>
               <span className="hidden text-xs text-muted-foreground sm:block">
                 press <kbd className="kr-pressed rounded-md px-1.5 py-0.5 text-[11px]">Enter ↵</kbd>

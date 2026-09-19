@@ -68,6 +68,11 @@ router = APIRouter(prefix="/api")
 # ---------------------------------------------------------------------------
 # Router-local helpers (not called from anywhere else)
 # ---------------------------------------------------------------------------
+# 2026-09-19 — a request its owner took back. Stored as "cancelled" (the name
+# the Flutter client's LeaveRequest already knows); the web says "Withdrawn".
+LEAVE_WITHDRAWN = "cancelled"
+
+
 def _can_approve_leave(user: dict, leave: dict) -> bool:
     if user.get("role") == "owner":
         return True
@@ -96,6 +101,10 @@ async def _decide_leave(leave_id, user, new_status, note, ntype, employee_msg):
         raise HTTPException(status_code=404, detail="Not found")
     if not _can_approve_leave(user, lv):
         raise HTTPException(status_code=403, detail="You cannot act on this leave request")
+    # 2026-09-19 — a request its owner withdrew is over; approving it now would
+    # put leave on the calendar that nobody is taking.
+    if lv.get("status") == LEAVE_WITHDRAWN:
+        raise HTTPException(status_code=409, detail=f"{lv.get('user_name') or 'They'} withdrew this request.")
     entry = {"action": new_status, "by": user["id"], "by_name": user.get("name"),
              "note": note or "", "at": now_iso()}
     updates = {"status": new_status, "decided_at": now_iso(), "decided_by": user["id"]}
@@ -317,10 +326,27 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
     # can be capped at 3 owners just as easily as 3 sales.
     from services.plans import enforce_seat_limit
     await enforce_seat_limit(db, user["tenant_id"])
-    email = inp.email.lower()
-    if await db.users.find_one({"email": email}):
-        raise HTTPException(status_code=400, detail="Email already registered")
-    phone = (inp.phone or "").strip()
+    # 2026-09-19 — members sign in with their mobile and a texted code. The
+    # manager used to be able to set a "temporary" password instead, which
+    # nothing ever asked the member to replace, so the manager who typed it
+    # could keep signing in as them. No password is set here any more.
+    if (inp.password or "").strip():
+        raise HTTPException(status_code=400, detail=(
+            "Members sign in with their mobile number and a texted code, so there's no password to set for them."))
+    from services.auth.phone import valid_indian_mobile, display_indian_mobile
+    _member_norm = valid_indian_mobile(inp.phone or "")
+    if not _member_norm:
+        # The number is their sign-in: a mistyped one hands their account to
+        # whoever owns it. Same rule as signup.
+        raise HTTPException(status_code=400, detail="Enter their 10-digit Indian mobile number — it's how they sign in.")
+    email = (inp.email or "").strip().lower()
+    if email:
+        _local, _, _domain = email.partition("@")
+        if not _local or "." not in _domain:
+            raise HTTPException(status_code=400, detail="Enter a valid email, or leave it empty")
+        if await db.users.find_one({"email": email}):
+            raise HTTPException(status_code=400, detail="Email already registered")
+    phone = display_indian_mobile(_member_norm)
     # 2026-09-16: one mobile, one member — inside this workspace. The number is
     # the sign-in and the WhatsApp route, so two people sharing one means codes
     # and captures land on the wrong account. The same number in ANOTHER
@@ -335,18 +361,10 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
                 status_code=400,
                 detail=f"That mobile number is already {_clash.get('name')}'s in this workspace.",
             )
-    pwd = (inp.password or "").strip()
-    passwordless = not pwd
-    if passwordless:
-        if len(_norm_phone(phone)) < 10:
-            raise HTTPException(status_code=400,
-                                detail="A valid mobile number is required for passwordless (OTP) members")
-        # No usable password — this member logs in only via mobile OTP.
-        password_hash = hash_password(new_id() + new_id())
-    else:
-        if len(pwd) < 6:
-            raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
-        password_hash = hash_password(pwd)
+    # No usable password — the member signs in only by mobile OTP. (An owner
+    # added here adds an email and password of their own at first sign-in.)
+    passwordless = True
+    password_hash = hash_password(new_id() + new_id())
     # 2026-09-15: follow the role (empty list), or their own list — which may be
     # empty on purpose ("No access").
     _perms_new = [] if inp.follow_role is True else clean_perms(inp.permissions)
@@ -356,7 +374,7 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
     # FIX-002-A: also write phone_norm for indexed OTP + WhatsApp lookup.
     from services.auth.phone import norm_phone as _np
     doc = {
-        "id": uid, "tenant_id": user["tenant_id"], "name": inp.name, "email": email,
+        "id": uid, "tenant_id": user["tenant_id"], "name": inp.name,
         "phone": phone, "phone_norm": _np(phone), "passwordless": passwordless,
         "password_hash": password_hash, "role": inp.role,
         "permissions": _perms_new, "permissions_custom": _custom_new, "created_at": now_iso(),
@@ -371,6 +389,10 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
     # 2026-09-14 — the job title the Team tree shows under a member's name.
     if inp.title and inp.title.strip():
         doc["title"] = inp.title.strip()[:80]
+    # Absent, not empty, when there isn't one: users.email is unique among
+    # real addresses only (bootstrap/lifecycle.py).
+    if email:
+        doc["email"] = email
     if len(_norm_phone(phone)) >= 10:
         invite_token = new_id()
         doc["invite_token"] = invite_token
@@ -397,8 +419,7 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
     await db.memberships.update_one({"user_id": uid, "tenant_id": user["tenant_id"]},
                                     {"$set": {"permissions_custom": _custom_new}})
     await log_activity(user["tenant_id"], user["id"], "user_added",
-                       f"Added {inp.name} as {inp.role}"
-                       + (" (mobile OTP login)" if passwordless else ""))
+                       f"Added {inp.name} as {inp.role} (mobile sign-in)")
     out = await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0})
     if invite_token:
         out["invite_token"] = invite_token
@@ -493,11 +514,21 @@ async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(r
     if inp.phone is not None:
         # FIX-002-A: keep phone_norm in sync so OTP + WhatsApp still finds
         # the user after an admin updates their phone.
-        from services.auth.phone import norm_phone as _np
+        from services.auth.phone import norm_phone as _np, valid_indian_mobile as _vim, display_indian_mobile as _dim
         _p = inp.phone.strip()
         _new_norm = _np(_p)
         _old_norm = _np(target.get("phone") or "")
         if _new_norm != _old_norm:
+            # 2026-09-19 — the same rule as signup and Team › Add: a new number
+            # is a real Indian mobile, and a member who signs in only by mobile
+            # can't be left without one.
+            if _p:
+                _new_norm = _vim(_p)
+                if not _new_norm:
+                    raise HTTPException(status_code=400, detail="Enter a 10-digit Indian mobile number — it's how they sign in.")
+                _p = _dim(_new_norm)
+            elif target.get("passwordless"):
+                raise HTTPException(status_code=400, detail="They sign in with this number, so it can be changed but not removed.")
             # 2026-09-16: the mobile IS the sign-in — a code goes to it and
             # whoever reads that code is in. So Manage team may FILL IN a number
             # for someone who has none (they cannot sign in at all until then,
@@ -534,29 +565,49 @@ async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(r
     if inp.title is not None:
         # 2026-09-14 — the job title on the Team tree; an empty string clears it.
         updates["title"] = inp.title.strip()[:80] or None
-    # RBAC P1 (2026-09-15): name and email can be corrected. Email is how they
-    # sign in, so only an owner changes it, and it must be free.
+    # RBAC P1 (2026-09-15): name and email can be corrected, and an email must
+    # be free. 2026-09-19 — whose call it is depends on what the email DOES:
+    # for someone with a password it is their sign-in, so only an owner
+    # changes it and it can't be removed; for a member who signs in by mobile
+    # it is contact detail, so whoever manages the team may add, fix or clear
+    # it (they could already set it when adding the member).
     if inp.name is not None:
         name = inp.name.strip()
         if not name:
             raise HTTPException(status_code=400, detail="Enter a name")
         updates["name"] = name[:80]
+    unsets = {}
     if inp.email is not None and inp.email.strip().lower() != (target.get("email") or "").lower():
-        if not acting_is_owner:
+        email_signs_in = not target.get("passwordless")
+        if email_signs_in and not acting_is_owner:
             raise HTTPException(status_code=403, detail="Only an owner can change someone's email, because it's how they sign in.")
         email = inp.email.strip().lower()
-        local, _, domain = email.partition("@")
-        if not local or "." not in domain:
-            raise HTTPException(status_code=400, detail="Enter a valid email")
-        if await db.users.find_one({"email": email, "id": {"$ne": user_id}}, {"_id": 0, "id": 1}):
-            raise HTTPException(status_code=400, detail="That email is already used by another account")
-        updates["email"] = email
-    if updates:
+        if not email:
+            if email_signs_in:
+                raise HTTPException(status_code=400, detail="They sign in with this email, so it can be changed but not removed.")
+            # Absent rather than empty: users.email is unique among real
+            # addresses only (bootstrap/lifecycle.py).
+            unsets.update({"email": "", "email_verified_at": ""})
+        else:
+            local, _, domain = email.partition("@")
+            if not local or "." not in domain:
+                raise HTTPException(status_code=400, detail="Enter a valid email, or leave it empty")
+            if await db.users.find_one({"email": email, "id": {"$ne": user_id}}, {"_id": 0, "id": 1}):
+                raise HTTPException(status_code=400, detail="That email is already used by another account")
+            updates["email"] = email
+            # A different address is unconfirmed until its owner clicks the link.
+            updates["email_verified_at"] = None
+    if updates or unsets:
         # E2-57: tenant scope on the write (defense-in-depth; target was
         # already loaded from this tenant above).
+        _write = {}
+        if updates:
+            _write["$set"] = updates
+        if unsets:
+            _write["$unset"] = unsets
         await db.users.update_one(
             {"id": user_id, "tenant_id": user["tenant_id"]},
-            {"$set": updates},
+            _write,
         )
         # FIX-004-B (RBAC-13): mirror role/permissions changes into
         # the membership row for THIS tenant so the authoritative
@@ -776,6 +827,90 @@ async def request_leave_info(leave_id: str, inp: LeaveDecisionInput, user: dict 
     return await _decide_leave(leave_id, user, "info_requested", inp.note, "clarification",
                                f"{user.get('name')} needs more info on your leave request"
                                + (f": {inp.note}" if inp.note else ""))
+
+
+async def _own_leave(leave_id: str, user: dict) -> dict:
+    """A leave request the caller raised themselves. Only the requester may
+    answer a question on it or take it back — not their manager, not an owner."""
+    lv = await db.leaves.find_one({"id": leave_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    if not lv:
+        raise HTTPException(status_code=404, detail="Not found")
+    if lv.get("user_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Only the person who asked for this leave can do that.")
+    return lv
+
+
+@router.post("/leaves/{leave_id}/respond")
+async def respond_to_leave_question(leave_id: str, inp: LeaveDecisionInput,
+                                    user: dict = Depends(get_current_user)):
+    """Answer the approver's "needs more info" (2026-09-19).
+
+    The approver could ask a question and the requester had no way to answer
+    it — their only move was raising a fresh request. The reply goes back on
+    the request, it returns to Pending, and the approver is told as an
+    approval (so their delegate hears too, and it lands in their queue).
+    """
+    from services.notifications import push_notification
+    lv = await _own_leave(leave_id, user)
+    if lv.get("status") != "info_requested":
+        raise HTTPException(status_code=409, detail="This request isn't waiting on an answer from you.")
+    reply = (inp.note or "").strip()
+    if not reply:
+        raise HTTPException(status_code=400, detail="Write your answer first.")
+    reply = reply[:1000]
+    await db.leaves.update_one(
+        {"id": leave_id, "tenant_id": user["tenant_id"]},
+        {"$set": {"status": "pending", "reply_note": reply, "replied_at": now_iso()},
+         "$push": {"history": {"action": "replied", "by": user["id"], "by_name": user.get("name"),
+                               "note": reply, "at": now_iso()}}},
+    )
+    if lv.get("approver_id"):
+        await push_notification(user["tenant_id"], [lv["approver_id"]], 2,
+                                f"{user.get('name')} answered your question about their leave: {reply[:140]}",
+                                entity_type="leave", entity_id=leave_id, ntype="approval",
+                                title=f"{lv.get('leave_type', 'Leave').title()} leave", sender=user.get("name"))
+    await log_activity(user["tenant_id"], user["id"], "leave_replied",
+                       f"{user.get('name')} answered a question on their leave", "leave", leave_id)
+    return await db.leaves.find_one({"id": leave_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+
+
+@router.post("/leaves/{leave_id}/withdraw")
+async def withdraw_leave(leave_id: str, inp: LeaveDecisionInput, user: dict = Depends(get_current_user)):
+    """Take back your own leave request (2026-09-19).
+
+    While it waits on a decision, or once approved but before it starts —
+    plans change. Not after it has started (that is coming back early, which
+    is a conversation with your manager) and not once rejected. The request is
+    kept, marked withdrawn, so the history stays true, and the approver is told.
+    """
+    from services.notifications import push_notification
+    lv = await _own_leave(leave_id, user)
+    status = lv.get("status")
+    today = datetime.now(timezone.utc).date().isoformat()
+    if status == LEAVE_WITHDRAWN:
+        raise HTTPException(status_code=409, detail="You've already withdrawn this request.")
+    if status == "rejected":
+        raise HTTPException(status_code=409, detail="This request was rejected — there's nothing to withdraw.")
+    if status == "approved" and (lv.get("from_date") or "") <= today:
+        raise HTTPException(status_code=409, detail="This leave has already started, so it can't be withdrawn here. Tell your manager if you're back early.")
+    note = (inp.note or "").strip()[:500]
+    await db.leaves.update_one(
+        {"id": leave_id, "tenant_id": user["tenant_id"]},
+        {"$set": {"status": LEAVE_WITHDRAWN, "withdrawn_at": now_iso(), "withdrawn_note": note or None},
+         "$push": {"history": {"action": "withdrawn", "by": user["id"], "by_name": user.get("name"),
+                               "note": note, "at": now_iso()}}},
+    )
+    if lv.get("approver_id"):
+        was = "approved " if status == "approved" else ""
+        await push_notification(user["tenant_id"], [lv["approver_id"]], 1,
+                                f"{user.get('name')} withdrew their {was}leave ({lv.get('from_date')}"
+                                + (f" → {lv.get('to_date')}" if lv.get("to_date") != lv.get("from_date") else "") + ")"
+                                + (f": {note}" if note else ""),
+                                entity_type="leave", entity_id=leave_id, ntype="leave_withdrawn",
+                                title=f"{lv.get('leave_type', 'Leave').title()} leave", sender=user.get("name"))
+    await log_activity(user["tenant_id"], user["id"], "leave_withdrawn",
+                       f"{user.get('name')} withdrew their leave", "leave", leave_id)
+    return await db.leaves.find_one({"id": leave_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
 
 
 @router.get("/leaves/{leave_id}/impact")

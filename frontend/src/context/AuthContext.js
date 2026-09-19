@@ -45,8 +45,14 @@ export function AuthProvider({ children }) {
     return data;
   };
 
-  const loginWithOtp = async (phone, code) => {
-    const { data } = await api.post("/auth/otp/verify", { phone, code });
+  // tenantId: which workspace the code was sent for, when the number belongs to
+  // more than one. Without it the API answers 409 and asks.
+  // inviteToken: a member's first sign-in comes through their invite link
+  // (2026-09-19) — until then their number opens nothing on its own.
+  const loginWithOtp = async (phone, code, tenantId, inviteToken) => {
+    const { data } = await api.post("/auth/otp/verify", {
+      phone, code, ...(tenantId ? { tenant_id: tenantId } : {}), ...(inviteToken ? { invite_token: inviteToken } : {}),
+    });
     persist(data);
     return data;
   };
@@ -76,7 +82,14 @@ export function AuthProvider({ children }) {
 
   const value = useMemo(
     () => ({ user, tenant, loading, login, register, logout, refreshTenant, refreshMe, loginWithOtp }),
-    // login/register/etc close only over stable refs (api import, setState); safe to omit.
+    /* login/register/etc close only over stable refs (api import, setState),
+       so omitting them is safe — and REQUIRED for this memo to do anything.
+       They are redeclared every render, so listing them would recompute
+       `value` every render and re-render every consumer of the context: the
+       exact cost the memo exists to avoid. The alternative is a useCallback
+       around each, which buys nothing here and puts five more hooks in the
+       auth path. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [user, tenant, loading]
   );
 

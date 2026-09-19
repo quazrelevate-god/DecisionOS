@@ -210,6 +210,8 @@ from models.signup import (
     InterviewSessionInput,
     InterviewRefineInput,
     TTSInput,
+    PhoneCodeInput,
+    PhoneVerifyInput,
 )
 
 
@@ -224,6 +226,64 @@ async def check_email(inp: EmailCheckInput, request: Request):
     email = inp.email.strip().lower()
     taken = bool(email) and bool(await db.users.find_one({"email": email}, {"_id": 1}))
     return {"available": not taken}
+
+
+# --------------------------------------------------------------------------
+# The founder's mobile (2026-09-19)
+# --------------------------------------------------------------------------
+# The mobile is a sign-in (Mobile OTP, and the mobile app) and a route
+# (WhatsApp from that number lands in the workspace as that person), so it is
+# confirmed with a texted code where it is typed — not stored on trust. See
+# services/auth/phone_proof.py for why the proof travels with the signup.
+#
+# These codes live in otp_codes like every other, keyed (phone, scope). There
+# is no tenant yet, so the scope is this fixed marker; it can never collide
+# with a workspace id (those are uuids) and never satisfies a sign-in.
+SIGNUP_OTP_SCOPE = "__signup__"
+# Per NUMBER, on top of the per-network limits every /signup call has: this is
+# the one public endpoint that texts a number nobody has registered, so it is
+# the one an SMS-pumping script would lean on, rotating addresses as it goes.
+_PHONE_CODES_PER_NUMBER_HOURLY = (5, 3600)
+
+
+@router.post("/phone/send-code")
+async def phone_send_code(inp: PhoneCodeInput, request: Request):
+    await _guard_signup_endpoint(request, "phone_code")
+    from services.auth.phone import valid_indian_mobile
+    norm = valid_indian_mobile(inp.phone)
+    if not norm:
+        raise HTTPException(status_code=400, detail="Enter a 10-digit Indian mobile number")
+    ok, retry_after = await check_rate_limit(
+        norm, _PHONE_CODES_PER_NUMBER_HOURLY[0], _PHONE_CODES_PER_NUMBER_HOURLY[1],
+        bucket="signup_phone_code_number",
+    )
+    if not ok:
+        mins = max(1, round(retry_after / 60))
+        raise HTTPException(
+            status_code=429,
+            detail=f"We've texted this number several codes in the last hour. Try again in about {mins} minute{'s' if mins != 1 else ''}.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    from services.otp import _issue_otp
+    resp = await _issue_otp(norm, norm, tenant_id=SIGNUP_OTP_SCOPE)
+    # The scope is ours, not the caller's business.
+    resp.pop("tenant_id", None)
+    return resp
+
+
+@router.post("/phone/verify")
+async def phone_verify(inp: PhoneVerifyInput, request: Request):
+    await _guard_signup_endpoint(request, "phone_verify")
+    from services.auth.phone import valid_indian_mobile, display_indian_mobile
+    from services.auth.phone_proof import issue_phone_proof
+    from services.otp import consume_otp
+    norm = valid_indian_mobile(inp.phone)
+    if not norm:
+        raise HTTPException(status_code=400, detail="Enter a 10-digit Indian mobile number")
+    # The same check the sign-in door makes: five wrong tries spend the code,
+    # an old code is refused, a right one is good exactly once.
+    await consume_otp(norm, SIGNUP_OTP_SCOPE, inp.code)
+    return {"verified": True, "phone": display_indian_mobile(norm), **issue_phone_proof(norm)}
 
 
 # --------------------------------------------------------------------------

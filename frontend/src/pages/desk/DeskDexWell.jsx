@@ -133,7 +133,12 @@ function AttachmentChip({ file, onRemove, disabled }) {
    pops. On desktop nothing here changes — the well still grows to the top of
    the KPI grid, still shows what was said and the stages it is passing, and
    the row of controls at its foot is the one ASK-33 drew. */
-export function DeskDexWell({ className, testid, phone = false, growToRef, growToPhoneRef, onExpandedChange, onReview, onLater }) {
+/* ASK-49 — `square` WAS `phone`. It meant "the phone's well" for as long as
+   only a phone had one; the founder's desktop redesign puts the same well —
+   ripple mic, static box, the forge alone, the title in the floor — in the
+   middle of the desktop hero as a square, so the flag is named for what it is
+   rather than for the one screen that used to have it. */
+export function DeskDexWell({ className, testid, square = false, growToRef, growToPhoneRef, onExpandedChange, onReview, onLater }) {
   const { user } = useAuth();
   // The gate every Dex capture surface uses (DexFab, DexCaptureBar). This used to
   // list DexSheet too; DexSheet was removed from Layout in 97c2bfc (KM-23) and is
@@ -253,7 +258,7 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
   const [sentText, setSentText] = useState("");
   const [outcome, setOutcome] = useState(null);
   // ASK-47 — the phone's stand-in for `growing`; see `workspace` below.
-  const [phoneWorking, setPhoneWorking] = useState(false);
+  const [squareWorking, setSquareWorking] = useState(false);
   const growing = !!grow;
   const growPhase = grow?.phase;
 
@@ -277,7 +282,7 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
        what changes inside it is what it is showing. The founder: "remove the
        entire growing feature of the dex card to the entire screen to the top.
        Make it static." */
-    if (phone) { setPhoneWorking(true); return; }
+    if (square) { setSquareWorking(true); return; }
     // Already the workspace (a second capture sent from it): stay open.
     if (grow && grow.phase !== "closing") return;
     const m = measure();
@@ -288,10 +293,10 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
   const collapse = useCallback(() => {
     // ASK-47 — on a phone there is nothing to shrink; the well just stops
     // showing the capture and goes back to being an invitation.
-    if (phone) { setPhoneWorking(false); return; }
+    if (square) { setSquareWorking(false); return; }
     if (prefersReducedMotion()) { setGrow(null); return; }
     setGrow((g) => (g ? { ...g, phase: "closing" } : g));
-  }, [phone]);
+  }, [square]);
 
   /* ASK-35 2.2 — RE-MEASURE ONCE THE PANE IS OUT OF THE FLOW. expand() measures
      inside the send handler, when the composer may still be two lines tall with
@@ -354,7 +359,7 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
      construction. `workspace` is that same idea with the geometry taken out of
      it: the well is showing a capture rather than an invitation. On desktop it
      IS `growing`, unchanged. */
-  const workspace = phone ? phoneWorking : growing;
+  const workspace = square ? squareWorking : growing;
   const expanded = growing && growPhase !== "closing";
   useEffect(() => { onExpandedChange?.(expanded); }, [expanded, onExpandedChange]);
 
@@ -544,19 +549,19 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
      It opens three ways — the keyboard button, a transcript coming back, or a
      draft that already exists — and closes when the draft is sent or cleared. */
   const [typing, setTyping] = useState(false);
-  const fieldOpen = !phone || typing || !!chat.draft || transcribing;
+  const fieldOpen = !square || typing || !!chat.draft || transcribing;
   // Sent or cleared: the door closes again and the ripple has the well back.
   useEffect(() => {
-    if (!phone || !typing) return;
+    if (!square || !typing) return;
     if (!chat.draft && !transcribing && !dex.recording && !chat.busy) {
       const t = setTimeout(() => setTyping(false), 2500);
       return () => clearTimeout(t);
     }
     return undefined;
-  }, [phone, typing, chat.draft, transcribing, dex.recording, chat.busy]);
+  }, [square, typing, chat.draft, transcribing, dex.recording, chat.busy]);
   const [rippleSize, setRippleSize] = useState(220);
   useEffect(() => {
-    if (!phone) return undefined;
+    if (!square) return undefined;
     const el = wellRef.current;
     if (!el || typeof ResizeObserver === "undefined") return undefined;
     const fit = () => {
@@ -574,7 +579,7 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
     ro.observe(el);
     fit();
     return () => ro.disconnect();
-  }, [phone]);
+  }, [square]);
 
   /* The line under "Dex". Attached files take its place rather than adding a
      row, so the well never changes height. The row's py-2 / -my-2 pair gives
@@ -598,7 +603,7 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
   const prompt = attachments || (workspace ? null : (
     <p className="mt-1.5 text-sm leading-snug text-foreground/70">
       {canCapture
-        ? (phone ? "Tell Dex what you decided." : "Tell Dex what you decided — speak or type.")
+        ? (square ? "Tell Dex what you decided." : "Tell Dex what you decided — speak or type.")
         : "Ask an owner to turn on Decision Desk capture for you."}
     </p>
   ));
@@ -617,7 +622,7 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
      eye and to a thumb. What scrolls is what there is to READ; the row of
      buttons is pinned under it, always whole, always reachable. `contents` on
      desktop, where the well grows and nothing needed splitting. */
-  const readPane = phone ? "kr-scroll-quiet min-h-0 flex-1 overflow-y-auto" : "contents";
+  const readPane = square ? "kr-scroll-quiet min-h-0 flex-1 overflow-y-auto" : "contents";
   const quietPill = "kr-pop flex h-10 items-center rounded-pill px-4 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60";
   const inkPill = "flex h-10 items-center rounded-pill bg-kr-ink px-5 text-sm font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60 disabled:opacity-40";
   const outcomeView = !outcome ? null : outcome.kind === "ready" ? (
@@ -724,7 +729,7 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
      passing are not drawn here — the forge IS the progress, and the ending is
      the report. Both of those still exist on desktop, where there is room for
      a workspace that narrates itself. */
-  const phoneBody = !phone ? null : outcome ? (
+  const squareBody = !square ? null : outcome ? (
     <div className="mt-2 flex min-h-0 flex-1 flex-col" aria-live="polite">{outcomeView}</div>
   ) : workspace ? (
     <div className="grid min-h-0 flex-1" aria-live="polite" data-testid="desk-dex-working">
@@ -758,7 +763,7 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
     </div>
   );
 
-  const body = phone ? phoneBody : growing ? (
+  const body = square ? squareBody : growing ? (
     <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-y-auto animate-in fade-in-0 duration-300 motion-reduce:animate-none" aria-live="polite">
       {outcome ? outcomeView : (
       /* ASK-34 item 5 — TWO COLUMNS, NOT ONE LAYER OVER ANOTHER. The stages
@@ -845,11 +850,13 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
      the space between and centre in it, and the top of the well is nothing but
      the ripple. On desktop the title stays where InsightWell has always put
      it. */
-  const phoneTitle = (
+  const squareTitle = (
     <div className="pointer-events-none min-w-0 flex-1 px-2 text-center">
-      <span className="block text-xs font-semibold tracking-wide text-foreground/75">Dex</span>
+      {/* ASK-49 — a step up on desktop, where the well is a 422px square and
+          the phone's 12/13px reads as a footnote at the bottom of it. */}
+      <span className="block text-xs font-semibold tracking-wide text-foreground/75 lg:text-sm">Dex</span>
       {!workspace && !outcome && (
-        <span className="mt-0.5 block truncate text-[13px] leading-snug text-foreground/70">
+        <span className="mt-0.5 block truncate text-[13px] leading-snug text-foreground/70 lg:text-[15px]">
           {canCapture ? "Tell Dex what you decided." : "Ask an owner to turn on capture."}
         </span>
       )}
@@ -949,7 +956,7 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
       {/* ASK-48 — and on a phone the words go here, between the two circles,
           taking the space they leave. The field, when it is open, takes that
           same space — so the two never fight for it. */}
-      {phone && !fieldOpen && phoneTitle}
+      {square && !fieldOpen && squareTitle}
 
       {/* ASK-47 — ON A PHONE THIS CIRCLE IS NO LONGER THE MICROPHONE. The mic
           is the ripple in the middle of the well, so what belongs here is the
@@ -958,7 +965,7 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
           is the send arrow, because that is the only thing left to do with it.
           Desktop keeps the mic exactly where ASK-33 put it: there the ripple is
           not on screen and this is the only way to speak. */}
-      {phone ? (
+      {square ? (
         <button
           type="button"
           data-testid="desk-dex-keyboard"
@@ -1005,8 +1012,8 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
       compact
       /* ASK-48 — on a phone the title and the prompt line are in the floor row
          instead; the attachment chips still belong at the top of the pane. */
-      label={phone ? null : "Dex"}
-      prompt={phone ? attachments : prompt}
+      label={square ? null : "Dex"}
+      prompt={square ? attachments : prompt}
       body={body}
       /* ASK-47 — AND WHILE AN ENDING IS SHOWING, THE PHONE'S WELL IS THE
          ENDING. The well is a fixed box, and an ending already carries the only
@@ -1017,7 +1024,7 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
          the well's own pane. One at a time, so the way out of the ending is
          always whole; dismissing it gives the ripple and the floor straight
          back. Desktop is untouched — there the well grows and both fit. */
-      floor={phone && outcome ? null : floor}
+      floor={square && outcome ? null : floor}
       className={className}
       testid={testid}
       expanded={expanded}
@@ -1028,7 +1035,7 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
          one. Desktop keeps p-4 (InsightWell's compact default). */
       /* ASK-48 — `kr-well--sunk` below lg: a dimmer wash and a deeper press.
          See index.css — the founder's "the well looks very transparent". */
-      paneClassName={cn("max-lg:flex-1 max-lg:p-3", phone && "kr-well--sunk", grow && growPhase !== "start" && "kr-dex-grow")}
+      paneClassName={cn("max-lg:flex-1 max-lg:p-3", square && "kr-well--sunk", grow && growPhase !== "start" && "kr-dex-grow")}
       paneStyle={grow
         ? { position: "absolute", left: 0, right: 0, bottom: 0, zIndex: 10, height: growPhase === "open" ? grow.to : grow.from }
         : undefined}

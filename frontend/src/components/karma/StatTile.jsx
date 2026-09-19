@@ -64,7 +64,7 @@ export function StatTile({
         // columns, not the thing that sets tile height.
         // KM-1: 120 is the arithmetic of the reshaped tile, not a guess —
         // p-4 16 + chip 40 + pt-3 12 + numeral 36 + p-4 16 = 120.
-        "kr-lift flex min-h-[120px] flex-col p-4 sm:p-5 lg:min-h-[170px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
+        "kr-stat kr-lift flex min-h-[120px] flex-col p-4 sm:p-5 lg:min-h-[170px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
         glass ? "kr-glass kr-glass--blue" : "nm-tile",
         className
       )}
@@ -85,7 +85,10 @@ export function StatTile({
         {arrow}
       </div>
 
-      <p className={cn("mt-4 hidden text-base lg:block", glass ? "opacity-90" : "text-foreground/80")}>
+      {/* ASK-49 — kr-stat__label / kr-stat__viz are hooks for a layout that
+          has to compact the tile (index.css .kr-desk-kpis); nothing here reads
+          them. */}
+      <p className={cn("kr-stat__label mt-4 hidden text-base lg:block", glass ? "opacity-90" : "text-foreground/80")}>
         {label}
       </p>
 
@@ -95,9 +98,9 @@ export function StatTile({
           TinySpark (72px) made it worse. Four 6px bars beside a 36px number is
           texture, not information; the number is the point, and dropping the
           chart is the only fix that holds no matter how long the string gets. */}
-      <div className="mt-auto flex items-end justify-between gap-3 pt-3 lg:pt-4">
+      <div className="kr-stat__foot mt-auto flex items-end justify-between gap-3 pt-3 lg:pt-4">
         <BigNumeral text={value} size="md" accent={urgent && !glass} countUp={countUp} />
-        {viz && <span className={cn("hidden shrink-0 pb-0.5 lg:block", glass ? "text-white" : "text-foreground")}>{viz}</span>}
+        {viz && <span className={cn("kr-stat__viz hidden shrink-0 pb-0.5 lg:block", glass ? "text-white" : "text-foreground")}>{viz}</span>}
       </div>
 
       {meaning && (

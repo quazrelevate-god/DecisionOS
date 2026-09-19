@@ -28,6 +28,10 @@ const SIZES = {
   // it: 72px at every width, so the row's height is the gauge's, not the
   // numeral's.
   hero: { main: "text-7xl", side: "text-2xl" },
+  // ASK-49 — no size of its own: it inherits the font-size of whatever holds
+  // it, so a layout can scale the numeral with the space it has (the Desk's
+  // hero does it with container units). Any side text is a share of that.
+  fluid: { main: "", side: "text-[0.32em]" },
   lg: { main: "text-5xl", side: "text-2xl" },              // wide money cards
   md: { main: "text-4xl", side: "text-lg" },               // KPI tiles
   sm: { main: "text-xl",  side: "text-sm" },               // inline stats
@@ -56,7 +60,7 @@ export function BigNumeral({ text, size = "md", countUp = false, accent = false,
 
   if (!m) {
     return (
-      <span data-testid={testid} className={cn(s.main, "font-semibold leading-none", tone, className)}>
+      <span data-testid={testid} className={cn("kr-num__main", s.main, "font-semibold leading-none", tone, className)}>
         {str}
       </span>
     );
@@ -70,10 +74,13 @@ export function BigNumeral({ text, size = "md", countUp = false, accent = false,
 
   return (
     <span data-testid={testid} className={cn("inline-flex items-baseline leading-none", tone, className)}>
-      {prefix && <span className={cn(s.side, "font-medium mr-1 opacity-80")}>{prefix.trim()}</span>}
-      <span className={cn(s.main, "font-semibold tracking-tight")}>{primaryNode}</span>
-      {groups && <span className={cn(s.side, "font-medium opacity-80")}>{groups}</span>}
-      {rest && <span className={cn(s.side, "font-medium ml-1 opacity-70")}>{rest.trim()}</span>}
+      {/* ASK-49 — kr-num__main / kr-num__side are hooks, not styles: a layout
+          that has to fit a numeral into a smaller box (the Desk's KPI squares
+          on a narrow laptop) sizes them from index.css without a new prop. */}
+      {prefix && <span className={cn("kr-num__side", s.side, "font-medium mr-1 opacity-80")}>{prefix.trim()}</span>}
+      <span className={cn("kr-num__main", s.main, "font-semibold tracking-tight")}>{primaryNode}</span>
+      {groups && <span className={cn("kr-num__side", s.side, "font-medium opacity-80")}>{groups}</span>}
+      {rest && <span className={cn("kr-num__side", s.side, "font-medium ml-1 opacity-70")}>{rest.trim()}</span>}
     </span>
   );
 }

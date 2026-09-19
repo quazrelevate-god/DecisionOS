@@ -453,17 +453,29 @@ const ensureDir = (d) => fs.mkdirSync(d, { recursive: true });
 // Wait until the DOM stops mutating. Recharts animates by rewriting SVG
 // attributes on rAF, so "networkidle + a fixed sleep" is not enough — without
 // this the desktop diff is flaky by hundreds of pixels between identical runs.
+/* ASK-49 — EVERY LIMIT BELOW IS MEASURED WITH performance.now(), NOT Date.now().
+   The pages this audit drives run under ctx.clock.setFixedTime(FROZEN_NOW),
+   which freezes Date: measured, Date.now() advanced 0ms across a real two
+   seconds while performance.now() advanced 2000. So every "give up after N ms"
+   in these three waits was `0 > N` — a timeout that could not time out. It only
+   ever finished because the DOM happened to go quiet. Then the Dex well got a
+   ripple that writes one CSS custom property per frame (125 style mutations in
+   2s, and nothing else on the page mutating), the DOM never went quiet, and the
+   audit hung: seven hours on the mobile half the night the ripple went on the
+   phone, and on the desktop half the day it went on the desktop. The ripple is
+   doing what it was designed to do; the fault was a clock the audit had frozen
+   itself. performance.now() is not faked, so the limits are real again. */
 async function waitForDomQuiet(page, quietMs = 250, timeoutMs = 2200) {
   await page
     .evaluate(
       ([quiet, limit]) =>
         new Promise((resolve) => {
           let timer;
-          const started = Date.now();
+          const started = performance.now();
           const done = () => { obs.disconnect(); clearTimeout(timer); resolve(); };
           const bump = () => {
             clearTimeout(timer);
-            if (Date.now() - started > limit) return done();
+            if (performance.now() - started > limit) return done();
             timer = setTimeout(done, quiet);
           };
           const obs = new MutationObserver(bump);
@@ -499,7 +511,7 @@ async function waitForVectorsStable(page, quietMs = 400, limitMs = 5000) {
                 || `${el.getAttribute('cx')},${el.getAttribute('cy')},${el.getAttribute('r')},${el.getAttribute('width')},${el.getAttribute('height')}`)
               .join('|');
           if (!document.querySelector('svg path, svg circle, svg rect')) return resolve();
-          const started = Date.now();
+          const started = performance.now();
           const STEP = 100;
           let prev = read();
           let quietFor = 0;
@@ -507,7 +519,7 @@ async function waitForVectorsStable(page, quietMs = 400, limitMs = 5000) {
             const next = read();
             quietFor = next === prev ? quietFor + STEP : 0;
             prev = next;
-            if (quietFor >= quiet || Date.now() - started > limit) return resolve();
+            if (quietFor >= quiet || performance.now() - started > limit) return resolve();
             setTimeout(tick, STEP);
           };
           setTimeout(tick, STEP);
@@ -638,7 +650,7 @@ async function waitForTextStable(page, quietMs = 300, limitMs = 2500) {
           if (!nodes.length) return resolve();
           const read = () =>
             nodes.map((el) => `${Math.round(el.offsetWidth)}x${Math.round(el.offsetHeight)}`).join('|');
-          const started = Date.now();
+          const started = performance.now();
           const STEP = 100;
           let prev = read();
           let quietFor = 0;
@@ -646,7 +658,7 @@ async function waitForTextStable(page, quietMs = 300, limitMs = 2500) {
             const next = read();
             quietFor = next === prev ? quietFor + STEP : 0;
             prev = next;
-            if (quietFor >= quiet || Date.now() - started > limit) return resolve();
+            if (quietFor >= quiet || performance.now() - started > limit) return resolve();
             setTimeout(tick, STEP);
           };
           setTimeout(tick, STEP);

@@ -3338,6 +3338,25 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
        pressed out of the same sheet the well is pressed into. Pressing it
        flips both to inset, which is the only honest "down" state a
        borderless control has. */
+    /* ASK-50 · PRIORITY, TINTED — BARELY. The New Task priority is a segment
+       bar now (ScopeSlider), and the founder asked for "a subtle, very subtle
+       light colour" on it. The thumb keeps .kr-pop's lighting and takes a wash
+       of the priority's own hue at three-quarters strength over a near-white:
+       enough to tell low from high at a glance, too little to read as a status
+       chip. Two classes, so it outranks .kr-pop's own background. */
+    .kr-pop.kr-prio-thumb--low {
+        background: hsl(150 45% 93% / .85);
+        transition: transform 240ms cubic-bezier(.22, 1, .36, 1), background-color 240ms ease;
+    }
+    .kr-pop.kr-prio-thumb--medium {
+        background: hsl(40 90% 91% / .85);
+        transition: transform 240ms cubic-bezier(.22, 1, .36, 1), background-color 240ms ease;
+    }
+    .kr-pop.kr-prio-thumb--high {
+        background: hsl(4 85% 94% / .85);
+        transition: transform 240ms cubic-bezier(.22, 1, .36, 1), background-color 240ms ease;
+    }
+
     .kr-pop {
         border: 0;
         background: hsl(0 0% 100% / .38);

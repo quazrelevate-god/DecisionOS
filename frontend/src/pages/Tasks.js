@@ -12,7 +12,9 @@ import { Plus, User, Paperclip, ClockCounterClockwise, X, Check, ShieldCheck, Pr
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
 import { PersonAvatar } from "../components/karma/PersonAvatar";
-import { GLASS_PILL, INK_PILL } from "../components/karma/glass";
+import { GLASS_PILL, INK_PILL, INK_PLATE } from "../components/karma/glass";
+import { ScopeSlider } from "../components/karma/ScopeSlider";
+import { DesignCheckbox } from "../components/karma/DesignCheckbox";
 import { GlassSelect } from "../components/karma/GlassSelect";
 
 const COLUMNS = [
@@ -75,22 +77,6 @@ const presetDate = (key) => {
   d.setDate(d.getDate() + p.days);
   return ymdLocal(d);
 };
-
-/* The design system's checkbox (the one on My Work's task cards): a rounded
-   square that fills with the black ink and a white tick. Still a real
-   <input type="checkbox"> underneath, so keyboard, forms and tests behave. */
-function DesignCheckbox({ checked, onChange, testid, children }) {
-  return (
-    <label className="flex cursor-pointer items-start gap-3 text-sm leading-snug text-foreground">
-      <span className="relative mt-px grid shrink-0 place-items-center">
-        <input type="checkbox" data-testid={testid} checked={checked} onChange={onChange}
-          className="peer h-5 w-5 cursor-pointer appearance-none rounded-full border-[1.5px] border-neutral-400/80 bg-[#fff] transition-colors checked:border-transparent checked:bg-[linear-gradient(180deg,hsl(0_0%_24%),hsl(0_0%_6%))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30" />
-        <Check size={12} weight="bold" aria-hidden="true" className="pointer-events-none absolute hidden text-white peer-checked:block" />
-      </span>
-      <span>{children}</span>
-    </label>
-  );
-}
 
 /**
  * @param {string} [triggerClassName]   classes for the trigger button
@@ -211,6 +197,13 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
      .kr-pressed sets `border: 0`, which also resets the style to none. */
   const inp = "w-full kr-pressed rounded-control border border-solid border-kr-ink/25 px-3.5 py-2.5 text-sm text-foreground placeholder:text-foreground/40 transition-colors focus:border-kr-ink focus:outline-none focus-visible:outline-none";
   const lbl = "block text-xs font-medium text-muted-foreground";
+  /* ASK-50 — THE TITLE IS A PLAIN TEXT FIELD. It wore `inp`, the same sunken
+     glass as the Department and Assign-to menus under it, so the one thing you
+     TYPE looked like one more thing you pick from. It is a writing line now:
+     no box, a hairline under it that turns ink on focus (the same focus signal
+     `inp` uses — the border, not an outline), and the card's own display face
+     at the size of what it is, the task's name. */
+  const titleInp = "w-full rounded-none border-0 border-b-2 border-solid border-kr-ink/15 bg-transparent px-0.5 pb-2 pt-1 font-display text-xl text-foreground placeholder:text-foreground/35 transition-colors focus:border-kr-ink focus:outline-none focus-visible:outline-none aria-[invalid=true]:border-kr-accent";
   return (
     <Dialog open={open} onOpenChange={(o) => {
       setOpen(o);
@@ -327,7 +320,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
               idea, and helpers see the task and its updates. */}
           <div>
             <label className="sr-only" htmlFor="task-title">Task title</label>
-            <input id="task-title" data-testid="task-title-input" autoFocus className={inp}
+            <input id="task-title" data-testid="task-title-input" autoFocus className={titleInp}
               placeholder="What needs to be done?" value={form.title}
               aria-invalid={titleError ? "true" : undefined}
               aria-describedby={titleError ? "task-title-error" : undefined}
@@ -402,29 +395,42 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
               is always open. Desktop sets it in two columns (the card is wide
               enough to hold them); the phone keeps one column, in the same
               order. */}
-          <div data-testid="task-details" className="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-x-6 lg:gap-y-4 lg:space-y-0">
-            <div className="space-y-4">
-              <div>
-                <span className={lbl} id="task-priority-label">Priority</span>
-                <div className="mt-1.5 flex gap-1.5" role="group" aria-labelledby="task-priority-label">
-                  {["low", "medium", "high"].map((p) => {
-                    const on = form.priority === p;
-                    return (
-                      <button key={p} type="button" aria-pressed={on} data-testid={`task-priority-${p}`}
-                        onClick={() => setForm({ ...form, priority: p })}
-                        className={`h-9 flex-1 rounded-pill px-3 text-xs capitalize ${on ? "kr-pressed font-semibold text-foreground" : "kr-pop text-foreground/75"}`}>
-                        {p}
-                      </button>
-                    );
-                  })}
+          {/* ASK-50 — ROWS, NOT TWO COLUMNS OF STACKS. The founder wants the
+              Description box as tall as the Needs approval box beside it; in
+              two independent column stacks nothing ties their heights. As one
+              grid, the two share a row, a grid row is as tall as its tallest
+              cell, and the textarea fills its cell — so they are the same
+              height whatever the panel holds. Every cell names its column so
+              the order on a phone (one column) is the order below.
+              "Expected result" is gone on the founder's call — its testid,
+              task-expected-output, goes with it; nothing is sent in its place
+              (the form still sends expected_output: null, as it did when the
+              field was left empty). */}
+          <div data-testid="task-details" className="space-y-4 lg:grid lg:grid-cols-2 lg:gap-x-6 lg:gap-y-4 lg:space-y-0">
+            {/* ASK-50 — a segment bar, not three pills: the app's one segment
+                material (ScopeSlider, the Company/You control), sliding between
+                the three, its thumb washed — barely — in the priority's own hue
+                (index.css .kr-prio-thumb--*). Same testids on the three. */}
+            <div className="lg:col-start-1">
+              <span className={lbl} id="task-priority-label">Priority</span>
+              <ScopeSlider fluid className="mt-1.5" label="Priority" testid="task-priority"
+                options={[{ key: "low", label: "Low" }, { key: "medium", label: "Medium" }, { key: "high", label: "High" }]}
+                value={form.priority} onChange={(p) => setForm({ ...form, priority: p })}
+                thumbClassName={`kr-prio-thumb--${form.priority}`} />
+            </div>
+
+              {dueDate && (
+                <div className="lg:col-start-2">
+                  <label className={lbl} htmlFor="task-due-time">Due time</label>
+                  <input id="task-due-time" data-testid="task-due-time" type="time" className={`${inp} mt-1`} value={form.due_time} onChange={set("due_time")} />
                 </div>
-              </div>
+              )}
 
               {/* ASK-26 — helpers alongside the person doing it. Offered once a
                   person is chosen; that person stays the one approvals and
                   hand-offs act on. Each helper is a pill you tap to take off. */}
               {personId && (
-                <div data-testid="task-co-assignees">
+                <div data-testid="task-co-assignees" className="lg:col-start-1">
                   <label className={lbl} htmlFor="task-helper-add">Helpers</label>
                   {form.co_assignee_ids.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -464,35 +470,33 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                 </div>
               )}
 
-              <div>
-                <label className={lbl} htmlFor="task-description">Description</label>
-                <textarea id="task-description" data-testid="task-description-input" className={`${inp} mt-1`} rows={3}
+              {/* The label sits INSIDE the box, as "Needs approval" sits inside
+                  its panel, so the two boxes start on one line and end on one
+                  line — equal heights, not merely equal bottoms. The box is the
+                  field's own recipe (`inp`'s sunken glass and ink-on-focus
+                  border, carried by focus-within) and the textarea inside it is
+                  bare and fills it. Clicking anywhere in it is clicking the
+                  field: the whole box is the <label>. */}
+              <label htmlFor="task-description" data-testid="task-description-box"
+                className="flex min-h-[8rem] cursor-text flex-col rounded-control border border-solid border-kr-ink/25 px-3.5 pb-2.5 pt-2.5 kr-pressed transition-colors focus-within:border-kr-ink lg:col-start-1">
+                <span className={lbl}>Description</span>
+                <textarea id="task-description" data-testid="task-description-input" rows={3}
+                  className="mt-1 min-h-0 w-full flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-foreground/40 focus:outline-none focus-visible:outline-none"
                   placeholder="Anything they need to know" value={form.description} onChange={set("description")} />
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              {dueDate && (
-                <div>
-                  <label className={lbl} htmlFor="task-due-time">Due time</label>
-                  <input id="task-due-time" data-testid="task-due-time" type="time" className={`${inp} mt-1`} value={form.due_time} onChange={set("due_time")} />
-                </div>
-              )}
-
-              <div>
-                <label className={lbl} htmlFor="task-expected">Expected result</label>
-                <input id="task-expected" data-testid="task-expected-output" className={`${inp} mt-1`}
-                  placeholder="e.g. Signed quote sent to the customer" value={form.expected_output} onChange={set("expected_output")} />
-              </div>
+              </label>
 
               {/* ASK-28 TK-05 — when the approval happens, chosen per task. */}
               {/* 2026-09-15, founder reference — a titled panel with one card per
                   choice instead of a pill row. Same choices, same testids, same
-                  state; only the presentation changes. Colours are the app's
-                  own brand-tint tokens, which also carry dark mode. */}
-              <div data-testid="task-approval" className="rounded-2xl border border-solid border-brand-tint-line bg-brand-tint p-3.5">
+                  state; only the presentation changes.
+                  ASK-50 — AND IT IS GREY AND INK NOW, NOT PURPLE. The founder:
+                  the panel's ground a light grey, the shield-and-tick badge a
+                  black gradient (INK_PLATE, the Desk's ink, not a new black),
+                  and everything that was brand-600 — the chosen card's edge,
+                  the radio, the hint's bulb — in the same ink. */}
+              <div data-testid="task-approval" className="rounded-2xl border border-solid border-neutral-900/[0.07] bg-neutral-100 p-3.5 lg:col-start-2">
                 <div className="flex items-start gap-3">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-600 text-white" aria-hidden="true">
+                  <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-white ${INK_PLATE}`} aria-hidden="true">
                     <ShieldCheck size={20} weight="fill" />
                   </span>
                   <div className="min-w-0 flex-1">
@@ -511,15 +515,15 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                     return (
                       <button key={c.key} type="button" aria-pressed={on} data-testid={`task-approval-${c.key}`}
                         onClick={() => setForm({ ...form, approval: c.key, approver_id: c.key === "none" ? "" : form.approver_id })}
-                        className={`flex min-w-0 flex-col items-stretch gap-1 rounded-xl border border-solid p-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${on ? "border-brand-600 bg-card" : "kr-pop border-transparent hover:border-brand-tint-line"}`}>
+                        className={`flex min-w-0 flex-col items-stretch gap-1 rounded-xl border border-solid p-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${on ? "border-neutral-900 bg-card" : "kr-pop border-transparent hover:border-neutral-900/15"}`}>
                         {/* Icon and radio dot share the top row, so the label below
                             gets the card's full width instead of dodging the dot. */}
                         <span className="flex items-center justify-between">
-                          <span aria-hidden="true" className={`grid h-7 w-7 place-items-center rounded-full ${on ? "bg-brand-tint text-brand-600" : "bg-muted text-foreground"}`}>
+                          <span aria-hidden="true" className={`grid h-7 w-7 place-items-center rounded-full ${on ? "bg-neutral-900 text-white" : "bg-muted text-foreground"}`}>
                             <Icon size={14} weight="bold" />
                           </span>
-                          <span aria-hidden="true" className={`grid h-4 w-4 place-items-center rounded-full border-[1.5px] border-solid ${on ? "border-brand-600" : "border-neutral-400/80"}`}>
-                            {on && <span className="h-2 w-2 rounded-full bg-brand-600" />}
+                          <span aria-hidden="true" className={`grid h-4 w-4 place-items-center rounded-full border-[1.5px] border-solid ${on ? "border-neutral-900" : "border-neutral-400/80"}`}>
+                            {on && <span className="h-2 w-2 rounded-full bg-neutral-900" />}
                           </span>
                         </span>
                         <span className="text-xs font-semibold leading-tight text-foreground">{c.label}</span>
@@ -530,14 +534,14 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                 </div>
 
                 <div className="mt-2.5 flex items-start gap-2 rounded-xl bg-card px-3 py-2">
-                  <Lightbulb size={16} weight="bold" className="mt-px shrink-0 text-brand-600" aria-hidden="true" />
+                  <Lightbulb size={16} weight="bold" className="mt-px shrink-0 text-neutral-700" aria-hidden="true" />
                   <p className="text-xs leading-snug text-muted-foreground" data-testid="task-approval-hint">
                     {APPROVAL_CHOICES.find((c) => c.key === form.approval)?.hint}
                   </p>
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 lg:col-start-2">
                 {form.approval !== "none" && (
                   <div data-testid="task-approver-wrap">
                     <label className={lbl} htmlFor="task-approver">Approver</label>
@@ -554,7 +558,6 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                   Needs proof (photo, voice note or file) before it can be completed
                 </DesignCheckbox>
               </div>
-            </div>
 
             <div className="lg:col-span-2">
               {/* 2026-09-14, founder — the browser's own "Choose file" control

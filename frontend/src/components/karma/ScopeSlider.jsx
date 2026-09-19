@@ -38,11 +38,14 @@ import { DRAWER_TRACK, GLASS_PILL } from "./glass";
  * @param {number}   segWidth     px per segment (default 104)
  * @param {string}   testid       base test id: `${testid}-slider` on the group,
  *                                `${testid}-${key}` on each segment
+ * @param {string}   thumbClassName  ASK-50 — extra classes on the sliding thumb,
+ *                                so a caller can tint it by what is chosen (the
+ *                                New Task priority does); nothing else sets it.
  * @param {string}   variant      "neumorphic" (default) or "glass"
  */
 export function ScopeSlider({
   options, value, onChange, segWidth = 104, segHeight = "2.25rem",
-  label = "Scope", testid = "scope", className, variant = "neumorphic", fluid = false,
+  label = "Scope", testid = "scope", className, variant = "neumorphic", fluid = false, thumbClassName,
 }) {
   const idx = Math.max(0, options.findIndex((o) => o.key === value));
   const glass = variant === "glass";
@@ -71,7 +74,8 @@ export function ScopeSlider({
         aria-hidden="true"
         className={cn(
           "absolute left-1 top-1 rounded-pill transition-transform duration-[240ms] ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:transition-none",
-          glass ? GLASS_PILL : ink ? "bg-white/[.16] ring-1 ring-inset ring-white/20" : "kr-pop"
+          glass ? GLASS_PILL : ink ? "bg-white/[.16] ring-1 ring-inset ring-white/20" : "kr-pop",
+          thumbClassName
         )}
         style={{ ...thumbStyle, transform: `translateX(${fluid ? `${idx * 100}%` : `${idx * segWidth}px`})` }}
       />

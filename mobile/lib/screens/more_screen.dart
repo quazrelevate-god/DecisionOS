@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../theme/app_theme.dart';
-import '../widgets/neu_surface.dart';
 
 /// The More menu — a floating soft-UI sheet that slides up OVER the
 /// current screen (the bottom nav stays visible). It's not a full-screen
@@ -26,7 +25,6 @@ import '../widgets/neu_surface.dart';
 /// floats over whichever page is behind it, so it needs one surface of
 /// its own to be lit consistently.
 const _ground = Color(0xFFEDEFEF);
-final _palette = NeuPalette.from(_ground);
 
 /// Shows the More menu as a modal bottom sheet. Called from BottomNav when
 /// the More slot is tapped.
@@ -89,14 +87,23 @@ class MoreBody extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Three rows of {wide, small} bento pairs. Roomier gaps between rows
-        // to match the reference — the frontend sheet breathes.
+        // A 2-column grid of dark ink pills.
         for (int r = 0; r < _tiles.length ~/ 2; r++) ...[
-          _BentoRow(wide: _tiles[r * 2], small: _tiles[r * 2 + 1]),
-          if (r != (_tiles.length ~/ 2) - 1) const SizedBox(height: 14),
+          Row(children: [
+            Expanded(child: _InkPill(tile: _tiles[r * 2])),
+            const SizedBox(width: 12),
+            Expanded(child: _InkPill(tile: _tiles[r * 2 + 1])),
+          ]),
+          const SizedBox(height: 12),
         ],
-        const SizedBox(height: 14),
-        _SettingsRow(),
+        // Settings — full width, with a chevron.
+        const _InkPill(
+          tile: _BentoTile(
+              label: 'Settings',
+              icon: Icons.settings_outlined,
+              route: '/settings'),
+          trailingChevron: true,
+        ),
       ],
     );
   }
@@ -108,174 +115,71 @@ class MoreBody extends StatelessWidget {
 
 class _BentoTile {
   final String label;
-  final String? blurb;
   final IconData icon;
   final String route;
   const _BentoTile({
     required this.label,
-    this.blurb,
     required this.icon,
     required this.route,
   });
 }
 
 const _tiles = <_BentoTile>[
-  // Row 1
   _BentoTile(
-    label: 'CRM',
-    blurb: 'Buyers, suppliers, complaints',
-    icon: Icons.contact_page_outlined,
-    route: '/crm',
-  ),
+      label: 'Approvals',
+      icon: Icons.verified_user_outlined,
+      route: '/approvals'),
+  _BentoTile(
+      label: 'Workflows',
+      icon: Icons.trending_up_rounded,
+      route: '/workflows'),
+  _BentoTile(label: 'Journal', icon: Icons.menu_book_outlined, route: '/journal'),
+  _BentoTile(label: 'Ops', icon: Icons.speed_rounded, route: '/ops'),
   _BentoTile(label: 'Team', icon: Icons.groups_2_outlined, route: '/team'),
-  // Row 2
-  _BentoTile(
-    label: 'Ops',
-    blurb: 'How the business is running',
-    icon: Icons.speed_rounded,
-    route: '/ops',
-  ),
-  _BentoTile(
-    label: 'Leave',
-    icon: Icons.beach_access_outlined,
-    route: '/leave',
-  ),
-  // Row 3
-  _BentoTile(
-    label: 'Workflows',
-    blurb: 'Pipelines & stage tracking',
-    icon: Icons.account_tree_outlined,
-    route: '/workflows',
-  ),
-  _BentoTile(
-    label: 'Work\nCoach',
-    icon: Icons.auto_awesome_rounded,
-    route: '/dex',
-  ),
+  _BentoTile(label: 'Leave', icon: Icons.eco_outlined, route: '/leave'),
 ];
 
-class _BentoRow extends StatelessWidget {
-  final _BentoTile wide;
-  final _BentoTile small;
-  const _BentoRow({required this.wide, required this.small});
-  @override
-  Widget build(BuildContext context) {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(flex: 2, child: _WideTile(tile: wide)),
-          const SizedBox(width: 10),
-          Expanded(flex: 1, child: _SmallTile(tile: small)),
-        ],
-      ),
-    );
-  }
-}
-
-class _WideTile extends StatelessWidget {
+class _InkPill extends StatelessWidget {
   final _BentoTile tile;
-  const _WideTile({required this.tile});
+  final bool trailingChevron;
+  const _InkPill({required this.tile, this.trailingChevron = false});
   @override
   Widget build(BuildContext context) {
-    return NeuRaised(
-      palette: _palette,
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-      padding: const EdgeInsets.all(AppSpacing.md + 2),
-      distance: 5,
-      blur: 11,
-      onTap: () {
-        Navigator.of(context).pop();
-        context.push(tile.route);
-      },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(tile.icon, size: 18, color: AppColors.textPrimary),
-              const SizedBox(width: 8),
-              Text(
-                tile.label,
-                style: AppText.bodyStrong().copyWith(fontSize: 14),
+    final r = BorderRadius.circular(AppRadius.pill);
+    return Material(
+      color: Colors.transparent,
+      borderRadius: r,
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context).pop();
+          // '/' is a shell tab (Desk) — replace rather than stack it.
+          if (tile.route == '/') {
+            context.go('/');
+          } else {
+            context.push(tile.route);
+          }
+        },
+        borderRadius: r,
+        child: Ink(
+          decoration: BoxDecoration(gradient: AppInk.plate, borderRadius: r),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+            child: Row(children: [
+              Icon(tile.icon, size: 19, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(tile.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.bodyStrong()
+                        .copyWith(fontSize: 14.5, color: Colors.white)),
               ),
-            ],
+              if (trailingChevron)
+                Icon(Icons.chevron_right_rounded,
+                    size: 20, color: Colors.white.withValues(alpha: 0.7)),
+            ]),
           ),
-          const Spacer(),
-          if ((tile.blurb ?? '').isNotEmpty)
-            Text(
-              tile.blurb!,
-              style: AppText.small().copyWith(
-                fontSize: 12,
-                color: AppColors.textSecondary,
-                height: 1.3,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SmallTile extends StatelessWidget {
-  final _BentoTile tile;
-  const _SmallTile({required this.tile});
-  @override
-  Widget build(BuildContext context) {
-    return NeuRaised(
-      palette: _palette,
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-      padding: const EdgeInsets.all(AppSpacing.md + 2),
-      distance: 5,
-      blur: 11,
-      onTap: () {
-        Navigator.of(context).pop();
-        context.push(tile.route);
-      },
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(tile.icon, size: 22, color: AppColors.textPrimary),
-          const SizedBox(height: 8),
-          Text(
-            tile.label,
-            style: AppText.bodyStrong().copyWith(fontSize: 12, height: 1.2),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SettingsRow extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return NeuRaised(
-      palette: _palette,
-      borderRadius: BorderRadius.circular(AppRadius.pill),
-      padding: const EdgeInsets.symmetric(
-        vertical: AppSpacing.md + 1,
-        horizontal: AppSpacing.md,
-      ),
-      distance: 5,
-      blur: 11,
-      onTap: () {
-        Navigator.of(context).pop();
-        context.push('/settings');
-      },
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Icons.settings_outlined,
-            size: 18,
-            color: AppColors.textPrimary,
-          ),
-          const SizedBox(width: 8),
-          Text('Settings', style: AppText.bodyStrong().copyWith(fontSize: 13)),
-        ],
+        ),
       ),
     );
   }

@@ -32,6 +32,9 @@ class AppColors {
   static const brandBg = Color(0xFFFDE9D9); // light orange tint
   static const brandDeep = Color(0xFF7A3612); // orange on dark bg (waiting rows)
   static const brandDeepBg = Color(0xFF3A1D0C); // dark orange card interior
+  // --kr-accent (hsl 19 100% 50%) — the vivid orange reserved for alerts,
+  // deltas and urgent values (e.g. an overdue KPI). NOT the same as `brand`.
+  static const accent = Color(0xFFFF5100);
 
   // Semantic
   static const danger = Color(0xFFE5484D);
@@ -45,6 +48,9 @@ class AppColors {
   static const hairline = Color(0xFFEBE3D8);
   static const hairlineStrong = Color(0xFFD9D0C3);
   static const chipBorder = Color(0xFFDDD4C7);
+  // --nm-edge (hsl 225 5% 77%) — the cool-gray hairline on every flat white
+  // card (.nm-raised). Used at ~40% opacity.
+  static const nmEdge = Color(0xFFC2C4C9);
 
   // -------------------------------------------------------------------------
   // Karma-redesign section tints — the four DecisionBento gradients (KR-8.5).
@@ -76,6 +82,11 @@ class AppRadius {
   static const lg = 20.0;
   static const xl = 24.0;
   static const pill = 999.0;
+  // PWA parity (index.css): control 16, tile 24, card 28 — the squircle radii
+  // the dock, the Dex FAB and the Desk's dark card are cut to.
+  static const control = 16.0;
+  static const tile = 24.0;
+  static const card = 28.0;
 }
 
 class AppSpacing {
@@ -113,6 +124,22 @@ class AppText {
   static TextStyle label() => _base(11, FontWeight.w600, height: 1.35, letter: 0.06, color: AppColors.textTertiary);
   static TextStyle bigNumber() => _base(34, FontWeight.w800, height: 1.05, letter: -0.03);
   static TextStyle mediumNumber() => _base(24, FontWeight.w800, height: 1.05, letter: -0.03);
+}
+
+/// INK_PLATE — the app's dark card face (glass.js INK_PLATE): a vertical
+/// gradient with a warm-white top lip and rim. Worn by the dock, the Dex FAB,
+/// the Desk's PhoneTabCard and the More tiles, all cut to the same squircle.
+class AppInk {
+  static const plateTop = Color(0xFF3D3D3D);    // hsl(0 0% 24%)
+  static const plateBottom = Color(0xFF0F0F0F); // hsl(0 0% 6%)
+  static const ink = Color(0xFF0C0C0D);         // --kr-ink
+  static const topLip = Color(0x29FFFFFF);      // white @ .16 — lit top edge
+  static const warmRim = Color(0x3AF6F1E9);     // warm white @ ~.23 — lit rim
+  static const plate = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [plateTop, plateBottom],
+  );
 }
 
 ThemeData buildAppTheme() {

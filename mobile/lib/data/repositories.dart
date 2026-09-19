@@ -60,6 +60,30 @@ class TasksRepository {
     return list.whereType<Map<String, dynamic>>().map(Task.fromJson).toList();
   }
 
+  /// GET /tasks?view=approvals — tasks awaiting the current user's approval.
+  /// Ported from Desk.js's approvals query (the Approvals tab of the phone
+  /// card). Some backends wrap the list as {tasks:[...]}, so handle both.
+  Future<List<Task>> approvals() async {
+    final r = await _api.dio.get('/tasks', queryParameters: {'view': 'approvals'});
+    _ensureOk(r);
+    final data = r.data;
+    final list = data is List
+        ? data
+        : (data is Map ? (data['tasks'] as List? ?? const []) : const []);
+    return list.whereType<Map<String, dynamic>>().map(Task.fromJson).toList();
+  }
+
+  /// GET /tasks?view=asked — tasks I created for others ("Asked by me").
+  Future<List<Task>> asked() async {
+    final r = await _api.dio.get('/tasks', queryParameters: {'view': 'asked'});
+    _ensureOk(r);
+    final data = r.data;
+    final list = data is List
+        ? data
+        : (data is Map ? (data['tasks'] as List? ?? const []) : const []);
+    return list.whereType<Map<String, dynamic>>().map(Task.fromJson).toList();
+  }
+
   Future<Task> get(String id) async {
     final r = await _api.dio.get('/tasks/$id');
     _ensureOk(r);
@@ -68,6 +92,13 @@ class TasksRepository {
 
   Future<void> approve(String id) async {
     final r = await _api.dio.post('/tasks/$id/approve');
+    _ensureOk(r);
+  }
+
+  /// POST /tasks/{id}/reject — send an approval back. `reason` is optional
+  /// (a close-stage "Request changes"); the server records it.
+  Future<void> reject(String id, {String reason = ''}) async {
+    final r = await _api.dio.post('/tasks/$id/reject', data: {'reason': reason});
     _ensureOk(r);
   }
 
@@ -175,12 +206,23 @@ class TasksRepository {
   Future<void> attach(String id,
       {required List<int> bytes,
       required String filename,
-      String? mimeType}) async {
+      String? mimeType,
+      String kind = 'attachment'}) async {
     final form = FormData.fromMap({
       'file': MultipartFile.fromBytes(bytes, filename: filename),
+      'kind': kind,
     });
     final r = await _api.dio.post('/tasks/$id/attachment', data: form);
     _ensureOk(r);
+  }
+
+  /// GET /tasks/{id}/activity — the task's timeline (newest first).
+  Future<List<Map<String, dynamic>>> activity(String id) async {
+    final r = await _api.dio.get('/tasks/$id/activity');
+    _ensureOk(r);
+    final data = r.data;
+    final list = data is List ? data : const [];
+    return list.whereType<Map<String, dynamic>>().toList();
   }
 }
 
@@ -202,13 +244,18 @@ class PeopleRepository {
     required String role,
     String? phone,
     String? password,
+    String? title,
+    String? reportingManagerId,
   }) async {
     final r = await _api.dio.post('/users', data: {
       'name': name,
       'email': email,
       'role': role,
+      if (title != null && title.isNotEmpty) 'title': title,
       if (phone != null && phone.isNotEmpty) 'phone': phone,
       if (password != null && password.isNotEmpty) 'password': password,
+      if (reportingManagerId != null && reportingManagerId.isNotEmpty)
+        'reporting_manager_id': reportingManagerId,
     });
     _ensureOk(r);
     return (r.data as Map).cast<String, dynamic>();
@@ -407,6 +454,13 @@ class JournalRepository {
       return JournalFeed.fromJson(r.data as Map<String, dynamic>);
     }
     return const JournalFeed(days: []);
+  }
+
+  /// GET /decisions/{id}/timeline — powers the "View timeline" dialog.
+  Future<DecisionTimeline> timeline(String id) async {
+    final r = await _api.dio.get('/decisions/$id/timeline');
+    _ensureOk(r);
+    return DecisionTimeline.fromJson((r.data as Map).cast<String, dynamic>());
   }
 }
 
@@ -609,7 +663,9 @@ class MoneyRepository {
   final _api = ApiClient();
 
   /// GET /ledger/summary — the finance overview payload used by the Money
-  /// screen's Overview tab (net profit, KPIs, sparkline, overdue list).
+  /// screen's Overview tab (all-time totals, asset/inventory holdings, monthly
+  /// net series). The Overview windows the money FLOWS client-side from the
+  /// revenue + expense lists, since this endpoint has no period filter.
   Future<LedgerSummary> summary() async {
     final r = await _api.dio.get('/ledger/summary');
     _ensureOk(r);
@@ -761,7 +817,45 @@ class MoneyRepository {
     _ensureOk(r);
   }
 
+  /// GET /ledger/ai/{scope} — the AI Finance Brief (scope 'brief') or the
+  /// per-tab AI Analysis (scope revenue|expenses|assets|inventory). Returns a
+  /// structured brief (headline + Action Items). A soft empty brief on error
+  /// so the card renders a "press Refresh" hint rather than crashing.
+  Future<FinanceBrief> aiBrief(String scope) async {
+    try {
+      final r = await _api.dio.get('/ledger/ai/$scope');
+      _ensureOk(r);
+      return FinanceBrief.fromJson(r.data as Map<String, dynamic>);
+    } catch (_) {
+      return const FinanceBrief();
+    }
+  }
+
+  /// POST /ledger/ai/{scope}/refresh — recompute and return the brief.
+  Future<FinanceBrief> refreshBrief(String scope) async {
+    final r = await _api.dio.post('/ledger/ai/$scope/refresh');
+    _ensureOk(r);
+    return FinanceBrief.fromJson(r.data as Map<String, dynamic>);
+  }
+
   // ── Inbox (captures) ───────────────────────────────────────────────────────
+
+  /// GET /captures?status={key} — the Inbox review queue for one sub-tab.
+  Future<List<Capture>> captures(String status) async {
+    final r = await _api.dio.get('/captures', queryParameters: {'status': status});
+    _ensureOk(r);
+    final data = r.data;
+    List raw = const [];
+    if (data is List) {
+      raw = data;
+    } else if (data is Map && data['items'] is List) {
+      raw = data['items'] as List;
+    } else if (data is Map && data['captures'] is List) {
+      raw = data['captures'] as List;
+    }
+    return raw.whereType<Map<String, dynamic>>().map(Capture.fromJson).toList();
+  }
+
   Future<void> approveCapture(String id) async {
     final r = await _api.dio.post('/captures/$id/approve');
     _ensureOk(r);
@@ -770,6 +864,12 @@ class MoneyRepository {
   Future<void> rejectCapture(String id, {String reason = ''}) async {
     final r = await _api.dio
         .post('/captures/$id/reject', data: {'reason': reason});
+    _ensureOk(r);
+  }
+
+  Future<void> clarifyCapture(String id, {String question = ''}) async {
+    final r = await _api.dio
+        .post('/captures/$id/clarify', data: {'question': question});
     _ensureOk(r);
   }
 
@@ -985,6 +1085,84 @@ class DexRepository {
     } catch (_) {
       return "I couldn't reach the assistant just now.";
     }
+  }
+
+  /// POST /voice-notes/text — the "decide" channel: hand Dex a decision in
+  /// words. Returns the created note id to poll. Requires the voice_capture
+  /// permission (owners hold it implicitly).
+  Future<String> submitDecisionText(String text, {List<String> fileIds = const []}) async {
+    final r = await _api.dio.post('/voice-notes/text', data: {'text': text, 'file_ids': fileIds});
+    _ensureOk(r);
+    final data = r.data;
+    return data is Map ? (data['id'] ?? '').toString() : '';
+  }
+
+  /// GET /voice-notes/{id} — poll a note through queued→…→done|failed. Returns
+  /// the raw note doc; the caller reads status / outcome / decision_id /
+  /// execution_summary / summary / error.
+  Future<Map<String, dynamic>> noteStatus(String id) async {
+    final r = await _api.dio.get('/voice-notes/$id');
+    _ensureOk(r);
+    return r.data is Map<String, dynamic> ? r.data as Map<String, dynamic> : <String, dynamic>{};
+  }
+}
+
+/// The decision-review wire — the enriched decision plus the decide actions.
+/// Mirrors backend/routers/decisions.py.
+class DecisionsRepository {
+  final _api = ApiClient();
+
+  /// GET /decisions/{id} — the enriched decision (title, summary, said,
+  /// proposal, tasks, execution_summary, created_by_name, …).
+  Future<Map<String, dynamic>> get(String id) async {
+    final r = await _api.dio.get('/decisions/$id');
+    _ensureOk(r);
+    return r.data is Map<String, dynamic> ? r.data as Map<String, dynamic> : <String, dynamic>{};
+  }
+
+  /// POST /decisions/{id}/approve — materializes the proposal. Empty body.
+  Future<Map<String, dynamic>> approve(String id) async {
+    final r = await _api.dio.post('/decisions/$id/approve');
+    _ensureOk(r);
+    return r.data is Map<String, dynamic> ? r.data as Map<String, dynamic> : <String, dynamic>{};
+  }
+
+  /// POST /decisions/{id}/reject — nothing proposed is created. Empty body.
+  Future<Map<String, dynamic>> reject(String id) async {
+    final r = await _api.dio.post('/decisions/$id/reject');
+    _ensureOk(r);
+    return r.data is Map<String, dynamic> ? r.data as Map<String, dynamic> : <String, dynamic>{};
+  }
+
+  /// PATCH /decisions/{id}/proposal/tasks/{key} — edit a proposed task's
+  /// assignee and/or due date before approval.
+  Future<void> patchProposalTask(String id, String key, {String? assigneeId, String? dueDate}) async {
+    final body = <String, dynamic>{};
+    if (assigneeId != null) body['assignee_id'] = assigneeId;
+    if (dueDate != null) body['due_date'] = dueDate;
+    final r = await _api.dio.patch('/decisions/$id/proposal/tasks/$key', data: body);
+    _ensureOk(r);
+  }
+
+  /// DELETE /decisions/{id}/proposal/{kind}/{key} — drop a proposed item
+  /// (kind ∈ tasks|workflows|meetings|reminders|memory_notes).
+  Future<void> deleteProposalItem(String id, String kind, String key) async {
+    final r = await _api.dio.delete('/decisions/$id/proposal/$kind/$key');
+    _ensureOk(r);
+  }
+
+  /// GET /decisions/{id}/approvers — everyone who could decide this.
+  Future<List<Map<String, dynamic>>> approvers(String id) async {
+    final r = await _api.dio.get('/decisions/$id/approvers');
+    _ensureOk(r);
+    final list = (r.data as List?) ?? const [];
+    return list.whereType<Map<String, dynamic>>().toList();
+  }
+
+  /// POST /decisions/{id}/approver — hand the decision to someone else.
+  Future<void> setApprover(String id, String approverId) async {
+    final r = await _api.dio.post('/decisions/$id/approver', data: {'approver_id': approverId});
+    _ensureOk(r);
   }
 }
 

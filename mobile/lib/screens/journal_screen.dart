@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../data/repositories.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
@@ -99,9 +100,15 @@ class _JournalScreenState extends State<JournalScreen> {
                             onSubmit: _submitSearch,
                           ),
                           const SizedBox(height: AppSpacing.md),
-                          _ViewSegment(
-                            view: _view,
-                            onChanged: (v) => setState(() => _view = v),
+                          Row(
+                            children: [
+                              const _EventsDeskPill(),
+                              const Spacer(),
+                              _ViewSegment(
+                                view: _view,
+                                onChanged: (v) => setState(() => _view = v),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: AppSpacing.lg),
                           _body(snap),
@@ -208,66 +215,53 @@ class _SearchRow extends StatelessWidget {
   const _SearchRow({required this.controller, required this.onSubmit});
   @override
   Widget build(BuildContext context) {
+    final neu = NeuPalette.from(trackColorFor(BloomTint.amber));
     return Row(
       children: [
+        // The field is a neu pit pressed into the amber ground.
         Expanded(
-          child: KrPop(
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            padding: const EdgeInsets.all(4),
-            color: AppColors.surfaceMuted,
-            child: KrPressed(
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              color: AppColors.surface,
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.search_rounded,
-                    size: 18,
-                    color: AppColors.textSecondary,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: controller,
-                      onSubmitted: (_) => onSubmit(),
-                      style: AppText.body(),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        hintText: 'Search decisions & notes…',
-                        hintStyle: AppText.body().copyWith(
-                          color: AppColors.textTertiary,
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                        ),
-                      ),
+          child: NeuRecessed(
+            palette: neu,
+            radius: AppRadius.pill,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                const Icon(Icons.search_rounded,
+                    size: 18, color: AppColors.textSecondary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    onSubmitted: (_) => onSubmit(),
+                    style: AppText.body(),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: 'Search decisions & notes…',
+                      hintStyle: AppText.body()
+                          .copyWith(color: AppColors.textTertiary),
+                      border: InputBorder.none,
+                      contentPadding:
+                          const EdgeInsets.symmetric(vertical: 15),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
         const SizedBox(width: 10),
-        Material(
+        // The Search button is a raised dark pill.
+        NeuRaised(
+          palette: neu,
           color: AppColors.textPrimary,
           borderRadius: BorderRadius.circular(AppRadius.pill),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            onTap: onSubmit,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.lg,
-                vertical: 12,
-              ),
-              child: Text(
-                'Search',
-                style: AppText.bodyStrong().copyWith(color: Colors.white),
-              ),
-            ),
-          ),
+          distance: 3,
+          blur: 8,
+          onTap: onSubmit,
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg, vertical: 14),
+          child: Text('Search',
+              style: AppText.bodyStrong().copyWith(color: Colors.white)),
         ),
       ],
     );
@@ -284,10 +278,11 @@ class _ViewSegment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // KM-57 — the app's segment material. A bare Row (not Align) so the
-    // control gets unbounded width and shrink-wraps to its two labels,
-    // rather than stretching across the page.
+    // KM-57 — the app's segment material. A shrink-wrapping Row so the
+    // control hugs its two labels and sits to the right of the Events desk
+    // pill, rather than stretching across the page.
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         RaisedPillSegment(
           active: _views.indexOf(view).clamp(0, 1),
@@ -300,6 +295,34 @@ class _ViewSegment extends StatelessWidget {
               neuSegmentLabel(context, _labels[i], isActive),
         ),
       ],
+    );
+  }
+}
+
+/// The "Events desk" pill — a raised link (NOT a third view) that jumps to the
+/// Calendar room, matching the PWA `<Link to="/calendar">`.
+class _EventsDeskPill extends StatelessWidget {
+  const _EventsDeskPill();
+  @override
+  Widget build(BuildContext context) {
+    return NeuRaised(
+      palette: NeuPalette.from(trackColorFor(BloomTint.amber)),
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(AppRadius.pill),
+      distance: 3,
+      blur: 8,
+      onTap: () => context.push('/calendar'),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.calendar_today_rounded,
+              size: 15, color: AppColors.textPrimary),
+          const SizedBox(width: 8),
+          Text('Events desk',
+              style: AppText.bodyStrong().copyWith(fontSize: 13.5)),
+        ],
+      ),
     );
   }
 }
@@ -546,16 +569,50 @@ class _NoteCard extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              note.text,
-              style: AppText.body().copyWith(
-                fontSize: 14,
-                height: 1.35,
-                color: AppColors.textPrimary,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  note.text,
+                  style: AppText.body().copyWith(
+                    fontSize: 14,
+                    height: 1.35,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                if ((note.tag ?? '').trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _NoteTagChip(tag: note.tag!.trim()),
+                ],
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A note's free-form tag (e.g. "Team-Coordination"). Renders in the neutral
+/// fallback style — underscores become spaces; existing casing is kept.
+class _NoteTagChip extends StatelessWidget {
+  final String tag;
+  const _NoteTagChip({required this.tag});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        tag.replaceAll('_', ' '),
+        style: AppText.small().copyWith(
+          color: AppColors.textSecondary,
+          fontWeight: FontWeight.w600,
+          fontSize: 11.5,
+        ),
       ),
     );
   }
@@ -568,11 +625,7 @@ class _DecisionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _NeuTile(
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('View timeline — coming soon')),
-        );
-      },
+      onTap: () => _openTimeline(context, entry.id),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -618,37 +671,24 @@ class _DecisionCard extends StatelessWidget {
   }
 }
 
-/// Neumorphic bento tile shared by note groups and decision cards.
-/// Matches the frontend's `rounded-cardlg` corner (20 px) and roomy padding.
+/// Neumorphic bento tile shared by note groups and decision cards — the
+/// app's real soft-UI material (dual light/shadow pair on the amber ground),
+/// not a single flat drop shadow.
 class _NeuTile extends StatelessWidget {
   final Widget child;
   final VoidCallback? onTap;
   const _NeuTile({required this.child, this.onTap});
   @override
   Widget build(BuildContext context) {
-    // Big soft corners — the reference shows ~20 px, not the 14 px used on
-    // smaller tiles. Padding is roomier too: 18 h × 16 v.
-    final radius = BorderRadius.circular(AppRadius.lg);
-    final content = Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: radius,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            offset: const Offset(0, 2),
-            blurRadius: 8,
-          ),
-        ],
-      ),
+    return NeuRaised(
+      palette: NeuPalette.from(trackColorFor(BloomTint.amber)),
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      distance: 4,
+      blur: 12,
+      onTap: onTap,
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       child: child,
-    );
-    if (onTap == null) return content;
-    return Material(
-      color: Colors.transparent,
-      borderRadius: radius,
-      child: InkWell(borderRadius: radius, onTap: onTap, child: content),
     );
   }
 }
@@ -776,6 +816,264 @@ String _capitalize(String s) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// "View timeline" — a bottom sheet fetching GET /decisions/{id}/timeline.
+// ─────────────────────────────────────────────────────────────────────────────
+
+void _openTimeline(BuildContext context, String decisionId) {
+  showDialog<void>(
+    context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.45),
+    builder: (_) => _TimelineDialog(decisionId: decisionId),
+  );
+}
+
+class _TimelineDialog extends StatefulWidget {
+  final String decisionId;
+  const _TimelineDialog({required this.decisionId});
+  @override
+  State<_TimelineDialog> createState() => _TimelineDialogState();
+}
+
+class _TimelineDialogState extends State<_TimelineDialog> {
+  late Future<DecisionTimeline> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = JournalRepository().timeline(widget.decisionId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final maxH = MediaQuery.of(context).size.height * 0.78;
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+      child: Container(
+        constraints: BoxConstraints(maxHeight: maxH),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(26),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.22),
+              offset: const Offset(0, 14),
+              blurRadius: 40,
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.lg),
+        child: FutureBuilder<DecisionTimeline>(
+          future: _future,
+          builder: (context, snap) {
+            if (snap.connectionState != ConnectionState.done) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 44),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snap.hasError) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 44),
+                child: Center(child: Text('Could not load the timeline.')),
+              );
+            }
+            return _content(snap.data!);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _content(DecisionTimeline t) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(t.title.isEmpty ? 'Decision' : t.title,
+                  style: AppText.h3().copyWith(fontSize: 18, height: 1.3)),
+            ),
+            const SizedBox(width: 10),
+            _DialogClose(onTap: () => Navigator.of(context).pop()),
+          ],
+        ),
+        if (t.status.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(_statusLabel(t.status),
+              style: AppText.bodyStrong().copyWith(
+                  fontSize: 13.5, color: _statusFg(t.status))),
+        ],
+        const SizedBox(height: 18),
+        if (t.events.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text('No timeline events yet.',
+                style:
+                    AppText.small().copyWith(color: AppColors.textTertiary)),
+          )
+        else
+          Flexible(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (int i = 0; i < t.events.length; i++)
+                    _TimelineRow(
+                      event: t.events[i],
+                      isLast: i == t.events.length - 1,
+                    ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _DialogClose extends StatelessWidget {
+  final VoidCallback onTap;
+  const _DialogClose({required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: AppColors.hairline),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: const Padding(
+          padding: EdgeInsets.all(8),
+          child: Icon(Icons.close_rounded,
+              size: 18, color: AppColors.textSecondary),
+        ),
+      ),
+    );
+  }
+}
+
+/// Foreground colour for a status word shown as plain coloured text
+/// (matches the `_StatusChip` fg palette).
+Color _statusFg(String status) {
+  switch (status.toLowerCase()) {
+    case 'approved':
+    case 'done':
+      return const Color(0xFF15803D);
+    case 'pending_approval':
+    case 'blocked':
+      return const Color(0xFFB45309);
+    case 'rejected':
+    case 'overdue':
+      return const Color(0xFFB91C1C);
+    default:
+      return AppColors.textSecondary;
+  }
+}
+
+class _TimelineRow extends StatelessWidget {
+  final DecisionTimelineEvent event;
+  final bool isLast;
+  const _TimelineRow({required this.event, required this.isLast});
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, color) = _eventStyle(event.kind);
+    final meta = [
+      if ((event.actor ?? '').isNotEmpty) event.actor! else 'System',
+      if (event.ts != null) _fmtEventTime(event.ts!),
+    ].join(' · ');
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Column(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 15, color: color),
+              ),
+              if (!isLast)
+                Expanded(
+                  child: Container(
+                    width: 1.5,
+                    color: AppColors.hairlineStrong,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(event.label,
+                      style: AppText.body().copyWith(
+                          fontSize: 14, fontWeight: FontWeight.w600)),
+                  if (meta.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(meta,
+                        style: AppText.small().copyWith(
+                            color: AppColors.textSecondary, fontSize: 12)),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+(IconData, Color) _eventStyle(String kind) {
+  switch (kind.toLowerCase()) {
+    case 'captured':
+    case 'capture':
+      return (Icons.mic_none_rounded, const Color(0xFF4F46E5));
+    case 'proposed':
+    case 'proposal':
+      return (Icons.lightbulb_outline_rounded, const Color(0xFFB45309));
+    case 'approved':
+      return (Icons.check_circle_outline_rounded, const Color(0xFF15803D));
+    case 'rejected':
+      return (Icons.cancel_outlined, const Color(0xFFB91C1C));
+    case 'task':
+    case 'task_created':
+      return (Icons.check_box_outlined, const Color(0xFF4F46E5));
+    default:
+      return (Icons.circle, AppColors.textSecondary);
+  }
+}
+
+String _fmtEventTime(DateTime d) {
+  const mo = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+  final l = d.toLocal();
+  final h = l.hour % 12 == 0 ? 12 : l.hour % 12;
+  final ampm = l.hour < 12 ? 'AM' : 'PM';
+  final mm = l.minute.toString().padLeft(2, '0');
+  return '${l.day} ${mo[l.month - 1]}, $h:$mm $ampm';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Date helpers (Journal-local — kept independent of calendar_screen).
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -841,30 +1139,4 @@ String _weekdayDayMonth(DateTime d) {
     'December',
   ];
   return '${wk[d.weekday - 1]} ${d.day} ${mo[d.month - 1]}';
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Warm amber bloom — matches the frontend `--kr-accent-soft` bleed.
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _JournalBloomBackground extends StatelessWidget {
-  const _JournalBloomBackground();
-  @override
-  Widget build(BuildContext context) {
-    const amber = Color(0xFFFFB25C);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: RadialGradient(
-          center: const Alignment(0, -0.15),
-          radius: 1.0,
-          colors: [
-            amber.withValues(alpha: 0.24),
-            amber.withValues(alpha: 0.10),
-            AppColors.background.withValues(alpha: 0),
-          ],
-          stops: const [0.0, 0.4, 1.0],
-        ),
-      ),
-    );
-  }
 }

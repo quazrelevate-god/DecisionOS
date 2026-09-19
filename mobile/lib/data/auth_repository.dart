@@ -18,6 +18,7 @@ class AuthRepository extends ChangeNotifier {
   User? _user;
   List<Pipeline> _pipelines = const [];
   List<TenantRole> _roles = const [];
+  List<({String key, String label})> _taskCategories = const [];
   String? _lastError;
 
   AuthStatus get status => _status;
@@ -31,6 +32,10 @@ class AuthRepository extends ChangeNotifier {
   /// Tenant-configured roles used for grouping the Team screen ("Sales",
   /// "Ops", …). Owner is implicit and rendered before this list.
   List<TenantRole> get roles => _roles;
+
+  /// Tenant-configured task departments (operating_model.task_categories),
+  /// each {key, label}. A task's `task_type` is the category key.
+  List<({String key, String label})> get taskCategories => _taskCategories;
 
   Future<void> refresh() async {
     try {
@@ -57,18 +62,29 @@ class AuthRepository extends ChangeNotifier {
             .map(TenantRole.fromJson)
             .where((r) => r.key.isNotEmpty)
             .toList();
+        final rawCats = (om?['task_categories'] as List?) ?? const [];
+        _taskCategories = rawCats
+            .whereType<Map<String, dynamic>>()
+            .map((c) => (
+                  key: (c['key'] ?? '').toString(),
+                  label: (c['label'] ?? c['key'] ?? '').toString(),
+                ))
+            .where((c) => c.key.isNotEmpty)
+            .toList();
         _status = AuthStatus.authenticated;
       } else {
         _status = AuthStatus.unauthenticated;
         _user = null;
         _pipelines = const [];
         _roles = const [];
+        _taskCategories = const [];
       }
     } catch (_) {
       _status = AuthStatus.unauthenticated;
       _user = null;
       _pipelines = const [];
       _roles = const [];
+      _taskCategories = const [];
     }
     notifyListeners();
   }

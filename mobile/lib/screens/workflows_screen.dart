@@ -6,36 +6,50 @@ import '../models/models.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_bloom.dart';
 import '../widgets/app_header.dart';
-import '../widgets/neumorphic.dart';
+import '../widgets/neu_surface.dart';
+import '../widgets/overlay_dock.dart';
 import '../widgets/states.dart';
 
-/// Standalone workflows page — reached from the More sheet. Wraps
-/// [WorkflowsBody] with the same steel-blue bloom + AppHeader that the
-/// Work screen wears, so navigating between them feels continuous.
+/// The Workflows screen — re-synced to the PWA (`frontend/pages/Workflows.js`).
+///
+///   • header: "Workflows" title
+///   • controls: a labelled pipeline dropdown (anchored popover with a per-type
+///     count) + an outline "+ New workflow" pill (opens a floating dialog)
+///   • one collapsible frosted tray per stage of the active pipeline. The tray
+///     header shows "Stage Count" + a chevron; open it and the workflow cards
+///     for that stage stack VERTICALLY inside.
+///   • each card: title (+ owner-only trash), counterparty + amount, a
+///     "From decision: …" line, the open stage-tasks (or "No open tasks at this
+///     stage."), a "↺ {last note} · {when}" meta line, and an outline
+///     "Advance to {next stage} →" button.
+///
+/// Only the active pipeline's items are loaded (matching the PWA), so counts for
+/// other pipelines read 0 until selected. Advancing hits PATCH
+/// /workflows/{id}/advance; the next stage is taken from the card's own frozen
+/// `stages`. Delete is owner-only.
 class WorkflowsScreen extends StatelessWidget {
   const WorkflowsScreen({super.key});
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Stack(
+    return Material(
+      type: MaterialType.canvas,
+      color: AppColors.background,
+      child: Stack(
         children: [
           const Positioned.fill(child: AppBloom(tint: BloomTint.steelBlue)),
           Column(
-            children: [
-              const AppHeader(),
-              const Expanded(child: WorkflowsBody()),
+            children: const [
+              AppHeader.minimal(),
+              Expanded(child: WorkflowsBody()),
             ],
           ),
+          const OverlayDock(),
         ],
       ),
     );
   }
 }
 
-/// The workflows content — pipeline switcher, "+ New workflow" pill, and a
-/// vertical stack of stage sections. When a stage is tapped open, the
-/// workflows for that stage render as a HORIZONTAL scroller (KR-14.21).
 class WorkflowsBody extends StatefulWidget {
   final String pipelineKey;
   const WorkflowsBody({super.key, this.pipelineKey = 'production'});
@@ -44,43 +58,61 @@ class WorkflowsBody extends StatefulWidget {
 }
 
 class _WorkflowsBodyState extends State<WorkflowsBody> {
-  late String _activeKey = widget.pipelineKey;
+  late String _activeKey;
   final Set<String> _openStages = {};
-  Future<List<Workflow>>? _future;
+  List<Workflow>? _items;
+  bool _loading = true;
+  bool _error = false;
 
   @override
   void initState() {
     super.initState();
-    _reload();
+    final pipes = AuthRepository.I.pipelines;
+    // Default to the first configured pipeline, or the passed-in key.
+    _activeKey = pipes.any((p) => p.key == widget.pipelineKey)
+        ? widget.pipelineKey
+        : (pipes.isNotEmpty ? pipes.first.key : widget.pipelineKey);
+    _load();
   }
 
-  @override
-  void didUpdateWidget(covariant WorkflowsBody old) {
-    super.didUpdateWidget(old);
-    // Parent (Work screen) changed the pipeline via the filter dropdown —
-    // reset open sections and refetch.
-    if (old.pipelineKey != widget.pipelineKey) {
-      _activeKey = widget.pipelineKey;
-      _openStages.clear();
-      _reload();
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = false;
+    });
+    try {
+      final items = await WorkflowsRepository().list(_activeKey);
+      if (!mounted) return;
+      setState(() {
+        _items = items;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = true;
+        _loading = false;
+      });
     }
   }
 
-  void _reload() {
-    // Block syntax on setState — the arrow form `() => _future = ...`
-    // implicitly returns the Future assignment, which Flutter rejects.
+  void _selectPipeline(String key) {
+    if (key == _activeKey) return;
     setState(() {
-      _future = WorkflowsRepository().list(_activeKey);
+      _activeKey = key;
+      _openStages.clear();
+      _items = null;
     });
+    _load();
   }
 
-  Future<void> _advance(Workflow wf, String targetStage) async {
+  Future<void> _advance(Workflow wf, String targetStage, String label) async {
     try {
       await WorkflowsRepository().advance(wf.id, targetStage);
-      _reload();
+      await _load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Moved to ${_labelFor(targetStage)}')),
+          SnackBar(content: Text('Moved to $label')),
         );
       }
     } catch (_) {
@@ -111,7 +143,7 @@ class _WorkflowsBodyState extends State<WorkflowsBody> {
     if (ok != true) return;
     try {
       await WorkflowsRepository().delete(wf.id);
-      _reload();
+      await _load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Workflow deleted')),
@@ -126,317 +158,367 @@ class _WorkflowsBodyState extends State<WorkflowsBody> {
     }
   }
 
-  String _labelFor(String stageKey) {
-    return stageKey.split(RegExp(r'[_\s]+')).map((w) {
-      return w.isEmpty ? w : w[0].toUpperCase() + w.substring(1);
-    }).join(' ');
+  Pipeline get _activePipeline {
+    final pipes = AuthRepository.I.pipelines;
+    return pipes.firstWhere(
+      (p) => p.key == _activeKey,
+      orElse: () => Pipeline(key: _activeKey, label: _titleCase(_activeKey)),
+    );
   }
+
+  static String _titleCase(String k) => k
+      .split(RegExp(r'[_\s]+'))
+      .map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1))
+      .join(' ');
 
   @override
   Widget build(BuildContext context) {
+    final items = _items ?? const <Workflow>[];
+    final isOwner = AuthRepository.I.user?.role == 'owner';
+
     return SingleChildScrollView(
       physics: const ClampingScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 120),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Title + pipeline filter — matches the Work screen chrome so
-          // the two feel like siblings.
+          Text('Workflows', style: AppText.h1()),
+          const SizedBox(height: AppSpacing.lg),
           Row(
             children: [
               Expanded(
-                child: Text('Workflows',
-                    style: AppText.display().copyWith(fontSize: 30, height: 1.05)),
+                child: _PipelinePicker(
+                  active: _activeKey,
+                  items: items,
+                  onSelect: _selectPipeline,
+                ),
               ),
-              _PipelineFilterCircle(
-                active: _activeKey,
-                onSelect: (k) {
-                  if (k == _activeKey) return;
-                  setState(() {
-                    _activeKey = k;
-                    _openStages.clear();
-                  });
-                  _reload();
-                },
+              const SizedBox(width: 10),
+              _NewWorkflowButton(
+                pipelineKey: _activeKey,
+                onCreated: _load,
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
-          _NewWorkflowButton(
-            pipelineKey: _activeKey,
-            onCreated: _reload,
-          ),
-          const SizedBox(height: 20),   // gap enlarged by +10 above divider
-          const _NeumorphicDivider(),
-          const SizedBox(height: 20),   // gap enlarged by +10 below divider
-          FutureBuilder<List<Workflow>>(
-            future: _future,
-            builder: (context, snap) {
-              if (snap.connectionState != ConnectionState.done) {
-                return const Column(children: [
-                  LoadingCard(height: 60),
-                  SizedBox(height: 10),
-                  LoadingCard(height: 90),
-                  SizedBox(height: 10),
-                  LoadingCard(height: 90),
-                ]);
-              }
-              if (snap.hasError) {
-                return ErrorState(
-                  message: 'Could not load workflows for this pipeline.',
-                  onRetry: _reload,
-                );
-              }
-              final wfs = snap.data ?? const <Workflow>[];
-              if (wfs.isEmpty) {
-                return const EmptyState(
-                  icon: Icons.polyline_outlined,
-                  title: 'No workflows in this pipeline',
-                  subtitle: 'New workflows will appear here once they’re created.',
-                );
-              }
-              // Derive stages from the first workflow.
-              final stages = wfs.first.stages;
-              return Column(
-                children: [
-                  for (final s in stages) ...[
-                    _StageSection(
-                      stageKey: s,
-                      label: _labelFor(s),
-                      items: wfs.where((w) => w.stage == s).toList(),
-                      open: _openStages.contains(s),
-                      onToggle: () => setState(() {
-                        _openStages.contains(s)
-                            ? _openStages.remove(s)
-                            : _openStages.add(s);
-                      }),
-                      nextStageLabel: (wf) {
-                        final idx = stages.indexOf(wf.stage);
-                        return idx >= 0 && idx < stages.length - 1
-                            ? _labelFor(stages[idx + 1])
-                            : null;
-                      },
-                      onAdvance: (wf) {
-                        final idx = stages.indexOf(wf.stage);
-                        if (idx < stages.length - 1) {
-                          _advance(wf, stages[idx + 1]);
-                        }
-                      },
-                      onDelete: (wf) => _confirmDelete(wf),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                  ],
-                ],
-              );
-            },
-          ),
+          _content(items, isOwner),
         ],
       ),
     );
   }
-}
 
-class _Header extends StatelessWidget {
-  final VoidCallback onBack;
-  const _Header({required this.onBack});
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
-      child: Row(children: [
-        IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back_rounded)),
-        const SizedBox(width: 4),
-        Text('Workflows', style: AppText.h1().copyWith(fontSize: 24)),
-      ]),
-    );
-  }
-}
+  Widget _content(List<Workflow> items, bool isOwner) {
+    if (_loading) {
+      return const Column(children: [
+        LoadingCard(height: 58),
+        SizedBox(height: 12),
+        LoadingCard(height: 58),
+        SizedBox(height: 12),
+        LoadingCard(height: 58),
+      ]);
+    }
+    if (_error) {
+      return ErrorState(
+        message: 'Could not load workflows for this pipeline.',
+        onRetry: _load,
+      );
+    }
 
-/// A thin neumorphic divider — two 1px hairlines stacked (a dark line + a
-/// white highlight underneath) so the line reads as a groove pressed INTO
-/// the cream page rather than a flat rule sitting on top.
-class _NeumorphicDivider extends StatelessWidget {
-  const _NeumorphicDivider();
-  @override
-  Widget build(BuildContext context) {
-    return Column(children: [
-      Container(
-        height: 1,
-        color: Colors.black.withValues(alpha: 0.08),
-      ),
-      Container(
-        height: 1,
-        color: Colors.white.withValues(alpha: 0.85),
-      ),
-    ]);
-  }
-}
+    final pipe = _activePipeline;
+    // Stages come from the active pipeline (so empty stages still show); fall
+    // back to the first card's frozen stage list for the default pipelines
+    // that ship without stage definitions.
+    final stageKeys = pipe.stages.isNotEmpty
+        ? pipe.stages
+        : (items.isNotEmpty ? items.first.stages : const <String>[]);
 
-class _NewWorkflowButton extends StatelessWidget {
-  final String pipelineKey;
-  final VoidCallback onCreated;
-  const _NewWorkflowButton({
-    required this.pipelineKey,
-    required this.onCreated,
-  });
+    if (stageKeys.isEmpty) {
+      return const EmptyState(
+        icon: Icons.polyline_outlined,
+        title: 'No workflows in this pipeline',
+        subtitle: 'New workflows will appear here once they’re created.',
+      );
+    }
 
-  Future<void> _open(BuildContext context) async {
-    final created = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
-      ),
-      builder: (ctx) => _NewWorkflowSheet(pipelineKey: pipelineKey),
-    );
-    if (created == true) onCreated();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Short, black, self-sizing pill — no longer stretched across the row.
-    // Aligned to the leading edge so it reads as a call to action, not a
-    // banner.
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => _open(context),
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppColors.textPrimary,
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.20),
-                  offset: const Offset(0, 3),
-                  blurRadius: 6,
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.add_rounded, size: 14, color: Colors.white),
-                const SizedBox(width: 6),
-                Text('New workflow',
-                    style: AppText.smallStrong().copyWith(
-                        fontSize: 12, color: Colors.white)),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StageSection extends StatelessWidget {
-  final String stageKey;
-  final String label;
-  final List<Workflow> items;
-  final bool open;
-  final VoidCallback onToggle;
-  final void Function(Workflow) onAdvance;
-  final void Function(Workflow) onDelete;
-  final String? Function(Workflow) nextStageLabel;
-  const _StageSection({
-    required this.stageKey,
-    required this.label,
-    required this.items,
-    required this.open,
-    required this.onToggle,
-    required this.onAdvance,
-    required this.onDelete,
-    required this.nextStageLabel,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // Collapsed = pill/round header only (KR-14.21 mobile idiom).
-    // Expanded = the header + a HORIZONTAL scroller of workflow cards below.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        KrPop(
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 14),
-          onTap: onToggle,
-          child: Row(children: [
-            Expanded(
-              child: Text(label,
-                  style: AppText.bodyStrong().copyWith(fontSize: 14)),
-            ),
-            Text('${items.length}',
-                style: AppText.small().copyWith(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                    fontFeatures: const [FontFeature.tabularFigures()])),
-            const SizedBox(width: 8),
-            AnimatedRotation(
-              turns: open ? 0 : -0.25,
-              duration: const Duration(milliseconds: 180),
-              child: const Icon(Icons.expand_more_rounded,
-                  size: 18, color: AppColors.textSecondary),
-            ),
-          ]),
-        ),
-        // Horizontal-scroll body — port of the frontend's `-mx-2 flex flex-row
-        // overflow-x-auto` when a mobile stage is open.
-        if (open) ...[
-          const SizedBox(height: AppSpacing.md),
-          SizedBox(
-            height: 240,
-            child: items.isEmpty
-                ? Container(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                      border: Border.all(
-                        color: AppColors.hairline,
-                        style: BorderStyle.solid,
-                      ),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text('Nothing at this stage',
-                        style: AppText.small()
-                            .copyWith(color: AppColors.textTertiary)),
-                  )
-                : ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    physics: const ClampingScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(horizontal: 2),
-                    itemCount: items.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 10),
-                    itemBuilder: (context, i) => SizedBox(
-                      width: 256,
-                      child: _WorkflowCard(
-                        wf: items[i],
-                        nextStageLabel: nextStageLabel(items[i]),
-                        onAdvance: () => onAdvance(items[i]),
-                        onDelete: () => onDelete(items[i]),
-                      ),
-                    ),
-                  ),
+        for (final key in stageKeys) ...[
+          _StageSection(
+            label: pipe.labelForStage(key),
+            items: items.where((w) => w.stage == key).toList(),
+            open: _openStages.contains(key),
+            isOwner: isOwner,
+            onToggle: () => setState(() {
+              _openStages.contains(key)
+                  ? _openStages.remove(key)
+                  : _openStages.add(key);
+            }),
+            nextLabelFor: (wf) {
+              final idx = wf.stages.indexOf(wf.stage);
+              return idx >= 0 && idx < wf.stages.length - 1
+                  ? pipe.labelForStage(wf.stages[idx + 1])
+                  : null;
+            },
+            onAdvance: (wf) {
+              final idx = wf.stages.indexOf(wf.stage);
+              if (idx >= 0 && idx < wf.stages.length - 1) {
+                final next = wf.stages[idx + 1];
+                _advance(wf, next, pipe.labelForStage(next));
+              }
+            },
+            onDelete: _confirmDelete,
           ),
+          const SizedBox(height: AppSpacing.md),
         ],
       ],
     );
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Pipeline picker — an anchored dropdown popover (never a bottom sheet).
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PipelinePicker extends StatelessWidget {
+  final String active;
+  final List<Workflow> items;
+  final ValueChanged<String> onSelect;
+  const _PipelinePicker({
+    required this.active,
+    required this.items,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final pipes = AuthRepository.I.pipelines;
+    final activePipe = pipes.firstWhere(
+      (p) => p.key == active,
+      orElse: () => Pipeline(key: active, label: active),
+    );
+
+    int countFor(String key) => items.where((w) => w.type == key).length;
+
+    return PopupMenuButton<String>(
+      onSelected: onSelect,
+      offset: const Offset(0, 8),
+      position: PopupMenuPosition.under,
+      color: AppColors.surface,
+      elevation: 8,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      constraints: const BoxConstraints(minWidth: 240),
+      itemBuilder: (_) => [
+        for (final p in pipes)
+          PopupMenuItem<String>(
+            value: p.key,
+            height: 44,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(p.label,
+                      style: AppText.body().copyWith(
+                          fontSize: 14,
+                          fontWeight: p.key == active
+                              ? FontWeight.w700
+                              : FontWeight.w400)),
+                ),
+                const SizedBox(width: 12),
+                Text('${countFor(p.key)}',
+                    style: AppText.small().copyWith(
+                        color: AppColors.textTertiary, fontSize: 13)),
+              ],
+            ),
+          ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(color: AppColors.hairline),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.view_list_rounded,
+                size: 18, color: AppColors.textSecondary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(activePipe.label,
+                  style: AppText.bodyStrong().copyWith(fontSize: 14),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+            ),
+            const Icon(Icons.keyboard_arrow_down_rounded,
+                size: 20, color: AppColors.textSecondary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NewWorkflowButton extends StatelessWidget {
+  final String pipelineKey;
+  final VoidCallback onCreated;
+  const _NewWorkflowButton(
+      {required this.pipelineKey, required this.onCreated});
+
+  Future<void> _open(BuildContext context) async {
+    final created = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.35),
+      builder: (_) => _NewWorkflowDialog(pipelineKey: pipelineKey),
+    );
+    if (created == true) onCreated();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(AppRadius.pill),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        onTap: () => _open(context),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            border: Border.all(color: AppColors.hairline),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.add_rounded,
+                  size: 18, color: AppColors.textPrimary),
+              const SizedBox(width: 6),
+              Text('New workflow',
+                  style: AppText.bodyStrong().copyWith(fontSize: 14)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stage tray — one collapsible frosted card per stage.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _StageSection extends StatelessWidget {
+  final String label;
+  final List<Workflow> items;
+  final bool open;
+  final bool isOwner;
+  final VoidCallback onToggle;
+  final void Function(Workflow) onAdvance;
+  final void Function(Workflow) onDelete;
+  final String? Function(Workflow) nextLabelFor;
+  const _StageSection({
+    required this.label,
+    required this.items,
+    required this.open,
+    required this.isOwner,
+    required this.onToggle,
+    required this.onAdvance,
+    required this.onDelete,
+    required this.nextLabelFor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        // A frosted tray sitting on the bloom; the cards inside are opaque.
+        color: Colors.white.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.65)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header — the whole row toggles the tray open/closed.
+          Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              onTap: onToggle,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md, vertical: 15),
+                child: Row(
+                  children: [
+                    Text(label,
+                        style: AppText.bodyStrong().copyWith(fontSize: 15)),
+                    const SizedBox(width: 8),
+                    Text('${items.length}',
+                        style: AppText.small().copyWith(
+                            fontSize: 13,
+                            color: AppColors.textTertiary,
+                            fontFeatures: const [
+                              FontFeature.tabularFigures()
+                            ])),
+                    const Spacer(),
+                    AnimatedRotation(
+                      turns: open ? 0.5 : 0.0,
+                      duration: const Duration(milliseconds: 180),
+                      child: const Icon(Icons.keyboard_arrow_down_rounded,
+                          size: 22, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (open)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
+              child: items.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text('Nothing at this stage.',
+                          style: AppText.small().copyWith(
+                              color: AppColors.textTertiary, fontSize: 13)),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (int i = 0; i < items.length; i++) ...[
+                          _WorkflowCard(
+                            wf: items[i],
+                            isOwner: isOwner,
+                            nextLabel: nextLabelFor(items[i]),
+                            onAdvance: () => onAdvance(items[i]),
+                            onDelete: () => onDelete(items[i]),
+                          ),
+                          if (i != items.length - 1)
+                            const SizedBox(height: AppSpacing.sm),
+                        ],
+                      ],
+                    ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _WorkflowCard extends StatelessWidget {
   final Workflow wf;
-  final String? nextStageLabel;
+  final bool isOwner;
+  final String? nextLabel;
   final VoidCallback onAdvance;
   final VoidCallback onDelete;
   const _WorkflowCard({
     required this.wf,
-    required this.nextStageLabel,
+    required this.isOwner,
+    required this.nextLabel,
     required this.onAdvance,
     required this.onDelete,
   });
@@ -444,7 +526,10 @@ class _WorkflowCard extends StatelessWidget {
   String _timeAgo(DateTime d) {
     final diff = DateTime.now().difference(d);
     if (diff.inDays >= 1) {
-      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      ];
       return '${d.day} ${months[d.month - 1]}';
     }
     if (diff.inHours >= 1) return '${diff.inHours}h ago';
@@ -453,10 +538,14 @@ class _WorkflowCard extends StatelessWidget {
   }
 
   String _money(double a) {
-    if (a >= 10000000) return '₹${(a / 10000000).toStringAsFixed(1)}Cr';
-    if (a >= 100000) return '₹${(a / 100000).toStringAsFixed(1)}L';
-    if (a >= 1000) return '₹${(a / 1000).toStringAsFixed(1)}K';
-    return '₹${a.toStringAsFixed(0)}';
+    // Western grouping to match the PWA (₹800,000).
+    final s = a.round().abs().toString();
+    final buf = StringBuffer();
+    for (int i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) buf.write(',');
+      buf.write(s[i]);
+    }
+    return '${a < 0 ? '-' : ''}₹${buf.toString()}';
   }
 
   @override
@@ -464,162 +553,213 @@ class _WorkflowCard extends StatelessWidget {
     final tasks = wf.stageTasks;
     final shown = tasks.take(4).toList();
     final hidden = tasks.length - shown.length;
-    return KrPop(
-      borderRadius: BorderRadius.circular(AppRadius.lg),
+    final hasMeta = wf.updatedAt != null;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            offset: const Offset(0, 3),
+            blurRadius: 10,
+          ),
+        ],
+      ),
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title + trash icon on the right (matches frontend owner-only
-          // delete; here we show the icon unconditionally — a live delete
-          // wire-up would go through WorkflowsRepository.delete).
+          // Title + owner-only trash.
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Text(wf.title,
-                    style: AppText.bodyStrong()
-                        .copyWith(fontSize: 14, height: 1.3),
-                    maxLines: 2, overflow: TextOverflow.ellipsis),
+                    style: AppText.bodyStrong().copyWith(
+                        fontSize: 14.5, height: 1.3),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis),
               ),
-              const SizedBox(width: 6),
-              InkWell(
-                onTap: onDelete,
-                borderRadius: BorderRadius.circular(999),
-                child: const Padding(
-                  padding: EdgeInsets.all(4),
-                  child: Icon(Icons.delete_outline_rounded,
-                      size: 14, color: AppColors.textSecondary),
+              if (isOwner) ...[
+                const SizedBox(width: 6),
+                InkWell(
+                  onTap: onDelete,
+                  borderRadius: BorderRadius.circular(999),
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.delete_outline_rounded,
+                        size: 18, color: AppColors.textSecondary),
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
 
-          // Counterparty + amount row.
-          if ((wf.counterparty ?? '').isNotEmpty || wf.amount != null) ...[
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                if ((wf.counterparty ?? '').isNotEmpty)
-                  Expanded(
-                    child: Text(wf.counterparty!,
-                        style: AppText.small().copyWith(
-                            fontSize: 12, color: AppColors.textSecondary),
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                  )
-                else
-                  const Spacer(),
-                if (wf.amount != null)
-                  Text(_money(wf.amount!),
-                      style: AppText.smallStrong().copyWith(
-                          fontSize: 12,
-                          fontFeatures: const [FontFeature.tabularFigures()])),
+          // Counterparty + amount.
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  (wf.counterparty ?? '').isNotEmpty
+                      ? wf.counterparty!
+                      : 'Customer (name not specified)',
+                  style: AppText.small().copyWith(
+                      fontSize: 12.5, color: AppColors.textSecondary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (wf.amount != null) ...[
+                const SizedBox(width: 8),
+                Text(_money(wf.amount!),
+                    style: AppText.bodyStrong().copyWith(
+                        fontSize: 13.5,
+                        fontFeatures: const [FontFeature.tabularFigures()])),
               ],
-            ),
+            ],
+          ),
+
+          // From decision: …
+          if ((wf.decisionTitle ?? '').isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text('From decision: ${wf.decisionTitle}',
+                style: AppText.small().copyWith(
+                    fontSize: 12.5,
+                    color: AppColors.textSecondary,
+                    height: 1.35),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis),
           ],
 
-          // Stage task pills — up to 4, each a long pill with an initial
-          // circle + task title, matching the frontend's
-          // `flex items-center gap-1.5 rounded-control bg-nm-sunken` row.
-          const SizedBox(height: 10),
+          // Open tasks or the empty note.
+          const SizedBox(height: 12),
           if (shown.isEmpty)
             Text('No open tasks at this stage.',
                 style: AppText.small().copyWith(
-                    fontSize: 11, color: AppColors.textTertiary))
-          else
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final t in shown)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: _StageTaskPill(task: t),
-                    ),
-                  if (hidden > 0)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4, top: 2),
-                      child: Text('+ $hidden more',
-                          style: AppText.small().copyWith(
-                              fontSize: 10, color: AppColors.textTertiary)),
-                    ),
-                ],
+                    fontSize: 12.5, color: AppColors.textTertiary))
+          else ...[
+            for (final t in shown)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: _StageTaskPill(task: t),
               ),
-            ),
+            if (hidden > 0)
+              Padding(
+                padding: const EdgeInsets.only(left: 2, top: 2),
+                child: Text('+ $hidden more',
+                    style: AppText.small().copyWith(
+                        fontSize: 11, color: AppColors.textTertiary)),
+              ),
+          ],
 
-          // "Created · 17 Aug" timeline line.
-          if (wf.updatedAt != null) ...[
-            const SizedBox(height: AppSpacing.md),
+          // Meta line.
+          if (hasMeta) ...[
+            const SizedBox(height: 12),
             Row(children: [
-              const Icon(Icons.history_rounded,
-                  size: 10, color: AppColors.textTertiary),
-              const SizedBox(width: 4),
+              const Icon(Icons.restore_rounded,
+                  size: 13, color: AppColors.textTertiary),
+              const SizedBox(width: 5),
               Expanded(
                 child: Text(
                   '${wf.updateLabel ?? 'Updated'} · ${_timeAgo(wf.updatedAt!)}',
                   style: AppText.small().copyWith(
-                      color: AppColors.textTertiary, fontSize: 10),
-                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                      color: AppColors.textTertiary, fontSize: 11.5),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ]),
           ],
 
-          // Advance to <next stage> — dark filled pill.
-          const SizedBox(height: AppSpacing.md),
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
+          // Advance — outline pill (or a done state on the last stage).
+          const SizedBox(height: 14),
+          if (nextLabel != null)
+            _OutlinePill(
+              label: 'Advance to $nextLabel',
+              trailing: Icons.arrow_forward_rounded,
               onTap: onAdvance,
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: AppColors.textPrimary,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        nextStageLabel == null
-                            ? 'Done'
-                            : 'Advance to $nextStageLabel',
-                        style: AppText.smallStrong().copyWith(
-                            fontSize: 12, color: Colors.white),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.arrow_forward_rounded,
-                        size: 12, color: Colors.white),
-                  ],
-                ),
-              ),
-            ),
-          ),
+            )
+          else
+            _DonePill(),
         ],
       ),
     );
   }
 }
 
-/// One task pill inside a workflow card — grey rounded rectangle with an
-/// initial avatar circle on the left and the task title on the right. Tap
-/// opens the task inside the Work tab (frontend routes to /my-work?task=id;
-/// mobile pops back to the Work tab and lets the user find it there for now,
-/// since the mobile Work screen doesn't accept a task query yet).
+class _OutlinePill extends StatelessWidget {
+  final String label;
+  final IconData trailing;
+  final VoidCallback onTap;
+  const _OutlinePill(
+      {required this.label, required this.trailing, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(AppRadius.pill),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            border: Border.all(color: AppColors.hairlineStrong),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(label,
+                    style: AppText.bodyStrong().copyWith(fontSize: 13.5),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ),
+              const SizedBox(width: 6),
+              Icon(trailing, size: 16, color: AppColors.textPrimary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DonePill extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF16A34A).withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.check_rounded, size: 16, color: Color(0xFF15803D)),
+          const SizedBox(width: 6),
+          Text('Complete',
+              style: AppText.bodyStrong()
+                  .copyWith(fontSize: 13.5, color: const Color(0xFF15803D))),
+        ],
+      ),
+    );
+  }
+}
+
+/// One task chip inside a workflow card — an initial avatar + task title. Tap
+/// fetches the full Task then pushes /task/:id.
 class _StageTaskPill extends StatelessWidget {
   final WorkflowStageTask task;
   const _StageTaskPill({required this.task});
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      // Fetch the full Task then push /task/:id — the detail route
-      // expects a Task as `extra`, not just an id.
       onTap: () async {
         final messenger = ScaffoldMessenger.of(context);
         final router = GoRouter.of(context);
@@ -632,50 +772,58 @@ class _StageTaskPill extends StatelessWidget {
           );
         }
       },
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(8),
       child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 16, height: 16,
-            decoration: const BoxDecoration(
-              color: AppColors.textPrimary,
-              shape: BoxShape.circle,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceMuted,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 18,
+              height: 18,
+              decoration: const BoxDecoration(
+                color: AppColors.textPrimary,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Text(task.initial,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700)),
             ),
-            alignment: Alignment.center,
-            child: Text(task.initial,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 9, fontWeight: FontWeight.w700)),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(task.title,
-                style: AppText.small().copyWith(
-                    fontSize: 11, height: 1.2),
-                maxLines: 1, overflow: TextOverflow.ellipsis),
-          ),
-        ],
-      ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(task.title,
+                  style: AppText.small().copyWith(fontSize: 12, height: 1.2),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// Bottom-sheet form matching NewWorkflowDialog on the frontend.
-class _NewWorkflowSheet extends StatefulWidget {
+// ─────────────────────────────────────────────────────────────────────────────
+// New workflow — a floating neumorphic dialog (matches the PWA modal).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _kWfDialogGround = Color(0xFFEDEFEF);
+
+class _NewWorkflowDialog extends StatefulWidget {
   final String pipelineKey;
-  const _NewWorkflowSheet({required this.pipelineKey});
+  const _NewWorkflowDialog({required this.pipelineKey});
   @override
-  State<_NewWorkflowSheet> createState() => _NewWorkflowSheetState();
+  State<_NewWorkflowDialog> createState() => _NewWorkflowDialogState();
 }
 
-class _NewWorkflowSheetState extends State<_NewWorkflowSheet> {
+class _NewWorkflowDialogState extends State<_NewWorkflowDialog> {
+  final NeuPalette _neu = NeuPalette.from(_kWfDialogGround);
   final _title = TextEditingController();
   final _counterparty = TextEditingController();
   final _amount = TextEditingController();
@@ -719,33 +867,36 @@ class _NewWorkflowSheetState extends State<_NewWorkflowSheet> {
     }
   }
 
+  Widget _label(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Text(text,
+            style: AppText.small()
+                .copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
+      );
+
   Widget _field(String label, TextEditingController c,
-      {String? hint,
-      TextInputType? keyboard,
-      int maxLines = 1}) {
+      {String? hint, TextInputType? keyboard, int maxLines = 1}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 6),
-          child: Text(label,
-              style: AppText.small().copyWith(
-                  fontWeight: FontWeight.w600, fontSize: 12)),
-        ),
-        TextField(
-          controller: c,
-          keyboardType: keyboard,
-          maxLines: maxLines,
-          decoration: InputDecoration(
-            hintText: hint,
-            filled: true,
-            fillColor: AppColors.surfaceMuted,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              borderSide: BorderSide.none,
+        _label(label),
+        NeuRecessed(
+          palette: _neu,
+          radius: AppRadius.md,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: TextField(
+            controller: c,
+            keyboardType: keyboard,
+            maxLines: maxLines,
+            style: AppText.body().copyWith(fontSize: 14),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: hint,
+              hintStyle:
+                  AppText.body().copyWith(color: AppColors.textTertiary),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 13),
             ),
-            contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12, vertical: 12),
           ),
         ),
       ],
@@ -754,135 +905,87 @@ class _NewWorkflowSheetState extends State<_NewWorkflowSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottom),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.lg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('New workflow', style: AppText.h3()),
-            const SizedBox(height: AppSpacing.md),
-            _field('Title', _title, hint: 'What is this workflow?'),
-            const SizedBox(height: 12),
-            _field('Counterparty', _counterparty,
-                hint: 'Customer or vendor name'),
-            const SizedBox(height: 12),
-            _field('Amount', _amount,
-                hint: '0',
-                keyboard: const TextInputType.numberWithOptions(decimal: true)),
-            const SizedBox(height: 12),
-            _field('Detail', _detail,
-                hint: 'Notes for the team', maxLines: 3),
-            const SizedBox(height: AppSpacing.lg),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Material(
-                color: AppColors.textPrimary,
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-                child: InkWell(
-                  onTap: _saving ? null : _save,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.lg, vertical: 12),
-                    child: Text(_saving ? 'Creating…' : 'Create',
-                        style: AppText.bodyStrong()
-                            .copyWith(color: Colors.white)),
-                  ),
-                ),
-              ),
+    final maxH = MediaQuery.of(context).size.height * 0.82;
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
+      child: Container(
+        constraints: BoxConstraints(maxHeight: maxH),
+        decoration: BoxDecoration(
+          color: _kWfDialogGround,
+          borderRadius: BorderRadius.circular(AppRadius.xl),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.28),
+              offset: const Offset(0, 14),
+              blurRadius: 40,
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Round 36×36 filter button — opens a bottom-sheet picker with every
-/// pipeline the tenant has configured, so the user can switch which
-/// pipeline this Workflows screen renders.
-class _PipelineFilterCircle extends StatelessWidget {
-  final String active;
-  final ValueChanged<String> onSelect;
-  const _PipelineFilterCircle({required this.active, required this.onSelect});
-
-  Future<void> _open(BuildContext context) async {
-    final pipes = AuthRepository.I.pipelines;
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(height: 8),
-            Center(
-              child: Container(
-                width: 44, height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.hairlineStrong,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-              child: Text('Pipeline',
-                  style: AppText.label().copyWith(fontSize: 11)),
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg, AppSpacing.lg, AppSpacing.md, 0),
+              child: Row(
+                children: [
+                  Text('New workflow', style: AppText.h3()),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    icon: const Icon(Icons.close_rounded,
+                        size: 20, color: AppColors.textSecondary),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
             ),
-            for (final p in pipes)
-              InkWell(
-                onTap: () => Navigator.of(ctx).pop(p.key),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 12),
-                  child: Row(children: [
-                    Icon(
-                      p.key == active
-                          ? Icons.check_circle_rounded
-                          : Icons.radio_button_unchecked_rounded,
-                      size: 18,
-                      color: p.key == active
-                          ? AppColors.brand
-                          : AppColors.textTertiary,
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg, 4, AppSpacing.lg, AppSpacing.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _field('Title', _title, hint: 'What is this workflow?'),
+                    const SizedBox(height: 12),
+                    _field('Counterparty', _counterparty,
+                        hint: 'Customer or vendor name'),
+                    const SizedBox(height: 12),
+                    _field('Amount', _amount,
+                        hint: '0',
+                        keyboard: const TextInputType.numberWithOptions(
+                            decimal: true)),
+                    const SizedBox(height: 12),
+                    _field('Detail', _detail,
+                        hint: 'Notes for the team', maxLines: 3),
+                    const SizedBox(height: AppSpacing.lg),
+                    NeuRaised(
+                      palette: _neu,
+                      color: AppColors.textPrimary,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                      distance: 3,
+                      blur: 8,
+                      onTap: _saving ? null : _save,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: Text(_saving ? 'Creating…' : 'Create workflow',
+                            textAlign: TextAlign.center,
+                            style: AppText.bodyStrong()
+                                .copyWith(color: Colors.white)),
+                      ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(p.label,
-                          style: AppText.body().copyWith(
-                              fontWeight: p.key == active
-                                  ? FontWeight.w600
-                                  : FontWeight.w400)),
-                    ),
-                  ]),
+                  ],
                 ),
               ),
-            const SizedBox(height: 12),
+            ),
           ],
         ),
       ),
-    );
-    if (picked != null) onSelect(picked);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return KrPop(
-      borderRadius: BorderRadius.circular(999),
-      padding: const EdgeInsets.all(10),
-      onTap: () => _open(context),
-      child: const Icon(Icons.tune_rounded,
-          size: 16, color: AppColors.textPrimary),
     );
   }
 }

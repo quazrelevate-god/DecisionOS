@@ -43,10 +43,21 @@ class Task {
   final String priority; // low, medium, high
   final DateTime? dueAt;
   final String? assigneeName;
+  final String? assigneeId;
   final String? taskType; // e.g. finance, logistics — used as the filter category
   final int attachmentCount;
   final String? source; // "escalation" | "handoff" | ...
+  final DateTime? createdAt;
+  final String? createdByName;
+  final String? createdBy;
   final bool overdue;
+  // Approval fields (populated on the /tasks?view=approvals feed).
+  final bool approvalRequired;
+  final String? approvalStatus; // pending | approved | rejected
+  final String? approvalStage;  // start | close
+  final String? approverId;
+  final String? approverName;
+  final String? rejectionReason;
 
   Task({
     required this.id,
@@ -56,15 +67,27 @@ class Task {
     required this.priority,
     this.dueAt,
     this.assigneeName,
+    this.assigneeId,
     this.taskType,
     this.attachmentCount = 0,
     this.source,
+    this.createdAt,
+    this.createdByName,
+    this.createdBy,
     this.overdue = false,
+    this.approvalRequired = false,
+    this.approvalStatus,
+    this.approvalStage,
+    this.approverId,
+    this.approverName,
+    this.rejectionReason,
   });
 
   bool get isTerminal => status == 'done' || status == 'cancelled';
   bool get isEscalation => source == 'escalation';
   bool get isHandoff => source == 'handoff';
+  bool get isPendingApproval =>
+      approvalRequired && approvalStatus == 'pending' && !isTerminal;
 
   factory Task.fromJson(Map<String, dynamic> j) {
     final due = j['due_at'] ?? j['due_date'];
@@ -80,10 +103,20 @@ class Task {
       priority: (j['priority'] ?? 'medium').toString(),
       dueAt: parsedDue,
       assigneeName: j['assignee_name'] as String? ?? j['owner_name'] as String?,
+      assigneeId: j['assignee_id'] as String?,
       taskType: j['task_type'] as String?,
       attachmentCount: (j['attachment_count'] as num?)?.toInt() ?? 0,
       source: j['source'] as String?,
+      createdAt: j['created_at'] is String ? DateTime.tryParse(j['created_at'] as String) : null,
+      createdByName: j['created_by_name'] as String?,
+      createdBy: j['created_by'] as String?,
       overdue: overdue,
+      approvalRequired: (j['approval_required'] as bool?) ?? false,
+      approvalStatus: j['approval_status'] as String?,
+      approvalStage: j['approval_stage'] as String?,
+      approverId: j['approver_id'] as String?,
+      approverName: j['approver_name'] as String?,
+      rejectionReason: j['rejection_reason'] as String?,
     );
   }
 }
@@ -293,17 +326,23 @@ class OpsMySnapshot {
   final int open;
   final int overdue;
   final int proofUploadRate;
+  final int actionable;
+  final int completed;
   const OpsMySnapshot({
     this.completionRate = 0,
     this.open = 0,
     this.overdue = 0,
     this.proofUploadRate = 0,
+    this.actionable = 0,
+    this.completed = 0,
   });
   factory OpsMySnapshot.fromJson(Map<String, dynamic> j) => OpsMySnapshot(
         completionRate: (j['completion_rate'] as num?)?.toInt() ?? 0,
         open: (j['open'] as num?)?.toInt() ?? 0,
         overdue: (j['overdue'] as num?)?.toInt() ?? 0,
         proofUploadRate: (j['proof_upload_rate'] as num?)?.toInt() ?? 0,
+        actionable: (j['actionable'] as num?)?.toInt() ?? 0,
+        completed: (j['completed'] as num?)?.toInt() ?? 0,
       );
 }
 
@@ -319,6 +358,12 @@ class LedgerSummary {
   final List<double> monthlyNet; // net over last N months for the sparkline
   final String currency;
   final List<OverdueReceivable> overdueReceivables;
+  // KM — the six-KPI Overview + the Spend-by-category donut + Top-vendors bars.
+  final double? assetValue;
+  final double? inventoryValue;
+  final double? revenueOutstanding; // receivables still owed to us
+  final List<CategorySpend> byCategory;
+  final List<VendorSpend> byVendor;
 
   LedgerSummary({
     this.netProfit,
@@ -331,6 +376,11 @@ class LedgerSummary {
     this.monthlyNet = const [],
     this.currency = 'INR',
     this.overdueReceivables = const [],
+    this.assetValue,
+    this.inventoryValue,
+    this.revenueOutstanding,
+    this.byCategory = const [],
+    this.byVendor = const [],
   });
 
   factory LedgerSummary.fromJson(Map<String, dynamic> j) {
@@ -366,6 +416,145 @@ class LedgerSummary {
       monthlyNet: months,
       currency: (j['currency'] ?? 'INR').toString(),
       overdueReceivables: overdue,
+      assetValue: (totals['asset_value'] as num?)?.toDouble(),
+      inventoryValue: (totals['inventory_value'] as num?)?.toDouble(),
+      revenueOutstanding: (totals['revenue_outstanding'] as num?)?.toDouble(),
+      byCategory: ((j['by_category'] as List?) ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(CategorySpend.fromJson)
+          .toList(),
+      byVendor: ((j['by_vendor'] as List?) ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(VendorSpend.fromJson)
+          .toList(),
+    );
+  }
+}
+
+/// One slice of the Spend-by-category donut (GET /ledger/summary → by_category).
+class CategorySpend {
+  final String category;
+  final double amount;
+  const CategorySpend({required this.category, required this.amount});
+  factory CategorySpend.fromJson(Map<String, dynamic> j) => CategorySpend(
+        category: (j['category'] ?? 'Other').toString(),
+        amount: (j['amount'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+/// One row of the Top-vendors-by-spend list (GET /ledger/summary → by_vendor).
+class VendorSpend {
+  final String vendor;
+  final double amount;
+  const VendorSpend({required this.vendor, required this.amount});
+  factory VendorSpend.fromJson(Map<String, dynamic> j) => VendorSpend(
+        vendor: (j['vendor'] ?? '—').toString(),
+        amount: (j['amount'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+/// The AI Finance Brief / Analysis payload (GET /ledger/ai/{scope}).
+class FinanceBrief {
+  final String headline;
+  final List<FinanceInsight> insights;
+  final DateTime? generatedAt;
+  const FinanceBrief({
+    this.headline = '',
+    this.insights = const [],
+    this.generatedAt,
+  });
+  factory FinanceBrief.fromJson(Map<String, dynamic> j) => FinanceBrief(
+        headline: (j['headline'] ?? '').toString(),
+        insights: ((j['insights'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(FinanceInsight.fromJson)
+            .toList(),
+        generatedAt: DateTime.tryParse('${j['generated_at'] ?? ''}'),
+      );
+}
+
+/// One Action Item in the AI brief. `level` ∈ high | medium | low.
+class FinanceInsight {
+  final String level;
+  final String title;
+  final String detail;
+  final String action;
+  const FinanceInsight({
+    required this.level,
+    required this.title,
+    this.detail = '',
+    this.action = '',
+  });
+  factory FinanceInsight.fromJson(Map<String, dynamic> j) => FinanceInsight(
+        level: () {
+          final l = (j['level'] ?? 'medium').toString();
+          return (l == 'high' || l == 'medium' || l == 'low') ? l : 'medium';
+        }(),
+        title: (j['title'] ?? '').toString(),
+        detail: (j['detail'] ?? '').toString(),
+        action: (j['action'] ?? j['title'] ?? '').toString(),
+      );
+}
+
+/// A capture in the Inbox review queue (GET /captures?status=…).
+class Capture {
+  final String id;
+  final String status;
+  final String summary;
+  final String classification;
+  final String? explainer; // "why AI routed this"
+  final String? text; // extracted text quote
+  final double? amount;
+  final int? confidence; // 0..100
+  final String? fileUrl;
+  final String? filename;
+  final String? docType; // pdf | image | text …
+  final bool needsOwner;
+  final String? reviewerRole;
+  final String? priority;
+  const Capture({
+    required this.id,
+    required this.status,
+    this.summary = '',
+    this.classification = '',
+    this.explainer,
+    this.text,
+    this.amount,
+    this.confidence,
+    this.fileUrl,
+    this.filename,
+    this.docType,
+    this.needsOwner = false,
+    this.reviewerRole,
+    this.priority,
+  });
+  factory Capture.fromJson(Map<String, dynamic> j) {
+    double? amt;
+    // Amount can arrive on the capture or nested in extracted records.
+    final rawAmt = j['amount'] ?? j['total_amount'] ?? j['money'];
+    if (rawAmt is num) amt = rawAmt.toDouble();
+    int? conf;
+    final rawConf = j['confidence'] ?? j['ai_confidence'];
+    if (rawConf is num) {
+      final v = rawConf.toDouble();
+      conf = (v <= 1 ? v * 100 : v).round();
+    }
+    return Capture(
+      id: (j['id'] ?? j['_id'] ?? '').toString(),
+      status: (j['status'] ?? 'pending_review').toString(),
+      summary: (j['summary'] ?? j['title'] ?? j['description'] ?? '').toString(),
+      classification:
+          (j['classification'] ?? j['doc_type'] ?? j['kind'] ?? '').toString(),
+      explainer: (j['explainer'] ?? j['why'] ?? j['routing_reason'])?.toString(),
+      text: (j['text'] ?? j['extracted_text'] ?? j['quote'])?.toString(),
+      amount: amt,
+      confidence: conf,
+      fileUrl: (j['file_url'] ?? j['url'])?.toString(),
+      filename: (j['filename'] ?? j['file_name'])?.toString(),
+      docType: (j['doc_type'] ?? j['type'])?.toString(),
+      needsOwner: j['needs_owner'] == true || j['needs_owner_approval'] == true,
+      reviewerRole: (j['reviewer_role'] ?? j['review_role'])?.toString(),
+      priority: j['priority']?.toString(),
     );
   }
 }
@@ -385,19 +574,43 @@ class OverdueReceivable {
 /// A revenue entry (invoice line). Shape mirrors `/revenue` response.
 class Revenue {
   final String id;
-  final String title;      // contact / invoice-number line
+  final String number;        // invoice number, e.g. SBT/25-26/0455
+  final String product;       // the invoice line title, e.g. "Indigo lot — 600 m"
+  final String contactName;   // the customer
   final double amount;
-  final DateTime? date;
-  final String status;     // paid | unpaid | overdue | partial
-  const Revenue({required this.id, required this.title, required this.amount, this.date, required this.status});
+  final DateTime? date;        // due / invoice date
+  final String status;        // paid | unpaid | overdue | partial | awaiting | received
+  final bool hasAttachment;
+  const Revenue({
+    required this.id,
+    this.number = '',
+    this.product = '',
+    this.contactName = '',
+    required this.amount,
+    this.date,
+    required this.status,
+  }) : hasAttachment = false;
+  const Revenue._({
+    required this.id,
+    required this.number,
+    required this.product,
+    required this.contactName,
+    required this.amount,
+    required this.date,
+    required this.status,
+    required this.hasAttachment,
+  });
   factory Revenue.fromJson(Map<String, dynamic> j) {
-    final d = j['invoice_date'] ?? j['date'] ?? j['created_at'];
-    return Revenue(
+    final d = j['due_date'] ?? j['invoice_date'] ?? j['date'] ?? j['created_at'];
+    return Revenue._(
       id: (j['id'] ?? '').toString(),
-      title: (j['contact_name'] ?? j['invoice_number'] ?? j['description'] ?? '—').toString(),
+      number: (j['number'] ?? j['invoice_number'] ?? '').toString(),
+      product: (j['title'] ?? j['description'] ?? j['line_title'] ?? '—').toString(),
+      contactName: (j['contact_name'] ?? j['customer_name'] ?? '').toString(),
       amount: ((j['amount'] ?? j['balance']) as num?)?.toDouble() ?? 0,
       date: d is String ? DateTime.tryParse(d) : null,
       status: (j['status'] ?? 'unpaid').toString(),
+      hasAttachment: j['attachment'] != null || j['attachment_url'] != null,
     );
   }
 }
@@ -407,17 +620,32 @@ class Expense {
   final String id;
   final String title;
   final String? category;
+  final String? vendor;
   final double amount;
   final DateTime? date;
-  const Expense({required this.id, required this.title, this.category, required this.amount, this.date});
+  final String? status; // paid | unpaid | awaiting_bill
+  final bool hasAttachment;
+  const Expense({
+    required this.id,
+    required this.title,
+    this.category,
+    this.vendor,
+    required this.amount,
+    this.date,
+    this.status,
+    this.hasAttachment = false,
+  });
   factory Expense.fromJson(Map<String, dynamic> j) {
     final d = j['date'] ?? j['created_at'];
     return Expense(
       id: (j['id'] ?? '').toString(),
-      title: (j['description'] ?? j['vendor'] ?? j['title'] ?? '—').toString(),
+      title: (j['description'] ?? j['title'] ?? j['vendor_name'] ?? j['vendor'] ?? '—').toString(),
       category: j['category'] as String?,
+      vendor: (j['vendor_name'] ?? j['vendor']) as String?,
       amount: (j['amount'] as num?)?.toDouble() ?? 0,
       date: d is String ? DateTime.tryParse(d) : null,
+      status: j['status'] as String?,
+      hasAttachment: j['attachment'] != null || j['attachment_url'] != null || j['source'] != null,
     );
   }
 }
@@ -426,27 +654,65 @@ class Asset {
   final String id;
   final String title;
   final String? category;
+  final String? vendor;
+  final DateTime? boughtDate;
+  final String? status; // active | maintenance | disposed
+  final bool hasAttachment;
   final double amount;
-  const Asset({required this.id, required this.title, this.category, required this.amount});
-  factory Asset.fromJson(Map<String, dynamic> j) => Asset(
-        id: (j['id'] ?? '').toString(),
-        title: (j['name'] ?? j['title'] ?? j['description'] ?? '—').toString(),
-        category: j['category'] as String?,
-        amount: (j['amount'] as num?)?.toDouble() ?? 0,
-      );
+  const Asset({
+    required this.id,
+    required this.title,
+    this.category,
+    this.vendor,
+    this.boughtDate,
+    this.status,
+    this.hasAttachment = false,
+    required this.amount,
+  });
+  factory Asset.fromJson(Map<String, dynamic> j) {
+    final d = j['purchase_date'] ?? j['bought_date'] ?? j['date'] ?? j['created_at'];
+    return Asset(
+      id: (j['id'] ?? '').toString(),
+      title: (j['name'] ?? j['title'] ?? j['description'] ?? '—').toString(),
+      category: j['category'] as String?,
+      vendor: (j['vendor_name'] ?? j['vendor']) as String?,
+      boughtDate: d is String ? DateTime.tryParse(d) : null,
+      status: j['status'] as String?,
+      hasAttachment: j['attachment'] != null || j['attachment_url'] != null,
+      amount: ((j['purchase_amount'] ?? j['amount']) as num?)?.toDouble() ?? 0,
+    );
+  }
 }
 
 class InventoryItem {
   final String id;
   final String title;
+  final String? sku;
+  final String? vendor;
+  final String? unit; // pcs, m, kg …
   final double quantity;
   final double? unitCost;
-  const InventoryItem({required this.id, required this.title, required this.quantity, this.unitCost});
+  final double? value; // server-computed value, else quantity × unitCost
+  const InventoryItem({
+    required this.id,
+    required this.title,
+    this.sku,
+    this.vendor,
+    this.unit,
+    required this.quantity,
+    this.unitCost,
+    this.value,
+  });
+  double get lineValue => value ?? (unitCost ?? 0) * quantity;
   factory InventoryItem.fromJson(Map<String, dynamic> j) => InventoryItem(
         id: (j['id'] ?? '').toString(),
-        title: (j['name'] ?? j['title'] ?? j['sku'] ?? '—').toString(),
+        title: (j['item'] ?? j['name'] ?? j['title'] ?? j['sku'] ?? '—').toString(),
+        sku: j['sku'] as String?,
+        vendor: (j['vendor_name'] ?? j['vendor']) as String?,
+        unit: j['unit'] as String?,
         quantity: (j['quantity'] as num?)?.toDouble() ?? 0,
         unitCost: (j['unit_cost'] as num?)?.toDouble(),
+        value: (j['value'] as num?)?.toDouble(),
       );
 }
 
@@ -464,6 +730,11 @@ class Person {
   // Team-screen fields (from /users)
   final String inviteStatus; // active | pending | suspended
   final int permissionCount;
+  final String? jobTitle;
+  final String? avatarUrl;
+  final String? about;              // the "what to bring them" blurb
+  final String? reportingManagerId; // resolves the "Reports to" row
+  final List<String> permissionKeys; // granted areas (effective_permissions)
 
   Person({
     required this.id,
@@ -478,20 +749,32 @@ class Person {
     this.tasksOverdue,
     this.inviteStatus = 'active',
     this.permissionCount = 0,
+    this.jobTitle,
+    this.avatarUrl,
+    this.about,
+    this.reportingManagerId,
+    this.permissionKeys = const [],
   });
 
   factory Person.fromJson(Map<String, dynamic> j) {
-    // `permissions` may be a list ["decisions.write", …] or a map keyed by
-    // permission → bool. Handle both, plus the pre-hydrated count.
-    int perms = 0;
+    // The granted areas: prefer the server-resolved `effective_permissions`
+    // list; fall back to a `permissions` list or a {key: bool} map.
+    List<String> keys = const [];
+    final eff = j['effective_permissions'];
     final raw = j['permissions'];
-    if (raw is List) {
-      perms = raw.length;
+    if (eff is List) {
+      keys = eff.map((e) => e.toString()).toList();
+    } else if (raw is List) {
+      keys = raw.map((e) => e.toString()).toList();
     } else if (raw is Map) {
-      perms = raw.values.whereType<bool>().where((v) => v).length;
-    } else if (j['permission_count'] is int) {
-      perms = j['permission_count'] as int;
+      keys = raw.entries
+          .where((e) => e.value == true)
+          .map((e) => e.key.toString())
+          .toList();
     }
+    final count = keys.isNotEmpty
+        ? keys.length
+        : (j['permission_count'] is int ? j['permission_count'] as int : 0);
     return Person(
       id: (j['id'] ?? j['_id'] ?? '').toString(),
       name: (j['name'] ?? j['full_name'] ?? j['email'] ?? '').toString(),
@@ -504,7 +787,12 @@ class Person {
       tasksOpen: j['tasks_open'] as int?,
       tasksOverdue: j['tasks_overdue'] as int?,
       inviteStatus: (j['invite_status'] as String?) ?? 'active',
-      permissionCount: perms,
+      permissionCount: count,
+      jobTitle: (j['job_title'] ?? j['title']) as String?,
+      avatarUrl: (j['avatar_url'] ?? j['avatar'] ?? j['photo_url']) as String?,
+      about: j['about'] as String?,
+      reportingManagerId: j['reporting_manager_id'] as String?,
+      permissionKeys: keys,
     );
   }
 
@@ -574,6 +862,46 @@ class JournalFeed {
         days: ((j['days'] as List?) ?? const [])
             .whereType<Map<String, dynamic>>()
             .map(JournalDay.fromJson)
+            .toList(),
+      );
+}
+
+/// One event on a decision's timeline (GET /decisions/{id}/timeline).
+class DecisionTimelineEvent {
+  final String kind;   // captured | proposed | approved | rejected | task | …
+  final String label;
+  final String? actor;
+  final DateTime? ts;
+  const DecisionTimelineEvent({
+    required this.kind,
+    required this.label,
+    this.actor,
+    this.ts,
+  });
+  factory DecisionTimelineEvent.fromJson(Map<String, dynamic> j) {
+    final t = j['ts'];
+    return DecisionTimelineEvent(
+      kind: (j['kind'] ?? '').toString(),
+      label: (j['label'] ?? '').toString(),
+      actor: j['actor'] as String?,
+      ts: t is String ? DateTime.tryParse(t) : null,
+    );
+  }
+}
+
+/// The payload behind the "View timeline" dialog on a journal decision card.
+class DecisionTimeline {
+  final String title;
+  final String status;
+  final List<DecisionTimelineEvent> events;
+  const DecisionTimeline(
+      {required this.title, required this.status, required this.events});
+  factory DecisionTimeline.fromJson(Map<String, dynamic> j) => DecisionTimeline(
+        title: (j['title'] ?? '').toString(),
+        status: (j['status'] ?? '').toString(),
+        events: ((j['timeline'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(DecisionTimelineEvent.fromJson)
             .toList(),
       );
 }
@@ -675,6 +1003,8 @@ class CrmActivity {
 /// Slim 360°-profile summary rolled up from `GET /api/contacts/{id}/profile`.
 /// Full response is much fatter (invoices, payments, workflows, tasks…);
 /// this pulls out the pieces the mobile detail screen actually shows.
+/// The 360° contact profile (GET /contacts/{id}/profile) — one payload feeding
+/// the whole detail screen's accordion sections.
 class ContactProfile {
   final Contact contact;
   final double totalBilled;
@@ -682,6 +1012,15 @@ class ContactProfile {
   final double outstanding;
   final String? lastPayment;
   final int openComplaints;
+  final List<ProfileInvoice> invoices;
+  final List<ProfilePayment> payments;
+  final List<ProfileLine> workflows; // title + stage
+  final List<ProfileDelivery> pendingDeliveries;
+  final List<ProfileFollowUp> followUps;
+  final List<ProfileTask> tasks;
+  final List<ProfileLine> complaints; // title + status
+  final List<ProfilePrice> priceHistory;
+  final AiRelationship? ai;
   const ContactProfile({
     required this.contact,
     this.totalBilled = 0,
@@ -689,10 +1028,24 @@ class ContactProfile {
     this.outstanding = 0,
     this.lastPayment,
     this.openComplaints = 0,
+    this.invoices = const [],
+    this.payments = const [],
+    this.workflows = const [],
+    this.pendingDeliveries = const [],
+    this.followUps = const [],
+    this.tasks = const [],
+    this.complaints = const [],
+    this.priceHistory = const [],
+    this.ai,
   });
   factory ContactProfile.fromJson(Map<String, dynamic> j) {
     final c = (j['contact'] as Map?)?.cast<String, dynamic>() ?? const {};
     final s = (j['summary'] as Map?)?.cast<String, dynamic>() ?? const {};
+    List<T> parse<T>(String key, T Function(Map<String, dynamic>) f) =>
+        ((j[key] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(f)
+            .toList();
     return ContactProfile(
       contact: Contact.fromJson(c),
       totalBilled: (s['total_billed'] as num?)?.toDouble() ?? 0,
@@ -700,8 +1053,127 @@ class ContactProfile {
       outstanding: (s['outstanding'] as num?)?.toDouble() ?? 0,
       lastPayment: s['last_payment'] as String?,
       openComplaints: (s['open_complaints'] as num?)?.toInt() ?? 0,
+      invoices: parse('invoices', ProfileInvoice.fromJson),
+      payments: parse('payments', ProfilePayment.fromJson),
+      workflows: parse('workflows',
+          (m) => ProfileLine((m['title'] ?? 'Workflow').toString(), m['stage']?.toString())),
+      pendingDeliveries: parse('pending_deliveries', ProfileDelivery.fromJson),
+      followUps: parse('follow_ups', ProfileFollowUp.fromJson),
+      tasks: parse('tasks', ProfileTask.fromJson),
+      complaints: parse('complaints',
+          (m) => ProfileLine((m['title'] ?? m['text'] ?? 'Complaint').toString(), m['status']?.toString())),
+      priceHistory: parse('price_history', ProfilePrice.fromJson),
+      ai: j['ai_relationship'] is Map
+          ? AiRelationship.fromJson((j['ai_relationship'] as Map).cast<String, dynamic>())
+          : null,
     );
   }
+}
+
+class ProfileInvoice {
+  final String number;
+  final String? status;
+  final String? dueDate;
+  final double amount;
+  final double paidAmount;
+  const ProfileInvoice({
+    required this.number,
+    this.status,
+    this.dueDate,
+    this.amount = 0,
+    this.paidAmount = 0,
+  });
+  double get balance => (amount - paidAmount) > 0 ? amount - paidAmount : 0;
+  factory ProfileInvoice.fromJson(Map<String, dynamic> j) => ProfileInvoice(
+        number: (j['number'] ?? 'Invoice').toString(),
+        status: j['status']?.toString(),
+        dueDate: j['due_date']?.toString(),
+        amount: (j['amount'] as num?)?.toDouble() ?? 0,
+        paidAmount: (j['paid_amount'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+class ProfilePayment {
+  final double amount;
+  final String? mode;
+  final String? reference;
+  final String? date;
+  const ProfilePayment({this.amount = 0, this.mode, this.reference, this.date});
+  factory ProfilePayment.fromJson(Map<String, dynamic> j) => ProfilePayment(
+        amount: (j['amount'] as num?)?.toDouble() ?? 0,
+        mode: (j['mode'] ?? j['method'])?.toString(),
+        reference: j['reference']?.toString(),
+        date: j['date']?.toString(),
+      );
+}
+
+/// A title + a secondary status/stage line (workflows, complaints).
+class ProfileLine {
+  final String title;
+  final String? sub;
+  const ProfileLine(this.title, this.sub);
+}
+
+class ProfileDelivery {
+  final String title;
+  final String? dueDate;
+  final double? amount;
+  const ProfileDelivery({required this.title, this.dueDate, this.amount});
+  factory ProfileDelivery.fromJson(Map<String, dynamic> j) => ProfileDelivery(
+        title: (j['title'] ?? 'Delivery').toString(),
+        dueDate: j['due_date']?.toString(),
+        amount: (j['amount'] as num?)?.toDouble(),
+      );
+}
+
+class ProfileFollowUp {
+  final String title;
+  final String? ownerName;
+  final String? dueDate;
+  const ProfileFollowUp({required this.title, this.ownerName, this.dueDate});
+  factory ProfileFollowUp.fromJson(Map<String, dynamic> j) => ProfileFollowUp(
+        title: (j['title'] ?? 'Follow-up').toString(),
+        ownerName: j['owner_name']?.toString(),
+        dueDate: j['due_date']?.toString(),
+      );
+}
+
+class ProfileTask {
+  final String id;
+  final String title;
+  const ProfileTask({required this.id, required this.title});
+  factory ProfileTask.fromJson(Map<String, dynamic> j) => ProfileTask(
+        id: (j['id'] ?? '').toString(),
+        title: (j['title'] ?? 'Task').toString(),
+      );
+}
+
+class ProfilePrice {
+  final String item;
+  final double rate;
+  final String? unit;
+  final String? date;
+  const ProfilePrice({required this.item, this.rate = 0, this.unit, this.date});
+  factory ProfilePrice.fromJson(Map<String, dynamic> j) => ProfilePrice(
+        item: (j['item'] ?? '—').toString(),
+        rate: (j['rate'] as num?)?.toDouble() ?? 0,
+        unit: j['unit']?.toString(),
+        date: j['date']?.toString(),
+      );
+}
+
+class AiRelationship {
+  final int? score;
+  final String? reason;
+  final List<String> signals;
+  const AiRelationship({this.score, this.reason, this.signals = const []});
+  factory AiRelationship.fromJson(Map<String, dynamic> j) => AiRelationship(
+        score: (j['relationship_score'] as num?)?.toInt(),
+        reason: j['reason']?.toString(),
+        signals: ((j['signals'] as List?) ?? const [])
+            .map((e) => e.toString())
+            .toList(),
+      );
 }
 
 /// Tenant-configured role — used to group the Team screen and to render the
@@ -729,6 +1201,9 @@ class Contact {
   final String? email;
   final String? ownerId;
   final String? ownerName;
+  final String? address;
+  final String? city;
+  final String? lifecycleStage;
   final DateTime? touchedAt;
 
   /// Enrichment fields — merged in after the /contacts fetch.
@@ -747,6 +1222,9 @@ class Contact {
     this.email,
     this.ownerId,
     this.ownerName,
+    this.address,
+    this.city,
+    this.lifecycleStage,
     this.touchedAt,
     this.complaintCount = 0,
     this.receivables = 0,
@@ -773,6 +1251,9 @@ class Contact {
       email: j['email'] as String?,
       ownerId: (j['owner_id'] ?? j['owner'])?.toString(),
       ownerName: (j['owner_name']) as String?,
+      address: j['address'] as String?,
+      city: j['city'] as String?,
+      lifecycleStage: (j['lifecycle_stage'] ?? j['stage']) as String?,
       touchedAt: parseDate(j['last_touched_at'] ?? j['updated_at']),
     );
   }
@@ -794,6 +1275,9 @@ class Contact {
       email: email,
       ownerId: ownerId,
       ownerName: ownerName ?? this.ownerName,
+      address: address,
+      city: city,
+      lifecycleStage: lifecycleStage,
       touchedAt: touchedAt,
       complaintCount: complaintCount ?? this.complaintCount,
       receivables: receivables ?? this.receivables,
@@ -877,6 +1361,8 @@ class Workflow {
   final DateTime? updatedAt;         // last history entry's `at` or created_at
   final String? updateLabel;         // last history entry's `note` or "Created"
   final DateTime? createdAt;
+  final String? decisionId;          // the decision this workflow came from
+  final String? decisionTitle;       // hydrated server-side ("From decision: …")
 
   Workflow({
     required this.id,
@@ -890,6 +1376,8 @@ class Workflow {
     this.updatedAt,
     this.updateLabel,
     this.createdAt,
+    this.decisionId,
+    this.decisionTitle,
   });
 
   factory Workflow.fromJson(Map<String, dynamic> j) {
@@ -919,6 +1407,8 @@ class Workflow {
       updatedAt: upAt is String ? DateTime.tryParse(upAt) : null,
       updateLabel: (last?['note'] as String?) ?? 'Created',
       createdAt: ca is String ? DateTime.tryParse(ca) : null,
+      decisionId: j['decision_id'] as String?,
+      decisionTitle: j['decision_title'] as String?,
     );
   }
 }
@@ -980,23 +1470,46 @@ class Pipeline {
   final String label;
   final String? sub;
   final List<String> stages;
+  final Map<String, String> stageLabels; // stage key → display label
   const Pipeline({
     required this.key,
     required this.label,
     this.sub,
     this.stages = const [],
+    this.stageLabels = const {},
   });
 
-  factory Pipeline.fromJson(Map<String, dynamic> j) => Pipeline(
-        key: (j['key'] ?? '').toString(),
-        label: (j['label'] ?? '').toString(),
-        sub: j['sub'] as String?,
-        stages: ((j['stages'] as List?) ?? const [])
-            .whereType<Map>()
-            .map((s) => (s['key'] ?? '').toString())
-            .where((s) => s.isNotEmpty)
-            .toList(),
-      );
+  /// The display label for a stage key — the tenant's label if present,
+  /// else the key word-cased with underscores turned to spaces.
+  String labelForStage(String key) {
+    final l = stageLabels[key];
+    if (l != null && l.isNotEmpty) return l;
+    return key
+        .split(RegExp(r'[_\s]+'))
+        .map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1))
+        .join(' ');
+  }
+
+  factory Pipeline.fromJson(Map<String, dynamic> j) {
+    final rawStages =
+        ((j['stages'] as List?) ?? const []).whereType<Map>().toList();
+    final keys = <String>[];
+    final labels = <String, String>{};
+    for (final s in rawStages) {
+      final k = (s['key'] ?? '').toString();
+      if (k.isEmpty) continue;
+      keys.add(k);
+      final l = (s['label'] ?? '').toString();
+      if (l.isNotEmpty) labels[k] = l;
+    }
+    return Pipeline(
+      key: (j['key'] ?? '').toString(),
+      label: (j['label'] ?? '').toString(),
+      sub: j['sub'] as String?,
+      stages: keys,
+      stageLabels: labels,
+    );
+  }
 
   /// Fallback pipelines (matches frontend `DEFAULT_OPERATING_MODEL.pipelines`)
   /// used when the backend hasn't populated the tenant yet.

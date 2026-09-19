@@ -21,8 +21,13 @@ class Sparkline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (points.length < 2) return const SizedBox.shrink();
+    // Size.infinite makes the CustomPaint FILL its (bounded) parent instead of
+    // collapsing to zero width — without an explicit size, a CustomPaint with
+    // no child sizes to Size.zero and paints nothing visible.
     return CustomPaint(
-      painter: _SparklinePainter(points: points, color: color, strokeWidth: strokeWidth),
+      size: Size.infinite,
+      painter: _SparklinePainter(
+          points: points, color: color, strokeWidth: strokeWidth),
     );
   }
 }
@@ -35,7 +40,7 @@ class _SparklinePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (points.length < 2) return;
+    if (points.length < 2 || size.width <= 0 || size.height <= 0) return;
     double lo = points.first, hi = points.first;
     for (final p in points) {
       if (p < lo) lo = p;
@@ -43,33 +48,55 @@ class _SparklinePainter extends CustomPainter {
     }
     final range = (hi - lo) == 0 ? 1.0 : (hi - lo);
     final dx = size.width / (points.length - 1);
+    // Inset the plot vertically so the stroke (and its round caps) is never
+    // clipped at the top/bottom edge — that clipping is part of why the line
+    // read as faint.
+    final pad = strokeWidth + 1;
+    final plotH = (size.height - pad * 2).clamp(1.0, size.height);
 
-    final path = Path();
+    double xAt(int i) => i * dx;
+    double yAt(int i) => pad + plotH - ((points[i] - lo) / range) * plotH;
+
+    final line = Path();
     for (int i = 0; i < points.length; i++) {
-      final x = i * dx;
-      // Y is inverted — higher values sit higher on screen (smaller y).
-      final y = size.height - ((points[i] - lo) / range) * size.height;
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
+      final x = xAt(i), y = yAt(i);
+      i == 0 ? line.moveTo(x, y) : line.lineTo(x, y);
     }
 
-    final paint = Paint()
-      ..color = color.withValues(alpha: 0.55)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    canvas.drawPath(path, paint);
+    // Soft area wash under the line (matches the PWA's 10–12% fill) — the fill
+    // is what makes the trend legible at this small size.
+    final fill = Path.from(line)
+      ..lineTo(xAt(points.length - 1), size.height)
+      ..lineTo(xAt(0), size.height)
+      ..close();
+    canvas.drawPath(
+      fill,
+      Paint()
+        ..style = PaintingStyle.fill
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            color.withValues(alpha: 0.22),
+            color.withValues(alpha: 0.02),
+          ],
+        ).createShader(Offset.zero & size),
+    );
+
+    canvas.drawPath(
+      line,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
 
     // Small end dot to anchor the eye at the latest value.
-    final lastX = (points.length - 1) * dx;
-    final lastY = size.height - ((points.last - lo) / range) * size.height;
     canvas.drawCircle(
-      Offset(lastX, lastY),
-      strokeWidth * 1.2,
+      Offset(xAt(points.length - 1), yAt(points.length - 1)),
+      strokeWidth * 1.3,
       Paint()..color = color,
     );
   }

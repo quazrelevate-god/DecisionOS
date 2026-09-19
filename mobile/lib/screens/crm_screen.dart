@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../data/repositories.dart';
@@ -6,15 +7,16 @@ import '../theme/app_theme.dart';
 import '../widgets/app_bloom.dart';
 import '../widgets/app_header.dart';
 import '../widgets/segment.dart';
-import '../widgets/neumorphic.dart';
 import '../widgets/overlay_dock.dart';
 import '../widgets/states.dart';
 
-/// The CRM screen — ported from frontend `pages/CRM.js`. Mirrors the mobile
-/// blocks (`lg:hidden`) exactly: minimal header, big "CRM" title, black
-/// "+ Add contact" pill, search bar + round filter button, Buyers/Suppliers
-/// neumorphic segment, and a 2-column grid of contact cards. The dock is
-/// overlaid — CRM is pushed above AppShell but the user still needs the nav.
+/// The CRM screen — re-synced to the PWA mobile CRM (frontend pages/CRM.js).
+///
+///   • header: "CRM" + subtitle + a dark round "+" (opens the add menu)
+///   • Buyers / Suppliers segment with counts (dark active pill)
+///   • search pill · status + sort dropdowns
+///   • a single column of neumorphic contact cards (avatar · name · company ·
+///     type chip · the one signal pill · "Touched …" + owner footer)
 class CrmScreen extends StatefulWidget {
   const CrmScreen({super.key});
   @override
@@ -23,15 +25,26 @@ class CrmScreen extends StatefulWidget {
 
 enum _SortMode { name, recent, outstanding, oldestTouched }
 
+const _sortLabels = <_SortMode, String>{
+  _SortMode.name: 'Name A–Z',
+  _SortMode.recent: 'Recently added',
+  _SortMode.outstanding: 'Outstanding (highest)',
+  _SortMode.oldestTouched: 'Last touched (oldest)',
+};
+
+const _statusLabels = <String, String>{
+  'all': 'All statuses',
+  'lead': 'Lead',
+  'active': 'Active',
+  'inactive': 'Inactive',
+};
+
 class _CrmScreenState extends State<CrmScreen> {
   late Future<List<Contact>> _future;
   String _query = '';
   bool _showBuyers = true;
   String _statusFilter = 'all';
   _SortMode _sort = _SortMode.name;
-  // Direction for the sliding tab body: +1 when Buyers → Suppliers,
-  // -1 the other way. Buyers is slot 0, Suppliers slot 1.
-  int _slideDir = 1;
 
   @override
   void initState() {
@@ -39,11 +52,7 @@ class _CrmScreenState extends State<CrmScreen> {
     _future = ContactsRepository().list();
   }
 
-  void _reload() {
-    setState(() {
-      _future = ContactsRepository().list();
-    });
-  }
+  void _reload() => setState(() => _future = ContactsRepository().list());
 
   @override
   Widget build(BuildContext context) {
@@ -60,65 +69,74 @@ class _CrmScreenState extends State<CrmScreen> {
                 child: SingleChildScrollView(
                   physics: const ClampingScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg,
-                    0,
-                    AppSpacing.lg,
-                    120,
-                  ),
+                      AppSpacing.lg, 0, AppSpacing.lg, 120),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('CRM', style: AppText.h1()),
-                      const SizedBox(height: AppSpacing.md),
-                      _AddContactPill(onPressed: _onAddContact),
-                      const SizedBox(height: AppSpacing.md),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _SearchBar(
-                              onChanged: (v) => setState(() => _query = v),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          _FilterButton(onSelect: _onFilterSelect),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      _ScopeSegment(
-                        buyers: _showBuyers,
-                        onChanged: (b) => setState(() {
-                          if (_showBuyers != b) _slideDir = b ? -1 : 1;
-                          _showBuyers = b;
-                        }),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      SlidingSwitcher(
-                        tabKey: _showBuyers,
-                        direction: _slideDir,
-                        child: FutureBuilder<List<Contact>>(
-                          future: _future,
-                          builder: (context, snap) {
-                            if (snap.connectionState != ConnectionState.done) {
-                              return _skeleton();
-                            }
-                            if (snap.hasError) {
-                              return ErrorState(
-                                message: 'Could not load contacts.',
-                                onRetry: _reload,
-                              );
-                            }
-                            final list = _filterAndSort(snap.data ?? const []);
-                            if (list.isEmpty) {
-                              return const EmptyState(
-                                icon: Icons.person_search_outlined,
-                                title: 'No records match your filters.',
-                                subtitle:
-                                    'Try clearing the search or switching the scope.',
-                              );
-                            }
-                            return _ContactGrid(items: list);
-                          },
-                        ),
+                      _Header(onSelectAdd: _handleAdd),
+                      const SizedBox(height: AppSpacing.lg),
+                      FutureBuilder<List<Contact>>(
+                        future: _future,
+                        builder: (context, snap) {
+                          final loading =
+                              snap.connectionState != ConnectionState.done;
+                          final all = snap.data ?? const <Contact>[];
+                          final buyers = all.where((c) => c.isBuyer).length;
+                          final suppliers =
+                              all.where((c) => c.isSupplier).length;
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _ScopeSegment(
+                                buyers: _showBuyers,
+                                buyersCount: buyers,
+                                suppliersCount: suppliers,
+                                onChanged: (b) =>
+                                    setState(() => _showBuyers = b),
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              _SearchBar(
+                                  onChanged: (v) =>
+                                      setState(() => _query = v)),
+                              const SizedBox(height: AppSpacing.md),
+                              Row(children: [
+                                Expanded(
+                                  child: _CrmSelect(
+                                    icon: Icons.filter_list_rounded,
+                                    value: _statusLabels[_statusFilter]!,
+                                    options: _statusLabels.entries
+                                        .map((e) => (e.key, e.value))
+                                        .toList(),
+                                    onSelect: (k) =>
+                                        setState(() => _statusFilter = k),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _CrmSelect(
+                                    icon: Icons.swap_vert_rounded,
+                                    value: _sortLabels[_sort]!,
+                                    options: _SortMode.values
+                                        .map((m) => (m.name, _sortLabels[m]!))
+                                        .toList(),
+                                    onSelect: (k) => setState(() => _sort =
+                                        _SortMode.values
+                                            .firstWhere((m) => m.name == k)),
+                                  ),
+                                ),
+                              ]),
+                              const SizedBox(height: AppSpacing.md),
+                              if (loading)
+                                _skeleton()
+                              else if (snap.hasError)
+                                ErrorState(
+                                    message: 'Could not load contacts.',
+                                    onRetry: _reload)
+                              else
+                                _body(all),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -132,492 +150,208 @@ class _CrmScreenState extends State<CrmScreen> {
     );
   }
 
+  Widget _body(List<Contact> all) {
+    final list = _filterAndSort(all);
+    if (list.isEmpty) {
+      return const EmptyState(
+        icon: Icons.person_search_outlined,
+        title: 'No records match your filters.',
+        subtitle: 'Try clearing the search or switching the scope.',
+      );
+    }
+    // No ClipRect here — a SlidingSwitcher would clip the cards' neumorphic
+    // side shadows and make them read as flat.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final c in list)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.md),
+            child: _ContactCard(c: c),
+          ),
+      ],
+    );
+  }
+
   List<Contact> _filterAndSort(List<Contact> raw) {
     final scope = raw.where((c) => _showBuyers ? c.isBuyer : c.isSupplier);
     final byStatus = _statusFilter == 'all'
         ? scope
         : scope.where((c) => c.status == _statusFilter);
-    final byQuery = _query.isEmpty
+    final q = _query.trim().toLowerCase();
+    final byQuery = q.isEmpty
         ? byStatus
-        : byStatus.where((c) {
-            final q = _query.toLowerCase();
-            return c.name.toLowerCase().contains(q) ||
-                (c.company ?? '').toLowerCase().contains(q) ||
-                (c.phone ?? '').toLowerCase().contains(q) ||
-                (c.email ?? '').toLowerCase().contains(q);
-          });
+        : byStatus.where((c) =>
+            c.name.toLowerCase().contains(q) ||
+            (c.company ?? '').toLowerCase().contains(q) ||
+            (c.phone ?? '').toLowerCase().contains(q) ||
+            (c.email ?? '').toLowerCase().contains(q));
     final list = byQuery.toList();
     switch (_sort) {
       case _SortMode.name:
-        list.sort((a, b) => a.name.compareTo(b.name));
+        list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
         break;
       case _SortMode.recent:
-        list.sort(
-          (a, b) => (b.touchedAt ?? DateTime(1970)).compareTo(
-            a.touchedAt ?? DateTime(1970),
-          ),
-        );
+        list.sort((a, b) => (b.touchedAt ?? DateTime(1970))
+            .compareTo(a.touchedAt ?? DateTime(1970)));
         break;
       case _SortMode.outstanding:
-        list.sort(
-          (a, b) => (b.receivables + b.payables).compareTo(
-            a.receivables + a.payables,
-          ),
-        );
+        list.sort((a, b) =>
+            (b.receivables + b.payables).compareTo(a.receivables + a.payables));
         break;
       case _SortMode.oldestTouched:
-        list.sort(
-          (a, b) => (a.touchedAt ?? DateTime(1970)).compareTo(
-            b.touchedAt ?? DateTime(1970),
-          ),
-        );
+        list.sort((a, b) => (a.touchedAt ?? DateTime(1970))
+            .compareTo(b.touchedAt ?? DateTime(1970)));
         break;
     }
     return list;
   }
 
-  Widget _skeleton() {
-    return GridView.count(
-      crossAxisCount: 2,
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 0.95,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      children: List.generate(6, (_) => const LoadingCard(height: 140)),
-    );
-  }
+  Widget _skeleton() => const Column(
+        children: [
+          LoadingCard(height: 118),
+          SizedBox(height: AppSpacing.md),
+          LoadingCard(height: 118),
+          SizedBox(height: AppSpacing.md),
+          LoadingCard(height: 118),
+        ],
+      );
 
-  Future<void> _onAddContact() async {
-    // Frontend opens `AddContactMenu` with New Buyer / New Supplier options.
-    // On mobile we prime the sheet with the scope the user is looking at.
+  // ── Add menu (handled from the "+" dropdown) ─────────────────────────────────
+
+  Future<void> _handleAdd(String value) async {
+    if (value == 'import') {
+      await _importCsv();
+      return;
+    }
+    // A record FORM stays a modal sheet; only the picker MENU is a dropdown.
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
-      ),
-      builder: (_) =>
-          _AddContactSheet(defaultType: _showBuyers ? 'customer' : 'vendor'),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg))),
+      builder: (_) => _AddContactSheet(defaultType: value),
     );
     if (saved == true) _reload();
   }
 
-  void _onFilterSelect(String key) {
-    setState(() {
-      if (key.startsWith('status:')) {
-        _statusFilter = key.substring(7);
-      } else if (key.startsWith('sort:')) {
-        _sort = _SortMode.values.firstWhere(
-          (m) => m.name == key.substring(5),
-          orElse: () => _SortMode.name,
-        );
-      }
-    });
+  Future<void> _importCsv() async {
+    try {
+      final r = await FilePicker.platform.pickFiles(
+        withData: true,
+        type: FileType.custom,
+        allowedExtensions: const ['csv', 'xlsx', 'xls'],
+      );
+      if (r == null || r.files.isEmpty || r.files.single.bytes == null) return;
+      if (!mounted) return;
+      _snack('Importing ${r.files.single.name}…');
+      await MoneyRepository()
+          .ingestCsv(bytes: r.files.single.bytes!, filename: r.files.single.name);
+      if (mounted) _snack('Imported — review it in Money ▸ Inbox.');
+    } catch (_) {
+      if (mounted) _snack('Could not import that spreadsheet.');
+    }
+  }
+
+  void _snack(String m) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+    }
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Top-of-screen controls
+// Header
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _AddContactPill extends StatelessWidget {
-  final VoidCallback onPressed;
-  const _AddContactPill({required this.onPressed});
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Material(
-        color: AppColors.textPrimary,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg,
-              vertical: 12,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.add_rounded, size: 18, color: Colors.white),
-                const SizedBox(width: 6),
-                Text(
-                  'Add contact',
-                  style: AppText.bodyStrong().copyWith(color: Colors.white),
-                ),
-                const SizedBox(width: 4),
-                const Icon(
-                  Icons.expand_more_rounded,
-                  size: 18,
-                  color: Colors.white,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+class _Header extends StatelessWidget {
+  final ValueChanged<String> onSelectAdd;
+  const _Header({required this.onSelectAdd});
 
-class _SearchBar extends StatelessWidget {
-  final ValueChanged<String> onChanged;
-  const _SearchBar({required this.onChanged});
-  @override
-  Widget build(BuildContext context) {
-    // Flat search field — no neumorphic depth. A single soft hairline
-    // border on a white pill, so it reads as an input, not a button.
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: AppColors.hairline),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.search_rounded,
-            size: 18,
-            color: AppColors.textSecondary,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              onChanged: onChanged,
-              style: AppText.body(),
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: 'Search name, company, phone, email…',
-                hintStyle: AppText.body().copyWith(
-                  color: AppColors.textTertiary,
-                ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FilterButton extends StatelessWidget {
-  final ValueChanged<String> onSelect;
-  const _FilterButton({required this.onSelect});
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 44,
-      height: 44,
-      child: PopupMenuButton<String>(
-        tooltip: 'Filter and sort',
-        onSelected: onSelect,
-        color: AppColors.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-        ),
-        itemBuilder: (_) => const [
-          PopupMenuItem<String>(enabled: false, child: Text('All statuses')),
-          PopupMenuItem(value: 'status:all', child: Text('All statuses')),
-          PopupMenuItem(value: 'status:lead', child: Text('Lead')),
-          PopupMenuItem(value: 'status:active', child: Text('Active')),
-          PopupMenuItem(value: 'status:inactive', child: Text('Inactive')),
-          PopupMenuDivider(),
-          PopupMenuItem<String>(enabled: false, child: Text('Sort')),
-          PopupMenuItem(value: 'sort:name', child: Text('Name A–Z')),
-          PopupMenuItem(value: 'sort:recent', child: Text('Recently added')),
-          PopupMenuItem(
-            value: 'sort:outstanding',
-            child: Text('Outstanding (highest)'),
-          ),
-          PopupMenuItem(
-            value: 'sort:oldestTouched',
-            child: Text('Last touched (oldest)'),
-          ),
-        ],
-        child: KrPop(
-          borderRadius: BorderRadius.circular(999),
-          padding: const EdgeInsets.all(10),
-          child: const Icon(
-            Icons.tune_rounded,
-            size: 20,
-            color: AppColors.textPrimary,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ScopeSegment extends StatelessWidget {
-  final bool buyers;
-  final ValueChanged<bool> onChanged;
-  const _ScopeSegment({required this.buyers, required this.onChanged});
-  @override
-  Widget build(BuildContext context) {
-    // KM-57 — same material as the Finance rail.
-    const labels = ['Buyers', 'Suppliers'];
-    return RaisedPillSegment(
-      active: buyers ? 0 : 1,
-      count: labels.length,
-      onSelect: (i) => onChanged(i == 0),
-      palette: NeuPalette.from(trackColorFor(BloomTint.steel)),
-      trackPadding: const EdgeInsets.symmetric(horizontal: 7, vertical: 10),
-      slotPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-      // Two slots, so they split the track down the middle: Buyers and
-      // Suppliers get the same pill whatever is selected, and the halves
-      // always add up to the track width, so nothing can overflow.
-      equalSlots: true,
-      slotBuilder: (context, i, isActive) =>
-          neuSegmentLabel(context, labels[i], isActive),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Grid + card
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _ContactGrid extends StatelessWidget {
-  final List<Contact> items;
-  const _ContactGrid({required this.items});
-  @override
-  Widget build(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: items.length,
-      // Clip.none is critical — the default (antiAlias) clips each cell
-      // exactly to its rect, which cuts the neumorphic drop shadow flush
-      // against the card edge and makes it invisible. With Clip.none the
-      // 3px dark drop + 3px white highlight can spill into the gutters.
-      clipBehavior: Clip.none,
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        // Gutters roomy enough for the shadows to breathe between cards
-        // without touching. Matches the frontend's md:gap-4.
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        // Wider than tall so a full stack (title + company + signal +
-        // divider + touched) fits with NO dead space at the bottom of the
-        // card. A square/tall ratio left a large gap because content is
-        // top-aligned with `mainAxisSize.min` while GridView forces the
-        // cell height.
-        childAspectRatio: 1.35,
-      ),
-      itemBuilder: (_, i) => _ContactCard(c: items[i]),
-    );
-  }
-}
-
-class _ContactCard extends StatelessWidget {
-  final Contact c;
-  const _ContactCard({required this.c});
-  @override
-  Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(AppRadius.md);
-    return Material(
-      color: Colors.transparent,
-      borderRadius: radius,
-      child: InkWell(
-        borderRadius: radius,
-        onTap: () => context.push('/contact/${c.id}', extra: c),
-        child: Container(
+  PopupMenuItem<String> _item(
+      String value, IconData icon, String title, String hint) {
+    return PopupMenuItem<String>(
+      value: value,
+      height: 64,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(children: [
+        Container(
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: radius,
-            // KM-51 — soft-UI single drop.
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                offset: const Offset(0, 2),
-                blurRadius: 8,
-              ),
+            color: AppColors.textPrimary.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, size: 18, color: AppColors.textPrimary),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: AppText.bodyStrong().copyWith(fontSize: 14)),
+              const SizedBox(height: 1),
+              Text(hint,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.small()
+                      .copyWith(fontSize: 11, color: AppColors.textSecondary)),
             ],
           ),
-          padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
+        ),
+      ]),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                children: [
-                  _StatusDot(status: c.status),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      c.name,
-                      style: AppText.bodyStrong().copyWith(fontSize: 14),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (c.complaintCount > 0) ...[
-                    const SizedBox(width: 6),
-                    _ComplaintBadge(count: c.complaintCount),
-                  ],
-                  const SizedBox(width: 4),
-                  const Icon(
-                    Icons.chevron_right_rounded,
-                    size: 16,
-                    color: AppColors.textTertiary,
-                  ),
-                ],
-              ),
-              if ((c.company ?? '').isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(
-                  c.company!,
-                  style: AppText.small().copyWith(
-                    color: AppColors.textSecondary,
-                    fontSize: 11,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-              if (_KeySignal.has(c)) ...[
-                const SizedBox(height: 10),
-                _KeySignal(c: c),
-              ],
-              const SizedBox(height: 10),
-              // Hairline separator matches the reference — a very light rule
-              // between the signal/body and the touched-ago footer.
-              Container(
-                height: 1,
-                color: AppColors.textPrimary.withValues(alpha: 0.06),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.schedule_rounded,
-                    size: 11,
-                    color: AppColors.textTertiary,
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      _touchedLabel(c.touchedAt),
-                      style: AppText.small().copyWith(
-                        color: AppColors.textTertiary,
-                        fontSize: 10,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
+              Text('CRM', style: AppText.h1()),
+              const SizedBox(height: 4),
+              Text('Manage your buyers and suppliers in one place.',
+                  style: AppText.small()
+                      .copyWith(color: AppColors.textSecondary)),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _StatusDot extends StatelessWidget {
-  final String status;
-  const _StatusDot({required this.status});
-  @override
-  Widget build(BuildContext context) {
-    Color color;
-    switch (status) {
-      case 'active':
-        color = AppColors.textPrimary.withValues(alpha: 0.70);
-        break;
-      case 'lead':
-        color = AppColors.textPrimary.withValues(alpha: 0.35);
-        break;
-      default:
-        color = const Color(0xFFA3A3A3);
-    }
-    return Container(
-      width: 8,
-      height: 8,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-    );
-  }
-}
-
-class _ComplaintBadge extends StatelessWidget {
-  final int count;
-  const _ComplaintBadge({required this.count});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 18,
-      height: 18,
-      decoration: BoxDecoration(
-        color: AppColors.danger,
-        shape: BoxShape.circle,
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        '$count',
-        style: AppText.small().copyWith(
-          color: Colors.white,
-          fontWeight: FontWeight.w700,
-          fontSize: 10,
-          height: 1,
-        ),
-      ),
-    );
-  }
-}
-
-class _KeySignal extends StatelessWidget {
-  final Contact c;
-  const _KeySignal({required this.c});
-  static bool has(Contact c) =>
-      c.complaintCount > 0 || c.receivables > 0 || c.payables > 0;
-  @override
-  Widget build(BuildContext context) {
-    if (c.complaintCount > 0) {
-      return _signal(
-        Icons.warning_amber_rounded,
-        '${c.complaintCount} open ${c.complaintCount == 1 ? 'complaint' : 'complaints'}',
-        AppColors.danger,
-      );
-    }
-    if (c.receivables > 0) {
-      final owed = _rupees(c.receivables);
-      final suffix = c.oldestDays > 30 ? ' · oldest ${c.oldestDays}d' : '';
-      return _signal(
-        Icons.currency_rupee_rounded,
-        '$owed owed$suffix',
-        c.oldestDays > 30 ? AppColors.danger : AppColors.textSecondary,
-      );
-    }
-    if (c.payables > 0) {
-      return _signal(
-        Icons.currency_rupee_rounded,
-        '${_rupees(c.payables)} to pay',
-        AppColors.textSecondary,
-      );
-    }
-    return const SizedBox.shrink();
-  }
-
-  Widget _signal(IconData icon, String text, Color color) {
-    return Row(
-      children: [
-        Icon(icon, size: 12, color: color),
-        const SizedBox(width: 4),
-        Expanded(
-          child: Text(
-            text,
-            style: AppText.small().copyWith(color: color, fontSize: 11),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+        const SizedBox(width: 12),
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: PopupMenuButton<String>(
+            tooltip: 'Add contact',
+            onSelected: onSelectAdd,
+            color: AppColors.surface,
+            elevation: 10,
+            shadowColor: Colors.black.withValues(alpha: 0.22),
+            position: PopupMenuPosition.under,
+            offset: const Offset(0, 8),
+            constraints: const BoxConstraints(minWidth: 268, maxWidth: 300),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18)),
+            itemBuilder: (_) => [
+              _item('customer', Icons.import_contacts_outlined, 'New Buyer',
+                  'A retail account, a regular buyer or a dealer'),
+              _item('vendor', Icons.local_shipping_outlined, 'New Supplier',
+                  'A supplier, vendor or raw-material source'),
+              _item('import', Icons.upload_file_outlined,
+                  'Import from spreadsheet', 'Bulk-add via CSV or Excel'),
+            ],
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                  gradient: AppInk.plate, shape: BoxShape.circle),
+              child:
+                  const Icon(Icons.add_rounded, size: 22, color: Colors.white),
+            ),
           ),
         ),
       ],
@@ -625,10 +359,437 @@ class _KeySignal extends StatelessWidget {
   }
 }
 
-// Indian-style grouping: "4,80,000" (last 3 digits, then pairs of 2).
+// ─────────────────────────────────────────────────────────────────────────────
+// Scope segment — Buyers / Suppliers with counts, dark active pill
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ScopeSegment extends StatelessWidget {
+  final bool buyers;
+  final int buyersCount;
+  final int suppliersCount;
+  final ValueChanged<bool> onChanged;
+  const _ScopeSegment({
+    required this.buyers,
+    required this.buyersCount,
+    required this.suppliersCount,
+    required this.onChanged,
+  });
+  @override
+  Widget build(BuildContext context) {
+    // A recessed neu tray with the active tab lifting out as a dark ink pill.
+    final neu = NeuPalette.from(trackColorFor(BloomTint.steel));
+    return NeuRecessed(
+      palette: neu,
+      radius: AppRadius.pill,
+      padding: const EdgeInsets.all(6),
+      child: Row(children: [
+        Expanded(
+          child: _ScopeCell(
+            icon: Icons.import_contacts_outlined,
+            label: 'Buyers',
+            count: buyersCount,
+            active: buyers,
+            onTap: () => onChanged(true),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: _ScopeCell(
+            icon: Icons.local_shipping_outlined,
+            label: 'Suppliers',
+            count: suppliersCount,
+            active: !buyers,
+            onTap: () => onChanged(false),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+class _ScopeCell extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final int count;
+  final bool active;
+  final VoidCallback onTap;
+  const _ScopeCell({
+    required this.icon,
+    required this.label,
+    required this.count,
+    required this.active,
+    required this.onTap,
+  });
+  @override
+  Widget build(BuildContext context) {
+    final fg = active ? Colors.white : AppColors.textSecondary;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        height: 48,
+        alignment: Alignment.center,
+        decoration: active
+            ? BoxDecoration(
+                gradient: AppInk.plate,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              )
+            : null,
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 17, color: fg),
+          const SizedBox(width: 8),
+          Text(label,
+              style: AppText.smallStrong().copyWith(fontSize: 14.5, color: fg)),
+          const SizedBox(width: 8),
+          // A tight round badge that hugs the number.
+          Container(
+            height: 20,
+            constraints: const BoxConstraints(minWidth: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 5),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: active
+                  ? Colors.white.withValues(alpha: 0.22)
+                  : AppColors.textPrimary.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Text('$count',
+                style: TextStyle(
+                    fontSize: 11.5,
+                    height: 1,
+                    fontWeight: FontWeight.w700,
+                    color: active ? Colors.white : AppColors.textSecondary)),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Search + selects
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SearchBar extends StatelessWidget {
+  final ValueChanged<String> onChanged;
+  const _SearchBar({required this.onChanged});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(color: AppColors.hairline),
+      ),
+      child: Row(children: [
+        const Icon(Icons.search_rounded,
+            size: 18, color: AppColors.textSecondary),
+        const SizedBox(width: 8),
+        Expanded(
+          child: TextField(
+            onChanged: onChanged,
+            style: AppText.body(),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: 'Search name, company, phone, email…',
+              hintStyle: AppText.body().copyWith(color: AppColors.textTertiary),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 13),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+class _CrmSelect extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final List<(String, String)> options; // key, label
+  final ValueChanged<String> onSelect;
+  const _CrmSelect({
+    required this.icon,
+    required this.value,
+    required this.options,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final r = BorderRadius.circular(AppRadius.pill);
+    return PopupMenuButton<String>(
+      onSelected: onSelect,
+      color: AppColors.surface,
+      elevation: 10,
+      shadowColor: Colors.black.withValues(alpha: 0.22),
+      position: PopupMenuPosition.under,
+      offset: const Offset(0, 8),
+      constraints: const BoxConstraints(minWidth: 200),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      itemBuilder: (_) => [
+        for (final o in options)
+          PopupMenuItem<String>(
+            value: o.$1,
+            height: 44,
+            child: Row(children: [
+              Expanded(
+                child: Text(o.$2,
+                    style: AppText.body().copyWith(
+                        fontWeight:
+                            o.$2 == value ? FontWeight.w600 : FontWeight.w400)),
+              ),
+              if (o.$2 == value)
+                const Icon(Icons.check_rounded,
+                    size: 18, color: AppColors.brand),
+            ]),
+          ),
+      ],
+      child: Container(
+        height: 46,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: r,
+          border: Border.all(color: AppColors.hairline),
+        ),
+        child: Row(children: [
+          Icon(icon, size: 16, color: AppColors.textSecondary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.smallStrong().copyWith(fontSize: 13)),
+          ),
+          const Icon(Icons.keyboard_arrow_down_rounded,
+              size: 18, color: AppColors.textSecondary),
+        ]),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Contact card — neumorphic, full width
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ContactCard extends StatelessWidget {
+  final Contact c;
+  const _ContactCard({required this.c});
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(AppRadius.lg);
+    return NeuRaised(
+      palette: NeuPalette.from(trackColorFor(BloomTint.steel)),
+      color: AppColors.surface,
+      borderRadius: radius,
+      distance: 4,
+      blur: 10,
+      onTap: () => context.push('/contact/${c.id}', extra: c),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _Avatar(name: c.name),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(c.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.bodyStrong().copyWith(fontSize: 15)),
+                    if ((c.company ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(c.company!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.small().copyWith(
+                              fontSize: 12, color: AppColors.textSecondary)),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              _TypeChip(buyer: c.isBuyer),
+            ]),
+            if (_SignalPill.has(c)) ...[
+              const SizedBox(height: 12),
+              _SignalPill(c: c),
+            ],
+            const SizedBox(height: 12),
+            Row(children: [
+              const Icon(Icons.schedule_rounded,
+                  size: 13, color: AppColors.textTertiary),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(_touchedLabel(c.touchedAt),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.small()
+                        .copyWith(fontSize: 12, color: AppColors.textTertiary)),
+              ),
+              if ((c.ownerName ?? '').isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Text('Owner: ${c.ownerName}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.small()
+                        .copyWith(fontSize: 12, color: AppColors.textTertiary)),
+              ],
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A deterministic tinted initials avatar (hash of the name → one of 10 tints).
+class _Avatar extends StatelessWidget {
+  final String name;
+  const _Avatar({required this.name});
+
+  static const _tints = <(Color, Color)>[
+    (Color(0xFFDCFCE7), Color(0xFF047857)), // emerald
+    (Color(0xFFE0F2FE), Color(0xFF0369A1)), // sky
+    (Color(0xFFFEF3C7), Color(0xFFB45309)), // amber
+    (Color(0xFFEDE9FE), Color(0xFF6D28D9)), // violet
+    (Color(0xFFFFE4E6), Color(0xFFBE123C)), // rose
+    (Color(0xFFCCFBF1), Color(0xFF0F766E)), // teal
+    (Color(0xFFE0E7FF), Color(0xFF4338CA)), // indigo
+    (Color(0xFFFFEDD5), Color(0xFFC2410C)), // orange
+    (Color(0xFFECFCCB), Color(0xFF4D7C0F)), // lime
+    (Color(0xFFF1F5F9), Color(0xFF475569)), // slate
+  ];
+
+  static (Color, Color) _tintFor(String name) {
+    int h = 0;
+    for (final cu in name.codeUnits) {
+      h = (h * 31 + cu) & 0x7fffffff;
+    }
+    return _tints[h % _tints.length];
+  }
+
+  static String _initials(String n) {
+    final parts = n.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) {
+      final w = parts.first;
+      return (w.length >= 2 ? w.substring(0, 2) : w).toUpperCase();
+    }
+    return (parts.first[0] + parts.last[0]).toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final (bg, fg) = _tintFor(name);
+    return Container(
+      width: 44,
+      height: 44,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+      child: Text(_initials(name),
+          style: TextStyle(
+              fontSize: 14, fontWeight: FontWeight.w700, color: fg)),
+    );
+  }
+}
+
+class _TypeChip extends StatelessWidget {
+  final bool buyer;
+  const _TypeChip({required this.buyer});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.textPrimary.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(buyer ? 'Buyer' : 'Supplier',
+          style: AppText.small()
+              .copyWith(fontSize: 11.5, color: AppColors.textSecondary)),
+    );
+  }
+}
+
+/// The one signal on a card: open complaints (rose) → else money owed (orange
+/// if aged, else quiet) → else money to pay (quiet). Matches the PWA priority.
+class _SignalPill extends StatelessWidget {
+  final Contact c;
+  const _SignalPill({required this.c});
+  static bool has(Contact c) =>
+      c.complaintCount > 0 || c.receivables > 0 || c.payables > 0;
+
+  @override
+  Widget build(BuildContext context) {
+    if (c.complaintCount > 0) {
+      return _pill(
+        icon: Icons.warning_amber_rounded,
+        text:
+            '${c.complaintCount} open ${c.complaintCount == 1 ? 'complaint' : 'complaints'}',
+        bg: const Color(0xFFFFE4E6),
+        fg: const Color(0xFFBE123C),
+        chevron: true,
+      );
+    }
+    if (c.receivables > 0) {
+      final aged = c.oldestDays > 30;
+      return _pill(
+        icon: Icons.currency_rupee_rounded,
+        text: '${_rupees(c.receivables)} owed${aged ? ' · oldest ${c.oldestDays}d' : ''}',
+        bg: aged ? const Color(0xFFFFEDD5) : AppColors.surfaceMuted,
+        fg: aged ? const Color(0xFFC2410C) : AppColors.textSecondary,
+      );
+    }
+    return _pill(
+      icon: Icons.currency_rupee_rounded,
+      text: '${_rupees(c.payables)} to pay',
+      bg: AppColors.surfaceMuted,
+      fg: AppColors.textSecondary,
+    );
+  }
+
+  Widget _pill({
+    required IconData icon,
+    required String text,
+    required Color bg,
+    required Color fg,
+    bool chevron = false,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
+      child: Row(children: [
+        Icon(icon, size: 15, color: fg),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Text(text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.smallStrong().copyWith(fontSize: 13, color: fg)),
+        ),
+        if (chevron)
+          Icon(Icons.chevron_right_rounded, size: 16, color: fg.withValues(alpha: 0.7)),
+      ]),
+    );
+  }
+}
+
+// Indian-style grouping with a ₹ sign: "₹4,80,000".
 String _rupees(double n) {
   final whole = n.round().toString();
-  if (whole.length <= 3) return 'Rs $whole';
+  if (whole.length <= 3) return '₹$whole';
   final head = whole.substring(0, whole.length - 3);
   final tail = whole.substring(whole.length - 3);
   final buf = StringBuffer();
@@ -637,7 +798,7 @@ String _rupees(double n) {
     if (buf.isNotEmpty) buf.write(',');
     buf.write(head.substring(start, i).split('').reversed.join());
   }
-  return 'Rs ${buf.toString().split('').reversed.join()},$tail';
+  return '₹${buf.toString().split('').reversed.join()},$tail';
 }
 
 String _touchedLabel(DateTime? at) {
@@ -651,7 +812,7 @@ String _touchedLabel(DateTime? at) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Add Contact bottom sheet — mobile port of AddContactMenu → dialog.
+// Add Contact bottom sheet — the form opened by New Buyer / New Supplier.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _AddContactSheet extends StatefulWidget {
@@ -680,9 +841,8 @@ class _AddContactSheetState extends State<_AddContactSheet> {
 
   Future<void> _save() async {
     if (_name.text.trim().isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Name is required.')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Name is required.')));
       return;
     }
     setState(() => _saving = true);
@@ -696,39 +856,29 @@ class _AddContactSheetState extends State<_AddContactSheet> {
       );
       if (mounted) {
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Contact added')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Contact added')));
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Could not add contact.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not add contact.')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  Widget _field(
-    String label,
-    TextEditingController c, {
-    String? hint,
-    TextInputType? keyboard,
-  }) {
+  Widget _field(String label, TextEditingController c,
+      {String? hint, TextInputType? keyboard}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 6),
-          child: Text(
-            label,
-            style: AppText.small().copyWith(
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            ),
-          ),
+          child: Text(label,
+              style: AppText.small()
+                  .copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
         ),
         TextField(
           controller: c,
@@ -741,10 +891,8 @@ class _AddContactSheetState extends State<_AddContactSheet> {
               borderRadius: BorderRadius.circular(AppRadius.md),
               borderSide: BorderSide.none,
             ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 12,
-            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           ),
         ),
       ],
@@ -762,48 +910,32 @@ class _AddContactSheetState extends State<_AddContactSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('New contact', style: AppText.h3()),
+            Text(_type == 'customer' ? 'New Buyer' : 'New Supplier',
+                style: AppText.h3()),
             const SizedBox(height: AppSpacing.md),
-            // KM-57 — the app's segment material.
             RaisedPillSegment(
               active: _type == 'customer' ? 0 : 1,
               count: 2,
               onSelect: (i) =>
                   setState(() => _type = i == 0 ? 'customer' : 'vendor'),
               palette: neuSheetPalette,
-              trackPadding: const EdgeInsets.symmetric(
-                horizontal: 6,
-                vertical: 7,
-              ),
-              slotPadding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 10,
-              ),
+              trackPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
+              slotPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
               equalSlots: true,
-              slotBuilder: (context, i, isActive) => neuSegmentLabel(
-                context,
-                const ['Buyer', 'Supplier'][i],
-                isActive,
-              ),
+              slotBuilder: (context, i, isActive) =>
+                  neuSegmentLabel(context, const ['Buyer', 'Supplier'][i], isActive),
             ),
             const SizedBox(height: 12),
             _field('Name', _name, hint: 'Contact name'),
             const SizedBox(height: 12),
             _field('Company', _company, hint: 'Company / business name'),
             const SizedBox(height: 12),
-            _field(
-              'Phone',
-              _phone,
-              hint: '+91 98765 43210',
-              keyboard: TextInputType.phone,
-            ),
+            _field('Phone', _phone,
+                hint: '+91 98765 43210', keyboard: TextInputType.phone),
             const SizedBox(height: 12),
-            _field(
-              'Email',
-              _email,
-              hint: 'name@example.com',
-              keyboard: TextInputType.emailAddress,
-            ),
+            _field('Email', _email,
+                hint: 'name@example.com',
+                keyboard: TextInputType.emailAddress),
             const SizedBox(height: AppSpacing.lg),
             Align(
               alignment: Alignment.centerLeft,
@@ -815,13 +947,10 @@ class _AddContactSheetState extends State<_AddContactSheet> {
                   borderRadius: BorderRadius.circular(AppRadius.pill),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg,
-                      vertical: 12,
-                    ),
-                    child: Text(
-                      _saving ? 'Adding…' : 'Add contact',
-                      style: AppText.bodyStrong().copyWith(color: Colors.white),
-                    ),
+                        horizontal: AppSpacing.lg, vertical: 12),
+                    child: Text(_saving ? 'Adding…' : 'Add contact',
+                        style:
+                            AppText.bodyStrong().copyWith(color: Colors.white)),
                   ),
                 ),
               ),

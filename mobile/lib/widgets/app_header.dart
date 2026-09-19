@@ -44,8 +44,8 @@ class AppHeader extends StatelessWidget {
   }
 }
 
-/// `DecisionOS⁺` — the wordmark with a small superscript plus, per the
-/// frontend header. "OS" and the plus sit in a lighter ink.
+/// `DecisionOS` — the wordmark. "Decision" in full ink, "OS" in a lighter ink.
+/// (The PWA Desk top bar shows the plain wordmark, no superscript plus.)
 class _WordmarkPlus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -64,17 +64,6 @@ class _WordmarkPlus extends StatelessWidget {
               fontSize: 20,
               fontWeight: FontWeight.w800,
               color: AppColors.textPrimary.withValues(alpha: 0.55),
-            ),
-          ),
-          WidgetSpan(
-            alignment: PlaceholderAlignment.top,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 2, left: 1),
-              child: Text('+',
-                  style: AppText.small().copyWith(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary.withValues(alpha: 0.55))),
             ),
           ),
         ],

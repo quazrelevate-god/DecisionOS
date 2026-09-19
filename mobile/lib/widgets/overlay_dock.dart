@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../app_shell.dart';
 import '../screens/more_screen.dart';
 import 'bottom_nav.dart';
@@ -29,6 +30,10 @@ class OverlayDock extends StatelessWidget {
                 currentIndex: currentIndex,
                 onTap: (i) {
                   if (i == 3) {
+                    context.push('/crm');
+                    return;
+                  }
+                  if (i == 4) {
                     showMoreSheet(context);
                     return;
                   }

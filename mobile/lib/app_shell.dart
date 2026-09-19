@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'data/repositories.dart';
 import 'models/models.dart';
 import 'screens/desk_screen.dart';
@@ -57,8 +58,13 @@ class _AppShellState extends State<AppShell> {
   ];
 
   void _onNavTap(int i) {
-    // The 4th slot (index 3) is the More sheet — open it, don't switch tab.
+    // Slots 0/1/2 are the shell tabs; slot 3 (CRM) is a pushed route; slot 4
+    // (More) opens the bento sheet. Neither CRM nor More switches the tab.
     if (i == 3) {
+      context.push('/crm');
+      return;
+    }
+    if (i == 4) {
       showMoreSheet(context);
       return;
     }

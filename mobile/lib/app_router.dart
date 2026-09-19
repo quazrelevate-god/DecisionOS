@@ -5,6 +5,7 @@ import 'app_shell.dart';
 import 'data/auth_repository.dart';
 import 'models/models.dart';
 import 'screens/all_apps_screen.dart';
+import 'screens/approvals_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/signup_screen.dart';
 import 'screens/calendar_screen.dart';
@@ -84,6 +85,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(path: '/money', builder: (_, __) => const MoneyScreen()),
     GoRoute(path: '/ops', builder: (_, __) => const OpsScreen()),
     GoRoute(path: '/workflows', builder: (_, __) => const WorkflowsScreen()),
+    GoRoute(path: '/approvals', builder: (_, __) => const ApprovalsScreen()),
     GoRoute(path: '/leave', builder: (_, __) => const LeaveScreen()),
     GoRoute(path: '/calendar', builder: (_, __) => const CalendarScreen()),
     GoRoute(path: '/dex', builder: (_, __) => const DexScreen()),

@@ -178,3 +178,119 @@ class StatDot extends StatelessWidget {
     );
   }
 }
+
+/// The canonical flat card — white fill, a single cool-gray hairline, and NO
+/// neumorphic shadow. This is the shipped `.nm-raised` surface (the app's
+/// "neumorphic" name is legacy; the real surface is flat). Prefer this over the
+/// older NeuRaised/KrPop shadow pairs for new work.
+class NmCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final double radius;
+  final Color color;
+  final VoidCallback? onTap;
+
+  const NmCard({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(AppSpacing.lg),
+    this.radius = 20,
+    this.color = AppColors.surface,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final r = BorderRadius.circular(radius);
+    final content = Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: r,
+        border: Border.all(color: AppColors.nmEdge.withValues(alpha: 0.40), width: 1),
+      ),
+      child: child,
+    );
+    if (onTap == null) return content;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: r,
+      child: InkWell(onTap: onTap, borderRadius: r, child: content),
+    );
+  }
+}
+
+/// The KPI / stat tile — a flat white glass card: label left, icon + value
+/// right. Ported from the Desk mobile KPI strip (desk-kpi-strip). Urgent
+/// values take the accent orange (--kr-accent).
+class StatTile extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final String value;
+  final bool urgent;
+  final VoidCallback? onTap;
+
+  const StatTile({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.value,
+    this.urgent = false,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final r = BorderRadius.circular(18);
+    final card = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.82),
+        borderRadius: r,
+        border: Border.all(color: Colors.white.withValues(alpha: 0.80), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF223326).withValues(alpha: 0.10),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.small().copyWith(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textPrimary.withValues(alpha: 0.80),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Icon(icon, size: 15, color: AppColors.textSecondary),
+          const SizedBox(width: 6),
+          Text(
+            value,
+            style: AppText.h3().copyWith(
+              fontSize: 17,
+              height: 1.0,
+              fontWeight: FontWeight.w800,
+              fontFeatures: const [FontFeature.tabularFigures()],
+              color: urgent ? AppColors.accent : AppColors.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+    if (onTap == null) return card;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: r,
+      child: InkWell(onTap: onTap, borderRadius: r, child: card),
+    );
+  }
+}

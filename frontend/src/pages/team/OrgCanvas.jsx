@@ -91,15 +91,21 @@ const ELBOW_R = 14; // corner radius where a branch leaves the trunk
 const ADD_H = 56; // the "Add member" node at the top of a column
 const ADD_LINE = "hsl(230 16% 74%)"; // its branch: neutral and dashed, not a person
 
-/* YOU, AND THE LINE YOU REPORT THROUGH. Graphite rather than a hue, and that
-   is the point: every team already owns a hue (HUE_RULES) and the structural
-   lines own the root lavender, so any colour picked here would read as "this
-   branch belongs to team X" somewhere in the tree. Ink belongs to no team, so
-   it reads as "this one is yours" against all of them. The card you are on
-   takes the solid weight; everyone you report through takes the faint one, so
-   the eye runs up the chain without the ancestors competing with you. */
-const PATH_INK = "hsl(240 6% 22%)";
-const PATH_INK_SOFT = "hsl(240 6% 22% / 0.34)";
+/* YOU, AND THE LINE YOU REPORT THROUGH — in the DEPARTMENT'S OWN COLOUR, at
+   the department's `ink` weight, and thicker than an ordinary branch.
+   It was graphite first, on the reasoning that a hue would read as "this
+   branch belongs to team X". The founder's answer, 2026-09-19: black reads as
+   a different KIND of thing on a page that has no black lines anywhere else,
+   and the tree is already colour-coded by department, so the right answer is
+   the department's colour carried louder rather than a new colour carried
+   quietly. Weight does the separating instead of hue — 3px against 1.5, and
+   `ink` (hsl h 62% 50%) against `line` (hsl h 68% 72%), so it is the same
+   colour family the cards already use, two steps stronger.
+   Falls back to the root violet for anything with no department of its own. */
+const pathTone = (hue) => tone(hue == null ? ROOT_HUE : hue).ink;
+const PATH_W = 3;    // an on-path branch or stem
+const LINE_W = 1.5;  // every other one
+const PATH_BORDER = 2.5; // the bold border on your own card
 const COL_PAD_Y = 20; // breathing room above and below a column's cards
 const MIN_GAP = 14; // cards never closer than this…
 const MAX_GAP = 56; // …nor further apart when a column has height to spare
@@ -376,10 +382,20 @@ function RootColumn({ owners, ctx, register }) {
                 <span className="relative grid h-[156px] w-[156px] place-items-center rounded-full bg-white/55 ring-1 ring-inset ring-white shadow-[0_20px_44px_-20px_hsl(250_45%_40%/0.55)] backdrop-blur-xl transition-transform duration-200 group-hover:scale-[1.02] motion-reduce:transition-none">
                   <PersonAvatar name={u.name} src={u.avatar_url} size={130} ring={false} />
                 </span>
-                {ctx.ownerOnPath && (
+                {/* ONLY WHEN THE OWNER IS YOU (founder, 2026-09-19). It used
+                    to ring the owner for everybody, as the top of whatever
+                    path you were on, and that is what the founder was looking
+                    at when they asked why there was a circle behind the owner:
+                    signed in as someone else, it drew a circle on a card that
+                    was not theirs, over a face that already carries a white
+                    inset ring and a bloom. Marking the top of the path is the
+                    LINE's job, and it does it. A border marks one card only —
+                    the one you are on — and here that is the owner's own face.
+                    The owner has no department, so pathTone falls to violet. */}
+                {u.id === ctx.meId && (
                   <span aria-hidden="true" data-testid="owner-on-path"
                     className="pointer-events-none absolute left-1/2 top-1/2 h-[162px] w-[162px] -translate-x-1/2 -translate-y-1/2 rounded-full"
-                    style={{ border: `${u.id === ctx.meId ? 2 : 1.5}px solid ${u.id === ctx.meId ? PATH_INK : PATH_INK_SOFT}` }} />
+                    style={{ border: `${PATH_BORDER}px solid ${pathTone(null)}` }} />
                 )}
                 <Presence u={u} outToday={ctx.outIds.has(u.id)} big />
                 <span data-testid={`member-title-${u.id}`}
@@ -413,11 +429,11 @@ function RootColumn({ owners, ctx, register }) {
    rather than a style on the card, for two reasons: the card's `open` state
    already owns `outline`, and an inline box-shadow would replace the card's
    depth shadow (NODE sets it as a class) rather than adding to it. */
-function PathRing({ on, mine }) {
-  if (!on) return null;
+function PathRing({ mine, hue }) {
+  if (!mine) return null;
   return (
     <span aria-hidden="true" className="pointer-events-none absolute -inset-px rounded-full"
-      style={{ border: `${mine ? 2 : 1.5}px solid ${mine ? PATH_INK : PATH_INK_SOFT}` }} />
+      style={{ border: `${PATH_BORDER}px solid ${pathTone(hue)}` }} />
   );
 }
 
@@ -441,7 +457,7 @@ function PersonCard({ node, ctx, register }) {
       data-on-path={onPath ? (mine ? "you" : "above") : undefined}
       className={`relative flex shrink-0 items-center gap-2 rounded-full pl-2 pr-2.5 transition-opacity ${NODE} ${node.dim ? "opacity-45" : ""}`}
       style={{ width: size.w, height: size.h, ...(open ? { outline: `2px solid ${t.line}`, outlineOffset: -2 } : null) }}>
-      <PathRing on={onPath} mine={mine} />
+      <PathRing mine={mine} hue={node.hue} />
       <button type="button" data-testid={`team-member-${u.id}`}
         onClick={() => ctx.onOpen(u)}
         aria-label={`Open profile for ${u.name}`}
@@ -480,7 +496,6 @@ function TeamCard({ node, ctx, register }) {
       data-on-path={ctx.onPath.has(node.id) ? "above" : undefined}
       className={`relative flex shrink-0 items-center gap-2 rounded-full pl-2 pr-2.5 ${NODE}`}
       style={{ width: CARD.team.w, height: CARD.team.h, ...(open ? { outline: `2px solid ${t.line}`, outlineOffset: -2 } : null) }}>
-      <PathRing on={ctx.onPath.has(node.id)} mine={false} />
       {/* A team has no profile, so the card itself opens its people too. */}
       <button type="button" onClick={() => ctx.toggle(node)} aria-expanded={open}
         aria-label={`${open ? "Hide" : "Show"} the ${team.label} team`}
@@ -576,8 +591,8 @@ function ColumnConnector({ line }) {
   const mono = !!line.mono;
   const trunk = mono ? structural : tone(line.stemHue).line;
   const dotX = GUTTER_W - 10;
-  const colourOf = (k) => (k.add ? ADD_LINE : k.path ? PATH_INK : mono ? structural : tone(k.hue).line);
-  const widthOf = (k) => (k.path ? 2 : 1.5);
+  const colourOf = (k) => (k.add ? ADD_LINE : k.path ? pathTone(k.hue) : mono ? structural : tone(k.hue).line);
+  const widthOf = (k) => (k.path ? PATH_W : LINE_W);
   const [top, bottom] = spineSpan(line);
   return (
     <svg aria-hidden="true" width={GUTTER_W}
@@ -705,8 +720,8 @@ function laneGeom(line) {
       dy,
       r,
       // Your own line is drawn over the top of the team colouring.
-      color: k.add ? ADD_LINE : k.path ? PATH_INK : mono ? structural : tone(k.hue).line,
-      width: k.path ? 2 : 1.5,
+      color: k.add ? ADD_LINE : k.path ? pathTone(k.hue) : mono ? structural : tone(k.hue).line,
+      width: k.path ? PATH_W : LINE_W,
       d,
     };
   });
@@ -724,8 +739,8 @@ function laneGeom(line) {
     /* Only the STEM takes the accent, never the trunk: the trunk is shared by
        every branch in the lane, so inking it would claim the whole level for
        one person. The stem is the single segment that is actually theirs. */
-    stemColor: line.fromPath ? PATH_INK : trunkColor,
-    stemWidth: line.fromPath ? 2 : 1.5,
+    stemColor: line.fromPath ? pathTone(line.stemHue) : trunkColor,
+    stemWidth: line.fromPath ? PATH_W : LINE_W,
     stemD: `M 0 ${y1} H ${jx}`,
     trunkD: trunkBottom - trunkTop > 0.5 ? `M ${jx} ${trunkTop} V ${trunkBottom}` : "",
     branches,

@@ -61,6 +61,7 @@ import {
 import { GlassSelect } from "./karma/GlassSelect";
 import { ScopeSlider } from "./karma/ScopeSlider";
 import { DesignCheckbox } from "./karma/DesignCheckbox";
+import { ApprovalPanel } from "./karma/ApprovalPanel";
 import { useAuth } from "../context/AuthContext";
 import { userPerms } from "../lib/perms";
 import { canAssignPerson } from "../lib/taskAccess";
@@ -131,12 +132,14 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
   const [sending, setSending] = useState(false);
   const [confirmReject, setConfirmReject] = useState(false);
   const { user } = useAuth();
-  /* ASK-50 — priority and proof for the tasks this decision creates, set here
-     and applied when it is approved (see approveM). null = untouched, and an
-     untouched setting is never sent — so Dex's own priority on a task is kept
-     unless the person approving actually changes it. */
+  /* ASK-50 — what the card shows while a change is on its way to the server;
+     null means "show what the proposal says". Each change is SAVED ON THE
+     PROPOSAL as it is made (PATCH …/proposal/tasks/:key, as who and when
+     already are), so it holds whoever approves it, from wherever. */
   const [taskPrio, setTaskPrio] = useState(null);
   const [taskProof, setTaskProof] = useState(null);
+  const [taskAppr, setTaskAppr] = useState(null);
+  const [taskApprover, setTaskApprover] = useState(null);
   // Focus lands on the close when the card opens, not on the card itself:
   // Radix focuses the content, and the content's focus ring is the app's
   // lavender outline drawn round the whole popup.
@@ -224,10 +227,35 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
   /* ASK-50 — what the priority bar opens on: the priority Dex proposed, when
      every task in the proposal agrees on one; otherwise medium, the app's
      default. And who sees the card at all (see its comment below). */
-  const proposedPrios = [...new Set((rows || []).map((r) => r.priority).filter(Boolean))];
-  const proposedPrio = proposedPrios.length === 1 && ["low", "medium", "high"].includes(proposedPrios[0])
-    ? proposedPrios[0] : "medium";
-  const canShapeTasks = editable && rows.length > 0 && (user?.role === "owner" || d?.created_by === user?.id);
+  /* ASK-50 — ONE SETTING FOR ALL THE TASKS IT CREATES, read from them. When
+     they agree the card shows it; when they do not (Dex can propose a high
+     task beside a medium one) it shows the first task's, and changing it sets
+     every task. */
+  const first = (rows || [])[0] || {};
+  const same = (f) => new Set((rows || []).map(f)).size <= 1;
+  const proposedPrio = same((r) => r.priority || "medium") && ["low", "medium", "high"].includes(first.priority || "medium")
+    ? (first.priority || "medium") : "medium";
+  const proposedProof = (rows || []).length > 0 && (rows || []).every((r) => !!r.evidence_required);
+  const apprOf = (r) => (r.approval_required ? (r.approval_stage === "close" ? "close" : "start") : "none");
+  const proposedAppr = apprOf(first);
+  const proposedApprover = first.approval_required ? (first.approver_id || "") : "";
+  /* Anyone who may decide it may shape it — the server holds that rule for
+     every proposal edit (decision_flow._editable). */
+  const canShapeTasks = editable && rows.length > 0;
+  const saveTaskSettings = async (body, revert) => {
+    setEditBusy(true);
+    try {
+      for (const r of rows) {
+        // eslint-disable-next-line no-await-in-loop
+        await api.patch(`/decisions/${decisionId}/proposal/tasks/${r.key}`, body);
+      }
+      invalidate();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not change it");
+      revert();
+      invalidate();
+    } finally { setEditBusy(false); }
+  };
   const [editBusy, setEditBusy] = useState(false);
   const [audioUrl, setAudioUrl] = useState(null);
   const membersQ = useQuery({
@@ -235,6 +263,22 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
     queryFn: () => api.get("/users").then((r) => r.data),
     enabled: !!open && editable,
   });
+  /* Who may approve a task this makes: the owner, or anyone with approval
+     access who is not doing one of these tasks (the server refuses the doer,
+     as New Task does). And who approves when nobody is picked — worked out the
+     way New Task says it, for the person who raised the decision. */
+  const doers = new Set((rows || []).map((r) => r.assignee_id).filter(Boolean));
+  const approverChoices = (membersQ.data || []).filter((m) => m.role === "owner"
+    || (userPerms(m).includes("approvals") && !doers.has(m.id)));
+  const raiser = (membersQ.data || []).find((m) => m.id === d?.created_by);
+  const raiserManager = raiser?.reporting_manager_id ? (membersQ.data || []).find((m) => m.id === raiser.reporting_manager_id) : null;
+  const firstOwner = (membersQ.data || []).find((m) => m.role === "owner");
+  const usualApprover = raiser?.role === "owner" ? raiser
+    : raiserManager && !doers.has(raiserManager.id) && approverChoices.some((a) => a.id === raiserManager.id) ? raiserManager
+    : firstOwner;
+  const usualApproverLabel = usualApprover
+    ? `${usualApprover.id === user?.id ? "You" : usualApprover.name}${usualApprover === raiserManager ? " · their manager" : usualApprover.role === "owner" ? " · owner" : ""}`
+    : "The owner";
   const people = (membersQ.data || []).filter((m) => canAssignPerson(user, m))
     .map((m) => ({ value: m.id, label: m.id === user?.id ? `${m.name} (you)` : m.name }));
   const editTask = async (key, body) => {
@@ -288,37 +332,17 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
   ) : null);
 
   const approveM = useMutation({
-    /* ASK-50 — APPROVE, THEN SHAPE WHAT IT MADE. The server's proposal edit
-       takes only who does a task and when (edit_proposal_task), so priority
-       and proof cannot ride on the proposal; they are applied to the decision's
-       tasks the moment approval creates them, with the same PATCH /tasks/:id
-       the drawer uses — so the same rights hold (who asked for it, or the
-       owner). Only what was touched is sent. A refusal does not undo the
-       approval; it is reported. */
-    mutationFn: async () => {
-      const res = await api.post(`/decisions/${decisionId}/approve`);
-      const patch = {};
-      if (taskPrio !== null) patch.priority = taskPrio;
-      if (taskProof !== null) patch.evidence_required = taskProof;
-      let failed = [];
-      const ids = res?.data?.task_ids || [];
-      if (Object.keys(patch).length && ids.length) {
-        const out = await Promise.allSettled(ids.map((id) => api.patch(`/tasks/${id}`, patch)));
-        failed = out.filter((o) => o.status === "rejected")
-          .map((o) => o.reason?.response?.data?.detail || "Could not update the task");
-      }
-      return { res, failed };
-    },
-    onSuccess: ({ res, failed }) => {
+    /* ASK-50 — priority, proof and approval are already on the proposal (the
+       card below saves them as they change), so approving creates the tasks
+       with them; nothing is patched afterwards. */
+    mutationFn: () => api.post(`/decisions/${decisionId}/approve`),
+    onSuccess: (res) => {
       const c = res?.data?.created_on_approval;
       const made = c ? [
         c.task_ids ? `${c.task_ids} task${c.task_ids === 1 ? "" : "s"}` : null,
         c.workflow_ids ? `${c.workflow_ids} workflow${c.workflow_ids === 1 ? "" : "s"}` : null,
       ].filter(Boolean) : [];
       toast.success(made.length ? `Approved — ${made.join(" and ")} created` : "Approved");
-      if (failed.length) {
-        toast.error(`Approved, but ${failed.length === 1 ? "one task kept" : `${failed.length} tasks kept`} its old settings: ${failed[0]}`);
-      }
       // ASK-32 Phase 3 — stay open: the popup now shows what was created, with links.
       invalidate();
     },
@@ -494,21 +518,51 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
                       person who raised it (the tasks are theirs: they are
                       created "asked by" the decision's author) — and only while
                       it is still a proposal with tasks in it. */}
+                  {/* ASK-50 — THE TASKS IT CREATES: New Task's priority bar,
+                      its Needs approval panel and its Needs proof, for the
+                      tasks this decision will create. Each change is saved on
+                      the proposal at once (the server's edit_proposal_task),
+                      so approval creates the tasks with them — locked until
+                      approved when approval is before work starts, exactly as
+                      New Task does — whoever approves and wherever from. */}
                   {canShapeTasks && (
                     <Card label="The tasks it creates" right={`${rows.length} task${rows.length === 1 ? "" : "s"}`} testid="decision-task-settings">
                       <p className={DRAWER_LABEL} id="decision-priority-label">Priority</p>
                       <ScopeSlider fluid label="Priority" testid="decision-priority"
                         options={[{ key: "low", label: "Low" }, { key: "medium", label: "Medium" }, { key: "high", label: "High" }]}
-                        value={taskPrio ?? proposedPrio} onChange={setTaskPrio}
+                        value={taskPrio ?? proposedPrio}
+                        onChange={(v) => { setTaskPrio(v); saveTaskSettings({ priority: v }, () => setTaskPrio(null)); }}
                         thumbClassName={`kr-prio-thumb--${taskPrio ?? proposedPrio}`} />
+
+                      <ApprovalPanel className="mt-4" testid="decision-approval" disabled={editBusy}
+                        subtitle="Approve before its work starts or when it's completed."
+                        value={taskAppr ?? proposedAppr}
+                        onChange={(k) => {
+                          setTaskAppr(k);
+                          saveTaskSettings(k === "none" ? { approval_required: false } : { approval_required: true, approval_stage: k },
+                            () => setTaskAppr(null));
+                        }} />
+                      {(taskAppr ?? proposedAppr) !== "none" && (
+                        <div className="mt-3" data-testid="decision-approver-wrap">
+                          <p className={DRAWER_LABEL}>Approver</p>
+                          <GlassSelect testid="decision-task-approver" ariaLabel="Who approves the tasks" disabled={editBusy}
+                            value={taskApprover ?? proposedApprover}
+                            onChange={(v) => { setTaskApprover(v); saveTaskSettings({ approver_id: v }, () => setTaskApprover(null)); }}
+                            options={[
+                              { value: "", label: usualApproverLabel },
+                              ...approverChoices.map((m) => ({ value: m.id, label: `${m.name}${m.id === user?.id ? " (you)" : ""}` })),
+                            ]} />
+                        </div>
+                      )}
+
                       <div className="mt-4">
-                        <DesignCheckbox testid="decision-evidence-required" checked={taskProof ?? false}
-                          onChange={(e) => setTaskProof(e.target.checked)}>
+                        <DesignCheckbox testid="decision-evidence-required" checked={taskProof ?? proposedProof} disabled={editBusy}
+                          onChange={(e) => { const v = e.target.checked; setTaskProof(v); saveTaskSettings({ evidence_required: v }, () => setTaskProof(null)); }}>
                           Needs proof (photo, voice note or file) before it can be completed
                         </DesignCheckbox>
                       </div>
                       <p className="mt-3 text-xs text-slate-500" data-testid="decision-task-settings-note">
-                        {rows.length === 1 ? "Set on the task" : rows.length === 2 ? "Set on both tasks" : `Set on all ${rows.length} tasks`} when you approve.
+                        {rows.length === 1 ? "For the task" : rows.length === 2 ? "For both tasks" : `For all ${rows.length} tasks`} — kept with the decision and applied when it's approved.
                       </p>
                     </Card>
                   )}

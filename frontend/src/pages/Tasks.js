@@ -8,13 +8,14 @@ import { toast } from "sonner";
 import { timeAgo, fullTime } from "../lib/format";
 import { userPerms } from "../lib/perms";
 import { canAssignPerson, canAssignTeam } from "../lib/taskAccess";
-import { Plus, User, Paperclip, ClockCounterClockwise, X, Check, ShieldCheck, Prohibit, Play, Lightbulb, Info, CloudArrowUp } from "@phosphor-icons/react";
+import { Plus, User, Paperclip, ClockCounterClockwise, X, CloudArrowUp } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
 import { PersonAvatar } from "../components/karma/PersonAvatar";
-import { GLASS_PILL, INK_PILL, INK_PLATE } from "../components/karma/glass";
+import { GLASS_PILL, INK_PILL } from "../components/karma/glass";
 import { ScopeSlider } from "../components/karma/ScopeSlider";
 import { DesignCheckbox } from "../components/karma/DesignCheckbox";
+import { ApprovalPanel } from "../components/karma/ApprovalPanel";
 import { GlassSelect } from "../components/karma/GlassSelect";
 
 const COLUMNS = [
@@ -40,14 +41,8 @@ export const OP_CATEGORIES = [
   "Administration", "Compliance", "Marketing", "HR Activity", "Travel", "Event", "IT Support", "Other",
 ];
 
-// ASK-28 TK-05 — when a task's approval happens. Before work starts locks it
-// until approved; before it's marked done lets the work start straight away
-// and makes Complete a request the approver closes.
-const APPROVAL_CHOICES = [
-  { key: "none", label: "No", sub: "Not required", icon: Prohibit, hint: "Spending money or committing the company? Approve before work starts. Checking the result? Approve before it's marked done." },
-  { key: "start", label: "Before work starts", sub: "Locked until approved", icon: Play, hint: "The task stays locked until it is approved." },
-  { key: "close", label: "Before it's marked done", sub: "Approver closes it", icon: Check, hint: "Work starts straight away. Complete sends it to the approver, who closes it." },
-];
+// ASK-28 TK-05 — the approval choices live with their panel now
+// (components/karma/ApprovalPanel), shared with the Decision review card.
 
 const EMPTY_FORM = {
   title: "", description: "", task_type: "",
@@ -485,61 +480,11 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                   placeholder="Anything they need to know" value={form.description} onChange={set("description")} />
               </label>
 
-              {/* ASK-28 TK-05 — when the approval happens, chosen per task. */}
-              {/* 2026-09-15, founder reference — a titled panel with one card per
-                  choice instead of a pill row. Same choices, same testids, same
-                  state; only the presentation changes.
-                  ASK-50 — AND IT IS GREY AND INK NOW, NOT PURPLE. The founder:
-                  the panel's ground a light grey, the shield-and-tick badge a
-                  black gradient (INK_PLATE, the Desk's ink, not a new black),
-                  and everything that was brand-600 — the chosen card's edge,
-                  the radio, the hint's bulb — in the same ink. */}
-              <div data-testid="task-approval" className="rounded-2xl border border-solid border-neutral-900/[0.07] bg-neutral-100 p-3.5 lg:col-start-2">
-                <div className="flex items-start gap-3">
-                  <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-white ${INK_PLATE}`} aria-hidden="true">
-                    <ShieldCheck size={20} weight="fill" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold text-foreground" id="task-approval-label">Needs approval</span>
-                    <span className="block text-xs text-muted-foreground">Approve before work starts or when it's completed.</span>
-                  </div>
-                  <span className="shrink-0 text-muted-foreground" title="Choose whether someone must approve this task, and when." aria-hidden="true">
-                    <Info size={18} />
-                  </span>
-                </div>
-
-                <div className="mt-3 grid grid-cols-3 gap-2" role="group" aria-labelledby="task-approval-label">
-                  {APPROVAL_CHOICES.map((c) => {
-                    const on = form.approval === c.key;
-                    const Icon = c.icon;
-                    return (
-                      <button key={c.key} type="button" aria-pressed={on} data-testid={`task-approval-${c.key}`}
-                        onClick={() => setForm({ ...form, approval: c.key, approver_id: c.key === "none" ? "" : form.approver_id })}
-                        className={`flex min-w-0 flex-col items-stretch gap-1 rounded-xl border border-solid p-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${on ? "border-neutral-900 bg-card" : "kr-pop border-transparent hover:border-neutral-900/15"}`}>
-                        {/* Icon and radio dot share the top row, so the label below
-                            gets the card's full width instead of dodging the dot. */}
-                        <span className="flex items-center justify-between">
-                          <span aria-hidden="true" className={`grid h-7 w-7 place-items-center rounded-full ${on ? "bg-neutral-900 text-white" : "bg-muted text-foreground"}`}>
-                            <Icon size={14} weight="bold" />
-                          </span>
-                          <span aria-hidden="true" className={`grid h-4 w-4 place-items-center rounded-full border-[1.5px] border-solid ${on ? "border-neutral-900" : "border-neutral-400/80"}`}>
-                            {on && <span className="h-2 w-2 rounded-full bg-neutral-900" />}
-                          </span>
-                        </span>
-                        <span className="text-xs font-semibold leading-tight text-foreground">{c.label}</span>
-                        <span className="text-[11px] leading-tight text-muted-foreground">{c.sub}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-2.5 flex items-start gap-2 rounded-xl bg-card px-3 py-2">
-                  <Lightbulb size={16} weight="bold" className="mt-px shrink-0 text-neutral-700" aria-hidden="true" />
-                  <p className="text-xs leading-snug text-muted-foreground" data-testid="task-approval-hint">
-                    {APPROVAL_CHOICES.find((c) => c.key === form.approval)?.hint}
-                  </p>
-                </div>
-              </div>
+              {/* ASK-28 TK-05 — when the approval happens, chosen per task.
+                  ASK-50 — the panel is components/karma/ApprovalPanel now,
+                  shared with the Decision review card; same testids. */}
+              <ApprovalPanel value={form.approval} testid="task-approval" className="lg:col-start-2"
+                onChange={(k) => setForm({ ...form, approval: k, approver_id: k === "none" ? "" : form.approver_id })} />
 
               <div className="space-y-2 lg:col-start-2">
                 {form.approval !== "none" && (

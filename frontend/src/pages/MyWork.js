@@ -627,9 +627,14 @@ function ExecutionPlan({ t, onChange, onPatched, members = [], roleOptions = [] 
   useEffect(() => () => clearTimeout(glowTimer.current), []);
   const reduceMotion = useReducedMotion();
 
+  /* Deliberately the two FIELDS rather than t.execution_plan itself: the task
+     is refetched often and arrives as a new object each time, so depending on
+     the object would throw away whatever the person was editing every time a
+     poll landed. updated_at/status are what actually mean "the plan changed". */
   useEffect(() => {
     setSteps(t.execution_plan?.steps || []);
     setEditing(!t.execution_plan || t.execution_plan.status === "draft");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t.execution_plan?.updated_at, t.execution_plan?.status]);
 
   const total = steps.length;

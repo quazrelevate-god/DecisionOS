@@ -411,6 +411,10 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
       return;
     }
     generate();
+    // ranRef above already makes this run exactly once, so the deps array is
+    // belt to its braces; listing generate/savedBlueprint would only add churn
+    // to a hook that returns immediately on every call after the first.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Progress creeps toward 92% and only hits 100% when the build truly finishes.

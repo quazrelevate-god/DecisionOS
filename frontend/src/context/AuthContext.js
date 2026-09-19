@@ -82,7 +82,14 @@ export function AuthProvider({ children }) {
 
   const value = useMemo(
     () => ({ user, tenant, loading, login, register, logout, refreshTenant, refreshMe, loginWithOtp }),
-    // login/register/etc close only over stable refs (api import, setState); safe to omit.
+    /* login/register/etc close only over stable refs (api import, setState),
+       so omitting them is safe — and REQUIRED for this memo to do anything.
+       They are redeclared every render, so listing them would recompute
+       `value` every render and re-render every consumer of the context: the
+       exact cost the memo exists to avoid. The alternative is a useCallback
+       around each, which buys nothing here and puts five more hooks in the
+       auth path. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [user, tenant, loading]
   );
 

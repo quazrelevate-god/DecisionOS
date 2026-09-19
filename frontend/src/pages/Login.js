@@ -84,7 +84,9 @@ export default function Login() {
     if (sp.get("signup") === "1" || sp.get("mode") === "signup") {
       navigate("/signup", { replace: true });
     }
-    // Runs once on mount to handle the deep-link.
+    // Runs once on mount to handle the deep-link: a later navigate identity
+    // change must not send someone to /signup again mid-session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Invite deep-link: /?invite=<token> — auto-switch to OTP and text the code.

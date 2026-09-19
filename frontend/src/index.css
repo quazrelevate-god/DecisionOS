@@ -139,6 +139,24 @@
            pixels = the same 28rem on the glass. */
         --app-shell: calc(28rem / var(--ui-scale, 1));
 
+        /* HOW FAR THE CENTRED SHELL'S EDGE IS FROM THE VIEWPORT'S — signed, so
+           it goes NEGATIVE once the viewport is narrower than the cap. The
+           fixed dock and FAB live outside the shell in the flow, so they
+           cannot be centred by a parent and have to rebuild this offset
+           themselves; it was written out at all five of their anchors, which
+           is the duplication the notes down there apologise for.
+
+           THE CLAMP MOVED OUT of the expression and onto each use, as
+           `max(base, calc(gap + base))` rather than `calc(max(0px, gap) +
+           base)`. Same number either way — the gap is only ever clamped up to
+           zero, and max(0,g) + b === max(b, g + b) — but postcss-calc cannot
+           parse a max() nested inside a calc() and emitted a warning for each
+           of the five, which CI=true turns into a failed build. Hoisting it to
+           a custom property does NOT help: the build inlines custom properties
+           before minifying, so the minifier sees the max() again wherever it
+           is written. Keeping calc() free of max() is what actually fixes it. */
+        --app-shell-gap: calc((100vw / var(--ui-scale, 1) - var(--app-shell)) / 2);
+
         /* ---- shadow ----
            RD-1: the reference uses NO shadow on resting surfaces — cards,
            tables and stat tiles are hairline-only. Shadow survives solely for
@@ -540,17 +558,17 @@
         margin-inline: auto;
     }
     .app-dock-left {
-        left: calc(max(0px, (100vw / var(--ui-scale, 1) - var(--app-shell)) / 2) + 1rem);
+        left: max(1rem, calc(var(--app-shell-gap) + 1rem));
     }
     /* KR-14.3 — the dock stretches across the shell on mobile, with a right
        anchor that leaves clearance for the Dex FAB (64px + a 12px gap). Paired
        with `app-dock-left`, this widens the pill from a hugging content box
        to a near-edge-to-edge bar. */
     .app-dock-right {
-        right: calc(max(0px, (100vw / var(--ui-scale, 1) - var(--app-shell)) / 2) + 1rem + 4.75rem);
+        right: max(calc(1rem + 4.75rem), calc(var(--app-shell-gap) + 1rem + 4.75rem));
     }
     .app-fab-right {
-        right: calc(max(0px, (100vw / var(--ui-scale, 1) - var(--app-shell)) / 2) + 1rem);
+        right: max(1rem, calc(var(--app-shell-gap) + 1rem));
     }
 
     /* KM-53 — the Dex plus moves to the right and lines up ON the FAB.
@@ -570,14 +588,14 @@
        stay paired at every width the shell can take — not only on a phone,
        where it happens to collapse to zero. */
     .app-plus-on-fab {
-        margin-right: calc(max(0px, (100vw / var(--ui-scale, 1) - var(--app-shell)) / 2) + 0.625rem);
+        margin-right: max(0.625rem, calc(var(--app-shell-gap) + 0.625rem));
     }
 }
 
 /* Under 360px the FAB shrinks to 3.75rem, so its centre moves 2px inward. */
 @media (max-width: 359px) {
     .app-plus-on-fab {
-        margin-right: calc(max(0px, (100vw / var(--ui-scale, 1) - var(--app-shell)) / 2) + 0.5rem);
+        margin-right: max(0.5rem, calc(var(--app-shell-gap) + 0.5rem));
     }
 }
 @media (min-width: 481px) and (max-width: 1023.98px) {

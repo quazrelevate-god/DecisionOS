@@ -231,13 +231,14 @@ const DESTINATIONS = [
      the Journal's "Events desk" pill and the bell into the Desk's own top bar —
      both of those doors are asserted on their own below. Approvals and
      Workflows are here because ASK-42 made them rooms rather than views inside
-     My Work. Leave lands on /team, which is where the register lives. */
+     My Work. Leave has its own page again (fe25b43, "Leave has a page of your
+     own again"), so its tile lands on /leave. */
   ['/approvals', 'allapps-tile-approvals'],
   ['/workflows', 'allapps-tile-workflows'],
   ['/journal', 'allapps-tile-journal'],
   ['/operating-score', 'allapps-tile-operating-score'],
   ['/team', 'allapps-tile-team'],
-  ['/team', 'allapps-tile-leave'],
+  ['/leave', 'allapps-tile-leave'],
   ['/settings', 'allapps-tile-settings'],
 ];
 

@@ -10,7 +10,8 @@ import { formatPhone, timeAgo } from "../lib/format";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { normIndianMobile } from "../lib/phone";
+import { normIndianMobile, displayIndianMobile } from "../lib/phone";
+import OtpBoxes from "../components/auth/OtpBoxes";
 import { PERMISSIONS, hasPerm, roleDefaultPerms, userPerms } from "../lib/perms";
 import { toast } from "sonner";
 import {
@@ -166,7 +167,9 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
   // whoever manages the team may add, fix or clear it; the server holds the
   // same line.
   const emailSignsIn = editing && !initial?.passwordless;
-  const emailLocked = emailSignsIn && me?.role !== "owner";
+  // Your own email is yours to change (basicOnly) — with your password when it
+  // is how you sign in, as Settings asks.
+  const emailLocked = emailSignsIn && me?.role !== "owner" && !basicOnly;
   const emailTyped = form.email.trim();
   const emailBad = !!emailTyped && !/^\S+@\S+\.\S+$/.test(emailTyped);
   // A number already on file changes only by an owner's hand — it is the sign-in.
@@ -175,9 +178,98 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
   const rolePerms = roleDefaultPerms(form.role, roleOptions);
   const shownPerms = form.follow_role ? rolePerms : form.permissions;
 
+  /* basicOnly — YOUR OWN mobile and email, changed here rather than in Settings
+     (founder, 2026-09-20: a member without Settings still has to be able to
+     fix them). The same rules PATCH /auth/profile holds and Settings › Your
+     Profile follows (U7-24.14): a new mobile is saved only with the code
+     texted to it, and an email that is your sign-in needs your password.
+     `me` is the signed-in record, which carries passwordless and phone_norm. */
+  const last10 = (v) => String(v || "").replace(/\D/g, "").slice(-10);
+  const myPhone = me?.phone_norm || last10(me?.phone);
+  const typedPhone = form.phone.trim();
+  const ownPhoneChanged = basicOnly && !!typedPhone && last10(typedPhone) !== myPhone;
+  const ownNewPhone = ownPhoneChanged ? normIndianMobile(typedPhone) : "";
+  const ownPhoneRemoved = basicOnly && !typedPhone && !!myPhone;
+  const ownEmailChanged = basicOnly && emailTyped.toLowerCase() !== (me?.email || "").toLowerCase();
+  const ownEmailNeedsPassword = ownEmailChanged && !me?.passwordless;
+  // phoneCodeFor is the number the code went to; a different number needs its own.
+  const [phoneCodeFor, setPhoneCodeFor] = useState("");
+  const [phoneCode, setPhoneCode] = useState("");
+  const [phoneResendIn, setPhoneResendIn] = useState(0);
+  const [sendingPhone, setSendingPhone] = useState(false);
+  const [emailPassword, setEmailPassword] = useState("");
+  const phoneCodeReady = !!ownNewPhone && phoneCodeFor === ownNewPhone && phoneCode.length === 6;
+  useEffect(() => {
+    if (phoneResendIn <= 0) return undefined;
+    const t = setTimeout(() => setPhoneResendIn((n) => n - 1), 1000);
+    return () => clearTimeout(t);
+  }, [phoneResendIn]);
+
+  const sendPhoneCode = async () => {
+    if (!ownNewPhone || sendingPhone) return;
+    setSendingPhone(true);
+    try {
+      const { data } = await api.post("/auth/phone/send-code", { phone: ownNewPhone });
+      setPhoneCodeFor(ownNewPhone);
+      setPhoneCode(data?.dev_otp || "");
+      setPhoneResendIn(30);
+      if (data?.dev_otp) toast.info(`Dev OTP: ${data.dev_otp} (auto-filled)`);
+      else toast.success(`We texted a code to ${displayIndianMobile(ownNewPhone)}`);
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Could not send the code");
+    } finally {
+      setSendingPhone(false);
+    }
+  };
+
+  // A member editing their OWN profile without Manage Team goes through PATCH
+  // /auth/profile, which by design never touches department, reporting line or
+  // access (PATCH /users needs team_manage and would refuse it).
+  const saveOwn = async () => {
+    if (!form.name.trim()) { toast.error("Enter your name"); return; }
+    if (emailBad) { toast.error("That email doesn't look right — fix it or leave it empty"); return; }
+    if (ownEmailChanged && !me?.passwordless && !emailTyped) {
+      toast.error("You sign in with this email, so it can be changed but not removed"); return;
+    }
+    if (ownEmailNeedsPassword && !emailPassword) { toast.error("Enter your current password to change your email"); return; }
+    if (ownPhoneRemoved && me?.passwordless) {
+      toast.error("You sign in with this number, so it can be changed but not removed."); return;
+    }
+    if (ownPhoneChanged && !ownNewPhone) { toast.error("Enter a 10-digit Indian mobile number"); return; }
+    if (ownPhoneChanged && !phoneCodeReady) {
+      toast.error(phoneCodeFor === ownNewPhone
+        ? "Enter the code we texted to your new number"
+        : "Text a code to your new number first, then save");
+      return;
+    }
+    setBusy(true);
+    try {
+      await api.patch("/auth/profile", {
+        name: form.name.trim(), title: form.title.trim(), phone: typedPhone,
+        ...(ownPhoneChanged ? { phone_code: phoneCode } : {}),
+        ...(ownEmailChanged ? {
+          email: emailTyped.toLowerCase(),
+          ...(me?.passwordless ? {} : { current_password: emailPassword }),
+        } : {}),
+      });
+      await refreshMe();
+      toast.success(ownEmailChanged && emailTyped
+        ? "Saved — check your new address for the link that confirms it"
+        : "Details updated");
+      setOpen(false);
+      onSaved();
+    } catch (e) {
+      // The phone refusals carry {code, message}; formatApiError reads both.
+      toast.error(formatApiError(e.response?.data?.detail) || "Could not update your details");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const openChange = (o) => {
     setOpen(o);
     if (!o) return;
+    setPhoneCodeFor(""); setPhoneCode(""); setPhoneResendIn(0); setEmailPassword("");
     if (initial) {
       setForm({
         name: initial.name, email: initial.email || "", title: initial.title || "",
@@ -214,11 +306,12 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
         : { title: `Remove owner access from ${initial.name}?`, body: "They lose full control. At least one owner must remain.", action: "Remove owner access" });
       return;
     }
+    if (basicOnly) { await saveOwn(); return; }
     // 2026-09-19 — members sign in with their mobile and a texted code, so the
     // number is required and has to be a real one: a typo hands their account
     // to whoever owns it. (The server holds the same rules.)
     const phoneTyped = form.phone.trim();
-    if (emailBad && !emailLocked && !basicOnly) { toast.error("That email doesn't look right — fix it or leave it empty"); return; }
+    if (emailBad && !emailLocked) { toast.error("That email doesn't look right — fix it or leave it empty"); return; }
     if (editing && emailSignsIn && !emailTyped && (initial.email || "")) {
       toast.error("They sign in with this email, so it can be changed but not removed"); return;
     }
@@ -232,19 +325,6 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
     try {
       if (editing) {
         if (!form.name.trim()) { toast.error("Enter a name"); setBusy(false); return; }
-        if (basicOnly) {
-          // A member editing their OWN profile without Manage Team goes through
-          // PATCH /auth/profile, which by design never touches department,
-          // reporting line or access (PATCH /users needs team_manage). Mobile and
-          // email are left out: changing either there needs a code or a
-          // password, which Settings › Your Profile asks for.
-          await api.patch("/auth/profile", { name: form.name.trim(), title: form.title.trim() });
-          await refreshMe();
-          toast.success("Details updated");
-          setOpen(false);
-          onSaved();
-          return;
-        }
         await api.patch(`/users/${initial.id}`, {
           // RBAC P1 (2026-09-15): name can be corrected. The email goes when
           // this person may change it (see emailLocked).
@@ -299,7 +379,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
         overlayClassName="bg-slate-900/30" data-testid="member-dialog">
         <SheetHead title={editing ? `Edit ${basicOnly || initial.role === "owner" ? "details" : "access"} — ${initial.name}` : "Add team member"}
           onClose={() => setOpen(false)} closeTestid="member-dialog-close" closeClassName={NM_ICON_BTN}>
-          {basicOnly ? "Your name and job title."
+          {basicOnly ? "Your name, job title, email and mobile number."
             : editing ? "Job title, department, reporting line and what they can open."
             : "Who they are, where they sit in the team, and what they can open."}
         </SheetHead>
@@ -317,11 +397,15 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
               </Field>
               <Field label="Email (optional)" htmlFor="member-email">
                 <input id="member-email" data-testid="member-email-input" className={MEMBER_FIELD} type="email" placeholder="name@company.com"
-                  disabled={emailLocked || basicOnly} title={emailLocked ? "They sign in with this email — only an owner can change it" : undefined}
+                  disabled={emailLocked} title={emailLocked ? "They sign in with this email — only an owner can change it" : undefined}
                   value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-                {emailBad && !emailLocked && !basicOnly && (
+                {emailBad && !emailLocked ? (
                   <p className="mt-1.5 text-xs text-danger-600" data-testid="member-email-invalid">
                     That email doesn't look right — fix it or leave it empty
+                  </p>
+                ) : ownEmailChanged && emailTyped && (
+                  <p className="mt-1.5 text-xs text-neutral-500" data-testid="member-email-confirm-hint">
+                    We'll email the new address a link to confirm it.
                   </p>
                 )}
               </Field>
@@ -336,16 +420,13 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                     whoever reads that code is in. So Manage team can fill in a
                     number for someone who has none, but changing one that is
                     already set is the owner's call (the server holds the same
-                    rule). Their own number is theirs to change in Settings. */}
+                    rule). Their own number is theirs to change, here or in
+                    Settings, confirmed by a code texted to it. */}
                 <input id="member-phone" data-testid="member-phone-input" className={MEMBER_FIELD} type="tel"
-                  disabled={phoneLocked || basicOnly}
+                  disabled={phoneLocked}
                   placeholder="+91 98765 43210"
                   value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-                {basicOnly ? (
-                  <p className="mt-1.5 text-xs text-neutral-500" data-testid="member-contact-in-settings">
-                    Change your mobile or email in Settings › Your Profile — a new one is confirmed with a code.
-                  </p>
-                ) : phoneLocked ? (
+                {phoneLocked ? (
                   <p className="mt-1.5 text-xs text-neutral-500" data-testid="member-phone-locked">
                     Only an owner can change someone's mobile number — it's how they sign in.
                   </p>
@@ -360,6 +441,51 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                 )}
               </Field>
             </div>
+
+            {/* Your new mobile signs you in, so it is saved only with the code
+                texted to it; the old one keeps working until then. */}
+            {ownNewPhone && (
+              <div className={`space-y-3 px-4 py-3.5 ${DRAWER_CARD}`} data-testid="member-own-phone-confirm">
+                <p className="text-xs leading-relaxed text-neutral-600">
+                  A new number signs you in, so we check it&apos;s yours: we&apos;ll text a code to{" "}
+                  <strong className="font-semibold text-neutral-900">{displayIndianMobile(ownNewPhone)}</strong>.
+                  Your old number keeps working until you save.
+                </p>
+                {phoneCodeFor === ownNewPhone ? (
+                  <>
+                    <div className="max-w-xs">
+                      <OtpBoxes value={phoneCode} onChange={setPhoneCode} disabled={busy} testid="member-own-phone-code" />
+                    </div>
+                    <p className="text-xs text-neutral-600">
+                      Enter it, then Save.{" "}
+                      {phoneResendIn > 0 ? (
+                        <span data-testid="member-own-phone-resend-wait">Text it again in {phoneResendIn}s</span>
+                      ) : (
+                        <button type="button" onClick={sendPhoneCode} disabled={sendingPhone} data-testid="member-own-phone-resend"
+                          className="font-semibold text-neutral-900 underline underline-offset-2 disabled:opacity-50">
+                          Text it again
+                        </button>
+                      )}
+                    </p>
+                  </>
+                ) : (
+                  <button type="button" onClick={sendPhoneCode} disabled={sendingPhone} data-testid="member-own-phone-send-code"
+                    className={`h-10 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-shadow active:shadow-[inset_3px_3px_7px_hsl(226_18%_76%),inset_-3px_-3px_7px_hsl(0_0%_100%/0.95)] disabled:opacity-50 ${NM_RAISED}`}>
+                    {sendingPhone ? "Sending…" : `Text a code to ${displayIndianMobile(ownNewPhone)}`}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Your email is your sign-in when you have a password: prove it is
+                you at the keyboard. Signing in by mobile, it is contact detail. */}
+            {ownEmailNeedsPassword && (
+              <Field label="Your current password" htmlFor="member-own-password">
+                <input id="member-own-password" data-testid="member-own-password-input" className={MEMBER_FIELD} type="password"
+                  autoComplete="current-password" placeholder="••••••••"
+                  value={emailPassword} onChange={(e) => setEmailPassword(e.target.value)} />
+              </Field>
+            )}
           </section>
 
           {/* Department, reporting line and access are a manager's to set —

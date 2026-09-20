@@ -34,7 +34,7 @@ import { useIsMobile } from "../hooks/useIsMobile";
 // ASK-6 (2026-09-12): a member's leave lands in their profile. Since
 // 2026-09-16 it is a timeline there rather than cards, so only Leave.js's
 // status and leave-type labels are shared.
-import { STATUS_META, typeLabel } from "./Leave";
+import { RequestLeaveDialog, STATUS_META, typeLabel } from "./Leave";
 
 const SHEET = `gap-5 rounded-[1.75rem] p-6 sm:rounded-[1.75rem] [&>button.absolute]:hidden ${GLASS_SHEET}`;
 /* 2026-09-16, founder: the profile pop-up is frosted glass like the Team tree's
@@ -968,6 +968,12 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
               </kbd>
             )}
           </div>
+          {/* 2026-09-21 — Mark Leave lives here now, beside Add member. Anyone
+              can mark their own time off, so it is NOT behind Manage team; the
+              glass pill keeps Add member as the header's main (ink) action. */}
+          <RequestLeaveDialog
+            onDone={() => qc.invalidateQueries({ queryKey: ["leaves"] })}
+            triggerClassName={`flex h-12 shrink-0 items-center gap-2 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`} />
           {canManageTeam && (
             <MemberDialog roleOptions={roleOptions} members={members} onSaved={refresh} onInvite={setInvite}
               trigger={

@@ -21,7 +21,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 // sign-offs render in the SAME grid and cards as the task list (a card
 // opened there carries Approve / Request changes / Ask clarification
 // natively); leave uses the LeaveCard the register uses.
-import { LeaveCard, RequestLeaveDialog } from "./Leave";
+import { LeaveCard } from "./Leave";
 import { ScopeSlider } from "../components/karma";
 // ASK-6 (2026-09-12): Leave no longer embedded here. Register lives on
 // Team, approvals live on Desk, config lives on Settings > Operations.
@@ -4314,12 +4314,8 @@ export default function MyWork({ only = null }) {
               )}
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              {/* 2026-09-19 — asking for time off from where the work is. The
-                  same form as the Leave page; the glass pill, not ink, so
-                  New task stays the page's main action. */}
-              <RequestLeaveDialog
-                onDone={() => qc.invalidateQueries({ queryKey: ["leaves"] })}
-                triggerClassName={`${SECTION_BTN} text-slate-800 transition-colors hover:bg-white ${GLASS_PILL}`} />
+              {/* 2026-09-21 — Mark Leave moved to the Team page (beside Add
+                  member). New task is My Work's only header action now. */}
               <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members} defaultType={tab}
                 onOpenChange={(o) => { if (o) setOpenId(null); }}
                 /* 2026-09-14, founder — the same black ink pill as the drawer's

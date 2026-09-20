@@ -102,11 +102,25 @@ async def resolve_wa_tenant(sender: str):
     # (silently capped at 5000, so user #5001+ never got matched).
     matches = await db.users.find(
         {"phone_norm": sp, "wa_phone_obsolete": {"$ne": True}},
-        {"_id": 0, "id": 1, "tenant_id": 1, "phone": 1, "name": 1, "created_at": 1},
+        {"_id": 0, "id": 1, "tenant_id": 1, "phone": 1, "name": 1, "created_at": 1,
+         "wa_primary": 1},
     ).to_list(50)
     if matches:
         distinct_tenants = {m["tenant_id"] for m in matches}
+        # 2026-09-20 — one founder may now run several companies on one mobile
+        # (register creates the second workspace from a confirmed number). That
+        # made this collision ORDINARY rather than exceptional, and dropping
+        # every message was the wrong answer for it. So a number can name the
+        # workspace its WhatsApp lands in: `wa_primary` on exactly one of its
+        # rows, set to the FIRST company when a second one is created. The
+        # ambiguity below still stands for everything else — two different
+        # people who happen to share a number are not a routing preference.
         if len(distinct_tenants) > 1:
+            _primary = [m for m in matches if m.get("wa_primary")]
+            if len(_primary) == 1:
+                logger.info("[WHATSAPP] Sender %s is in %d workspaces; routing to its chosen one (%s).",
+                            sender, len(distinct_tenants), _primary[0]["tenant_id"])
+                return _primary[0]["tenant_id"]
             # FIX-003-A: cross-tenant collision. Alert BOTH tenants and
             # fall back to WA_TENANT_ID — never orphan any workspace's
             # WhatsApp routing implicitly.

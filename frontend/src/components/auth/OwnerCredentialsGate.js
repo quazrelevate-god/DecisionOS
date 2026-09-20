@@ -17,9 +17,18 @@ import { passwordProblem, PASSWORD_RULE } from "../../lib/password";
 const FIELD = "w-full rounded-2xl border-0 bg-white/70 px-4 py-3 text-[15px] text-slate-800 placeholder:text-slate-400 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/20";
 const LABEL = "text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500";
 
-/** True for an owner who still signs in by mobile only. */
+/** True for an owner who still signs in by mobile only.
+ *
+ * 2026-09-20 — except when they already have an email and a password on
+ * another of their own companies. A founder's second company is mobile-only by
+ * design (the same number, no second sign-in address), so asking them to
+ * invent one here would be asking for nothing. `credentials_elsewhere` is the
+ * server's answer for exactly that case (GET /auth/me); a business email for
+ * this company stays available in Settings.
+ */
 export function needsOwnerCredentials(user) {
-  return !!user && user.role === "owner" && (!!user.passwordless || !user.email);
+  return !!user && user.role === "owner" && (!!user.passwordless || !user.email)
+    && !user.credentials_elsewhere;
 }
 
 export default function OwnerCredentialsGate() {

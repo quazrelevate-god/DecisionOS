@@ -64,7 +64,12 @@ export default function Signup() {
   // over. The password is the one thing never stored (the draft store refuses
   // it), so a returning founder is put back on that step with the rest filled.
   const [resumed, setResumed] = useState(false);       // show "picked up where you left off"
-  const [basicsStart, setBasicsStart] = useState(0);   // the step to reopen at
+  const [basicsStart, setBasicsStart] = useState("company_name");   // the step to reopen at
+  /* 2026-09-20 — WHO THIS IS. A founder whose confirmed mobile already signs
+     in somewhere is a person we know: their second company asks for no email
+     and no password, and register creates it from the phone proof alone. Set
+     when they choose "Create another company" after the code. */
+  const [identity, setIdentity] = useState(null);
   const [savedBlueprint, setSavedBlueprint] = useState(null);
   const [draftReady, setDraftReady] = useState(false);
   const [world, setWorld] = useState(null); // { industry, business_model, description, website_summary, products }
@@ -81,27 +86,44 @@ export default function Signup() {
 
   // Resumed straight into the build (their blueprint was saved), there is no
   // `world` from the website step — the draft's own answers stand in.
-  const buildPayload = world
-    ? { ...form, company_size: form.team_size,
-        industry: world.industry, description: world.description, products: world.products }
-    : { ...form, company_size: form.team_size,
-        industry: form.industry || "General", description: form.description || "", products: [] };
+  const buildPayload = (() => {
+    const base = world
+      ? { ...form, company_size: form.team_size,
+          industry: world.industry, description: world.description, products: world.products }
+      : { ...form, company_size: form.team_size,
+          industry: form.industry || "General", description: form.description || "", products: [] };
+    // A second company carries the confirmed mobile and nothing else: register
+    // reads the proof, finds the person it belongs to, and creates the
+    // workspace without a second sign-in address or password.
+    if (identity?.known) return { ...base, email: "", password: "", identity_known: true };
+    return base;
+  })();
 
   // Resume (or start) the draft once, before the first step is drawn.
   useEffect(() => {
     let live = true;
     (async () => {
+      /* 2026-09-20 — "Add a company" from the profile menu is a NEW company,
+         not the half-finished signup this browser may still be holding. Drop
+         that draft first so the wizard opens on a blank first question; their
+         mobile is confirmed again at the third, which is what identifies them. */
+      if (new URLSearchParams(window.location.search).get("add") === "1") clearDraft();
       const { stepData } = await startOrResume();
       if (!live) return;
       if (hasSavedAnswers(stepData)) {
         const saved = formFromDraft(stepData);
         setForm((f) => ({ ...f, ...saved }));
         setSavedBlueprint((stepData.os_blueprint) || null);
-        // Reopen at the first answer that is missing — which is the password,
-        // every time, because it is never saved.
-        const order = ["company_name", "name", "email", "password", "phone", "team_size"];
-        const firstGap = order.findIndex((k) => !String(saved[k] || "").trim());
-        setBasicsStart(firstGap === -1 ? 0 : firstGap);
+        const known = !!(stepData.about || {}).identity_known;
+        if (known) setIdentity({ known: true, name: saved.name || "" });
+        // Reopen at the first answer that is missing. For a new founder that is
+        // the password, every time, because it is never saved; for a founder we
+        // already know there is no password step at all, so the scan must not
+        // stall on one (2026-09-20).
+        const order = ["company_name", "name", "phone", "email", "password", "team_size"]
+          .filter((k) => !known || (k !== "email" && k !== "password"));
+        const firstGap = order.find((k) => !String(saved[k] || "").trim());
+        setBasicsStart(firstGap || order[0]);
         setResumed(true);
       }
       setDraftReady(true);
@@ -238,7 +260,22 @@ export default function Signup() {
             {phase === "basics" && (
               draftReady ? (
               <BasicsFlow
-                form={form} setForm={setForm} initialIndex={basicsStart} resumed={resumed}
+                form={form} setForm={setForm} initialStep={basicsStart} resumed={resumed}
+                identity={identity}
+                onIdentity={(who) => {
+                  setIdentity(who);
+                  /* The whole block, not just the flag: a draft step is
+                     REPLACED on save (services/auth/onboarding_drafts.py
+                     patch_step), so sending the flag alone would wipe the
+                     answers already in it. */
+                  saveStep("about", {
+                    company_name: form.company_name, name: who.name || form.name,
+                    email: form.email, phone: form.phone,
+                    phone_token: form.phone_token, phone_verified_norm: form.phone_verified_norm,
+                    phone_token_expires_at: form.phone_token_expires_at,
+                    identity_known: true,
+                  });
+                }}
                 onStepSaved={(key, value, whole) => {
                   // What they typed is kept as each step completes; the password
                   // is excluded here and refused by the store besides.
@@ -249,6 +286,8 @@ export default function Signup() {
                       email: whole.email, phone: whole.phone,
                       phone_token: whole.phone_token, phone_verified_norm: whole.phone_verified_norm,
                       phone_token_expires_at: whole.phone_token_expires_at,
+                      // carried on every save: a step REPLACES its block
+                      ...(identity?.known ? { identity_known: true } : {}),
                     });
                   }
                 }}
@@ -284,14 +323,14 @@ export default function Signup() {
                    to the OS they built — not through the interview again. */
                 onFixPhone={() => {
                   setForm((f) => ({ ...f, phone_token: "", phone_verified_norm: "", phone_token_expires_at: "" }));
-                  setBasicsStart(4); setResumed(false); setPhase("basics");
+                  setBasicsStart("phone"); setResumed(false); setPhase("basics");
                 }}
                 /* The address is taken and they would rather use another. Back
                    to that one step — not through the interview again — and
                    straight back here, because savedBlueprint means the build
                    is restored rather than regenerated. */
                 onChangeEmail={() => {
-                  setBasicsStart(2); setResumed(false); setPhase("basics");
+                  setBasicsStart("email"); setResumed(false); setPhase("basics");
                 }} />
             )}
           </motion.div>

@@ -339,7 +339,10 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
       // checked back on the sign-in step and a founder can spend minutes in the
       // interview. Cheap, and it turns "Couldn't create your workspace" into a
       // sentence that says what to do.
+      // A second company brings no address of its own — there is nothing to
+      // check, and register identifies the founder by the confirmed mobile.
       try {
+        if (payload.identity_known) throw new Error("second company — no address to check");
         const { data: avail } = await api.post("/signup/check-email", { email: payload.email });
         if (avail && avail.available === false) {
           setTakenEmail(true);
@@ -356,8 +359,11 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
       }
       const products = (bp.products || payload.products || []).filter((p) => (p.name || "").trim());
       await register({
-        company_name: payload.company_name, name: payload.name, email: payload.email,
-        password: payload.password, phone: payload.phone, phone_token: payload.phone_token,
+        company_name: payload.company_name, name: payload.name,
+        // Omitted entirely for a second company: the proof below says who this
+        // is, and sending an empty address would fail the model's own check.
+        ...(payload.identity_known ? {} : { email: payload.email, password: payload.password }),
+        phone: payload.phone, phone_token: payload.phone_token,
         industry: payload.industry || "General", description: payload.description,
         company_size: payload.company_size, currency: "INR",
         business_scale: { employees: payload.company_size },
@@ -379,11 +385,20 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
       // wall: it also carries them past the registration rate limit, which
       // counts attempts per network and would otherwise refuse the very person
       // trying to recover their own workspace.
-      if (signIn) {
+      /* 2026-09-20 — and ONLY when it lands in the company being created. A
+         founder starting their second company reuses the address they already
+         have, so this recovery signed them into the FIRST one and showed the
+         reveal: the new company had never been created, and the screen said it
+         had. A second company has no password to try with, either. */
+      if (signIn && !payload.identity_known) {
         try {
-          await signIn(payload.email, payload.password);
-          setStage("reveal");
-          return;
+          const back = await signIn(payload.email, payload.password);
+          const landed = back?.tenant?.name || "";
+          if (!landed || landed.trim().toLowerCase() === (payload.company_name || "").trim().toLowerCase()) {
+            setStage("reveal");
+            return;
+          }
+          console.debug("recovery signed into a different workspace — not this company", landed);
         } catch (signInErr) {
           console.debug("recovery sign-in did not apply", signInErr);
         }

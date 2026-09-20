@@ -15,8 +15,13 @@ from models.tenant import RoleItem, ProductItem  # noqa: F401  (re-exported for 
 class RegisterInput(BaseModel):
     company_name: Optional[str] = None  # can be sourced from draft
     name: Optional[str] = None
-    email: EmailStr
-    password: str = Field(min_length=6)
+    # 2026-09-20 — a SECOND company sends neither: the confirmed mobile in
+    # `phone_token` says who this is, and that founder already has an email and
+    # a password on their first workspace. A FIRST company still needs both,
+    # which register enforces (the two shapes are checked there, where the
+    # proof can be read, rather than by a model validator that cannot).
+    email: Optional[EmailStr] = None
+    password: Optional[str] = Field(default=None, min_length=6)
     phone: Optional[str] = None
     # 2026-09-19 — proof from /signup/phone/verify that whoever is signing up
     # received a code at `phone`. Register trusts a phone only with one.

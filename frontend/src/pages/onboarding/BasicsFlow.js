@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, ArrowLeft, Eye, EyeSlash } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -30,12 +31,35 @@ const STEPS = [
     sub: () => "You'll be the owner of this workspace.",
     validate: (v) => (v.trim().length >= 2 ? "" : "We'd love to know your name"),
   },
+  /* 2026-09-19 — required, a real Indian mobile, and confirmed by a texted
+     code before we move on. It is how the founder signs in on the mobile app
+     (Mobile OTP), and WhatsApp from it lands in the workspace as them. It used
+     to be optional with an "8 digits" check and stored on trust: a slip locked
+     the founder out of Mobile OTP and gave whoever owns the mistyped number an
+     owner's sign-in. The email stays the business address for support and
+     receipts; this is the phone in their hand.
+
+     2026-09-20 — AND IT IS ASKED THIRD, BEFORE THE EMAIL. A founder may run
+     more than one company here: the mobile is the person, the email is one per
+     company. Confirming the number first is what lets us say "you already run
+     Sharma Textiles — open it, or start another" at the third question,
+     instead of letting them build a whole second OS and refusing the reused
+     address at the very end. For a founder we already know, the two steps
+     below are not asked at all. */
+  {
+    key: "phone", eyebrow: "Mobile sign-in", type: "tel", placeholder: "+91 98765 43210",
+    q: () => "Your mobile number?",
+    sub: () => "You'll sign in with it on the mobile app. We'll text a code to confirm it's yours.",
+    validate: (v) => (normIndianMobile(v) ? "" : "Enter a 10-digit Indian mobile number"),
+    confirmByCode: true,
+  },
   {
     key: "email", eyebrow: "Sign-in", type: "email", placeholder: "you@company.com",
     q: (f) => `Nice to meet you, ${first(f.name)}. Your work email?`,
     sub: () => "This becomes your sign-in — we never spam.",
     validate: (v) => (/^\S+@\S+\.\S+$/.test(v.trim()) ? "" : "That email doesn't look right"),
     checkEmail: true,
+    onlyWhenNew: true,
   },
   {
     key: "password", eyebrow: "Sign-in", type: "password", placeholder: "8+ characters, a letter and a number",
@@ -43,20 +67,7 @@ const STEPS = [
     sub: () => "As the owner you'll sign in with this or your mobile. Your team signs in with their mobile.",
     // 2026-09-19 — 8+ characters with a letter and a number (lib/password.js).
     validate: (v) => passwordProblem(v),
-  },
-  /* 2026-09-19 — required, a real Indian mobile, and confirmed by a texted
-     code before we move on. It is how the founder signs in on the mobile app
-     (Mobile OTP), and WhatsApp from it lands in the workspace as them. It used
-     to be optional with an "8 digits" check and stored on trust: a slip locked
-     the founder out of Mobile OTP and gave whoever owns the mistyped number an
-     owner's sign-in. The email stays the business address for support and
-     receipts; this is the phone in their hand. */
-  {
-    key: "phone", eyebrow: "Mobile sign-in", type: "tel", placeholder: "+91 98765 43210",
-    q: () => "Your mobile number?",
-    sub: () => "You'll sign in with it on the mobile app. We'll text a code to confirm it's yours.",
-    validate: (v) => (normIndianMobile(v) ? "" : "Enter a 10-digit Indian mobile number"),
-    confirmByCode: true,
+    onlyWhenNew: true,
   },
   {
     key: "team_size", eyebrow: "Your team", type: "chips",
@@ -72,10 +83,11 @@ const variants = {
   exit: { opacity: 0, y: -24 },
 };
 
-/* Which step the email is asked on. Derived, not a literal: the resume check
-   below has to know it, and a step inserted above it must not silently move
-   what gets re-verified. */
-const EMAIL_IDX = STEPS.findIndex((s) => s.key === "email");
+/* The steps this founder is actually asked. A founder whose mobile already
+   signs in somewhere is a person we know: they set no second password and pick
+   no second sign-in address, so those two steps are not in their wizard at all
+   (2026-09-20). Everything below indexes into THIS list, never into STEPS. */
+const stepsFor = (identityKnown) => STEPS.filter((st) => !st.onlyWhenNew || !identityKnown);
 
 /* "taken" | "free" | "unknown" — THREE answers, not two.
    This used to be a try/catch that swallowed everything and carried on, and
@@ -95,9 +107,20 @@ async function emailAvailability(email) {
   }
 }
 
-export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSaved,
-                             resumed = false }) {
-  const [idx, setIdx] = useState(initialIndex);
+export function BasicsFlow({ form, setForm, onDone, initialStep = "company_name", onStepSaved,
+                             resumed = false, identity, onIdentity }) {
+  // Which question we are on is held as a KEY, not a number: the list itself
+  // changes length once we know who this is.
+  const identityKnown = !!identity?.known;
+  const steps = stepsFor(identityKnown);
+  const [idx, setIdx] = useState(() => {
+    const at = steps.findIndex((st) => st.key === initialStep);
+    return at === -1 ? 0 : at;
+  });
+  /* What this number already reaches, answered by /signup/phone/verify the
+     moment the code is confirmed: {workspaces, pending_invites, name}. Null
+     until then; a founder whose number is new never sees this panel. */
+  const [existing, setExisting] = useState(null);
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
   const [showPw, setShowPw] = useState(false);
@@ -109,6 +132,7 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
   const [resendIn, setResendIn] = useState(0);
   const [sending, setSending] = useState(false);
   const inputRef = useRef(null);
+  const navigate = useNavigate();
   /* The address a check could not be run for. A second press on the SAME one
      goes through: an offline founder must not be walled out of their own
      signup, but they should be told once first rather than find out at the
@@ -117,7 +141,7 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
      is cleared by a deliberate click rather than by pressing the same key
      again — see the note where it is set. */
   const [unverified, setUnverified] = useState("");
-  const step = STEPS[idx];
+  const step = steps[idx] || steps[0];
   const value = form[step.key] || "";
 
   useEffect(() => {
@@ -136,7 +160,7 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
   const next = (whole) => {
     setError("");
     onStepSaved?.(step.key, whole[step.key], whole);
-    if (idx + 1 >= STEPS.length) onDone();
+    if (idx + 1 >= steps.length) onDone();
     else setIdx(idx + 1);
   };
 
@@ -167,6 +191,16 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
       };
       setForm(whole);
       setCodeFor(""); setCode(""); setResendIn(0);
+      /* 2026-09-20 — the number is confirmed, so we can say what it already
+         reaches. Companies they are in, and invitations they have not opened.
+         Nothing to show means a number we have never seen: carry on and ask
+         for an email and a password as before. */
+      const runs = data.workspaces || [];
+      const invited = data.pending_invites || [];
+      if (runs.length || invited.length) {
+        setExisting({ workspaces: runs, pending_invites: invited, name: data.name || "", whole });
+        return;
+      }
       next(whole);
     } catch (e) {
       setCode("");
@@ -190,10 +224,14 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
      about it once. If it is taken the founder lands ON the email step with the
      reason, before spending another minute. "unknown" is left alone — it is
      re-asked before the build, and a founder returning on a bad connection
-     should not be held at the door. */
+     should not be held at the door.
+
+     2026-09-20 — a founder we already know has no email step to land on and no
+     address to collide with, so there is nothing to ask about. */
   const resumeChecked = useRef(false);
   useEffect(() => {
-    if (initialIndex <= EMAIL_IDX) return;
+    const emailIdx = steps.findIndex((st) => st.key === "email");
+    if (emailIdx === -1 || idx <= emailIdx) return;
     const email = String(form.email || "").trim();
     if (!email) return;
     /* Once per mount. StrictMode runs an effect twice in development, and
@@ -211,7 +249,7 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
     (async () => {
       const verdict = await emailAvailability(email);
       if (verdict !== "taken") return;
-      setIdx(EMAIL_IDX);
+      setIdx(steps.findIndex((st) => st.key === "email"));
       setError("This email already has a workspace — sign in instead, or use another address.");
     })();
     // Once, on mount: this answers "what was restored", not "what is typed".
@@ -222,6 +260,11 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
     const t = setTimeout(() => inputRef.current?.focus(), 380);
     return () => clearTimeout(t);
   }, [idx]);
+
+  // The email and password steps disappear the moment we know who this is.
+  useEffect(() => {
+    if (idx > steps.length - 1) setIdx(steps.length - 1);
+  }, [idx, steps.length]);
 
   /* opts.skipEmailCheck is set by ONE caller: the "Continue anyway" button.
      Pressing the key again must never be a way past the notice — see below. */
@@ -266,11 +309,31 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
     setError("");
     // Keep what they typed, step by step, so closing the tab costs nothing.
     onStepSaved?.(step.key, v, { ...form, [step.key]: v });
-    if (idx + 1 >= STEPS.length) onDone();
+    if (idx + 1 >= steps.length) onDone();
     else setIdx(idx + 1);
   };
 
+  /* THEY ALREADY RUN SOMETHING. Two doors, and both are honest about what
+     they do: open what they have (sign in with this number — one fresh code,
+     because a signup proof is not a session key), or start another company on
+     the same number, which asks for no second email and no second password. */
+  const openExisting = (tenantId) => {
+    const norm = form.phone_verified_norm || normIndianMobile(form.phone);
+    navigate(`/login?phone=${encodeURIComponent(norm)}${tenantId ? `&tenant=${encodeURIComponent(tenantId)}` : ""}`);
+  };
+  const createAnother = () => {
+    const { whole, name } = existing;
+    const known = { known: true, name: name || form.name };
+    onIdentity?.(known);
+    setExisting(null);
+    // Their name is the one the account already carries.
+    const merged = { ...whole, name: known.name || whole.name };
+    setForm(merged);
+    next(merged);
+  };
+
   const back = () => {
+    if (existing) { setExisting(null); return; }                          // back to the number
     if (codeFor) { setCodeFor(""); setCode(""); setError(""); return; }   // back to the number
     if (idx > 0) { setError(""); setIdx(idx - 1); }
   };
@@ -285,10 +348,10 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
       <div className="kr-well__pane rounded-[1.75rem] p-6 sm:p-9">
       {/* 2026-09-17 — a founder who closed the tab reopens here, three answers
           in, with no idea why. Say it once, on the step they land on. */}
-      {resumed && idx === initialIndex && (
+      {resumed && step.key === initialStep && (
         <p data-testid="signup-resumed-note" className="mb-5 text-sm text-muted-foreground">
           Welcome back{first(form.name) ? `, ${first(form.name)}` : ""} — we kept your answers.
-          Just your password again, and you&apos;re on.
+          {identityKnown ? " Carry on where you left off." : " Just your password again, and you're on."}
         </p>
       )}
       <AnimatePresence mode="wait">
@@ -298,16 +361,58 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
             <span className="kr-pressed grid h-6 min-w-[1.75rem] place-items-center rounded-pill px-2 text-[11px] tabular-nums">
               {String(idx + 1).padStart(2, "0")}
             </span>
-            {step.eyebrow}
+            {existing ? "Your companies" : step.eyebrow}
           </p>
           <h1 className="mb-2 font-display text-3xl leading-[1.04] sm:text-4xl lg:text-5xl">
-            {step.confirmByCode && codeFor ? "Enter the code we just texted you." : step.q(form)}
+            {existing ? (existing.workspaces.length
+              ? `Welcome back${first(existing.name) ? `, ${first(existing.name)}` : ""}.`
+              : "You've been invited to a workspace.")
+              : step.confirmByCode && codeFor ? "Enter the code we just texted you." : step.q(form)}
           </h1>
           <p className="mb-7 text-sm text-muted-foreground">
-            {step.confirmByCode && codeFor ? "Six digits. It works for five minutes." : step.sub(form)}
+            {existing ? (existing.workspaces.length
+              ? "This number already signs in here. Open what you have, or start another company on the same number."
+              : "Open the invite link you were sent to join it — or start a company of your own.")
+              : step.confirmByCode && codeFor ? "Six digits. It works for five minutes." : step.sub(form)}
           </p>
 
-          {step.type === "chips" ? (
+          {existing ? (
+            <div data-testid="signup-existing-workspaces" className="space-y-3">
+              {existing.workspaces.map((w) => (
+                <div key={w.tenant_id} data-testid={`signup-existing-${w.tenant_id}`}
+                  className="kr-pressed flex items-center justify-between gap-3 rounded-2xl px-4 py-3">
+                  <span className="min-w-0">
+                    <span className="block truncate text-base font-semibold">{w.tenant_name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {w.role === "owner" ? "You own this one" : `You're in this one as ${w.role}`}
+                    </span>
+                  </span>
+                  <button type="button" onClick={() => openExisting(w.tenant_id)}
+                    data-testid={`signup-open-${w.tenant_id}`}
+                    className="kr-pop h-10 shrink-0 rounded-pill px-5 text-sm font-medium">
+                    Open
+                  </button>
+                </div>
+              ))}
+              {existing.pending_invites.map((p, i) => (
+                <p key={i} data-testid="signup-existing-invite"
+                  className="kr-pressed rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+                  <strong className="font-semibold text-foreground">{p.tenant_name}</strong> invited you —
+                  open the invite link they sent to join it the first time.
+                </p>
+              ))}
+              <div className="flex flex-wrap items-center gap-4 pt-3">
+                <motion.button onClick={createAnother} data-testid="signup-create-another"
+                  whileHover={{ y: -2, scale: 1.03 }} whileTap={{ scale: 0.98 }}
+                  className="kr-pop flex h-12 items-center gap-2 rounded-pill bg-kr-ink px-8 text-sm font-medium text-white">
+                  Create another company <ArrowRight size={16} weight="bold" />
+                </motion.button>
+                <span className="text-xs text-muted-foreground">
+                  Same number, new company — no second password to remember.
+                </span>
+              </div>
+            </div>
+          ) : step.type === "chips" ? (
             <div className="flex flex-wrap gap-3" data-testid="signup-team-size-chips">
               {SIZES.map((s, i) => (
                 <motion.button key={s} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -407,7 +512,7 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
           {error && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} data-testid="signup-basics-error"
             className="mt-3 text-sm font-semibold text-danger-600">{error}</motion.p>}
 
-          {step.type !== "chips" && !(step.confirmByCode && codeFor) && (
+          {step.type !== "chips" && !existing && !(step.confirmByCode && codeFor) && (
             <div className="mt-8 flex items-center gap-4">
               {/* KM-66 follow-up: Continue elevates on hover. -2px lift +
                   1.03 scale via framer whileHover — same grammar as the

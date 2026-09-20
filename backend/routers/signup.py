@@ -283,7 +283,28 @@ async def phone_verify(inp: PhoneVerifyInput, request: Request):
     # The same check the sign-in door makes: five wrong tries spend the code,
     # an old code is refused, a right one is good exactly once.
     await consume_otp(norm, SIGNUP_OTP_SCOPE, inp.code)
-    return {"verified": True, "phone": display_indian_mobile(norm), **issue_phone_proof(norm)}
+    # 2026-09-20 — and now say what this number already reaches. A founder may
+    # run several companies; the email is one per company but the mobile is
+    # theirs. Asked here, right after the code, so a returning founder chooses
+    # between opening what they have and starting another BEFORE building a
+    # second OS — that wall used to be the email check at the very end.
+    #
+    # Safe to answer with workspace names at this point and not before: the
+    # code was just consumed, so whoever is asking holds the phone.
+    from services.auth.phone import find_tenant_choices_for_phone, split_live_and_pending, identity_for_phone
+    live, pending = await split_live_and_pending(db, await find_tenant_choices_for_phone(db, norm))
+    identity = await identity_for_phone(db, norm)
+    return {
+        "verified": True, "phone": display_indian_mobile(norm), **issue_phone_proof(norm),
+        "workspaces": [{"tenant_id": c["tenant_id"], "tenant_name": c["tenant_name"],
+                        "user_name": c["user_name"], "role": c["role"]} for c in live],
+        # Invited somewhere and never signed in: that one opens with the invite
+        # link, never with a code (auth_otp.INVITE_FIRST), so it is listed
+        # separately and carries no tenant_id to act on.
+        "pending_invites": [{"tenant_name": c["tenant_name"]} for c in pending],
+        # Their name, so a second company does not ask for it again.
+        "name": (identity or {}).get("name") or "",
+    }
 
 
 # --------------------------------------------------------------------------

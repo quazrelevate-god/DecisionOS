@@ -256,6 +256,65 @@ def _norm_stage(s, used):
     }
 
 
+OM_MAX_PIPELINES, OM_MAX_STAGES, OM_MAX_STAGE_TASKS, OM_MAX_CATEGORIES = 6, 8, 6, 10
+
+
+def operating_model_problems(data: dict) -> list:
+    """What normalize_operating_model would silently drop from an owner's edit.
+
+    2026-09-20 (Settings audit): the normaliser is built for AI output and
+    quietly throws away whatever it cannot keep — a second pipeline or stage
+    whose name makes the same key (and that stage's tasks with it), a pipeline
+    with no stages, anything past the size caps. From the Operations editor
+    that meant work vanished on Save with "Operating model saved". The save
+    route refuses with these instead; the AI paths still normalise as before.
+    Same key and cap rules as the normaliser, so the two cannot disagree."""
+    d = data or {}
+    out = []
+    pipelines = [p for p in (d.get("pipelines") or [])
+                 if isinstance(p, dict) and (p.get("label") or p.get("name") or "").strip()]
+    if len(pipelines) > OM_MAX_PIPELINES:
+        out.append(f"At most {OM_MAX_PIPELINES} pipelines — remove {len(pipelines) - OM_MAX_PIPELINES}.")
+    seen_p = {}
+    for p in pipelines:
+        label = (p.get("label") or p.get("name") or "").strip()
+        key = _slugify_key(p.get("key") or label)
+        if key in seen_p:
+            out.append(f'Two pipelines are both called "{seen_p[key]}" — rename one.')
+            continue
+        seen_p[key] = label
+        stages = [s for s in (p.get("stages") or [])
+                  if (s.strip() if isinstance(s, str) else str((s or {}).get("label") or (s or {}).get("name") or "").strip())]
+        if not stages:
+            out.append(f'"{label}" needs at least one stage.')
+        if len(stages) > OM_MAX_STAGES:
+            out.append(f'"{label}" has {len(stages)} stages — at most {OM_MAX_STAGES}.')
+        seen_s = {}
+        for s in stages:
+            s_label = s.strip() if isinstance(s, str) else str(s.get("label") or s.get("name") or "").strip()
+            s_key = _slugify_key(("" if isinstance(s, str) else s.get("key")) or "") or _slugify_key(s_label)
+            if s_key in seen_s:
+                out.append(f'"{label}" has two stages called "{seen_s[s_key]}" — rename one.')
+                continue
+            seen_s[s_key] = s_label
+            tasks = [t for t in ((s.get("tasks") if isinstance(s, dict) else None) or [])
+                     if isinstance(t, dict) and str(t.get("title") or "").strip()]
+            if len(tasks) > OM_MAX_STAGE_TASKS:
+                out.append(f'"{label} › {s_label}" has {len(tasks)} task templates — at most {OM_MAX_STAGE_TASKS}.')
+    cats = [c for c in (d.get("task_categories") or [])
+            if (c.strip() if isinstance(c, str) else str((c or {}).get("label") or "").strip())]
+    if len(cats) > OM_MAX_CATEGORIES:
+        out.append(f"At most {OM_MAX_CATEGORIES} task categories — remove {len(cats) - OM_MAX_CATEGORIES}.")
+    seen_c = {}
+    for c in cats:
+        c_label = c.strip() if isinstance(c, str) else str(c.get("label") or "").strip()
+        c_key = _slugify_key(("" if isinstance(c, str) else c.get("key")) or c_label)
+        if c_key in seen_c:
+            out.append(f'Two task categories are both called "{seen_c[c_key]}" — rename one.')
+        seen_c.setdefault(c_key, c_label)
+    return out
+
+
 def normalize_operating_model(data: dict) -> dict:
     """Coerce a raw (AI or user) operating model into a clean, editable structure."""
     d = data or {}

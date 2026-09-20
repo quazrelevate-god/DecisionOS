@@ -13,6 +13,7 @@ its own routers.
 """
 
 import asyncio
+from services.tenant_ai_keys import TENANT_PUBLIC
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, BackgroundTasks
 
@@ -95,6 +96,15 @@ from models.auth import (  # noqa: F401
 )
 
 
+def _norm_company(name) -> str:
+    """A company name as it compares: trimmed, case- and spacing-blind.
+
+    Used to tell a lost "Create workspace" press (same company, retried) from a
+    founder starting their SECOND company with the address they already use.
+    """
+    return " ".join(str(name or "").split()).strip().lower()
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -170,8 +180,35 @@ async def register(inp: RegisterInput, request: Request, response: Response,
     #   * Catch DuplicateKeyError on the user insert itself and roll
     #     back the tenant we just created so the loser's failed race
     #     leaves NOTHING behind.
-    email = inp.email.lower()
-    _existing = await db.users.find_one({"email": email})
+    # 2026-09-20 — ONE FOUNDER, SEVERAL COMPANIES.
+    #
+    # The email is one per company (globally unique, users.email_1); the mobile
+    # is the person. So a SECOND company sends neither an email nor a password:
+    # the proof from /signup/phone/verify names a number somebody has already
+    # confirmed, and that row says who they are. They sign in to the new
+    # workspace by mobile, and add a business email for it later in Settings
+    # (POST /auth/owner-credentials) if they want one.
+    #
+    # A FIRST company still needs both — an unknown number is not an identity.
+    from services.auth.phone import identity_for_phone as _identity_for_phone
+    from services.auth.phone_proof import read_phone_proof as _read_proof
+    _proof_norm = _read_proof(inp.phone_token) if inp.phone_token else ""
+    _identity = await _identity_for_phone(db, _proof_norm) if _proof_norm else None
+    second_company = not inp.email and not inp.password
+    if second_company and not _identity:
+        raise HTTPException(status_code=400, detail={
+            "code": "identity_unknown",
+            "message": ("Confirm your mobile number with the code we text you, then create your "
+                        "workspace — or sign up with an email and a password."),
+        })
+    if not second_company and (not inp.email or not inp.password):
+        raise HTTPException(status_code=400, detail={
+            "code": "credentials_required",
+            "message": "Your first workspace needs an email and a password.",
+        })
+
+    email = (inp.email or "").lower()
+    _existing = await db.users.find_one({"email": email}) if email else None
     if _existing:
         # 2026-09-17 — the founder pressing "Create workspace" a second time is
         # almost never someone else's account: it is the same person, because
@@ -186,17 +223,33 @@ async def register(inp: RegisterInput, request: Request, response: Response,
         # workspace. If it does not, the email genuinely belongs to someone
         # else — say so with the words the signup form uses at the email step,
         # and a code the screen can turn into a "Sign in instead" button.
-        if verify_password(inp.password, _existing.get("password_hash", "")):
-            _tid = _existing.get("tenant_id")
+        #
+        # 2026-09-20 — but only when it is the SAME company. A founder starting
+        # their second company reuses the address they already have, and this
+        # recovery signed them into the FIRST workspace and answered like a
+        # normal sign-in, so the reveal screen appeared and the new company had
+        # never been created. The lost press is recognised by the company name
+        # on the request matching the workspace that account already owns;
+        # anything else is a person who wants a second company, and they are
+        # sent to the door that opens: their mobile.
+        _tid = _existing.get("tenant_id")
+        _t = await db.tenants.find_one({"id": _tid}, TENANT_PUBLIC) if _tid else None
+        _same_company = _norm_company(inp.company_name) == _norm_company((_t or {}).get("name"))
+        if _same_company and verify_password(inp.password or "", _existing.get("password_hash", "")):
             _tok = create_token(_existing["id"], _tid, _existing.get("role") or "owner")
             set_auth_cookie(response, _tok)
             _u = await db.users.find_one({"id": _existing["id"]}, {"_id": 0, "password_hash": 0})
-            _t = await db.tenants.find_one({"id": _tid}, {"_id": 0}) if _tid else None
             logger.info(f"register: same credentials for an existing account ({email}) — signing them in")
             return login_response(_tok, user=_u, tenant=_t)
+        _owns = (_t or {}).get("name")
         raise HTTPException(status_code=400, detail={
             "code": "email_registered",
-            "message": "This email already has a workspace. Sign in instead, or use a different email.",
+            "message": (
+                f"This email already runs {_owns}. Create {inp.company_name.strip()} with your mobile "
+                "instead — same number, new company — or use a different email."
+                if _owns and not _same_company else
+                "This email already has a workspace. Sign in instead, or use a different email."
+            ),
         })
 
     # 2026-09-19 — the founder's mobile is a sign-in (Mobile OTP, the mobile
@@ -209,17 +262,24 @@ async def register(inp: RegisterInput, request: Request, response: Response,
     #
     # 2026-09-19 — a new password is 8+ characters with a letter and a number.
     # After the recovery above on purpose: an existing password is still valid.
-    from services.auth.passwords import password_problem
-    _pw_problem = password_problem(inp.password)
-    if _pw_problem:
-        raise HTTPException(status_code=400, detail={"code": "password_weak", "message": _pw_problem})
+    # A second company sets no password at all — the founder signs in to it by
+    # mobile, and their first workspace still holds the password they have.
+    if not second_company:
+        from services.auth.passwords import password_problem
+        _pw_problem = password_problem(inp.password)
+        if _pw_problem:
+            raise HTTPException(status_code=400, detail={"code": "password_weak", "message": _pw_problem})
 
     # Checked after the same-credentials recovery above on purpose: that path
     # signs an existing account in and writes no phone.
     from services.auth.phone import valid_indian_mobile, display_indian_mobile
     from services.auth.phone_proof import read_phone_proof
     _phone_norm = ""
-    if (inp.phone or "").strip():
+    if second_company:
+        # The proof was read above and named this number; it IS the sign-in for
+        # the workspace being created, whatever the form sent as `phone`.
+        _phone_norm = _proof_norm
+    elif (inp.phone or "").strip():
         _phone_norm = valid_indian_mobile(inp.phone)
         if not _phone_norm:
             raise HTTPException(status_code=400, detail={
@@ -343,6 +403,7 @@ async def register(inp: RegisterInput, request: Request, response: Response,
     # arrangement of spaces and prefixes was typed; the lookup key is the
     # confirmed 10 digits.
     _raw_phone = display_indian_mobile(_phone_norm) if _phone_norm else ""
+    _owner_name = ((_identity or {}).get("name") or inp.name) if second_company else inp.name
     # FIX-003-B (S2-10): DuplicateKeyError-safe insert. If a concurrent
     # request slipped past the pre-check, this insert loses the race
     # at the unique-index level. Roll back the orphan tenant so the
@@ -355,10 +416,18 @@ async def register(inp: RegisterInput, request: Request, response: Response,
     # user doc entirely.
     try:
         await db.users.insert_one({
-            "id": user_id, "tenant_id": tenant_id, "name": inp.name, "email": email,
+            "id": user_id, "tenant_id": tenant_id,
+            # A second company keeps the founder's name from the account their
+            # number already belongs to, has no email (they add a business one
+            # in Settings if they want it) and no password: mobile is the way
+            # in, exactly as it is for every member.
+            "name": _owner_name,
+            "email": email,
             "phone": _raw_phone, "phone_norm": _phone_norm,
             "phone_verified_at": now_iso() if _phone_norm else None,
-            "password_hash": hash_password(inp.password), "role": "owner", "created_at": now_iso(),
+            **({"passwordless": True} if second_company
+               else {"password_hash": hash_password(inp.password)}),
+            "role": "owner", "created_at": now_iso(),
         })
     except Exception as _register_err:
         # pymongo.errors.DuplicateKeyError only fires when the unique
@@ -410,6 +479,22 @@ async def register(inp: RegisterInput, request: Request, response: Response,
             detail="Registration failed — please try again.",
         ) from _membership_err
 
+    # 2026-09-20 — KEEP WHATSAPP WORKING WHEN A NUMBER GAINS A SECOND COMPANY.
+    # Inbound WhatsApp from a number that matches users in two workspaces is
+    # dropped on purpose: picking a winner would silently sever the other
+    # workspace (services/whatsapp.py, step 2). So the moment a second company
+    # appears, name the FIRST one as where messages from this number land —
+    # today's behaviour, made explicit — and leave changing it to Settings.
+    if second_company and _phone_norm:
+        try:
+            _already = await db.users.find_one(
+                {"phone_norm": _phone_norm, "wa_primary": True}, {"_id": 0, "id": 1})
+            if not _already and _identity and _identity.get("id"):
+                await db.users.update_one({"id": _identity["id"]}, {"$set": {"wa_primary": True}})
+        except Exception:
+            # Routing preference is a convenience; never fail a registration on it.
+            logger.warning("register: could not mark the WhatsApp home workspace", exc_info=True)
+
     # FIX-001-D: consume the draft (if any) so it can't be reused.
     if draft:
         try:
@@ -421,7 +506,11 @@ async def register(inp: RegisterInput, request: Request, response: Response,
     # Best-effort — if SMTP is down or misconfigured, registration
     # still succeeds. The user can re-request from Settings later
     # (POST /auth/email/send-verification).
+    # A second company has no address yet — nothing to verify. They add a
+    # business email for it in Settings, which sends its own link.
     try:
+        if not email:
+            raise RuntimeError("no address on this workspace yet")
         from services.auth import auth_emails
         from services.email import send_email
         _row = await auth_emails.issue(
@@ -462,7 +551,7 @@ async def register(inp: RegisterInput, request: Request, response: Response,
 
     token = create_token(user_id, tenant_id, "owner")
     user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
-    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    tenant = await db.tenants.find_one({"id": tenant_id}, TENANT_PUBLIC)
     set_auth_cookie(response, token)
     # FIX-004-G (RBAC-21): record the new session on registration.
     import jwt as _jwt
@@ -505,6 +594,11 @@ async def register(inp: RegisterInput, request: Request, response: Response,
     }
     # FIX-006-A (S0-08): cookie is source of truth; body carries user/tenant.
     # Raw JWT surfaces in the body only when AUTH_RETURN_TOKEN is on.
+    # 2026-09-20 — a second company is mobile-only by design, and the screen it
+    # opens on decides whether to ask for an email and a password from THIS
+    # answer (it does not re-read /auth/me first).
+    from services.auth.phone import has_credentials_elsewhere
+    user = {**user, "credentials_elsewhere": await has_credentials_elsewhere(db, user)}
     return login_response(
         token,
         user=user, tenant=tenant, os_summary=os_summary,
@@ -632,7 +726,7 @@ async def login(inp: LoginInput, request: Request, response: Response):
             "detail": "Enter your 2FA code to complete sign in.",
         }
     token = create_token(user["id"], tenant_id, role)
-    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    tenant = await db.tenants.find_one({"id": tenant_id}, TENANT_PUBLIC)
     user.pop("_id", None)
     user.pop("password_hash", None)
     # Project the membership onto the returned user dict so the
@@ -675,6 +769,38 @@ async def login(inp: LoginInput, request: Request, response: Response):
     return login_response(token, user=user, tenant=tenant)
 
 
+async def _confirmed_mobile_of(user: dict) -> str:
+    """This session's own confirmed number, or "" if it was never confirmed.
+
+    Read from the stored row rather than the token: the number is only an
+    identity once a texted code proved it (`phone_verified_at`).
+    """
+    row = await db.users.find_one(
+        {"id": user["id"]}, {"_id": 0, "phone_norm": 1, "phone_verified_at": 1}) or {}
+    return row.get("phone_norm") or "" if row.get("phone_verified_at") else ""
+
+
+async def _workspaces_by_confirmed_mobile(user: dict, exclude: set) -> list:
+    """The other companies this person's confirmed mobile signs in to."""
+    norm = await _confirmed_mobile_of(user)
+    if not norm:
+        return []
+    from services.auth.phone import find_tenant_choices_for_phone
+    from services.auth.membership import find_membership, LIVE_STATUSES
+    out = []
+    for c in await find_tenant_choices_for_phone(db, norm):
+        if c["tenant_id"] in exclude:
+            continue
+        # A live membership, not merely a row with this number on it: an invite
+        # not yet accepted opens with its link, and a membership that was
+        # suspended or removed is not a way back in.
+        m = await find_membership(db, c["user_id"], c["tenant_id"], statuses=LIVE_STATUSES)
+        if m:
+            out.append({"tenant_id": c["tenant_id"], "tenant_name": c["tenant_name"],
+                        "role": m.get("role") or c.get("role"), "user_id": c.get("user_id")})
+    return out
+
+
 @router.get("/me/workspaces")
 async def list_my_workspaces(user: dict = Depends(get_current_user)):
     """FIX-004-B (RBAC-13): every workspace the current user is a
@@ -684,6 +810,14 @@ async def list_my_workspaces(user: dict = Depends(get_current_user)):
     the UI can render it distinctly."""
     from services.auth.membership import resolve_login_choices
     choices = await resolve_login_choices(db, user["id"])
+    # 2026-09-20 — ALSO the companies this person's confirmed mobile reaches.
+    # A workspace creates its own user row per person (register and Team invite
+    # both do), so one founder running two companies has two ids and each id
+    # has exactly one membership — the list above would always be a single row.
+    # The confirmed number is what says they are the same person, so it is what
+    # the switcher lists. Live memberships only: an invite not yet accepted
+    # opens with its link, and a removed one is not a way back in.
+    choices += await _workspaces_by_confirmed_mobile(user, exclude={c["tenant_id"] for c in choices})
     current_tid = user.get("tenant_id")
     for c in choices:
         c["is_current"] = (c["tenant_id"] == current_tid)
@@ -701,13 +835,32 @@ async def switch_workspace(inp: SwitchWorkspaceInput, request: Request,
     target = await find_membership(
         db, user["id"], inp.tenant_id, statuses=LIVE_STATUSES,
     )
+    # 2026-09-20 — the same person holds a DIFFERENT user row in each of their
+    # companies (register and Team invite both create one), so the membership
+    # above only ever exists for the workspace they are already in. Their
+    # confirmed mobile is what links the rows: find the row this number holds
+    # in the target workspace, require BOTH sides to have been confirmed by a
+    # texted code, and mint the token for THAT row — its id and its role.
+    _switch_user_id = user["id"]
+    if not target:
+        _norm = await _confirmed_mobile_of(user)
+        _row = await db.users.find_one(
+            {"tenant_id": inp.tenant_id, "phone_norm": _norm,
+             "phone_verified_at": {"$ne": None}, "wa_phone_obsolete": {"$ne": True}},
+            {"_id": 0, "id": 1},
+        ) if _norm else None
+        if _row:
+            target = await find_membership(db, _row["id"], inp.tenant_id, statuses=LIVE_STATUSES)
+            if target:
+                _switch_user_id = _row["id"]
     if not target:
         raise HTTPException(
             status_code=403,
             detail="You don't have access to this workspace.",
         )
-    token = create_token(user["id"], inp.tenant_id, target.get("role") or "sales")
-    tenant = await db.tenants.find_one({"id": inp.tenant_id}, {"_id": 0})
+    user = {**user, "id": _switch_user_id}
+    token = create_token(_switch_user_id, inp.tenant_id, target.get("role") or "sales")
+    tenant = await db.tenants.find_one({"id": inp.tenant_id}, TENANT_PUBLIC)
     set_auth_cookie(response, token)
     # FIX-004-G (RBAC-21): the switch mints a NEW jti — record it.
     # The old jti stays valid (a user with 2 tabs open in 2
@@ -877,7 +1030,7 @@ async def me(user: dict = Depends(get_current_user)):
     # Deferred so this router doesn't import server.py at module load.
     from services.ai.generators import ai_generate_finance_categories, ai_generate_lexicon, backfill_operating_model
 
-    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
     if tenant and not tenant.get("lexicon"):
         # Backfill industry vocabulary once for pre-existing workspaces.
         lex = await ai_generate_lexicon(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"), tenant.get("description") or "")
@@ -898,7 +1051,19 @@ async def me(user: dict = Depends(get_current_user)):
     # list, else the company's role settings, else role defaults, plus live temp
     # grants), so the screens decide with the same answer as the routes.
     from core import user_perms
-    return {"user": {**user, "effective_permissions": sorted(user_perms(user))}, "tenant": tenant}
+    # 2026-09-20 — an owner who came in by mobile is asked for an email and a
+    # password by a full-screen gate (OwnerCredentialsGate). A founder's SECOND
+    # company is mobile-only by design, and they already have both on their
+    # first one — so say when that is the case and let the gate stand down.
+    # Looked up only for the accounts it can apply to, on an indexed field.
+    from services.auth.phone import has_credentials_elsewhere
+    _full = await db.users.find_one(
+        {"id": user["id"]}, {"_id": 0, "phone_norm": 1, "phone_verified_at": 1,
+                             "passwordless": 1, "email": 1, "role": 1, "id": 1}) or {}
+    _elsewhere = await has_credentials_elsewhere(db, {**_full, "role": user.get("role")})
+    return {"user": {**user, "effective_permissions": sorted(user_perms(user)),
+                     "credentials_elsewhere": _elsewhere},
+            "tenant": tenant}
 
 
 @router.patch("/profile")
@@ -1008,7 +1173,7 @@ async def update_profile(inp: ProfileUpdateInput, user: dict = Depends(get_curre
     # done if they move on before a second call lands (2026-09-19).
     await db.users.update_one({"id": user["id"]}, {"$set": updates, "$unset": {"welcome_pending": ""}})
     fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0, "password": 0})
-    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
     return {"user": fresh, "tenant": tenant}
 
 
@@ -1394,7 +1559,7 @@ async def verify_2fa_on_login(inp: TotpVerifyLoginInput, request: Request,
             raise HTTPException(status_code=401, detail="Invalid 2FA code")
     # Success — issue the real session token, matching /login's tail.
     token = create_token(user_id, tenant_id, role)
-    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    tenant = await db.tenants.find_one({"id": tenant_id}, TENANT_PUBLIC)
     user.pop("_id", None)
     user.pop("password_hash", None)
     set_auth_cookie(response, token)

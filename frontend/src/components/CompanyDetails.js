@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm, PERMISSIONS, defaultPermsForRole } from "../lib/perms";
@@ -42,16 +42,26 @@ export function CompanyDetails() {
   const [opTasks, setOpTasks] = useState([]);
   const [osBusy, setOsBusy] = useState(false);
 
+  // 2026-09-20 (Settings audit) — this card has three saves (company details,
+  // task templates, teams/access), and each one reloads the tenant. The effect
+  // below used to rebuild EVERY section on each reload, so saving a team wiped
+  // unsaved company details and the other way round. A section is now re-read
+  // from the tenant only while it holds no unsaved edits.
+  const dirty = useRef({ company: false, os: false });
   useEffect(() => {
     if (!tenant) return;
-    setForm({
-      name: tenant.name || "", industry: tenant.industry || "", company_size: tenant.company_size || "",
-      phone: tenant.phone || "", region: tenant.region || "", gst: tenant.gst || "", branches: tenant.branches || "",
-    });
-    setProducts((tenant.products || []).map((p) => ({ name: p.name || "", description: p.description || "", _key: uid() })));
+    if (!dirty.current.company) {
+      setForm({
+        name: tenant.name || "", industry: tenant.industry || "", company_size: tenant.company_size || "",
+        phone: tenant.phone || "", region: tenant.region || "", gst: tenant.gst || "", branches: tenant.branches || "",
+      });
+      setProducts((tenant.products || []).map((p) => ({ name: p.name || "", description: p.description || "", _key: uid() })));
+    }
     setRoles((tenant.roles || []).map((r) => ({ ...r })));
     // WE-02: setWorkflows removed.
-    setOpTasks((tenant.operational_task_templates || []).map((t) => ({ title: t.title || "", category: t.category || "Other", _key: uid() })));
+    if (!dirty.current.os) {
+      setOpTasks((tenant.operational_task_templates || []).map((t) => ({ title: t.title || "", category: t.category || "Other", _key: uid() })));
+    }
   }, [tenant]);
 
   const setRoleLabel = (key, label) => setRoles((rs) => rs.map((r) => (r.key === key ? { ...r, label } : r)));
@@ -98,15 +108,16 @@ export function CompanyDetails() {
     } finally { setRoleBusy(false); }
   };
 
-  const setField = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-  const addProduct = () => setProducts((p) => [...p, { name: "", description: "", _key: uid() }]);
-  const setProduct = (i, k, v) => setProducts((p) => p.map((it, idx) => (idx === i ? { ...it, [k]: v } : it)));
-  const removeProduct = (i) => setProducts((p) => p.filter((_, idx) => idx !== i));
+  const touch = (section) => { dirty.current[section] = true; };
+  const setField = (k, v) => { touch("company"); setForm((f) => ({ ...f, [k]: v })); };
+  const addProduct = () => { touch("company"); setProducts((p) => [...p, { name: "", description: "", _key: uid() }]); };
+  const setProduct = (i, k, v) => { touch("company"); setProducts((p) => p.map((it, idx) => (idx === i ? { ...it, [k]: v } : it))); };
+  const removeProduct = (i) => { touch("company"); setProducts((p) => p.filter((_, idx) => idx !== i)); };
 
   // WE-02: addWorkflow/setWorkflow/removeWorkflow removed.
-  const addOpTask = () => setOpTasks((t) => [...t, { title: "", category: "Other", _key: uid() }]);
-  const setOpTaskField = (i, k, v) => setOpTasks((t) => t.map((it, idx) => (idx === i ? { ...it, [k]: v } : it)));
-  const removeOpTask = (i) => setOpTasks((t) => t.filter((_, idx) => idx !== i));
+  const addOpTask = () => { touch("os"); setOpTasks((t) => [...t, { title: "", category: "Other", _key: uid() }]); };
+  const setOpTaskField = (i, k, v) => { touch("os"); setOpTasks((t) => t.map((it, idx) => (idx === i ? { ...it, [k]: v } : it))); };
+  const removeOpTask = (i) => { touch("os"); setOpTasks((t) => t.filter((_, idx) => idx !== i)); };
 
   const saveOs = async () => {
     setOsBusy(true);
@@ -119,6 +130,7 @@ export function CompanyDetails() {
         // enforced them. Approvals live on each task and on workflow stages.
         operational_task_templates: opTasks.filter((t) => t.title.trim()),
       });
+      dirty.current.os = false;
       await refreshTenant();
       toast.success("Operating system updated");
     } catch (e) {
@@ -128,12 +140,18 @@ export function CompanyDetails() {
 
   const save = async () => {
     if (!form.name?.trim()) return toast.error("Company name is required");
+    // A product with a description but no name used to vanish on save,
+    // description and all. Say so instead.
+    if (products.some((p) => !p.name.trim() && p.description.trim())) {
+      return toast.error("Give every product a name, or remove the empty row");
+    }
     setSaving(true);
     try {
       await api.patch("/tenant", {
         ...form,
         products: products.filter((p) => p.name.trim()).map(({ _key, ...r }) => r),
       });
+      dirty.current.company = false;
       await refreshTenant();
       toast.success("Company details updated");
     } catch (e) {

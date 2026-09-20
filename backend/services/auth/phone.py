@@ -129,6 +129,78 @@ async def find_tenant_choices_for_phone(db, norm: str) -> list:
 
 
 # ---------------------------------------------------------------------------
+# 2026-09-20 — ONE MOBILE, SEVERAL COMPANIES.
+#
+# A founder may run more than one company here, and the confirmed mobile is
+# what says they are the same person: the email is one per company (globally
+# unique, `users.email_1`), the number is not. Onboarding asks about the number
+# before it asks for an email, so a returning founder is shown what they
+# already run instead of building a second OS and hitting the email wall at the
+# end; the workspace switcher lists the same set.
+#
+# Both helpers below read the choices `find_tenant_choices_for_phone` returns,
+# so the onboarding chooser, the sign-in picker and the switcher cannot drift
+# apart.
+# ---------------------------------------------------------------------------
+async def split_live_and_pending(db, choices: list):
+    """(live, pending) — pending = invited to that workspace, never signed in.
+
+    Moved here from routers/auth_otp.py (2026-09-20) so signup can apply the
+    same rule without a router importing another router. An invited member's
+    first way in is their invite link (auth_otp.INVITE_FIRST), so a pending
+    workspace is never offered as something to sign into.
+    """
+    from services.auth.membership import find_membership, STATUS_PENDING
+    live, pending = [], []
+    for c in choices:
+        m = await find_membership(db, c["user_id"], c["tenant_id"])
+        (pending if (m or {}).get("status") == STATUS_PENDING else live).append(c)
+    return live, pending
+
+
+async def has_credentials_elsewhere(db, user: dict) -> bool:
+    """True when this mobile-only owner already has an email and a password on
+    another of their own companies.
+
+    A founder's SECOND company is mobile-only by design, so the full-screen
+    "add an email and a password" gate (OwnerCredentialsGate) must not ask them
+    for something they have. Answered wherever a session begins — register, OTP
+    sign-in, /auth/me — so the gate sees the same answer however they arrived.
+    """
+    if not user or user.get("role") != "owner":
+        return False
+    if not (user.get("passwordless") or not user.get("email")):
+        return False
+    norm = user.get("phone_norm") or ""
+    if not norm or not user.get("phone_verified_at"):
+        return False
+    return bool(await db.users.find_one(
+        {"phone_norm": norm, "id": {"$ne": user.get("id")},
+         "password_hash": {"$exists": True, "$ne": ""}, "email": {"$gt": ""}},
+        {"_id": 0, "id": 1}))
+
+
+async def identity_for_phone(db, norm: str):
+    """The person this confirmed number belongs to, or None.
+
+    The newest non-obsolete row that has been confirmed by a texted code
+    (`phone_verified_at`). Used when a founder creates a SECOND company: their
+    name comes from here and no email or password is asked for again. A number
+    nobody has confirmed is not an identity — the first company still needs an
+    email and a password.
+    """
+    if not isinstance(norm, str) or len(norm) < 10:
+        return None
+    return await db.users.find_one(
+        {"phone_norm": norm, "phone_verified_at": {"$ne": None},
+         "wa_phone_obsolete": {"$ne": True}},
+        {"_id": 0, "id": 1, "tenant_id": 1, "name": 1, "email": 1,
+         "password_hash": 1, "passwordless": 1, "phone": 1, "phone_norm": 1},
+        sort=[("created_at", -1)],
+    )
+
+
+# ---------------------------------------------------------------------------
 # 2026-09-19 — what counts as a mobile number we can sign someone in with.
 #
 # `norm_phone` above is deliberately forgiving: it is a LOOKUP key, and it has

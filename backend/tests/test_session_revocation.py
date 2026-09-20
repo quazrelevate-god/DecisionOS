@@ -286,8 +286,10 @@ class TestAiRegenTracksStatus:
         src = inspect.getsource(_shim_regenerate_operating_model)
         assert "ai_generate_operating_model_with_status" in src
         # And updates ai_setup_status.operating_model on the tenant.
-        assert "ai_setup_status" in src
-        assert 'status_map["operating_model"]' in src
+        # 2026-09-20: the status write moved into _record_regen_status(part, ...),
+        # shared by all three regenerate routes; a failed run now also answers
+        # 502 instead of a 200 the screens read as success.
+        assert '_record_regen_status(tenant, "operating_model"' in src
         # And it does NOT clobber the existing operating_model on a
         # defaulted/failed run — that was the silent-degradation bug.
         assert "STATUS_GENERATED" in src
@@ -296,7 +298,7 @@ class TestAiRegenTracksStatus:
         import server
         src = inspect.getsource(_shim_regenerate_finance_categories)
         assert "ai_generate_finance_categories_with_status" in src
-        assert 'status_map["finance_categories"]' in src
+        assert '_record_regen_status(tenant, "finance_categories"' in src
         assert "STATUS_GENERATED" in src
 
     def test_regen_endpoints_surface_status_summary(self):

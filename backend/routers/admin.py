@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 import asyncio
+from services.tenant_ai_keys import TENANT_PUBLIC
 
 from core import (
     db, logger, now_iso, new_id,
@@ -123,7 +124,7 @@ async def admin_metrics(admin: dict = Depends(get_platform_admin)):
 # --- Tenants ----------------------------------------------------------------
 @router.get("/tenants")
 async def admin_tenants(admin: dict = Depends(get_platform_admin)):
-    tenants = await db.tenants.find({}, {"_id": 0}).to_list(1000)
+    tenants = await db.tenants.find({}, TENANT_PUBLIC).to_list(1000)
     out = []
     for t in tenants:
         tid = t.get("id")

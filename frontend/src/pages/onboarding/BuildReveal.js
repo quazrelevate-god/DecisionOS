@@ -226,7 +226,7 @@ function PillSection({ label, items, tint, testid, startAt, stagger, still, newK
 // Generates the personalized OS blueprint from the interview, lets the founder
 // refine it, then registers the workspace and reveals it. Dex keeps the wait alive.
 export function BuildReveal({ sessionId, languageCode, payload, register, signIn, onEnter,
-                              savedBlueprint = null, onBlueprint, onFixPhone }) {
+                              savedBlueprint = null, onBlueprint, onFixPhone, onChangeEmail }) {
   const [pct, setPct] = useState(0);
   const [line, setLine] = useState(0);
   // stage: 'building' → 'preview' (refine) → 'registering' → 'reveal'
@@ -339,19 +339,31 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
       // checked back on the sign-in step and a founder can spend minutes in the
       // interview. Cheap, and it turns "Couldn't create your workspace" into a
       // sentence that says what to do.
+      // A second company brings no address of its own — there is nothing to
+      // check, and register identifies the founder by the confirmed mobile.
       try {
+        if (payload.identity_known) throw new Error("second company — no address to check");
         const { data: avail } = await api.post("/signup/check-email", { email: payload.email });
         if (avail && avail.available === false) {
           setTakenEmail(true);
-          setError("This email already has a workspace. Sign in instead, or go back and use a different email.");
+          setError("This email already has a workspace. Sign in instead, or use a different address — everything you have built is kept either way.");
           setStage("preview");
           return;
         }
-      } catch (e) { console.debug("email re-check skipped (network) — register decides", e); }
+      } catch (e) {
+        /* Still not fatal — register decides, and it decides correctly. But it
+           is no longer SILENT: if this is the check that cannot run, the
+           founder should learn it here rather than from a failure after the
+           long call. register's own answer replaces this line either way. */
+        console.debug("email re-check did not answer — register decides", e);
+      }
       const products = (bp.products || payload.products || []).filter((p) => (p.name || "").trim());
       await register({
-        company_name: payload.company_name, name: payload.name, email: payload.email,
-        password: payload.password, phone: payload.phone, phone_token: payload.phone_token,
+        company_name: payload.company_name, name: payload.name,
+        // Omitted entirely for a second company: the proof below says who this
+        // is, and sending an empty address would fail the model's own check.
+        ...(payload.identity_known ? {} : { email: payload.email, password: payload.password }),
+        phone: payload.phone, phone_token: payload.phone_token,
         industry: payload.industry || "General", description: payload.description,
         company_size: payload.company_size, currency: "INR",
         business_scale: { employees: payload.company_size },
@@ -373,11 +385,20 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
       // wall: it also carries them past the registration rate limit, which
       // counts attempts per network and would otherwise refuse the very person
       // trying to recover their own workspace.
-      if (signIn) {
+      /* 2026-09-20 — and ONLY when it lands in the company being created. A
+         founder starting their second company reuses the address they already
+         have, so this recovery signed them into the FIRST one and showed the
+         reveal: the new company had never been created, and the screen said it
+         had. A second company has no password to try with, either. */
+      if (signIn && !payload.identity_known) {
         try {
-          await signIn(payload.email, payload.password);
-          setStage("reveal");
-          return;
+          const back = await signIn(payload.email, payload.password);
+          const landed = back?.tenant?.name || "";
+          if (!landed || landed.trim().toLowerCase() === (payload.company_name || "").trim().toLowerCase()) {
+            setStage("reveal");
+            return;
+          }
+          console.debug("recovery signed into a different workspace — not this company", landed);
         } catch (signInErr) {
           console.debug("recovery sign-in did not apply", signInErr);
         }
@@ -396,6 +417,39 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
       }
     }
   };
+
+  /* ASK THE ADDRESS ONCE MORE THE MOMENT THIS SCREEN OPENS, alongside the
+     build rather than in front of it.
+
+     Every earlier check can legitimately come back "we could not tell" —
+     /signup/check-email is rate limited and CAPTCHA-gated, and a founder who
+     has been round the signup a few times is exactly the one who trips it. The
+     only check that CANNOT be skipped is the one before register, and that is
+     at the very end: the founder reported building their departments and
+     workflows, adding another recurring task through Dex, and only then being
+     told the address was taken. This is the same question asked before any of
+     that is worth doing, so the answer arrives with the OS instead of after
+     the work on it.
+     It does not gate the build — it runs beside it and only sets the notice,
+     so a slow or rate-limited answer costs nothing and register still has the
+     final say. */
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      if (!payload?.email) return;
+      try {
+        const { data } = await api.post("/signup/check-email", { email: payload.email });
+        if (!live || !data || data.available !== false) return;
+        setTakenEmail(true);
+        setError("This email already has a workspace. Sign in instead, or use a different address — everything you have built is kept either way.");
+      } catch (e) {
+        console.debug("early email re-check did not answer — register decides", e);
+      }
+    })();
+    return () => { live = false; };
+    // Once, when the build screen opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (ranRef.current) return;
@@ -659,7 +713,27 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
                 <div className="pointer-events-none absolute inset-0 grid place-items-center">
                   {counts.map((c, i) => (i >= placed ? (
                     <motion.div
-                      key={`bloom-${c.label}`} layoutId={`count-tile-${c.label}`}
+                      key={`bloom-${c.label}`}
+                      /* NO layoutId ON THE BLOOM, and this is a bug fix, not a
+                         simplification. Pairing it with the landed tile put two
+                         shared-layout nodes in the preview's subtree, and when
+                         the preview unmounted that pair left an exit which
+                         NEVER COMPLETED. The AnimatePresence around the stages
+                         is mode="wait", so it then never mounted the stage
+                         after it: pressing "Looks good — Enter DecisionOS"
+                         created the account and left the founder looking at the
+                         review screen, apparently ignored — and only a second
+                         press got them in, because that one failed on the
+                         address now existing and took the sign-in recovery.
+                         Measured: React rendered stage="reveal" while the
+                         preview was still in the DOM at 1s, 3s and 8s, with the
+                         reveal never mounted.
+                         The bloom already carries the whole effect on its own —
+                         it scales and un-blurs into place — so what is lost is
+                         the shared-layout MOVE, not the arrival. Bounding the
+                         id by `settled` was tried first and does not hold: the
+                         pair is live whenever a founder presses Create before
+                         the sequence has finished, which is most of them. */
                       initial={{ opacity: 0, scale: 1.35, filter: "blur(8px)" }}
                       animate={{ opacity: 1, scale: 1.35, filter: "blur(0px)" }}
                       transition={{ delay: CHOREO.tilesAt + i * CHOREO.tileGap, duration: CHOREO.bloom }}
@@ -802,10 +876,25 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
                     </button>
                   )}
                   {takenEmail && (
-                    <Link to="/login" data-testid="build-error-signin"
-                      className="mt-3 inline-flex h-10 items-center rounded-pill bg-kr-ink px-5 text-sm font-medium text-white">
-                      Sign in instead
-                    </Link>
+                    /* TWO doors, not one. "Sign in" only helps the founder who
+                       already owns that workspace; the one who mistyped, or
+                       reached for an address a colleague had used, was left
+                       with a wall at the end of ten minutes of work. Nothing
+                       is lost by going back — the draft holds the answers and
+                       the blueprint, so they return to this screen with the
+                       same OS they just built. */
+                    <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                      <Link to="/login" data-testid="build-error-signin"
+                        className="inline-flex h-10 items-center rounded-pill bg-kr-ink px-5 text-sm font-medium text-white">
+                        Sign in instead
+                      </Link>
+                      {onChangeEmail && (
+                        <button type="button" onClick={onChangeEmail} data-testid="build-error-change-email"
+                          className="inline-flex h-10 items-center rounded-pill border border-kr-ink/25 px-5 text-sm font-medium text-foreground transition-colors hover:bg-white/70">
+                          Use a different email
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               )}

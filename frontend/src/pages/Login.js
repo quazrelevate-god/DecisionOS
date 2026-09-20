@@ -46,8 +46,14 @@ const maskPhone = (raw) => {
 export default function Login() {
   const { login, loginWithOtp } = useAuth();
   const navigate = useNavigate();
-  const [loginTab, setLoginTab] = useState("password");
-  const [otpPhone, setOtpPhone] = useState("");
+  /* 2026-09-20 — onboarding sends a founder here when the number they just
+     confirmed already runs a company ("Open"), with the number and the
+     workspace in the link. Open on the mobile tab with it filled in, so all
+     they do is ask for the code. */
+  const _opened = new URLSearchParams(window.location.search);
+  const _fromSignup = _opened.get("phone") || "";
+  const [loginTab, setLoginTab] = useState(_fromSignup ? "otp" : "password");
+  const [otpPhone, setOtpPhone] = useState(_fromSignup);
   const [otpCode, setOtpCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   // 2026-09-19 — which workspace the code is for. A number can belong to more
@@ -55,7 +61,7 @@ export default function Login() {
   // friend's shop). The API then sends NOTHING and answers with a list; this
   // page used to ignore that answer, say "OTP sent", and wait for a code that
   // was never coming.
-  const [otpTenant, setOtpTenant] = useState(null);
+  const [otpTenant, setOtpTenant] = useState(_opened.get("tenant") || null);
   const [otpChoices, setOtpChoices] = useState(null);
   const [resendIn, setResendIn] = useState(0);
   const [invite, setInvite] = useState(null);

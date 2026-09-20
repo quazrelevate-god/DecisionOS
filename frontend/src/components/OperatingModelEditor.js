@@ -1,9 +1,10 @@
 import { useState } from "react";
+import { RegenerateWithAi } from "./RegenerateWithAi";
 import { useAuth } from "../context/AuthContext";
-import api from "../lib/api";
+import api, { formatApiError } from "../lib/api";
 import { opModel } from "../lib/operatingModel";
 import { toast } from "sonner";
-import { FlowArrow, FloppyDisk, Sparkle, Plus, Trash, ArrowUp, ArrowDown, ShieldCheck, ListChecks, Lightning } from "@phosphor-icons/react";
+import { FlowArrow, FloppyDisk, Plus, Trash, ArrowUp, ArrowDown, ShieldCheck, ListChecks, Lightning } from "@phosphor-icons/react";
 
 const inp = "w-full border border-nm-edge/40 rounded-lg px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
 const smInp = "border border-nm-edge/40 rounded-md px-2 py-1.5 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
@@ -22,6 +23,11 @@ function withUids(om) {
       approval_stage: p.approval_stage || "",
       stages: (p.stages || []).map((s) => ({
         _uid: uid(), key: s.key || "", label: s.label || "",
+        // 2026-09-20 (Settings audit) — the stage's department. Voice capture
+        // routes a task to the stage its department owns
+        // (services/workflows.py); the editor never loaded or sent it, so
+        // every save reset it to the first task's role, or to nothing.
+        role: s.role || "",
         tasks: (s.tasks || []).map((t) => ({
           _uid: uid(),
           title: t.title || "",
@@ -53,12 +59,13 @@ export function OperatingModelEditor() {
   // an owner can't pick a stage-task role that doesn't exist in the
   // tenant's RBAC. Owner is always available regardless of what
   // tenant.roles carries.
-  const ROLE_KEYS = (() => {
-    const keys = new Set(["owner"]);
+  // 2026-09-20 — the pickers show the team's name ("Sales"), not its key.
+  const ROLE_OPTS = (() => {
+    const out = [{ key: "owner", label: "Owner" }];
     for (const r of (tenant?.roles || [])) {
-      if (r?.key) keys.add(r.key);
+      if (r?.key && r.key !== "owner") out.push({ key: r.key, label: r.label || r.key });
     }
-    return Array.from(keys);
+    return out;
   })();
 
   const setPipeline = (i, patch) => setModel((m) => {
@@ -185,6 +192,7 @@ export function OperatingModelEditor() {
           .map((s) => ({
             key: s.key || undefined,
             label: s.label.trim(),
+            role: s.role || "",
             tasks: (s.tasks || [])
               .filter((t) => t.title.trim())
               .map((t) => ({
@@ -211,7 +219,7 @@ export function OperatingModelEditor() {
       if (refreshTenant) await refreshTenant();
       toast.success("Operating model saved");
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Could not save");
+      toast.error(formatApiError(e.response?.data?.detail) || "Could not save");
     } finally {
       setSaving(false);
     }
@@ -224,7 +232,7 @@ export function OperatingModelEditor() {
       if (refreshTenant) await refreshTenant();
       toast.success("AI regenerated your operating model");
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Could not regenerate");
+      toast.error(formatApiError(e.response?.data?.detail) || "Could not regenerate");
     } finally {
       setRegen(false);
     }
@@ -261,6 +269,12 @@ export function OperatingModelEditor() {
                   {/* Stage name row + reorder + delete */}
                   <div className="flex items-center gap-1.5">
                     <input className={`${smInp} flex-1`} placeholder="Stage name" value={s.label} onChange={(e) => setStage(pi, si, { label: e.target.value })} />
+                    <select data-testid={`op-stage-role-${pi}-${si}`} className={smInp} value={s.role || ""}
+                      onChange={(e) => setStage(pi, si, { role: e.target.value })}
+                      title="Stage owner: the team whose work this stage is. A voice note about that team's work lands here.">
+                      <option value="">Stage owner (from first task)</option>
+                      {ROLE_OPTS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+                    </select>
                     <button onClick={() => moveStage(pi, si, -1)} disabled={si === 0} title="Move up" className="p-1 disabled:opacity-30 hover:text-brand-blue"><ArrowUp size={14} weight="bold" /></button>
                     <button onClick={() => moveStage(pi, si, 1)} disabled={si === p.stages.length - 1} title="Move down" className="p-1 disabled:opacity-30 hover:text-brand-blue"><ArrowDown size={14} weight="bold" /></button>
                     <button onClick={() => delStage(pi, si)} title="Delete stage" className="p-1 text-muted-foreground hover:text-kr-accent"><Trash size={14} weight="bold" /></button>
@@ -281,7 +295,7 @@ export function OperatingModelEditor() {
                           <input className={`${smInp} flex-1`} placeholder="Task title (e.g. Confirm with customer)" value={t.title} onChange={(e) => setStageTask(pi, si, ti, { title: e.target.value })} />
                           <select className={smInp} value={t.role} onChange={(e) => setStageTask(pi, si, ti, { role: e.target.value })} title="Assign to role">
                             <option value="">Unassigned</option>
-                            {ROLE_KEYS.map((r) => <option key={r} value={r}>{r}</option>)}
+                            {ROLE_OPTS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
                           </select>
                           <label className="flex items-center gap-1 text-[11px] text-muted-foreground whitespace-nowrap" title="Require attached evidence to close">
                             <input type="checkbox" checked={!!t.evidence_required} onChange={(e) => setStageTask(pi, si, ti, { evidence_required: e.target.checked })} />
@@ -305,7 +319,7 @@ export function OperatingModelEditor() {
                       value={s.approval?.role || ""}
                       onChange={(e) => setStageApproval(pi, si, { role: e.target.value })}>
                       <option value="">None</option>
-                      {ROLE_KEYS.map((r) => <option key={r} value={r}>{r}</option>)}
+                      {ROLE_OPTS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
                     </select>
                     {s.approval?.role && (
                       <label className="flex items-center gap-1 text-[11px] text-muted-foreground whitespace-nowrap" title="If off, the gate is recorded but skippable">
@@ -377,10 +391,8 @@ export function OperatingModelEditor() {
           className="flex items-center gap-2 bg-kr-ink text-white px-5 py-2 text-sm font-medium rounded-lg transition-all disabled:opacity-60">
           <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Model"}
         </button>
-        <button onClick={regenerate} disabled={regen} data-testid="op-regenerate"
-          className="flex items-center gap-2 border border-nm-edge/40 px-5 py-2 text-sm font-medium rounded-lg hover:bg-accent transition-all disabled:opacity-60">
-          <Sparkle size={16} weight="bold" /> {regen ? "Regenerating…" : "Regenerate with AI"}
-        </button>
+        <RegenerateWithAi onConfirm={regenerate} busy={regen} testid="op-regenerate"
+          replaces="your pipelines, stages, task templates and approval gates" />
       </div>
     </div>
   );

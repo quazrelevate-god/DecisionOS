@@ -6,7 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { useSkyFade } from "../hooks/useSkyFade";
 import { hasPerm } from "../lib/perms";
 import { toast } from "sonner";
-import api from "../lib/api";
+import api, { formatApiError } from "../lib/api";
 import { timeAgo } from "../lib/format";
 import { notifMeta, notifLink } from "../lib/notif";
 import { Chip } from "./common";
@@ -24,6 +24,8 @@ import {
   Wallet,
   Gauge, // Epic 2 E2-15: Ops nav entry (Operating Score)
   UsersThree, // Epic 2 E2-01: Team nav entry (Employees list)
+  Buildings,  // 2026-09-20: the founder's other companies, in the profile menu
+  Plus,
 } from "@phosphor-icons/react";
 // KR-5/KR-8.2 — the Karma shell pieces.
 import { PillNav } from "./karma";
@@ -138,6 +140,62 @@ const WIDE_ROUTES = ["/my-work", "/team"];
    .app-shell (tailwind.config.js) and `xl` fires at 1280, where 1400 is
    already more width than the viewport has. */
 const DESK_WIDE = "2xl:max-w-[min(1640px,94%)]";
+
+/* The founder's other companies. One person holds a SEPARATE user row per
+   workspace (register and Team invite each create one), so this list comes
+   from the server, which links them by the mobile they confirmed. */
+function WorkspaceSwitcher() {
+  const { tenant, switchWorkspace } = useAuth();
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [rows, setRows] = useState([]);
+  const [busy, setBusy] = useState("");
+
+  /* On mount, which IS on open: the menu's content is mounted by the popover
+     only while it is open, so this asks once per opening and never on an
+     ordinary page load. */
+  useEffect(() => {
+    let live = true;
+    api.get("/auth/me/workspaces")
+      .then(({ data }) => { if (live) setRows(data?.workspaces || []); })
+      .catch(() => { /* the menu still works without it */ });
+    return () => { live = false; };
+  }, []);
+
+  const go = async (tenantId) => {
+    setBusy(tenantId);
+    try {
+      await switchWorkspace(tenantId);
+      // A different workspace is a different everything — start it clean
+      // rather than reconciling every cached query in place.
+      window.location.href = "/";
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Couldn't open that company");
+      setBusy("");
+    }
+  };
+
+  const others = rows.filter((r) => r.tenant_id !== tenant?.id);
+  if (!rows.length) return null;
+  return (
+    <div className="border-b border-slate-900/[0.06] p-1.5" data-testid="workspace-switcher">
+      {others.map((r) => (
+        <button key={r.tenant_id} onClick={() => go(r.tenant_id)} disabled={!!busy}
+          data-testid={`switch-workspace-${r.tenant_id}`}
+          className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-900/[0.06] hover:text-slate-900 disabled:opacity-60">
+          <Buildings size={15} className="shrink-0" />
+          <span className="min-w-0 flex-1 truncate">{r.tenant_name}</span>
+          <span className="shrink-0 text-[11px] capitalize text-slate-500">{r.role}</span>
+        </button>
+      ))}
+      <button onClick={() => navigate("/signup?add=1")}
+        data-testid="add-company"
+        className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-900/[0.06] hover:text-slate-900">
+        <Plus size={15} /> {t("header.add_company", "Add a company")}
+      </button>
+    </div>
+  );
+}
 
 export default function Layout({ children }) {
   const { user, tenant, logout } = useAuth();
@@ -700,6 +758,11 @@ export default function Layout({ children }) {
                   <p className="truncate text-xs text-slate-500">{tenant.industry}</p>
                 )}
               </div>
+              {/* 2026-09-20 — a founder may run more than one company on one
+                  mobile. The others they can sign in to, and the way to start
+                  another: both only when the menu is open, so the app does not
+                  ask on every page load. */}
+              <WorkspaceSwitcher />
               <div className="p-1.5">
                 {/* ASK-34 C3 — the Journal's way in. It had none: /journal was
                     reachable only by typing the URL. It sits above Settings

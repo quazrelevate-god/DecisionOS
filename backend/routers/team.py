@@ -511,6 +511,19 @@ async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(r
         updates["permissions_custom"] = inp.follow_role is False or bool(updates["permissions"])
     if new_role == "owner":
         updates["permissions"] = list(PERMISSION_KEYS)
+    # 2026-09-20 (Settings audit) — your OWN mobile and email are sign-ins, and
+    # Settings › Your Profile guards them: a new mobile needs the code sent to
+    # it, an owner's new email needs their password (U7-24.14). This route had
+    # no such step, so a stolen owner session could re-point the owner's own
+    # sign-in here and take the account with a reset. Your own go through there.
+    if user_id == user["id"]:
+        from services.auth.phone import norm_phone as _npo
+        if inp.phone is not None and _npo(inp.phone.strip()) != _npo(target.get("phone") or ""):
+            raise HTTPException(status_code=403, detail=(
+                "Change your own mobile in Settings › Your Profile — it sends a code to the new number."))
+        if inp.email is not None and (inp.email or "").strip().lower() != (target.get("email") or "").strip().lower():
+            raise HTTPException(status_code=403, detail=(
+                "Change your own email in Settings › Your Profile — it checks it's really you."))
     if inp.phone is not None:
         # FIX-002-A: keep phone_norm in sync so OTP + WhatsApp still finds
         # the user after an admin updates their phone.

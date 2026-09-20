@@ -5,6 +5,7 @@ public invite-link resolve/start flow. OTP infra (_issue_otp, _hash_otp,
 _apm_send_and_fetch_otp, OTP_MAX_ATTEMPTS) + _norm_phone stay in server.
 """
 import re
+from services.tenant_ai_keys import TENANT_PUBLIC
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Response
@@ -27,13 +28,14 @@ INVITE_FIRST = ("Open the invite link you were sent to sign in the first time. "
 
 
 async def _split_by_invite(choices):
-    """(live, pending): pending = invited here and not yet signed in."""
-    from services.auth.membership import find_membership, STATUS_PENDING
-    live, pending = [], []
-    for c in choices:
-        m = await find_membership(db, c["user_id"], c["tenant_id"])
-        (pending if (m or {}).get("status") == STATUS_PENDING else live).append(c)
-    return live, pending
+    """(live, pending): pending = invited here and not yet signed in.
+
+    2026-09-20 — the rule itself moved to services/auth/phone.py so onboarding
+    can ask the same question about a number it has just confirmed. This stays
+    as the name the rest of this router already calls.
+    """
+    from services.auth.phone import split_live_and_pending
+    return await split_live_and_pending(db, choices)
 
 
 @router.post("/auth/otp/request")
@@ -253,9 +255,13 @@ async def verify_otp(inp: OtpVerifyInput, response: Response):
     if _accepted:
         user["role"] = _accepted.get("role") or user.get("role")
     token = create_token(user["id"], user["tenant_id"], user["role"])
-    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
     user.pop("_id", None)
     user.pop("password_hash", None)
+    # 2026-09-20 — an owner signing in to their mobile-only second company is
+    # not asked to invent an email and a password they already have elsewhere.
+    from services.auth.phone import has_credentials_elsewhere
+    user["credentials_elsewhere"] = await has_credentials_elsewhere(db, user)
     set_auth_cookie(response, token)
     # FIX-006-A (S0-08): cookie is source of truth; only surface the JWT
     # in the body when AUTH_RETURN_TOKEN is on (dev/test) so prod XSS

@@ -1,9 +1,10 @@
 import { useState } from "react";
+import { RegenerateWithAi } from "./RegenerateWithAi";
 import { useAuth } from "../context/AuthContext";
-import api from "../lib/api";
+import api, { formatApiError } from "../lib/api";
 import { lex } from "../lib/lexicon";
 import { toast } from "sonner";
-import { Translate, FloppyDisk, Sparkle } from "@phosphor-icons/react";
+import { Translate, FloppyDisk } from "@phosphor-icons/react";
 
 const inp = "w-full border border-nm-edge/40 rounded-lg px-3 py-2 text-sm font-mono bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
 
@@ -36,11 +37,13 @@ export function BusinessVocabulary() {
   const save = async () => {
     setSaving(true);
     try {
-      await api.patch("/tenant/lexicon", { lexicon: form });
+      const { data } = await api.patch("/tenant/lexicon", { lexicon: form });
+      // A cleared word is saved as the default; show what was saved, not a blank.
+      setForm(lex(data));
       if (refreshTenant) await refreshTenant();
       toast.success("Vocabulary saved");
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Could not save");
+      toast.error(formatApiError(e.response?.data?.detail) || "Could not save");
     } finally {
       setSaving(false);
     }
@@ -54,7 +57,7 @@ export function BusinessVocabulary() {
       if (refreshTenant) await refreshTenant();
       toast.success("AI regenerated your vocabulary");
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Could not regenerate");
+      toast.error(formatApiError(e.response?.data?.detail) || "Could not regenerate");
     } finally {
       setRegen(false);
     }
@@ -97,10 +100,8 @@ export function BusinessVocabulary() {
           className="flex items-center gap-2 bg-kr-ink text-white px-5 py-2 text-sm font-medium rounded-lg transition-all disabled:opacity-60">
           <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Vocabulary"}
         </button>
-        <button onClick={regenerate} disabled={regen} data-testid="vocab-regenerate"
-          className="flex items-center gap-2 border border-nm-edge/40 px-5 py-2 text-sm font-medium rounded-lg hover:bg-accent transition-all disabled:opacity-60">
-          <Sparkle size={16} weight="bold" /> {regen ? "Regenerating…" : "Regenerate with AI"}
-        </button>
+        <RegenerateWithAi onConfirm={regenerate} busy={regen} testid="vocab-regenerate"
+          replaces="your customer, vendor and task-type words" />
       </div>
     </div>
   );

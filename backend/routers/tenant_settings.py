@@ -7,6 +7,7 @@ helpers (ai_generate_*, backfill_operating_model, normalize_finance_categories)
 and a few shared models stay in server; services are deferred-imported.
 """
 import re
+from services.tenant_ai_keys import TENANT_PUBLIC
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -45,19 +46,51 @@ async def update_lexicon(inp: LexiconInput, user: dict = Depends(require_perm("t
     lex = normalize_lexicon(inp.lexicon or {})
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"lexicon": lex}})
     await log_activity(user["tenant_id"], user["id"], "lexicon_updated", f"{user['name']} updated the business vocabulary")
-    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    return await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
+
+
+# 2026-09-20 (Settings audit) — the three "Regenerate with AI" buttons. The
+# generators never raise: when the model fails (or AI is switched off for the
+# workspace, which fails every call with 451) they hand back the built-in
+# defaults. The vocabulary route SAVED those defaults over the owner's own words
+# and answered 200; the other two kept the old data but also answered 200, so
+# every screen said "AI regenerated…" either way. Now: AI off is refused before
+# any call, and a result that is not the AI's own keeps what was there and says
+# so with an error the screens already show.
+REGEN_AI_OFF = ("AI is off for this workspace, so nothing was regenerated. Turn it on under "
+                "Settings › Business › AI processing, then try again.")
+REGEN_FAILED = "The AI didn't give a usable answer, so nothing changed. Try again in a minute."
+
+
+def _refuse_if_ai_off(tenant: dict) -> None:
+    from services.ai_consent import has_active_consent
+    if not has_active_consent(tenant):
+        raise HTTPException(status_code=451, detail=REGEN_AI_OFF)
+
+
+async def _record_regen_status(tenant: dict, part: str, status: str, updates: dict) -> dict:
+    status_map = dict(tenant.get("ai_setup_status") or {})
+    status_map[part] = status
+    await db.tenants.update_one({"id": tenant["id"]}, {"$set": {**updates, "ai_setup_status": status_map}})
+    return status_map
 
 
 @router.post("/tenant/lexicon/regenerate")
 async def regenerate_lexicon(user: dict = Depends(require_perm("team_manage"))):
     """Re-run AI to regenerate the industry vocabulary from the workspace's industry."""
-    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
     if not tenant:
         raise HTTPException(status_code=404, detail="Workspace not found")
-    lex = await ai_generate_lexicon(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"), tenant.get("description") or "")
-    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"lexicon": lex}})
+    _refuse_if_ai_off(tenant)
+    from services.ai import ai_setup as ai_setup_svc
+    lex, lex_status = await ai_setup_svc.ai_generate_lexicon_with_status(
+        tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"), tenant.get("description") or "")
+    if lex_status != ai_setup_svc.STATUS_GENERATED:
+        await _record_regen_status(tenant, "lexicon", lex_status, {})
+        raise HTTPException(status_code=502, detail=REGEN_FAILED)
+    await _record_regen_status(tenant, "lexicon", lex_status, {"lexicon": lex})
     await log_activity(user["tenant_id"], user["id"], "lexicon_regenerated", f"{user['name']} regenerated the business vocabulary")
-    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    return await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
 
 
 
@@ -65,18 +98,36 @@ async def regenerate_lexicon(user: dict = Depends(require_perm("team_manage"))):
 @router.patch("/tenant/operating-model")
 async def update_operating_model(inp: OperatingModelInput, user: dict = Depends(require_perm("team_manage"))):
     """Owner-edit the operating model (workflow pipelines + stages + task categories)."""
+    from shared.normalizers import operating_model_problems
+    problems = operating_model_problems(inp.operating_model or {})
+    if problems:
+        raise HTTPException(status_code=400, detail=" ".join(problems[:3]))
     om = normalize_operating_model(inp.operating_model or {})
+    # 2026-09-20 (Settings audit) — the Workflows board shows a tab per pipeline
+    # in the model, so removing one left its cards on no board at all.
+    before = ((await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "operating_model": 1}))
+              or {}).get("operating_model") or {}
+    kept = {p["key"] for p in om.get("pipelines") or []}
+    for p in before.get("pipelines") or []:
+        if p.get("key") in kept:
+            continue
+        n = await db.workflows.count_documents({"tenant_id": user["tenant_id"], "type": p.get("key")})
+        if n:
+            raise HTTPException(status_code=409, detail=(
+                f'"{p.get("label") or p.get("key")}" still has {n} workflow card{"s" if n != 1 else ""}. '
+                "Move or close them on the Workflows board before removing the pipeline."))
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"operating_model": om}})
     await log_activity(user["tenant_id"], user["id"], "operating_model_updated", f"{user['name']} updated the operating model")
-    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    return await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
 
 
 @router.post("/tenant/operating-model/regenerate")
 async def regenerate_operating_model(user: dict = Depends(require_perm("team_manage"))):
     """Re-run AI to regenerate the operating model, preserving any pipeline/category with data."""
-    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
     if not tenant:
         raise HTTPException(status_code=404, detail="Workspace not found")
+    _refuse_if_ai_off(tenant)
     # FIX-003-C (S2-11): track success/failure. Prior code called
     # backfill_operating_model directly, so a silent AI degradation
     # (timeout, malformed JSON, empty pipelines) left the tenant with
@@ -101,13 +152,12 @@ async def regenerate_operating_model(user: dict = Depends(require_perm("team_man
         # Merge over the existing so pipelines the AI didn't touch survive.
         merged = await backfill_operating_model({**tenant, "operating_model": om})
         updates["operating_model"] = merged
-    status_map = dict(tenant.get("ai_setup_status") or {})
-    status_map["operating_model"] = om_status
-    updates["ai_setup_status"] = status_map
-    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": updates})
+    status_map = await _record_regen_status(tenant, "operating_model", om_status, updates)
+    if om_status != ai_setup_svc.STATUS_GENERATED:
+        raise HTTPException(status_code=502, detail=REGEN_FAILED)
     await log_activity(user["tenant_id"], user["id"], "operating_model_regenerated",
                        f"{user['name']} regenerated the operating model ({om_status})")
-    out = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    out = await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
     # Surface the status so the frontend can prompt retry if needed
     # WITHOUT needing a second /me round-trip.
     out["ai_setup_status_summary"] = ai_setup_svc.summarize_ai_setup_status(status_map)
@@ -122,15 +172,16 @@ async def update_finance_categories(inp: FinanceCategoriesInput, user: dict = De
     fc = normalize_finance_categories(inp.finance_categories or {})
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"finance_categories": fc}})
     await log_activity(user["tenant_id"], user["id"], "finance_categories_updated", f"{user['name']} updated the finance categories")
-    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    return await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
 
 
 @router.post("/tenant/finance-categories/regenerate")
 async def regenerate_finance_categories(user: dict = Depends(require_perm("team_manage"))):
     """Re-run AI to regenerate the finance categories from the workspace's industry."""
-    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
     if not tenant:
         raise HTTPException(status_code=404, detail="Workspace not found")
+    _refuse_if_ai_off(tenant)
     # FIX-003-C (S2-11): use the status-tracking wrapper so a defaulted
     # AI result updates ai_setup_status.finance_categories instead of
     # silently clobbering the existing categories with a default map.
@@ -144,13 +195,12 @@ async def regenerate_finance_categories(user: dict = Depends(require_perm("team_
     updates: dict = {}
     if fc_status == ai_setup_svc.STATUS_GENERATED:
         updates["finance_categories"] = fc
-    status_map = dict(tenant.get("ai_setup_status") or {})
-    status_map["finance_categories"] = fc_status
-    updates["ai_setup_status"] = status_map
-    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": updates})
+    status_map = await _record_regen_status(tenant, "finance_categories", fc_status, updates)
+    if fc_status != ai_setup_svc.STATUS_GENERATED:
+        raise HTTPException(status_code=502, detail=REGEN_FAILED)
     await log_activity(user["tenant_id"], user["id"], "finance_categories_regenerated",
                        f"{user['name']} regenerated the finance categories ({fc_status})")
-    out = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    out = await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
     out["ai_setup_status_summary"] = ai_setup_svc.summarize_ai_setup_status(status_map)
     return out
 
@@ -177,7 +227,7 @@ async def update_tenant(inp: TenantUpdateInput, user: dict = Depends(require_per
         raise HTTPException(status_code=400, detail="Nothing to update")
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": updates})
     await log_activity(user["tenant_id"], user["id"], "company_updated", f"{user['name']} updated company details")
-    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    return await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
 
 
 
@@ -210,7 +260,7 @@ async def update_tenant_settings(inp: TenantSettingsInput, user: dict = Depends(
         raise HTTPException(status_code=400, detail="Nothing to update")
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": updates})
     await log_activity(user["tenant_id"], user["id"], "settings_updated", f"{user['name']} updated workspace settings")
-    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    return await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
 
 
 
@@ -233,7 +283,7 @@ async def add_role(inp: RoleLabelInput, user: dict = Depends(require_perm("team_
     roles.append({"key": key, "label": label})
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"roles": roles}})
     await log_activity(user["tenant_id"], user["id"], "role_added", f"{user['name']} added the role '{label}'")
-    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    return await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
 
 
 @router.patch("/tenant/roles/{key}")
@@ -252,7 +302,7 @@ async def rename_role(key: str, inp: RoleLabelInput, user: dict = Depends(requir
             r["label"] = label
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"roles": roles}})
     await log_activity(user["tenant_id"], user["id"], "role_renamed", f"{user['name']} renamed a role to '{label}'")
-    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    return await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
 
 
 @router.delete("/tenant/roles/{key}")
@@ -269,7 +319,7 @@ async def delete_role(key: str, user: dict = Depends(require_perm("team_manage")
     new_roles = [r for r in roles if r.get("key") != key]
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"roles": new_roles}})
     await log_activity(user["tenant_id"], user["id"], "role_deleted", f"{user['name']} deleted a role")
-    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    return await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
 
 
 # FIX-004-D (RBAC-14): per-role permission editor. Tenant-level roles
@@ -324,7 +374,7 @@ async def update_role_permissions(key: str, inp: RolePermissionsInput,
         f"{user['name']} updated permissions on role '{key}' to {len(perms)} perm(s)"
         + (f"; {members_updated} member(s) now follow it" if members_updated else ""),
     )
-    return {**(await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})), "members_updated": members_updated}
+    return {**(await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)), "members_updated": members_updated}
 
 
 # FIX-005-C (RBAC-25): DPDP AI-consent tracking endpoints.
@@ -428,7 +478,7 @@ async def get_tenant_usage(user: dict = Depends(get_current_user)):
     Aggregation window = current UTC calendar month. Resets on the 1st.
     """
     from services.quotas import quota_status_all
-    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
     return {"quotas": await quota_status_all(db, tenant or {"id": user["tenant_id"]})}
 
 
@@ -440,7 +490,7 @@ async def get_tenant_plan(user: dict = Depends(get_current_user)):
     read this — frontend uses it to decide whether to show upgrade
     prompts, disabled features, seat-count badges."""
     from services.plans import effective_plan
-    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
     if not tenant:
         raise HTTPException(status_code=404, detail="Workspace not found")
     ep = effective_plan(tenant)
@@ -611,7 +661,7 @@ async def update_owner_exclusions(inp: OwnerExclusionsInput, request: Request,
         after={"owner_exclusions": excl},
         **_ctx,
     )
-    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    return await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
 
 
 # FIX-004-F (RBAC-20): owner-facing audit-log read endpoint.

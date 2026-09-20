@@ -57,6 +57,20 @@ export function AuthProvider({ children }) {
     return data;
   };
 
+  /* 2026-09-20 — move to another of this person's companies. The server mints
+     a fresh token for the row that number holds there (the same founder has a
+     separate user row per workspace), so the whole app reloads under the new
+     workspace rather than trying to reconcile two. */
+  const switchWorkspace = async (tenantId) => {
+    await api.post("/auth/me/switch-workspace", { tenant_id: tenantId });
+    // The switch answers with the new workspace but not with the person (they
+    // are a different user row there), so identity is re-read rather than
+    // guessed: /auth/me under the new cookie returns both.
+    const { data } = await api.get("/auth/me");
+    persist(data);
+    return data;
+  };
+
   const logout = async () => {
     try {
       await api.post("/auth/logout");
@@ -81,7 +95,8 @@ export function AuthProvider({ children }) {
   };
 
   const value = useMemo(
-    () => ({ user, tenant, loading, login, register, logout, refreshTenant, refreshMe, loginWithOtp }),
+    () => ({ user, tenant, loading, login, register, logout, refreshTenant, refreshMe, loginWithOtp,
+             switchWorkspace }),
     /* login/register/etc close only over stable refs (api import, setState),
        so omitting them is safe — and REQUIRED for this memo to do anything.
        They are redeclared every render, so listing them would recompute

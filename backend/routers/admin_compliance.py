@@ -13,6 +13,7 @@ require the super_admin role; reads follow the normal admin gate (a read_only
 admin can view exports but cannot delete).
 """
 from __future__ import annotations
+from services.tenant_ai_keys import TENANT_PUBLIC
 
 from typing import Optional
 
@@ -48,7 +49,7 @@ class RetentionInput(BaseModel):
 
 
 async def _tenant_or_404(tenant_id: str) -> dict:
-    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    t = await db.tenants.find_one({"id": tenant_id}, TENANT_PUBLIC)
     if not t:
         raise HTTPException(status_code=404, detail="Workspace not found")
     return t

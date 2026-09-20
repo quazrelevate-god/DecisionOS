@@ -128,6 +128,21 @@ class TestApproverResolution:
         assert lv["status"] == "pending"
         assert "_id" not in lv
 
+    def test_owner_leave_is_auto_approved(self, owner):
+        """An owner sits at the top of the company — nobody approves their leave.
+        Their own request is RECORDED as approved (no approver, no self-approval
+        step), instead of routing back to themselves to sign off."""
+        so, ou = owner
+        r = so.post(f"{API}/leaves", json={
+            "leave_type": "casual", "from_date": "2026-04-01", "to_date": "2026-04-01",
+            "day_portion": "full", "reason": f"{TEST_MARK} owner-self"
+        })
+        assert r.status_code == 200, r.text
+        lv = r.json()
+        assert lv["status"] == "approved", f"owner leave should auto-approve, got {lv.get('status')}"
+        assert lv["approver_id"] is None, "an owner is not their own approver"
+        assert lv["decided_by"] == ou["id"]
+
     def test_department_mapping(self, owner, sales, finance):
         """Map sales role → finance user; new leave should route to finance."""
         so, ou = owner

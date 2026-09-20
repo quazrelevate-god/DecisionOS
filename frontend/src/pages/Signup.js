@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
@@ -49,7 +49,9 @@ const PHASES = [
 export default function Signup() {
   // 2026-09-20 — `login` is gone from here with the password: a lost "Create"
   // press is recovered by register itself now, from the confirmed mobile.
-  const { register } = useAuth();
+  // `user` is the session, for the founder who pressed "Add a company" while
+  // already signed in — see below.
+  const { register, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   const [phase, setPhase] = useState("basics");
@@ -66,12 +68,28 @@ export default function Signup() {
   // over. 2026-09-20: there is no password to withhold any more — signing in is
   // the mobile — so a resumed signup simply reopens at the first blank answer.
   const [resumed, setResumed] = useState(false);       // show "picked up where you left off"
-  const [basicsStart, setBasicsStart] = useState("company_name");   // the step to reopen at
+  /* The step to reopen at. Empty means "the first question there is" — which
+     BasicsFlow decides, because the list itself depends on who this is. Naming
+     a step here would pin the wizard to whatever was first when this line was
+     written: it said "company_name", and after the mobile moved to the front
+     every new founder opened on question three. */
+  const [basicsStart, setBasicsStart] = useState("");
   /* 2026-09-20 — WHO THIS IS. A founder whose confirmed mobile already signs
      in somewhere is a person we know: their second company asks for no email
      and no password, and register creates it from the phone proof alone. Set
      when they choose "Create another company" after the code. */
   const [identity, setIdentity] = useState(null);
+  /* 2026-09-20 (Yokesh) — "when I create a new company it definitely has the
+     catch about being signed in, so why do we have to put the number and get
+     the OTP again?" Quite right: a signed-in founder whose mobile was confirmed
+     long ago is already identified, better than a 24-hour token identifies
+     anyone. Their wizard opens at "Hello Rajesh — what's your new company
+     called?" with no number and no code, and register reads the number from
+     the session. Someone signed in whose number was never confirmed still gets
+     asked, because there would otherwise be nothing to sign in with. */
+  const sessionIdentity = user?.phone_verified_at
+    ? { known: true, name: user.name || "", fromSession: true }
+    : null;
   const [savedBlueprint, setSavedBlueprint] = useState(null);
   const [draftReady, setDraftReady] = useState(false);
   const [world, setWorld] = useState(null); // { industry, business_model, description, website_summary, products }
@@ -99,20 +117,38 @@ export default function Signup() {
     // workspace without a second sign-in address or password.
     if (identity?.known) {
       return { ...base, email: "", identity_known: true,
-               support_email: (form.support_email || "").trim() };
+               support_email: (form.support_email || "").trim(),
+               // Signed in: register reads the mobile from the session, and
+               // there is no proof to send because no code was asked for.
+               ...(identity.fromSession ? { phone: "", phone_token: "" } : {}) };
     }
     return base;
   })();
 
   // Resume (or start) the draft once, before the first step is drawn.
+  const started = useRef(false);
   useEffect(() => {
+    /* Wait for the session to settle first. /auth/me is still in flight on the
+       first render, so deciding here without it would mean a signed-in founder
+       who pressed "Add a company" was asked for their number and a code all
+       over again — which is the thing this is for. */
+    if (authLoading || started.current) return undefined;
+    started.current = true;
     let live = true;
     (async () => {
       /* 2026-09-20 — "Add a company" from the profile menu is a NEW company,
          not the half-finished signup this browser may still be holding. Drop
-         that draft first so the wizard opens on a blank first question; their
-         mobile is confirmed again at the third, which is what identifies them. */
-      if (new URLSearchParams(window.location.search).get("add") === "1") clearDraft();
+         that draft first so the wizard opens on a blank first question. */
+      if (new URLSearchParams(window.location.search).get("add") === "1") {
+        clearDraft();
+        if (sessionIdentity) {
+          setIdentity(sessionIdentity);
+          setForm((f) => ({ ...f, name: sessionIdentity.name }));
+          setBasicsStart("company_name");
+          setDraftReady(true);
+          return;   // nothing saved to resume: this is a new company, now
+        }
+      }
       const { stepData } = await startOrResume();
       if (!live) return;
       if (hasSavedAnswers(stepData)) {
@@ -134,9 +170,9 @@ export default function Signup() {
       setDraftReady(true);
     })();
     return () => { live = false; };
-    // Runs once on mount.
+    // Once, as soon as the session is known.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authLoading]);
 
   const enterApp = () => {
     clearDraft();

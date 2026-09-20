@@ -14,6 +14,45 @@ export const API = `${process.env.REACT_APP_BACKEND_URL || ""}/api`;
 
 const api = axios.create({ baseURL: API, withCredentials: true });
 
+/* 2026-09-20 — CSRF, the client's half of it.
+ *
+ * The session is a cookie, and a browser attaches a cookie to every request to
+ * this origin whatever page started it — so another site can make a signed-in
+ * founder's browser POST here and the server sees an ordinary authenticated
+ * request. The defence (services/csrf.py, in place since FIX-006-B) is the
+ * double-submit: the server mints a readable `dos_csrf` cookie, and a request
+ * that really came from our own pages echoes it back in a header. A page on
+ * someone else's domain cannot read that cookie, so its forged request has no
+ * header and is refused.
+ *
+ * The server has been minting the cookie and counting matches all along; this
+ * is the half that was never shipped, which is why enforcement had to stay
+ * off. Safe verbs are skipped because the server skips them too.
+ */
+const CSRF_COOKIE = "dos_csrf";
+const CSRF_HEADER = "X-CSRF-Token";
+const SAFE_VERBS = ["get", "head", "options"];
+
+function csrfToken() {
+  try {
+    const hit = document.cookie.split("; ").find((c) => c.startsWith(`${CSRF_COOKIE}=`));
+    return hit ? decodeURIComponent(hit.slice(CSRF_COOKIE.length + 1)) : "";
+  } catch (e) {
+    return "";   // no document (tests, SSR): the request simply goes without it
+  }
+}
+
+api.interceptors.request.use((config) => {
+  const method = (config.method || "get").toLowerCase();
+  if (SAFE_VERBS.includes(method)) return config;
+  const token = csrfToken();
+  if (token) {
+    config.headers = config.headers || {};
+    config.headers[CSRF_HEADER] = token;
+  }
+  return config;
+});
+
 // FUP-46 (2026-08-15): strengthen error parsing for FastAPI 422 detail
 // (an array of {loc, msg, type} entries). Was collapsing all validation
 // errors into a JSON blob when msg wasn't a plain string.

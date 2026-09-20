@@ -70,8 +70,10 @@ export function RequestLeaveDialog({ onDone, triggerClassName }) {
     if (!form.from_date || !form.to_date) return toast.error("Pick dates");
     if (form.to_date < form.from_date) return toast.error("End date cannot be before start date");
     try {
-      await api.post("/leaves", form);
-      toast.success("Leave request submitted");
+      const { data } = await api.post("/leaves", form);
+      // An owner (nobody above them) records leave — it comes back already
+      // approved, so don't call it "submitted for approval".
+      toast.success(data?.status === "approved" ? "Leave recorded" : "Leave request submitted");
       setOpen(false);
       setForm({ leave_type: "casual", from_date: today, to_date: today, day_portion: "full", reason: "" });
       onDone?.();
@@ -85,12 +87,12 @@ export function RequestLeaveDialog({ onDone, triggerClassName }) {
           title="Plan time off in advance -- needs approval"
           className={triggerClassName || "kr-pop flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium"}
         >
-          <Plus size={16} weight="bold" /> Request Leave
+          <Plus size={16} weight="bold" /> Mark Leave
         </button>
       </DialogTrigger>
       <DialogContent className="rounded-cardlg border border-nm-edge/40">
         <DialogHeader>
-          <DialogTitle className="font-display text-xl">Request Leave</DialogTitle>
+          <DialogTitle className="font-display text-xl">Mark Leave</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">Your reporting manager or department approver will be notified.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -132,8 +134,9 @@ function AbsenceDialog({ onDone }) {
   const [form, setForm] = useState({ reason: "sick", note: "" });
   const submit = async () => {
     try {
-      await api.post("/leaves/absence", form);
-      toast.success("Absence reported — your approver was notified");
+      const { data } = await api.post("/leaves/absence", form);
+      // Owners have no approver — their absence is recorded, not sent for sign-off.
+      toast.success(data?.status === "approved" ? "Absence recorded" : "Absence reported — your approver was notified");
       setOpen(false);
       setForm({ reason: "sick", note: "" });
       onDone();
@@ -507,7 +510,7 @@ export default function Leave() {
         <p className="text-sm text-muted-foreground">Loading your leave…</p>
       ) : mine.length === 0 ? (
         <EmptyState title="No leave requests yet"
-          hint="Use Request Leave to plan time off, or Report Absence Today if you can't come in." />
+          hint="Use Mark Leave to plan time off, or Report Absence Today if you can't come in." />
       ) : (
         <div className="space-y-8">
           {upcoming.length > 0 && (

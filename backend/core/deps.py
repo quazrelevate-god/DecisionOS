@@ -163,6 +163,24 @@ async def get_current_user(
     return user
 
 
+async def get_current_user_optional(
+    request: Request,
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+):
+    """The signed-in person, or None — never a 401.
+
+    2026-09-20 — for the handful of PUBLIC endpoints that behave differently
+    when someone is already signed in. /auth/register is the first: a founder
+    who presses "Add a company" from inside the app is identified by their
+    session, so they are not sent back through a texted code to prove a number
+    they confirmed long ago.
+    """
+    try:
+        return await get_current_user(request, creds)
+    except HTTPException:
+        return None
+
+
 def require_role(*roles):
     async def checker(user: dict = Depends(get_current_user)) -> dict:
         if roles and user["role"] not in roles:

@@ -13,12 +13,14 @@ its own routers.
 """
 
 import asyncio
+from typing import Optional
+
 from services.tenant_ai_keys import TENANT_PUBLIC
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, BackgroundTasks
 
 from core import (
-    db, get_current_user, hash_password, verify_password, create_token,
+    db, get_current_user, get_current_user_optional, hash_password, verify_password, create_token,
     set_auth_cookie, clear_auth_cookie, set_usage_tenant, new_id, now_iso,
     login_response, logger,
 )
@@ -110,7 +112,8 @@ def _norm_company(name) -> str:
 # ---------------------------------------------------------------------------
 @router.post("/register")
 async def register(inp: RegisterInput, request: Request, response: Response,
-                    background: BackgroundTasks = None):
+                    background: BackgroundTasks = None,
+                    caller: Optional[dict] = Depends(get_current_user_optional)):
     # FIX-004-A (RBAC-02): rate-limit registrations per IP + verify
     # CAPTCHA before any DB work. Prevents bot-driven tenant creation
     # + AI credit burn + storage cost.
@@ -196,9 +199,34 @@ async def register(inp: RegisterInput, request: Request, response: Response,
     from services.auth.phone import identity_for_phone as _identity_for_phone
     from services.auth.phone_proof import read_phone_proof as _read_proof
     _proof_norm = _read_proof(inp.phone_token) if inp.phone_token else ""
-    _identity = await _identity_for_phone(db, _proof_norm) if _proof_norm else None
+    # 2026-09-20 (Yokesh) — "when I create a new company it has the catch about
+    # being signed in, so why do we put the number and get the OTP again?" We
+    # don't: a session whose own mobile is confirmed identifies this founder at
+    # least as well as a 24-hour proof token does, so it stands in for one.
+    # A session whose number was never confirmed does not — there would be
+    # nothing to sign the new workspace in with.
+    _session_norm = ""
+    # Called as a function rather than through FastAPI (every test here does
+    # that), `caller` is the Depends marker itself — there is no session then.
+    if not isinstance(caller, dict):
+        caller = None
+    # This endpoint is on CSRF_EXEMPT_PATHS, because a founder signing up has
+    # no CSRF cookie yet — and that exemption was harmless while register
+    # ignored sessions entirely. It no longer does, so the half that ACTS on a
+    # cookie session is checked here: without the double-submit header, another
+    # site could make a signed-in founder's browser create a workspace. A
+    # Bearer caller and a direct call are not forgeable and pass untouched.
+    if caller:
+        from services.csrf import cookie_session_needs_csrf, csrf_pair_matches
+        if cookie_session_needs_csrf(request) and not csrf_pair_matches(request):
+            logger.warning("register: ignoring a cookie session with no CSRF header")
+            caller = None
+    if caller and caller.get("phone_verified_at"):
+        _session_norm = caller.get("phone_norm") or ""
+    _known_norm = _proof_norm or _session_norm
+    _identity = await _identity_for_phone(db, _known_norm) if _known_norm else None
     second_company = not inp.email
-    if not _proof_norm and not inp.password:
+    if not _known_norm and not inp.password:
         raise HTTPException(status_code=400, detail={
             "code": "phone_unverified",
             "message": "Confirm your mobile number with the code we text you, then create your workspace.",
@@ -241,7 +269,7 @@ async def register(inp: RegisterInput, request: Request, response: Response,
         # Is this the same person coming back? Their confirmed mobile answers
         # that now (nobody types a password in signup any more); a password sent
         # by an older client still counts.
-        _same_person = bool(_proof_norm) and _proof_norm == (_existing.get("phone_norm") or "")
+        _same_person = bool(_known_norm) and _known_norm == (_existing.get("phone_norm") or "")
         if inp.password:
             _same_person = _same_person or verify_password(inp.password, _existing.get("password_hash", ""))
         if _same_company and _same_person:
@@ -299,10 +327,11 @@ async def register(inp: RegisterInput, request: Request, response: Response,
                 "code": "phone_unverified",
                 "message": "Confirm your mobile number with the code we text you, then create your workspace.",
             })
-    elif _proof_norm:
-        # No number typed — a second company sends the proof alone, and it names
-        # the number this workspace signs in with.
-        _phone_norm = _proof_norm
+    elif _known_norm:
+        # No number typed — a second company sends the proof alone (or nothing
+        # at all, when the session already says who this is), and that number is
+        # what the new workspace signs in with.
+        _phone_norm = _known_norm
     tenant_id = new_id()
     set_usage_tenant(tenant_id)
     bp = normalize_os_blueprint(inp.os_blueprint) if inp.os_blueprint else None

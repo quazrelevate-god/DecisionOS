@@ -145,7 +145,7 @@ const DESK_WIDE = "2xl:max-w-[min(1640px,94%)]";
    workspace (register and Team invite each create one), so this list comes
    from the server, which links them by the mobile they confirmed. */
 function WorkspaceSwitcher() {
-  const { tenant, switchWorkspace } = useAuth();
+  const { tenant, user, switchWorkspace } = useAuth();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [rows, setRows] = useState([]);
@@ -181,7 +181,12 @@ function WorkspaceSwitcher() {
   };
 
   const others = rows.filter((r) => r.tenant_id !== tenant?.id);
-  if (!rows.length) return null;
+  /* 2026-09-20 (Yokesh) — starting a company is an owner's move. Someone who
+     works in this workspace still sees the other companies THEY belong to and
+     can move between them; they are simply not invited to found one from here.
+     With neither, there is nothing to draw. */
+  const canAddCompany = user?.role === "owner";
+  if (!others.length && !canAddCompany) return null;
   return (
     <div className="border-b border-slate-900/[0.06] p-1.5" data-testid="workspace-switcher">
       {others.map((r) => (
@@ -193,11 +198,13 @@ function WorkspaceSwitcher() {
           <span className="shrink-0 text-[11px] capitalize text-slate-500">{r.role}</span>
         </button>
       ))}
-      <button onClick={() => navigate("/signup?add=1")}
-        data-testid="add-company"
-        className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-900/[0.06] hover:text-slate-900">
-        <Plus size={15} /> {t("header.add_company", "Add a company")}
-      </button>
+      {canAddCompany && (
+        <button onClick={() => navigate("/signup?add=1")}
+          data-testid="add-company"
+          className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-900/[0.06] hover:text-slate-900">
+          <Plus size={15} /> {t("header.add_company", "Add a company")}
+        </button>
+      )}
     </div>
   );
 }

@@ -119,5 +119,5 @@ from shared.normalizers import (  # noqa: F401,E402
 # at the very end so core is fully initialized before core.deps pulls in
 # set_usage_tenant from it.
 from core.deps import (  # noqa: F401,E402
-    get_current_user, require_role, require_perm, tenant_role_keys,
+    get_current_user, get_current_user_optional, require_role, require_perm, tenant_role_keys,
 )

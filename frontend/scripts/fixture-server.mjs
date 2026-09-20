@@ -867,7 +867,13 @@ function resolve(method, path, q) {
   if (p === '/invoices') return method === 'GET' ? INVOICES : { ...OK, invoice: INVOICES[0] };
   if (p === '/payments') return method === 'GET' ? PAYMENTS : { ...OK, payment: PAYMENTS[0] };
   if (p === '/payables') return INVOICES.filter((i) => i.type === 'purchase_invoice');
-  if (p === '/files') return [];
+  /* An UPLOAD answers with the stored file, id first — routers/files.py
+     returns _file_public(rec) and routers/brain_docs.py returns _public(doc),
+     both with a top-level id. The old stub answered every /files call with
+     [] and every /brain/documents POST with {ok:true}, so an attachment in
+     Dex uploaded "successfully" and staged nothing (useDexConversation reads
+     data.id). Nothing could reproduce the composer's attach path against it. */
+  if (p === '/files') return method === 'GET' ? [] : { id: `f_${Math.random().toString(36).slice(2, 9)}`, filename: 'upload', content_type: 'application/pdf', created_at: new Date().toISOString() };
 
   // --- capture / ingest ---
   if (p === '/captures/pending-count') return { count: CAPTURES.filter((c) => c.status === 'pending').length };
@@ -886,7 +892,8 @@ function resolve(method, path, q) {
   ];
 
   // --- brain / dex ---
-  if (p === '/brain/documents') return method === 'GET' ? BRAIN_DOCS : { ...OK, document: BRAIN_DOCS[0] };
+  if (p === '/brain/documents') return method === 'GET' ? BRAIN_DOCS
+    : { id: `bd_${Math.random().toString(36).slice(2, 9)}`, title: 'Uploaded document', kind: 'other', visibility: 'private', created_at: new Date().toISOString() };
   if (p === '/brain/search') return { results: [
     { id: 'bd_1', title: 'Reliance Trends master agreement 2025', snippet: 'Payment terms: 30 days from invoice date…', score: 0.91 },
   ] };

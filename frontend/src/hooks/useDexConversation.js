@@ -366,17 +366,25 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
     return true;
   }, [dex, oneAtATime]);
 
-  /* ASK-39 4 — a staged file is something to send on EITHER channel now: on
-     Decide it rides with the capture, on Ask it is already in the Brain and the
-     question points at it. */
-  const canSendFiles = pendingFiles.length > 0;
-
   /** What the FAB does right now — the single source for its icon and action.
-      KM-51 — A DRAFT NOW OUTRANKS THE MODE: recording wins (stop), then any
-      draft or attached file (send), then the mode decides. */
+      KM-51 — A DRAFT OUTRANKS THE MODE: recording wins (stop), then a draft
+      (send), then the mode decides.
+
+      ASK-53 — AN ATTACHMENT MUST NOT EAT THE MICROPHONE, which is ASK-36 1's
+      rule arriving where it was always needed. The Desk well learned it then
+      — "attach a file and the mic turns into a send arrow, so the only way
+      left to say what to do with it is to type, on the very screen whose own
+      words are 'Attached. Say or type what to do with it'" — but the dock's
+      FAB kept counting a staged file as something to send, so attaching in
+      the sheet took the microphone away too. A FILE IS NOT A MESSAGE; it is
+      what a message is about. Only words in the field turn this button into
+      send — typed, or spoken and transcribed back into it — and the file
+      leaves with them as one note. So the order of business is: attach, then
+      speak (the mic is still there), then stop, read back what Dex heard,
+      then send. */
   const fabIntent =
     dex?.recording ? "stop"
-    : (draft.trim() || canSendFiles) ? "send"
+    : draft.trim() ? "send"
     : mode === "type" ? "keyboard"
     : "mic";
 
@@ -388,10 +396,15 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
     /* Transcription is still in flight. Without this the button falls through
        to "start recording" and you are taping over the thing you just said. */
     if (dex?.sending) return;
-    if (draft.trim() || canSendFiles) { ask(draft); return; }
+    /* ASK-53 — the button does what its glyph says, and the glyph follows the
+       FIELD, not the attachments (fabIntent). A staged file with nothing said
+       about it therefore starts a recording rather than sending itself: the
+       media is analysed WITH the message as its context, so a file on its own
+       is half a thing to send. The file rides out with the words. */
+    if (draft.trim()) { ask(draft); return; }
     if (mode === "type") return;      // empty field: nothing to send
     dex?.startRecording?.();
-  }, [ask, canSendFiles, draft, dex, mode]);
+  }, [ask, draft, dex, mode]);
 
   return { log, busy, mode, setMode, draft, setDraft, setDraftFromVoice, ask, attach, removeFile, retry, adopt, canRetry, submit, fabIntent, pendingFiles };
 }

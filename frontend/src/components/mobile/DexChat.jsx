@@ -488,21 +488,6 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                 />
               ))}
               {busy && <Bubble m={{ role: "dex", text: "Thinking…", pending: true }} index={log.length} />}
-              {/* ASK-39 4 — THE PREVIEW, not a sent message. A file used to
-                  post itself into the transcript the instant it was picked;
-                  it is staged now, and this is what staged looks like — an
-                  image shows itself, anything else shows its glyph and its
-                  name, and either can be taken off before the question goes.
-                  The same chip the Desk well has had since ASK-33, in this
-                  sheet's palette. */}
-              {pendingFiles.length > 0 && (
-                <ul data-testid="dex-attached" aria-label="Attached files"
-                  className="flex flex-wrap justify-end gap-1.5 self-end">
-                  {pendingFiles.map((f) => (
-                    <AttachedChip key={f.id} file={f} onRemove={() => removeFile?.(f.id)} disabled={busy} />
-                  ))}
-                </ul>
-              )}
               <div ref={endRef} />
             </div>
             </PresenceContext.Provider>
@@ -528,6 +513,32 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                 centring; the menu follows it over so the pills still hang off
                 the button that opened them rather than across the screen. */}
             <div className="relative flex flex-col items-end px-4 pb-[calc(5.75rem+var(--sa-bottom))]">
+              {/* ASK-39 4 — THE PREVIEW, not a sent message. A file used to
+                  post itself into the transcript the instant it was picked;
+                  it is staged now, and this is what staged looks like — an
+                  image shows itself, anything else shows its glyph and its
+                  name, and either can be taken off before the question goes.
+                  The same chip the Desk well has had since ASK-33, in this
+                  sheet's palette.
+
+                  ASK-53 — ON THE LEFT, AND OUT OF THE TRANSCRIPT. It hugged
+                  the right edge, directly under the plus and the FAB, which
+                  read as a message already sent and crowded the two controls;
+                  it is on the left now, where the Desk well has always put it
+                  (DeskDexWell's `attachments`), opposite the button that
+                  sends. And it lived INSIDE the scrolling transcript, so it
+                  scrolled away with the conversation — which it cannot do any
+                  more, because a file now waits through a whole recording
+                  before it goes. It belongs to the composer, so it sits with
+                  the composer. */}
+              {pendingFiles.length > 0 && (
+                <ul data-testid="dex-attached" aria-label="Attached files"
+                  className="mb-2.5 flex w-full flex-wrap justify-start gap-1.5">
+                  {pendingFiles.map((f) => (
+                    <AttachedChip key={f.id} file={f} onRemove={() => removeFile?.(f.id)} disabled={busy} />
+                  ))}
+                </ul>
+              )}
               <AnimatePresence>
                 {plusOpen && (
                   <motion.div

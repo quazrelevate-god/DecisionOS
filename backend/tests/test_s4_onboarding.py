@@ -426,7 +426,7 @@ def test_owner_retry_reruns_only_non_generated(with_test_db):
 # T10-04.6 -- abuse / rate limits: the sliding window admits up to the cap then
 # refuses (429), and the shared signup guard enforces the burst ceiling per IP.
 # ===========================================================================
-def test_sliding_window_admits_to_cap_then_refuses():
+def test_sliding_window_admits_to_cap_then_refuses(rate_limits_on):
     import asyncio
     from services.rate_limit import check_rate_limit, reset_for_test
 
@@ -446,7 +446,7 @@ def test_sliding_window_admits_to_cap_then_refuses():
     assert other[0] is True, "a different IP is an independent bucket"
 
 
-def test_signup_guard_enforces_burst_429(with_test_db):
+def test_signup_guard_enforces_burst_429(with_test_db, rate_limits_on):
     from fastapi import HTTPException
     from services.rate_limit import reset_for_test
     import routers.signup as sg

@@ -222,7 +222,7 @@ def test_a_wrong_code_is_counted_and_five_spend_it(with_test_db):
     assert late == 400, "and the right code no longer works — ask for a new one"
 
 
-def test_one_number_cannot_be_texted_on_a_loop(with_test_db):
+def test_one_number_cannot_be_texted_on_a_loop(with_test_db, rate_limits_on):
     """The one public endpoint that texts a number nobody registered. Per
     network limits alone would let a script rotate addresses; this caps the
     number itself."""
@@ -352,7 +352,9 @@ def _fe(*parts):
 
 def test_the_signup_step_requires_the_mobile_and_confirms_it():
     basics = _fe("pages", "onboarding", "BasicsFlow.js")
-    phone = basics[basics.index('key: "phone"'):basics.index('key: "team_size"')]
+    # 2026-09-20 — to the NEXT step, not to team_size: the company's contact
+    # address sits between them now and it IS optional.
+    phone = basics[basics.index('key: "phone"'):basics.index('key: "email"')]
     assert "optional: true" not in phone, "the founder's mobile is not optional any more"
     assert "normIndianMobile(v)" in phone, "and it is the shared rule, not a digit count"
     assert "confirmByCode: true" in phone

@@ -227,7 +227,7 @@ def test_someone_with_a_password_can_remove_it(with_test_db):
 # ---------------------------------------------------------------------------
 # Texting on a loop.
 # ---------------------------------------------------------------------------
-def test_one_number_cannot_be_texted_on_a_loop(with_test_db):
+def test_one_number_cannot_be_texted_on_a_loop(with_test_db, rate_limits_on):
     async def body(db, texted):
         saved = otpmod.OTP_RESEND_COOLDOWN
         otpmod.OTP_RESEND_COOLDOWN = 0

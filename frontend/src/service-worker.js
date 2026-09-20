@@ -205,6 +205,24 @@ registerRoute(
 
 // Signing out must not leave a restorable identity behind. Registered before
 // the refusal catch-all so it wins for this path.
+// 2026-09-20 — SWITCHING COMPANY THROWS THE CACHE AWAY TOO.
+//
+// A founder may run several companies, and the cache above holds their tasks,
+// people, invoices and even /auth/me for up to 24 hours. Those entries are
+// keyed by URL alone, so after a switch a slow network (NetworkFirst gives up
+// at 3s) would answer company B's screens with company A's data. Same purge as
+// signing out, for the same reason: nothing cached should outlive the identity
+// it was fetched under.
+registerRoute(
+  ({ url }) => url.pathname === '/api/auth/me/switch-workspace',
+  async ({ request }) => {
+    const res = await fetch(request);
+    if (res && res.ok) await caches.delete('decisionos-api');
+    return res;
+  },
+  'POST',
+);
+
 registerRoute(
   ({ url }) => url.pathname === '/api/auth/logout',
   async ({ request }) => {
@@ -317,4 +335,9 @@ setCatchHandler(async ({ request }) => {
 // Let the page trigger activation of a waiting worker.
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+  // The page asks for the purge directly when it cannot rely on the route
+  // above (a request that never reached this worker, e.g. a cold install).
+  if (event.data?.type === 'PURGE_API_CACHE') {
+    event.waitUntil(caches.delete('decisionos-api'));
+  }
 });

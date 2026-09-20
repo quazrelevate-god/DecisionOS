@@ -225,7 +225,7 @@ function PillSection({ label, items, tint, testid, startAt, stagger, still, newK
 
 // Generates the personalized OS blueprint from the interview, lets the founder
 // refine it, then registers the workspace and reveals it. Dex keeps the wait alive.
-export function BuildReveal({ sessionId, languageCode, payload, register, signIn, onEnter,
+export function BuildReveal({ sessionId, languageCode, payload, register, onEnter,
                               savedBlueprint = null, onBlueprint, onFixPhone, onChangeEmail }) {
   const [pct, setPct] = useState(0);
   const [line, setLine] = useState(0);
@@ -360,10 +360,14 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
       const products = (bp.products || payload.products || []).filter((p) => (p.name || "").trim());
       await register({
         company_name: payload.company_name, name: payload.name,
-        // Omitted entirely for a second company: the proof below says who this
-        // is, and sending an empty address would fail the model's own check.
-        ...(payload.identity_known ? {} : { email: payload.email, password: payload.password }),
+        /* 2026-09-20 — no password is set here by anyone: the confirmed mobile
+           below is the sign-in. A second company sends no address either (the
+           proof says who this is); a first one sends the address support and
+           receipts should use. */
+        ...(payload.identity_known ? {} : { email: payload.email }),
         phone: payload.phone, phone_token: payload.phone_token,
+        // the company's own contact address (support, receipts) — not a sign-in
+        ...(payload.support_email ? { support_email: payload.support_email } : {}),
         industry: payload.industry || "General", description: payload.description,
         company_size: payload.company_size, currency: "INR",
         business_scale: { employees: payload.company_size },
@@ -379,30 +383,16 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
       setStage("reveal");
     } catch (e) {
       const detail = e.response?.data?.detail;
-      // 2026-09-17 — a founder whose first press was lost (the proxy giving up
-      // at 60s, a phone changing network, a double tap) has an account already,
-      // and the password in their hands. Try the door before showing them a
-      // wall: it also carries them past the registration rate limit, which
-      // counts attempts per network and would otherwise refuse the very person
-      // trying to recover their own workspace.
-      /* 2026-09-20 — and ONLY when it lands in the company being created. A
-         founder starting their second company reuses the address they already
-         have, so this recovery signed them into the FIRST one and showed the
-         reveal: the new company had never been created, and the screen said it
-         had. A second company has no password to try with, either. */
-      if (signIn && !payload.identity_known) {
-        try {
-          const back = await signIn(payload.email, payload.password);
-          const landed = back?.tenant?.name || "";
-          if (!landed || landed.trim().toLowerCase() === (payload.company_name || "").trim().toLowerCase()) {
-            setStage("reveal");
-            return;
-          }
-          console.debug("recovery signed into a different workspace — not this company", landed);
-        } catch (signInErr) {
-          console.debug("recovery sign-in did not apply", signInErr);
-        }
-      }
+      /* 2026-09-17 — a founder whose first press was lost (the proxy giving up
+         at 60s, a phone changing network, a double tap) already has the
+         workspace, and pressing Create again used to say "email already
+         registered" about an account they could have walked into. The recovery
+         was a sign-in with the password they had just typed.
+         2026-09-20 — nobody types a password here any more, so register does it
+         instead: the confirmed mobile in the proof it was handed either belongs
+         to the account holding that address, in which case this IS them and it
+         answers with their session, or it does not, and the message below says
+         which company holds the address. Nothing to retry from this side. */
       setStage("preview");
       // The one failure a founder can act on: the email is taken. Say so, and
       // offer the door — pressing "Create" again cannot help.

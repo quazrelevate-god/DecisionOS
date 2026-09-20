@@ -153,13 +153,18 @@ function WorkspaceSwitcher() {
 
   /* On mount, which IS on open: the menu's content is mounted by the popover
      only while it is open, so this asks once per opening and never on an
-     ordinary page load. */
+     ordinary page load.
+
+     NO CANCELLATION FLAG, deliberately — the same trap BasicsFlow documents.
+     The popover mounts and unmounts this content as it opens (and React's
+     StrictMode double-invokes the effect besides), so a `live` flag captured
+     per run was false by the time the answer arrived and every response was
+     thrown away: the list fetched 200 OK and the menu still showed nothing.
+     A setState on a component that has gone is ignored by React 18. */
   useEffect(() => {
-    let live = true;
     api.get("/auth/me/workspaces")
-      .then(({ data }) => { if (live) setRows(data?.workspaces || []); })
+      .then(({ data }) => setRows(data?.workspaces || []))
       .catch(() => { /* the menu still works without it */ });
-    return () => { live = false; };
   }, []);
 
   const go = async (tenantId) => {

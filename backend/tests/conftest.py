@@ -92,6 +92,20 @@ def _new_test_db_name():
 
 
 @pytest.fixture
+def rate_limits_on(monkeypatch):
+    """Turn the throughput limits back on for a test that is about them.
+
+    2026-09-20 — register, the signup checks and the code sends are unmetered
+    by default while we build (config.RATE_LIMITS). The handful of tests that
+    exist to prove those limits still work ask for this fixture; everything
+    else runs without a founder-sized budget in the way.
+    """
+    import config
+    monkeypatch.setattr(config, "RATE_LIMITS_ENABLED", True)
+    return True
+
+
+@pytest.fixture
 def with_test_db():
     """Return runner(async_fn) -> result.
 

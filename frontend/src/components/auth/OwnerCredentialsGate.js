@@ -17,18 +17,28 @@ import { passwordProblem, PASSWORD_RULE } from "../../lib/password";
 const FIELD = "w-full rounded-2xl border-0 bg-white/70 px-4 py-3 text-[15px] text-slate-800 placeholder:text-slate-400 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/20";
 const LABEL = "text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500";
 
-/** True for an owner who still signs in by mobile only.
+/** True for an owner who has no way back in at all.
  *
- * 2026-09-20 — except when they already have an email and a password on
- * another of their own companies. A founder's second company is mobile-only by
- * design (the same number, no second sign-in address), so asking them to
- * invent one here would be asking for nothing. `credentials_elsewhere` is the
- * server's answer for exactly that case (GET /auth/me); a business email for
- * this company stays available in Settings.
+ * This screen exists because the owner is who recovers everyone else, and an
+ * owner locked out locks out the workspace. It is NOT about passwords.
+ *
+ * 2026-09-20 (Yokesh) — "let them log in by mobile itself, that's fine." Signup
+ * asks for no password from anyone now: the confirmed mobile is the sign-in,
+ * for the founder exactly as for every member. So an owner whose number is
+ * confirmed is never stopped here, and neither is one who already has an email
+ * and a password on another of their own companies (`credentials_elsewhere`,
+ * answered by the server). What remains is the case this was written for: an
+ * owner with no confirmed number AND no password — someone added or promoted
+ * on the Team page — who has nothing to sign in with next time.
+ *
+ * Adding an email and a password stays available to any owner in Settings.
  */
 export function needsOwnerCredentials(user) {
-  return !!user && user.role === "owner" && (!!user.passwordless || !user.email)
-    && !user.credentials_elsewhere;
+  if (!user || user.role !== "owner") return false;
+  if (user.credentials_elsewhere) return false;
+  const signsInByMobile = !!user.phone_verified_at;
+  const signsInByPassword = !user.passwordless && !!user.email;
+  return !signsInByMobile && !signsInByPassword;
 }
 
 export default function OwnerCredentialsGate() {

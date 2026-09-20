@@ -116,7 +116,7 @@ class TestGuardUnauthAiEndpoint:
         ))
         assert ip == "10.0.0.1"
 
-    def test_hourly_quota_returns_429(self, monkeypatch):
+    def test_hourly_quota_returns_429(self, monkeypatch, rate_limits_on):
         """Custom low hourly quota; 3rd hit trips the check."""
         monkeypatch.delenv("CAPTCHA_REQUIRED", raising=False)
         from fastapi import HTTPException
@@ -135,7 +135,7 @@ class TestGuardUnauthAiEndpoint:
         assert exc.value.status_code == 429
         assert "Retry-After" in exc.value.headers
 
-    def test_burst_quota_returns_429(self, monkeypatch):
+    def test_burst_quota_returns_429(self, monkeypatch, rate_limits_on):
         """Small burst; 3rd fast hit trips even though hourly is huge."""
         monkeypatch.delenv("CAPTCHA_REQUIRED", raising=False)
         from fastapi import HTTPException
@@ -378,3 +378,37 @@ class TestLoginEndpointWiresLockout:
 # Small helper used in one lockout test.
 def now_iso_str() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+# ---------------------------------------------------------------------------
+# 2026-09-20 — the switch that turns all of the above off while we build.
+# ---------------------------------------------------------------------------
+class TestRateLimitsAreOffWhileWeBuild:
+    """Yokesh: "remove the rate limit, make it off for now, write a flag."
+
+    Every throughput limit answers to config.RATE_LIMITS (off by default, and
+    bootstrap warns on each start while it is). What it must NOT reach: the
+    sign-in lockout and the OTP's own attempt limits, which are account
+    security and live elsewhere.
+    """
+
+    def test_a_cap_does_not_bite_when_the_limits_are_off(self):
+        from services.rate_limit import check_rate_limit
+        verdicts = [_run(check_rate_limit("10.0.0.9", 2, 3600, bucket="flagtest_off"))
+                    for _ in range(6)]
+        assert all(ok for ok, _ in verdicts), "six hits through a cap of two"
+
+    def test_and_bites_again_the_moment_it_is_on(self, rate_limits_on):
+        from services.rate_limit import check_rate_limit
+        verdicts = [_run(check_rate_limit("10.0.0.10", 2, 3600, bucket="flagtest_on"))
+                    for _ in range(4)]
+        assert [ok for ok, _ in verdicts] == [True, True, False, False]
+        assert verdicts[-1][1] > 0, "and says how long to wait"
+
+    def test_the_sign_in_lockout_is_not_part_of_the_switch(self):
+        """It counts failures in the database, not through check_rate_limit."""
+        import inspect
+        import routers.auth as rauth
+        src = inspect.getsource(rauth._login_locked_out)
+        assert "check_rate_limit" not in src
+        assert "platform_login_attempts" in src or "login_attempts" in src

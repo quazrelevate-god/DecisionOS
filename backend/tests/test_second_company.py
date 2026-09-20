@@ -20,9 +20,11 @@ from starlette.requests import Request as StarletteRequest
 import core
 import routers.auth as rauth
 import routers.signup as rsignup
+import routers.tenant_settings as ts
 import services.whatsapp as wa
 from core import hash_password, now_iso
 from models.auth import RegisterInput, SwitchWorkspaceInput
+from models.tenant import TenantUpdateInput
 from models.signup import PhoneVerifyInput
 from services.auth.phone_proof import issue_phone_proof
 
@@ -174,26 +176,77 @@ def test_a_second_company_needs_no_email_and_no_password(with_test_db):
     assert first.get("wa_primary") is True, "WhatsApp keeps landing in the first company"
 
 
-def test_a_first_company_still_needs_an_email_and_a_password(with_test_db):
+def test_a_first_company_needs_an_address_and_a_confirmed_mobile(with_test_db):
+    """No password from anyone (2026-09-20) — but a first company must say where
+    to reach them, and everyone must have a way back in."""
     async def scenario(db):
         restore = _patch(db, rauth, core)
         try:
-            # a proof for a number nobody has confirmed before
-            refused, _ = await _refused(rauth.register(
+            # a proof for a number nobody has confirmed, and no address with it
+            no_address, _ = await _refused(rauth.register(
                 RegisterInput(company_name="Brand New", name="Someone", phone_token=_proof(OTHER)),
                 _req(), Response()))
-            # and the other way round: no proof at all
-            refused_2, _ = await _refused(rauth.register(
-                RegisterInput(company_name="Brand New", name="Someone"),
+            # and nothing at all: no proof, no password, no way in
+            no_way_in, _ = await _refused(rauth.register(
+                RegisterInput(company_name="Brand New", name="Someone", email="new@brand.co"),
                 _req(), Response()))
-            return refused, refused_2, await db.tenants.count_documents({})
+            return no_address, no_way_in, await db.tenants.count_documents({})
         finally:
             restore()
 
-    refused, refused_2, tenants = with_test_db(scenario)
-    assert refused[0] == 400 and refused[1]["code"] == "identity_unknown"
-    assert refused_2[0] == 400 and refused_2[1]["code"] == "identity_unknown"
+    no_address, no_way_in, tenants = with_test_db(scenario)
+    assert no_address[0] == 400 and no_address[1]["code"] == "identity_unknown"
+    assert no_way_in[0] == 400 and no_way_in[1]["code"] == "phone_unverified"
     assert tenants == 0, "nothing half-created"
+
+
+def test_a_first_company_sets_no_password_at_all(with_test_db):
+    """Yokesh: we don't need that password — let them log in by mobile."""
+    async def scenario(db):
+        restore = _patch(db, rauth, core)
+        try:
+            out = await rauth.register(
+                RegisterInput(company_name="Brand New", name="Asha", email="asha@brand.co",
+                              phone=OTHER, phone_token=_proof(OTHER)),
+                _req(), Response())
+            owner = await db.users.find_one({"tenant_id": out["tenant"]["id"]}, {"_id": 0})
+            return out, owner
+        finally:
+            restore()
+
+    out, owner = with_test_db(scenario)
+    assert out["tenant"]["name"] == "Brand New"
+    assert owner["passwordless"] is True and "password_hash" not in owner
+    assert owner["email"] == "asha@brand.co", "the address is still how support reaches them"
+    assert owner["phone_norm"] == OTHER and owner["phone_verified_at"], "and the mobile is the sign-in"
+
+
+def test_a_lost_create_press_is_recovered_by_the_confirmed_mobile(with_test_db):
+    """The recovery used to be the password they had just typed. There is none
+    now, so the number confirmed one step earlier answers instead."""
+    async def scenario(db):
+        restore = _patch(db, rauth, core)
+        try:
+            await _seed_first_company(db)
+            await db.users.update_one({"id": "u-rajesh"}, {"$unset": {"password_hash": ""},
+                                                           "$set": {"passwordless": True}})
+            same = await rauth.register(
+                RegisterInput(company_name="Sharma Textiles", name="Rajesh Sharma",
+                              email="rajesh@sharma.co", phone_token=_proof()),
+                _req(), Response())
+            # somebody else's address, with their own confirmed number
+            theirs, _ = await _refused(rauth.register(
+                RegisterInput(company_name="Sharma Textiles", name="Impostor",
+                              email="rajesh@sharma.co", phone_token=_proof(OTHER)),
+                _req(), Response()))
+            return same, theirs, await db.tenants.count_documents({})
+        finally:
+            restore()
+
+    same, theirs, tenants = with_test_db(scenario)
+    assert same["tenant"]["id"] == "t-sharma" and same["user"]["id"] == "u-rajesh"
+    assert theirs[0] == 400 and theirs[1]["code"] == "email_registered", "a stranger gets the wall"
+    assert tenants == 1
 
 
 # ---------------------------------------------------------------------------
@@ -372,6 +425,113 @@ def test_whatsapp_lands_in_the_company_the_number_chose(with_test_db):
 
 
 # ---------------------------------------------------------------------------
+# The company's own address (2026-09-20, Yokesh): "I just get the email for the
+# support thing, so there's no need for the password asking."
+# ---------------------------------------------------------------------------
+def test_a_second_company_keeps_a_contact_address_of_its_own(with_test_db):
+    """Not a sign-in, so it can be the SAME address the first company uses —
+    that is the whole point of holding it on the workspace."""
+    async def scenario(db):
+        restore = _patch(db, rauth, core)
+        try:
+            await _seed_first_company(db)
+            out = await rauth.register(
+                RegisterInput(company_name="Nila Exports", name="Rajesh Sharma",
+                              phone_token=_proof(), support_email="rajesh@sharma.co"),
+                _req(), Response())
+            tid = out["tenant"]["id"]
+            tenant = await db.tenants.find_one({"id": tid}, {"_id": 0, "support_email": 1})
+            owner = await db.users.find_one({"tenant_id": tid}, {"_id": 0, "email": 1, "passwordless": 1})
+            return tenant, owner
+        finally:
+            restore()
+
+    tenant, owner = with_test_db(scenario)
+    assert tenant["support_email"] == "rajesh@sharma.co", "the same address their first company uses"
+    assert owner["email"] == "" and owner["passwordless"] is True, "and still no second sign-in"
+
+
+def test_the_address_can_be_skipped_and_added_later_in_settings(with_test_db):
+    async def scenario(db):
+        restore = _patch(db, rauth, core, ts)
+        try:
+            await _seed_first_company(db)
+            out = await rauth.register(
+                RegisterInput(company_name="Nila Exports", name="Rajesh Sharma", phone_token=_proof()),
+                _req(), Response())
+            tid = out["tenant"]["id"]
+            skipped = await db.tenants.find_one({"id": tid}, {"_id": 0, "support_email": 1})
+            owner = await db.users.find_one({"tenant_id": tid}, {"_id": 0, "id": 1})
+            later = await ts.update_tenant(
+                TenantUpdateInput(support_email="hello@nila.co"),
+                user={"id": owner["id"], "tenant_id": tid, "role": "owner",
+                      "permissions": ["team_manage"], "name": "Rajesh"})
+            return skipped, later.get("support_email")
+        finally:
+            restore()
+
+    skipped, later = with_test_db(scenario)
+    assert skipped["support_email"] == "", "skipping is fine"
+    assert later == "hello@nila.co", "Settings fills it in"
+
+
+# ---------------------------------------------------------------------------
+# Switching must really switch.
+# ---------------------------------------------------------------------------
+def test_switching_hands_over_the_other_workspaces_own_identity(with_test_db):
+    """The row, the role and the workspace all come from the target — nothing
+    of the old company may ride along."""
+    async def scenario(db):
+        restore = _patch(db, rauth, core)
+        try:
+            await _two_companies(db)
+            # they are the OWNER of the first and only Sales in the second
+            await db.users.update_one({"id": "u-rajesh-2"}, {"$set": {"role": "sales"}})
+            from services.auth.membership import update_membership
+            await update_membership(db, user_id="u-rajesh-2", tenant_id="t-nila",
+                                    updates={"role": "sales", "permissions": []})
+            me = {"id": "u-rajesh", "tenant_id": "t-sharma", "role": "owner", "permissions": []}
+            out = await rauth.switch_workspace(
+                SwitchWorkspaceInput(tenant_id="t-nila"), _req(), Response(), user=me)
+            import jwt as _jwt
+            from core import JWT_SECRET, JWT_ALGORITHM
+            token = out.get("token") or ""
+            claims = _jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM]) if token else {}
+            return out, claims
+        finally:
+            restore()
+
+    out, claims = with_test_db(scenario)
+    assert out["tenant"]["id"] == "t-nila"
+    assert out.get("role") == "sales", "their role THERE, not the one they hold here"
+    if claims:
+        assert claims["tenant_id"] == "t-nila"
+        assert claims["sub"] == "u-rajesh-2", "the token names the row that workspace knows"
+
+
+def test_the_switch_drops_what_was_cached_for_the_old_company():
+    """The service worker caches API GETs by URL for 24h — tasks, people,
+    invoices, /auth/me. After a switch those answers belong to another company,
+    so the switch purges them exactly as signing out does."""
+    sw = (FE.parent / "src" / "service-worker.js").read_text(encoding="utf-8")
+    assert "'/api/auth/me/switch-workspace'" in sw
+    block = sw[sw.index("'/api/auth/me/switch-workspace'"):]
+    assert "caches.delete('decisionos-api')" in block[:600]
+    assert "PURGE_API_CACHE" in sw, "and the page can ask for it directly"
+    ctx = _fe("context", "AuthContext.js")
+    assert 'postMessage({ type: "PURGE_API_CACHE" })' in ctx
+
+
+def test_other_tabs_follow_the_switch():
+    """One cookie per browser: a tab still showing the old company is, from the
+    moment of the switch, writing into the new one."""
+    ctx = _fe("context", "AuthContext.js")
+    assert 'localStorage.setItem("dos_active_workspace"' in ctx
+    assert 'e.key !== "dos_active_workspace"' in ctx
+    assert "window.location.reload();" in ctx
+
+
+# ---------------------------------------------------------------------------
 # The wizard itself.
 # ---------------------------------------------------------------------------
 from pathlib import Path  # noqa: E402
@@ -387,20 +547,38 @@ def test_the_mobile_is_asked_before_the_email():
     """Which is the whole point: the number is what tells us they already have
     a company, so it has to come before the address that collides."""
     src = _fe("pages", "onboarding", "BasicsFlow.js")
-    order = [k for k in ("company_name", "name", "phone", "email", "password", "team_size")
+    order = [k for k in ("company_name", "name", "phone", "email", "support_email", "team_size")
              if f'key: "{k}"' in src]
-    assert order == ["company_name", "name", "phone", "email", "password", "team_size"]
+    assert order == ["company_name", "name", "phone", "email", "support_email", "team_size"]
     assert src.index('key: "phone"') < src.index('key: "email"')
 
 
-def test_a_founder_we_know_is_asked_for_neither_an_email_nor_a_password():
+def test_nobody_is_asked_for_a_password_and_a_second_company_gets_its_own_address():
     src = _fe("pages", "onboarding", "BasicsFlow.js")
-    assert src.count("onlyWhenNew: true") == 2, "the email and password steps, and only those"
-    assert "const stepsFor = (identityKnown) => STEPS.filter((st) => !st.onlyWhenNew || !identityKnown);" in src
+    assert 'key: "password"' not in src, "signup sets no password for anyone any more"
+    assert "passwordProblem" not in src and "showPw" not in src, "and nothing is left of that step"
+    assert src.count("onlyWhenNew: true") == 1, "the address a NEW founder gives"
+    assert src.count("onlyWhenKnown: true") == 1, "the company address, asked only of them"
+    assert "(identityKnown ? !st.onlyWhenNew : !st.onlyWhenKnown)" in src
+    support = src[src.index('key: "support_email"'):]
+    assert "optional: true" in support[:700], "skippable — Settings can fill it in later"
     signup = _fe("pages", "Signup.js")
-    assert 'if (identity?.known) return { ...base, email: "", password: "", identity_known: true };' in signup
+    assert 'email: "", identity_known: true' in signup, "a second company sends no address"
+    def _code(block):
+        """The block with its prose stripped — these are notes ABOUT the
+        password that was removed, not code that sends one."""
+        keep = [l for l in block.splitlines() if not l.strip().startswith(("//", "/*", "*"))]
+        return "\n".join(keep)
+
+    payload = _code(signup[signup.index("const buildPayload"):signup.index("// Resume (or start) the draft")])
+    assert "password" not in payload, "register is sent no password by anyone"
+    form = _code(signup[signup.index("const [form, setForm] = useState("):signup.index("const [resumed,")])
+    assert "password" not in form, "the wizard does not even hold one"
+    assert 'support_email: (form.support_email || "").trim()' in signup, "the company address is"
     build = _fe("pages", "onboarding", "BuildReveal.js")
-    assert "...(payload.identity_known ? {} : { email: payload.email, password: payload.password })" in build
+    assert "{ support_email: payload.support_email }" in build, "and reaches register"
+    build = _fe("pages", "onboarding", "BuildReveal.js")
+    assert "...(payload.identity_known ? {} : { email: payload.email })" in build
 
 
 def test_the_chooser_offers_both_doors():
@@ -411,10 +589,22 @@ def test_the_chooser_offers_both_doors():
     assert 'data-testid="signup-existing-invite"' in src, "an invite is shown, not offered as a door"
 
 
-def test_the_recovery_sign_in_cannot_land_in_another_company():
+def test_the_screen_no_longer_tries_to_recover_by_signing_in():
+    """It cannot: nobody typed a password. register recognises the lost press
+    from the confirmed mobile and answers with the session itself."""
     build = _fe("pages", "onboarding", "BuildReveal.js")
-    assert "if (signIn && !payload.identity_known) {" in build
-    assert "landed.trim().toLowerCase() === (payload.company_name || \"\").trim().toLowerCase()" in build
+    assert "signIn" not in build and "payload.password" not in build
+
+
+def test_the_switcher_keeps_the_list_it_fetched():
+    """It fetched 200 OK and rendered nothing: the popover mounts and unmounts
+    its content as it opens (StrictMode double-invokes besides), so a `live`
+    flag captured per effect run was false by the time the answer arrived and
+    every response was dropped. Same trap BasicsFlow documents."""
+    layout = _fe("components", "Layout.js")
+    block = layout[layout.index("function WorkspaceSwitcher"):layout.index("export default function Layout")]
+    assert "let live = true" not in block and "live = false" not in block
+    assert ".then(({ data }) => setRows(data?.workspaces || []))" in block
 
 
 def test_the_profile_menu_switches_between_companies():
@@ -426,6 +616,10 @@ def test_the_profile_menu_switches_between_companies():
     assert 'api.post("/auth/me/switch-workspace"' in ctx
 
 
-def test_the_owner_gate_reads_the_servers_answer():
+def test_the_owner_gate_only_stops_an_owner_with_no_way_in():
+    """Every founder is mobile-only now, so a confirmed number is enough; the
+    gate is left for an owner who has neither that nor a password."""
     gate = _fe("components", "auth", "OwnerCredentialsGate.js")
-    assert "&& !user.credentials_elsewhere;" in gate
+    assert "if (user.credentials_elsewhere) return false;" in gate
+    assert "const signsInByMobile = !!user.phone_verified_at;" in gate
+    assert "return !signsInByMobile && !signsInByPassword;" in gate

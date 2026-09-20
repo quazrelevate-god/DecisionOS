@@ -180,31 +180,34 @@ async def register(inp: RegisterInput, request: Request, response: Response,
     #   * Catch DuplicateKeyError on the user insert itself and roll
     #     back the tenant we just created so the loser's failed race
     #     leaves NOTHING behind.
-    # 2026-09-20 — ONE FOUNDER, SEVERAL COMPANIES.
+    # 2026-09-20 — ONE FOUNDER, SEVERAL COMPANIES, AND NOBODY SETS A PASSWORD.
     #
-    # The email is one per company (globally unique, users.email_1); the mobile
-    # is the person. So a SECOND company sends neither an email nor a password:
-    # the proof from /signup/phone/verify names a number somebody has already
-    # confirmed, and that row says who they are. They sign in to the new
-    # workspace by mobile, and add a business email for it later in Settings
-    # (POST /auth/owner-credentials) if they want one.
+    # The confirmed mobile is the sign-in — for the founder exactly as for every
+    # member — and the email is how support and receipts reach them. So signup
+    # sends no password at all; an owner who wants one adds it later in Settings
+    # (POST /auth/owner-credentials), and a password sent here by an older
+    # client still works.
     #
-    # A FIRST company still needs both — an unknown number is not an identity.
+    # The email is one per company (globally unique, users.email_1) and the
+    # number is not, so a SECOND company sends no address either: the proof
+    # names a number somebody has already confirmed, and that row says who they
+    # are. Either way the mobile has to be confirmed — an unknown number is not
+    # an identity, and without one there would be no way back in.
     from services.auth.phone import identity_for_phone as _identity_for_phone
     from services.auth.phone_proof import read_phone_proof as _read_proof
     _proof_norm = _read_proof(inp.phone_token) if inp.phone_token else ""
     _identity = await _identity_for_phone(db, _proof_norm) if _proof_norm else None
-    second_company = not inp.email and not inp.password
+    second_company = not inp.email
+    if not _proof_norm and not inp.password:
+        raise HTTPException(status_code=400, detail={
+            "code": "phone_unverified",
+            "message": "Confirm your mobile number with the code we text you, then create your workspace.",
+        })
     if second_company and not _identity:
         raise HTTPException(status_code=400, detail={
             "code": "identity_unknown",
-            "message": ("Confirm your mobile number with the code we text you, then create your "
-                        "workspace — or sign up with an email and a password."),
-        })
-    if not second_company and (not inp.email or not inp.password):
-        raise HTTPException(status_code=400, detail={
-            "code": "credentials_required",
-            "message": "Your first workspace needs an email and a password.",
+            "message": ("This number has no workspace yet, so this is your first one — "
+                        "an email for support and receipts is needed with it."),
         })
 
     email = (inp.email or "").lower()
@@ -235,7 +238,13 @@ async def register(inp: RegisterInput, request: Request, response: Response,
         _tid = _existing.get("tenant_id")
         _t = await db.tenants.find_one({"id": _tid}, TENANT_PUBLIC) if _tid else None
         _same_company = _norm_company(inp.company_name) == _norm_company((_t or {}).get("name"))
-        if _same_company and verify_password(inp.password or "", _existing.get("password_hash", "")):
+        # Is this the same person coming back? Their confirmed mobile answers
+        # that now (nobody types a password in signup any more); a password sent
+        # by an older client still counts.
+        _same_person = bool(_proof_norm) and _proof_norm == (_existing.get("phone_norm") or "")
+        if inp.password:
+            _same_person = _same_person or verify_password(inp.password, _existing.get("password_hash", ""))
+        if _same_company and _same_person:
             _tok = create_token(_existing["id"], _tid, _existing.get("role") or "owner")
             set_auth_cookie(response, _tok)
             _u = await db.users.find_one({"id": _existing["id"]}, {"_id": 0, "password_hash": 0})
@@ -264,7 +273,7 @@ async def register(inp: RegisterInput, request: Request, response: Response,
     # After the recovery above on purpose: an existing password is still valid.
     # A second company sets no password at all — the founder signs in to it by
     # mobile, and their first workspace still holds the password they have.
-    if not second_company:
+    if inp.password:
         from services.auth.passwords import password_problem
         _pw_problem = password_problem(inp.password)
         if _pw_problem:
@@ -275,11 +284,10 @@ async def register(inp: RegisterInput, request: Request, response: Response,
     from services.auth.phone import valid_indian_mobile, display_indian_mobile
     from services.auth.phone_proof import read_phone_proof
     _phone_norm = ""
-    if second_company:
-        # The proof was read above and named this number; it IS the sign-in for
-        # the workspace being created, whatever the form sent as `phone`.
-        _phone_norm = _proof_norm
-    elif (inp.phone or "").strip():
+    if (inp.phone or "").strip():
+        # A number was typed: it must be a real mobile AND the proof must be for
+        # THAT number. Confirming your own and then typing a colleague's is the
+        # case this refuses — the proof does not transfer.
         _phone_norm = valid_indian_mobile(inp.phone)
         if not _phone_norm:
             raise HTTPException(status_code=400, detail={
@@ -291,6 +299,10 @@ async def register(inp: RegisterInput, request: Request, response: Response,
                 "code": "phone_unverified",
                 "message": "Confirm your mobile number with the code we text you, then create your workspace.",
             })
+    elif _proof_norm:
+        # No number typed — a second company sends the proof alone, and it names
+        # the number this workspace signs in with.
+        _phone_norm = _proof_norm
     tenant_id = new_id()
     set_usage_tenant(tenant_id)
     bp = normalize_os_blueprint(inp.os_blueprint) if inp.os_blueprint else None
@@ -374,6 +386,11 @@ async def register(inp: RegisterInput, request: Request, response: Response,
         "region": inp.region or "",
         "currency": (inp.currency or "INR").upper(),
         "gst": inp.gst or "",
+        # Where support and receipts for THIS company go. A founder's second
+        # company has no sign-in address of its own, so this is how they are
+        # reachable about it — and it may be the same address as their first
+        # company, because it is company contact detail, not an account.
+        "support_email": (inp.support_email or "").strip().lower(),
         "branches": inp.branches or "",
         "business_scale": inp.business_scale or {},
         "current_software": inp.current_software or [],
@@ -418,15 +435,17 @@ async def register(inp: RegisterInput, request: Request, response: Response,
         await db.users.insert_one({
             "id": user_id, "tenant_id": tenant_id,
             # A second company keeps the founder's name from the account their
-            # number already belongs to, has no email (they add a business one
-            # in Settings if they want it) and no password: mobile is the way
-            # in, exactly as it is for every member.
+            # number already belongs to, and has no email of its own (support
+            # and receipts go to the workspace's own address instead).
             "name": _owner_name,
             "email": email,
             "phone": _raw_phone, "phone_norm": _phone_norm,
             "phone_verified_at": now_iso() if _phone_norm else None,
-            **({"passwordless": True} if second_company
-               else {"password_hash": hash_password(inp.password)}),
+            # 2026-09-20 — nobody sets a password at signup: the confirmed
+            # mobile is the sign-in. An owner who wants one adds it in Settings,
+            # and a password from an older client is still honoured here.
+            **({"password_hash": hash_password(inp.password)} if inp.password
+               else {"passwordless": True}),
             "role": "owner", "created_at": now_iso(),
         })
     except Exception as _register_err:

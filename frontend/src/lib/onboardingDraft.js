@@ -107,6 +107,7 @@ export function formFromDraft(stepData) {
     phone_token: about.phone_token || "",
     phone_verified_norm: about.phone_verified_norm || "",
     phone_token_expires_at: about.phone_token_expires_at || "",
+    support_email: about.support_email || "",
     industry: about.industry || "",
     description: about.description || "",
     team_size: scale.team_size || "",

@@ -26,6 +26,9 @@ class RegisterInput(BaseModel):
     # 2026-09-19 — proof from /signup/phone/verify that whoever is signing up
     # received a code at `phone`. Register trusts a phone only with one.
     phone_token: Optional[str] = Field(default=None, max_length=1000)
+    # 2026-09-20 — the company's contact address, asked (optionally) when a
+    # founder creates a second company. Not a sign-in: see TenantUpdateInput.
+    support_email: Optional[str] = None
     industry: Optional[str] = None
     description: Optional[str] = None
     company_size: Optional[str] = None

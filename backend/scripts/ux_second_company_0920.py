@@ -71,6 +71,17 @@ def confirm_code(p):
         tid(p, "signup-phone-confirm").click()
 
 
+def whoami(p):
+    """(workspace name, user id, the company's contact address) for this session."""
+    return p.evaluate("""async (api) => {
+      const r = await fetch(api + '/auth/me', {credentials: 'include'});
+      if (!r.ok) return ['', '', ''];
+      const d = await r.json();
+      return [(d.tenant && d.tenant.name) || '', (d.user && d.user.id) || '',
+              (d.tenant && d.tenant.support_email) || ''];
+    }""", API)
+
+
 def current_workspace(p):
     """The workspace this session is in. `tenant-name` lives INSIDE the profile
     menu, so it cannot answer this while the menu is shut."""
@@ -172,12 +183,19 @@ with sync_playwright() as pw:
     # 3 · create another: no email, no password
     tid(p2, "signup-create-another").click()
     asked_again = wait(p2, "signup-input-email", 4000) or wait(p2, "signup-input-password", 1000)
-    rec("no-second-email-or-password-is-asked", not asked_again, "straight to team size")
+    rec("no-second-sign-in-email-or-password-is-asked", not asked_again, "no second account")
+    # instead: the company's own contact address, and it may be the SAME one
+    asked_support = wait(p2, "signup-input-support_email", 10000)
+    rec("the-company-address-is-asked-instead", asked_support, "support and receipts")
+    if asked_support:
+        tid(p2, "signup-input-support_email").fill(EMAIL)   # the address company one uses
+        tid(p2, "signup-basics-next").click()
     assert wait(p2, "signup-team-size-chips", 15000), "team size never appeared"
     tid(p2, "team-size-11-50").click()
     entered = build_and_enter(p2)
-    name_two = current_workspace(p2) if entered else ""
+    name_two, id_two, support_two = whoami(p2) if entered else ("", "", "")
     rec("second-company-created-and-entered", entered and TWO in name_two, name_two)
+    rec("the-shared-address-is-kept-on-the-company", support_two == EMAIL.lower(), support_two)
     gate = p2.locator('[data-testid="owner-credentials-gate"]').count()
     rec("no-credentials-gate-in-the-second-company", gate == 0, f"{gate} gate(s)")
     p2.screenshot(path=str(OUT / "3_second_company.png"))
@@ -192,8 +210,11 @@ with sync_playwright() as pw:
         rec("and-offers-add-a-company", tid(p2, "add-company").is_visible(), "")
         row.click()
         p2.wait_for_timeout(9000)
-        now = current_workspace(p2)
+        now, id_now, _sup = whoami(p2)
         rec("switching-lands-in-the-other-company", ONE in now, now)
+        # the whole identity moves: that company knows this founder as its own row
+        rec("and-hands-over-that-companys-own-identity", bool(id_now) and id_now != id_two,
+            f"{id_two[:8]}… -> {id_now[:8]}…")
         p2.screenshot(path=str(OUT / "5_switched.png"))
 
     # 5 · signing in by mobile offers both

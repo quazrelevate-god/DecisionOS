@@ -69,6 +69,27 @@ SUPERADMIN_ALLOW_HASH_REFRESH = (
 )
 
 
+# 2026-09-20 (Yokesh) — THE THROUGHPUT LIMITS ARE OFF WHILE WE BUILD.
+#
+# Three workspaces an hour per network, five address checks per ten seconds,
+# five codes an hour per number: all sized for the open internet, and all of
+# them count a founder testing their own product as an attacker. Creating two
+# companies in one sitting — which is now an ordinary thing to do — spends the
+# register budget, and the wall says "try again in 60 minutes".
+#
+# So they are off by default and `RATE_LIMITS=on` puts every one of them back;
+# nothing else changes, the numbers stay where they are. This is a switch to
+# flip before the doors open, and bootstrap logs a warning on every start while
+# it is off so it cannot be forgotten quietly.
+#
+# WHAT THIS DOES NOT TOUCH, because these are account security rather than
+# throughput: the sign-in lockout (5 failures per IP+email for 15 minutes,
+# routers/auth.py and routers/admin.py), the OTP's own five attempts and single
+# use (services/otp.py), and its 30-second resend cooldown.
+_RL_ENV = os.environ.get('RATE_LIMITS', '').strip().lower()
+RATE_LIMITS_ENABLED = _RL_ENV in ('1', 'true', 'yes', 'on')
+
+
 # --- FIX-006-B (S0-02): strict CORS + CSRF ---------------------------------
 def _parse_cors_origins() -> list[str]:
     """Comma-separated allow-list. In prod (ENV=prod) we REFUSE to boot

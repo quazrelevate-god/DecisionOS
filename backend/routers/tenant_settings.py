@@ -215,7 +215,8 @@ async def regenerate_finance_categories(user: dict = Depends(require_perm("team_
 @router.patch("/tenant")
 async def update_tenant(inp: TenantUpdateInput, user: dict = Depends(require_perm("team_manage"))):
     updates = {}
-    for f in ["name", "industry", "company_size", "region", "gst", "phone", "branches"]:
+    for f in ["name", "industry", "company_size", "region", "gst", "phone", "branches",
+              "support_email"]:
         v = getattr(inp, f)
         if v is not None:
             updates[f] = v.strip() if isinstance(v, str) else v

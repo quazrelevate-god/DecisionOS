@@ -60,7 +60,9 @@ class TestRateLimit:
         assert ok is True
         assert retry_after == 0
 
-    def test_cap_blocks_further_hits(self):
+    def test_cap_blocks_further_hits(self, rate_limits_on):
+        # 2026-09-20 — the limits are off by default while we build
+        # (config.RATE_LIMITS); this test is about the cap itself.
         from services.rate_limit import check_rate_limit
         for _ in range(3):
             _run(check_rate_limit("ip2", 3, 60))

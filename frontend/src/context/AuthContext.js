@@ -27,6 +27,21 @@ export function AuthProvider({ children }) {
     // Runs once on mount to restore the session; deps intentionally empty.
   }, []);
 
+  /* 2026-09-20 — ANOTHER TAB SWITCHED COMPANY. The auth cookie is one per
+     browser, so the moment one tab switches, every other tab is signed into
+     the new workspace while still showing the old one — and a save from there
+     would land in the wrong company. Each tab reloads itself instead. The
+     event only fires in OTHER tabs, and only for this one key. */
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key !== "dos_active_workspace" || !e.newValue) return;
+      const switchedTo = String(e.newValue).split(":")[0];
+      if (switchedTo && switchedTo !== tenant?.id) window.location.reload();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [tenant?.id]);
+
   const persist = (data) => {
     // Auth token lives in a secure HttpOnly cookie set by the server.
     setUser(data.user);
@@ -63,6 +78,22 @@ export function AuthProvider({ children }) {
      workspace rather than trying to reconcile two. */
   const switchWorkspace = async (tenantId) => {
     await api.post("/auth/me/switch-workspace", { tenant_id: tenantId });
+    /* NOTHING FROM THE OLD COMPANY MAY SURVIVE THE SWITCH (2026-09-20).
+       The service worker caches API GETs by URL for 24h — tasks, people,
+       invoices, /auth/me — so company B's screens could be answered with
+       company A's data whenever the network is slow (NetworkFirst gives up at
+       3s). The SW purges on this request itself; this message covers the case
+       where it never saw it. */
+    try {
+      navigator.serviceWorker?.controller?.postMessage({ type: "PURGE_API_CACHE" });
+    } catch (e) { /* no worker here (dev, or an unsupported browser) */ }
+    /* And tell the OTHER tabs. The auth cookie is one per browser, so a tab
+       still showing company A is, from this moment, writing into company B.
+       A `storage` write fires in every other tab of this origin; each one
+       reloads itself into the workspace that is now current. */
+    try {
+      localStorage.setItem("dos_active_workspace", `${tenantId}:${Date.now()}`);
+    } catch (e) { /* private window: the reload below still fixes this tab */ }
     // The switch answers with the new workspace but not with the person (they
     // are a different user row there), so identity is re-read rather than
     // guessed: /auth/me under the new cookie returns both.

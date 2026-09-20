@@ -364,7 +364,10 @@ def test_the_app_asks_owners_for_credentials_and_welcomes_members():
 
 
 def test_every_new_password_screen_uses_the_rule():
-    for parts in (("pages", "onboarding", "BasicsFlow.js"), ("pages", "PasswordReset.js"),
+    # 2026-09-20 — signup no longer sets a password at all (the confirmed
+    # mobile is the sign-in), so BasicsFlow is not on this list any more. Every
+    # screen that DOES take a new password still shares the one rule.
+    for parts in (("pages", "PasswordReset.js"),
                   ("components", "ProfileDialog.js"), ("components", "auth", "OwnerCredentialsGate.js")):
         assert "passwordProblem" in _fe(*parts), parts[-1]
 

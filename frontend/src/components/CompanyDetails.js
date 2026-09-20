@@ -16,6 +16,9 @@ const FIELDS = [
   { key: "industry", label: "Industry" },
   { key: "company_size", label: "Team size" },
   { key: "phone", label: "Company mobile" },
+  // 2026-09-20 — where support and receipts for THIS company go. Not a sign-in:
+  // a founder running two companies may use one address for both.
+  { key: "support_email", label: "Company email (support & receipts)" },
   { key: "region", label: "Region" },
   { key: "gst", label: "GST / Tax ID" },
   { key: "branches", label: "Branches" },
@@ -53,7 +56,8 @@ export function CompanyDetails() {
     if (!dirty.current.company) {
       setForm({
         name: tenant.name || "", industry: tenant.industry || "", company_size: tenant.company_size || "",
-        phone: tenant.phone || "", region: tenant.region || "", gst: tenant.gst || "", branches: tenant.branches || "",
+        phone: tenant.phone || "", region: tenant.region || "", gst: tenant.gst || "",
+        support_email: tenant.support_email || "", branches: tenant.branches || "",
       });
       setProducts((tenant.products || []).map((p) => ({ name: p.name || "", description: p.description || "", _key: uid() })));
     }

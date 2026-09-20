@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, ArrowLeft, Eye, EyeSlash } from "@phosphor-icons/react";
+import { ArrowRight, ArrowLeft } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import api, { formatApiError } from "../../lib/api";
 import { normIndianMobile, displayIndianMobile } from "../../lib/phone";
 import OtpBoxes from "../../components/auth/OtpBoxes";
-import { passwordProblem } from "../../lib/password";
 // ASK-36 5 — the app's one loading animation.
 import { Loader } from "../../components/common";
 
@@ -49,25 +48,38 @@ const STEPS = [
   {
     key: "phone", eyebrow: "Mobile sign-in", type: "tel", placeholder: "+91 98765 43210",
     q: () => "Your mobile number?",
-    sub: () => "You'll sign in with it on the mobile app. We'll text a code to confirm it's yours.",
+    sub: () => "This is how you sign in — we'll text a code to confirm it's yours.",
     validate: (v) => (normIndianMobile(v) ? "" : "Enter a 10-digit Indian mobile number"),
     confirmByCode: true,
   },
+  /* 2026-09-20 (Yokesh) — NOBODY SETS A PASSWORD TO GET IN HERE. "We don't need
+     that password — let them log in by mobile itself." The number was confirmed
+     one step ago and it is the whole sign-in, for the founder exactly as for
+     every member. The address below is how support and receipts reach them, and
+     it is where a password lives IF they ever add one (Settings › Your Profile);
+     nothing in signup asks for one. */
   {
-    key: "email", eyebrow: "Sign-in", type: "email", placeholder: "you@company.com",
+    key: "email", eyebrow: "Support", type: "email", placeholder: "you@company.com",
     q: (f) => `Nice to meet you, ${first(f.name)}. Your work email?`,
-    sub: () => "This becomes your sign-in — we never spam.",
+    sub: () => "For receipts and support. You'll sign in with your mobile.",
     validate: (v) => (/^\S+@\S+\.\S+$/.test(v.trim()) ? "" : "That email doesn't look right"),
     checkEmail: true,
     onlyWhenNew: true,
   },
+  /* 2026-09-20 (Yokesh) — a SECOND company still wants an address, just not a
+     second sign-in: "I just get the email for the support thing, so there's no
+     need for the password asking." So this is the COMPANY's address — support,
+     receipts — saved on the workspace, not on their account. It may be the very
+     address their first company uses, because it is contact detail and not an
+     account, and it can be skipped and filled in later in Settings. The
+     password step above is never shown to them. */
   {
-    key: "password", eyebrow: "Sign-in", type: "password", placeholder: "8+ characters, a letter and a number",
-    q: () => "Set a password for your executive office.",
-    sub: () => "As the owner you'll sign in with this or your mobile. Your team signs in with their mobile.",
-    // 2026-09-19 — 8+ characters with a letter and a number (lib/password.js).
-    validate: (v) => passwordProblem(v),
-    onlyWhenNew: true,
+    key: "support_email", eyebrow: "Support", type: "email", placeholder: "you@company.com",
+    q: (f) => `Where should support reach you about ${f.company_name.trim()}?`,
+    sub: () => "For receipts and support about this company. You can skip it and add it in Settings.",
+    validate: (v) => (!v.trim() || /^\S+@\S+\.\S+$/.test(v.trim()) ? "" : "That email doesn't look right"),
+    optional: true,
+    onlyWhenKnown: true,
   },
   {
     key: "team_size", eyebrow: "Your team", type: "chips",
@@ -87,7 +99,8 @@ const variants = {
    signs in somewhere is a person we know: they set no second password and pick
    no second sign-in address, so those two steps are not in their wizard at all
    (2026-09-20). Everything below indexes into THIS list, never into STEPS. */
-const stepsFor = (identityKnown) => STEPS.filter((st) => !st.onlyWhenNew || !identityKnown);
+const stepsFor = (identityKnown) => STEPS.filter(
+  (st) => (identityKnown ? !st.onlyWhenNew : !st.onlyWhenKnown));
 
 /* "taken" | "free" | "unknown" — THREE answers, not two.
    This used to be a try/catch that swallowed everything and carried on, and
@@ -123,7 +136,6 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "company_name"
   const [existing, setExisting] = useState(null);
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
-  const [showPw, setShowPw] = useState(false);
   // The mobile step's second half: the number a code was texted to (""
   // while the number is still being typed), what they have entered, and
   // the resend clock (30s, the server's own cooldown).
@@ -471,7 +483,7 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "company_name"
               <input
                 ref={inputRef}
                 data-testid={`signup-input-${step.key}`}
-                type={step.type === "password" && showPw ? "text" : step.type}
+                type={step.type}
                 placeholder={step.placeholder}
                 value={value}
                 onChange={(e) => setVal(e.target.value)}
@@ -486,25 +498,6 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "company_name"
                 <p className="mt-3 text-sm font-medium text-success-600" data-testid="signup-phone-confirmed">
                   Confirmed — no need for another code.
                 </p>
-              )}
-              {step.type === "password" && (
-                <button type="button" onClick={() => setShowPw(!showPw)} data-testid="signup-toggle-password"
-                  aria-label={showPw ? "Hide password" : "Show password"}
-                  /* CENTRED WITHOUT A TRANSFORM, and that is the fix rather
-                     than a preference. It used to be `top-1/2 -translate-y-1/2`,
-                     and .signup-stage .kr-pop:hover sets `transform:
-                     translateY(-2px)` — a whole-property override, so the
-                     moment the pointer arrived the centring translate was
-                     replaced by the lift and the button dropped half its own
-                     height, out from under the cursor. Losing the pointer
-                     removed :hover, which put it back, which caught the
-                     pointer again: it flickered in place and was very hard to
-                     click. inset-y-0 + my-auto centres a fixed-height
-                     absolute box with no transform at all, so the hover lift
-                     is the only one there is and it composes with nothing. */
-                  className="kr-pop absolute inset-y-0 right-2.5 my-auto grid h-9 w-9 place-items-center rounded-full text-muted-foreground">
-                  {showPw ? <EyeSlash size={22} weight="bold" /> : <Eye size={22} weight="bold" />}
-                </button>
               )}
             </div>
           )}

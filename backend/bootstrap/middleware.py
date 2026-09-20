@@ -40,3 +40,14 @@ def register_middleware(app) -> None:
     # CSRF_ENFORCE env flag.
     app.add_middleware(CSRFMiddleware)
     logger.info(f"CSRF middleware installed (enforce={CSRF_ENFORCE})")
+
+    # 2026-09-20 — say it on every start while the throughput limits are off,
+    # so the switch cannot be forgotten quietly before the doors open.
+    from config import RATE_LIMITS_ENABLED, _ENV
+    if RATE_LIMITS_ENABLED:
+        logger.info("Rate limits ON (register, signup checks, code sends)")
+    else:
+        logger.warning(
+            "RATE LIMITS ARE OFF - register, signup checks and code sends are unmetered. "
+            "Set RATE_LIMITS=on before launch.%s",
+            "  *** THIS IS A PRODUCTION BOOT ***" if _ENV == "prod" else "")

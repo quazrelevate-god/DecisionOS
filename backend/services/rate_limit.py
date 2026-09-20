@@ -48,6 +48,15 @@ async def check_rate_limit(
     bucket: str = "default",
 ) -> Tuple[bool, int]:
     """Register a hit for `key` in `bucket`. Return (allowed, retry_after)."""
+    # 2026-09-20 — one switch for every throughput limit (config.RATE_LIMITS).
+    # Off while we build, because these numbers count a founder testing their
+    # own product as an attacker: two companies in one sitting spends the
+    # register budget for the hour. Read at call time, not import time, so a
+    # test can flip it. The sign-in lockout and the OTP's own attempt limits do
+    # not come through here and are unaffected.
+    from config import RATE_LIMITS_ENABLED
+    if not RATE_LIMITS_ENABLED:
+        return True, 0
     if not key or max_hits <= 0 or window_seconds <= 0:
         return True, 0
     now = time.monotonic()

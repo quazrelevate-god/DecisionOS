@@ -47,22 +47,24 @@ const PHASES = [
 // read because their dark shadows do the work alone, but they read quieter
 // than the same components do inside the app.
 export default function Signup() {
-  // `login` is here for the recovery in BuildReveal: when creating the
-  // workspace answers with an error but the account already exists (their first
-  // press was lost), signing in with the same details is the way in.
-  const { register, login } = useAuth();
+  // 2026-09-20 — `login` is gone from here with the password: a lost "Create"
+  // press is recovered by register itself now, from the confirmed mobile.
+  const { register } = useAuth();
   const navigate = useNavigate();
 
   const [phase, setPhase] = useState("basics");
   const [form, setForm] = useState({
-    company_name: "", name: "", email: "", password: "", phone: "", team_size: "",
+    company_name: "", name: "", email: "", phone: "", team_size: "",
+    // the company's own contact address (a second company asks for it instead
+    // of a second sign-in; blank is fine and Settings can fill it in later)
+    support_email: "",
     // 2026-09-19 — the proof the mobile was confirmed by a texted code; register
     // refuses a phone without one (services/auth/phone_proof.py).
     phone_token: "", phone_verified_norm: "", phone_token_expires_at: "",
   });
   // 2026-09-17 — signup is saved as it goes, so closing the tab is not starting
-  // over. The password is the one thing never stored (the draft store refuses
-  // it), so a returning founder is put back on that step with the rest filled.
+  // over. 2026-09-20: there is no password to withhold any more — signing in is
+  // the mobile — so a resumed signup simply reopens at the first blank answer.
   const [resumed, setResumed] = useState(false);       // show "picked up where you left off"
   const [basicsStart, setBasicsStart] = useState("company_name");   // the step to reopen at
   /* 2026-09-20 — WHO THIS IS. A founder whose confirmed mobile already signs
@@ -95,7 +97,10 @@ export default function Signup() {
     // A second company carries the confirmed mobile and nothing else: register
     // reads the proof, finds the person it belongs to, and creates the
     // workspace without a second sign-in address or password.
-    if (identity?.known) return { ...base, email: "", password: "", identity_known: true };
+    if (identity?.known) {
+      return { ...base, email: "", identity_known: true,
+               support_email: (form.support_email || "").trim() };
+    }
     return base;
   })();
 
@@ -116,12 +121,12 @@ export default function Signup() {
         setSavedBlueprint((stepData.os_blueprint) || null);
         const known = !!(stepData.about || {}).identity_known;
         if (known) setIdentity({ known: true, name: saved.name || "" });
-        // Reopen at the first answer that is missing. For a new founder that is
-        // the password, every time, because it is never saved; for a founder we
-        // already know there is no password step at all, so the scan must not
-        // stall on one (2026-09-20).
-        const order = ["company_name", "name", "phone", "email", "password", "team_size"]
-          .filter((k) => !known || (k !== "email" && k !== "password"));
+        // Reopen at the first answer that is missing. 2026-09-20 — no password
+        // step for anyone now, so nothing in this scan is "never saved": a
+        // resumed signup lands on the first answer that is genuinely blank.
+        const order = (known
+          ? ["company_name", "name", "phone", "team_size"]        // support_email may be skipped
+          : ["company_name", "name", "phone", "email", "team_size"]);
         const firstGap = order.find((k) => !String(saved[k] || "").trim());
         setBasicsStart(firstGap || order[0]);
         setResumed(true);
@@ -273,6 +278,7 @@ export default function Signup() {
                     email: form.email, phone: form.phone,
                     phone_token: form.phone_token, phone_verified_norm: form.phone_verified_norm,
                     phone_token_expires_at: form.phone_token_expires_at,
+                    support_email: form.support_email,
                     identity_known: true,
                   });
                 }}
@@ -286,6 +292,7 @@ export default function Signup() {
                       email: whole.email, phone: whole.phone,
                       phone_token: whole.phone_token, phone_verified_norm: whole.phone_verified_norm,
                       phone_token_expires_at: whole.phone_token_expires_at,
+                      support_email: whole.support_email,
                       // carried on every save: a step REPLACES its block
                       ...(identity?.known ? { identity_known: true } : {}),
                     });
@@ -315,7 +322,7 @@ export default function Signup() {
             {phase === "build" && (
               <BuildReveal
                 sessionId={sessionId} languageCode={languageCode} payload={buildPayload}
-                register={register} signIn={login} onEnter={enterApp}
+                register={register} onEnter={enterApp}
                 savedBlueprint={savedBlueprint}
                 onBlueprint={(bp) => { setSavedBlueprint(bp); saveStep("os_blueprint", bp); }}
                 /* The mobile's proof lapsed while they sat on this screen (it

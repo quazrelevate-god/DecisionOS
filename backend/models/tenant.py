@@ -22,6 +22,11 @@ class ProductItem(BaseModel):
 
 class TenantUpdateInput(BaseModel):
     name: Optional[str] = None
+    # 2026-09-20 — where support and receipts for THIS company go. A company
+    # address, not a sign-in: it carries no password, is not unique across
+    # workspaces, and a founder running two companies may well use the same one
+    # for both. Their sign-in email stays on their own user row.
+    support_email: Optional[str] = None
     industry: Optional[str] = None
     company_size: Optional[str] = None
     region: Optional[str] = None

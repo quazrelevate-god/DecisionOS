@@ -113,7 +113,10 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
      goes through: an offline founder must not be walled out of their own
      signup, but they should be told once first rather than find out at the
      end. Cleared whenever the address changes. */
-  const unverified = useRef("");
+  /* The address a check could not be run for. It is STATE, not a ref, and it
+     is cleared by a deliberate click rather than by pressing the same key
+     again — see the note where it is set. */
+  const [unverified, setUnverified] = useState("");
   const step = STEPS[idx];
   const value = form[step.key] || "";
 
@@ -220,7 +223,9 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
     return () => clearTimeout(t);
   }, [idx]);
 
-  const advance = async (override) => {
+  /* opts.skipEmailCheck is set by ONE caller: the "Continue anyway" button.
+     Pressing the key again must never be a way past the notice — see below. */
+  const advance = async (override, opts = {}) => {
     const v = override !== undefined ? override : value;
     const err = step.validate(v);
     if (err) { setError(err); return; }
@@ -230,7 +235,7 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
       await sendCode(norm);
       return;
     }
-    if (step.checkEmail) {
+    if (step.checkEmail && !opts.skipEmailCheck) {
       setChecking(true);
       const verdict = await emailAvailability(v);
       setChecking(false);
@@ -238,9 +243,23 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
         setError("This email already has a workspace — sign in instead, or use another address.");
         return;
       }
-      if (verdict === "unknown" && unverified.current !== v.trim()) {
-        unverified.current = v.trim();
-        setError("We couldn't check this address just now. Press continue again to carry on — we'll confirm it before your workspace is built.");
+      /* WE COULD NOT CHECK IT — and that needs a DELIBERATE choice, not a
+         second press of the key they are already pressing.
+         The first version of this said "press continue again to carry on",
+         which a founder typing an address and hitting Enter twice — one
+         keystroke apart, with the field still focused — went straight
+         through without reading. That is how somebody who could have been
+         told here still reached the end of onboarding before finding out.
+         So the way past is a separate button that Enter does not reach. */
+      if (verdict === "unknown") {
+        /* AND IT STOPS HERE, every time, however many times the key is
+           pressed. The first version let a second press through, which a
+           founder hitting Enter twice — one keystroke apart, field still
+           focused — never even saw; the third press in a row got past it.
+           The only way on is the button beside Continue, which Enter does
+           not reach. */
+        setUnverified(v.trim());
+        setError("We couldn't check whether this address is already in use. Continue anyway, or try again in a moment — we'll confirm it before your OS is built either way.");
         return;
       }
     }
@@ -256,7 +275,7 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
     if (idx > 0) { setError(""); setIdx(idx - 1); }
   };
   const setVal = (v) => {
-    if (step.key === "email" && unverified.current && unverified.current !== String(v).trim()) unverified.current = "";
+    if (step.key === "email" && unverified && unverified !== String(v).trim()) setUnverified("");
     setForm((f) => ({ ...f, [step.key]: v }));
     if (error) setError("");
   };
@@ -402,9 +421,16 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
                   : step.confirmByCode && !alreadyConfirmed(normIndianMobile(value)) ? "Text me a code"
                   : "Continue"} <ArrowRight size={16} weight="bold" />
               </motion.button>
-              <span className="hidden text-xs text-muted-foreground sm:block">
-                press <kbd className="kr-pressed rounded-md px-1.5 py-0.5 text-[11px]">Enter ↵</kbd>
-              </span>
+              {step.checkEmail && unverified === String(value).trim() && unverified ? (
+                <button type="button" onClick={() => advance(undefined, { skipEmailCheck: true })} data-testid="signup-continue-unverified"
+                  className="kr-pop flex h-12 items-center gap-2 rounded-pill px-6 text-sm font-medium text-foreground">
+                  Continue anyway
+                </button>
+              ) : (
+                <span className="hidden text-xs text-muted-foreground sm:block">
+                  press <kbd className="kr-pressed rounded-md px-1.5 py-0.5 text-[11px]">Enter ↵</kbd>
+                </span>
+              )}
             </div>
           )}
         </motion.div>

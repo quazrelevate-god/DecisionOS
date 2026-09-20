@@ -403,6 +403,39 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
     }
   };
 
+  /* ASK THE ADDRESS ONCE MORE THE MOMENT THIS SCREEN OPENS, alongside the
+     build rather than in front of it.
+
+     Every earlier check can legitimately come back "we could not tell" —
+     /signup/check-email is rate limited and CAPTCHA-gated, and a founder who
+     has been round the signup a few times is exactly the one who trips it. The
+     only check that CANNOT be skipped is the one before register, and that is
+     at the very end: the founder reported building their departments and
+     workflows, adding another recurring task through Dex, and only then being
+     told the address was taken. This is the same question asked before any of
+     that is worth doing, so the answer arrives with the OS instead of after
+     the work on it.
+     It does not gate the build — it runs beside it and only sets the notice,
+     so a slow or rate-limited answer costs nothing and register still has the
+     final say. */
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      if (!payload?.email) return;
+      try {
+        const { data } = await api.post("/signup/check-email", { email: payload.email });
+        if (!live || !data || data.available !== false) return;
+        setTakenEmail(true);
+        setError("This email already has a workspace. Sign in instead, or use a different address — everything you have built is kept either way.");
+      } catch (e) {
+        console.debug("early email re-check did not answer — register decides", e);
+      }
+    })();
+    return () => { live = false; };
+    // Once, when the build screen opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (ranRef.current) return;
     ranRef.current = true;

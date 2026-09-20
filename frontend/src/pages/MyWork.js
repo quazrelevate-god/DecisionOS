@@ -3979,17 +3979,12 @@ export default function MyWork({ only = null }) {
                links and the view itself are untouched. */
             return (
               <div className="flex flex-wrap items-center gap-2.5" data-testid="mywork-lens-group">
-                {/* 2026-09-19 — the Workflows pill is back (ASK-42 C had removed
-                    it). It opens /workflows — another surface at its own address,
-                    as ASK-42 intended — and wears a label, not just ASK-38's
-                    icon circle, so it reads as a place rather than a filter. */}
-                {canSeeWorkflows && (
-                  <Link to="/workflows" data-testid="work-open-workflows"
-                    className="kr-pop flex h-10 shrink-0 items-center gap-2 rounded-pill px-4 text-sm font-medium text-foreground">
-                    <FlowArrow size={16} weight="bold" aria-hidden="true" />
-                    {t("mywork.view_workflows", "Workflows")}
-                  </Link>
-                )}
+                {/* ASK-52 — AND IT GOES AGAIN, on the founder's call: the way
+                    into the boards from a working screen is the Desk's
+                    Workflows card now (pages/desk/WorkflowsTile), which says
+                    what needs attention rather than only where the boards are.
+                    The phone keeps its entry in the view menu above — there is
+                    no KPI grid on a phone to carry the card. */}
                 {view === "mywork" && !asked && !team && canPrioritize && (
                   <button onClick={() => setAiPriority((v) => !v)} data-testid="ai-priority-toggle"
                     aria-pressed={aiPriority}

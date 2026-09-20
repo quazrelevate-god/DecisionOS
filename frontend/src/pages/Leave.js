@@ -70,8 +70,10 @@ export function RequestLeaveDialog({ onDone, triggerClassName }) {
     if (!form.from_date || !form.to_date) return toast.error("Pick dates");
     if (form.to_date < form.from_date) return toast.error("End date cannot be before start date");
     try {
-      await api.post("/leaves", form);
-      toast.success("Leave request submitted");
+      const { data } = await api.post("/leaves", form);
+      // An owner (nobody above them) records leave — it comes back already
+      // approved, so don't call it "submitted for approval".
+      toast.success(data?.status === "approved" ? "Leave recorded" : "Leave request submitted");
       setOpen(false);
       setForm({ leave_type: "casual", from_date: today, to_date: today, day_portion: "full", reason: "" });
       onDone?.();
@@ -132,8 +134,9 @@ function AbsenceDialog({ onDone }) {
   const [form, setForm] = useState({ reason: "sick", note: "" });
   const submit = async () => {
     try {
-      await api.post("/leaves/absence", form);
-      toast.success("Absence reported — your approver was notified");
+      const { data } = await api.post("/leaves/absence", form);
+      // Owners have no approver — their absence is recorded, not sent for sign-off.
+      toast.success(data?.status === "approved" ? "Absence recorded" : "Absence reported — your approver was notified");
       setOpen(false);
       setForm({ reason: "sick", note: "" });
       onDone();

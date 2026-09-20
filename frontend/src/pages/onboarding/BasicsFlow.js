@@ -18,18 +18,6 @@ const SIZES = ["1-10", "11-50", "51-200", "201-500", "500+"];
 const first = (name) => (name || "").trim().split(/\s+/)[0] || "";
 
 const STEPS = [
-  {
-    key: "company_name", eyebrow: "Your company", type: "text", placeholder: "e.g. Sharma Textiles",
-    q: () => "What's your company called?",
-    sub: () => "The name your customers know you by.",
-    validate: (v) => (v.trim().length >= 2 ? "" : "Tell us your company name"),
-  },
-  {
-    key: "name", eyebrow: "About you", type: "text", placeholder: "Your full name",
-    q: (f) => `And who's running ${f.company_name.trim()}?`,
-    sub: () => "You'll be the owner of this workspace.",
-    validate: (v) => (v.trim().length >= 2 ? "" : "We'd love to know your name"),
-  },
   /* 2026-09-19 — required, a real Indian mobile, and confirmed by a texted
      code before we move on. It is how the founder signs in on the mobile app
      (Mobile OTP), and WhatsApp from it lands in the workspace as them. It used
@@ -38,19 +26,39 @@ const STEPS = [
      owner's sign-in. The email stays the business address for support and
      receipts; this is the phone in their hand.
 
-     2026-09-20 — AND IT IS ASKED THIRD, BEFORE THE EMAIL. A founder may run
-     more than one company here: the mobile is the person, the email is one per
-     company. Confirming the number first is what lets us say "you already run
-     Sharma Textiles — open it, or start another" at the third question,
-     instead of letting them build a whole second OS and refusing the reused
-     address at the very end. For a founder we already know, the two steps
-     below are not asked at all. */
+     2026-09-20 — AND IT IS THE FIRST QUESTION OF ALL (Yokesh). A founder may
+     run more than one company here: the mobile is the person, the email is one
+     per company. It used to be asked third, after a name — so a returning
+     founder could type any name they liked and then be greeted, correctly but
+     jarringly, as whoever the number belongs to ("type Nitish, hear Welcome
+     back Rajesh"). Asking it first means we know WHO before we ask anything
+     about them: a number we know is greeted by name and never asked for one,
+     and a number we don't goes on to name and company as before. Nothing about
+     the number is shown until the code confirms it, so a stranger's number
+     still tells the typist nothing. */
   {
     key: "phone", eyebrow: "Mobile sign-in", type: "tel", placeholder: "+91 98765 43210",
-    q: () => "Your mobile number?",
+    q: () => "Let's start with your mobile number.",
     sub: () => "This is how you sign in — we'll text a code to confirm it's yours.",
     validate: (v) => (normIndianMobile(v) ? "" : "Enter a 10-digit Indian mobile number"),
     confirmByCode: true,
+    skipWhenSignedIn: true,
+  },
+  {
+    key: "name", eyebrow: "About you", type: "text", placeholder: "Your full name",
+    q: () => "And your name?",
+    sub: () => "You'll be the owner of this workspace.",
+    validate: (v) => (v.trim().length >= 2 ? "" : "We'd love to know your name"),
+    onlyWhenNew: true,
+  },
+  {
+    key: "company_name", eyebrow: "Your company", type: "text", placeholder: "e.g. Sharma Textiles",
+    // A founder we already know is greeted by the name on their account — the
+    // one thing we are sure of — rather than by anything typed on this screen.
+    q: (f, who) => (who ? `Hello ${first(who)} — what's your new company called?`
+      : "What's your company called?"),
+    sub: () => "The name your customers know you by.",
+    validate: (v) => (v.trim().length >= 2 ? "" : "Tell us your company name"),
   },
   /* 2026-09-20 (Yokesh) — NOBODY SETS A PASSWORD TO GET IN HERE. "We don't need
      that password — let them log in by mobile itself." The number was confirmed
@@ -99,8 +107,12 @@ const variants = {
    signs in somewhere is a person we know: they set no second password and pick
    no second sign-in address, so those two steps are not in their wizard at all
    (2026-09-20). Everything below indexes into THIS list, never into STEPS. */
-const stepsFor = (identityKnown) => STEPS.filter(
-  (st) => (identityKnown ? !st.onlyWhenNew : !st.onlyWhenKnown));
+const stepsFor = (identityKnown, signedIn) => STEPS.filter((st) => {
+  // Already signed in and creating another company: the session is who they
+  // are, so there is no number to confirm and no code to wait for.
+  if (signedIn && st.skipWhenSignedIn) return false;
+  return identityKnown ? !st.onlyWhenNew : !st.onlyWhenKnown;
+});
 
 /* "taken" | "free" | "unknown" — THREE answers, not two.
    This used to be a try/catch that swallowed everything and carried on, and
@@ -120,12 +132,14 @@ async function emailAvailability(email) {
   }
 }
 
-export function BasicsFlow({ form, setForm, onDone, initialStep = "company_name", onStepSaved,
+export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSaved,
                              resumed = false, identity, onIdentity }) {
   // Which question we are on is held as a KEY, not a number: the list itself
   // changes length once we know who this is.
   const identityKnown = !!identity?.known;
-  const steps = stepsFor(identityKnown);
+  // `fromSession` — they are signed in and pressed "Add a company", so their
+  // mobile was confirmed long ago and register reads it from the session.
+  const steps = stepsFor(identityKnown, !!identity?.fromSession);
   const [idx, setIdx] = useState(() => {
     const at = steps.findIndex((st) => st.key === initialStep);
     return at === -1 ? 0 : at;
@@ -379,7 +393,7 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "company_name"
             {existing ? (existing.workspaces.length
               ? `Welcome back${first(existing.name) ? `, ${first(existing.name)}` : ""}.`
               : "You've been invited to a workspace.")
-              : step.confirmByCode && codeFor ? "Enter the code we just texted you." : step.q(form)}
+              : step.confirmByCode && codeFor ? "Enter the code we just texted you." : step.q(form, identity?.name)}
           </h1>
           <p className="mb-7 text-sm text-muted-foreground">
             {existing ? (existing.workspaces.length

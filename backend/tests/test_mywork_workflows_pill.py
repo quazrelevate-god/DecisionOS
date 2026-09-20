@@ -21,12 +21,16 @@ def test_gate_matches_the_workflows_permission():
     assert 'const canSeeWorkflows = user?.role === "owner" || userPerms(user).includes("workflows");' in s
 
 
-def test_desktop_pill_opens_the_workflows_page():
+def test_the_desktop_pill_is_gone_again_and_that_is_the_founders_call():
+    """ASK-52 (Chinmay, 2026-09-20, 8f0369c) removed it a second time: the way
+    into the boards from a working screen is the Desk's Workflows card, which
+    says what needs attention rather than only where the boards are. This file
+    was written when the pill came back (7902351) — it now records the decision
+    that replaced it, so the history of this control stays readable rather than
+    the test simply disappearing. The phone keeps its entry: there is no KPI
+    grid there to carry the card."""
     s = _src()
-    i = s.index('data-testid="work-open-workflows"')
-    block = s[s.rindex("{canSeeWorkflows && (", 0, i):i + 400]
-    assert '<Link to="/workflows"' in block
-    assert 't("mywork.view_workflows", "Workflows")' in block, "a labelled pill, not a bare icon"
+    assert 'data-testid="work-open-workflows"' not in s
 
 
 def test_phone_view_menu_has_a_workflows_entry():

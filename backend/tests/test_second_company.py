@@ -221,6 +221,52 @@ def test_a_first_company_sets_no_password_at_all(with_test_db):
     assert owner["phone_norm"] == OTHER and owner["phone_verified_at"], "and the mobile is the sign-in"
 
 
+def test_a_signed_in_founder_creates_a_company_without_a_code(with_test_db):
+    """Their session carries a mobile that was confirmed long ago; register
+    reads it instead of asking for a fresh proof."""
+    async def scenario(db):
+        restore = _patch(db, rauth, core)
+        try:
+            await _seed_first_company(db)
+            signed_in = {"id": "u-rajesh", "tenant_id": "t-sharma", "role": "owner",
+                         "name": "Rajesh Sharma", "permissions": [],
+                         "phone_norm": PHONE, "phone_verified_at": now_iso()}
+            out = await rauth.register(
+                RegisterInput(company_name="Kaveri Logistics", name="Rajesh Sharma"),
+                _req(), Response(), caller=signed_in)
+            owner = await db.users.find_one({"tenant_id": out["tenant"]["id"]}, {"_id": 0})
+            return out, owner
+        finally:
+            restore()
+
+    out, owner = with_test_db(scenario)
+    assert out["tenant"]["name"] == "Kaveri Logistics"
+    assert owner["phone_norm"] == PHONE and owner["phone_verified_at"], "the session's number"
+    assert owner["passwordless"] is True and owner["email"] == ""
+    assert owner["name"] == "Rajesh Sharma"
+
+
+def test_a_session_whose_number_was_never_confirmed_is_still_asked(with_test_db):
+    """There would otherwise be nothing to sign the new workspace in with."""
+    async def scenario(db):
+        restore = _patch(db, rauth, core)
+        try:
+            await _seed_first_company(db, verified=False)
+            unconfirmed = {"id": "u-rajesh", "tenant_id": "t-sharma", "role": "owner",
+                           "name": "Rajesh Sharma", "permissions": [],
+                           "phone_norm": PHONE, "phone_verified_at": None}
+            refused, _ = await _refused(rauth.register(
+                RegisterInput(company_name="Kaveri Logistics", name="Rajesh Sharma"),
+                _req(), Response(), caller=unconfirmed))
+            return refused, await db.tenants.count_documents({})
+        finally:
+            restore()
+
+    refused, tenants = with_test_db(scenario)
+    assert refused[0] == 400 and refused[1]["code"] == "phone_unverified"
+    assert tenants == 1, "nothing created"
+
+
 def test_a_lost_create_press_is_recovered_by_the_confirmed_mobile(with_test_db):
     """The recovery used to be the password they had just typed. There is none
     now, so the number confirmed one step earlier answers instead."""
@@ -543,23 +589,56 @@ def _fe(*parts):
     return FE.joinpath(*parts).read_text(encoding="utf-8")
 
 
-def test_the_mobile_is_asked_before_the_email():
-    """Which is the whole point: the number is what tells us they already have
-    a company, so it has to come before the address that collides."""
+def test_the_mobile_is_the_very_first_question():
+    """Yokesh: a returning founder could type any name and then be greeted as
+    whoever the number belongs to ("type Nitish, hear Welcome back Rajesh").
+    Asking the number first means we know WHO before we ask anything of them."""
     src = _fe("pages", "onboarding", "BasicsFlow.js")
-    order = [k for k in ("company_name", "name", "phone", "email", "support_email", "team_size")
+    order = [k for k in ("phone", "name", "company_name", "email", "support_email", "team_size")
              if f'key: "{k}"' in src]
-    assert order == ["company_name", "name", "phone", "email", "support_email", "team_size"]
-    assert src.index('key: "phone"') < src.index('key: "email"')
+    assert order == ["phone", "name", "company_name", "email", "support_email", "team_size"]
+    assert src.index('key: "phone"') < src.index('key: "name"') < src.index('key: "company_name"')
+
+
+def test_a_founder_we_know_is_never_asked_for_a_name():
+    """Their name comes from the account the confirmed number belongs to, and
+    the greeting uses THAT — never anything typed on this screen."""
+    src = _fe("pages", "onboarding", "BasicsFlow.js")
+    name_step = src[src.index('key: "name"'):src.index('key: "company_name"')]
+    assert "onlyWhenNew: true" in name_step
+    company = src[src.index('key: "company_name"'):src.index('key: "email"')]
+    assert "q: (f, who) =>" in company and "Hello ${first(who)}" in company
+    assert "step.q(form, identity?.name)" in src, "and the greeting is passed that name"
+
+
+def test_a_signed_in_founder_is_not_sent_back_through_a_code():
+    """Yokesh: "it has the catch about being signed in, so why put the number
+    and get the OTP again?" The session stands in for the proof."""
+    src = _fe("pages", "onboarding", "BasicsFlow.js")
+    phone_step = src[src.index('key: "phone"'):src.index('key: "name"')]
+    assert "skipWhenSignedIn: true" in phone_step
+    assert "if (signedIn && st.skipWhenSignedIn) return false;" in src
+    signup = _fe("pages", "Signup.js")
+    assert "const sessionIdentity = user?.phone_verified_at" in signup, "confirmed number only"
+    assert "fromSession: true" in signup
+    assert 'setBasicsStart("company_name")' in signup, "straight to the company question"
+
+
+def test_only_an_owner_is_invited_to_start_a_company():
+    layout = _fe("components", "Layout.js")
+    assert 'const canAddCompany = user?.role === "owner";' in layout
+    assert "{canAddCompany && (" in layout
+    assert "if (!others.length && !canAddCompany) return null;" in layout
 
 
 def test_nobody_is_asked_for_a_password_and_a_second_company_gets_its_own_address():
     src = _fe("pages", "onboarding", "BasicsFlow.js")
     assert 'key: "password"' not in src, "signup sets no password for anyone any more"
     assert "passwordProblem" not in src and "showPw" not in src, "and nothing is left of that step"
-    assert src.count("onlyWhenNew: true") == 1, "the address a NEW founder gives"
+    # asked only of a founder we do not know: their name, and their address
+    assert src.count("onlyWhenNew: true") == 2, "the name and the address a NEW founder gives"
     assert src.count("onlyWhenKnown: true") == 1, "the company address, asked only of them"
-    assert "(identityKnown ? !st.onlyWhenNew : !st.onlyWhenKnown)" in src
+    assert "return identityKnown ? !st.onlyWhenNew : !st.onlyWhenKnown;" in src
     support = src[src.index('key: "support_email"'):]
     assert "optional: true" in support[:700], "skippable — Settings can fill it in later"
     signup = _fe("pages", "Signup.js")

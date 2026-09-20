@@ -68,7 +68,7 @@ import { DecisionDialog } from "../components/DecisionDialog";
 // import { deskInsight } from "../lib/deskInsight";
 import {
   ArrowSquareOut, CaretRight, CaretDown, Timer,
-  ChatCircleText, Gauge as GaugeIcon, Receipt, HandCoins, TrendUp,
+  ChatCircleText, Gauge as GaugeIcon, Receipt, HandCoins, FlowArrow,
 } from "@phosphor-icons/react";
 
 /* ASK-35 1.1 — how many rows the phone's card shows before the control. Three:
@@ -1184,7 +1184,8 @@ export default function Desk() {
         {/* KR-14.20 · MOBILE — the KPIs are four rounded rectangles in a
             2×2 grid. Each card: label on the LEFT, icon + numeral aligned
             to the RIGHT. Score-mix and Spend are dropped per the founder;
-            the four kept are Delayed, Complaints, Overdue, Net profit. */}
+            the four kept are Delayed, Complaints, Overdue and — ASK-52 —
+            Workflows, which took Net profit's place. */}
         {/* ASK-35 2.3 — the pane grows over this now, so it fades with the
             greeting above it. Anything it covers fades; anything it does not,
             does not. */}
@@ -1206,10 +1207,21 @@ export default function Desk() {
               value: m.cash ? inrCompact(m.cash.overdue) : "…",
               urgent: (m.cash?.overdue || 0) > 0,
               to: "/finance?tab=revenue&filter=overdue", testid: "kpi-collect-m" },
-            { icon: TrendUp, label: "Net profit",
-              value: m.ledger && Number.isFinite(m.ledger.netProfit) ? inrCompact(m.ledger.netProfit) : "…",
-              urgent: m.ledger ? m.ledger.netProfit < 0 : false,
-              to: "/finance", testid: "kpi-profit-m" },
+            /* ASK-52 · the fourth pill is the boards, not the ledger. It
+               carries the desktop card's headline number and nothing else
+               the card carries: how many cards need attention, out of how
+               many are running — the same workflowAttention() the tile
+               reads, so the phone and the desktop cannot disagree. The
+               you/stuck/late split, the Next up card and its move stay on
+               the desktop: a pill has no room for them, and no room for a
+               button inside something that is itself a link. Net profit
+               keeps its home on /finance, where this pill used to go.
+               RETIRED TESTID: kpi-profit-m (no test referenced it). */
+            { icon: FlowArrow, label: "Workflows",
+              value: workflowsQ.isLoading ? "…" : String(wfAttention.needAttention),
+              sub: workflowsQ.isLoading ? null : `/${wfAttention.total}`,
+              urgent: wfAttention.needAttention > 0,
+              to: "/workflows", testid: "kpi-workflows-m" },
           ].map((k) => (
             /* ASK-42 A — p-2.5 below lg (p-3 from lg up): 4px off each tile is
                8px off the strip, and the strip is two rows deep. */
@@ -1218,8 +1230,17 @@ export default function Desk() {
               <p className="min-w-0 truncate text-xs font-medium text-foreground/80">{k.label}</p>
               <span className="flex shrink-0 items-center gap-1.5">
                 <k.icon size={13} weight="regular" aria-hidden="true" className="text-muted-foreground" />
-                <span className={`font-display text-base leading-none tabular-nums ${k.urgent ? "text-kr-accent" : ""}`}>
-                  {k.value}
+                {/* The number, and — where a pill has one — the total it
+                    is out of, in the desktop tile's own shape. */}
+                <span className="inline-flex items-baseline">
+                  <span className={`font-display text-base leading-none tabular-nums ${k.urgent ? "text-kr-accent" : ""}`}>
+                    {k.value}
+                  </span>
+                  {k.sub && (
+                    <span className="ml-0.5 text-[11px] font-medium leading-none tabular-nums text-muted-foreground">
+                      {k.sub}
+                    </span>
+                  )}
                 </span>
               </span>
             </Link>

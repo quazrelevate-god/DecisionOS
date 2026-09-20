@@ -448,3 +448,85 @@ class TestCsrfMiddlewareDispatch:
             headers={},
         )
         assert r.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# 2026-09-20 — the frontend half shipped, so enforcement can be real.
+# ---------------------------------------------------------------------------
+class TestTheFrontendSendsTheToken:
+    """The double-submit needs both halves. The server has minted `dos_csrf`
+    and counted matches since FIX-006-B; the client never echoed it back,
+    which is why enforcement had to stay off."""
+
+    def _api_js(self):
+        from pathlib import Path
+        return (Path(__file__).resolve().parents[2] / "frontend" / "src" / "lib" / "api.js"
+                ).read_text(encoding="utf-8")
+
+    def test_every_mutating_request_carries_the_header(self):
+        src = self._api_js()
+        assert 'const CSRF_COOKIE = "dos_csrf";' in src
+        assert 'const CSRF_HEADER = "X-CSRF-Token";' in src
+        assert "api.interceptors.request.use((config) => {" in src
+        assert 'SAFE_VERBS.includes(method)) return config;' in src, "the server skips these too"
+        assert "config.headers[CSRF_HEADER] = token;" in src
+
+    def test_the_cookie_it_reads_is_readable(self):
+        """Not HttpOnly, on purpose and unlike the auth cookie — a script on
+        our own page has to read it, and a script on another origin cannot."""
+        from pathlib import Path
+        sec = (Path(__file__).resolve().parents[1] / "core" / "security.py").read_text(encoding="utf-8")
+        block = sec[sec.index("key=CSRF_COOKIE_NAME"):]
+        assert "httponly=False" in block[:200]
+
+    def test_enforcement_is_on_in_production_and_overridable(self, monkeypatch):
+        import importlib
+        import config as config_mod
+        for env, explicit, expected in (("prod", None, True), ("dev", None, False),
+                                        ("prod", "off", False), ("dev", "on", True)):
+            monkeypatch.setenv("ENV", env)
+            monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com")
+            if explicit is None:
+                monkeypatch.delenv("CSRF_ENFORCE", raising=False)
+            else:
+                monkeypatch.setenv("CSRF_ENFORCE", explicit)
+            reloaded = importlib.reload(config_mod)
+            assert reloaded.CSRF_ENFORCE is expected, (env, explicit)
+        # leave the module as the rest of the suite expects it
+        monkeypatch.undo()
+        importlib.reload(config_mod)
+
+
+class TestRegisterIsExemptButNotDefenceless:
+    """/api/auth/register is on CSRF_EXEMPT_PATHS — a founder signing up has no
+    CSRF cookie yet. Since 2026-09-20 it ALSO creates a company for a founder
+    who is already signed in, and that half must not be reachable from another
+    site, so it makes the check itself."""
+
+    def test_a_cookie_session_without_the_header_is_not_trusted(self):
+        from services.csrf import cookie_session_needs_csrf, csrf_pair_matches
+        forged = _fake_request(path="/api/auth/register",
+                               cookies={"dos_token": "the victim's session"},
+                               headers={})
+        assert cookie_session_needs_csrf(forged) is True
+        assert csrf_pair_matches(forged) is False
+
+    def test_our_own_page_passes(self):
+        from services.csrf import cookie_session_needs_csrf, csrf_pair_matches
+        ours = _fake_request(path="/api/auth/register",
+                             cookies={"dos_token": "session", "dos_csrf": "abc123"},
+                             headers={"X-CSRF-Token": "abc123"})
+        assert cookie_session_needs_csrf(ours) and csrf_pair_matches(ours)
+
+    def test_a_bearer_caller_is_not_forgeable_and_is_left_alone(self):
+        from services.csrf import cookie_session_needs_csrf
+        bearer = _fake_request(path="/api/auth/register", cookies={},
+                               headers={"Authorization": "Bearer x"})
+        assert cookie_session_needs_csrf(bearer) is False
+
+    def test_register_drops_a_session_it_cannot_verify(self):
+        import inspect
+        import routers.auth as rauth
+        src = inspect.getsource(rauth.register)
+        assert "cookie_session_needs_csrf(request) and not csrf_pair_matches(request)" in src
+        assert "caller = None" in src

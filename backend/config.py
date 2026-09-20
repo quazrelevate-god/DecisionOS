@@ -153,15 +153,27 @@ CSRF_EXEMPT_PATHS = frozenset([
     "/api/health",
     "/health",
 ])
-# Rollout guard: middleware is ALWAYS installed so we start minting the
-# cookie and logging telemetry immediately. But enforcement (returning
-# 403 on mismatch) defaults OFF so this batch can ship without a
-# breaking frontend change. Flip to CSRF_ENFORCE=1 once the frontend
-# starts sending X-CSRF-Token and staging logs show 100% match rate.
-CSRF_ENFORCE = (
-    os.environ.get('CSRF_ENFORCE', '').strip().lower()
-    in ('1', 'true', 'yes', 'on')
-)
+# Rollout guard: the middleware is ALWAYS installed, so the cookie is minted
+# and match/mismatch counted from the start. Enforcement (a 403 on mismatch)
+# waited on the frontend half.
+#
+# 2026-09-20 — that half shipped: lib/api.js reads `dos_csrf` and echoes it as
+# X-CSRF-Token on every mutating request, and a live run showed matches with no
+# mismatches. So enforcement is ON in production and off elsewhere, and an
+# explicit CSRF_ENFORCE still wins either way.
+#
+# Why not everywhere: the grandfathered `requests`-based integration suites
+# (tests/_live_harness.py and the test_iteration* files) sign in with cookies
+# and send no header, so enforcing locally would fail them for no safety gain
+# — a test harness on localhost is not a cross-site attacker. Turn it on in a
+# staging box with CSRF_ENFORCE=on to rehearse the production setting.
+_CSRF_ENV = os.environ.get('CSRF_ENFORCE', '').strip().lower()
+if _CSRF_ENV in ('1', 'true', 'yes', 'on'):
+    CSRF_ENFORCE = True
+elif _CSRF_ENV in ('0', 'false', 'no', 'off'):
+    CSRF_ENFORCE = False
+else:
+    CSRF_ENFORCE = (_ENV == 'prod')
 
 
 # --- FIX-006-C (S0-03/04/05): endpoint hardening -----------------------------

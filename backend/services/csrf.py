@@ -100,6 +100,30 @@ def _has_auth_cookie(request: Request) -> bool:
                  or request.cookies.get(ADMIN_COOKIE_NAME))
 
 
+def cookie_session_needs_csrf(request: Request) -> bool:
+    """True when this request's session rides on a cookie — the only kind
+    another site can make a browser send on its own.
+
+    2026-09-20 — for an endpoint on CSRF_EXEMPT_PATHS that nonetheless ACTS on
+    a session. /auth/register is exactly that now: it is exempt because a
+    founder signing up has no CSRF cookie yet, but it also creates a company
+    for a founder who is already signed in ("Add a company"), and that half
+    must not be reachable from another site. A Bearer-token caller is not
+    forgeable cross-site, and a direct call (our tests) carries no cookies at
+    all — neither needs the check.
+    """
+    return _has_auth_cookie(request)
+
+
+def csrf_pair_matches(request: Request) -> bool:
+    """The double-submit check on its own: cookie present, header present, and
+    equal. Used where an endpoint decides for itself rather than being judged
+    by the middleware."""
+    cookie_val = request.cookies.get(CSRF_COOKIE_NAME) or ""
+    header_val = request.headers.get(CSRF_HEADER_NAME) or ""
+    return bool(cookie_val) and bool(header_val) and hmac.compare_digest(cookie_val, header_val)
+
+
 def _check(request: Request) -> tuple[bool, str]:
     """Evaluate the CSRF contract for one request. Returns (ok, reason).
 

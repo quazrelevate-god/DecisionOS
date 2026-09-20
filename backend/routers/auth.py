@@ -210,6 +210,17 @@ async def register(inp: RegisterInput, request: Request, response: Response,
     # that), `caller` is the Depends marker itself — there is no session then.
     if not isinstance(caller, dict):
         caller = None
+    # This endpoint is on CSRF_EXEMPT_PATHS, because a founder signing up has
+    # no CSRF cookie yet — and that exemption was harmless while register
+    # ignored sessions entirely. It no longer does, so the half that ACTS on a
+    # cookie session is checked here: without the double-submit header, another
+    # site could make a signed-in founder's browser create a workspace. A
+    # Bearer caller and a direct call are not forgeable and pass untouched.
+    if caller:
+        from services.csrf import cookie_session_needs_csrf, csrf_pair_matches
+        if cookie_session_needs_csrf(request) and not csrf_pair_matches(request):
+            logger.warning("register: ignoring a cookie session with no CSRF header")
+            caller = None
     if caller and caller.get("phone_verified_at"):
         _session_norm = caller.get("phone_norm") or ""
     _known_norm = _proof_norm or _session_norm

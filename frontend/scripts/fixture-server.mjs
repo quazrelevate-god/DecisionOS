@@ -588,7 +588,12 @@ const OK = { ok: true };
 function resolve(method, path, q) {
   const seg = path.split('/').filter(Boolean); // ['api', ...]
   const p = '/' + seg.slice(1).join('/');
-  const role = q.get('_role') || 'owner';
+  /* Who the fixture is signed in as. `?_role=sales` on one request, or
+     DOS_FIXTURE_ROLE=sales for the whole server — the app does not send the
+     query param, so the env var is the way to see a screen as somebody without
+     an owner's access (ASK-51: what Team shows a member who has no Manage
+     team). Owner unless asked. */
+  const role = q.get('_role') || process.env.DOS_FIXTURE_ROLE || 'owner';
   const me = USERS.find((u) => u.role === role) || USERS[0];
 
   // --- auth ---

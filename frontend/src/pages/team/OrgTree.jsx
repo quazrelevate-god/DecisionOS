@@ -119,7 +119,9 @@ export function MemberNode({ u, title, access, isMe, outToday, dimmed, root = fa
             : <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${status.dot}`} />}
           <span className="truncate">{away ? "Out today" : status.label}</span>
         </span>
-        <span data-testid={`member-access-count-${u.id}`} className={`${CHIP} ${QUIET_CHIP}`}>{access}</span>
+        {/* ASK-51 — only when the page passed one. Someone without Manage team
+            is not shown what access other people hold (Team.js decides). */}
+        {access && <span data-testid={`member-access-count-${u.id}`} className={`${CHIP} ${QUIET_CHIP}`}>{access}</span>}
       </div>
     </button>
   );

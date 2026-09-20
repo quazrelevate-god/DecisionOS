@@ -146,7 +146,14 @@ const MENU_PREVIEW = [
 /* Add a member, or edit one (`initial`). `defaultRole` pre-sets the team when
    the dialog opens from that team's branch; `defaultManagerId` pre-sets
    "Reports to" when it opens from a node in the desktop tree. */
-function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOptions, onSaved, onInvite, members = [], inviteAfterSave = false }) {
+/* ASK-51 — `canEditAccess`: may whoever opened this change what the person can
+   open? The founder: "edit allows only editing basic details, not access, if
+   [they] do not have permission." False leaves the sheet at name, email, phone,
+   department and reporting line; the Access section is not drawn and the save
+   carries neither role nor permissions, so nothing can be changed by a stale
+   form either. Deny by default — a call site that forgets it shows less, not
+   more. The server holds the same line (PATCH /users needs team_manage). */
+function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOptions, onSaved, onInvite, members = [], inviteAfterSave = false, canEditAccess = false }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const { user: me } = useAuth();
@@ -236,13 +243,13 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
           // RBAC P1 (2026-09-15): name can be corrected. The email goes when
           // this person may change it (see emailLocked).
           name: form.name.trim(), ...(emailLocked ? {} : { email: emailTyped }),
-          follow_role: !!form.follow_role,
-          role: form.role, permissions: form.follow_role ? [] : form.permissions,
+          ...(canEditAccess ? { follow_role: !!form.follow_role, role: form.role,
+            permissions: form.follow_role ? [] : form.permissions } : {}),
           // Left out when it is locked, so a save of the other fields still goes through.
           ...(phoneLocked ? {} : { phone: form.phone }),
           reporting_manager_id: form.reporting_manager_id, title: form.title.trim(),
         });
-        toast.success(`${initial.name}'s access updated`);
+        toast.success(canEditAccess ? `${initial.name}'s access updated` : `${initial.name}'s details updated`);
         setOpen(false);
         onSaved();
         // Opened from the invite icon of someone with no mobile: once the
@@ -366,6 +373,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
             <p className="text-xs text-neutral-500">The reporting manager approves their leave, and their tasks and decisions when nobody else is picked; overdue work reaches them first. The tree lines them up under that person.</p>
           </section>
 
+          {canEditAccess && (
           <section>
             <p className={`${DRAWER_LABEL} flex items-center gap-1.5`}>
               <ShieldCheck size={13} weight="bold" aria-hidden="true" /> Access
@@ -437,6 +445,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
               </>
             )}
           </section>
+          )}
         </div>
 
         {/* RBAC P2 (2026-09-16): the owner change is confirmed right here, above
@@ -705,7 +714,13 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
       root={root}
       isMe={u.id === user?.id}
       title={u.title || roleNameFor(tenantRoles, u.role)}
-      access={u.role === "owner" ? "Full access" : `${userPerms(u).length} permissions`}
+      /* ASK-51 — WHAT SOMEBODY ELSE MAY OPEN IS NOT PUBLIC. The founder: "if
+         they don't have manage team, don't show the access permissions of
+         others." Without Manage team the chip is dropped — except on your own
+         card, where it is your own access. */
+      access={canManageTeam || u.id === user?.id
+        ? (u.role === "owner" ? "Full access" : `${userPerms(u).length} permissions`)
+        : null}
       outToday={outIds.has(u.id)}
       // The root stays as the tree's anchor during a search, faded when it is not a match.
       dimmed={root && !!q && !memberMatches(u, q, tenantRoles)}
@@ -714,7 +729,7 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
   );
   const renderAdd = canManageTeam
     ? (b) => (tenantRoles.some((r) => r.key === b.key) ? (
-      <MemberDialog roleOptions={roleOptions} members={members} defaultRole={b.key} onSaved={refresh} onInvite={setInvite}
+      <MemberDialog roleOptions={roleOptions} members={members} defaultRole={b.key} onSaved={refresh} onInvite={setInvite} canEditAccess
         trigger={<AddMemberTile data-testid={`team-add-${b.key}`} aria-label={`Add member to ${b.label}`} />} />
     ) : null)
     : null;
@@ -723,7 +738,7 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
      Add member dialog with "Reports to" (and, below the heads, the team) set. */
   const canvasAdd = canManageTeam
     ? ({ managerId, role, hint, testid, width, height }) => (
-      <MemberDialog roleOptions={roleOptions} members={members} defaultRole={role} defaultManagerId={managerId}
+      <MemberDialog roleOptions={roleOptions} members={members} defaultRole={role} defaultManagerId={managerId} canEditAccess
         onSaved={refresh} onInvite={setInvite}
         trigger={
           <AddNode data-testid={testid} hint={hint} width={width} height={height}
@@ -801,7 +816,7 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
             )}
           </div>
           {canManageTeam && (
-            <MemberDialog roleOptions={roleOptions} members={members} onSaved={refresh} onInvite={setInvite}
+            <MemberDialog roleOptions={roleOptions} members={members} onSaved={refresh} onInvite={setInvite} canEditAccess
               trigger={
                 <button type="button" data-testid="add-user-button"
                   className={`flex h-12 shrink-0 items-center gap-2 rounded-pill px-5 text-sm font-medium ${INK_PILL}`}>
@@ -927,6 +942,8 @@ function MemberProfileDialog({
   const canEdit = canManageTeam && (u.role !== "owner" || isOwner);
   // ASK-6: leave is for team managers and for the person themselves.
   const showLeave = canManageTeam || isMe;
+  // ASK-51 — and so is what someone's access is.
+  const showAccess = canManageTeam || isMe;
   // Every member but an owner gets the invite-link icon from a team manager
   // (founder, 2026-09-16). The link logs in by a code texted to their mobile,
   // so for someone with no number the icon opens their form to add one, and
@@ -972,6 +989,10 @@ function MemberProfileDialog({
                 roleOptions={roleOptions}
                 initial={u}
                 members={members}
+                /* ASK-51 — Edit is only offered to a team manager (canEdit), and
+                   it is the same answer that decides whether the sheet may
+                   touch access at all. */
+                canEditAccess={canEdit}
                 onSaved={onSaved}
                 // A save here can mint an invite token (phone added, or the
                 // member re-invited). Without this it was created and dropped.
@@ -1005,6 +1026,7 @@ function MemberProfileDialog({
                 </button>
               ) : (
                 <MemberDialog roleOptions={roleOptions} initial={u} members={members} onSaved={onSaved} onInvite={onInvite} inviteAfterSave
+                  canEditAccess={canManageTeam}
                   trigger={
                     <button type="button" data-testid={`invite-link-${u.id}`}
                       aria-label={`Add a mobile number to get ${u.name}'s invite link`} title="Add a mobile number to get an invite link"
@@ -1048,6 +1070,11 @@ function MemberProfileDialog({
             </div>
           </section>
 
+          {/* ASK-51 — the same rule in the profile: without Manage team this
+              section is not drawn at all for anyone but yourself. It was the
+              worst of the two — "7 of 16 areas", every area they hold, and a
+              sentence naming everything they cannot open. */}
+          {showAccess && (
           <section>
             {/* The edit button used to sit here; it is up beside Close now. */}
             <div className="mb-2.5 flex items-center gap-3">
@@ -1076,6 +1103,7 @@ function MemberProfileDialog({
               </div>
             )}
           </section>
+          )}
 
             </div>
 

@@ -366,7 +366,19 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
               {step.type === "password" && (
                 <button type="button" onClick={() => setShowPw(!showPw)} data-testid="signup-toggle-password"
                   aria-label={showPw ? "Hide password" : "Show password"}
-                  className="kr-pop absolute right-2.5 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full text-muted-foreground">
+                  /* CENTRED WITHOUT A TRANSFORM, and that is the fix rather
+                     than a preference. It used to be `top-1/2 -translate-y-1/2`,
+                     and .signup-stage .kr-pop:hover sets `transform:
+                     translateY(-2px)` — a whole-property override, so the
+                     moment the pointer arrived the centring translate was
+                     replaced by the lift and the button dropped half its own
+                     height, out from under the cursor. Losing the pointer
+                     removed :hover, which put it back, which caught the
+                     pointer again: it flickered in place and was very hard to
+                     click. inset-y-0 + my-auto centres a fixed-height
+                     absolute box with no transform at all, so the hover lift
+                     is the only one there is and it composes with nothing. */
+                  className="kr-pop absolute inset-y-0 right-2.5 my-auto grid h-9 w-9 place-items-center rounded-full text-muted-foreground">
                   {showPw ? <EyeSlash size={22} weight="bold" /> : <Eye size={22} weight="bold" />}
                 </button>
               )}

@@ -665,7 +665,27 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
                 <div className="pointer-events-none absolute inset-0 grid place-items-center">
                   {counts.map((c, i) => (i >= placed ? (
                     <motion.div
-                      key={`bloom-${c.label}`} layoutId={`count-tile-${c.label}`}
+                      key={`bloom-${c.label}`}
+                      /* NO layoutId ON THE BLOOM, and this is a bug fix, not a
+                         simplification. Pairing it with the landed tile put two
+                         shared-layout nodes in the preview's subtree, and when
+                         the preview unmounted that pair left an exit which
+                         NEVER COMPLETED. The AnimatePresence around the stages
+                         is mode="wait", so it then never mounted the stage
+                         after it: pressing "Looks good — Enter DecisionOS"
+                         created the account and left the founder looking at the
+                         review screen, apparently ignored — and only a second
+                         press got them in, because that one failed on the
+                         address now existing and took the sign-in recovery.
+                         Measured: React rendered stage="reveal" while the
+                         preview was still in the DOM at 1s, 3s and 8s, with the
+                         reveal never mounted.
+                         The bloom already carries the whole effect on its own —
+                         it scales and un-blurs into place — so what is lost is
+                         the shared-layout MOVE, not the arrival. Bounding the
+                         id by `settled` was tried first and does not hold: the
+                         pair is live whenever a founder presses Create before
+                         the sequence has finished, which is most of them. */
                       initial={{ opacity: 0, scale: 1.35, filter: "blur(8px)" }}
                       animate={{ opacity: 1, scale: 1.35, filter: "blur(0px)" }}
                       transition={{ delay: CHOREO.tilesAt + i * CHOREO.tileGap, duration: CHOREO.bloom }}

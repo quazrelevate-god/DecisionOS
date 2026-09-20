@@ -87,12 +87,12 @@ export function RequestLeaveDialog({ onDone, triggerClassName }) {
           title="Plan time off in advance -- needs approval"
           className={triggerClassName || "kr-pop flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium"}
         >
-          <Plus size={16} weight="bold" /> Request Leave
+          <Plus size={16} weight="bold" /> Mark Leave
         </button>
       </DialogTrigger>
       <DialogContent className="rounded-cardlg border border-nm-edge/40">
         <DialogHeader>
-          <DialogTitle className="font-display text-xl">Request Leave</DialogTitle>
+          <DialogTitle className="font-display text-xl">Mark Leave</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">Your reporting manager or department approver will be notified.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -510,7 +510,7 @@ export default function Leave() {
         <p className="text-sm text-muted-foreground">Loading your leave…</p>
       ) : mine.length === 0 ? (
         <EmptyState title="No leave requests yet"
-          hint="Use Request Leave to plan time off, or Report Absence Today if you can't come in." />
+          hint="Use Mark Leave to plan time off, or Report Absence Today if you can't come in." />
       ) : (
         <div className="space-y-8">
           {upcoming.length > 0 && (

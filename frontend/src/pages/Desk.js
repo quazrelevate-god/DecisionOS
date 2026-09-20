@@ -36,6 +36,10 @@ import { cn } from "../lib/utils";
 import { clearDeferred, deferDecision, getDeferred, pruneDeferred, subscribeDeferred } from "../lib/deferredDecisions";
 import { selfScore } from "../lib/karmaScore";
 import { isDemoTenant, demoDelta } from "./_operatingScoreDemo";
+import { opModel } from "../lib/operatingModel";
+// ASK-52 — the Workflows card and the numbers behind it.
+import { WorkflowsTile } from "./desk/WorkflowsTile";
+import { workflowAttention } from "./desk/workflowAttention";
 import {
   ArcGauge, StatTile, ScopeSlider,
   BigNumeral, KDeltaChip, MiniBars, CircleDots, TinySpark,
@@ -637,6 +641,22 @@ export default function Desk() {
   const { user, tenant } = useAuth();
   const m = useDeskMetrics();
   const isMobile = useIsMobile();
+  /* ASK-52 — the boards behind the Workflows tile. with_tasks=true brings the
+     open tasks at each card's current stage, which is what "needs you",
+     "stuck" and "late" are read from (pages/desk/workflowAttention). Same
+     query key the Workflows page uses, so a move made here refreshes there. */
+  const workflowsQ = useQuery({
+    queryKey: ["workflows", "attention"],
+    queryFn: () => api.get("/workflows?with_tasks=true").then((r) => r.data),
+    refetchInterval: 60000,
+  });
+  const wfAttention = useMemo(() => workflowAttention({
+    workflows: workflowsQ.data || [],
+    userId: user?.id,
+    isOwner: user?.role === "owner",
+    pipelines: opModel(tenant).pipelines,
+  }), [workflowsQ.data, user, tenant]);
+
   const heroRef = useRef(null);
   // ASK-33 Phase 2 — the expanded Dex well grows to this grid's top, and while
   // it is the workspace the greeting and the score row above it fade.
@@ -1212,6 +1232,8 @@ export default function Desk() {
             ASK-25 — the rows are shorter than they were because the LEFT
             column got shorter (the numeral, the gauge and the well all took a
             step down); the tiles follow, they are not sized on their own. */}
+        {/* ASK-52 — still three columns and two rows; the second row is the
+            two-wide Workflows card plus one tile. */}
         <div ref={kpiGridRef} className="order-3 hidden min-w-0 grid-cols-2 gap-3 lg:order-none lg:grid lg:auto-rows-fr lg:grid-cols-3" data-testid="desk-kpi-grid">
           <StatTile
             icon={Timer}
@@ -1237,15 +1259,6 @@ export default function Desk() {
             testid="kpi-complaints"
           />
           <StatTile
-            glass
-            icon={GaugeIcon}
-            label={isOwnerView && ops.weakest ? `Weakest — ${ops.weakest[0]}` : "Score mix"}
-            value={isOwnerView && ops.weakest ? String(ops.weakest[1]) : "—"}
-            viz={isOwnerView ? <MiniBars values={ops.catValues} width={64} /> : null}
-            to="/operating-score"
-            testid="kpi-score-mix"
-          />
-          <StatTile
             icon={HandCoins}
             alert={(m.cash?.overdue || 0) > 0}
             label="To collect (overdue)"
@@ -1254,13 +1267,16 @@ export default function Desk() {
             to="/finance?tab=revenue&filter=overdue"
             testid="kpi-collect"
           />
-          <StatTile
-            icon={TrendUp}
-            label="Net profit"
-            value={m.ledger && Number.isFinite(m.ledger.netProfit) ? inrCompact(m.ledger.netProfit) : "…"}
-            urgent={m.ledger ? m.ledger.netProfit < 0 : false}
-            to="/finance"
-            testid="kpi-profit"
+          {/* ASK-52 — THE WORKFLOWS CARD, TWO CELLS WIDE, where Weakest and Net
+              profit were. The grid reflows around it: the three tiles that can
+              raise the alert dot (Delayed, Complaints, To collect) take the top
+              row, and this sits under them beside the one quiet money number.
+              Its numbers come from workflowAttention, which the Workflows page
+              can read later without the two disagreeing. */}
+          <WorkflowsTile
+            attention={wfAttention}
+            loading={workflowsQ.isLoading}
+            className="lg:col-span-2"
           />
           <StatTile
             icon={Receipt}

@@ -52,12 +52,42 @@ const TODAY = ymd(T0);
 // ---------------------------------------------------------------------------
 // Cast
 // ---------------------------------------------------------------------------
+/* ASK-52 — the operating model this tenant's boards actually run on. Every
+   real tenant has one (the AI designs it at onboarding); the fixture had none,
+   so the app fell back to the generic default whose stages are not these
+   stages — the Desk's Workflows tile could not name a stage, and the
+   procurement board's owner sign-off (approval_stage) never existed to be
+   counted. Shaped as services/workflows expects: {key, label, sub,
+   approval_stage, stages:[{key,label}]}. */
+const OPERATING_MODEL = {
+  pipelines: [
+    { key: 'purchase_payment', label: 'Procurement', sub: 'Quote → Paid', approval_stage: 'po_raised',
+      stages: [
+        { key: 'quote_received', label: 'Quote received' }, { key: 'po_raised', label: 'PO raised' },
+        { key: 'goods_received', label: 'Goods received' }, { key: 'payment_due', label: 'Payment due' },
+        { key: 'paid', label: 'Paid' },
+      ] },
+    { key: 'order_to_cash', label: 'Sales & Dispatch', sub: 'Enquiry → Paid', approval_stage: null,
+      stages: [
+        { key: 'enquiry', label: 'Enquiry' }, { key: 'quotation_sent', label: 'Quotation sent' },
+        { key: 'order_confirmed', label: 'Order confirmed' }, { key: 'dispatched', label: 'Dispatched' },
+        { key: 'payment_received', label: 'Payment received' },
+      ] },
+  ],
+  task_categories: [
+    { key: 'operational', label: 'Operational' }, { key: 'sales', label: 'Sales' },
+    { key: 'purchase', label: 'Purchase' }, { key: 'production', label: 'Production' },
+    { key: 'finance', label: 'Finance' }, { key: 'hr', label: 'HR' },
+  ],
+};
+
 const TENANT = {
   id: 'ten_rajesh_textiles',
   name: 'Shree Balaji Textiles',
   industry: 'Textile & Apparel',
   currency: 'INR',
   size: '11-50',
+  operating_model: OPERATING_MODEL,
   // §10 Q1 — the high-value threshold MPWA-06's undo-vs-confirm rule keys off.
   high_value_threshold: 50000,
   language: 'en',
@@ -146,6 +176,9 @@ const DECISIONS = [
 const mkTask = (o) => ({
   status: 'todo', priority: 'medium', source: 'manual', progress: 0,
   updates: [], attachments: [], created_by: 'u_owner', created_at: daysAgo(5),
+  // ASK-52 — the list sends this, and the Desk's Workflows tile reads it to
+  // tell a card being worked from one nobody has touched.
+  updated_at: daysAgo(5),
   ...o,
   assignee_name: byId(o.assignee_id).name,
   assignee_role: byId(o.assignee_id).role,
@@ -172,8 +205,18 @@ const TASKS = [
   mkTask({ id: 't_6', title: 'Pay Surat Spinners advance before dispatch slot closes', assignee_id: 'u_fin', due_date: TODAY, priority: 'high', amount: 144000, department: 'Finance',
     ...wfLink('w_1', 'purchase_payment', 'Surat Spinners — yarn PO', 'quote_received') }),
   mkTask({ id: 't_7', title: 'Count finished-goods stock in godown 2 before audit', assignee_id: 'u_store', due_date: dateAgo(2), priority: 'medium', status: 'in_progress', progress: 25, department: 'Stores' }),
-  mkTask({ id: 't_8', title: 'File TDS return for Q2', assignee_id: 'u_fin', due_date: dateAhead(4), priority: 'medium', department: 'Finance',
+  // ASK-52 — nobody has touched this one either, so its card reads as stuck
+  // on both halves of the rule (no stage move, no task activity).
+  mkTask({ id: 't_8', title: 'File TDS return for Q2', assignee_id: 'u_fin', due_date: dateAhead(4), priority: 'medium', department: 'Finance', updated_at: daysAgo(12),
     ...wfLink('w_2', 'purchase_payment', 'Rajkot Fibres — blend PO', 'payment_due') }),
+  /* ASK-52 — the two the Desk's Workflows tile reads: an OVERDUE task at
+     w_1's current stage (that card is "late"), and one on the owner's own
+     plate at w_3's ("needs you"). Both are ordinary tasks and show in My Work
+     like any other. */
+  mkTask({ id: 't_17', title: 'Send the signed quote back to Surat Spinners', assignee_id: 'u_fin', due_date: dateAgo(2), priority: 'high', department: 'Finance', updated_at: daysAgo(4),
+    ...wfLink('w_1', 'purchase_payment', 'Surat Spinners — yarn PO', 'quote_received') }),
+  mkTask({ id: 't_18', title: 'Confirm the Diwali quotation with Reliance', assignee_id: 'u_owner', due_date: dateAhead(2), priority: 'high', department: 'Sales', updated_at: daysAgo(1),
+    ...wfLink('w_3', 'order_to_cash', 'Reliance Trends — Diwali order', 'quotation_sent') }),
   /* ASK-50 — a task that came from a decision (ASK-32 4.4: decision_id, and the
      list's decision_title), so the drawer's link back to the review has
      something to show. */
@@ -477,10 +520,34 @@ const LEAVES = [
   { id: 'lv_3', user_id: 'u_prod', user_name: 'Suresh Patel', user_role: 'production', leave_type: 'casual', from_date: dateAhead(12), to_date: dateAhead(12), days: 1, day_portion: 'half', reason: 'Bank work', status: 'pending', created_at: daysAgo(1) },
 ];
 
+/* ASK-52 — shaped as the API sends them: every card carries the `history` of
+   its stage moves ({stage, note, by, at}), and GET /workflows?with_tasks=true
+   hydrates `stage_tasks` with the OPEN tasks at the current stage (routers/
+   workflows.list_workflows). The five below are a spread the Desk's Workflows
+   tile can be read against: one moving, one idle for ten days, one waiting on
+   the owner's sign-off, one whose task is overdue, one already finished. */
+const wfHistory = (stages, at, upto) => stages.slice(0, upto + 1).map((stage, i) => ({
+  stage, note: i === 0 ? 'Created' : `Moved to ${stage}`, by: 'u_owner',
+  at: i === upto ? at : daysAgo(40 - i * 3),
+}));
+
 const WORKFLOWS = [
-  { id: 'w_1', type: 'purchase_payment', title: 'Surat Spinners — yarn PO', stage: 'quote_received', stages: ['quote_received', 'po_raised', 'goods_received', 'payment_due', 'paid'], amount: 480000, contact_name: 'Surat Spinners', owner_id: 'u_prod', owner_name: 'Suresh Patel', created_at: daysAgo(3), updated_at: daysAgo(1) },
-  { id: 'w_2', type: 'purchase_payment', title: 'Rajkot Fibres — blend PO', stage: 'payment_due', stages: ['quote_received', 'po_raised', 'goods_received', 'payment_due', 'paid'], amount: 92000, contact_name: 'Rajkot Fibres', owner_id: 'u_fin', owner_name: 'Anita Desai', created_at: daysAgo(40), updated_at: daysAgo(10) },
-  { id: 'w_3', type: 'order_to_cash', title: 'Reliance Trends — Diwali order', stage: 'quotation_sent', stages: ['enquiry', 'quotation_sent', 'order_confirmed', 'dispatched', 'payment_received'], amount: 2200000, contact_name: 'Reliance Trends', owner_id: 'u_sales', owner_name: 'Priya Sharma', created_at: daysAgo(5), updated_at: daysAgo(1) },
+  { id: 'w_1', type: 'purchase_payment', title: 'Surat Spinners — yarn PO', stage: 'quote_received', stages: ['quote_received', 'po_raised', 'goods_received', 'payment_due', 'paid'], amount: 480000, contact_name: 'Surat Spinners', owner_id: 'u_prod', owner_name: 'Suresh Patel', created_at: daysAgo(3), updated_at: daysAgo(1),
+    history: wfHistory(['quote_received'], daysAgo(1), 0) },
+  { id: 'w_2', type: 'purchase_payment', title: 'Rajkot Fibres — blend PO', stage: 'payment_due', stages: ['quote_received', 'po_raised', 'goods_received', 'payment_due', 'paid'], amount: 92000, contact_name: 'Rajkot Fibres', owner_id: 'u_fin', owner_name: 'Anita Desai', created_at: daysAgo(40), updated_at: daysAgo(10),
+    history: wfHistory(['quote_received', 'po_raised', 'goods_received', 'payment_due'], daysAgo(10), 3) },
+  { id: 'w_3', type: 'order_to_cash', title: 'Reliance Trends — Diwali order', stage: 'quotation_sent', stages: ['enquiry', 'quotation_sent', 'order_confirmed', 'dispatched', 'payment_received'], amount: 2200000, contact_name: 'Reliance Trends', owner_id: 'u_sales', owner_name: 'Priya Sharma', created_at: daysAgo(5), updated_at: daysAgo(1),
+    history: wfHistory(['enquiry', 'quotation_sent'], daysAgo(1), 1) },
+  // Sitting one move short of the stage only an owner may make (the textile
+  // operating model's approval_stage on purchase_payment is `po_raised`).
+  { id: 'w_4', type: 'purchase_payment', title: 'Coimbatore Mills — cotton lot', stage: 'quote_received', stages: ['quote_received', 'po_raised', 'goods_received', 'payment_due', 'paid'], amount: 265000, contact_name: 'Coimbatore Mills', owner_id: 'u_owner', owner_name: 'Rajesh Kumar', created_at: daysAgo(6), updated_at: daysAgo(2),
+    history: wfHistory(['quote_received'], daysAgo(2), 0) },
+  { id: 'w_6', type: 'order_to_cash', title: 'Tirupur Knits — export order', stage: 'order_confirmed', stages: ['enquiry', 'quotation_sent', 'order_confirmed', 'dispatched', 'payment_received'], amount: 840000, contact_name: 'Tirupur Knits', owner_id: 'u_sales', owner_name: 'Priya Sharma', created_at: daysAgo(8), updated_at: daysAgo(1),
+    history: wfHistory(['enquiry', 'quotation_sent', 'order_confirmed'], daysAgo(1), 2) },
+  { id: 'w_7', type: 'purchase_payment', title: 'Erode Dyes — dye lot', stage: 'goods_received', stages: ['quote_received', 'po_raised', 'goods_received', 'payment_due', 'paid'], amount: 78000, contact_name: 'Erode Dyes', owner_id: 'u_prod', owner_name: 'Suresh Patel', created_at: daysAgo(9), updated_at: TODAY,
+    history: wfHistory(['quote_received', 'po_raised', 'goods_received'], TODAY, 2) },
+  { id: 'w_5', type: 'order_to_cash', title: 'Anand Fabrics — festive reorder', stage: 'payment_received', stages: ['enquiry', 'quotation_sent', 'order_confirmed', 'dispatched', 'payment_received'], amount: 600000, contact_name: 'Anand Fabrics', owner_id: 'u_sales', owner_name: 'Priya Sharma', created_at: daysAgo(30), updated_at: daysAgo(2),
+    history: wfHistory(['enquiry', 'quotation_sent', 'order_confirmed', 'dispatched', 'payment_received'], daysAgo(2), 4) },
 ];
 
 const CAPTURES = [
@@ -769,7 +836,20 @@ function resolve(method, path, q) {
   if (p === '/workflows') {
     if (method !== 'GET') return { ...OK, workflow: WORKFLOWS[0] };
     const type = q.get('type');
-    return type ? WORKFLOWS.filter((w) => w.type === type) : WORKFLOWS;
+    const rows = type ? WORKFLOWS.filter((w) => w.type === type) : WORKFLOWS;
+    // ASK-52 — with_tasks=true hydrates the OPEN tasks at each card's current
+    // stage, exactly as routers/workflows.list_workflows does.
+    if (q.get('with_tasks') === 'true') {
+      return rows.map((w) => ({
+        ...w,
+        stage_tasks: TASKS.filter((t) => t.workflow_id === w.id && t.stage_key === w.stage
+          && !['done', 'cancelled'].includes(t.status))
+          .map((t) => ({ id: t.id, title: t.title, workflow_id: t.workflow_id, stage_key: t.stage_key,
+            assignee_id: t.assignee_id, assignee_name: t.assignee_name, assignee_role: t.assignee_role,
+            priority: t.priority, status: t.status, due_date: t.due_date, updated_at: t.updated_at })),
+      }));
+    }
+    return rows;
   }
   if (seg[1] === 'workflows' && seg[2]) return method === 'GET' ? (WORKFLOWS.find((w) => w.id === seg[2]) || {}) : { ...OK, workflow: WORKFLOWS[0] };
 

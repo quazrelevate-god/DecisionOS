@@ -52,6 +52,8 @@ const EMPTY_FORM = {
   co_assignee_ids: [],   // ASK-26 — helpers alongside the person doing it
   priority: "medium",
   due_preset: "", due_date: "", due_time: "",
+  // D1 — how often this comes back. "" is a one-off, which is most tasks.
+  repeat_every: "", repeat_interval: "1", repeat_until: "",
   expected_output: "", approval: "none", approver_id: "",
   evidence_required: false,
 };
@@ -129,6 +131,9 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
   const create = async () => {
     if (!form.title.trim()) { setTitleError("Give the task a title"); return; }
     if (form.due_preset === "pick" && !form.due_date) { toast.error("Pick a due date, or choose No date"); return; }
+    // The date is what repeats, so a cadence without one means nothing. Said
+    // here rather than letting the server refuse a filled-in form.
+    if (form.repeat_every && !dueDate) { toast.error("A repeating task needs a due date — the date is what repeats"); return; }
     setBusy(true);
     try {
       const { data: task } = await api.post("/tasks", {
@@ -145,6 +150,9 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
         approval_stage: form.approval !== "none" ? form.approval : null,
         approver_id: form.approval !== "none" ? (form.approver_id || null) : null,
         evidence_required: form.evidence_required,
+        repeat_every: form.repeat_every || null,
+        repeat_interval: form.repeat_every ? (parseInt(form.repeat_interval, 10) || 1) : null,
+        repeat_until: form.repeat_every ? (form.repeat_until || null) : null,
       });
       if (files.length && task?.id) {
         for (const f of files) {
@@ -378,6 +386,46 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
             {form.due_preset === "pick" && (
               <input data-testid="task-due-date" type="date" aria-label="Due date" className={`${inp} mt-2`}
                 value={form.due_date} onChange={set("due_date")} />
+            )}
+            {/* D1 (2026-09-21) — HOW OFTEN IT COMES BACK.
+                Nothing in the product could repeat: the GST filing, the
+                salary run, the Monday stock count were all typed again from
+                scratch every cycle, and the "recurring tasks" collected during
+                onboarding were stored and read by nothing at all. Offered only
+                once there IS a date, because the date is what repeats — which
+                also keeps this out of the way of the ordinary one-off task. */}
+            {dueDate && (
+              <div className="mt-2.5" data-testid="task-repeat">
+                <label className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span>Repeats</span>
+                  <select value={form.repeat_every} onChange={set("repeat_every")}
+                    aria-label="How often this task repeats"
+                    data-testid="task-repeat-every" className={`${inp} !h-9 !w-auto !py-0 text-xs`}>
+                    <option value="">Just once</option>
+                    <option value="day">Every day</option>
+                    <option value="week">Every week</option>
+                    <option value="month">Every month</option>
+                  </select>
+                  {form.repeat_every && (
+                    <>
+                      <span>every</span>
+                      <input type="number" min={1} max={52} value={form.repeat_interval}
+                        onChange={set("repeat_interval")} aria-label="How many"
+                        data-testid="task-repeat-interval" className={`${inp} !h-9 !w-16 !py-0 text-xs`} />
+                      <span>{form.repeat_every}{(parseInt(form.repeat_interval, 10) || 1) === 1 ? "" : "s"}, until</span>
+                      <input type="date" value={form.repeat_until} onChange={set("repeat_until")}
+                        aria-label="Repeat until" data-testid="task-repeat-until"
+                        className={`${inp} !h-9 !w-auto !py-0 text-xs`} />
+                      <span>(blank = keeps going)</span>
+                    </>
+                  )}
+                </label>
+                {form.repeat_every && (
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    The next one appears when this one is marked done, so there is only ever one live.
+                  </p>
+                )}
+              </div>
             )}
             {dueDate && form.due_preset !== "pick" && (
               <p className="mt-1.5 text-xs text-muted-foreground" data-testid="task-due-summary">

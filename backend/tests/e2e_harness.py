@@ -31,6 +31,10 @@ _DB_MODULES = [
     "services.inbox", "services.leave", "services.enrich", "services.notifications",
     "services.ai.generators", "services.ai.brain_context",
     "services.decision_flow", "services.captures", "routers.voice_notes", "routers.desk",
+    # The follow-up sweep is on the journey too (overdue escalation, D2's
+    # due-soon warning) and its module-level db was reaching the production
+    # client from inside an isolated test.
+    "services.finance_signals",
     "services.workflows", "services.ai.agent_tools",
     "routers.access", "routers.tenant_settings",
 ]

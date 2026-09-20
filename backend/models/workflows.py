@@ -38,6 +38,21 @@ class WorkflowCreateInput(BaseModel):
     contact_id: Optional[str] = None
 
 
+class WorkflowUpdateInput(BaseModel):
+    """Correcting a card that already exists (A4, 2026-09-21).
+
+    A typo in the amount or the party's name used to be permanent: there was no
+    PATCH at all, so the only fix was deleting the card and losing its history.
+    `stage` is deliberately NOT here — services/workflow_engine.advance stays
+    the single writer of it, and `stages` is the rails under a moving card.
+    """
+    title: Optional[str] = None
+    detail: Optional[str] = None
+    amount: Optional[float] = None
+    counterparty: Optional[str] = None
+    contact_id: Optional[str] = None
+
+
 class WorkflowAdvanceInput(BaseModel):
     stage: str
     note: Optional[str] = ""

@@ -367,6 +367,9 @@ function EscalationCard() {
   const { tenant, refreshTenant } = useAuth();
   const [manager, setManager] = useState(String(tenant?.followup_manager_days || 2));
   const [owner, setOwner] = useState(String(tenant?.followup_owner_days || 4));
+  // D2 — the warning BEFORE the date. Bills have had one for a year; tasks
+  // said nothing until the day they were already late.
+  const [warn, setWarn] = useState(String(tenant?.due_soon_days ?? 2));
   const [email, setEmail] = useState(tenant?.owner_alert_email !== false);
   const [busy, setBusy] = useState(false);
   const save = async () => {
@@ -374,9 +377,11 @@ function EscalationCard() {
     const o = parseInt(owner, 10);
     if (!(m >= 1 && m <= 30) || !(o >= 1 && o <= 60)) { toast.error("Use 1 to 30 days for the manager and 1 to 60 for the owner"); return; }
     if (o <= m) { toast.error("The owner should hear after the manager"); return; }
+    const w = parseInt(warn, 10);
+    if (!(w >= 0 && w <= 14)) { toast.error("Use 0 to 14 days of warning before a task is due"); return; }
     setBusy(true);
     try {
-      await api.patch("/tenant/settings", { followup_manager_days: m, followup_owner_days: o, owner_alert_email: email });
+      await api.patch("/tenant/settings", { followup_manager_days: m, followup_owner_days: o, due_soon_days: w, owner_alert_email: email });
       if (refreshTenant) await refreshTenant();
       toast.success("Overdue work settings saved");
     } catch (e) {
@@ -385,11 +390,19 @@ function EscalationCard() {
   };
   return (
     <div className="kr-bento p-5 sm:p-6" data-testid="settings-escalation-card">
-      <h2 className="text-base font-medium">Overdue work</h2>
+      <h2 className="text-base font-medium">Deadlines</h2>
       <p className="mt-1 text-xs text-muted-foreground">
-        A late task reminds the people on it the day it&rsquo;s due and the day after. Then it goes up, one step at a time.
+        The people on a task hear before it&rsquo;s due, again the day it&rsquo;s due and the day after.
+        Then it goes up, one step at a time.
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <label className="text-sm sm:col-span-2">Warn the people on a task
+          <span className="mt-1 flex items-center gap-2">
+            <input type="number" min={0} max={14} value={warn} onChange={(e) => setWarn(e.target.value)}
+              data-testid="due-soon-days" className={`${FIELD} w-24`} /> days before it&rsquo;s due
+          </span>
+          <span className="mt-1 block text-xs text-muted-foreground">0 turns the early warning off.</span>
+        </label>
         <label className="text-sm">Tell their manager after
           <span className="mt-1 flex items-center gap-2">
             <input type="number" min={1} max={30} value={manager} onChange={(e) => setManager(e.target.value)}

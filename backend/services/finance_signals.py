@@ -18,6 +18,63 @@ from services.voice import pick_least_loaded_member
 _followup_last_run: dict = {}
 
 
+async def warn_before_due(tenant_id: str, now: datetime) -> int:
+    """Tell everyone on a task that it is due soon. Returns how many were told.
+
+    THE IDEMPOTENCY IS THE DATE ITSELF. A task remembers which due date it was
+    warned about (`due_soon_notified_for`), so the sweep runs every five
+    minutes without repeating itself — and moving the date (B2) re-arms the
+    warning by simply no longer matching, with no extra bookkeeping at the
+    place the date is changed.
+
+    Anything already past its date belongs to the overdue ladder below, not
+    here; anything further out than the company's lead time is not news yet.
+    """
+    from services.tasks import OPEN_STATUSES, due_soon_days
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "due_soon_days": 1})
+    lead = due_soon_days(tenant)
+    if lead <= 0:
+        return 0
+    # Dates are stored either as "2026-10-02" or "2026-10-02T17:30:00" and
+    # compare as strings, so the window is built from calendar days: from the
+    # start of today (a date-only task due TODAY still counts) to the end of
+    # the last day in the lead time.
+    start = now.date().isoformat()
+    end = (now + timedelta(days=lead)).date().isoformat() + "T23:59:59"
+    rows = await db.tasks.find(
+        {"tenant_id": tenant_id, "status": {"$in": list(OPEN_STATUSES)},
+         "due_date": {"$ne": None, "$gte": start, "$lte": end}},
+        {"_id": 0, "id": 1, "title": 1, "due_date": 1, "assignee_id": 1,
+         "co_assignee_ids": 1, "due_soon_notified_for": 1},
+    ).to_list(500)
+    told = 0
+    moment = now.isoformat()
+    for t in rows:
+        due = str(t.get("due_date") or "")
+        # A task due LATER TODAY is still ahead; one due at 9am and now it is
+        # 2pm is already late and belongs to the ladder below, which starts the
+        # same day. Bare dates ("2026-09-21") mean end of day, so they stay in.
+        if len(due) > 10 and due < moment:
+            continue
+        if t.get("due_soon_notified_for") == t.get("due_date"):
+            continue
+        people = [i for i in [t.get("assignee_id"), *(t.get("co_assignee_ids") or [])] if i]
+        # Nobody holds it yet: the warning would go nowhere, and the date has
+        # not been missed, so we leave it for the day it is actually late.
+        if people:
+            day = str(t["due_date"])[:10]
+            when = "today" if day == start else (
+                "tomorrow" if day == (now + timedelta(days=1)).date().isoformat() else f"on {day}")
+            await push_notification(
+                tenant_id, people, 1, f"'{t['title']}' is due {when}.", "task", t["id"],
+                ntype="due_soon", title=t["title"])
+            told += 1
+        await db.tasks.update_one(
+            {"id": t["id"], "tenant_id": tenant_id},
+            {"$set": {"due_soon_notified_for": t["due_date"]}})
+    return told
+
+
 async def run_followup(tenant_id: str):
     now = datetime.now(timezone.utc)
     # Throttle: this scan runs on every notifications poll — cap it to once per 60s per tenant.
@@ -35,6 +92,13 @@ async def run_followup(tenant_id: str):
             logger.info(f"[rbac-27] auto-revoked {revoked} expired temp grant(s) in tenant {tenant_id[:8]}...")
     except Exception as e:
         logger.warning(f"[rbac-27] temp-grant sweep failed: {e}")
+    # D2 (2026-09-21): warn the people on a task BEFORE its date, not only
+    # after. Runs ahead of the overdue ladder below, on the same leader-locked
+    # tick, and never blocks it.
+    try:
+        await warn_before_due(tenant_id, now)
+    except Exception as e:
+        logger.warning(f"[D2] due-soon warning failed for tenant {tenant_id[:8]}...: {e}")
     # ASK-28 Phase 7 (plan 7.1–7.3): every open stage counts — Waiting on and
     # waiting for approval too — and the ladder and who hears at each step
     # live in services/tasks (followup_level, stuck_on, escalation_manager_id).

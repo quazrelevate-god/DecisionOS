@@ -60,6 +60,8 @@ class TenantSettingsInput(BaseModel):
     currency: Optional[str] = None
     # 2026-09-16 (RBAC P2): overdue work — days late before the doer's manager,
     # then the owner, hears; and whether owners also get the alert by email.
+    # D2: days of warning before a task's due date (0 = no warning).
+    due_soon_days: Optional[int] = None
     followup_manager_days: Optional[int] = None
     followup_owner_days: Optional[int] = None
     owner_alert_email: Optional[bool] = None

@@ -379,6 +379,53 @@ _TRAIL_KIND = {"note": "task_note", "handoff": "task_handoff", "escalate": "task
                "response": "task_reply", "handoff_reply": "task_reply"}
 
 
+def _split_due(stored) -> tuple:
+    """A stored due date back into the two fields the client sends.
+
+    Tasks store one string: "2026-10-02" for a day, "2026-10-02T14:00:00" when
+    an hour was given. Someone changing only the hour still needs the day, and
+    vice versa, so a PATCH that sends one field keeps the other.
+    """
+    if not stored or not isinstance(stored, str):
+        return "", ""
+    day, _, rest = stored.partition("T")
+    return day, (rest[:5] if len(rest) >= 5 else "")
+
+
+def _reschedule(sent: dict, stored) -> Optional[str]:
+    """The new value of tasks.due_date, given what the PATCH carried.
+
+    Raises ValueError with a sentence for the person if either half is not a
+    date/time. Returns None when the task should end up with no due date.
+    """
+    day, hhmm = _split_due(stored)
+    if sent.get("due_date") is not None:
+        day = (sent["due_date"] or "").strip()
+    if sent.get("due_time") is not None:
+        hhmm = (sent["due_time"] or "").strip()
+    if not day:
+        return None          # no date at all — an hour on its own means nothing
+    try:
+        datetime.strptime(day, "%Y-%m-%d")
+    except ValueError:
+        raise ValueError(f"'{day}' is not a date. Use YYYY-MM-DD.")
+    if hhmm:
+        try:
+            datetime.strptime(hhmm, "%H:%M")
+        except ValueError:
+            raise ValueError(f"'{hhmm}' is not a time. Use HH:MM.")
+        return f"{day}T{hhmm}:00"
+    return day
+
+
+def _due_words(due) -> str:
+    """How a rescheduling reads on the task's timeline."""
+    if not due:
+        return "no due date"
+    day, hhmm = _split_due(due)
+    return f"{day} {hhmm}".strip()
+
+
 async def _log_task_event(user: dict, task_id: str, kind: str, message: str, detail: str) -> None:
     """log_activity, plus the short `detail` line for the task's timeline."""
     await db.activity.insert_one({
@@ -465,6 +512,7 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
     from services.notifications import _approver_ids, push_notification
     from services.voice import pick_least_loaded_member
     from services.workflows import derive_task_workflow_link  # WE-01
+    from services import recurrence as recurrence_svc          # D1
     # ASK-28 TK-08 (plan 6.2): creating a task needs the Tasks permission (on for
     # every role by default; the owner can switch it off for someone).
     if "tasks" not in user_perms(user):
@@ -488,6 +536,18 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
         due = f"{inp.due_date}T{inp.due_time}:00" if inp.due_time else inp.due_date
     elif isinstance(inp.due_in_days, int):
         due = (datetime.now(timezone.utc) + timedelta(days=inp.due_in_days)).isoformat()
+    # D1 — how often this comes back. A repeat with no date has nothing to
+    # move, so it is refused rather than stored and quietly ignored.
+    try:
+        recurrence = recurrence_svc.normalise(inp.repeat_every, inp.repeat_interval, inp.repeat_until)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if recurrence:
+        if not due:
+            raise HTTPException(
+                status_code=400,
+                detail="A repeating task needs a due date — the date is what repeats.")
+        recurrence = {**recurrence, "series_id": tid}
     troles = await tenant_role_keys(user["tenant_id"])
     assignee_id = inp.assignee_id
     role = inp.assignee_role if inp.assignee_role in troles else None
@@ -535,6 +595,18 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
                     f"{approver.get('name') or 'That person'} can't approve tasks. Pick someone with approval "
                     "access, or leave it as anyone with approval access."))
             approver_id = approver["id"]
+    # D3 — what this waits for. Ids we do not recognise are dropped rather
+    # than refused: a stale one would otherwise block the task for good.
+    depends_on: list = []
+    blocked_by_work = False
+    if inp.depends_on:
+        async for p in db.tasks.find(
+            {"id": {"$in": [i for i in inp.depends_on if i][:20]}, "tenant_id": user["tenant_id"]},
+            {"_id": 0, "id": 1, "status": 1},
+        ):
+            depends_on.append(p["id"])
+            if p.get("status") not in ("done", "cancelled"):
+                blocked_by_work = True
     progress = max(0, min(100, inp.progress)) if isinstance(inp.progress, int) else 0
     needs_approval = bool(inp.approval_required)
     if needs_approval and not approver_id:
@@ -547,7 +619,9 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
         "id": tid, "tenant_id": user["tenant_id"], "title": inp.title, "description": inp.description or "",
         "assignee_role": role, "assignee_id": assignee_id, "priority": inp.priority or "medium",
         "co_assignee_ids": co_ids, "auto_assigned": auto_assigned,
-        "status": "blocked" if lock_now else "todo", "due_date": due, "decision_id": None,
+        "status": "blocked" if (lock_now or blocked_by_work) else "todo",
+        "depends_on": depends_on,
+        "due_date": due, "decision_id": None,
         "source": "manual", "created_at": now_iso(),
         "task_type": task_type, "op_category": inp.op_category or None,
         "expected_output": inp.expected_output or None, "approval_required": needs_approval,
@@ -562,6 +636,9 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
         # WE-01: workflow linkage (both None for ad-hoc tasks).
         "workflow_id": link_wf,
         "stage_key": link_stage,
+        # D1: the cadence, and the series this occurrence belongs to.
+        "recurrence": recurrence,
+        "series_id": (recurrence or {}).get("series_id"),
         "updated_at": now_iso(), "last_action": "Created",
     })
     if inp.reference_file_ids:
@@ -597,6 +674,22 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             status_code=400,
             detail=f"Invalid status '{updates['status']}'. Use one of: {sorted(TASK_STATUSES)}",
         )
+    # B2 (2026-09-21): rescheduling. Handled apart from the generic `updates`
+    # dict because a due date arrives as two fields and is stored as one, and
+    # because "" has to mean "no date any more" — the dict above drops None
+    # (unchanged), so an explicit empty string is how a date is cleared.
+    _sent = inp.model_dump(exclude_unset=True)
+    _moving_due = _sent.get("due_date") is not None or _sent.get("due_time") is not None
+    updates.pop("due_time", None)
+    if _moving_due:
+        try:
+            updates["due_date"] = _reschedule(_sent, t.get("due_date"))
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    # D1 — stopping a routine. It ends the SERIES, not the piece of work in
+    # hand: this task stays open and closing it simply brings nothing after it.
+    if updates.pop("stop_repeating", None):
+        updates["recurrence"] = None
     # ASK-28 item 7 (plan 6.7): changing a task is held to the people who run it
     # (services/tasks.task_edit_rights) — before, any member of the company could.
     if user.get("role") != "owner":
@@ -788,6 +881,13 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
                 and not signoff_requested and "waiting_on" not in updates):
             word = _STATUS_WORDS.get(updates["status"], updates["status"])
             await _log_task_event(user, task_id, "task_status", f"'{t['title']}' status → {word}", f"Status → {word}")
+        if _moving_due and updates.get("due_date") != t.get("due_date"):
+            # A moved deadline is a fact about the work, not a silent edit: the
+            # people on the task read this line and know it changed and by whom.
+            was, now_ = _due_words(t.get("due_date")), _due_words(updates.get("due_date"))
+            await _log_task_event(
+                user, task_id, "task_due", f"'{t['title']}' due {now_}",
+                f"Due date moved from {was} to {now_}" if t.get("due_date") else f"Due {now_}")
         if "progress" in updates and "status" not in updates and updates["progress"] != t.get("progress"):
             await _log_task_event(user, task_id, "task_progress", f"'{t['title']}' progress {updates['progress']}%",
                                   f"Progress set to {updates['progress']}%")
@@ -800,6 +900,110 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             who_name = (member or {}).get("name", "a member")
             await _log_task_event(user, task_id, "task_assigned", f"Assigned '{t['title']}' to {who_name}", f"Assigned to {who_name}")
     return await enrich_task(await db.tasks.find_one(tenant_filter(task_id, user["tenant_id"]), {"_id": 0}))  # FIX-001-C
+
+
+async def _release_dependents(user: dict, t: dict) -> list:
+    """Open every task that was waiting only on this one. Returns their ids.
+
+    A task can wait on several; it starts when the LAST of them is closed, so
+    each dependent is re-checked against all of its predecessors rather than
+    released the moment any one of them finishes. Nothing here touches a task
+    blocked for another reason — an approval that has not come, a decision not
+    yet taken — because clearing one block is not clearing the rest.
+    """
+    from services.notifications import push_notification
+    waiting = await db.tasks.find(
+        {"tenant_id": t["tenant_id"], "depends_on": t["id"], "status": "blocked"},
+        {"_id": 0, "id": 1, "title": 1, "depends_on": 1, "assignee_id": 1,
+         "co_assignee_ids": 1, "approval_required": 1, "approval_status": 1},
+    ).to_list(200)
+    freed = []
+    for w in waiting:
+        if w.get("approval_required") and w.get("approval_status") == "pending":
+            continue  # still locked by its approval, which is a different block
+        others = [i for i in (w.get("depends_on") or []) if i != t["id"]]
+        if others:
+            still_open = await db.tasks.count_documents(
+                {"tenant_id": t["tenant_id"], "id": {"$in": others},
+                 "status": {"$nin": ["done", "cancelled"]}})
+            if still_open:
+                continue
+        await db.tasks.update_one(
+            {"id": w["id"], "tenant_id": t["tenant_id"]},
+            {"$set": {"status": "todo", "updated_at": now_iso(),
+                      "last_action": f"Unblocked by '{t.get('title') or 'the task before it'}'"}})
+        people = [i for i in assignee_ids_of(w) if i != user["id"]]
+        if people:
+            await push_notification(
+                t["tenant_id"], people, 1,
+                f"You can start '{w['title']}' — '{t.get('title') or 'the task before it'}' is done",
+                "task", w["id"], ntype="assigned", title=w["title"], sender=user.get("name"))
+        await _log_task_event(user, w["id"], "task_status",
+                              f"'{w['title']}' can start",
+                              f"Unblocked — '{t.get('title') or 'the task before it'}' is done")
+        freed.append(w["id"])
+    return freed
+
+
+# Carried from one occurrence of a routine to the next: what the work IS and
+# who does it. Deliberately NOT carried: anything about this particular run of
+# it — its progress, its notes, its evidence, its approval, and any workflow
+# stage it happened to be spawned onto (that card has moved on).
+_RECUR_CARRY = (
+    "title", "description", "assignee_id", "assignee_role", "co_assignee_ids",
+    "priority", "task_type", "op_category", "expected_output",
+    "evidence_required", "approval_required", "approval_stage", "approver_id",
+    "contact_id", "contact_name", "amount",
+)
+
+
+async def _spawn_next_occurrence(user: dict, t: dict) -> Optional[str]:
+    """Create the next task in a routine, if this one belongs to a live series.
+
+    Returns the new task's id, or None when there is nothing to schedule.
+    """
+    from services import recurrence as recurrence_svc
+    rec = t.get("recurrence") or None
+    if not rec or not rec.get("every"):
+        return None
+    nxt = recurrence_svc.next_due(t.get("due_date") or "", rec["every"], int(rec.get("interval") or 1))
+    if recurrence_svc.series_is_over(rec, nxt):
+        return None
+    series = rec.get("series_id") or t.get("series_id") or t["id"]
+    # A double close (two people, or a retry) must not double the routine.
+    live = await db.tasks.find_one(
+        {"tenant_id": t["tenant_id"], "series_id": series,
+         "status": {"$nin": ["done", "cancelled"]}},
+        {"_id": 0, "id": 1})
+    if live:
+        return None
+    nid = new_id()
+    row = {k: t.get(k) for k in _RECUR_CARRY}
+    lock_now = bool(row.get("approval_required")) and row.get("approval_stage") != "close"
+    row.update({
+        "id": nid, "tenant_id": t["tenant_id"],
+        "status": "blocked" if lock_now else "todo",
+        "approval_status": "pending" if lock_now else None,
+        "progress": 0, "due_date": nxt, "decision_id": None,
+        "workflow_id": None, "stage_key": None,
+        "source": "recurring", "recurrence": {**rec, "series_id": series},
+        "series_id": series, "created_by": t.get("created_by") or user["id"],
+        "created_at": now_iso(), "updated_at": now_iso(),
+        "last_action": "Next time round",
+    })
+    await db.tasks.insert_one(row)
+    if not lock_now:
+        from services.notifications import push_notification
+        people = [i for i in assignee_ids_of(row) if i != user["id"]]
+        if people:
+            await push_notification(
+                t["tenant_id"], people, 1,
+                f"Due again: '{row['title']}' on {str(nxt)[:10]}", "task", nid,
+                ntype="assigned", title=row["title"], sender=user.get("name"))
+    await _log_task_event(user, nid, "task_created",
+                          f"Next time round: '{row['title']}'",
+                          f"Repeats — due {str(nxt)[:10]}")
+    return nid
 
 
 async def _after_task_done(user: dict, t: dict, task_id: str) -> None:
@@ -835,6 +1039,20 @@ async def _after_task_done(user: dict, t: dict, task_id: str) -> None:
             # Fail-open: never let engine issue break the task close.
             from core import logger as _lg
             _lg.warning(f"[WE-06.5] task-close engine hook skipped for {task_id}: {e}")
+    # D3 (2026-09-21) — work that was waiting on this task can start now.
+    try:
+        await _release_dependents(user, t)
+    except Exception as e:  # noqa: BLE001 — never block a close over this
+        from core import logger as _lg
+        _lg.warning(f"[D3] could not release the tasks waiting on {task_id}: {e}")
+    # D1 (2026-09-21) — the next occurrence of a routine, created by the act of
+    # finishing this one. See services/recurrence for why it is on close and
+    # not on a timer.
+    try:
+        await _spawn_next_occurrence(user, t)
+    except Exception as e:  # noqa: BLE001 — a routine never blocks a close
+        from core import logger as _lg
+        _lg.warning(f"[D1] could not schedule the next occurrence of {task_id}: {e}")
     # FIX-007-B (S4-02): thread decision_id through so the
     # decision → task → outcome chain is reconstructable.
     await brain_context.record_context(

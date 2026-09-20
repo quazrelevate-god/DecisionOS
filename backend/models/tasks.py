@@ -53,6 +53,19 @@ class TaskCreateInput(BaseModel):
     # without workflow_id is rejected as semantically invalid.
     workflow_id: Optional[str] = None
     stage_key: Optional[str] = None
+    # D1 (2026-09-21): work that comes back. There was no notion of a repeating
+    # task anywhere in the product — every GST filing, salary run and stock
+    # count was typed again from scratch. "day" | "week" | "month", every
+    # `repeat_interval` of them, optionally stopping on `repeat_until`. A
+    # repeating task needs a due date: the date is what the repeat moves.
+    repeat_every: Optional[str] = None
+    repeat_interval: Optional[int] = None
+    repeat_until: Optional[str] = None
+    # D3 (2026-09-21): work that cannot start until other work is finished.
+    # "Pack the order" after "Check stock". There was no way to say this, so
+    # either the second task sat in someone's list looking ignorable, or it was
+    # not created until somebody remembered to create it.
+    depends_on: Optional[List[str]] = None
 
 
 class TaskUpdateInput(BaseModel):
@@ -67,6 +80,19 @@ class TaskUpdateInput(BaseModel):
     # ASK-28 TK-07: "Waiting on" — {"user_id": ...} (a colleague) or
     # {"name": "Kumar Fabrics"} (free text); {} stops waiting.
     waiting_on: Optional[dict] = None
+    # B2 (2026-09-21): rescheduling. There was NO due-date field here and no
+    # other route that set one, so a date, once given, was permanent — the
+    # only way to move a deadline was to delete the task and type it again,
+    # losing its checklist, its notes and its whole timeline with it. That is
+    # the single most common act in running a company's work.
+    #   "2026-10-02"  set or move the date        ""   drop the date entirely
+    #   due_time "HH:MM" sets the hour; ""  clears it, keeping the day.
+    # null (the default) means "not sent" — unchanged, as for every field here.
+    due_date: Optional[str] = None
+    due_time: Optional[str] = None
+    # D1: stop a routine without cancelling the piece of work in hand. Closing
+    # this task then brings nothing after it.
+    stop_repeating: Optional[bool] = None
 
 
 class TaskReassignInput(BaseModel):

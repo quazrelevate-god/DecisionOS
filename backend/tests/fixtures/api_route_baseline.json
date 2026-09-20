@@ -1,6 +1,6 @@
 {
-  "count": 337,
-  "sha": "22949c0a4ac28ee0940cf1538a77e93df17266d508c528b80776cb39ea632a6b",
+  "count": 340,
+  "sha": "51eee59614bf4a4d1abb8f5a5b201e086a469a28166fbe3835acb8096b959ddf",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -150,6 +150,7 @@
     "GET /api/work-coach",
     "GET /api/workflows",
     "GET /api/workflows/counts",
+    "GET /api/workflows/{workflow_id}",
     "GET /docs",
     "GET /docs/oauth2-redirect",
     "GET /health",
@@ -192,6 +193,7 @@
     "PATCH /api/tenant/roles/{key}/permissions",
     "PATCH /api/tenant/settings",
     "PATCH /api/users/{user_id}",
+    "PATCH /api/workflows/{workflow_id}",
     "PATCH /api/workflows/{workflow_id}/advance",
     "POST /api/admin/2fa/confirm",
     "POST /api/admin/2fa/disable",
@@ -340,6 +342,7 @@
     "POST /api/webhooks/whatsapp",
     "POST /api/work-coach/refresh",
     "POST /api/workflows",
+    "POST /api/workflows/{workflow_id}/approve-stage",
     "PUT /api/admin/ai-keys",
     "PUT /api/admin/tenants/{tenant_id}/retention",
     "PUT /api/tenant/ai-keys",

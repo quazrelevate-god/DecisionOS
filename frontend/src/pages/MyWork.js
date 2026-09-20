@@ -31,6 +31,7 @@ import {
   CheckCircle, Camera, Microphone, Stop, ChatCircleText,
   Sparkle, Plus, Trash, PencilSimple, ListChecks, CaretDown, CaretUp,
   ArrowBendUpRight, WarningCircle, ChatText, ArrowRight, Kanban,
+  ArrowsClockwise,   // D1 — a task that comes back
   Paperclip, UserCircle, ShieldCheck, Tag, ClockCounterClockwise,
   ArrowClockwise, XCircle, LockKey, X, MagnifyingGlassPlus,
   // Aliased: imported bare, the icon `File` shadowed the browser's File
@@ -139,6 +140,14 @@ const STATUS_LABEL = {
 };
 const STAGE_OF = { todo: "todo", blocked: "todo", in_progress: "in_progress", waiting: "in_progress", review: "in_progress", done: "done", cancelled: "cancelled" };
 const stageOf = (status) => STAGE_OF[status] || "todo";
+/* D1 — how a cadence reads on screen. Mirrors services/recurrence.describe so
+   the app and the server say the same words about the same routine. */
+function repeatLabel(rec) {
+  if (!rec || !rec.every) return "";
+  const n = parseInt(rec.interval, 10) || 1;
+  return n === 1 ? `Every ${rec.every}` : `Every ${n} ${rec.every}s`;
+}
+
 // Whole days a task has been waiting (0 on the day it started), or null.
 const waitDays = (t) => {
   const since = t.waiting_on?.since ? new Date(t.waiting_on.since).getTime() : NaN;
@@ -300,6 +309,8 @@ const TIMELINE_KIND = {
   task_created:    { icon: Plus, dot: "bg-neutral-400", tone: "text-neutral-500" },
   task_status:     { icon: Clock, dot: "bg-neutral-900", tone: "text-neutral-900" },
   task_progress:   { icon: ChartBar, dot: "bg-neutral-500", tone: "text-neutral-600" },
+  // B2 — a moved deadline reads on the timeline like any other change.
+  task_due:        { icon: CalendarBlank, dot: "bg-neutral-600", tone: "text-neutral-700" },
   task_people:     { icon: UserPlus, dot: "bg-neutral-600", tone: "text-neutral-700" },
   task_assigned:   { icon: UserPlus, dot: "bg-neutral-600", tone: "text-neutral-700" },
   task_note:       { icon: ChatText, dot: "bg-neutral-400", tone: "text-neutral-600" },
@@ -1275,6 +1286,127 @@ function StatusRing({ status, tone }) {
   );
 }
 
+/* B2 (2026-09-21) — MOVING A DUE DATE.
+ *
+ * Yokesh's audit turned this up as the plainest gap in the whole task system:
+ * TaskUpdateInput had no due_date, and no other route set one, so a date given
+ * at creation was permanent. To change one you deleted the task and typed it
+ * again — losing its checklist, its notes, its proof and its timeline. It is
+ * the most ordinary act in running a company's work, and it was impossible.
+ *
+ * The date reads as text until someone who may move it clicks it, which is the
+ * right weight for this: the common case is reading the date, not editing it.
+ * The rule matches the server's — whoever asked for the work, their manager or
+ * the owner — because a due date is a promise made to somebody else.
+ */
+function DueLine({ t: task, canMove, onSaved, className = "", testid }) {
+  const [editing, setEditing] = useState(false);
+  const [day, setDay] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const open = () => {
+    setDay(String(task.due_date || "").slice(0, 10));
+    setEditing(true);
+  };
+
+  const save = async (value) => {
+    setBusy(true);
+    try {
+      await api.patch(`/tasks/${task.id}`, { due_date: value });
+      toast.success(value ? `Due ${dueLabel(value)}` : "Due date removed");
+      setEditing(false);
+      onSaved?.();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not move the due date.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <span className={`flex flex-wrap items-center gap-2 ${className}`} data-testid={`task-due-edit-${task.id}`}>
+        <input type="date" value={day} autoFocus disabled={busy}
+          onChange={(e) => setDay(e.target.value)}
+          aria-label="Due date"
+          data-testid={`task-due-input-${task.id}`}
+          className="rounded-xl bg-white/85 px-3 py-1.5 text-[13px] text-slate-800 ring-1 ring-inset ring-slate-900/[0.08]" />
+        <button type="button" onClick={() => save(day)} disabled={busy || !day}
+          data-testid={`task-due-save-${task.id}`}
+          className={`min-h-8 rounded-pill px-3.5 text-[12.5px] font-semibold disabled:opacity-50 ${INK_PILL}`}>
+          Save
+        </button>
+        {task.due_date && (
+          <button type="button" onClick={() => save("")} disabled={busy}
+            data-testid={`task-due-clear-${task.id}`}
+            className="min-h-8 rounded-pill px-3 text-[12.5px] font-medium text-slate-500 hover:text-slate-800">
+            Remove
+          </button>
+        )}
+        <button type="button" onClick={() => setEditing(false)} disabled={busy}
+          className="min-h-8 rounded-pill px-2 text-[12.5px] font-medium text-slate-500 hover:text-slate-800">
+          Cancel
+        </button>
+      </span>
+    );
+  }
+
+  if (!task.due_date) {
+    if (!canMove) return null;
+    return (
+      <button type="button" onClick={open} data-testid={testid || `task-due-set-${task.id}`}
+        className={`inline-flex items-center gap-1 text-[13px] text-slate-500 underline-offset-2 hover:underline ${className}`}>
+        <CalendarBlank size={13} weight="bold" aria-hidden="true" /> Set a due date
+      </button>
+    );
+  }
+
+  const label = <><CalendarBlank size={13} weight="bold" aria-hidden="true" /> Due {dueLabel(task.due_date)}</>;
+  if (!canMove) {
+    return <span className={`inline-flex items-center gap-1 ${className}`} data-testid={testid}>{label}</span>;
+  }
+  return (
+    <button type="button" onClick={open} data-testid={testid || `task-due-open-${task.id}`}
+      title="Move the due date"
+      className={`inline-flex items-center gap-1 underline-offset-2 hover:underline ${className}`}>
+      {label}
+    </button>
+  );
+}
+
+/* D1 — a routine, and the way to end one. Stopping a routine is NOT cancelling
+   the piece of work in hand: this task stays open and doing it simply brings
+   nothing after it, which is what "we don't do this any more" actually means
+   when you are halfway through the last one. */
+function RepeatLine({ t: task, canStop, onSaved, className = "" }) {
+  const [busy, setBusy] = useState(false);
+  if (!task.recurrence?.every) return null;
+  const stop = async () => {
+    setBusy(true);
+    try {
+      await api.patch(`/tasks/${task.id}`, { stop_repeating: true });
+      toast.success("This won't come back after it's done");
+      onSaved?.();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not stop the repeat.");
+    } finally { setBusy(false); }
+  };
+  return (
+    <span className={`inline-flex items-center gap-1.5 ${className}`} data-testid={`task-repeat-line-${task.id}`}>
+      <ArrowsClockwise size={13} weight="bold" aria-hidden="true" />
+      {repeatLabel(task.recurrence)}
+      {task.recurrence.until && <span className="opacity-70">until {String(task.recurrence.until).slice(0, 10)}</span>}
+      {canStop && (
+        <button type="button" onClick={stop} disabled={busy}
+          data-testid={`task-repeat-stop-${task.id}`}
+          className="underline underline-offset-2 hover:text-slate-800 disabled:opacity-50">
+          Stop repeating
+        </button>
+      )}
+    </span>
+  );
+}
+
 /* ASK-26 — everyone on a task: the lead (assignee_id) first, then the people
    added alongside them (co_assignee_ids). A role queue with nobody named yet
    keeps the team glyph. Names come from /users so a photo set on Team shows
@@ -1612,6 +1744,8 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
      decision (new decisions create their tasks only when approved). Nobody
      starts it before then; the server refuses too. */
   const waitingDecision = t.status === "blocked" && !!t.decision_id && !t.approval_required;
+  // D3 — the third reason a task is blocked: work that has to happen first.
+  const waitsForWork = t.status === "blocked" && (t.depends_on || []).length > 0 && !awaitingApproval;
   const workLocked = awaitingApproval || waitingDecision;
   const overdue = isOverdue(t);
   const terminal = isTerminal(t);
@@ -2068,11 +2202,10 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                 has its own info card for it). ASK-29: the "Status → waiting
                 2 min ago" line that used to share this row is gone — every
                 change is on the Activity timeline at the bottom instead. */}
-            {t.due_date && (
-              <p className="mt-1.5 hidden items-center gap-1 text-[13px] text-slate-500 lg:flex" data-testid={`task-meta-${t.id}`}>
-                <CalendarBlank size={13} weight="bold" aria-hidden="true" /> Due {dueLabel(t.due_date)}
-              </p>
-            )}
+            <p className="mt-1.5 hidden flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-slate-500 lg:flex" data-testid={`task-meta-${t.id}`}>
+              <DueLine t={t} canMove={rights.priority} onSaved={onChange} />
+              <RepeatLine t={t} canStop={rights.priority} onSaved={onChange} />
+            </p>
           </div>
           <SheetClose
             ref={closeRef}
@@ -2123,7 +2256,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
           top border when the top row is present. Prevents the hollow
           curve above a lone "Created X ago" line. */}
       {(t.workflow_summary?.title || t.due_date || t.created_at) && (() => {
-        const hasTop = !!(t.workflow_summary?.title || t.due_date);
+        const hasTop = !!(t.workflow_summary?.title || t.due_date || rights.priority);
         return (
           <div className={`p-3 ${DRAWER_CARD}`}>
             {hasTop && (
@@ -2136,19 +2269,25 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                     <span className="min-w-0 truncate text-sm">{t.workflow_summary.title}</span>
                   </>
                 )}
-                {t.workflow_summary?.title && t.due_date && (
+                {t.workflow_summary?.title && (t.due_date || rights.priority) && (
                   <span className="mx-1 h-5 w-px shrink-0 bg-slate-900/10" />
                 )}
-                {t.due_date && (
+                {(t.due_date || rights.priority) && (
                   <>
                     <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-green-50 text-green-600">
                       <ClockCounterClockwise size={14} weight="regular" />
                     </span>
-                    <span className="min-w-0 truncate text-sm">
-                      Due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}
+                    <span className="min-w-0 text-sm">
+                      <DueLine t={t} canMove={rights.priority} onSaved={onChange}
+                        testid={`task-due-m-${t.id}`} className="text-sm text-slate-700" />
                     </span>
                   </>
                 )}
+              </div>
+            )}
+            {t.recurrence?.every && (
+              <div className="mt-3 border-t border-slate-900/[0.06] pt-2 text-xs text-slate-600">
+                <RepeatLine t={t} canStop={rights.priority} onSaved={onChange} />
               </div>
             )}
             {t.created_at && (
@@ -2729,6 +2868,27 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                 <Clock size={12} weight="bold" aria-hidden="true" /> Overdue
               </span>
             )}
+            {/* B3 (2026-09-21) — BLOCKED WORK HAS TO LOOK BLOCKED.
+                The three stages on screen fold `blocked` into "To do"
+                (ASK-28 TK-07) and the drawer explains why — but on the card
+                FACE, in a list of twenty, work that CANNOT be started read
+                exactly like work nobody had bothered with, and a founder
+                scanning the list blamed the person instead of the block. The
+                approval pill below already speaks for the approval case; this
+                speaks for every other reason a task is held. */}
+            {t.status === "blocked" && !awaitingApproval && !terminal && (
+              <span data-testid={`blocked-pill-${t.id}`}
+                className={`${PILL} bg-slate-900/[0.07] text-slate-700 ring-slate-900/10`}
+                title={waitingDecision
+                  ? "This task starts when the decision it came from is approved"
+                  : waitsForWork
+                  ? "This task starts when the work before it is done"
+                  : "This task cannot be started yet"}>
+                <LockKey size={12} weight="bold" aria-hidden="true" />
+                {waitingDecision ? "Waiting for a decision"
+                  : waitsForWork ? "Waits for earlier work" : "Blocked"}
+              </span>
+            )}
             {/* ASK-28 TK-07 — the Waiting on flag: who or what, and for how long. */}
             {t.status === "waiting" && !terminal && (
               <span data-testid={`waiting-pill-${t.id}`} className={`${PILL} bg-amber-50 text-amber-800 ring-amber-100`}
@@ -2748,6 +2908,15 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                 className={`${PILL} ${awaitingApproval || signoffPending ? "bg-amber-50 text-amber-800 ring-amber-100" : QUIET_PILL}`}>
                 <ShieldCheck size={12} weight="bold" aria-hidden="true" />
                 {apprStage === "start" ? "Approval to start" : signoffPending ? "Approval to close" : "Needs approval to close"}
+              </span>
+            )}
+            {/* D1 — a routine says so on its face, so "didn't I just do this?"
+                has an answer without opening anything. */}
+            {t.recurrence?.every && !terminal && (
+              <span data-testid={`repeat-pill-${t.id}`} className={`${PILL} ${QUIET_PILL}`}
+                title={`Repeats ${repeatLabel(t.recurrence).toLowerCase()}. The next one appears when this is done.`}>
+                <ArrowsClockwise size={12} weight="bold" aria-hidden="true" />
+                {repeatLabel(t.recurrence)}
               </span>
             )}
             {t.source === "escalation" && (

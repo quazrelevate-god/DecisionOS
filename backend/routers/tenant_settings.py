@@ -255,6 +255,12 @@ async def update_tenant_settings(inp: TenantSettingsInput, user: dict = Depends(
         if owner <= manager:
             raise HTTPException(status_code=400, detail="The owner should hear after the manager — give the owner more days")
         updates["followup_manager_days"], updates["followup_owner_days"] = int(manager), int(owner)
+    # D2 (2026-09-21): how much warning a task gives before it is due.
+    if inp.due_soon_days is not None:
+        if not (0 <= inp.due_soon_days <= 14):
+            raise HTTPException(status_code=400,
+                                detail="Use 0 to 14 days of warning before a task is due")
+        updates["due_soon_days"] = int(inp.due_soon_days)
     if inp.owner_alert_email is not None:
         updates["owner_alert_email"] = bool(inp.owner_alert_email)
     if not updates:

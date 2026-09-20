@@ -33,14 +33,15 @@ LEXICON = register(Prompt(
 
 OPERATING_MODEL = register(Prompt(
     name="generators.operating_model",
-    version="1.0",
-    intent="Design the tenant's operating model: workflow pipelines (with role-owned stages) + task categories.",
+    version="1.1",
+    intent="Design the tenant's operating model: workflow pipelines (role-owned stages, each with the work that stage needs) + task categories.",
     template=(
         "You design the OPERATING MODEL for a business inside DecisionOS. The model has two parts and MUST fit "
         "the specific industry — a salon has NO 'production' or 'dispatch'; it has a service/appointment flow. "
         "Return ONLY valid JSON, no prose, EXACTLY this shape: "
         '{"pipelines": [{"key": lowercase_snake_case, "label": str, "sub": short \'A → B\' subtitle, '
-        '"stages": [{"key": lowercase_snake_case, "label": str, "role": role_slug_or_empty}], '
+        '"stages": [{"key": lowercase_snake_case, "label": str, "role": role_slug_or_empty, '
+        '"tasks": [{"title": str, "role": role_slug_or_empty}]}], '
         '"approval_stage": key of the stage that needs owner sign-off or null}], '
         '"task_categories": [{"key": lowercase_snake_case, "label": str}]}. '
         "PIPELINES = the core multi-step operational flows this business tracks on a kanban board, from start to finish. "
@@ -55,6 +56,19 @@ OPERATING_MODEL = register(Prompt(
         "procurement.approved → 'owner', procurement.paid → 'finance'; sales.order_received → 'sales', "
         "sales.confirmed → 'finance' (they raise the invoice), sales.ready → 'operations'. Set role='' only if truly "
         "no single department owns the stage. "
+        # 2026-09-21: stages have always been ABLE to carry the work they need
+        # (WE-03 normalizes tasks[] per stage, and the engine spawns them the
+        # moment a card lands on a stage) — and this prompt never asked for
+        # them, so every tenant's stages came back empty and the whole
+        # mechanism sat dead. A card arriving at "In production" with nobody
+        # told to do anything is why boards stall.
+        'STAGE TASKS: for each stage give 1-3 "tasks" — the concrete pieces of work somebody must actually DO while '
+        "work sits at that stage, in this industry's own words, as an instruction ('Confirm the order with the "
+        "customer', 'Check stock and reserve it', 'Photograph the finished goods', 'Collect the signed delivery "
+        "note'). These are created automatically and assigned the moment a card reaches the stage, so they must be "
+        "real, repeatable work — not restatements of the stage name ('Do the cooking' for a Cooking stage is "
+        "useless). Set each task's \"role\" to the department that does it, usually the stage's own role. A final "
+        "stage that is purely a resting state (Delivered, Completed, Paid) may have an empty tasks list. "
         "TASK_CATEGORIES = 4-7 department buckets that a task in this business belongs to (e.g. salon → Front Desk, Service, "
         "Inventory, Finance, HR; coaching → Admissions, Academic, Operations, Finance, HR). Always keep the categories relevant to the industry. "
         "Keep every label 1-3 words, Title Case. Use the industry's real terminology; never force manufacturing terms onto a service business."

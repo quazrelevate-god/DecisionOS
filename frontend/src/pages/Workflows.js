@@ -32,7 +32,7 @@
 // Every other column goes inert — no preventDefault, so the cursor shows
 // "no drop" and the browser refuses the gesture itself. A rule the UI
 // enforces beats the same rule delivered as a red toast after the fact.
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -70,6 +70,14 @@ import {
   DRAWER_FIELD, GLASS_MENU, GLASS_MENU_ITEM, INK_PILL,
 } from "../components/karma/glass";
 import { GlassSelect } from "../components/karma/GlassSelect";
+import WorkflowDetail from "../components/workflow/WorkflowDetail";
+/* C2 (2026-09-21) — stuck / late / needs-you, computed in ONE place. These
+   rules were written for the Desk's Workflows tile (ASK-52) and the file says
+   in its own header that the board should read the same numbers "so the two do
+   not drift" — and then the board never imported it. So the Desk could tell a
+   founder that four cards needed attention while the board those cards live on
+   showed them as ordinary cards in ordinary columns. */
+import { workflowAttention } from "./desk/workflowAttention";
 
 function _initials(name) {
   if (!name) return "?";
@@ -407,6 +415,7 @@ export default function Workflows() {
   const labelOf = (k) => stageLabelMap[k] || humanStage(k);
   const tabLabel = pipeline?.label || "";
 
+  const [openId, setOpenId] = useState(null);             // C1 — the card open in the drawer
   const [overrideCtx, setOverrideCtx] = useState(null);   // {wf, blockedReason, targetStage}
   // Drag state. `dragId` is what is in flight; `overStage` is the column
   // under the pointer, used only to paint the drop target.
@@ -425,6 +434,7 @@ export default function Workflows() {
   const [deleting, setDeleting] = useState(false);
 
   const refresh = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ["workflow"] });   // C1 — the open card too
     qc.invalidateQueries({ queryKey: ["workflows", activeKey, "with_tasks"] });
     qc.invalidateQueries({ queryKey: ["workflows-counts"] });
     qc.invalidateQueries({ queryKey: ["dashboard"] });
@@ -434,8 +444,15 @@ export default function Workflows() {
   const _postAdvance = async (wf, targetStage, opts = {}) => {
     const body = { stage: targetStage, note: t("workflows.moved_to", { stage: labelOf(targetStage) }) };
     if (opts.override) { body.override = true; body.reason = opts.reason; }
-    await api.patch(`/workflows/${wf.id}/advance`, body);
-    toast.success(`→ ${labelOf(targetStage)}`);
+    const { data } = await api.patch(`/workflows/${wf.id}/advance`, body);
+    /* A5 (2026-09-21) — the engine has always detected the second of two
+       people pressing at once (the compare-and-swap on stage_version), and the
+       route used to drop that flag, so the person who LOST the race got the
+       same green "→ Dispatched" as the one who won it. On a board two people
+       share that is not a cosmetic difference: it is the card telling you that
+       you moved something you did not. */
+    if (data?.already_advanced) toast.info(`Someone else moved this to ${labelOf(data.stage)} first`);
+    else toast.success(`→ ${labelOf(targetStage)}`);
     refresh();
   };
 
@@ -480,6 +497,15 @@ export default function Workflows() {
   // ASK-2 fix: `del` no longer calls window.confirm (silently no-ops in
   // some browser + embed contexts). It just queues the workflow for the
   // AlertDialog; the actual delete runs from `confirmDelete` below.
+  /* C1 — opening a card. `dragId` guards the click that a browser fires at
+     the end of a drag gesture: without it, dropping a card onto the next
+     column also opened its drawer. */
+  const openCard = (wf, e) => {
+    if (e?.target?.closest?.("button, a")) return;
+    if (dragId) return;
+    setOpenId(wf.id);
+  };
+
   const del = (wf) => setPendingDelete(wf);
   const confirmDelete = async () => {
     if (!pendingDelete) return;
@@ -506,6 +532,19 @@ export default function Workflows() {
   };
 
   const total = (data || []).length;
+  const openCardRow = (data || []).find((w) => w.id === openId) || null;
+
+  /* C2 — the same read the Desk does, over the cards already on screen. */
+  const attention = useMemo(() => workflowAttention({
+    workflows: data || [],
+    userId: user?.id,
+    isOwner: user?.role === "owner",
+    pipelines,
+  }), [data, user, pipelines]);
+  const readOf = useMemo(
+    () => new Map((attention.cards || []).map((c) => [c.w.id, c])),
+    [attention],
+  );
 
   return (
     /* ASK-25 — THE COLUMNS SCROLL, NOT THE PAGE. From lg the page is a flex
@@ -584,6 +623,40 @@ export default function Workflows() {
       {/* KR-14.21 · MOBILE — the drag hint is hidden on the phone (there is
           no drag target when each stage is a collapsed card and a horizontal
           scroller). It still renders from lg up. */}
+      {/* C4 (2026-09-21) — WHAT IS GOING ON, ABOVE THE BOARD. A founder
+          opening this page could count the cards and nothing else: whether any
+          of them had stalled, run late, or were waiting on them took reading
+          every column. The Desk has been able to answer this since ASK-52;
+          the board it describes could not. Rendered at every width — the phone
+          needs it most, where only one stage is on screen at a time. */}
+      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground"
+        data-testid="workflow-summary">
+        <span className="font-medium text-foreground" data-testid="workflow-summary-running">
+          {attention.total} running
+        </span>
+        {attention.needAttention > 0 ? (
+          <>
+            <span aria-hidden="true" className="h-1 w-1 rounded-full bg-muted-foreground/50" />
+            <span data-testid="workflow-summary-attention" className="font-medium text-kr-accent">
+              {attention.needAttention} need{attention.needAttention === 1 ? "s" : ""} attention
+            </span>
+            {attention.you > 0 && <span data-testid="workflow-summary-you">· {attention.you} on you</span>}
+            {attention.stuck > 0 && <span data-testid="workflow-summary-stuck">· {attention.stuck} stuck</span>}
+            {attention.late > 0 && <span data-testid="workflow-summary-late">· {attention.late} late</span>}
+          </>
+        ) : attention.total > 0 && (
+          <>
+            <span aria-hidden="true" className="h-1 w-1 rounded-full bg-muted-foreground/50" />
+            <span data-testid="workflow-summary-clear">nothing is waiting</span>
+          </>
+        )}
+        {attention.advancedToday > 0 && (
+          <>
+            <span aria-hidden="true" className="h-1 w-1 rounded-full bg-muted-foreground/50" />
+            <span data-testid="workflow-summary-today">{attention.advancedToday} moved today</span>
+          </>
+        )}
+      </div>
       <p className="mb-3 hidden items-center gap-1.5 text-xs text-muted-foreground lg:flex">
         <DotsSixVertical size={13} weight="bold" aria-hidden="true" />
         Drag a card into its next stage, or use its button. {total} in this pipeline.
@@ -712,6 +785,7 @@ export default function Workflows() {
                     const updAt = lastEv?.at || w.created_at;
                     const updLabel = lastEv?.note || t("workflows.created_label");
                     const stageTasks = w.stage_tasks || [];
+                    const read = readOf.get(w.id);   // C2 — why this card is asking
                     const nextKey = !isLast ? w.stages[w.stages.indexOf(w.stage) + 1] : null;
                     const dragging = dragId === w.id;
                     return (
@@ -726,6 +800,7 @@ export default function Workflows() {
                           setDragId(w.id);
                         }}
                         onDragEnd={() => { setDragId(null); setOverStage(null); }}
+                        onClick={(e) => openCard(w, e)}
                         /* KM-31 — the card was a fixed w-64 in a horizontal
                            scroller, so inside a 343px stage it sat flush left
                            with a band of empty stage showing down its right
@@ -743,7 +818,15 @@ export default function Workflows() {
                         <div className="flex items-start gap-2">
                           <DotsSixVertical size={15} weight="bold" aria-hidden="true"
                             className="mt-0.5 hidden shrink-0 text-muted-foreground opacity-40 transition-opacity group-hover:opacity-80 lg:block" />
-                          <p className="min-w-0 flex-1 text-sm font-semibold leading-snug line-clamp-2 text-left">{w.title}</p>
+                          {/* The title is the way IN, and it is a button so a
+                              keyboard reaches the card too — the body click
+                              below is only a convenience for a mouse. */}
+                          <button type="button" onClick={() => setOpenId(w.id)}
+                            data-testid={`open-workflow-${w.id}`}
+                            aria-label={`Open ${w.title}`}
+                            className="min-w-0 flex-1 text-left text-sm font-semibold leading-snug line-clamp-2 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:underline">
+                            {w.title}
+                          </button>
                           {user?.role === "owner" && (
                             <button onClick={() => del(w)} data-testid={`delete-workflow-${w.id}`} title={t("workflows.delete_card")}
                               /* MW-13 fix: label names the card it deletes.
@@ -760,6 +843,28 @@ export default function Workflows() {
                           )}
                         </div>
 
+                        {/* C2 — the one reason that matters most, in the
+                            board's own words. The worse reason wins (late,
+                            then stuck, then you), which is the same rule the
+                            Desk counts by, so the strip above and the badges
+                            here can never disagree. */}
+                        {read?.reason && (
+                          <div className="mt-1.5 lg:pl-[23px]">
+                            <span data-testid={`wf-attention-${w.id}`} data-reason={read.reason}
+                              className={`inline-flex items-center gap-1 rounded-pill px-2 py-[3px] text-[10.5px] font-semibold leading-none ring-1 ring-inset ${
+                                read.reason === "late" ? "bg-red-50 text-red-700 ring-red-100"
+                                : read.reason === "stuck" ? "bg-amber-50 text-amber-800 ring-amber-100"
+                                : "bg-slate-900 text-white ring-slate-900"
+                              }`}>
+                              <WarningCircle size={10} weight="bold" aria-hidden="true" />
+                              {read.reason === "late"
+                                ? `${read.overdueBy} ${read.overdueBy === 1 ? "day" : "days"} late`
+                                : read.reason === "stuck" ? `Stuck ${read.idleDays}d`
+                                : read.needsSignOff && !read.mine ? "Needs your sign-off" : "Needs you"}
+                            </span>
+                          </div>
+                        )}
+
                         {(w.counterparty || w.amount != null) && (
                           <div className="mt-1.5 flex items-baseline justify-between gap-2 lg:pl-[23px]">
                             {w.counterparty && <span className="truncate text-xs text-muted-foreground">{w.counterparty}</span>}
@@ -773,6 +878,17 @@ export default function Workflows() {
                             className="mt-1 block truncate text-[11px] text-muted-foreground underline-offset-2 hover:underline lg:pl-[23px]">
                             From decision: {w.decision_title}
                           </a>
+                        )}
+
+                        {/* C3 — how far through THIS stage the card is. The
+                            board used to say only where a card sat, so "In
+                            production" read identically on the day it arrived
+                            and on the day it was one task from leaving. */}
+                        {w.stage_total > 0 && (
+                          <p className="mt-2 font-mono text-[10.5px] tabular-nums text-muted-foreground lg:pl-[23px]"
+                            data-testid={`wf-card-stage-progress-${w.id}`}>
+                            {w.stage_done} of {w.stage_total} done at this stage
+                          </p>
                         )}
 
                         {stageTasks.length > 0 ? (
@@ -838,6 +954,17 @@ export default function Workflows() {
           })}
         </div>
       </div>
+
+      {/* C1 — the card, opened. Everything a person could not do to a workflow
+          (add a task to a stage, give a stage's approval, correct the card)
+          lives in here, because each one is a thing you do to a stage. */}
+      <WorkflowDetail
+        workflowId={openId}
+        open={!!openId}
+        onOpenChange={(v) => { if (!v) setOpenId(null); }}
+        onChanged={refresh}
+        onAdvance={(card, stageKey) => moveTo(openCardRow || card, stageKey)}
+      />
 
       <OverrideReasonDialog
         open={!!overrideCtx}

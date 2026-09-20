@@ -286,6 +286,30 @@ def followup_days(tenant: Optional[dict]) -> tuple:
     return manager, max(owner, manager + 1)
 
 
+# D2 (2026-09-21): how many days before a due date the people on a task hear
+# about it. Bills have had a three-day warning since Finance shipped; tasks had
+# NOTHING until the day they were already late, which is the wrong moment to
+# find out — by then the promise is broken, and the ladder that follows is
+# about chasing rather than delivering. Two working-ish days is the default a
+# 10-15 person company can act on; Settings > Overdue work tunes it.
+DUE_SOON_DEFAULT_DAYS = 2
+
+
+def due_soon_days(tenant: Optional[dict]) -> int:
+    """The company's warning lead time, clamped to something sane.
+
+    0 turns the warning off — some teams live task-to-task and a reminder for
+    everything due tomorrow is noise to them.
+    """
+    raw = (tenant or {}).get("due_soon_days")
+    if raw is None:
+        return DUE_SOON_DEFAULT_DAYS
+    try:
+        return max(0, min(14, int(raw)))
+    except (TypeError, ValueError):
+        return DUE_SOON_DEFAULT_DAYS
+
+
 def followup_level(days_overdue: int, manager_days: int = FOLLOWUP_MANAGER_DAYS,
                    owner_days: int = FOLLOWUP_OWNER_DAYS) -> int:
     if days_overdue < 1:
@@ -355,6 +379,24 @@ def task_edit_rights(user: dict, t: dict, team_ids, perms) -> dict:
     }
 
 
+def blocked_reason(t: dict) -> Optional[str]:
+    """Why a task cannot be started, in the words a person would use.
+
+    Used by the app to label a blocked task on its face. `blocked` has three
+    causes and they are not interchangeable: an approval that has not come, a
+    decision not yet taken, and (D3) work that has to happen first.
+    """
+    if (t or {}).get("status") != "blocked":
+        return None
+    if t.get("approval_required") and t.get("approval_status") == "pending":
+        return "approval"
+    if t.get("depends_on"):
+        return "depends"
+    if t.get("decision_id"):
+        return "decision"
+    return "blocked"
+
+
 def edit_refusal(t: dict, changes: dict, rights: dict) -> Optional[str]:
     """Why this person may not make these changes, or None. `changes` is the
     PATCH body as sent; a field sent with the value it already has changes
@@ -388,6 +430,12 @@ def edit_refusal(t: dict, changes: dict, rights: dict) -> Optional[str]:
                 "can change who is on this task.")
     if "priority" in changes and changes["priority"] != t.get("priority") and not rights["priority"]:
         return "Only the person who asked for it, the manager or the owner can change the priority."
+    # B2 (2026-09-21): a due date is a promise made to someone else, so moving
+    # it belongs to the same people as the priority — whoever asked for the
+    # work, their manager, or the owner. A doer who needs longer says so on the
+    # task ("waiting on", a note) rather than quietly moving the date.
+    if "due_date" in changes and changes["due_date"] != t.get("due_date") and not rights["priority"]:
+        return "Only the person who asked for it, the manager or the owner can move the due date."
     if "evidence_required" in changes and bool(changes["evidence_required"]) != bool(t.get("evidence_required")) \
             and not rights["proof"]:
         return "Only the person who asked for it or the owner can change whether proof is needed."

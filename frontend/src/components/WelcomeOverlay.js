@@ -48,9 +48,21 @@ export function WelcomeOverlay() {
 
   const mask = useMotionTemplate`radial-gradient(circle at ${ox}px ${oy}px, transparent ${r}px, #000 calc(${r}px + 1px))`;
 
+  /* 2026-09-20 (Yokesh) — NOT ON A DESKTOP. "Enter DecisionOS" already is the
+     founder pressing the door; landing them behind a second full-screen pane
+     that asks them to step inside AGAIN is one confirmation too many, and at
+     desktop width a centred max-w-xl column over a blurred page reads as a
+     phone screen dropped into the middle of a monitor — "it's showing the PWA
+     screen on desktop". A phone keeps it: there the column IS the screen, it
+     is the width this was drawn for, and the dock beneath needs covering.
+     The flag is cleared either way, so it cannot resurface later. */
   useEffect(() => {
     const v = localStorage.getItem("dos_welcome");
-    if (v) setName(v === "1" ? "" : v);
+    if (!v) return;
+    const onDesktop = typeof window !== "undefined"
+      && window.matchMedia?.("(min-width: 1024px)").matches;
+    if (onDesktop) { localStorage.removeItem("dos_welcome"); return; }
+    setName(v === "1" ? "" : v);
   }, []);
 
   const clear = useCallback(() => {

@@ -79,9 +79,14 @@ async def list_workflows(type: Optional[str] = None,
                 {"tenant_id": user["tenant_id"],
                  "status": {"$nin": ["done", "cancelled"]},
                  "$or": or_clauses},
+                # ASK-52: updated_at comes with them. A card is "stuck" when
+                # neither its stage nor its tasks have moved for N working days
+                # (the Desk's Workflows tile), and without this the client can
+                # only see the stage move — so a card being actively worked
+                # read as stuck.
                 {"_id": 0, "id": 1, "title": 1, "workflow_id": 1,
                  "stage_key": 1, "assignee_id": 1, "assignee_role": 1,
-                 "priority": 1, "status": 1, "due_date": 1},
+                 "priority": 1, "status": 1, "due_date": 1, "updated_at": 1},
             ).to_list(1000)
             # Hydrate assignee_name in one query.
             assignee_ids = {t["assignee_id"] for t in task_rows if t.get("assignee_id")}

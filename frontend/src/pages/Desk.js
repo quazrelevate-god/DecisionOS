@@ -1419,7 +1419,13 @@ export default function Desk() {
                   line={leaveNames(pendingLeaves)}
                   tail={pendingLeaves[0] ? leaveRange(pendingLeaves[0]) : ""}
                   empty="No leave requests waiting"
-                  to="/approvals?sub=leave"
+                  /* ASK-51 — MY WORK'S APPROVALS, NOT THE APPROVALS PAGE. The founder:
+                      this card opened /approvals?sub=leave, and the page they want
+                      is the one My Work's own approvals section opens. `sub=leave`
+                      stays on THIS url so a card that says "Leave requests" opens
+                      the Leave tab rather than an empty Tasks one; it is the same
+                      page either way. */
+                  to="/my-work?view=approvals&sub=leave"
                   testid="desk-leave-m"
                 />
               )}
@@ -1505,7 +1511,7 @@ export default function Desk() {
                 line={leaveNames(pendingLeaves)}
                 tail={pendingLeaves[0] ? leaveRange(pendingLeaves[0]) : ""}
                 empty="No leave requests waiting"
-                to="/approvals?sub=leave"
+                to="/my-work?view=approvals&sub=leave"
                 testid="desk-leave"
               />
             )}

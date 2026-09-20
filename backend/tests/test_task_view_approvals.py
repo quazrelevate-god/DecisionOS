@@ -95,6 +95,15 @@ def test_mine_flag_ignored_for_approvals():
     assert task_list_query(SALES, mine=True, view="approvals") == task_list_query(SALES, mine=False, view="approvals")
 
 
-def test_other_views_unchanged_by_can_approve_any():
-    assert task_list_query(SALES, mine=True, can_approve_any=True) == task_list_query(SALES, mine=True)
+def test_can_approve_any_only_widens_the_approvals_exclusion():
+    # The task lists now exclude whatever would sit in my Approvals, so
+    # can_approve_any changes the excluded set (a holder also signs off tasks
+    # named to nobody) — but never who the list is FOR.
+    base = task_list_query(SALES, mine=True)
+    holder = task_list_query(SALES, mine=True, can_approve_any=True)
+    assert holder["$or"] == base["$or"]  # membership unchanged
+    assert base["$nor"][0]["$and"][1] == {"approver_id": "u-sales"}
+    assert holder["$nor"][0]["$and"][1] == {
+        "$or": [{"approver_id": "u-sales"}, {"approver_id": None}, {"approver_id": ""}]}
+    # "Asked by me" never touches approvals, so it is untouched either way.
     assert task_list_query(SALES, view="asked", can_approve_any=True) == task_list_query(SALES, view="asked")

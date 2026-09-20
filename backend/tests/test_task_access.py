@@ -83,7 +83,10 @@ def test_see_all_widens_the_list_query():
     lane = task_list_query(SALES, mine=False)
     everything = task_list_query(SALES, mine=False, see_all=True)
     assert "$or" in lane and "$or" not in everything
-    assert everything == {"tenant_id": "t1"}
+    # See all tasks drops the assignee filter, but the approvals exclusion stays:
+    # a task waiting for my sign-off is in Approvals, not the task list.
+    assert everything["tenant_id"] == "t1" and "$nor" in everything
+    assert set(everything) == {"tenant_id", "$nor"}
     # My Tasks stays mine even with See all tasks.
     assert task_list_query(SALES, mine=True, see_all=True) == task_list_query(SALES, mine=True)
 

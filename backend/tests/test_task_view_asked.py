@@ -12,6 +12,19 @@ OWNER = {"id": "u-owner", "tenant_id": "t1", "role": "owner"}
 SALES = {"id": "u-sales", "tenant_id": "t1", "role": "sales"}
 PROD = {"id": "u-prod", "tenant_id": "t1", "role": "production"}
 
+# The Approvals set the task lists now exclude ($nor): a task waiting for my
+# sign-off is in my Approvals lens, not doubled into my task lists.
+_APPR_WINDOW = {"$or": [
+    {"approval_stage": {"$ne": "close"}, "approval_status": {"$ne": "approved"}},
+    {"approval_stage": "close", "approval_status": "pending"},
+]}
+
+
+def _excl(*approver_and):
+    """The exact document task_list_query drops from the task lists."""
+    return {"approval_required": True, "$and": [_APPR_WINDOW, *approver_and],
+            "status": {"$nin": ["done", "cancelled"]}}
+
 
 def _matches(q, t):
     """Tiny evaluator for the operators task_list_query emits."""
@@ -78,23 +91,29 @@ def test_owner_asked_is_scoped_too():
     assert q["created_by"] == "u-owner" and "$or" not in q
 
 
-def test_mine_unchanged():
+def test_mine_excludes_my_approvals():
+    # My Tasks is the same membership as before, minus what's waiting for MY
+    # sign-off (that lives in Approvals now).
     assert task_list_query(SALES, mine=True) == {
         "tenant_id": "t1",
         "$or": [{"assignee_id": "u-sales"}, {"co_assignee_ids": "u-sales"},
                 {"assignee_id": None, "assignee_role": "sales"}],
+        "$nor": [_excl({"approver_id": "u-sales"})],
     }
 
 
-def test_non_owner_board_unchanged():
+def test_non_owner_board_excludes_my_approvals():
     assert task_list_query(SALES, mine=False) == {
         "tenant_id": "t1",
         "$or": [{"assignee_id": "u-sales"}, {"co_assignee_ids": "u-sales"}, {"assignee_role": "sales"}],
+        "$nor": [_excl({"approver_id": "u-sales"})],
     }
 
 
-def test_owner_all_unchanged():
-    assert task_list_query(OWNER, mine=False) == {"tenant_id": "t1"}
+def test_owner_all_excludes_pending_approvals():
+    # The owner may sign off anything, so All Tasks drops every task still
+    # waiting for approval — they're in the owner's Approvals lens instead.
+    assert task_list_query(OWNER, mine=False) == {"tenant_id": "t1", "$nor": [_excl()]}
 
 
 def test_unknown_view_behaves_like_before():

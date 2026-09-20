@@ -129,7 +129,7 @@ def test_delegate_approves_decides_sees_and_is_told(with_test_db):
             t = await db.tasks.find_one({"id": "t-1"}, {"_id": 0})
             assert tasks._can_approve_task(priya, t) is True
             assert tasks._can_approve_task(SALES, t) is False, "not without the hand-over"
-            assert task_list_query(priya, view="approvals")["approver_id"] == {"$in": ["u-sales", "u-fin"]}
+            assert task_list_query(priya, view="approvals")["$and"][1]["approver_id"] == {"$in": ["u-sales", "u-fin"]}
             await tasks.approve_task("t-1", user=priya)
             assert (await db.tasks.find_one({"id": "t-1"}))["approval_status"] == "approved"
 

@@ -439,6 +439,36 @@ def reopen_updates(t: dict, new_status: str) -> dict:
     return {}
 
 
+def _approval_wait_scope(user: dict, can_approve_any: bool) -> dict:
+    """The tasks waiting for THIS person to sign off — the membership of the
+    Approvals lens (GET /tasks?view=approvals), as one match document (no status
+    guard; the caller adds it). ONE builder feeds both the Approvals view and the
+    task-list exclusion, so the two stay exact complements: a task is in your
+    Approvals or your task lists, never both — approving is a responsibility, not
+    a task.
+
+      window   ASK-28 TK-05 — before-start waits until approved (changes
+               requested included); before-close waits only once sent for
+               sign-off (sent back, it is the doer's again).
+      approver owner: any; `approvals` holder: named to me + named to nobody;
+               named approver: named to me (RBAC P2: plus approvals handed to me
+               while someone is away).
+    """
+    uid = user["id"]
+    ands = [{"$or": [
+        {"approval_stage": {"$ne": "close"}, "approval_status": {"$ne": "approved"}},
+        {"approval_stage": "close", "approval_status": "pending"},
+    ]}]
+    if user.get("role") != "owner":
+        held = list(user.get("_acting_for") or [])
+        mine_q = {"$in": [uid, *held]} if held else uid
+        if can_approve_any:
+            ands.append({"$or": [{"approver_id": mine_q}, {"approver_id": None}, {"approver_id": ""}]})
+        else:
+            ands.append({"approver_id": mine_q})
+    return {"approval_required": True, "$and": ands}
+
+
 def task_list_query(user: dict, mine: bool = False, view: Optional[str] = None,
                     status: Optional[str] = None, can_approve_any: bool = False,
                     team_ids: Optional[List[str]] = None, see_all: bool = False) -> dict:
@@ -468,24 +498,12 @@ def task_list_query(user: dict, mine: bool = False, view: Optional[str] = None,
     if status:
         q["status"] = status
     if view == "approvals":
-        q["approval_required"] = True
-        # ASK-28 TK-05: approval before work starts waits until approved (changes
-        # requested included); approval before closing waits only while the
-        # doer has sent it for sign-off — sent back, it is the doer's again.
-        q["$and"] = [{"$or": [
-            {"approval_stage": {"$ne": "close"}, "approval_status": {"$ne": "approved"}},
-            {"approval_stage": "close", "approval_status": "pending"},
-        ]}]
+        # The Approvals lens IS the "waiting for my sign-off" set; the task lists
+        # below EXCLUDE the same set via _approval_wait_scope, so the two are
+        # exact complements.
+        q.update(_approval_wait_scope(user, can_approve_any))
         if not status:
             q["status"] = {"$nin": ["done", "cancelled"]}
-        if user.get("role") != "owner":
-            # RBAC P2 (2026-09-16): plus approvals handed to me while someone is away.
-            held = list(user.get("_acting_for") or [])
-            mine_q = {"$in": [uid, *held]} if held else uid
-            if can_approve_any:
-                q["$or"] = [{"approver_id": mine_q}, {"approver_id": None}, {"approver_id": ""}]
-            else:
-                q["approver_id"] = mine_q
         return q
     if view == "team":
         ids = [i for i in (team_ids or []) if i]
@@ -506,6 +524,14 @@ def task_list_query(user: dict, mine: bool = False, view: Optional[str] = None,
                     {"assignee_id": None, "assignee_role": user["role"]}]
     elif user["role"] != "owner" and not see_all:  # ASK-28 TK-08: See all tasks widens it
         q["$or"] = [{"assignee_id": uid}, {"co_assignee_ids": uid}, {"assignee_role": user["role"]}]
+    # A task waiting for THIS person to sign off belongs in their Approvals lens
+    # (its own All/Mine toggle), not doubled into their task lists — approving is
+    # a responsibility, not a task. Exclude the exact Approvals set so a row is in
+    # one place or the other, never both. Only tasks the viewer is the pending
+    # approver of are removed; the doer keeps their own task (a locked "Approval
+    # to start" card until it is approved).
+    q["$nor"] = [{**_approval_wait_scope(user, can_approve_any),
+                  "status": {"$nin": ["done", "cancelled"]}}]
     return q
 
 

@@ -72,6 +72,29 @@ const variants = {
   exit: { opacity: 0, y: -24 },
 };
 
+/* Which step the email is asked on. Derived, not a literal: the resume check
+   below has to know it, and a step inserted above it must not silently move
+   what gets re-verified. */
+const EMAIL_IDX = STEPS.findIndex((s) => s.key === "email");
+
+/* "taken" | "free" | "unknown" — THREE answers, not two.
+   This used to be a try/catch that swallowed everything and carried on, and
+   that is how a founder got all the way to the end of onboarding before being
+   told the address was taken: /signup/check-email is rate limited (5 per 10s,
+   30 an hour per IP) and CAPTCHA-gated, so a 429 or a 400 is an ordinary
+   answer from it, not an exception — and both were being read as "fine".
+   "unknown" is now a distinct answer the caller has to deal with, rather than
+   a silence that looks like a pass. */
+async function emailAvailability(email) {
+  try {
+    const { data } = await api.post("/signup/check-email", { email: String(email || "").trim() });
+    return data && data.available === false ? "taken" : "free";
+  } catch (e) {
+    console.debug("check-email did not answer", e);
+    return "unknown";
+  }
+}
+
 export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSaved,
                              resumed = false }) {
   const [idx, setIdx] = useState(initialIndex);
@@ -86,6 +109,11 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
   const [resendIn, setResendIn] = useState(0);
   const [sending, setSending] = useState(false);
   const inputRef = useRef(null);
+  /* The address a check could not be run for. A second press on the SAME one
+     goes through: an offline founder must not be walled out of their own
+     signup, but they should be told once first rather than find out at the
+     end. Cleared whenever the address changes. */
+  const unverified = useRef("");
   const step = STEPS[idx];
   const value = form[step.key] || "";
 
@@ -145,6 +173,48 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
     }
   };
 
+  /* A RESUMED SIGNUP RE-CHECKS THE ADDRESS IT IS ABOUT TO REUSE.
+
+     This is the bug a founder hit: the wizard reopens at the first unanswered
+     question, and the password is never saved, so that is ALWAYS the password
+     step — one past the email. The saved address was therefore carried through
+     the whole of onboarding without ever being checked again, and the
+     collision surfaced at register, after the departments and workflows had
+     been built. Once a draft existed, every later attempt behaved that way:
+     the email step was not shown, so there was nothing to correct.
+
+     So when we open past that step with an address already in hand, we ask
+     about it once. If it is taken the founder lands ON the email step with the
+     reason, before spending another minute. "unknown" is left alone — it is
+     re-asked before the build, and a founder returning on a bad connection
+     should not be held at the door. */
+  const resumeChecked = useRef(false);
+  useEffect(() => {
+    if (initialIndex <= EMAIL_IDX) return;
+    const email = String(form.email || "").trim();
+    if (!email) return;
+    /* Once per mount. StrictMode runs an effect twice in development, and
+       /signup/check-email allows five requests in ten seconds — spending two
+       of them to answer one question would leave a founder who presses Back
+       and Continue a couple of times hitting the limit on their own signup. */
+    if (resumeChecked.current) return;
+    resumeChecked.current = true;
+    /* No cancellation flag, deliberately. Pairing one with the ref guard is
+       what broke this the first time: StrictMode runs the effect, tears it
+       down, and runs it again, so the flag from the FIRST run cancelled the
+       only request the guard allowed, and the answer was thrown away. There
+       is nothing to leak here — the worst case is a setState on a component
+       that has gone, which React 18 ignores. */
+    (async () => {
+      const verdict = await emailAvailability(email);
+      if (verdict !== "taken") return;
+      setIdx(EMAIL_IDX);
+      setError("This email already has a workspace — sign in instead, or use another address.");
+    })();
+    // Once, on mount: this answers "what was restored", not "what is typed".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const t = setTimeout(() => inputRef.current?.focus(), 380);
     return () => clearTimeout(t);
@@ -162,11 +232,17 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
     }
     if (step.checkEmail) {
       setChecking(true);
-      try {
-        const { data } = await api.post("/signup/check-email", { email: v.trim() });
-        if (!data.available) { setError("This email already has a workspace — sign in instead."); setChecking(false); return; }
-      } catch (e) { console.debug("email availability check skipped (network) — register validates later", e); }
+      const verdict = await emailAvailability(v);
       setChecking(false);
+      if (verdict === "taken") {
+        setError("This email already has a workspace — sign in instead, or use another address.");
+        return;
+      }
+      if (verdict === "unknown" && unverified.current !== v.trim()) {
+        unverified.current = v.trim();
+        setError("We couldn't check this address just now. Press continue again to carry on — we'll confirm it before your workspace is built.");
+        return;
+      }
     }
     setError("");
     // Keep what they typed, step by step, so closing the tab costs nothing.
@@ -179,7 +255,11 @@ export function BasicsFlow({ form, setForm, onDone, initialIndex = 0, onStepSave
     if (codeFor) { setCodeFor(""); setCode(""); setError(""); return; }   // back to the number
     if (idx > 0) { setError(""); setIdx(idx - 1); }
   };
-  const setVal = (v) => { setForm((f) => ({ ...f, [step.key]: v })); if (error) setError(""); };
+  const setVal = (v) => {
+    if (step.key === "email" && unverified.current && unverified.current !== String(v).trim()) unverified.current = "";
+    setForm((f) => ({ ...f, [step.key]: v }));
+    if (error) setError("");
+  };
 
   return (
     <div className="kr-well mx-auto w-full max-w-2xl" data-testid="signup-basics">

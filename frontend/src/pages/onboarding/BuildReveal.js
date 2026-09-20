@@ -226,7 +226,7 @@ function PillSection({ label, items, tint, testid, startAt, stagger, still, newK
 // Generates the personalized OS blueprint from the interview, lets the founder
 // refine it, then registers the workspace and reveals it. Dex keeps the wait alive.
 export function BuildReveal({ sessionId, languageCode, payload, register, signIn, onEnter,
-                              savedBlueprint = null, onBlueprint, onFixPhone }) {
+                              savedBlueprint = null, onBlueprint, onFixPhone, onChangeEmail }) {
   const [pct, setPct] = useState(0);
   const [line, setLine] = useState(0);
   // stage: 'building' → 'preview' (refine) → 'registering' → 'reveal'
@@ -343,11 +343,17 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
         const { data: avail } = await api.post("/signup/check-email", { email: payload.email });
         if (avail && avail.available === false) {
           setTakenEmail(true);
-          setError("This email already has a workspace. Sign in instead, or go back and use a different email.");
+          setError("This email already has a workspace. Sign in instead, or use a different address — everything you have built is kept either way.");
           setStage("preview");
           return;
         }
-      } catch (e) { console.debug("email re-check skipped (network) — register decides", e); }
+      } catch (e) {
+        /* Still not fatal — register decides, and it decides correctly. But it
+           is no longer SILENT: if this is the check that cannot run, the
+           founder should learn it here rather than from a failure after the
+           long call. register's own answer replaces this line either way. */
+        console.debug("email re-check did not answer — register decides", e);
+      }
       const products = (bp.products || payload.products || []).filter((p) => (p.name || "").trim());
       await register({
         company_name: payload.company_name, name: payload.name, email: payload.email,
@@ -802,10 +808,25 @@ export function BuildReveal({ sessionId, languageCode, payload, register, signIn
                     </button>
                   )}
                   {takenEmail && (
-                    <Link to="/login" data-testid="build-error-signin"
-                      className="mt-3 inline-flex h-10 items-center rounded-pill bg-kr-ink px-5 text-sm font-medium text-white">
-                      Sign in instead
-                    </Link>
+                    /* TWO doors, not one. "Sign in" only helps the founder who
+                       already owns that workspace; the one who mistyped, or
+                       reached for an address a colleague had used, was left
+                       with a wall at the end of ten minutes of work. Nothing
+                       is lost by going back — the draft holds the answers and
+                       the blueprint, so they return to this screen with the
+                       same OS they just built. */
+                    <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                      <Link to="/login" data-testid="build-error-signin"
+                        className="inline-flex h-10 items-center rounded-pill bg-kr-ink px-5 text-sm font-medium text-white">
+                        Sign in instead
+                      </Link>
+                      {onChangeEmail && (
+                        <button type="button" onClick={onChangeEmail} data-testid="build-error-change-email"
+                          className="inline-flex h-10 items-center rounded-pill border border-kr-ink/25 px-5 text-sm font-medium text-foreground transition-colors hover:bg-white/70">
+                          Use a different email
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               )}

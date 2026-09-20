@@ -285,6 +285,13 @@ export default function Signup() {
                 onFixPhone={() => {
                   setForm((f) => ({ ...f, phone_token: "", phone_verified_norm: "", phone_token_expires_at: "" }));
                   setBasicsStart(4); setResumed(false); setPhase("basics");
+                }}
+                /* The address is taken and they would rather use another. Back
+                   to that one step — not through the interview again — and
+                   straight back here, because savedBlueprint means the build
+                   is restored rather than regenerated. */
+                onChangeEmail={() => {
+                  setBasicsStart(2); setResumed(false); setPhase("basics");
                 }} />
             )}
           </motion.div>

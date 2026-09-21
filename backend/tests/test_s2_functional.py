@@ -407,7 +407,8 @@ def test_task_gates_smart_route_and_auto_invoice(with_test_db):
             ])
             await db.tasks.insert_one({"id": "load1", "tenant_id": tid, "assignee_id": "s1",
                                        "status": "todo"})   # s1 has load, s2 has none
-            created = await tasks.create_task(TaskCreateInput(title="Chase new leads", assignee_role="sales"),
+            created = await tasks.create_task(TaskCreateInput(title="Chase new leads", assignee_role="sales",
+                                                              due_date="2026-10-01"),  # PILOT-1 C
                                               background=BackgroundTasks(), user=owner)
             r["routed_to"] = created.get("assignee_id")
 

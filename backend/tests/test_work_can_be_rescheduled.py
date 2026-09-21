@@ -99,11 +99,13 @@ def test_a_date_can_be_given_to_a_task_that_never_had_one(with_test_db):
     assert [e["detail"] for e in trail if e["kind"] == "task_due"] == ["Due 2026-10-15"]
 
 
-def test_a_due_date_can_be_taken_off_again(with_test_db):
-    """An empty string is how a date is removed. null means "not sent" for
-    every other field on this model, and has to keep meaning that here."""
+def test_a_due_date_can_no_longer_be_taken_off(with_test_db):
+    """B2 let an empty string remove a date. PILOT-1 C (2026-09-21) closed
+    that: every task a person makes has a deadline, and a dateless task is
+    invisible to Due today, Overdue and the score — so a date is moved, never
+    taken off. (tests/test_pilot1_due_dates.py holds the rest of that rule.)"""
     row, _, refused = _run(with_test_db, OWNER, {"due_date": ""})
-    assert refused is None and row["due_date"] is None
+    assert refused and refused[0] == 400 and row["due_date"] == "2026-10-02"
 
 
 def test_not_sending_the_field_leaves_the_date_where_it_was(with_test_db):

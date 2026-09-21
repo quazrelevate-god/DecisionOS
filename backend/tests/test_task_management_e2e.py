@@ -62,6 +62,9 @@ async def _seed(db):
 
 
 async def _create(user, **kw):
+    # PILOT-1 C: a task made by hand needs a due date; these tests are about
+    # other things, so they give it one.
+    kw.setdefault("due_date", "2026-10-01")
     return await tasks.create_task(TaskCreateInput(**kw), BackgroundTasks(), user=user)
 
 
@@ -402,7 +405,8 @@ def test_supporting_employee_is_gone_and_old_apps_still_create(with_test_db):
         with e2e_env(db, stubs=STUBS, keep=KEEP):
             # An older app build still sends support_id: the task is created, the field is not kept.
             t = await tasks.create_task(TaskCreateInput.model_validate(
-                {"title": "Pack the sample", "assignee_id": "u-ops", "support_id": "u-prod"}), BackgroundTasks(), user=SALES)
+                {"title": "Pack the sample", "assignee_id": "u-ops", "support_id": "u-prod",
+                 "due_date": "2026-10-01"}), BackgroundTasks(), user=SALES)
             saved = await db.tasks.find_one({"id": t["id"]}, {"_id": 0})
             assert "support_id" not in saved and "support_name" not in t
             # ...and it grants nothing: the would-be supporter cannot open the task.

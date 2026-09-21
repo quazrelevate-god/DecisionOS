@@ -553,6 +553,19 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
                 status_code=400,
                 detail="A repeating task needs a due date — the date is what repeats.")
         recurrence = {**recurrence, "series_id": tid}
+    # PILOT-1 C (2026-09-21): EVERY TASK A PERSON MAKES HAS A DEADLINE. The pilot
+    # client: "Any task assigned should have deadline. Only then you can show
+    # 'Due today'." New Task opened on "No date", so most tasks were made
+    # without one — they were never due today, never overdue, and never pulled
+    # the score down; the work was invisible to every number that watches it.
+    # This route is how a PERSON makes a task (New Task, a workflow stage's
+    # "Add a task", Finance's "Create task from insight"), so it refuses one
+    # without a date. Tasks the system makes — from a Dex decision, a workflow
+    # stage's template, a routine — are created elsewhere and are not touched.
+    # It sits after the repeat check so a routine with no date is still told
+    # why a routine in particular needs one.
+    if not due:
+        raise HTTPException(status_code=400, detail="Give the task a due date — when does it need to be done?")
     troles = await tenant_role_keys(user["tenant_id"])
     assignee_id = inp.assignee_id
     role = inp.assignee_role if inp.assignee_role in troles else None
@@ -704,6 +717,11 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
     # because "" has to mean "no date any more" — the dict above drops None
     # (unchanged), so an explicit empty string is how a date is cleared.
     _sent = inp.model_dump(exclude_unset=True)
+    # PILOT-1 C: a deadline can be MOVED, not taken off. B2 let `due_date: ""`
+    # drop the date, which put a task back among the ones no count can see.
+    # (Clearing only the hour — `due_time: ""` — still keeps the day.)
+    if _sent.get("due_date") is not None and not str(_sent["due_date"]).strip():
+        raise HTTPException(status_code=400, detail="A task keeps its due date — move it to another day instead.")
     _moving_due = _sent.get("due_date") is not None or _sent.get("due_time") is not None
     updates.pop("due_time", None)
     if _moving_due:

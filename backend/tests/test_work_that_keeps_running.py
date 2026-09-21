@@ -51,6 +51,11 @@ async def _people(db):
 
 def _create(**kw):
     from models.tasks import TaskCreateInput
+    # PILOT-1 C: a task made by hand needs a due date. These tests are about
+    # routines and waiting on other work, so they give one — except where a
+    # routine with NO date is exactly what is being tested.
+    if not ({"due_date", "due_in_days", "repeat_every"} & kw.keys()):
+        kw["due_date"] = "2026-10-01"
     return TaskCreateInput(**kw)
 
 

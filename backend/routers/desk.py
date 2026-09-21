@@ -18,8 +18,9 @@ Chips explained (all tenant + user scoped):
                     action in {escalate, handoff} and to_id=me
                     UNION tasks I own (assignee_id=me) that are
                     overdue and not done/cancelled
-  due_today      -> tasks I own with due_date=today
-                    (status not in {done, cancelled})
+  due_today      -> what My Work lists as due today for me (PILOT-1 C):
+                    every open task for the owner / See all tasks, else
+                    My tasks; due today in India's day, not done/cancelled
   important      -> AI-ranked (services/ai/priorities.py extension).
                     MVP: returns empty list (fail-open).
                     Wire ranker in E2-21.
@@ -663,21 +664,33 @@ async def _cards_on_fire(tid: str, user: dict) -> list:
 
 
 async def _cards_due_today(tid: str, user: dict) -> list:
-    """Tasks due today that someone else owns (I care about them, they
-    need nudging). Mirror of on_fire scope: not-me + I-created-them,
-    or owner scope for owner. My own due-today lives on My Work."""
+    """PILOT-1 C — the tasks the viewer's My Work lists as due today, and
+    therefore the number on the card that opens that list.
+
+    It used to count only tasks SOMEONE ELSE was doing (and, for anyone but
+    the owner, only ones they had given to someone), while the card linked to
+    /my-work?filter=due_today — which lists the viewer's OWN tasks due today.
+    The number and the list were two different sets: the pilot client makes
+    tasks for themselves, so their own work due today was never counted at
+    all. One definition now, taken from the list itself — GET /tasks's own
+    filter (services.tasks.task_list_query) for the scope My Work opens the
+    link in:
+      owner, or "See all tasks"  every task in the company   (My Work flips
+                                                              to All for them)
+      everyone else              My tasks: theirs, the ones they help on, and
+                                 unclaimed work in their team's pool
+    narrowed to open work due today (India's day; a time on the date still
+    counts as that day). Waiting-for-my-approval work is left out here exactly
+    as the list leaves it out."""
+    from core.permissions import user_perms
+    from services.tasks import can_see_all_tasks, task_list_query
     uid = user["id"]
     today = _iso_today()
-    is_owner = user.get("role") == "owner"
-    q = {
-        "tenant_id": tid,
-        "assignee_id": {"$ne": uid, "$exists": True, "$nin": [None, ""]},
-        "co_assignee_ids": {"$ne": uid},  # ASK-26: same rule as on_fire
-        "status": {"$nin": ["done", "cancelled"]},
-        "due_date": today,
-    }
-    if not is_owner:
-        q["created_by"] = uid
+    perms = user_perms(user)
+    see_all = can_see_all_tasks(user, perms)
+    q = task_list_query(user, mine=not see_all, can_approve_any="approvals" in perms, see_all=see_all)
+    q["status"] = {"$nin": ["done", "cancelled"]}
+    q["due_date"] = {"$regex": f"^{today}"}
     rows = await db.tasks.find(q, {"_id": 0}).to_list(200)
     assignee_ids = [t.get("assignee_id") for t in rows if t.get("assignee_id")]
     umap = await _users_lookup(tid, assignee_ids)

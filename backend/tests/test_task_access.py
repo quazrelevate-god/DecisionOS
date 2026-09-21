@@ -100,7 +100,9 @@ TASK = {"id": "t", "created_by": "u-sales", "assignee_id": "u-sales2", "assignee
         "co_assignee_ids": ["u-ops"], "status": "in_progress", "progress": 20, "priority": "medium",
         "evidence_required": True, "approver_id": "u-fin"}
 MGR = {"id": "u-mgr", "role": "finance"}          # Kiran's reporting manager
-ALL = {"work": True, "finish": True, "people": True, "priority": True, "proof": True}
+# PILOT-1 B: "wording" (rename, rewrite the description) belongs to the same
+# people as "priority" — see tests/test_pilot1_task_rename.py.
+ALL = {"work": True, "finish": True, "people": True, "priority": True, "wording": True, "proof": True}
 NONE = dict.fromkeys(ALL, False)
 
 

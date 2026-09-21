@@ -375,6 +375,9 @@ def task_edit_rights(user: dict, t: dict, team_ids, perms) -> dict:
         "finish": runs or doer,
         "people": runs or "team_manage" in (perms or ()),
         "priority": runs,
+        # PILOT-1 B — renaming, and rewriting the description: what the work IS.
+        # The person who asked for it, their manager and the owner; not the doer.
+        "wording": runs,
         "proof": owner or creator,
     }
 
@@ -430,6 +433,11 @@ def edit_refusal(t: dict, changes: dict, rights: dict) -> Optional[str]:
                 "can change who is on this task.")
     if "priority" in changes and changes["priority"] != t.get("priority") and not rights["priority"]:
         return "Only the person who asked for it, the manager or the owner can change the priority."
+    if "title" in changes and changes["title"] != t.get("title") and not rights.get("wording"):
+        return "Only the person who asked for it, the manager or the owner can rename this task."
+    if ("description" in changes and (changes["description"] or "") != (t.get("description") or "")
+            and not rights.get("wording")):
+        return "Only the person who asked for it, the manager or the owner can change what this task says."
     # B2 (2026-09-21): a due date is a promise made to someone else, so moving
     # it belongs to the same people as the priority — whoever asked for the
     # work, their manager, or the owner. A doer who needs longer says so on the

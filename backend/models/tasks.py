@@ -69,6 +69,16 @@ class TaskCreateInput(BaseModel):
 
 
 class TaskUpdateInput(BaseModel):
+    # PILOT-1 B (2026-09-21): a task's NAME and DESCRIPTION can be changed.
+    # There was no field for either, so a PATCH that sent a title was dropped
+    # without a word and the drawer could only show the name it was born with —
+    # the pilot client could not fix a typo in a task they had made for
+    # themselves. Who may change them: the person who asked for the task,
+    # their manager and the owner (services/tasks.task_edit_rights "wording",
+    # the same people as the priority). Someone doing a task another person
+    # gave them does not rewrite what they were asked to do.
+    title: Optional[str] = None
+    description: Optional[str] = None
     status: Optional[str] = None
     assignee_id: Optional[str] = None
     assignee_role: Optional[str] = None

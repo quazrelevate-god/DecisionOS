@@ -377,6 +377,9 @@ _STATUS_WORDS = {
 # task's own `updates` trail, so the log's copy of them is skipped to avoid
 # listing each one twice.
 _TRAIL_LOG_KINDS = {"task_note", "task_handoff", "task_escalate", "handoff_resolved"}
+# PILOT-1 B: how long a task's name may be. Generous for a sentence of work,
+# short enough that a pasted paragraph is caught as the mistake it is.
+TASK_TITLE_MAX = 200
 _TRAIL_KIND = {"note": "task_note", "handoff": "task_handoff", "escalate": "task_escalate",
                "response": "task_reply", "handoff_reply": "task_reply"}
 
@@ -676,6 +679,26 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             status_code=400,
             detail=f"Invalid status '{updates['status']}'. Use one of: {sorted(TASK_STATUSES)}",
         )
+    # PILOT-1 B: a new name is tidied and has to say something; a description
+    # may be emptied. Cleaned BEFORE the rights check, and dropped when it is
+    # what the task already says, so "  Send the quote " is not a rename of
+    # "Send the quote" and nobody is refused for sending the name back as is.
+    if "title" in updates:
+        clean_title = " ".join(str(updates["title"]).split())
+        if not clean_title:
+            raise HTTPException(status_code=400, detail="A task needs a name.")
+        if len(clean_title) > TASK_TITLE_MAX:
+            raise HTTPException(status_code=400, detail=f"Keep the name under {TASK_TITLE_MAX} characters.")
+        if clean_title == (t.get("title") or ""):
+            updates.pop("title")
+        else:
+            updates["title"] = clean_title
+    if "description" in updates:
+        clean_desc = str(updates["description"]).strip()
+        if clean_desc == (t.get("description") or "").strip():
+            updates.pop("description")
+        else:
+            updates["description"] = clean_desc
     # B2 (2026-09-21): rescheduling. Handled apart from the generic `updates`
     # dict because a due date arrives as two fields and is stored as one, and
     # because "" has to mean "no date any more" — the dict above drops None
@@ -813,6 +836,10 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             updates["last_action"] = "People updated"
         elif "progress" in updates:
             updates["last_action"] = f"Progress {updates['progress']}%"
+        elif "title" in updates:
+            updates["last_action"] = "Renamed"
+        elif "description" in updates:
+            updates["last_action"] = "Description changed"
         else:
             updates["last_action"] = "Updated"
         updates["updated_at"] = now_iso()
@@ -890,6 +917,17 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             await _log_task_event(
                 user, task_id, "task_due", f"'{t['title']}' due {now_}",
                 f"Due date moved from {was} to {now_}" if t.get("due_date") else f"Due {now_}")
+        # PILOT-1 B: a rename is a change like any other and reads on the
+        # timeline as one, old name and new, so nobody wonders why the task
+        # they were given now says something else.
+        if "title" in updates:
+            await _log_task_event(
+                user, task_id, "task_renamed", f"Renamed '{t.get('title') or ''}' to '{updates['title']}'",
+                f"Renamed from “{t.get('title') or ''}” to “{updates['title']}”")
+        if "description" in updates:
+            await _log_task_event(
+                user, task_id, "task_edited", f"Changed the description of '{updates.get('title') or t.get('title') or ''}'",
+                "Changed the description" if updates["description"] else "Removed the description")
         if "progress" in updates and "status" not in updates and updates["progress"] != t.get("progress"):
             await _log_task_event(user, task_id, "task_progress", f"'{t['title']}' progress {updates['progress']}%",
                                   f"Progress set to {updates['progress']}%")

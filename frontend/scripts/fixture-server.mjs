@@ -665,6 +665,16 @@ const financeAi = (scope) => ({
     'Surat Spinners — ₹3,36,000 due in 4 days',
     '₹75,000 received on NEFT9910233 is not matched to any invoice',
   ],
+  /* PILOT-1 C — the shape the Finance AI panel reads today (FinanceAi.jsx:
+     {headline, insights[{level, title, detail, action}]}). Without it the
+     panel drew no action items on the fixtures, so its "Create task" — now
+     asking for a due date — could not be reached. */
+  headline: 'Cash is fine this month, but one buyer is holding ₹4,00,000. Chase Krishna Garments before Diwali stock is bought.',
+  insights: [
+    { level: 'high', title: 'Krishna Garments is 31 days late on ₹4,00,000', detail: 'That is 62% of everything still to come in, with one retailer.', action: 'Call Krishna Garments and agree a payment date' },
+    { level: 'medium', title: 'Surat Spinners bill of ₹3,36,000 is due in 4 days', detail: 'Paying on time keeps the Diwali yarn rate.', action: 'Schedule the Surat Spinners payment' },
+    { level: 'low', title: '₹75,000 received on NEFT9910233 is not matched', detail: 'It is sitting unmatched in the bank feed.', action: 'Match the ₹75,000 NEFT to its invoice' },
+  ],
 });
 
 // ---------------------------------------------------------------------------
@@ -898,6 +908,29 @@ function resolve(method, path, q, body = {}) {
       }));
     }
     return rows;
+  }
+  /* PILOT-1 C — the opened card carries `stages_detail`, as routers/workflows
+     does: each stage's state, owner team and its tasks. Without it the fixture
+     card opened on its history alone, and a stage's "Add a task" form (where
+     a date is now required) could not be reached at all. */
+  if (seg[1] === 'workflows' && seg[2] && method === 'GET' && !seg[3]) {
+    const w = WORKFLOWS.find((x) => x.id === seg[2]);
+    if (!w) return {};
+    const pipe = OPERATING_MODEL.pipelines.find((x) => x.key === w.type) || { stages: [] };
+    const at = w.stages.indexOf(w.stage);
+    return {
+      ...w,
+      stages_detail: w.stages.map((key, i) => {
+        const def = (pipe.stages || []).find((x) => (typeof x === 'string' ? x : x.key) === key);
+        return {
+          key, label: (def && typeof def !== 'string' && def.label) || key.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()),
+          state: i < at ? 'done' : i === at ? 'current' : 'upcoming',
+          owner_role: (def && typeof def !== 'string' && def.owner_role) || null,
+          tasks: TASKS.filter((t) => t.workflow_id === w.id && t.stage_key === key),
+          approval: { required: false, given: [] },
+        };
+      }),
+    };
   }
   if (seg[1] === 'workflows' && seg[2]) return method === 'GET' ? (WORKFLOWS.find((w) => w.id === seg[2]) || {}) : { ...OK, workflow: WORKFLOWS[0] };
 

@@ -1525,10 +1525,11 @@ function NoDateChip({ t: task, canSet, onSaved }) {
     <span className="relative inline-flex" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
       <button type="button" onClick={pick} disabled={busy} data-testid={`no-date-${task.id}`}
         aria-label={`No due date — set one for ${task.title}`}
-        /* 32px to the eye, 44px to a thumb: the ::before reaches 6px past
-           every edge, so the chip keeps the card's pill size and the touch
-           floor both. */
-        className={`${PILL} ${chip} relative min-h-8 before:absolute before:-inset-1.5 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40 disabled:opacity-60`}>
+        /* 32px to the eye, 44px to a thumb: the ::before reaches 6px above
+           and below, so the chip keeps the card's pill size and the touch
+           floor both. Not sideways — it is already far wider than 44px, and a
+           sideways reach spilled past the card's edge. */
+        className={`${PILL} ${chip} relative min-h-8 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40 disabled:opacity-60`}>
         <CalendarBlank size={11} weight="bold" aria-hidden="true" /> {busy ? "Saving…" : "No due date · Set"}
       </button>
       {/* The picker itself: present for showPicker(), out of sight and out of

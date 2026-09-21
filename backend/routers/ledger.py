@@ -351,7 +351,7 @@ async def create_asset(tenant_id: str, user_id: str, data: dict, source: str = "
         "category": category,
         "purchase_amount": amt, "currency": currency,
         "purchase_date": data.get("purchase_date") or now_iso()[:10],
-        "vendor_name": (data.get("vendor_name") or "").strip(),
+        "vendor_name": (data.get("vendor_name") or "").strip(), "vendor_id": data.get("vendor_id"),  # PILOT-1 E
         "status": data.get("status") if data.get("status") in ("active", "disposed", "maintenance") else "active",
         "notes": (data.get("notes") or "").strip(), "source": source, "expense_id": data.get("expense_id"),
         "attachment": data.get("attachment"),
@@ -374,6 +374,7 @@ async def create_inventory(tenant_id: str, user_id: str, data: dict, source: str
         "sku": (data.get("sku") or "").strip(), "quantity": qty, "unit": (data.get("unit") or "unit").strip(),
         "unit_cost": unit_cost, "currency": currency, "value": round(qty * unit_cost, 2),
         "category": (data.get("category") or "").strip(), "vendor_name": (data.get("vendor_name") or "").strip(),
+        "vendor_id": data.get("vendor_id"),  # PILOT-1 E
         "notes": (data.get("notes") or "").strip(), "source": source,
         "attachment": data.get("attachment"),
         "created_by": user_id, "created_at": now_iso(),
@@ -626,6 +627,54 @@ async def require_ledger(user: dict = Depends(get_current_user)) -> dict:
     raise HTTPException(status_code=403, detail="You don't have access to Finance")
 
 
+# --- PILOT-1 E: the supplier / customer a finance record is FOR -------------
+# The pilot client: "I have added Vendor, but not able to select when adding new
+# expense." The expense form's supplier was a plain text box that never read
+# CRM, so a supplier added there could not be picked. The finance forms now
+# pick from the company's CRM contacts and keep the link (vendor_id /
+# contact_id), while a new name can still be typed.
+#
+# CRM itself sits behind the `people` permission; a finance person without it
+# must still be able to pick a supplier. So the pickers read a NARROW list —
+# id, name, company, nothing else — behind Finance's own gate, and CRM stays
+# closed to them.
+PARTY_KINDS = {"vendor": ("vendor",), "customer": ("customer", "dealer")}
+
+
+@router.get("/ledger/parties")
+async def list_parties(kind: str = "vendor", q: Optional[str] = None,
+                       limit: int = Query(200, ge=1, le=500), user: dict = Depends(require_ledger)):
+    """Suppliers (kind=vendor) or buyers (kind=customer: customers and dealers)
+    for a finance form's picker. Only what a picker needs to show."""
+    types = PARTY_KINDS.get(kind)
+    if not types:
+        raise HTTPException(status_code=400, detail="kind must be vendor or customer")
+    query = {"tenant_id": user["tenant_id"], "type": {"$in": list(types)}}
+    if q and q.strip():
+        rx = {"$regex": re.escape(q.strip()), "$options": "i"}
+        query["$or"] = [{"name": rx}, {"company": rx}]
+    rows = await db.contacts.find(query, {"_id": 0, "id": 1, "name": 1, "company": 1, "type": 1}) \
+        .sort("name", 1).to_list(limit)
+    return [{"id": r["id"], "name": r.get("name") or r.get("company") or "", "company": r.get("company") or "",
+             "type": r.get("type")} for r in rows if r.get("id")]
+
+
+async def _linked_party(tenant_id: str, contact_id: str, kind: str) -> Optional[dict]:
+    """The CRM contact a record is being linked to, or None when none was sent.
+    A link to someone who is not in this company's CRM, or not that kind of
+    contact, is refused rather than stored: a record pointing at nobody is how
+    a supplier's spend quietly stops adding up."""
+    cid = (contact_id or "").strip()
+    if not cid:
+        return None
+    c = await db.contacts.find_one({"id": cid, "tenant_id": tenant_id, "type": {"$in": list(PARTY_KINDS[kind])}},
+                                   {"_id": 0, "id": 1, "name": 1, "company": 1})
+    if not c:
+        who = "supplier" if kind == "vendor" else "customer"
+        raise HTTPException(status_code=400, detail=f"That {who} isn't in your CRM any more — pick again or type the name.")
+    return {"id": c["id"], "name": c.get("name") or c.get("company") or ""}
+
+
 # --- Input models -----------------------------------------------------------
 
 
@@ -712,10 +761,14 @@ async def add_expense_with_file(
     title: str = Form(""), amount: str = Form(""), vendor_name: str = Form(""),
     category: str = Form(""), date: str = Form(""), status: str = Form("unpaid"),
     notes: str = Form(""), file: Optional[UploadFile] = File(None),
+    vendor_id: str = Form(""),   # PILOT-1 E: the CRM supplier picked in the form
     user: dict = Depends(require_ledger),
 ):
     typed = {"title": title.strip(), "amount": _num(amount), "vendor_name": vendor_name.strip(),
              "category": category, "date": date, "status": status, "notes": notes.strip()}
+    party = await _linked_party(user["tenant_id"], vendor_id, "vendor")
+    if party:
+        typed.update(vendor_id=party["id"], vendor_name=party["name"])
     data, _ = await _read_attachment(file, "expense", user["tenant_id"], typed)
     if not (str(data.get("title") or "").strip()) and not _num(data.get("amount")):
         raise HTTPException(status_code=400, detail="Add a title/amount or attach a readable bill")
@@ -775,10 +828,14 @@ async def add_asset_with_file(
     name: str = Form(""), purchase_amount: str = Form(""), vendor_name: str = Form(""),
     category: str = Form(""), purchase_date: str = Form(""), status: str = Form("active"),
     notes: str = Form(""), file: Optional[UploadFile] = File(None),
+    vendor_id: str = Form(""),   # PILOT-1 E
     user: dict = Depends(require_ledger),
 ):
     typed = {"name": name.strip(), "purchase_amount": _num(purchase_amount), "vendor_name": vendor_name.strip(),
              "category": category, "purchase_date": purchase_date, "status": status, "notes": notes.strip()}
+    party = await _linked_party(user["tenant_id"], vendor_id, "vendor")
+    if party:
+        typed.update(vendor_id=party["id"], vendor_name=party["name"])
     data, _ = await _read_attachment(file, "asset", user["tenant_id"], typed)
     if not (str(data.get("name") or "").strip()):
         raise HTTPException(status_code=400, detail="Add an asset name or attach a readable bill")
@@ -828,10 +885,14 @@ async def add_inventory_with_file(
     item: str = Form(""), sku: str = Form(""), quantity: str = Form(""), unit: str = Form("unit"),
     unit_cost: str = Form(""), category: str = Form(""), vendor_name: str = Form(""),
     notes: str = Form(""), file: Optional[UploadFile] = File(None),
+    vendor_id: str = Form(""),   # PILOT-1 E
     user: dict = Depends(require_ledger),
 ):
     typed = {"item": item.strip(), "sku": sku.strip(), "quantity": _num(quantity), "unit": unit.strip() or "unit",
              "unit_cost": _num(unit_cost), "category": category.strip(), "vendor_name": vendor_name.strip(), "notes": notes.strip()}
+    party = await _linked_party(user["tenant_id"], vendor_id, "vendor")
+    if party:
+        typed.update(vendor_id=party["id"], vendor_name=party["name"])
     data, _ = await _read_attachment(file, "inventory", user["tenant_id"], typed)
     if not (str(data.get("item") or "").strip()):
         raise HTTPException(status_code=400, detail="Add an item name or attach a readable bill")
@@ -983,11 +1044,16 @@ async def add_revenue_with_file(
     title: str = Form(""), customer_name: str = Form(""), amount: str = Form(""),
     number: str = Form(""), date: str = Form(""), due_date: str = Form(""),
     status: str = Form("unpaid"), received: str = Form("false"), notes: str = Form(""),
-    file: Optional[UploadFile] = File(None), user: dict = Depends(require_ledger),
+    file: Optional[UploadFile] = File(None),
+    contact_id: str = Form(""),   # PILOT-1 E: the CRM customer picked in the form
+    user: dict = Depends(require_ledger),
 ):
     typed = {"title": title.strip(), "customer_name": customer_name.strip(), "amount": _num(amount),
              "number": number.strip(), "date": date, "due_date": due_date,
              "status": status, "notes": notes.strip()}
+    party = await _linked_party(user["tenant_id"], contact_id, "customer")
+    if party:
+        typed.update(contact_id=party["id"], customer_name=party["name"])
     data, _ = await _read_attachment(file, "income", user["tenant_id"], typed)
     data["received"] = str(received).lower() in ("true", "1", "yes", "on")
     if not (str(data.get("title") or "").strip()) and not _num(data.get("amount")) and not (str(data.get("customer_name") or "").strip()):

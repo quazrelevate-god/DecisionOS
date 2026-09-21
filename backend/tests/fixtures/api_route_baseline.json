@@ -1,6 +1,6 @@
 {
-  "count": 342,
-  "sha": "0d38aa89119b1543146081dbc2ea33b7709641235a16be2e632896065df92dd3",
+  "count": 343,
+  "sha": "22e2972c624798a6d5f2b03745194a8c30c8708ca070d2714866fe3151e5463f",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -117,6 +117,7 @@
     "GET /api/leaves/{leave_id}",
     "GET /api/leaves/{leave_id}/impact",
     "GET /api/ledger/ai/{scope}",
+    "GET /api/ledger/parties",
     "GET /api/ledger/summary",
     "GET /api/me/acting-as",
     "GET /api/meetings",

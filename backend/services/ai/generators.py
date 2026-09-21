@@ -92,6 +92,16 @@ async def tenant_operating_model(tenant_id: str) -> dict:
     return om if om and om.get("pipelines") else DEFAULT_OPERATING_MODEL
 
 
+# PILOT-1 F: how many categories a company may keep, besides "Other". These
+# were 14 and 10 — sized for what the AI generates at sign-up, which is about
+# that many. People can add their own now (routers/ledger.add_finance_category),
+# and a Settings save runs the whole list through the function below, so a cap
+# this low would silently cut off the categories people added. The AI still
+# generates the same dozen or so; this only stops a real company's list being
+# truncated.
+FINANCE_CATEGORY_CAPS = {"expense": 40, "asset": 25}
+
+
 def normalize_finance_categories(d: dict) -> dict:
     """Clean AI-generated finance categories: dedupe, cap, always end with 'Other'."""
     def clean(lst, cap):
@@ -102,8 +112,8 @@ def normalize_finance_categories(d: dict) -> dict:
                 out.append(s)
         return out[:cap] + ["Other"]
     from routers.ledger import EXPENSE_CATEGORIES, ASSET_CATEGORIES
-    exp = clean((d or {}).get("expense"), 14)
-    ast = clean((d or {}).get("asset"), 10)
+    exp = clean((d or {}).get("expense"), FINANCE_CATEGORY_CAPS["expense"])
+    ast = clean((d or {}).get("asset"), FINANCE_CATEGORY_CAPS["asset"])
     if len(exp) <= 1:
         exp = list(EXPENSE_CATEGORIES)
     if len(ast) <= 1:

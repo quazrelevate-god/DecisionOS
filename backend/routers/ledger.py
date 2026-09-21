@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, File, Form, UploadFile, Query
+from pydantic import BaseModel
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
 
@@ -673,6 +674,56 @@ async def _linked_party(tenant_id: str, contact_id: str, kind: str) -> Optional[
         who = "supplier" if kind == "vendor" else "customer"
         raise HTTPException(status_code=400, detail=f"That {who} isn't in your CRM any more — pick again or type the name.")
     return {"id": c["id"], "name": c.get("name") or c.get("company") or ""}
+
+
+# --- PILOT-1 F: a category added from the form it is needed in ----------------
+# Categories are per company (tenant.finance_categories) and Settings > Money
+# has always edited them — behind Manage Team, and nowhere near the expense
+# being typed. Anyone with Finance access may now ADD one from the category
+# list itself; renaming and removing stay in Settings behind Manage Team.
+CATEGORY_NAME_MAX = 40
+
+
+class NewCategoryInput(BaseModel):
+    kind: str
+    name: str
+
+
+@router.post("/ledger/categories")
+async def add_finance_category(inp: NewCategoryInput, user: dict = Depends(require_ledger)):
+    from services.ai.generators import FINANCE_CATEGORY_CAPS
+    kind = (inp.kind or "").strip().lower()
+    if kind not in ("expense", "asset"):
+        raise HTTPException(status_code=400, detail="kind must be expense or asset")
+    name = " ".join(str(inp.name or "").split())
+    if not name:
+        raise HTTPException(status_code=400, detail="Give the category a name.")
+    if len(name) > CATEGORY_NAME_MAX:
+        raise HTTPException(status_code=400, detail=f"Keep the name under {CATEGORY_NAME_MAX} characters.")
+    for _attempt in range(3):
+        current = (await get_finance_categories(user["tenant_id"]))[kind]
+        same = next((c for c in current if c.lower() == name.lower()), None)
+        if same:
+            # Already there (in any capitalisation): hand back the one that exists.
+            return {"kind": kind, "category": same, "categories": current, "added": False}
+        rest = [c for c in current if c.lower() != "other"]
+        if len(rest) >= FINANCE_CATEGORY_CAPS[kind]:
+            raise HTTPException(status_code=400, detail=(
+                f"You already have {len(rest)} {kind} categories, the most there can be. "
+                "Ask someone with Manage Team to rename or remove one in Settings."))
+        updated = rest + [name, "Other"]
+        # Written only if the list is still what was read, so two people adding
+        # at the same moment both land (the loser re-reads and adds again).
+        t = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "finance_categories": 1})
+        stored = ((t or {}).get("finance_categories") or {}).get(kind)
+        guard = {"id": user["tenant_id"], f"finance_categories.{kind}": stored} if stored else \
+                {"id": user["tenant_id"], f"finance_categories.{kind}": {"$exists": False}}
+        r = await db.tenants.update_one(guard, {"$set": {f"finance_categories.{kind}": updated}})
+        if r.modified_count:
+            await log_activity(user["tenant_id"], user["id"], "finance_category_added",
+                               f"{user.get('name') or 'Someone'} added the {kind} category '{name}'")
+            return {"kind": kind, "category": name, "categories": updated, "added": True}
+    raise HTTPException(status_code=409, detail="The categories changed while saving — try again.")
 
 
 # --- Input models -----------------------------------------------------------

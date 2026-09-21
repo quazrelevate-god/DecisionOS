@@ -234,6 +234,10 @@ const TASKS = [
      drawer's Approve / Reject / Ask-to-clarify row (and the reason window
      behind the last two) has something to render against. No fixture task
      needed an approval before. */
+  /* PILOT-1 B/C — the pilot client's own case: a task the owner made for
+     themselves, with a typo in its name and, made before dates were required,
+     no due date. Renaming it (B) and dating it in one tap (C) are shown on it. */
+  mkTask({ id: 't_20', title: 'Call Surat Spinnrs about the yarn rate', assignee_id: 'u_owner', created_by: 'u_owner', priority: 'medium', department: 'Management' }),
   mkTask({ id: 't_19', title: 'Buy 20 cones of polyester yarn for the sample run', assignee_id: 'u_prod', created_by: 'u_prod', due_date: dateAhead(3), priority: 'medium', department: 'Production',
     status: 'blocked', approval_required: true, approval_stage: 'start', approval_status: 'pending', approver_id: 'u_owner' }),
   mkTask({ id: 't_14', title: 'Service the boiler before winter run', assignee_id: 'u_store', due_date: dateAhead(20), priority: 'low', department: 'Stores', status: 'done', progress: 100 }),
@@ -658,7 +662,11 @@ const financeAi = (scope) => ({
 // ---------------------------------------------------------------------------
 const OK = { ok: true };
 
-function resolve(method, path, q) {
+/* PILOT-1 — a refusal the fixture answers with a status other than 200, the
+   way the real route would (resolve returns it; the server unwraps it). */
+const refuse = (status, detail) => ({ __status: status, detail });
+
+function resolve(method, path, q, body = {}) {
   const seg = path.split('/').filter(Boolean); // ['api', ...]
   const p = '/' + seg.slice(1).join('/');
   /* Who the fixture is signed in as. `?_role=sales` on one request, or
@@ -753,6 +761,21 @@ function resolve(method, path, q) {
       { id: 's_3', title: 'Schedule the swap for Sunday shutdown', done: false },
     ] };
     if (seg[3] === 'updates') return t.updates || [];
+    /* PILOT-1 B/C — PATCH keeps what the drawer changes that the screens read
+       back (the name, the description, the due date), with the real route's
+       refusals, so a rename or a newly dated task can be seen to stick. Other
+       fields are acknowledged and not stored, as before. In memory only: a
+       restart is a clean fixture again. */
+    if (method === 'PATCH' && !seg[3]) {
+      if ('title' in body && body.title !== null) {
+        const title = String(body.title).replace(/\s+/g, ' ').trim();
+        if (!title) return refuse(400, 'A task needs a name.');
+        t.title = title;
+      }
+      if ('description' in body && body.description !== null) t.description = String(body.description).trim();
+      t.updated_at = new Date().toISOString();
+      return t;
+    }
     if (method !== 'GET') return { ...OK, task: t };
     return t;
   }
@@ -966,7 +989,9 @@ const server = http.createServer((req, res) => {
     if (!url.pathname.startsWith('/api')) return send(404, { detail: 'Not found' });
     let out;
     try {
-      out = resolve(req.method, url.pathname, url.searchParams);
+      let parsed = {};
+      try { parsed = body && (req.headers['content-type'] || '').includes('json') ? JSON.parse(body) : {}; } catch { parsed = {}; }
+      out = resolve(req.method, url.pathname, url.searchParams, parsed || {});
     } catch (err) {
       console.error(`[fixture] ${req.method} ${url.pathname} ->`, err.message);
       return send(500, { detail: 'Fixture server error' });
@@ -977,6 +1002,7 @@ const server = http.createServer((req, res) => {
       console.warn(`[fixture] unmapped ${req.method} ${url.pathname} -> {}`);
       out = req.method === 'GET' ? {} : OK;
     }
+    if (out && out.__status) return send(out.__status, { detail: out.detail });
     send(200, out);
   });
 });

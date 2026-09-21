@@ -1401,6 +1401,89 @@ function DueLine({ t: task, canMove, onSaved, className = "", testid }) {
   );
 }
 
+/* PILOT-1 B (2026-09-21) — RENAME A TASK, AND REWRITE WHAT IT SAYS.
+ *
+ * The pilot client made a task for themselves and could not fix its name.
+ * Nobody could, anywhere: the server had no field for it and the drawer drew
+ * the name as plain text. It opens from the pencil beside the drawer's title,
+ * for the people who may change what the work IS — whoever asked for it, their
+ * manager and the owner (taskEditRights "wording", the priority rule). The
+ * doer does not get the pencil: they were asked to do this, not to redefine it.
+ *
+ * What is typed here is a draft like any other (lib/drafts.js): closing the
+ * drawer keeps it, Save or Cancel ends it. The fields are the app's own
+ * .nm-field. A rename lands on the Activity timeline — the server writes it.
+ */
+export const wordingDraftName = (taskId) => `task-wording:${taskId}`;
+
+function TaskWordingEditor({ t, onSaved, onClose }) {
+  const [f, setF, draft] = useDraft(wordingDraftName(t.id), { title: t.title || "", description: t.description || "" });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const titleRef = useRef(null);
+  useEffect(() => { titleRef.current?.focus(); }, []);
+
+  const cancel = () => { draft.discard(); onClose(); };
+  const save = async () => {
+    const title = f.title.replace(/\s+/g, " ").trim();
+    if (!title) { setError("A task needs a name"); titleRef.current?.focus(); return; }
+    const body = {};
+    if (title !== (t.title || "")) body.title = title;
+    if (f.description.trim() !== (t.description || "").trim()) body.description = f.description.trim();
+    if (!Object.keys(body).length) { cancel(); return; }
+    setBusy(true);
+    try {
+      const { data } = await api.patch(`/tasks/${t.id}`, body);
+      toast.success(body.title ? "Task renamed" : "Description saved");
+      draft.discard();
+      onSaved?.(data);
+      onClose();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not save the change");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); save(); }} data-testid={`task-wording-${t.id}`}
+      className={`${DRAWER_CARD} space-y-3 p-4`}>
+      {draft.restored && (
+        <DraftNote onDiscard={() => draft.discard()} label="Kept from before — not saved yet"
+          testid={`task-wording-draft-${t.id}`} className="-mb-1 -mt-2" />
+      )}
+      <div>
+        <label htmlFor={`task-wording-title-${t.id}`} className={`${DRAWER_LABEL} block`}>Name</label>
+        <input ref={titleRef} id={`task-wording-title-${t.id}`} data-testid={`task-wording-title-${t.id}`}
+          value={f.title} maxLength={200} disabled={busy}
+          aria-invalid={error ? "true" : undefined}
+          aria-describedby={error ? `task-wording-error-${t.id}` : undefined}
+          onChange={(e) => { setF((s) => ({ ...s, title: e.target.value })); if (error) setError(""); }}
+          className="nm-field w-full px-4 py-3 text-base font-medium text-slate-900 placeholder:text-slate-400" />
+        {error && <p id={`task-wording-error-${t.id}`} role="alert" className="mt-1.5 text-xs font-medium text-kr-accent">{error}</p>}
+      </div>
+      <div>
+        <label htmlFor={`task-wording-desc-${t.id}`} className={`${DRAWER_LABEL} block`}>Description</label>
+        <textarea id={`task-wording-desc-${t.id}`} data-testid={`task-wording-desc-${t.id}`} rows={3}
+          value={f.description} disabled={busy}
+          onChange={(e) => setF((s) => ({ ...s, description: e.target.value }))}
+          placeholder="What does done look like? (optional)"
+          className="nm-field w-full resize-none px-4 py-3 text-[15px] leading-relaxed text-slate-800 placeholder:text-slate-400" />
+      </div>
+      <div className="flex gap-2">
+        <button type="submit" disabled={busy} data-testid={`task-wording-save-${t.id}`}
+          className={`flex h-11 flex-1 items-center justify-center rounded-pill text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40 disabled:opacity-50 ${INK_PILL}`}>
+          {busy ? "Saving…" : "Save"}
+        </button>
+        <button type="button" onClick={cancel} disabled={busy} data-testid={`task-wording-cancel-${t.id}`}
+          className={`flex h-11 items-center rounded-pill px-5 text-sm font-medium text-slate-700 transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40 ${GLASS_PILL}`}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
 /* D1 — a routine, and the way to end one. Stopping a routine is NOT cancelling
    the piece of work in hand: this task stays open and doing it simply brings
    nothing after it, which is what "we don't do this any more" actually means
@@ -1801,6 +1884,9 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
   // open it — See all tasks, the approver, a colleague waited on — leaves notes.
   const rights = taskEditRights(user, t, members);
   const noteOnly = !onThisTask;
+  // PILOT-1 B — the rename / description editor. It opens by itself when a
+  // half-written change was kept from before (lib/drafts.js).
+  const [renaming, setRenaming] = useState(() => hasDraft(draftScope(tenant, user), wordingDraftName(t.id)));
   const canEditPeople = rights.people;
   const onPeoplePatched = (data) => { applyPatched(data); onChange(); };
   // ASK-28 — progress comes from the checklist whenever the task has one.
@@ -1977,11 +2063,14 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
      Cancel still close it, because those are asked for. (Its words would come
      back anyway — lib/drafts.js — but they should not have to.) */
   const holdForUnsent = (e) => {
-    const unsent = hasDraftUnder(draftScope(tenant, user), updateDraftName(t.id, null));
-    if (!unsent && !recording) return;
+    const scope = draftScope(tenant, user);
+    const unsentNote = hasDraftUnder(scope, updateDraftName(t.id, null));
+    const unsavedName = hasDraft(scope, wordingDraftName(t.id));
+    if (!unsentNote && !unsavedName && !recording) return;
     e.preventDefault();
     toast(recording ? "Still recording — press Stop to attach it to the task"
-      : "Your update isn't posted yet — Post it, or Cancel to throw it away", { id: `unsent-${t.id}` });
+      : unsentNote ? "Your update isn't posted yet — Post it, or Cancel to throw it away"
+        : "Your change to the name isn't saved yet — Save it, or Cancel", { id: `unsent-${t.id}` });
   };
 
   const complete = async () => {
@@ -2269,6 +2358,15 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
               <RepeatLine t={t} canStop={rights.priority} onSaved={onChange} />
             </p>
           </div>
+          {/* PILOT-1 B — rename, for the people who may change what the work
+              is. Beside the close, the same size, a quieter face. */}
+          {rights.wording && !renaming && (
+            <button type="button" onClick={() => setRenaming(true)} data-testid={`task-rename-${t.id}`}
+              aria-label="Rename or describe this task" title="Rename"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/70 text-slate-700 ring-1 ring-inset ring-slate-900/[0.06] transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40">
+              <PencilSimple size={17} weight="bold" aria-hidden="true" />
+            </button>
+          )}
           <SheetClose
             ref={closeRef}
             data-testid={`task-drawer-close-${t.id}`}
@@ -2278,6 +2376,11 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
             <X size={18} weight="bold" aria-hidden="true" />
           </SheetClose>
         </SheetHeader>
+    {renaming && (
+      <div className="px-4 pt-4 lg:px-7">
+        <TaskWordingEditor t={t} onSaved={(data) => { applyPatched(data); onChange(); }} onClose={() => setRenaming(false)} />
+      </div>
+    )}
     {/* KR-14.22 · MOBILE EXPANDED BODY — reference-driven layout for the
         task expanded view on phones. Uses the same handlers/state as the
         desktop body below; the desktop body is `hidden lg:block` from

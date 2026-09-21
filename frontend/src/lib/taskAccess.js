@@ -31,11 +31,13 @@ export const canAssignTeam = (user, roleKey) => canAssignAny(user) || (!!roleKey
 //   finish   done / cancel / reopen: the same minus helpers
 //   people   doer and helpers: asker, manager, Manage Team, owner
 //   priority asker, manager, owner
+//   wording  rename / rewrite the description: asker, manager, owner
+//            (PILOT-1 B — the same people as priority; not the doer)
 //   proof    asker and owner only
 // "See all tasks", the approver and a colleague waited on leave notes.
 // `members` carries reporting_manager_id, which decides "manager".
 export function taskEditRights(user, t, members = []) {
-  const none = { work: false, finish: false, people: false, priority: false, proof: false };
+  const none = { work: false, finish: false, people: false, priority: false, wording: false, proof: false };
   if (!user?.id || !t) return none;
   const owner = isOwner(user);
   const doer = t.assignee_id ? t.assignee_id === user.id : (!!t.assignee_role && t.assignee_role === user.role);
@@ -49,6 +51,7 @@ export function taskEditRights(user, t, members = []) {
     finish: runs || doer,
     people: runs || userPerms(user).includes("team_manage"),
     priority: runs,
+    wording: runs,
     proof: owner || creator,
   };
 }

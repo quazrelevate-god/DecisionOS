@@ -52,6 +52,15 @@
  * envelope follows the voice up quickly and down slowly, which is the
  * difference between fluid and jittery.
  *
+ * ── 2026-09-21 · INWARD, FOR THE DESKTOP WELL ────────────────────────────
+ * `mode="in"` turns the same surface around. The stage is no longer a square
+ * round the mic: it fills its container, and the waves are born at the
+ * container's own inner wall and travel IN to the mic, fading as they go so
+ * that nothing arrives at the centre as a hard ring. At the wall a wave is the
+ * wall's shape — a superellipse sized to the box, close to its rounded corners
+ * — and it rounds into a circle as it closes on the mic. The phone keeps
+ * `mode="out"` (the default), drawn exactly as before.
+ *
  * ── REDUCED MOTION ───────────────────────────────────────────────────────
  * Nothing travels. One ring answers the level by thickening — the app's rule
  * since ASK-34 is that a decorative animation does not run when the system asks
@@ -150,7 +159,15 @@ export function VoiceRipple({
   // How alive the surface is when nothing is being said. The founder asked for
   // "subtly waving" at rest, which is this and not zero.
   idle = 0.13,
+  /* 2026-09-21 — "out" (the phone: waves leave the mic for the rim) or "in"
+     (the desktop well: waves leave the container's wall for the mic). In "in"
+     the stage fills its positioned parent; `hubPx` is the mic's diameter and
+     `hubAt` its centre, both in the stage's own pixels (default: the middle). */
+  mode = "out",
+  hubPx = 64,
+  hubAt = null,
 }) {
+  const inward = mode === "in";
   const external = typeof readLevel === "function";
   const canvasRef = useRef(null);
   const stageRef = useRef(null);
@@ -170,7 +187,7 @@ export function VoiceRipple({
   cfgRef.current = {
     ...RIPPLE_DEFAULTS, ...config, simulate,
     live: external ? listening : live,
-    external, readLevel, idle,
+    external, readLevel, idle, hubPx, hubAt,
   };
 
   /* ── the microphone ──────────────────────────────────────────────────── */
@@ -255,15 +272,23 @@ export function VoiceRipple({
        drawing happens in the element's own pixels, which is what `size` means. */
     // Backing-store pixels per own pixel; the shadow fallback needs it (below).
     let px = 1;
+    // The inward stage's height; the outward one is square, so `box` is both.
+    let boxH = size;
     const fit = () => {
       const rect = canvas.getBoundingClientRect();
       const own = canvas.offsetWidth || size;
+      const ownH = inward ? (canvas.offsetHeight || own) : own;
       const zoom = rect.width ? rect.width / own : 1;
-      const scale = (window.devicePixelRatio || 1) * zoom;
+      /* The inward stage is the whole well — several times the phone's square —
+         and every ring is blurred across all of it, so its backing store stops
+         at twice the screen's pixels. The phone's is untouched. */
+      const dpr = window.devicePixelRatio || 1;
+      const scale = (inward ? Math.min(2, dpr) : dpr) * zoom;
       canvas.width = Math.round(own * scale);
-      canvas.height = Math.round(own * scale);
+      canvas.height = Math.round(ownH * scale);
       ctx2d.setTransform(scale, 0, 0, scale, 0, 0);
       px = scale;
+      boxH = ownH;
       return own;
     };
     let box = fit();
@@ -316,13 +341,13 @@ export function VoiceRipple({
     /* One wave. `shape` is the ring's own outline (two random sets, blended by
        age), `amp` how far it is allowed to push, `relief` how deep the ridge
        is, `weight` the line, `soft` the blur. */
-    const drawWave = (cx, cy, R, alpha, relief, shape, amp, spin, weight, soft) => {
+    const drawWave = (cx, cy, R, alpha, relief, shape, amp, spin, weight, soft, radiusAt = null) => {
       if (R <= 2 || alpha <= 0.002) return;
       const STEPS = 128;
       const path = new Path2D();
       for (let i = 0; i <= STEPS; i += 1) {
         const th = (i / STEPS) * Math.PI * 2;
-        const r = R * (1 + amp * shape(th + spin));
+        const r = radiusAt ? radiusAt(th) : R * (1 + amp * shape(th + spin));
         const x = cx + Math.cos(th) * r;
         const y = cy + Math.sin(th) * r;
         if (i === 0) path.moveTo(x, y); else path.lineTo(x, y);
@@ -367,8 +392,87 @@ export function VoiceRipple({
       ridge(-off, -off, `hsl(0 0% 100% / ${(alpha * 0.85).toFixed(3)})`);
     };
 
+    /* 2026-09-21 · THE INWARD FRAME (mode="in"). The waves are born at the
+       container's inner wall and travel in to the mic.
+       SHAPE. At the wall a wave is a superellipse, |x/a|^n + |y/b|^n = 1, with
+       its four half-extents measured from the mic to each wall — so it fits
+       the box even when the mic is not in the box's middle — and n high enough
+       to read as the well's own rounded rectangle. As it travels, the extents
+       close on the mic and n falls to 2: the wave rounds into a circle.
+       LIGHT. It is born at nothing (a wave does not pop out of a wall), is at
+       its fullest while it is still near the wall, and thins away as it closes
+       in — gone before it reaches the mic, so the centre never receives a hard
+       ring. The same ridge, the same blur, the same founder's settings. */
+    const inwardFrame = (now) => {
+      const { softness, thickness, water, speed, density, hubPx: hp, hubAt: at } = cfgRef.current;
+      const level = read(now);
+      const W = box;
+      const H = boxH;
+      const cx = at?.x ?? W / 2;
+      const cy = at?.y ?? H / 2;
+      const hubR = (hp || 64) / 2;
+      ctx2d.clearRect(0, 0, W, H);
+
+      // The mic's bloom, as in the outward surface.
+      const auraR = hubR * (1.15 + 0.9 * level);
+      const aura = ctx2d.createRadialGradient(cx, cy, hubR * 0.6, cx, cy, auraR);
+      aura.addColorStop(0, `hsl(0 0% 100% / ${(0.40 + 0.35 * level).toFixed(3)})`);
+      aura.addColorStop(1, "hsl(0 0% 100% / 0)");
+      ctx2d.fillStyle = aura;
+      ctx2d.beginPath();
+      ctx2d.arc(cx, cy, auraR, 0, Math.PI * 2);
+      ctx2d.fill();
+
+      const INSET = 3;
+      const wall = {
+        l: Math.max(hubR, cx - INSET), r: Math.max(hubR, W - cx - INSET),
+        t: Math.max(hubR, cy - INSET), b: Math.max(hubR, H - cy - INSET),
+      };
+      const end = hubR * 1.18;          // where a wave would arrive — it is gone by then
+      const N_WALL = 7;                 // squareness at the wall: the well's rounded box
+      const radiusAt = (e, amp, shape, spin) => (th) => {
+        const n = N_WALL + (2 - N_WALL) * e;
+        const c = Math.cos(th);
+        const s = Math.sin(th);
+        const ax = (c >= 0 ? wall.r : wall.l) + (end - (c >= 0 ? wall.r : wall.l)) * e;
+        const by = (s >= 0 ? wall.b : wall.t) + (end - (s >= 0 ? wall.b : wall.t)) * e;
+        const base = Math.pow(Math.pow(Math.abs(c / ax), n) + Math.pow(Math.abs(s / by), n), -1 / n);
+        return base * (1 + amp * shape(th + spin));
+      };
+
+      if (still) {
+        const ring = ringsRef.current[0] || (ringsRef.current[0] = newRing(0, 0.5));
+        drawWave(cx, cy, end * 3, 0.5, 0.25 + 0.55 * level, null, 0, 0, thickness, softness,
+          radiusAt(0.55, 0, seedShape(ring, 1), 0));
+        return;
+      }
+
+      const cadence = (RING_MS_QUIET - (RING_MS_QUIET - RING_MS_LOUD) * level) / Math.max(0.2, density);
+      if (now - lastRingRef.current > cadence) {
+        lastRingRef.current = now;
+        ringsRef.current.push(newRing(now, 0.12 + 0.88 * level));
+      }
+      const rings = ringsRef.current;
+      for (let i = rings.length - 1; i >= 0; i -= 1) {
+        const ring = rings[i];
+        const age = (now - ring.born) / ((LIFE_MS / Math.max(0.2, speed)) * (1.25 - 0.45 * ring.push));
+        if (age >= 1) { rings.splice(i, 1); continue; }
+        // Away from the wall briskly, easing as it closes on the mic.
+        const e = 1 - Math.pow(1 - age, 1.7);
+        const born = Math.min(1, age / 0.16);            // no wave pops out of a wall
+        const fade = Math.pow(1 - e, 1.5);                // …and none arrives at the mic
+        const alpha = ring.push * born * fade;
+        const relief = ring.push * born * (1 - e);
+        // Irregular in its middle life, calm at the wall and as it rounds up.
+        const amp = water * 0.07 * ring.push * Math.sin(Math.PI * Math.min(1, e * 1.05));
+        drawWave(cx, cy, end * 3, alpha, Math.max(0, relief), null, 0, 0, thickness, softness,
+          radiusAt(e, amp, seedShape(ring, age), ring.spin * age));
+      }
+    };
+
     const frame = (now) => {
       rafRef.current = requestAnimationFrame(frame);
+      if (inward) { inwardFrame(now); return; }
       const { softness, thickness, water, elastic, speed, density } = cfgRef.current;
       const level = read(now);
       const cx = box / 2;
@@ -451,7 +555,7 @@ export function VoiceRipple({
       ro.disconnect();
       window.removeEventListener("resize", refit);
     };
-  }, [size, still]);
+  }, [size, still, inward]);
 
   /* The hub's swell follows the level without a re-render: the loop writes a
      CSS variable and the halo reads it.
@@ -476,13 +580,26 @@ export function VoiceRipple({
     return () => cancelAnimationFrame(raf);
   }, []);
 
+  /* The mic's box: the square stage's own centre outward, or wherever the
+     inward stage was told the mic is. */
+  const hubD = inward ? hubPx : size * hub;
+  const hubBox = (scale) => (inward ? {
+    position: "absolute",
+    left: (hubAt?.x ?? 0) - (hubD * scale) / 2,
+    top: (hubAt?.y ?? 0) - (hubD * scale) / 2,
+    ...(hubAt ? {} : { left: `calc(50% - ${(hubD * scale) / 2}px)`, top: `calc(50% - ${(hubD * scale) / 2}px)` }),
+  } : {});
+
   return (
-    <div className="flex flex-col items-center gap-3">
+    /* Inward: the whole container, clipped to its rounded corners so no wave
+       is ever drawn outside the wall it starts from. */
+    <div className={inward ? "pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]" : "flex flex-col items-center gap-3"}>
       <div
         ref={stageRef}
-        className="relative grid place-items-center"
-        style={{ width: size, height: size }}
+        className={inward ? "absolute inset-0" : "relative grid place-items-center"}
+        style={inward ? undefined : { width: size, height: size }}
         data-testid="voice-ripple"
+        data-mode={mode}
         data-live={live ? "true" : undefined}
       >
         {/* ASK-45 — NO DISH. The stage was a .kr-pressed well, which drew a hard
@@ -492,7 +609,7 @@ export function VoiceRipple({
         <canvas
           ref={canvasRef}
           className="absolute inset-0 h-full w-full"
-          style={{ width: size, height: size }}
+          style={inward ? undefined : { width: size, height: size }}
           aria-hidden="true"
         />
         {/* The hub's own swell — a ridge of the surface right at the mic's
@@ -510,8 +627,9 @@ export function VoiceRipple({
           aria-hidden="true"
           className="pointer-events-none absolute rounded-full"
           style={{
-            width: size * hub * 1.28,
-            height: size * hub * 1.28,
+            width: hubD * 1.28,
+            height: hubD * 1.28,
+            ...hubBox(1.28),
             transform: "scale(calc(1 + 0.085 * var(--vr-level, 0)))",
             /* No box-shadow anywhere near this. A shadow is drawn at the
                element's BOUNDARY, so it redraws the very edge the founder
@@ -531,6 +649,7 @@ export function VoiceRipple({
           aria-label={label || ((external ? listening : live) ? "Stop listening" : "Start listening")}
           className={[
             "relative grid place-items-center rounded-full transition-[box-shadow,transform,background] duration-150",
+            inward && "pointer-events-auto",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60",
             disabled && "opacity-50",
           ].join(" ")}
@@ -547,8 +666,9 @@ export function VoiceRipple({
              corners and the body dips — .kr-pressed's grammar, drawn in light
              instead of in edges. */
           style={{
-            width: size * hub,
-            height: size * hub,
+            width: hubD,
+            height: hubD,
+            ...hubBox(1),
             background: (external ? listening : live)
               ? [
                   "radial-gradient(circle at 68% 72%, hsl(0 0% 100% / .92), hsl(0 0% 100% / 0) 58%)",
@@ -564,7 +684,7 @@ export function VoiceRipple({
         >
           {/* The glyph is the app's own mic, drawn rather than imported so this
               file stays standalone (Phosphor's Microphone, same geometry). */}
-          <svg viewBox="0 0 24 24" width={size * hub * 0.48} height={size * hub * 0.48} aria-hidden="true"
+          <svg viewBox="0 0 24 24" width={hubD * 0.48} height={hubD * 0.48} aria-hidden="true"
             fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
             className="text-foreground">
             <rect x="9" y="2.5" width="6" height="11" rx="3" />
@@ -574,7 +694,7 @@ export function VoiceRipple({
         </button>
       </div>
 
-      {!external && (
+      {!external && !inward && (
       <p className="text-center text-sm text-muted-foreground" role="status">
         {error
           ? <span className="text-kr-accent">{error}</span>

@@ -96,6 +96,25 @@ async def workflow_counts(user: dict = Depends(get_current_user)):
     return {r["_id"]: r["n"] for r in await cur.to_list(200) if r.get("_id")}
 
 
+def _clean_target(raw) -> Optional[str]:
+    """A card's target date: YYYY-MM-DD, or None to clear. Anything else is a
+    400 that says what to send."""
+    from datetime import date as _date
+    s = (raw or "").strip()
+    if not s:
+        return None
+    try:
+        return _date.fromisoformat(s[:10]).isoformat()
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"'{s}' is not a date. Use YYYY-MM-DD, or leave it empty.")
+
+
+async def _pipelines_by_key(tenant_id: str) -> dict:
+    from services.ai.generators import tenant_operating_model
+    om = await tenant_operating_model(tenant_id)
+    return {p.get("key"): p for p in (om.get("pipelines") or [])}
+
+
 @router.get("/workflows")
 async def list_workflows(type: Optional[str] = None,
                          with_tasks: Optional[bool] = False,
@@ -166,6 +185,18 @@ async def list_workflows(type: Optional[str] = None,
                 w["stage_tasks"] = [t for t in at_stage if t.get("status") not in _TASK_CLOSED]
                 w["stage_total"] = len(at_stage)
                 w["stage_done"] = sum(1 for t in at_stage if t.get("status") in _TASK_CLOSED)
+            # 2026-09-22 — the card's clock: its stage deadline, how late the
+            # stage is, the forecast against any target, and the stuck clock
+            # with this board's own threshold. The board and the Desk read the
+            # same numbers (services/workflow_timing.card_timing).
+            from services.workflow_timing import card_timing
+            pipes = await _pipelines_by_key(user["tenant_id"])
+            for w in wfs:
+                last = max((t.get("updated_at") for t in (by_wf.get(w.get("id")) or []) if t.get("updated_at")),
+                           default=None)
+                tm = card_timing(w, pipes.get(w.get("type")), last_activity=last)
+                tm.pop("timeline", None)
+                w["timing"] = tm
     return wfs
 
 
@@ -190,6 +221,7 @@ async def create_workflow(inp: WorkflowCreateInput, user: dict = Depends(require
         "detail": inp.detail or "", "amount": inp.amount, "counterparty": counterparty, "contact_id": contact_id,
         "stage": stages[0], "stages": stages,
         "stage_version": 0,
+        "target_date": _clean_target(inp.target_date),
         "history": [{"stage": stages[0], "note": "Created", "by": user["id"], "at": now_iso()}],
         "created_by": user["id"], "created_at": now_iso(),
     }
@@ -288,6 +320,11 @@ async def get_workflow(workflow_id: str, user: dict = Depends(get_current_user))
     # linked before stage_key was required). Shown rather than silently lost.
     wf["unstaged_tasks"] = by_stage.get("") or []
     wf["readiness"] = await check_stage_ready(user["tenant_id"], workflow_id)
+    # 2026-09-22 — the whole clock, with the planned-vs-actual timeline.
+    from services.workflow_timing import card_timing
+    cur_tasks = by_stage.get(wf.get("stage")) or []
+    last = max((t.get("updated_at") for t in cur_tasks if t.get("updated_at")), default=None)
+    wf["timing"] = card_timing(wf, pipeline, last_activity=last)
     return wf
 
 
@@ -327,6 +364,8 @@ async def update_workflow(workflow_id: str, inp: WorkflowUpdateInput,
         )
         updates["counterparty"] = (party or "").strip()
         updates["contact_id"] = contact_id
+    if "target_date" in fields:
+        updates["target_date"] = _clean_target(fields["target_date"])
     if not updates:
         return await db.workflows.find_one(
             {"id": workflow_id, "tenant_id": user["tenant_id"]}, {"_id": 0})

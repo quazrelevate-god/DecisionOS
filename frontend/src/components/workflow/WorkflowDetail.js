@@ -441,6 +441,126 @@ function EditCard({ card, onSaved, onCancel }) {
   );
 }
 
+/* ═══════════════════════════ the card's clock ═════════════════════════
+   2026-09-22 (Yokesh: "delay, overdue for the workflow, setting up the
+   timeline"). Stages have a duration and a card may have a target date
+   (services/workflow_timing). This says, in order: when this stage is due and
+   whether it has run over, whether the card has gone quiet, the target with
+   its forecast, and every stage's planned days against the days it took. */
+function dayWord(n) { return `${n} working day${n === 1 ? "" : "s"}`; }
+function shortDay(ymd) {
+  if (!ymd) return "";
+  const d = new Date(`${String(ymd).slice(0, 10)}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+}
+
+function CardClock({ card, canEdit, onSaved }) {
+  const tm = card?.timing;
+  const [editing, setEditing] = useState(false);
+  const [target, setTarget] = useState(card?.target_date || "");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setTarget(card?.target_date || ""); }, [card?.target_date]);
+  if (!tm) return null;
+
+  const saveTarget = async (value) => {
+    setBusy(true);
+    try {
+      await api.patch(`/workflows/${card.id}`, { target_date: value || "" });
+      toast.success(value ? `Target set: ${shortDay(value)}` : "Target cleared");
+      setEditing(false);
+      onSaved?.();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Could not save the target date.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const rows = (tm.timeline || []).filter((r) => r.planned_days != null);
+  const widest = Math.max(1, ...rows.map((r) => Math.max(r.planned_days || 0, r.actual_days || 0)));
+
+  return (
+    <section className={`${DRAWER_CARD} space-y-3 p-4`} data-testid="wf-detail-clock">
+      <p className={DRAWER_LABEL}>Timeline</p>
+
+      {!tm.finished && tm.stage_due && (
+        <p className="flex items-start gap-2 text-[13px] text-slate-700" data-testid="wf-clock-stage">
+          <CalendarBlank size={14} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0 text-slate-400" />
+          <span>
+            This stage is due <b>{shortDay(tm.stage_due)}</b> ({dayWord(tm.stage_days)}).
+            {tm.stage_late_days > 0 && (
+              <span className="text-red-700" data-testid="wf-clock-stage-late"> {dayWord(tm.stage_late_days)} over.</span>
+            )}
+          </span>
+        </p>
+      )}
+      {!tm.finished && tm.stuck && (
+        <p className="flex items-start gap-2 text-[13px] text-amber-800" data-testid="wf-clock-stuck">
+          <WarningCircle size={14} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0" />
+          <span>Nothing has moved for {dayWord(tm.idle_days)} — this board calls a card stuck after {tm.stuck_after_days}.</span>
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2 text-[13px] text-slate-700" data-testid="wf-clock-target">
+        {tm.target_date ? (
+          <span>
+            Target <b>{shortDay(tm.target_date)}</b>
+            {tm.finished ? "" : tm.past_target ? <span className="text-red-700"> · missed</span>
+              : tm.at_risk ? <span className="text-amber-700" data-testid="wf-clock-at-risk"> · at risk — forecast {shortDay(tm.forecast_date)}</span>
+              : <span className="text-emerald-700"> · on track — forecast {shortDay(tm.forecast_date)}</span>}
+          </span>
+        ) : (
+          <span className="text-slate-500">
+            No target date{!tm.finished && tm.forecast_date ? ` · forecast to finish ${shortDay(tm.forecast_date)}` : ""}
+          </span>
+        )}
+        {canEdit && !editing && (
+          <button type="button" onClick={() => setEditing(true)} data-testid="wf-clock-target-edit"
+            className={`ml-auto min-h-9 rounded-pill px-3.5 text-[12.5px] font-medium text-slate-700 ${GLASS_PILL}`}>
+            {tm.target_date ? "Change" : "Set a target"}
+          </button>
+        )}
+      </div>
+      {editing && (
+        <div className="flex flex-wrap items-center gap-2">
+          <input type="date" value={target} onChange={(e) => setTarget(e.target.value)} aria-label="Target date"
+            data-testid="wf-clock-target-input" className={`${DRAWER_FIELD} !w-auto !py-2 !text-[13px]`} />
+          <button type="button" disabled={busy || !target} onClick={() => saveTarget(target)} data-testid="wf-clock-target-save"
+            className={`min-h-9 rounded-pill px-4 text-[12.5px] font-semibold disabled:opacity-50 ${INK_PILL}`}>Save</button>
+          {tm.target_date && (
+            <button type="button" disabled={busy} onClick={() => saveTarget("")} data-testid="wf-clock-target-clear"
+              className="min-h-9 rounded-pill px-3 text-[12.5px] font-medium text-slate-500 hover:text-slate-800">Clear</button>
+          )}
+          <button type="button" onClick={() => setEditing(false)}
+            className="min-h-9 rounded-pill px-3 text-[12.5px] font-medium text-slate-500 hover:text-slate-800">Cancel</button>
+        </div>
+      )}
+
+      {rows.length > 0 && (
+        <ol className="space-y-2 pt-1" data-testid="wf-clock-timeline">
+          {rows.map((r) => (
+            <li key={r.key} data-testid={`wf-clock-row-${r.key}`} data-state={r.state}
+              className="grid grid-cols-[minmax(0,7.5rem)_1fr_auto] items-center gap-2.5 text-[12px]">
+              <span className={`truncate ${r.state === "upcoming" ? "text-slate-400" : "text-slate-700"}`}>{r.label}</span>
+              <span className="relative h-2 rounded-full bg-slate-900/[0.06]" aria-hidden="true">
+                <span className="absolute inset-y-0 left-0 rounded-full bg-slate-900/15"
+                  style={{ width: `${(r.planned_days / widest) * 100}%` }} />
+                {r.actual_days != null && (
+                  <span className={`absolute inset-y-0 left-0 rounded-full ${r.over ? "bg-red-500" : r.state === "current" ? "bg-sky-500" : "bg-emerald-500"}`}
+                    style={{ width: `${(Math.min(r.actual_days, widest) / widest) * 100}%` }} />
+                )}
+              </span>
+              <span className={`whitespace-nowrap tabular-nums ${r.over ? "text-red-700" : "text-slate-500"}`}>
+                {r.actual_days != null ? `${r.actual_days} of ${r.planned_days}d` : `${r.planned_days}d planned`}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
 /* ═══════════════════════════════ the drawer ═══════════════════════════ */
 export default function WorkflowDetail({ workflowId, open, onOpenChange, onAdvance, onChanged }) {
   const { user, tenant } = useAuth();
@@ -587,6 +707,8 @@ export default function WorkflowDetail({ workflowId, open, onOpenChange, onAdvan
                 )}
               </div>
             )}
+
+            {card && <CardClock card={card} canEdit={canEdit} onSaved={reload} />}
 
             {/* 2 + 3. Every stage, its work, and who holds it. */}
             {stages.map((s, i) => (

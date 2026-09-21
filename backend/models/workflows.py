@@ -36,6 +36,9 @@ class WorkflowCreateInput(BaseModel):
     amount: Optional[float] = None
     counterparty: Optional[str] = None
     contact_id: Optional[str] = None
+    # 2026-09-22 — when this card has to be finished by ("ship by 15 Oct"),
+    # YYYY-MM-DD. Optional; the card's forecast is measured against it.
+    target_date: Optional[str] = None
 
 
 class WorkflowUpdateInput(BaseModel):
@@ -51,6 +54,8 @@ class WorkflowUpdateInput(BaseModel):
     amount: Optional[float] = None
     counterparty: Optional[str] = None
     contact_id: Optional[str] = None
+    # 2026-09-22 — the card's target date; "" clears it.
+    target_date: Optional[str] = None
 
 
 class WorkflowAdvanceInput(BaseModel):

@@ -450,6 +450,20 @@ async def _bootstrap():
         except Exception as e:
             logger.exception(f"drop_ghost_workflow_collections migration: {e}")  # WE-02
 
+        # 2026-09-22 — stage work gets a deadline. Work created before stages
+        # had a duration has none; date it from its stage (never earlier than
+        # the next working day, so nothing turns overdue overnight).
+        try:
+            from services.workflow_timing import backfill_stage_due_dates
+            _sd = await _apply_migration(
+                db, "date_stage_work_v1", backfill_stage_due_dates,
+                description="Open stage work with no due date gets its stage's deadline",
+            )
+            if _sd == "applied":
+                logger.info("Migration applied: date_stage_work_v1")
+        except Exception as e:
+            logger.exception(f"date_stage_work migration: {e}")
+
         # ASK-32 2.1 (2026-09-15): waiting decisions captured before routing
         # existed get the approver the routing rule picks now (capturer ->
         # their manager -> the owner). Several owners: left with every owner.

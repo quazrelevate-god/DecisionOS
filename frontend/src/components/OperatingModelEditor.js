@@ -22,8 +22,13 @@ function withUids(om) {
     pipelines: (om.pipelines || []).map((p) => ({
       _uid: uid(), key: p.key || "", label: p.label || "", sub: p.sub || "",
       approval_stage: p.approval_stage || "",
+      // 2026-09-22 — working days of silence before a card here is stuck.
+      stuck_after_days: p.stuck_after_days ?? "",
       stages: (p.stages || []).map((s) => ({
         _uid: uid(), key: s.key || "", label: s.label || "",
+        // 2026-09-22 — working days this stage should take; its work is
+        // dated from it when a card arrives (blank = the default, 3).
+        days: s.days ?? "",
         // 2026-09-20 (Settings audit) — the stage's department. Voice capture
         // routes a task to the stage its department owns
         // (services/workflows.py); the editor never loaded or sent it, so
@@ -188,12 +193,14 @@ export function OperatingModelEditor() {
       .map((p) => ({
         key: p.key || undefined, label: p.label.trim(), sub: p.sub.trim(),
         approval_stage: p.approval_stage || null,
+        stuck_after_days: p.stuck_after_days === "" ? null : Number(p.stuck_after_days),
         stages: p.stages
           .filter((s) => s.label.trim())
           .map((s) => ({
             key: s.key || undefined,
             label: s.label.trim(),
             role: s.role || "",
+            days: s.days === "" ? null : Number(s.days),
             tasks: (s.tasks || [])
               .filter((t) => t.title.trim())
               .map((t) => ({
@@ -288,9 +295,17 @@ export function OperatingModelEditor() {
               <span className="label-mono text-muted-foreground">Stages (in order)</span>
               {p.stages.map((s, si) => (
                 <div key={s._uid} className="border border-nm-edge/60 rounded-md p-2.5 bg-accent/30" data-testid={`op-stage-${pi}-${si}`}>
-                  {/* Stage name row + reorder + delete */}
-                  <div className="flex items-center gap-1.5">
-                    <input className={`${smInp} flex-1`} placeholder="Stage name" value={s.label} onChange={(e) => setStage(pi, si, { label: e.target.value })} />
+                  {/* Stage name row + reorder + delete. Wraps: with the
+                      stage's days on it the row no longer fits a phone. */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <input className={`${smInp} min-w-[8rem] flex-1`} placeholder="Stage name" value={s.label} onChange={(e) => setStage(pi, si, { label: e.target.value })} />
+                    <label className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground"
+                      title="Working days this stage should take. Its work is due that many working days after a card arrives. Blank = 3.">
+                      <input data-testid={`op-stage-days-${pi}-${si}`} type="number" min="1" max="60" inputMode="numeric"
+                        className={`${smInp} w-14 text-center`} placeholder="3" value={s.days}
+                        onChange={(e) => setStage(pi, si, { days: e.target.value.replace(/[^0-9]/g, "").slice(0, 2) })} />
+                      days
+                    </label>
                     <select data-testid={`op-stage-role-${pi}-${si}`} className={smInp} value={s.role || ""}
                       onChange={(e) => setStage(pi, si, { role: e.target.value })}
                       title="Stage owner: the team whose work this stage is. A voice note about that team's work lands here.">
@@ -387,6 +402,13 @@ export function OperatingModelEditor() {
                 {p.stages.filter((s) => s.key).map((s) => <option key={s._uid} value={s.key}>{s.label}</option>)}
               </select>
               <span className="text-[11px] text-muted-foreground">(only the owner can advance to it)</span>
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <span className="label-mono text-muted-foreground">Stuck after</span>
+              <input data-testid={`op-stuck-days-${pi}`} type="number" min="1" max="30" inputMode="numeric"
+                className={`${smInp} w-14 text-center`} placeholder="3" value={p.stuck_after_days}
+                onChange={(e) => setPipeline(pi, { stuck_after_days: e.target.value.replace(/[^0-9]/g, "").slice(0, 2) })} />
+              <span className="text-[11px] text-muted-foreground">working days with no movement — the people on the card and the owner are told</span>
             </div>
           </div>
         ))}

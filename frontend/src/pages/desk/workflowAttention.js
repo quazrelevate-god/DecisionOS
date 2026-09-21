@@ -14,10 +14,14 @@
  *          refuses that move from anyone else, services/workflow_engine). The
  *          sign-off half counts only when the person looking IS an owner:
  *          nobody else can act on it.
- *   stuck  neither the stage nor its tasks have moved for STUCK_WORKING_DAYS.
- *   late   an open task at its current stage is past its due date. A CARD has
- *          no due date of its own — this is the founder's call on what "late"
- *          means until it does.
+ *   stuck  neither the stage nor its tasks have moved for the board's stuck
+ *          days (Settings → Operations, else STUCK_WORKING_DAYS).
+ *   late   an open task at its current stage is past its due date, OR the
+ *          stage itself has run past the working days it should take, OR the
+ *          card has passed its own target date (2026-09-22: stages have a
+ *          duration and cards a target — services/workflow_timing, which
+ *          sends `timing` on every card; this file reads it rather than
+ *          working the same numbers out a second time).
  *
  * A card is counted ONCE. Where two reasons fit, the worse one wins — late,
  * then stuck, then you — so the three parts add up to the number above them
@@ -35,8 +39,10 @@ export const STUCK_WORKING_DAYS_BY_BOARD = {};
    change this one line for a five-day week. */
 const isWorkingDay = (d) => d.getDay() !== 0;
 
-export const stuckDaysFor = (type) =>
-  STUCK_WORKING_DAYS_BY_BOARD[type] ?? STUCK_WORKING_DAYS;
+export const stuckDaysFor = (type, pipelines) =>
+  STUCK_WORKING_DAYS_BY_BOARD[type]
+  ?? (pipelines || []).find((p) => p.key === type)?.stuck_after_days
+  ?? STUCK_WORKING_DAYS;
 
 /** Working days between two instants, counting the days AFTER `from` up to
  *  and including `to`'s day. Same day → 0. */
@@ -92,19 +98,27 @@ function readCard(w, { userId, isOwner, pipelines, now }) {
   const idleSince = latest(lastMove, lastTask);
   const idleDays = workingDaysBetween(idleSince, now);
 
+  const tm = w.timing || null;
+  const stageLateDays = (tm && tm.stage_late_days) || 0;
+  const pastTarget = !!(tm && tm.past_target);
+  const atRisk = active && !!(tm && tm.at_risk) && !pastTarget;
   const you = active && (mine || (needsSignOff && isOwner));
-  const stuck = active && idleDays >= stuckDaysFor(w.type);
-  const late = active && overdue.length > 0;
+  // The server's stuck clock when it sent one (same rule, the board's own
+  // threshold); the local count otherwise.
+  const stuck = active && (tm ? !!tm.stuck : idleDays >= stuckDaysFor(w.type, pipelines));
+  const late = active && (overdue.length > 0 || stageLateDays > 0 || pastTarget);
   // The worse reason wins, so the three parts of the bar add up to the number.
   const reason = late ? "late" : stuck ? "stuck" : you ? "you" : null;
 
   return {
     w, active, nextStage, needsSignOff, tasks, mine, overdue,
-    idleSince, idleDays, you, stuck, late, reason,
+    idleSince, idleDays: tm ? tm.idle_days : idleDays, you, stuck, late, reason,
+    stageLateDays, pastTarget, atRisk, timing: tm,
     // The earliest due date it has run past — "2 days late" reads off this.
-    overdueBy: overdue.length
-      ? Math.max(...overdue.map((t) => Math.round((new Date(today) - new Date(t.due_date)) / 86400000)))
-      : 0,
+    overdueBy: Math.max(
+      overdue.length ? Math.max(...overdue.map((t) => Math.round((new Date(today) - new Date(t.due_date)) / 86400000))) : 0,
+      stageLateDays,
+    ),
   };
 }
 
@@ -143,6 +157,9 @@ export function workflowAttention({ workflows, userId, isOwner = false, pipeline
     you: flagged.filter((c) => c.reason === "you").length,
     stuck: flagged.filter((c) => c.reason === "stuck").length,
     late: flagged.filter((c) => c.reason === "late").length,
+    // Running on time today but forecast to miss the target date — not yet a
+    // reason (nothing is late), said beside the number.
+    atRisk: active.filter((c) => c.atRisk).length,
     advancedToday,
     nextUp: chosen ? nextUpOf(chosen, pipelines) : null,
     cards: read,
@@ -157,6 +174,8 @@ function nextUpOf(c, pipelines) {
     : c.late ? `${c.overdueBy} ${c.overdueBy === 1 ? "day" : "days"} late`
     : "";
   const note = c.tasks.length === 0 ? "no tasks at this stage"
+    : c.pastTarget ? `past its target date`
+    : c.stageLateDays ? `${c.stageLateDays} working day${c.stageLateDays === 1 ? "" : "s"} over at this stage`
     : c.overdue.length ? `${c.overdue.length} overdue task${c.overdue.length === 1 ? "" : "s"}`
     : `${c.tasks.length} open task${c.tasks.length === 1 ? "" : "s"}`;
   return {

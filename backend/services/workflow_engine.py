@@ -213,6 +213,15 @@ async def on_stage_enter(
         }}},
     )
 
+    # 2026-09-22 — the stage's work gets the stage's deadline. It used to be
+    # created with no date, so nothing on a workflow was ever due, overdue or
+    # escalated (services/workflow_timing). Never blocks the transition.
+    try:
+        from services.workflow_timing import date_stage_work
+        await date_stage_work(tenant_id, wf, pipeline)
+    except Exception as e:
+        logger.warning(f"[stage-days] could not date stage work on {workflow_id}: {e}")
+
     # -----------------------------------------------------------------------
     # WE-08 side-effects. Registry lookup + call. Each hook is
     # coroutine(tenant_id, wf, stage_obj, params, actor_id) -> Optional[dict]

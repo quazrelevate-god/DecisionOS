@@ -99,6 +99,13 @@ async def run_followup(tenant_id: str):
         await warn_before_due(tenant_id, now)
     except Exception as e:
         logger.warning(f"[D2] due-soon warning failed for tenant {tenant_id[:8]}...: {e}")
+    # 2026-09-22: a workflow card that has sat still for its board's stuck days
+    # is told about — it used to be a colour on the Desk and nothing more.
+    try:
+        from services.workflow_timing import warn_stuck_workflows
+        await warn_stuck_workflows(tenant_id, now)
+    except Exception as e:
+        logger.warning(f"[stage-days] stuck-card warning failed for tenant {tenant_id[:8]}...: {e}")
     # ASK-28 Phase 7 (plan 7.1–7.3): every open stage counts — Waiting on and
     # waiting for approval too — and the ladder and who hears at each step
     # live in services/tasks (followup_level, stuck_on, escalation_manager_id).

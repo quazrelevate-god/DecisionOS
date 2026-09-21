@@ -362,6 +362,13 @@ function StandaloneHeader({ show, title, pipelines, activeKey, countOf, onPick, 
    changed when the page became standalone is
    branch, which now looks like every other room: a pinned title, and one row
    under it carrying the pipeline picker and the primary action. */
+/* "Thu 25 Sep" from YYYY-MM-DD — the card clock's dates (2026-09-22). */
+function shortDay(ymd) {
+  if (!ymd) return "";
+  const d = new Date(`${String(ymd).slice(0, 10)}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+}
+
 export default function Workflows() {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -875,7 +882,8 @@ export default function Workflows() {
                               }`}>
                               <WarningCircle size={10} weight="bold" aria-hidden="true" />
                               {read.reason === "late"
-                                ? `${read.overdueBy} ${read.overdueBy === 1 ? "day" : "days"} late`
+                                ? (read.pastTarget && !read.overdueBy ? "Past its target date"
+                                  : `${read.overdueBy} ${read.overdueBy === 1 ? "day" : "days"} late`)
                                 : read.reason === "stuck" ? `Stuck ${read.idleDays}d`
                                 : read.needsSignOff && !read.mine ? "Needs your sign-off" : "Needs you"}
                             </span>
@@ -905,6 +913,25 @@ export default function Workflows() {
                           <p className="mt-2 font-mono text-[10.5px] tabular-nums text-muted-foreground lg:pl-[23px]"
                             data-testid={`wf-card-stage-progress-${w.id}`}>
                             {w.stage_done} of {w.stage_total} done at this stage
+                          </p>
+                        )}
+                        {/* 2026-09-22 — the card's clock: when this stage is
+                            due, and the target with its forecast. */}
+                        {w.timing && !w.timing.finished && (w.timing.stage_due || w.timing.target_date) && (
+                          <p className="mt-1 flex flex-wrap gap-x-2 font-mono text-[10.5px] tabular-nums text-muted-foreground lg:pl-[23px]"
+                            data-testid={`wf-card-clock-${w.id}`}>
+                            {w.timing.stage_due && (
+                              <span className={w.timing.stage_late_days > 0 ? "text-red-700" : undefined}>
+                                Stage due {shortDay(w.timing.stage_due)}
+                              </span>
+                            )}
+                            {w.timing.target_date && (
+                              <span className={w.timing.past_target ? "text-red-700" : w.timing.at_risk ? "text-amber-700" : undefined}
+                                data-testid={`wf-card-target-${w.id}`}>
+                                Target {shortDay(w.timing.target_date)}
+                                {w.timing.past_target ? " · missed" : w.timing.at_risk ? ` · at risk (${shortDay(w.timing.forecast_date)})` : " · on track"}
+                              </span>
+                            )}
                           </p>
                         )}
 

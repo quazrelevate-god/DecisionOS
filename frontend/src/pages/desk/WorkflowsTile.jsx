@@ -44,7 +44,7 @@ const REASON_CHIP = {
 export function WorkflowsTile({ attention, loading = false, onMoved, className, testid = "kpi-workflows" }) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
-  const { needAttention = 0, total = 0, nextUp = null, advancedToday = 0 } = attention || {};
+  const { needAttention = 0, total = 0, nextUp = null, advancedToday = 0, atRisk = 0 } = attention || {};
   const quiet = !loading && needAttention === 0;
 
   /* The board's move, from the board's own endpoint — same call the Workflows
@@ -108,6 +108,14 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
       <div className="flex min-w-0 flex-col">
         <IconChip icon={FlowArrow} alert={needAttention > 0} />
         <p className="kr-stat__label mt-4 text-base text-foreground/80">Workflows — need attention</p>
+        {/* 2026-09-22 — on time today, but forecast to miss the date the card
+            has to be done by (services/workflow_timing). Not late yet, so not
+            one of the three reasons; said here so it is seen before it is. */}
+        {!loading && atRisk > 0 && (
+          <p className="mt-1 text-[12px] font-medium text-amber-700" data-testid={`${testid}-at-risk`}>
+            {atRisk === 1 ? "1 card" : `${atRisk} cards`} forecast to miss {atRisk === 1 ? "its" : "their"} target date
+          </p>
+        )}
         <div className="kr-stat__foot mt-auto flex flex-wrap items-end justify-between gap-x-3 gap-y-2 pt-3">
           <span className="inline-flex shrink-0 items-baseline whitespace-nowrap leading-none">
             {/* The score's own shape: the number, then the total it is out of. */}

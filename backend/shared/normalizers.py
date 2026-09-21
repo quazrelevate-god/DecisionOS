@@ -196,6 +196,19 @@ def _norm_stage_side_effect(se: dict) -> Optional[dict]:
     return {"kind": kind, "params": params}
 
 
+def _whole_days(v, hi: int):
+    """A count of working days from an editor or the AI, or None. Anything
+    that is not a whole number from 1 to `hi` is dropped, not clamped: a typo
+    of 500 should read as "not set", not as the maximum."""
+    try:
+        n = int(v)
+    except (TypeError, ValueError):
+        return None
+    if isinstance(v, float) and v != n:
+        return None
+    return n if 1 <= n <= hi else None
+
+
 def _norm_stage(s, used):
     """WE-03 extended (2026-08-16): stages carry tasks[], approval,
     side_effects[] in addition to {key,label}. Old string / two-field
@@ -249,11 +262,19 @@ def _norm_stage(s, used):
     if not role and tasks:
         role = (tasks[0].get("role") or "").strip()
 
-    return {
+    out = {
         "key": key, "label": label,
         "tasks": tasks, "approval": approval, "side_effects": side_effects,
         "role": role,
     }
+    # 2026-09-22 — how many working days this stage should take. The engine
+    # dates the stage's work from it when a card arrives; unset falls back to
+    # the company default (services/workflow_timing). Only stored when set,
+    # so models saved before this read exactly as they did.
+    days = _whole_days(obj.get("days"), 60)
+    if days:
+        out["days"] = days
+    return out
 
 
 OM_MAX_PIPELINES, OM_MAX_STAGES, OM_MAX_STAGE_TASKS, OM_MAX_CATEGORIES = 6, 8, 6, 10
@@ -340,11 +361,17 @@ def normalize_operating_model(data: dict) -> dict:
         appr = p.get("approval_stage")
         appr = appr if appr in stage_keys else None
         seen_p.add(key)
-        pipelines.append({
+        np = {
             "key": key, "label": label,
             "sub": (p.get("sub") or "").strip() or f"{stages[0]['label']} → {stages[-1]['label']}",
             "stages": stages, "approval_stage": appr,
-        })
+        }
+        # 2026-09-22 — working days of silence before a card on this board is
+        # "stuck" (and its people are told). Unset = the company default.
+        stuck = _whole_days(p.get("stuck_after_days"), 30)
+        if stuck:
+            np["stuck_after_days"] = stuck
+        pipelines.append(np)
         if len(pipelines) >= 6:
             break
     cats, seen_c = [], set()

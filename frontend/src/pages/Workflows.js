@@ -95,7 +95,7 @@ function _initials(name) {
 function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ title: "", detail: "", amount: "", counterparty: "", contact_id: "" });
+  const [form, setForm] = useState({ title: "", detail: "", amount: "", counterparty: "", contact_id: "", target_date: "" });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const contactType = type === "purchase_payment" ? "vendor" : "customer";
   const contactLabel = contactType === "customer" ? custLabel : vendLabel;
@@ -110,7 +110,7 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
   };
   const [titleError, setTitleError] = useState("");
   const [busy, setBusy] = useState(false);
-  const blank = { title: "", detail: "", amount: "", counterparty: "", contact_id: "" };
+  const blank = { title: "", detail: "", amount: "", counterparty: "", contact_id: "", target_date: "" };
   const create = async () => {
     if (!form.title.trim()) { setTitleError(t("workflows.title_required", "Give the workflow a title")); return; }
     setBusy(true);
@@ -118,14 +118,18 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
       await api.post("/workflows", {
         type, title: form.title.trim(), detail: form.detail, counterparty: form.counterparty,
         contact_id: form.contact_id || null, amount: form.amount ? Number(form.amount) : null,
+        // 2026-09-22 — when the card has to be finished by; optional.
+        target_date: form.target_date || null,
       });
       toast.success(t("workflows.created"));
       setForm(blank);
       setTitleError("");
       setOpen(false);
       onCreated();
-    } catch {
-      toast.error(t("workflows.create_failed"));
+    } catch (e) {
+      // Say what the server refused (a bad target date says which), else the generic line.
+      const detail = e?.response?.data?.detail;
+      toast.error(typeof detail === "string" ? detail : t("workflows.create_failed"));
     } finally {
       setBusy(false);
     }
@@ -218,6 +222,20 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
             <label className={lbl} htmlFor="wf-counterparty">{t("workflows.counterparty_ph")}</label>
             <input id="wf-counterparty" data-testid="wf-counterparty-input" className={`${inp} mt-1`}
               placeholder={t("workflows.counterparty_ph")} value={form.counterparty} onChange={set("counterparty")} />
+          </div>
+
+          {/* 2026-09-22 — the card's own deadline ("ship by 15 Oct"). Optional:
+              with one, the card forecasts its finish from its stages' days and
+              says "at risk" before the date is missed, on the board and on the
+              Desk. Can be set or changed later from the card. */}
+          <div>
+            <label className={lbl} htmlFor="wf-target">{t("workflows.target_label", "Finish by (optional)")}</label>
+            <input id="wf-target" data-testid="wf-target-input" type="date" className={`${inp} mt-1 sm:max-w-[14rem]`}
+              min={new Date().toISOString().slice(0, 10)}
+              value={form.target_date} onChange={set("target_date")} />
+            <p className="mt-1 text-[11.5px] text-muted-foreground">
+              {t("workflows.target_hint", "The card warns you if it is heading past this date.")}
+            </p>
           </div>
 
           <div>

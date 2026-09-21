@@ -237,3 +237,14 @@ def test_the_backfill_dates_old_work_without_making_it_overdue_overnight(with_te
     assert dates["old"] >= add_working_days(today_ist(), 1).isoformat(), "never overdue on the day it is switched on"
     assert dates["left"] is None, "work on a stage the card left is the leftover review's"
     assert dates["shut"] is None
+
+
+# ═══════════════════════════ the New workflow form ═════════════════════════
+def test_the_new_workflow_form_asks_for_a_target_date():
+    """2026-09-22: the target could only be set from the card after creating it."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[2] / "frontend" / "src" / "pages" / "Workflows.js").read_text(encoding="utf-8")
+    assert 'data-testid="wf-target-input"' in src
+    assert "target_date: form.target_date || null" in src
+    i18n = (Path(__file__).resolve().parents[2] / "frontend" / "src" / "i18n.js").read_text(encoding="utf-8")
+    assert i18n.count("target_label:") == 3, "English, Hindi and Tamil"

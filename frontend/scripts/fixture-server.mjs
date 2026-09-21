@@ -230,6 +230,12 @@ const TASKS = [
   mkTask({ id: 't_12', title: 'Quality check on the 400-piece sample lot for Reliance', assignee_id: 'u_prod', due_date: dateAhead(3), priority: 'high', department: 'Production',
     ...wfLink('w_3', 'order_to_cash', 'Reliance Trends — Diwali order', 'quotation_sent') }),
   mkTask({ id: 't_13', title: 'Update rate card for cotton blends', assignee_id: 'u_sales', due_date: dateAhead(8), priority: 'low', department: 'Sales' }),
+  /* PILOT-1 — a task waiting on the owner's approval before work starts, so the
+     drawer's Approve / Reject / Ask-to-clarify row (and the reason window
+     behind the last two) has something to render against. No fixture task
+     needed an approval before. */
+  mkTask({ id: 't_19', title: 'Buy 20 cones of polyester yarn for the sample run', assignee_id: 'u_prod', created_by: 'u_prod', due_date: dateAhead(3), priority: 'medium', department: 'Production',
+    status: 'blocked', approval_required: true, approval_stage: 'start', approval_status: 'pending', approver_id: 'u_owner' }),
   mkTask({ id: 't_14', title: 'Service the boiler before winter run', assignee_id: 'u_store', due_date: dateAhead(20), priority: 'low', department: 'Stores', status: 'done', progress: 100 }),
 ];
 

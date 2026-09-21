@@ -41,6 +41,8 @@ import {
   GLASS_MENU, GLASS_MENU_ITEM, GLASS_PILL, GLASS_SHEET, INK_PILL,
 } from "../components/karma/glass";
 import { GlassSelect } from "../components/karma/GlassSelect";
+import { DraftNote } from "../components/karma/DraftNote";
+import { useDraft } from "../hooks/useDraft";
 import { cn } from "@/lib/utils";
 
 const CUSTOMER_TYPES = ["customer", "dealer"];
@@ -377,9 +379,13 @@ function FormSection({ label, children }) {
    "churned" supplier). Everything shows at once, in sections: who they are,
    how to reach them, where they stand, the rest. */
 function CrmContactDialog({ type, onClose, onSaved, users, labels }) {
-  const [form, setForm] = useState(() => blankContact(type || "customer"));
+  /* PILOT-1 A — a contact half-typed is kept (lib/drafts.js), one per kind of
+     contact the window was opened for. It used to start blank on every open,
+     so closing it to look up a phone number threw the rest away. The X,
+     Escape and a click beside it keep the fields; Cancel and Save empty them. */
+  const [form, setForm, draft] = useDraft(type ? `new-contact:${type}` : null, blankContact(type || "customer"));
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (type) setForm(blankContact(type)); }, [type]);
+  const cancel = () => { draft.discard(); onClose(); };
 
   const set = (key) => (e) => { const v = e.target.value; setForm((f) => ({ ...f, [key]: v })); };
   const applyType = (t) => {
@@ -401,6 +407,7 @@ function CrmContactDialog({ type, onClose, onSaved, users, labels }) {
         lifecycle_stage: form.lifecycle_stage || "",
       });
       toast.success(`${typeName} added`);
+      draft.discard();
       onSaved();
       onClose();
     } catch (e) {
@@ -427,6 +434,9 @@ function CrmContactDialog({ type, onClose, onSaved, users, labels }) {
           </button>
         </div>
 
+        {draft.restored && (
+          <DraftNote onDiscard={() => draft.discard()} label="Kept from before — not saved yet" testid="crm-contact-draft" className="-my-2" />
+        )}
         <div role="group" aria-label="Contact type" data-testid="crm-contact-type" className={`flex gap-1 rounded-pill p-1 ${DRAWER_TRACK}`}>
           {["customer", "dealer", "vendor"].map((key) => {
             const on = form.type === key;
@@ -502,7 +512,7 @@ function CrmContactDialog({ type, onClose, onSaved, users, labels }) {
         </div>
 
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={busy} data-testid="crm-contact-cancel"
+          <button type="button" onClick={cancel} disabled={busy} data-testid="crm-contact-cancel"
             className={`h-11 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}>
             Cancel
           </button>

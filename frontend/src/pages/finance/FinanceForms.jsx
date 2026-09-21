@@ -18,8 +18,18 @@ import {
 import { GlassSelect } from "../../components/karma/GlassSelect";
 import { GLASS_MENU, GLASS_MENU_ITEM, INK_PILL } from "../../components/karma/glass";
 import { AREA, FIELD, Field, FileField, SHEET_CONTENT, SheetFoot, SheetHead, fmt } from "./financeKit";
+import { DraftNote } from "../../components/karma/DraftNote";
+import { useDraft } from "../../hooks/useDraft";
 
 const withCurrent = (list, value) => (value && !list.includes(value) ? [value, ...list] : list);
+
+/* PILOT-1 A — KEEP. Every form here held its fields in state and emptied them
+   on ANY close — the X, Escape, a click beside it — so an expense half-typed
+   when someone stepped away to find the bill was gone. The fields are a draft
+   now (lib/drafts.js): closing keeps them for the next time this form opens,
+   and Cancel or Save is what empties it. The attached bill is not kept; a
+   browser cannot store a file for later. */
+const KEPT_LABEL = "Kept from before — not saved yet";
 
 const formData = (fields, file) => {
   const fd = new FormData();
@@ -35,12 +45,15 @@ export function AddExpenseDialog({ open, onOpenChange, categories = [], onDone }
   const { tenant } = useAuth();
   const L = lex(tenant);
   const uid = useId();
-  const [f, setF] = useState(EXPENSE_BLANK);
+  const [f, setF, draft] = useDraft("expense", EXPENSE_BLANK);
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-  const close = () => { onOpenChange(false); setF(EXPENSE_BLANK); setFile(null); };
+  // PILOT-1 A — closing keeps what was typed (see KEEP below); Cancel and Save
+  // are what empty the form.
+  const close = () => onOpenChange(false);
+  const cancel = () => { draft.discard(); setFile(null); onOpenChange(false); };
 
   const suggest = async () => {
     const text = `${f.title} ${f.vendor_name} ${f.notes}`.trim();
@@ -62,7 +75,7 @@ export function AddExpenseDialog({ open, onOpenChange, categories = [], onDone }
     try {
       await api.post("/expenses/with-file", formData(f, file));
       toast.success(file ? t("finance.added_bill") : t("finance.expense_added"));
-      close();
+      cancel();
       onDone();
     } catch (e) {
       toast.error(e.response?.data?.detail || t("finance.failed"));
@@ -76,6 +89,7 @@ export function AddExpenseDialog({ open, onOpenChange, categories = [], onDone }
       <DialogContent className={cn(SHEET_CONTENT, "max-w-xl")} data-testid="expense-dialog">
         <SheetHead icon={Receipt} title={t("finance.new_expense")} description={t("finance.new_expense_desc")} onClose={close} />
         <div className="space-y-4 px-6 pb-5">
+          {draft.restored && <DraftNote onDiscard={() => draft.discard()} label={KEPT_LABEL} testid="expense-draft" className="-mt-2" />}
           <FileField file={file} setFile={setFile} />
           <Field label={t("finance.c_title")} htmlFor={`${uid}-title`}>
             <input id={`${uid}-title`} data-testid="expense-title" className={FIELD} value={f.title}
@@ -118,7 +132,7 @@ export function AddExpenseDialog({ open, onOpenChange, categories = [], onDone }
             <textarea id={`${uid}-notes`} className={AREA} rows={2} value={f.notes} onChange={(e) => set("notes", e.target.value)} />
           </Field>
         </div>
-        <SheetFoot onCancel={close} onSave={save} busy={busy} testid="expense-save" saveLabel={t("finance.save_expense")}
+        <SheetFoot onCancel={cancel} onSave={save} busy={busy} testid="expense-save" saveLabel={t("finance.save_expense")}
           busyLabel={file ? t("finance.ai_reading") : t("finance.saving")} />
       </DialogContent>
     </Dialog>
@@ -130,18 +144,21 @@ const ASSET_BLANK = { name: "", purchase_amount: "", category: "Equipment", vend
 export function AddAssetDialog({ open, onOpenChange, categories = [], onDone }) {
   const { t } = useTranslation();
   const uid = useId();
-  const [f, setF] = useState(ASSET_BLANK);
+  const [f, setF, draft] = useDraft("asset", ASSET_BLANK);
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-  const close = () => { onOpenChange(false); setF(ASSET_BLANK); setFile(null); };
+  // PILOT-1 A — closing keeps what was typed (see KEEP below); Cancel and Save
+  // are what empty the form.
+  const close = () => onOpenChange(false);
+  const cancel = () => { draft.discard(); setFile(null); onOpenChange(false); };
   const save = async () => {
     if (!f.name.trim() && !file) return toast.error(t("finance.need_asset"));
     setBusy(true);
     try {
       await api.post("/assets/with-file", formData(f, file));
       toast.success(file ? t("finance.asset_added_bill") : t("finance.asset_added"));
-      close();
+      cancel();
       onDone();
     } catch (e) {
       toast.error(e.response?.data?.detail || t("finance.failed"));
@@ -154,6 +171,7 @@ export function AddAssetDialog({ open, onOpenChange, categories = [], onDone }) 
       <DialogContent className={cn(SHEET_CONTENT, "max-w-xl")} data-testid="asset-dialog">
         <SheetHead icon={Buildings} title={t("finance.new_asset")} description={t("finance.new_asset_desc")} onClose={close} />
         <div className="space-y-4 px-6 pb-5">
+          {draft.restored && <DraftNote onDiscard={() => draft.discard()} label={KEPT_LABEL} testid="asset-draft" className="-mt-2" />}
           <FileField file={file} setFile={setFile} />
           <Field label={t("finance.asset_name")} htmlFor={`${uid}-name`}>
             <input id={`${uid}-name`} data-testid="asset-name" className={FIELD} value={f.name}
@@ -188,7 +206,7 @@ export function AddAssetDialog({ open, onOpenChange, categories = [], onDone }) 
             </Field>
           </div>
         </div>
-        <SheetFoot onCancel={close} onSave={save} busy={busy} testid="asset-save" saveLabel={t("finance.save_asset")}
+        <SheetFoot onCancel={cancel} onSave={save} busy={busy} testid="asset-save" saveLabel={t("finance.save_asset")}
           busyLabel={file ? t("finance.ai_reading") : t("finance.saving")} />
       </DialogContent>
     </Dialog>
@@ -200,11 +218,14 @@ const INVENTORY_BLANK = { item: "", sku: "", quantity: "", unit: "unit", unit_co
 export function AddInventoryDialog({ open, onOpenChange, cur, onDone }) {
   const { t } = useTranslation();
   const uid = useId();
-  const [f, setF] = useState(INVENTORY_BLANK);
+  const [f, setF, draft] = useDraft("inventory", INVENTORY_BLANK);
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-  const close = () => { onOpenChange(false); setF(INVENTORY_BLANK); setFile(null); };
+  // PILOT-1 A — closing keeps what was typed (see KEEP below); Cancel and Save
+  // are what empty the form.
+  const close = () => onOpenChange(false);
+  const cancel = () => { draft.discard(); setFile(null); onOpenChange(false); };
   const value = (Number(f.quantity) || 0) * (Number(f.unit_cost) || 0);
   const save = async () => {
     if (!f.item.trim() && !file) return toast.error(t("finance.need_item"));
@@ -212,7 +233,7 @@ export function AddInventoryDialog({ open, onOpenChange, cur, onDone }) {
     try {
       await api.post("/inventory/with-file", formData(f, file));
       toast.success(file ? t("finance.inv_added_bill") : t("finance.inv_added"));
-      close();
+      cancel();
       onDone();
     } catch (e) {
       toast.error(e.response?.data?.detail || t("finance.failed"));
@@ -225,6 +246,7 @@ export function AddInventoryDialog({ open, onOpenChange, cur, onDone }) {
       <DialogContent className={cn(SHEET_CONTENT, "max-w-xl")} data-testid="inventory-dialog">
         <SheetHead icon={Package} title={t("finance.new_inv")} description={t("finance.new_inv_desc")} onClose={close} />
         <div className="space-y-4 px-6 pb-5">
+          {draft.restored && <DraftNote onDiscard={() => draft.discard()} label={KEPT_LABEL} testid="inventory-draft" className="-mt-2" />}
           <FileField file={file} setFile={setFile} />
           <div className="grid grid-cols-2 gap-3">
             <Field label={t("finance.i_item")} htmlFor={`${uid}-item`}>
@@ -259,7 +281,7 @@ export function AddInventoryDialog({ open, onOpenChange, cur, onDone }) {
             </p>
           )}
         </div>
-        <SheetFoot onCancel={close} onSave={save} busy={busy} testid="inv-save" saveLabel={t("finance.save_item")}
+        <SheetFoot onCancel={cancel} onSave={save} busy={busy} testid="inv-save" saveLabel={t("finance.save_item")}
           busyLabel={file ? t("finance.ai_reading") : t("finance.saving")} />
       </DialogContent>
     </Dialog>
@@ -272,18 +294,21 @@ export function AddIncomeDialog({ open, onOpenChange, onDone }) {
   const { tenant } = useAuth();
   const L = lex(tenant);
   const uid = useId();
-  const [f, setF] = useState(INCOME_BLANK);
+  const [f, setF, draft] = useDraft("income", INCOME_BLANK);
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-  const close = () => { onOpenChange(false); setF(INCOME_BLANK); setFile(null); };
+  // PILOT-1 A — closing keeps what was typed (see KEEP below); Cancel and Save
+  // are what empty the form.
+  const close = () => onOpenChange(false);
+  const cancel = () => { draft.discard(); setFile(null); onOpenChange(false); };
   const save = async () => {
     if (!f.title.trim() && !f.amount && !f.customer_name.trim() && !file) return toast.error("Add a title, customer or amount");
     setBusy(true);
     try {
       await api.post("/revenue/with-file", formData(f, file));
       toast.success(file ? "Income recorded from the invoice" : "Income recorded");
-      close();
+      cancel();
       onDone();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Could not record income");
@@ -297,6 +322,7 @@ export function AddIncomeDialog({ open, onOpenChange, onDone }) {
         <SheetHead icon={CurrencyInr} title="Record sale / service income"
           description="Money coming in. Attach a sales invoice and AI reads the amount and customer, or type it in." onClose={close} />
         <div className="space-y-4 px-6 pb-5">
+          {draft.restored && <DraftNote onDiscard={() => draft.discard()} label={KEPT_LABEL} testid="income-draft" className="-mt-2" />}
           <FileField file={file} setFile={setFile} />
           <Field label="What was it for" htmlFor={`${uid}-title`}>
             <input id={`${uid}-title`} data-testid="income-title" className={FIELD} value={f.title}
@@ -329,7 +355,7 @@ export function AddIncomeDialog({ open, onOpenChange, onDone }) {
             </Field>
           </div>
         </div>
-        <SheetFoot onCancel={close} onSave={save} busy={busy} testid="income-save" saveLabel="Save income"
+        <SheetFoot onCancel={cancel} onSave={save} busy={busy} testid="income-save" saveLabel="Save income"
           busyLabel={file ? "AI reading…" : "Saving…"} />
       </DialogContent>
     </Dialog>

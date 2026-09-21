@@ -17,6 +17,8 @@ import { ScopeSlider } from "../components/karma/ScopeSlider";
 import { DesignCheckbox } from "../components/karma/DesignCheckbox";
 import { ApprovalPanel } from "../components/karma/ApprovalPanel";
 import { GlassSelect } from "../components/karma/GlassSelect";
+import { DraftNote } from "../components/karma/DraftNote";
+import { useDraft } from "../hooks/useDraft";
 
 const COLUMNS = [
   { key: "blocked", label: "Pending Approval" },
@@ -92,7 +94,13 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
   const firstType = () => (cats.some((c) => c.key === defaultType) ? defaultType : cats[0]?.key || "operational");
   const blank = () => ({ ...EMPTY_FORM, task_type: firstType() });
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState(blank);
+  /* PILOT-1 A — a half-written task is kept (lib/drafts.js). The dialog
+     already refused stray clicks outside; what it could not survive was the
+     page going away — another screen, a reload, a phone closing the app. The
+     words come back the next time New Task opens; Create, or Discard on the
+     line that says they were kept, is what throws them away. (Attached files
+     are not kept: a browser cannot store them for later.) */
+  const [form, setForm, formDraft] = useDraft("new-task", blank());
   const [titleError, setTitleError] = useState("");
   const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -171,7 +179,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
       } else {
         toast.success("Task created");
       }
-      setForm(blank());
+      formDraft.discard();
       setFiles([]);
       setTitleError("");
       setOpen(false);
@@ -313,6 +321,10 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
           </DialogPrimitiveClose>
           <DialogTitle className="font-display text-xl">New Task</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">What, who and when. The rest is optional.</DialogDescription>
+          {formDraft.restored && (
+            <DraftNote onDiscard={() => { formDraft.discard(); setTitleError(""); }}
+              label="Kept from before — not created yet" testid="new-task-draft" className="-mb-2 pt-1" />
+          )}
         </DialogHeader>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-0.5 lg:flex-none lg:overflow-visible lg:pr-0">
           {/* ASK-29 (2026-09-14): what, which department, who and when come

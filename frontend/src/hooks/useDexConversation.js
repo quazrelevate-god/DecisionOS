@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../lib/api";
 import { captureOutcome, failureReason, isReading, readyLine, OUTCOME_COPY } from "../lib/dexOutcome";
+import { useDraft } from "./useDraft";
 
 // KM-26 · the Dex conversation, lifted out of the view.
 //
@@ -27,14 +28,18 @@ const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
      userId    who is reading, so "Decision ready for …" can say "you"
      onEnding  told of each Decide ending as it lands (Layout refreshes the Desk,
                and toasts the ending if the sheet has been closed) */
-export function useDexConversation({ dex, open, channel = "ask", onCommitted, userId, onEnding } = {}) {
+/* PILOT-1 A — `draftName` keeps what is typed in the composer (lib/drafts.js)
+   across a reload, the phone closing the app, or leaving the screen and coming
+   back. Only the Desk well passes one; sending empties the field, and an empty
+   field is not a draft, so a sent message is never kept. */
+export function useDexConversation({ dex, open, channel = "ask", onCommitted, userId, onEnding, draftName = null } = {}) {
   const [log, setLog] = useState([]);
   const [ctxId, setCtxId] = useState(null);
   const [busy, setBusy] = useState(false);
   // "voice" -> the bar draws the wave, the FAB is a microphone.
   // "type"  -> the bar is a text field, the FAB is a send button.
   const [mode, setMode] = useState("voice");
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useDraft(draftName, "");
   // ASK-32 1.6 — files attached to the next decision, and the held recording
   // the draft came from (its words are reviewed here, then sent on as ONE note).
   const [pendingFiles, setPendingFiles] = useState([]);
@@ -57,7 +62,7 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
   // founder can close, act on an answer and come back to it.
   useEffect(() => {
     if (!open) { setMode("voice"); setDraft(""); heldNoteRef.current = null; }
-  }, [open]);
+  }, [open, setDraft]);
 
   /* KM-54 — SWITCHING DOORS STARTS A NEW TRANSCRIPT.
      Only a change BETWEEN doors clears it — the null the channel takes while
@@ -74,7 +79,7 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
       heldNoteRef.current = null;
     }
     lastChannelRef.current = channel;
-  }, [channel]);
+  }, [channel, setDraft]);
 
   /* A finished capture becomes a turn in the transcript. Keyed on note + outcome
      so a poll updating the same note in place cannot stack duplicates.
@@ -141,7 +146,7 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
   const setDraftFromVoice = useCallback((text, noteId) => {
     setDraft(text);
     heldNoteRef.current = noteId || null;
-  }, []);
+  }, [setDraft]);
 
   /* ASK-33 Phase 4 — ONE NOTE AT A TIME. useDexCapture follows a single note: a
      new follow() retires the one in flight, and a recording's transcript poll
@@ -224,7 +229,7 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
     } finally {
       setBusy(false);
     }
-  }, [busy, channel, ctxId, dex, onCommitted, oneAtATime, pendingFiles, push]);
+  }, [busy, channel, ctxId, dex, onCommitted, oneAtATime, pendingFiles, push, setDraft]);
 
   /* ASK-39 4 — ASK STAGES A FILE, IT DOES NOT SEND ONE.
      Both channels used to post the moment a file was picked: a "File: x.webp"
@@ -364,7 +369,7 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
       dex.follow(noteId, { transcript: text });
     }
     return true;
-  }, [dex, oneAtATime]);
+  }, [dex, oneAtATime, setDraft]);
 
   /** What the FAB does right now — the single source for its icon and action.
       KM-51 — A DRAFT OUTRANKS THE MODE: recording wins (stop), then a draft

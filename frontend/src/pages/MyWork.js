@@ -58,6 +58,9 @@ import {
 // 2026-09-14, founder — every dropdown on this page is the app's own glass
 // list; none of them opens the operating system's picker.
 import { GlassSelect } from "../components/karma/GlassSelect";
+import { DraftNote } from "../components/karma/DraftNote";
+import { useDraft } from "../hooks/useDraft";
+import { draftScope, hasDraft, hasDraftUnder } from "../lib/drafts";
 
 // RD-2 (2026-08-17): the toolbar control. Was uppercase + wide tracking +
 // hard black border — eight of these in a row read as a control panel. Now a
@@ -198,16 +201,34 @@ const isDueToday = (t) => {
   return (due.length <= 10 ? due : ymdOf(new Date(due))) === todayYmd();
 };
 
+/* PILOT-1 A — where a task's unsent update is kept (lib/drafts.js). One per
+   task, and one per checklist step, so a note half-written on step 2 never
+   turns up on the task's own form. */
+export const updateDraftName = (taskId, stepId) => `task-update:${taskId}${stepId ? `:${stepId}` : ""}`;
+const UPDATE_BLANK = { text: "", action: "note", toId: "", toRole: "" };
+
 function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel, noteOnly = false }) {
   const { user } = useAuth();
   // ASK-28 Phase 7 — Escalate goes to your reporting manager first, the owner
   // only if you have none (the server decides; this names who it will be).
   const managerId = members.find((m) => m.id === user?.id)?.reporting_manager_id;
   const escalateTo = managerId && managerId !== user?.id ? members.find((m) => m.id === managerId) : null;
-  const [text, setText] = useState("");
-  const [action, setAction] = useState("note");
-  const [toId, setToId] = useState("");
-  const [toRole, setToRole] = useState("");
+  /* PILOT-1 A — THE WORDS OUTLIVE THE FORM. They lived in this component's
+     state, so anything that took the form off the screen — a click beside the
+     drawer, the phone's Back, a look at another screen, a reload — took the
+     answer with it. The client's team member lost a whole reply that way. It
+     is written down as it is typed now, and comes back when the form opens
+     again; only Post or Cancel throws it away. */
+  const [d, setD, draft] = useDraft(updateDraftName(taskId, stepId), UPDATE_BLANK);
+  const text = d.text;
+  const action = noteOnly ? "note" : d.action;
+  const toId = d.toId;
+  const toRole = d.toRole;
+  const setText = (v) => setD((s) => ({ ...s, text: v }));
+  const setAction = (v) => setD((s) => ({ ...s, action: v }));
+  const setToId = (v) => setD((s) => ({ ...s, toId: v }));
+  const setToRole = (v) => setD((s) => ({ ...s, toRole: v }));
+  const cancel = () => { draft.discard(); onCancel(); };
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
@@ -222,6 +243,7 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel, no
       const sentTo = (data?.updates || []).slice(-1)[0]?.to_name;
       toast.success(action === "note" ? "Update logged"
         : action === "escalate" ? `Escalated to ${sentTo || escalateTo?.name || "your manager"}` : "Handed off");
+      draft.discard();
       onDone();
     } catch (e) { toast.error(e.response?.data?.detail || "Could not post update"); }
     finally { setBusy(false); }
@@ -246,6 +268,7 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel, no
        transition — outset and inset shadows do not interpolate, MW-08),
        glass select pills for the hand-off target, and the navy Post. */
     <div className={`${DRAWER_CARD} space-y-3 p-4`} data-testid={`update-form-${taskId}`}>
+      {draft.restored && <DraftNote onDiscard={() => draft.discard()} testid={`update-draft-${taskId}`} className="-mb-1 -mt-2" />}
       <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} data-testid={`update-text-${taskId}`}
         placeholder="What did you find? e.g. Logistics can't commit to a date — supplier issue"
         className={`${DRAWER_FIELD} resize-none leading-relaxed`} />
@@ -291,7 +314,7 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel, no
           className={`flex h-11 flex-1 items-center justify-center rounded-pill text-sm font-medium disabled:opacity-50 ${INK_PILL}`}>
           {busy ? "Posting…" : "Post"}
         </button>
-        <button type="button" onClick={onCancel}
+        <button type="button" onClick={cancel} data-testid={`update-cancel-${taskId}`}
           className={`flex h-11 items-center rounded-pill px-5 text-sm font-medium text-slate-700 transition-colors hover:bg-white ${GLASS_PILL}`}>
           Cancel
         </button>
@@ -383,7 +406,11 @@ function ProgressControl({ value, onCommit, testid, valueTestid, checklist }) {
 }
 
 function TaskTrail({ t, members, roleOptions, onChange, openTrigger = 0, noteOnly = false }) {
-  const [open, setOpen] = useState(false);
+  const { user, tenant } = useAuth();
+  /* PILOT-1 A — a task with an unsent update opens with the form already out
+     and the words in it. Behind a closed "Log update" button they would read
+     as lost, which is the very thing the draft is there to prevent. */
+  const [open, setOpen] = useState(() => hasDraft(draftScope(tenant, user), updateDraftName(t.id, null)));
   // MW-09 fix: the mobile "Log update or hand off" button on the collapsed
   // card can nudge this counter; each nudge opens the UpdateForm here.
   // useEffect (not a lazy initializer) so a second tap while the form is
@@ -1669,7 +1696,7 @@ function dueLabel(iso) {
  * drawer show everyone on the task, for everyone.
  */
 export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions = [], scores, highlight = false, selected = false, onToggleSelect, open, onToggleOpen, drawerOnly = false }) {
-  const { user } = useAuth();
+  const { user, tenant } = useAuth();
   // MW-01 fix: the queryClient is used to write PATCH responses straight
   // into the cache before onChange() invalidates. The old flow was
   // PATCH -> onChange (invalidate) -> refetch, and the refetch raced the
@@ -1716,7 +1743,11 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
   // dialogs -- prompt is anti-pattern that blocks browser thread and
   // returns null in embed contexts (FUP-49 hit this pattern for confirm).
   const [reasonDialog, setReasonDialog] = useState(null); // {kind: 'reject'|'clarify'}
-  const [reasonText, setReasonText] = useState("");
+  /* PILOT-1 A — a reason being written is kept like any other words: closing
+     the window by its X, Escape or a click beside it keeps them for next time;
+     Cancel and Send are the two ways they go. One per kind, per task. */
+  const [reasonText, setReasonText, reasonDraft] = useDraft(
+    reasonDialog ? `task-${reasonDialog.kind}:${t.id}` : null, "");
   const [reasonBusy, setReasonBusy] = useState(false);
   const fileRef = useRef(null);
   const closeRef = useRef(null);   // MW-17 — focus target when the drawer opens
@@ -1806,7 +1837,8 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
     catch (e) { toast.error(e.response?.data?.detail || "Could not approve"); }
   };
 
-  const openReasonDialog = (kind) => { setReasonText(""); setReasonDialog({ kind }); };
+  const openReasonDialog = (kind) => { setReasonDialog({ kind }); };
+  const cancelReason = () => { reasonDraft.discard(); setReasonDialog(null); };
   const submitReason = async () => {
     if (!reasonDialog) return;
     const { kind } = reasonDialog;
@@ -1818,6 +1850,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       const endpoint = kind === "reject" ? "reject" : "clarify";
       await api.post(`/tasks/${t.id}/${endpoint}`, { reason: reasonText });
       toast.success(kind === "reject" ? (apprStage === "close" ? "Changes requested" : "Rejected") : "Clarification requested");
+      reasonDraft.discard();
       setReasonDialog(null);
       onChange();
     } catch (e) {
@@ -1921,6 +1954,34 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
     mediaRef.current?.stop();
     setRecording(false);
     toast("Recording discarded");
+  };
+
+  /* PILOT-1 A — A RECORDING IS NOT THROWN AWAY BY LEAVING THE SCREEN. Go to
+     another screen mid-answer and this card unmounted with the recorder still
+     running: nothing ever stopped it, so nothing was ever uploaded, and the
+     microphone stayed open until the page was reloaded. Leaving now stops it
+     the way the Stop button does, and what was said is attached to the task. */
+  useEffect(() => () => {
+    const mr = mediaRef.current;
+    if (mr && mr.state === "recording") {
+      cancelledRef.current = false;
+      try { mr.stop(); } catch (e) { /* already stopping */ }
+    }
+  }, []);
+
+  /* PILOT-1 A — THE TRIGGER. On a desktop the drawer closed on any click
+     beside it, and the answer being written inside it went with it: the
+     client's team member reached for something on the page behind, and their
+     reply was gone. A drawer holding an unsent update or a live recording now
+     stays open on an outside click and says why; Escape, the close button and
+     Cancel still close it, because those are asked for. (Its words would come
+     back anyway — lib/drafts.js — but they should not have to.) */
+  const holdForUnsent = (e) => {
+    const unsent = hasDraftUnder(draftScope(tenant, user), updateDraftName(t.id, null));
+    if (!unsent && !recording) return;
+    e.preventDefault();
+    toast(recording ? "Still recording — press Stop to attach it to the task"
+      : "Your update isn't posted yet — Post it, or Cancel to throw it away", { id: `unsent-${t.id}` });
   };
 
   const complete = async () => {
@@ -2183,6 +2244,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
            the white pills sit visibly on top of it. */
         className="w-full max-w-none overflow-hidden rounded-[0px] border-l-0 p-0 sm:max-w-none lg:max-w-2xl lg:rounded-l-[2rem] bg-[linear-gradient(165deg,hsl(0_0%_95%),hsl(0_0%_90.5%))] lg:shadow-[-30px_0_80px_-30px_hsl(0_0%_0%/0.45)]"
         data-testid={`task-drawer-${t.id}`}
+        onInteractOutside={holdForUnsent}
         /* MW-17 — the drawer supplies its own close, so send focus there on
            open. Without this Radix focuses the stock close. */
         onOpenAutoFocus={(e) => { e.preventDefault(); closeRef.current?.focus(); }}>
@@ -2723,9 +2785,11 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
               <X size={16} weight="bold" aria-hidden="true" />
             </button>
           </div>
+          {reasonDraft.restored && <DraftNote onDiscard={() => reasonDraft.discard()} testid={`reason-draft-${t.id}`} className="-my-2" />}
           <textarea
             rows={4}
             value={reasonText}
+            data-testid={`reason-text-${t.id}`}
             onChange={(e) => setReasonText(e.target.value)}
             aria-label={reasonDialog?.kind === "reject" ? "What needs to change" : "Your question"}
             placeholder={reasonDialog?.kind !== "reject" ? "e.g. Which supplier's rate card do I use?"
@@ -2736,7 +2800,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
           <div className="flex justify-end gap-2">
             <button
               type="button"
-              onClick={() => setReasonDialog(null)}
+              onClick={cancelReason}
               disabled={reasonBusy}
               data-testid={`reason-cancel-${t.id}`}
               className={`h-11 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}

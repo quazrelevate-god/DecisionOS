@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import api, { SESSION_LOST_EVENT } from "../lib/api";
+import { clearAllDrafts } from "../lib/drafts";
 import { toast } from "sonner";
 import { setAppLanguage } from "../i18n";
 
@@ -137,6 +138,11 @@ export function AuthProvider({ children }) {
     } catch (e) {
       // ignore network errors on logout
     }
+    /* PILOT-1 A — unsent words (lib/drafts.js) leave with the person. A
+       session that merely ENDS under the open app (above) keeps them: that is
+       not the person choosing to leave, and they are scoped to them, so they
+       come back when the same person signs in again. */
+    clearAllDrafts();
     setUser(null);
     setTenant(null);
   };

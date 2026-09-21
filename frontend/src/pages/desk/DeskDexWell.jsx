@@ -156,7 +156,8 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
     onTranscript: (text, noteId) => draftSinkRef.current?.(text, noteId),
     onCaptured: refresh,
   });
-  const chat = useDexConversation({ dex, open: true, channel: "decide", onCommitted: refresh, userId: user?.id });
+  // PILOT-1 A — what is typed here survives leaving the Desk and a reload.
+  const chat = useDexConversation({ dex, open: true, channel: "decide", onCommitted: refresh, userId: user?.id, draftName: "dex-well" });
   draftSinkRef.current = chat.setDraftFromVoice;
   // For toasts, which act long after the render that raised them.
   const chatRef = useRef(chat);

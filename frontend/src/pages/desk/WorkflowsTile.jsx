@@ -74,15 +74,18 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
 
   const parts = PARTS.map((p) => ({ ...p, n: attention?.[p.key] || 0 })).filter((p) => p.n > 0);
 
-  /* The one link on the tile, to the boards. */
+  /* The one link on the tile, to the boards. 2026-09-21, founder — a named
+     pill, not a bare circle: "Open Workflows", the same shape, width and
+     height as the move above it, in the ink the circle wore, so the two read
+     as a pair — the move you can make here, and the way to the boards. */
   const openBoards = (
     <Link
       to="/workflows"
       data-testid={`${testid}-open`}
-      aria-label="Open Workflows"
-      className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[hsl(var(--kr-action-bg,var(--kr-ink)))] text-[hsl(var(--kr-action-fg,0_0%_100%))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
+      className="flex min-h-10 w-full items-center justify-center gap-1.5 rounded-pill bg-[hsl(var(--kr-action-bg,var(--kr-ink)))] px-4 py-2 text-[13px] font-medium leading-tight text-[hsl(var(--kr-action-fg,0_0%_100%))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
     >
-      <ArrowRight size={18} weight="bold" className="kr-arrow transition-transform duration-200" />
+      Open Workflows
+      <ArrowRight size={14} weight="bold" aria-hidden="true" className="kr-arrow shrink-0 transition-transform duration-200" />
     </Link>
   );
 
@@ -92,7 +95,7 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
        only job on this side was the black arrow — so Next up got what was left
        below it, and a move like "Approve Order Confirmed" wrapped onto two
        lines inside a 40px pill with no room above or below it. The arrow now
-       sits at the foot of this half, under the move, the same circle; the
+       sits at the foot of this half, under the move, as a named pill; the
        half starts at the card's top edge, and the move gets its whole width on
        one line at 13px — 25-odd characters — growing to a second line with
        its own padding only where the card is at its narrowest. */
@@ -174,7 +177,7 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
         {/* Sized to the row the grid already had: the tiles follow the Dex
             well's height (Desk.js, KR-8.6), so this half fits inside it rather
             than making every tile taller. */}
-        <div className={cn("flex flex-col items-end gap-2", (quiet || !nextUp) && !loading ? "pt-2.5" : "mt-auto pt-2.5")}>
+        <div className={cn("flex flex-col gap-2", (quiet || !nextUp) && !loading ? "pt-2.5" : "mt-auto pt-2.5")}>
           {!loading && !quiet && nextUp?.actionLabel && (
             <button
               type="button"

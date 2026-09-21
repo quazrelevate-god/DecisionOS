@@ -60,9 +60,14 @@ const EMPTY_FORM = {
   evidence_required: false,
 };
 
-/* ASK-29 — due presets. A date with no time is due for that whole day. */
+/* ASK-29 — due presets. A date with no time is due for that whole day.
+   PILOT-1 C — "No date" is gone, and it was the default. The pilot client:
+   "Any task assigned should have deadline. Only then you can show 'Due today'."
+   Most tasks were made dateless and so were never due, never late, never
+   counted. Nothing is preselected either: the person chooses when the work is
+   due, rather than a default choosing it for them. The server refuses a task
+   without one as well. */
 const DUE_PRESETS = [
-  { key: "", label: "No date" },
   { key: "today", label: "Today", days: 0 },
   { key: "tomorrow", label: "Tomorrow", days: 1 },
   { key: "week", label: "In a week", days: 7 },
@@ -102,6 +107,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
      are not kept: a browser cannot store them for later.) */
   const [form, setForm, formDraft] = useDraft("new-task", blank());
   const [titleError, setTitleError] = useState("");
+  const [dueError, setDueError] = useState("");
   const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef(null);
@@ -138,7 +144,11 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
 
   const create = async () => {
     if (!form.title.trim()) { setTitleError("Give the task a title"); return; }
-    if (form.due_preset === "pick" && !form.due_date) { toast.error("Pick a due date, or choose No date"); return; }
+    if (!dueDate) {
+      setDueError(form.due_preset === "pick" ? "Pick the day it's due" : "Choose when it's due");
+      document.getElementById("task-due-label")?.scrollIntoView?.({ block: "center" });
+      return;
+    }
     // The date is what repeats, so a cadence without one means nothing. Said
     // here rather than letting the server refuse a filled-in form.
     if (form.repeat_every && !dueDate) { toast.error("A repeating task needs a due date — the date is what repeats"); return; }
@@ -182,6 +192,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
       formDraft.discard();
       setFiles([]);
       setTitleError("");
+      setDueError("");
       setOpen(false);
       onCreated();
     } catch (e) { toast.error(e.response?.data?.detail || "Create failed"); }
@@ -381,14 +392,15 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
           )}
 
           <div>
-            <span className={lbl} id="task-due-label">Due</span>
-            <div className="mt-1.5 flex flex-wrap gap-1.5" role="group" aria-labelledby="task-due-label">
+            <span className={lbl} id="task-due-label">Due <span className="text-kr-accent" aria-hidden="true">*</span></span>
+            <div className="mt-1.5 flex flex-wrap gap-1.5" role="group" aria-labelledby="task-due-label"
+              aria-describedby={dueError ? "task-due-error" : undefined}>
               {DUE_PRESETS.map((p) => {
                 const on = form.due_preset === p.key;
                 return (
-                  <button key={p.key || "none"} type="button" aria-pressed={on}
-                    data-testid={`task-due-${p.key || "none"}`}
-                    onClick={() => setForm({ ...form, due_preset: p.key })}
+                  <button key={p.key} type="button" aria-pressed={on}
+                    data-testid={`task-due-${p.key}`}
+                    onClick={() => { setForm({ ...form, due_preset: p.key }); if (dueError) setDueError(""); }}
                     className={`h-9 rounded-pill px-3.5 text-xs ${on ? "kr-pressed font-semibold text-foreground" : "kr-pop text-foreground/75"}`}>
                     {p.label}
                   </button>
@@ -397,7 +409,12 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
             </div>
             {form.due_preset === "pick" && (
               <input data-testid="task-due-date" type="date" aria-label="Due date" className={`${inp} mt-2`}
-                value={form.due_date} onChange={set("due_date")} />
+                value={form.due_date} onChange={(e) => { setForm({ ...form, due_date: e.target.value }); if (dueError) setDueError(""); }} />
+            )}
+            {dueError && (
+              <p id="task-due-error" role="alert" data-testid="task-due-error" className="mt-1.5 text-xs font-medium text-kr-accent">
+                {dueError}
+              </p>
             )}
             {/* D1 (2026-09-21) — HOW OFTEN IT COMES BACK.
                 Nothing in the product could repeat: the GST filing, the
@@ -410,14 +427,18 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
               <div className="mt-2.5" data-testid="task-repeat">
                 <label className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <span>Repeats</span>
-                  <select value={form.repeat_every} onChange={set("repeat_every")}
-                    aria-label="How often this task repeats"
-                    data-testid="task-repeat-every" className={`${inp} !h-9 !w-auto !py-0 text-xs`}>
-                    <option value="">Just once</option>
-                    <option value="day">Every day</option>
-                    <option value="week">Every week</option>
-                    <option value="month">Every month</option>
-                  </select>
+                  {/* The app's own glass list, not the OS picker (founder rule). */}
+                  <span className="inline-block w-40">
+                    <GlassSelect value={form.repeat_every} onChange={(v) => setForm({ ...form, repeat_every: v })}
+                      ariaLabel="How often this task repeats" testid="task-repeat-every"
+                      variant="field" triggerClassName={`${inp} !h-9 !py-0 text-xs`}
+                      options={[
+                        { value: "", label: "Just once" },
+                        { value: "day", label: "Every day" },
+                        { value: "week", label: "Every week" },
+                        { value: "month", label: "Every month" },
+                      ]} />
+                  </span>
                   {form.repeat_every && (
                     <>
                       <span>every</span>

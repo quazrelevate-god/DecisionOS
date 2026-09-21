@@ -260,6 +260,10 @@ function CreateTaskFromInsight({ insight, members, roleOptions }) {
   const [desc, setDesc] = useState("");
   const [assignee, setAssignee] = useState("");
   const [priority, setPriority] = useState("medium");
+  // PILOT-1 C — a task made from an insight has a deadline like any other.
+  // Chosen by the person, not guessed from the insight.
+  const [due, setDue] = useState("");
+  const [dueError, setDueError] = useState("");
   const [busy, setBusy] = useState(false);
 
   const openDialog = () => {
@@ -267,12 +271,15 @@ function CreateTaskFromInsight({ insight, members, roleOptions }) {
     setDesc(insight.detail || "");
     setPriority(insight.level === "high" ? "high" : insight.level === "low" ? "low" : "medium");
     setAssignee("");
+    setDue("");
+    setDueError("");
     setOpen(true);
   };
   const save = async () => {
     if (!title.trim()) return toast.error(t("finance.task_title_required"));
+    if (!due) { setDueError("Choose when it's due"); return; }
     setBusy(true);
-    const payload = { title: title.trim(), description: desc.trim(), priority };
+    const payload = { title: title.trim(), description: desc.trim(), priority, due_date: due };
     if (assignee.startsWith("user:")) payload.assignee_id = assignee.slice(5);
     else if (assignee.startsWith("role:")) payload.assignee_role = assignee.slice(5);
     try {
@@ -305,6 +312,14 @@ function CreateTaskFromInsight({ insight, members, roleOptions }) {
             </Field>
             <Field label={t("finance.description")} htmlFor="insight-task-desc">
               <textarea id="insight-task-desc" className={AREA} rows={3} value={desc} onChange={(e) => setDesc(e.target.value)} />
+            </Field>
+            <Field label="Due" htmlFor="insight-task-due">
+              <input id="insight-task-due" data-testid="insight-task-due" type="date" className={FIELD} value={due}
+                aria-invalid={dueError ? "true" : undefined} aria-describedby={dueError ? "insight-task-due-error" : undefined}
+                onChange={(e) => { setDue(e.target.value); if (dueError) setDueError(""); }} />
+              {dueError && (
+                <p id="insight-task-due-error" role="alert" className="mt-1.5 text-xs font-medium text-kr-accent">{dueError}</p>
+              )}
             </Field>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label={t("finance.assign_to")} htmlFor="insight-task-assignee">

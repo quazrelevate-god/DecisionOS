@@ -38,6 +38,7 @@ import { userPerms } from "../../lib/perms";
 import { canAssignPerson } from "../../lib/taskAccess";
 import { money, timeAgo, fullTime } from "../../lib/format";
 import { deptName } from "../../lib/departments";
+import { GlassSelect } from "../karma/GlassSelect";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "../ui/sheet";
 import {
   DRAWER_CARD, DRAWER_FIELD, DRAWER_LABEL, GLASS_PILL, INK_PILL, CHIP, QUIET_CHIP,
@@ -154,6 +155,8 @@ function AddTaskToStage({ workflowId, stage, members, user, tenant, onAdded, pri
   const [due, setDue] = useState("");
   const [after, setAfter] = useState("");
   const [busy, setBusy] = useState(false);
+  // PILOT-1 C — work put on a stage by hand has a deadline like any other.
+  const [dueError, setDueError] = useState("");
   const inputRef = useRef(null);
 
   useEffect(() => { if (open) inputRef.current?.focus(); }, [open]);
@@ -167,6 +170,7 @@ function AddTaskToStage({ workflowId, stage, members, user, tenant, onAdded, pri
     e?.preventDefault?.();
     const clean = title.trim();
     if (!clean || busy) return;
+    if (!due) { setDueError("Choose when it's due"); return; }
     setBusy(true);
     try {
       /* The whole point of this screen. POST /tasks has accepted these two
@@ -180,7 +184,7 @@ function AddTaskToStage({ workflowId, stage, members, user, tenant, onAdded, pri
         stage_key: stage.key,
         assignee_id: assignee || undefined,
         assignee_role: !assignee ? (stage.owner_role || undefined) : undefined,
-        due_date: due || undefined,
+        due_date: due,
         /* D3 — work that has to wait its turn. It starts blocked and opens by
            itself, telling whoever holds it, the moment the task before it is
            done. Offered here because a stage is exactly where order matters:
@@ -188,7 +192,7 @@ function AddTaskToStage({ workflowId, stage, members, user, tenant, onAdded, pri
         depends_on: after ? [after] : undefined,
       });
       toast.success(`Added to ${stage.label}`);
-      setTitle(""); setAssignee(""); setDue(""); setAfter(""); setOpen(false);
+      setTitle(""); setAssignee(""); setDue(""); setAfter(""); setDueError(""); setOpen(false);
       onAdded?.();
     } catch (err) {
       toast.error(err.response?.data?.detail || "Could not add the task.");
@@ -222,42 +226,52 @@ function AddTaskToStage({ workflowId, stage, members, user, tenant, onAdded, pri
         className={`${DRAWER_FIELD} !py-2.5 !text-[14px]`}
       />
       <div className="flex flex-wrap gap-2">
-        <select
-          value={assignee}
-          onChange={(e) => setAssignee(e.target.value)}
-          aria-label="Who does it"
-          data-testid={`wf-add-task-assignee-${stage.key}`}
-          className={`${DRAWER_FIELD} !w-auto flex-1 !py-2.5 !text-[13.5px]`}
-        >
-          <option value="">
-            {stage.owner_role ? `Anyone in ${deptName(tenant, stage.owner_role)}` : "Nobody yet"}
-          </option>
-          {assignable.map((m) => (
-            <option key={m.id} value={m.id}>{m.name || m.email}</option>
-          ))}
-        </select>
+        {/* The app's own glass list, never the operating system's picker
+            (founder rule) — these two were native <select>s. */}
+        <div className="min-w-[10rem] flex-1">
+          <GlassSelect
+            value={assignee}
+            onChange={setAssignee}
+            ariaLabel="Who does it"
+            testid={`wf-add-task-assignee-${stage.key}`}
+            variant="field"
+            triggerClassName={`${DRAWER_FIELD} !py-2.5 !text-[13.5px]`}
+            options={[
+              { value: "", label: stage.owner_role ? `Anyone in ${deptName(tenant, stage.owner_role)}` : "Nobody yet" },
+              ...assignable.map((m) => ({ value: m.id, label: m.name || m.email })),
+            ]}
+          />
+        </div>
         <input
           type="date"
           value={due}
-          onChange={(e) => setDue(e.target.value)}
+          onChange={(e) => { setDue(e.target.value); if (dueError) setDueError(""); }}
           aria-label="Due date"
+          aria-required="true"
+          aria-invalid={dueError ? "true" : undefined}
+          aria-describedby={dueError ? `wf-add-task-due-error-${stage.key}` : undefined}
           data-testid={`wf-add-task-due-${stage.key}`}
           className={`${DRAWER_FIELD} !w-auto !py-2.5 !text-[13.5px]`}
         />
       </div>
+      {dueError && (
+        <p id={`wf-add-task-due-error-${stage.key}`} role="alert" className="text-xs font-medium text-kr-accent">
+          {dueError}
+        </p>
+      )}
       {priorTasks.length > 0 && (
-        <select
+        <GlassSelect
           value={after}
-          onChange={(e) => setAfter(e.target.value)}
-          aria-label="Starts after"
-          data-testid={`wf-add-task-after-${stage.key}`}
-          className={`${DRAWER_FIELD} !py-2.5 !text-[13.5px]`}
-        >
-          <option value="">Can start right away</option>
-          {priorTasks.map((p) => (
-            <option key={p.id} value={p.id}>Starts after: {p.title}</option>
-          ))}
-        </select>
+          onChange={setAfter}
+          ariaLabel="Starts after"
+          testid={`wf-add-task-after-${stage.key}`}
+          variant="field"
+          triggerClassName={`${DRAWER_FIELD} !py-2.5 !text-[13.5px]`}
+          options={[
+            { value: "", label: "Can start right away" },
+            ...priorTasks.map((p) => ({ value: p.id, label: `Starts after: ${p.title}` })),
+          ]}
+        />
       )}
       <div className="flex items-center justify-end gap-2">
         <button type="button" onClick={() => setOpen(false)}

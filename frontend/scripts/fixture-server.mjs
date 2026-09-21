@@ -414,8 +414,18 @@ function cardsOnFire() {
   return out;
 }
 
-function cardsDueToday() {
-  return TASKS.filter((t) => t.due_date === TODAY && !['done', 'cancelled'].includes(t.status) && t.assignee_id !== 'u_owner')
+/* PILOT-1 C — mirrors routers/desk._cards_due_today: what My Work lists as due
+   today for the person looking — every open task for the owner (or See all
+   tasks), their My tasks for anyone else; a time on the date is that day.
+   DOS_FIXTURE_DUE_TODAY=old brings back the rule it replaced (only other
+   people's tasks), for before/after evidence. */
+function cardsDueToday(me = USERS[0]) {
+  const seesAll = me.role === 'owner' || (me.permissions || []).includes('tasks_view_all');
+  const mine = (t) => t.assignee_id === me.id || (t.co_assignee_ids || []).includes(me.id)
+    || (!t.assignee_id && t.assignee_role === me.role);
+  const oldRule = process.env.DOS_FIXTURE_DUE_TODAY === 'old';
+  return TASKS.filter((t) => String(t.due_date || '').slice(0, 10) === TODAY && !['done', 'cancelled'].includes(t.status)
+      && (oldRule ? t.assignee_id !== 'u_owner' : (seesAll || mine(t))))
     .map((t) => ({
       id: t.id, kind: 'task_due_today', title: t.title,
       context_line: t.assignee_name ? `With ${t.assignee_name}` : 'Due today',
@@ -688,8 +698,8 @@ function resolve(method, path, q, body = {}) {
   // --- desk ---
   if (p === '/desk') {
     const chip = q.get('chip') || 'needs_decision';
-    const counters = Object.fromEntries(Object.entries(DESK_BUILDERS).map(([k, f]) => [k, f().length]));
-    return { chip, counters, cards: (DESK_BUILDERS[chip] || cardsImportant)() };
+    const counters = Object.fromEntries(Object.entries(DESK_BUILDERS).map(([k, f]) => [k, f(me).length]));
+    return { chip, counters, cards: (DESK_BUILDERS[chip] || cardsImportant)(me) };
   }
   /* The greeting, the KPI tiles' trends and the counters (routers/desk.py's
      /desk/summary, same shape). This route was missing, so every fixture run —
@@ -749,6 +759,11 @@ function resolve(method, path, q, body = {}) {
 
   // --- tasks ---
   if (p === '/tasks') {
+    /* PILOT-1 C — mirrors routers/tasks.create_task: a task a person makes has
+       a due date (or "in N days"), or it is refused. */
+    if (method === 'POST' && !body.due_date && !Number.isInteger(body.due_in_days)) {
+      return refuse(400, 'Give the task a due date — when does it need to be done?');
+    }
     if (method !== 'GET') return { ...OK, task: TASKS[0] };
     return q.get('mine') === 'true' ? TASKS.filter((t) => t.assignee_id === me.id || t.created_by === me.id) : TASKS;
   }
@@ -767,12 +782,16 @@ function resolve(method, path, q, body = {}) {
        fields are acknowledged and not stored, as before. In memory only: a
        restart is a clean fixture again. */
     if (method === 'PATCH' && !seg[3]) {
+      if ('due_date' in body && body.due_date !== null && !String(body.due_date).trim()) {
+        return refuse(400, 'A task keeps its due date — move it to another day instead.');
+      }
       if ('title' in body && body.title !== null) {
         const title = String(body.title).replace(/\s+/g, ' ').trim();
         if (!title) return refuse(400, 'A task needs a name.');
         t.title = title;
       }
       if ('description' in body && body.description !== null) t.description = String(body.description).trim();
+      if (body.due_date) t.due_date = body.due_date;
       t.updated_at = new Date().toISOString();
       return t;
     }

@@ -1340,7 +1340,7 @@ function DueLine({ t: task, canMove, onSaved, className = "", testid }) {
     setBusy(true);
     try {
       await api.patch(`/tasks/${task.id}`, { due_date: value });
-      toast.success(value ? `Due ${dueLabel(value)}` : "Due date removed");
+      toast.success(`Due ${dueLabel(value)}`);
       setEditing(false);
       onSaved?.();
     } catch (e) {
@@ -1363,13 +1363,9 @@ function DueLine({ t: task, canMove, onSaved, className = "", testid }) {
           className={`min-h-8 rounded-pill px-3.5 text-[12.5px] font-semibold disabled:opacity-50 ${INK_PILL}`}>
           Save
         </button>
-        {task.due_date && (
-          <button type="button" onClick={() => save("")} disabled={busy}
-            data-testid={`task-due-clear-${task.id}`}
-            className="min-h-8 rounded-pill px-3 text-[12.5px] font-medium text-slate-500 hover:text-slate-800">
-            Remove
-          </button>
-        )}
+        {/* PILOT-1 C — no "Remove": every task keeps a deadline, so a date
+            is moved, never taken off (the server refuses it too). Retired
+            testid: task-due-clear-<id>. */}
         <button type="button" onClick={() => setEditing(false)} disabled={busy}
           className="min-h-8 rounded-pill px-2 text-[12.5px] font-medium text-slate-500 hover:text-slate-800">
           Cancel
@@ -1481,6 +1477,67 @@ function TaskWordingEditor({ t, onSaved, onClose }) {
         </button>
       </div>
     </form>
+  );
+}
+
+/* PILOT-1 C — A TASK WITH NO DATE, ON ITS CARD.
+ *
+ * Tasks made before dates were required still have none, and they are the ones
+ * no count can see. They are not given a date in bulk — somebody has to decide
+ * when each is due — but they are made plain on the card, and for the people
+ * who may set a date (the priority rule: whoever asked, their manager, the
+ * owner) the chip IS the control: one tap opens the date picker, and picking a
+ * day saves it. Everyone else sees the chip and can say so on the task.
+ */
+function NoDateChip({ t: task, canSet, onSaved }) {
+  const inputRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const chip = "bg-badge-pending text-badge-pending-fg ring-badge-pending-line";
+  if (!canSet) {
+    return (
+      <span data-testid={`no-date-${task.id}`} className={`${PILL} ${chip}`}>
+        <CalendarBlank size={11} weight="bold" aria-hidden="true" /> No due date
+      </span>
+    );
+  }
+  const pick = (e) => {
+    e.stopPropagation();
+    const el = inputRef.current;
+    if (!el) return;
+    try { if (typeof el.showPicker === "function") { el.showPicker(); return; } } catch (err) { /* fall through */ }
+    el.focus();
+    el.click();
+  };
+  const save = async (day) => {
+    if (!day) return;
+    setBusy(true);
+    try {
+      const { data } = await api.patch(`/tasks/${task.id}`, { due_date: day });
+      toast.success(`Due ${dueLabel(day)}`);
+      onSaved?.(data);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Could not set the date.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <span className="relative inline-flex" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+      <button type="button" onClick={pick} disabled={busy} data-testid={`no-date-${task.id}`}
+        aria-label={`No due date — set one for ${task.title}`}
+        /* 32px to the eye, 44px to a thumb: the ::before reaches 6px past
+           every edge, so the chip keeps the card's pill size and the touch
+           floor both. */
+        className={`${PILL} ${chip} relative min-h-8 before:absolute before:-inset-1.5 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40 disabled:opacity-60`}>
+        <CalendarBlank size={11} weight="bold" aria-hidden="true" /> {busy ? "Saving…" : "No due date · Set"}
+      </button>
+      {/* The picker itself: present for showPicker(), out of sight and out of
+          the tab order — the chip above is the control. */}
+      <input ref={inputRef} type="date" tabIndex={-1} aria-hidden="true"
+        data-testid={`no-date-input-${task.id}`}
+        onChange={(e) => save(e.target.value)}
+        className="pointer-events-none absolute bottom-0 left-0 h-px w-px opacity-0" />
+    </span>
   );
 }
 
@@ -3016,6 +3073,13 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
             </span>
           )}
         </div>
+        {/* PILOT-1 C — no date, made plain: under the title, where the date
+            pill would be, so it is read in the same glance. */}
+        {!t.due_date && !terminal && (
+          <div className="mt-2">
+            <NoDateChip t={t} canSet={rights.priority} onSaved={(data) => { applyPatched(data); onChange(); }} />
+          </div>
+        )}
 
         {/* BOTTOM ROW — the pills wrap on the left; the people hold the right. */}
         <div className="mt-auto flex items-end justify-between gap-2 pt-3">
@@ -3372,6 +3436,8 @@ const STATUS_FILTER_OPTIONS = [
   { key: "overdue", label: "Overdue" },
   // ASK-25 F4 — the Desk's "Due today" card needs somewhere to land.
   { key: "due_today", label: "Due today" },
+  // PILOT-1 C — the tasks made before dates were required, found in one place.
+  { key: "no_date", label: "No due date" },
   { key: "completed", label: "Done" },
 ];
 // Links made before the stages keep working: Pending Approval and Under
@@ -3379,7 +3445,7 @@ const STATUS_FILTER_OPTIONS = [
 const STATUS_ALIASES = { blocked: "approval", review: "approval" };
 // Everything but a stage is a LENS or a FLAG: the card's stage chip still
 // says something under it, so it stays on the cards (see hideStatus).
-const STATUS_LENSES = new Set(["overdue", "due_today", "completed", "waiting", "approval"]);
+const STATUS_LENSES = new Set(["overdue", "due_today", "no_date", "completed", "waiting", "approval"]);
 function statusMatches(t, status) {
   if (status === "todo" || status === "in_progress") return stageOf(t.status) === status;
   if (status === "waiting") return t.status === "waiting";
@@ -3405,6 +3471,7 @@ function matchesFilters(t, { tab, person, status }) {
   if (tab !== "all" && tab !== "completed" && t.task_type !== tab) return false;
   if (status === "overdue" && !isOverdue(t)) return false;
   if (status === "due_today" && !isDueToday(t)) return false;
+  if (status === "no_date" && t.due_date) return false;
   if (status && !statusMatches(t, status)) return false;
   if (person === "unassigned") return !t.assignee_id && !t.assignee_role;
   if (person && person.startsWith("role:")) return !t.assignee_id && t.assignee_role === person.slice(5);
@@ -4738,6 +4805,28 @@ export default function MyWork({ only = null }) {
               openReassign={() => { setBulkAssigneeId(""); setBulkAssigneeRole(""); setBulkReassignOpen(true); }}
             />
           )}
+          {/* PILOT-1 C — tasks made before a date was required, counted, one
+              tap from the list that holds them. Nothing is dated for anyone:
+              each card's own "No due date · Set" is where a date is chosen. */}
+          {(() => {
+            const undated = countWith({ status: "no_date" });
+            if (!undated || filters.status === "no_date" || showingCompleted) return null;
+            return (
+              <div data-testid="mywork-no-date-notice" role="status"
+                className="mb-3 flex min-w-0 items-center justify-between gap-3 rounded-2xl bg-badge-pending py-1 pl-4 pr-1 text-sm text-badge-pending-fg ring-1 ring-inset ring-badge-pending-line">
+                <span className="flex min-w-0 items-center gap-2">
+                  <CalendarBlank size={15} weight="bold" aria-hidden="true" className="shrink-0" />
+                  <span className="min-w-0">
+                    {undated} {undated === 1 ? "task has" : "tasks have"} no due date, so {undated === 1 ? "it won't" : "they won't"} show as due or late.
+                  </span>
+                </span>
+                <button type="button" onClick={() => setStatusFilter("no_date")} data-testid="mywork-no-date-show"
+                  className="flex min-h-11 shrink-0 items-center rounded-pill px-4 font-semibold underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40">
+                  Show them
+                </button>
+              </div>
+            );
+          })()}
           {(() => {
             const cardProps = (t) => ({
               onChange: refresh,

@@ -19,6 +19,7 @@ from prompts import render
 from services.ingestion import commit_ingestion_records, _classify_ingestion
 from services.voice import process_voice_note
 from services.ai.safety import INJECTION_GUARD, wrap_untrusted, detect_injection
+from shared.due import due_day
 
 
 CAPTURE_CLASSES = ["operational_task", "invoice", "payment", "purchase", "sales", "hr", "meeting", "decision", "approval", "workflow", "other"]
@@ -197,7 +198,7 @@ async def persist_capture_draft(tenant_id, wa_from, kind, payload, tri, troles, 
         reviewer = "owner"
     due = None
     if isinstance(tri.get("due_in_days"), int):
-        due = (datetime.now(timezone.utc) + timedelta(days=tri["due_in_days"])).isoformat()
+        due = due_day(tri["due_in_days"])   # a day, not an instant (shared/due.py)
     did = new_id()
     await db.capture_drafts.insert_one({
         "id": did, "tenant_id": tenant_id, "source": "whatsapp", "wa_from": wa_from, "kind": kind,

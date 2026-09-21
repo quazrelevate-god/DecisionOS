@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import api from "../lib/api";
+import api, { SESSION_LOST_EVENT } from "../lib/api";
+import { toast } from "sonner";
 import { setAppLanguage } from "../i18n";
 
 const AuthContext = createContext(null);
@@ -26,6 +27,34 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
     // Runs once on mount to restore the session; deps intentionally empty.
   }, []);
+
+  /* 2026-09-21 — THE SESSION ENDED UNDER THE OPEN APP (see lib/api.js).
+     A 401 from any ordinary route while someone is signed in: ask /auth/me
+     once — the one question that settles it — and only if that is refused
+     too, sign this tab out. Clearing the user unmounts the signed-in shell,
+     which stops every poller with it, and the router sends them to sign in.
+     `checking` makes a burst of 401s (every poller at once) one check. */
+  useEffect(() => {
+    if (!user) return undefined;
+    let checking = false;
+    const onLost = async () => {
+      if (checking) return;
+      checking = true;
+      try {
+        await api.get("/auth/me");          // still signed in: that 401 was about something else
+      } catch (e) {
+        if (e?.response?.status === 401) {
+          setUser(null);
+          setTenant(null);
+          toast.info("You were signed out. Sign in again to carry on.", { id: "session-lost" });
+        }
+      } finally {
+        checking = false;
+      }
+    };
+    window.addEventListener(SESSION_LOST_EVENT, onLost);
+    return () => window.removeEventListener(SESSION_LOST_EVENT, onLost);
+  }, [user]);
 
   /* 2026-09-20 — ANOTHER TAB SWITCHED COMPANY. The auth cookie is one per
      browser, so the moment one tab switches, every other tab is signed into

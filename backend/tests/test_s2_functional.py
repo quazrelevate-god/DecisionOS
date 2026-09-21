@@ -492,6 +492,13 @@ def test_leave_request_validation_approve_and_attendance(with_test_db):
             owner = _u("owner", "o1")
             emp = _u("sales", "e1")
             r = {}
+            # 2026-09-21: every real company has its owner on file, and since
+            # 6d4f404 (an owner's own leave is recorded, nobody approves their
+            # own) an approver walk that finds NOBODY records the leave as
+            # approved. This test never seeded the owner, so the employee's
+            # request below started coming back "approved" — seed what a real
+            # workspace has, so it goes on testing the employee path it names.
+            await db.users.insert_many([dict(owner), dict(emp)])
 
             # bad leave type -> 400
             try:

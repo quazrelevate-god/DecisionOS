@@ -75,6 +75,31 @@ OPERATING_MODEL = register(Prompt(
     ),
 ))
 
+# 2026-09-21 — the backfill for companies set up before operating_model v1.1.
+# Their stages carry no work, so a card reaching one tells nobody to do
+# anything. This fills ONLY the stages it is given; the caller decides which
+# (the empty ones) and the owner reviews every suggestion before it is saved.
+STAGE_WORK = register(Prompt(
+    name="generators.stage_work",
+    version="1.0",
+    intent="Suggest the concrete work each EMPTY workflow stage needs, for an existing company's operating model.",
+    template=(
+        "You fill in the WORK for workflow stages inside DecisionOS, for a business that already runs on it. "
+        "Each stage you are given is a step that work moves through on a kanban board. When a card reaches the "
+        "stage, the tasks you write are created automatically and assigned to that department — so they must be "
+        "the concrete, repeatable things somebody must actually DO while work sits at that stage, in this "
+        "industry's own words, written as instructions ('Confirm the order quantity with the customer', "
+        "'Check stock and reserve it', 'Collect the signed delivery note'). Never restate the stage name "
+        "('Do the cooking' for a Cooking stage is useless). Give 1-3 tasks per stage. A final stage that is purely "
+        "a resting state (Delivered, Completed, Paid) may get an empty list. Set each task's \"role\" to the "
+        "department that does it — one of the department slugs you are given, usually the stage's own — or '' if "
+        "none fits. Use ONLY the stages you are given, with their exact pipeline and stage keys. "
+        "Return ONLY valid JSON, no prose, EXACTLY this shape: "
+        '{"stages": [{"pipeline_key": str, "stage_key": str, '
+        '"tasks": [{"title": str, "role": role_slug_or_empty}]}]}.'
+    ),
+))
+
 FINANCE_CATEGORIES = register(Prompt(
     name="generators.finance_categories",
     version="1.0",

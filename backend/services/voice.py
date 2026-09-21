@@ -20,6 +20,7 @@ from services.ai.extraction import ai_extract
 from services.tasks import _attach_reference_ids
 # ASK-32 Phase 2 — who decides (capturer, else their manager, else the owner) and who is told.
 from services.decision_flow import notify_decision_waiting, route_approver
+from shared.due import due_day
 
 
 def match_member_by_name(members: list, name: str):
@@ -259,7 +260,7 @@ async def build_proposal(tenant_id, extracted, troles, members, cat_keys, pipeli
             how = "load" if assignee_id else "team"
         due = None
         if isinstance(t.get("due_in_days"), int):
-            due = (now + timedelta(days=t["due_in_days"])).isoformat()
+            due = due_day(t["due_in_days"], now)   # a day, not an instant (shared/due.py)
         tasks.append({
             "key": new_id(), "title": t.get("title") or "Untitled task",
             "description": t.get("description", ""), "assignee_id": assignee_id,
@@ -319,7 +320,7 @@ async def build_proposal(tenant_id, extracted, troles, members, cat_keys, pipeli
                 for mt in extracted.get("meeting_events") or []]
     reminders = []
     for r in extracted.get("reminders") or []:
-        due = (now + timedelta(days=r["due_in_days"])).isoformat() if isinstance(r.get("due_in_days"), int) else None
+        due = due_day(r.get("due_in_days"), now)   # a day, not an instant (shared/due.py)
         reminders.append({"key": new_id(), "title": r.get("title") or "Reminder", "due_date": due})
     memory_notes = [{"key": new_id(), "text": m["text"], "tag": m.get("tag", "note")}
                     for m in extracted.get("memory_notes") or [] if m.get("text")]
@@ -469,6 +470,7 @@ async def _link_tasks_to_workflows(tenant_id, task_ids, wf_ids, fallback=True):
     wfs = await db.workflows.find({"id": {"$in": wf_ids}, "tenant_id": tenant_id},
                                   {"_id": 0, "id": 1, "type": 1, "stage": 1}).to_list(len(wf_ids))
     om = await tenant_operating_model(tenant_id)
+    role_keys = await tenant_role_keys(tenant_id)
     pipelines = {p.get("key"): p for p in (om or {}).get("pipelines") or [] if p.get("key")}
     wf_map = [{"wf": wf, "pipeline": pipelines.get(wf.get("type") or "")} for wf in wfs]
     first = wf_map[0] if wf_map else None
@@ -476,7 +478,7 @@ async def _link_tasks_to_workflows(tenant_id, task_ids, wf_ids, fallback=True):
         role = (tk.get("assignee_role") or "").strip()
         chosen_wf, chosen_stage = None, None
         for entry in wf_map:
-            sk = stage_owned_by(entry["pipeline"], role) if entry["pipeline"] else None
+            sk = stage_owned_by(entry["pipeline"], role, role_keys) if entry["pipeline"] else None
             if sk:
                 chosen_wf, chosen_stage = entry["wf"]["id"], sk
                 break

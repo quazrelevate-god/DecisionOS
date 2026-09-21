@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from core import (
     db, get_current_user, require_perm, require_role, clean_perms,
     DEFAULT_ROLES, now_iso, log_activity, normalize_lexicon, normalize_operating_model,
+    tenant_role_keys,
 )
 from models.tenant import TenantUpdateInput, InviteInput
 from services.ai.generators import (
@@ -37,6 +38,7 @@ from models.tenant import (
     AiConsentGrantInput,
     TenantAIKeysInput,
     OwnerExclusionsInput,
+    StageWorkApplyInput,
 )
 
 
@@ -164,6 +166,66 @@ async def regenerate_operating_model(user: dict = Depends(require_perm("team_man
     return out
 
 
+
+
+# 2026-09-21 — STAGE WORK FOR COMPANIES SET UP BEFORE operating_model v1.1.
+# Their stages carry no work, so the engine has nothing to hand anyone when a
+# card arrives. services/ai/stage_work.py holds the rules (only the gaps; the
+# owner sees it first; nothing lands on cards already moving). These are the
+# two doors: one that suggests and writes nothing, one that writes what the
+# owner kept.
+STAGE_WORK_CHANGED = ("Your workflows were changed while you were reviewing these, so nothing was "
+                      "saved. Ask for suggestions again to see the stages as they are now.")
+
+
+@router.post("/tenant/operating-model/stage-work/suggest")
+async def suggest_stage_work(user: dict = Depends(require_perm("team_manage"))):
+    """Suggest the work for every stage that has none. Writes NOTHING."""
+    from services.ai import stage_work
+    from services.ai.generators import tenant_operating_model
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    _refuse_if_ai_off(tenant)
+    tenant["operating_model"] = await tenant_operating_model(user["tenant_id"])
+    try:
+        return await stage_work.suggest(tenant)
+    except Exception:
+        raise HTTPException(status_code=502, detail=REGEN_FAILED)
+
+
+@router.post("/tenant/operating-model/stage-work")
+async def apply_stage_work(inp: StageWorkApplyInput, user: dict = Depends(require_perm("team_manage"))):
+    """Save the work the owner kept — into stages that are STILL empty only.
+
+    A stage that gained work since the suggestion (an owner typed some, another
+    tab applied) is skipped and reported, never overwritten. The write is
+    conditional on the model being exactly what was read, so a concurrent edit
+    of the workflows turns into a clear refusal instead of a silent loss.
+
+    Cards already sitting on a stage are NOT given the new tasks: templates act
+    the next time a card enters a stage (services/workflow_engine.on_stage_enter).
+    """
+    from services.ai import stage_work
+    from services.ai.generators import tenant_operating_model
+    stored = ((await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "operating_model": 1}))
+              or {}).get("operating_model")
+    om = await tenant_operating_model(user["tenant_id"])
+    role_keys = set(await tenant_role_keys(user["tenant_id"])) | {"owner"}
+    model, filled, skipped = stage_work.apply(om, [f.model_dump() for f in inp.fills], role_keys)
+    if filled:
+        res = await db.tenants.update_one(
+            {"id": user["tenant_id"], "operating_model": stored},
+            {"$set": {"operating_model": normalize_operating_model(model)}})
+        if not res.matched_count:
+            raise HTTPException(status_code=409, detail=STAGE_WORK_CHANGED)
+        n = sum(f["tasks"] for f in filled)
+        await log_activity(user["tenant_id"], user["id"], "operating_model_stage_work",
+                           f"{user['name']} added {n} task{'s' if n != 1 else ''} to "
+                           f"{len(filled)} workflow stage{'s' if len(filled) != 1 else ''}")
+    out = await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
+    out["stage_work"] = {"filled": filled, "skipped": skipped}
+    return out
 
 
 @router.patch("/tenant/finance-categories")

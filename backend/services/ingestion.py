@@ -25,6 +25,7 @@ from services.vision import get_gemini_client, _gemini_doc_sync
 from services.ai.validation import calibrate_doc_confidence
 from core import model_for
 from prompts import render
+from shared.due import due_day
 
 
 # Prompt text now lives in the registry (prompts/documents.py). The literal
@@ -409,7 +410,7 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
             continue
         due = None
         if isinstance(t.get("due_in_days"), int):
-            due = (datetime.now(timezone.utc) + timedelta(days=t["due_in_days"])).isoformat()
+            due = due_day(t["due_in_days"])   # a day, not an instant (shared/due.py)
         await db.tasks.insert_one({
             "id": new_id(), "tenant_id": tenant_id, "title": title, "description": "",
             "assignee_role": followup_role, "assignee_id": None,

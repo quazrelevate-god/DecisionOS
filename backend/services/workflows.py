@@ -227,7 +227,7 @@ async def derive_task_workflow_link(
     return (None, None)
 
 
-def stage_owned_by(pipeline: dict, role: str) -> Optional[str]:
+def stage_owned_by(pipeline: dict, role: str, role_keys=None) -> Optional[str]:
     """WE-01.5 (2026-08-16): return the pipeline stage.key where the
     given role is the natural owner.
 
@@ -253,18 +253,31 @@ def stage_owned_by(pipeline: dict, role: str) -> Optional[str]:
     role_s = role.strip().lower()
     if not role_s:
         return None
+    # 2026-09-21: a stage says "sales"; the company calls it
+    # "sales_&_exporter_relations". With the company's department keys, each
+    # stage's word is resolved to the department it means before comparing
+    # (shared/roles.py). Without them, the old exact comparison stands.
+    if role_keys:
+        from shared.roles import resolve_role
+        keys = list(role_keys)
+
+        def _means(word):
+            return (resolve_role(word, keys) or "").lower() == role_s
+    else:
+        def _means(word):
+            return (word or "").strip().lower() == role_s
     # Pass 1: explicit stage.role
     for s in (pipeline.get("stages") or []):
         if not isinstance(s, dict):
             continue
-        if (s.get("role") or "").strip().lower() == role_s:
+        if s.get("role") and _means(s.get("role")):
             return s.get("key")
     # Pass 2: derive from stage.tasks[*].role
     for s in (pipeline.get("stages") or []):
         if not isinstance(s, dict):
             continue
         for t in (s.get("tasks") or []):
-            if (t.get("role") or "").strip().lower() == role_s:
+            if t.get("role") and _means(t.get("role")):
                 return s.get("key")
     return None
 

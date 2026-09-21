@@ -10,6 +10,7 @@ from core import db, logger, new_id, now_iso, log_activity
 from services.ai import brain_context
 from services.ai.extraction import ai_meeting_notes
 from services.transcription import transcribe_audio
+from shared.due import due_day
 
 
 async def process_meeting(meeting_id: str):
@@ -43,7 +44,7 @@ async def process_meeting(meeting_id: str):
                 continue
             due = None
             if isinstance(a.get("due_in_days"), int):
-                due = (datetime.now(timezone.utc) + timedelta(days=a["due_in_days"])).isoformat()
+                due = due_day(a["due_in_days"])   # a day, not an instant (shared/due.py)
             member = match_member_by_name(members, a.get("assignee_name", ""))
             tid_task = new_id()
             await db.tasks.insert_one({

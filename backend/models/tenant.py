@@ -50,6 +50,23 @@ class OperatingModelInput(BaseModel):
     operating_model: dict
 
 
+class StageWorkTask(BaseModel):
+    title: str
+    role: Optional[str] = ""
+    evidence_required: Optional[bool] = False
+
+
+class StageWorkFill(BaseModel):
+    """The work an owner kept for ONE stage, after reviewing the suggestion."""
+    pipeline_key: str
+    stage_key: str
+    tasks: List[StageWorkTask] = []
+
+
+class StageWorkApplyInput(BaseModel):
+    fills: List[StageWorkFill]
+
+
 class FinanceCategoriesInput(BaseModel):
     finance_categories: dict
 

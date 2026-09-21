@@ -28,6 +28,8 @@ from services.ai import brain_context
 from services.tenancy import ensure_owned, tenant_filter  # FIX-001-C
 
 
+from shared.due import due_day  # noqa: E402
+
 router = APIRouter(prefix="/api")
 
 
@@ -156,7 +158,7 @@ async def add_decision_task(decision_id: str, inp: TaskCreateInput, user: dict =
     await _check_assignable(user, assignee_id, role if (role and not assignee_id) else None)
     due = None
     if isinstance(inp.due_in_days, int):
-        due = (datetime.now(timezone.utc) + timedelta(days=inp.due_in_days)).isoformat()
+        due = due_day(inp.due_in_days)   # a day, not an instant (shared/due.py)
     # Blocked while the decision is still pending; unblocks on approval like the rest.
     status = "blocked" if d.get("status") == "pending_approval" else ("cancelled" if d.get("status") == "rejected" else "todo")
     tid = new_id()

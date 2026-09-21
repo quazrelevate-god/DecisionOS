@@ -63,6 +63,7 @@ import { ScopeSlider } from "./karma/ScopeSlider";
 import { DesignCheckbox } from "./karma/DesignCheckbox";
 import { ApprovalPanel } from "./karma/ApprovalPanel";
 import { useAuth } from "../context/AuthContext";
+import { deptName } from "../lib/departments";
 import { userPerms } from "../lib/perms";
 import { canAssignPerson } from "../lib/taskAccess";
 import { proposalCreatesText } from "../lib/decisionProposal";
@@ -131,7 +132,7 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
   const [confirmReject, setConfirmReject] = useState(false);
-  const { user } = useAuth();
+  const { user, tenant } = useAuth();
   /* ASK-50 — what the card shows while a change is on its way to the server;
      null means "show what the proposal says". Each change is SAVED ON THE
      PROPOSAL as it is made (PATCH …/proposal/tasks/:key, as who and when
@@ -667,7 +668,7 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
                                     onChange={(v) => v && editTask(t.key, { assignee_id: v })}
                                     ariaLabel={`Who does ${t.title}`}
                                     testid={`decision-task-person-${t.key}`}
-                                    placeholder={t.assignee_role ? `Pick who does this (${t.assignee_role} team)` : "Pick who does this"}
+                                    placeholder={t.assignee_role ? `Pick who does this (${deptName(tenant, t.assignee_role)} team)` : "Pick who does this"}
                                     variant="field"
                                     disabled={editBusy}
                                     triggerClassName={`h-9 rounded-pill px-3 text-xs ${t.assignee_id ? `text-slate-700 ${GLASS_PILL}` : "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200"}`}
@@ -690,7 +691,7 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
                               <p className="text-xs text-slate-500">
                                 {/* E3-13: auto-assigned to a person, else the role pool, else unassigned */}
                                 {t.assignee_name ? `Goes to ${t.assignee_name}`
-                                  : t.assignee_role ? `Goes to the ${t.assignee_role} team`
+                                  : t.assignee_role ? `Goes to the ${deptName(tenant, t.assignee_role)} team`
                                   : "Unassigned"}
                                 {t.due_date ? ` · due ${new Date(t.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : ""}
                                 {t.priority && t.priority !== "medium" ? ` · ${t.priority} priority` : ""}

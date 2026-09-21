@@ -37,6 +37,7 @@ import { useAuth } from "../../context/AuthContext";
 import { userPerms } from "../../lib/perms";
 import { canAssignPerson } from "../../lib/taskAccess";
 import { money, timeAgo, fullTime } from "../../lib/format";
+import { deptName } from "../../lib/departments";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "../ui/sheet";
 import {
   DRAWER_CARD, DRAWER_FIELD, DRAWER_LABEL, GLASS_PILL, INK_PILL, CHIP, QUIET_CHIP,
@@ -78,8 +79,9 @@ function dueLabel(iso) {
 }
 const isOverdue = (t) => !!t.due_date && !CLOSED.has(t.status) && new Date(t.due_date) < new Date();
 
+
 /* ─────────────────────────────── one task row ─────────────────────────── */
-function TaskRow({ task }) {
+function TaskRow({ task, tenant }) {
   const late = isOverdue(task);
   const waiting = task.waiting_on && Object.keys(task.waiting_on).length > 0;
   return (
@@ -91,7 +93,7 @@ function TaskRow({ task }) {
       }`}
     >
       <span
-        title={task.assignee_name || task.assignee_role || "Nobody yet"}
+        title={task.assignee_name || (task.assignee_role ? `${deptName(tenant, task.assignee_role)} team` : "Nobody yet")}
         className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full text-[10px] font-bold ${
           task.assignee_id ? "bg-slate-900 text-white" : "bg-slate-500/[0.12] text-slate-500"
         }`}
@@ -130,6 +132,11 @@ function TaskRow({ task }) {
               <Lock size={10} weight="bold" aria-hidden="true" /> Needs approval
             </span>
           )}
+          {!task.assignee_id && task.assignee_role && (
+            /* A department's queue, with nobody in it picked yet — say WHICH
+               team, not just "?" (someone joins, or it is handed to a person). */
+            <span className={`${CHIP} ${QUIET_CHIP}`}>{deptName(tenant, task.assignee_role)} · nobody picked yet</span>
+          )}
           {!task.assignee_id && !task.assignee_role && (
             <span className={`${CHIP} ${QUIET_CHIP}`}>Nobody yet</span>
           )}
@@ -140,7 +147,7 @@ function TaskRow({ task }) {
 }
 
 /* ───────────────────── add a task to THIS stage (B1) ──────────────────── */
-function AddTaskToStage({ workflowId, stage, members, user, onAdded, priorTasks = [] }) {
+function AddTaskToStage({ workflowId, stage, members, user, tenant, onAdded, priorTasks = [] }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [assignee, setAssignee] = useState("");
@@ -223,7 +230,7 @@ function AddTaskToStage({ workflowId, stage, members, user, onAdded, priorTasks 
           className={`${DRAWER_FIELD} !w-auto flex-1 !py-2.5 !text-[13.5px]`}
         >
           <option value="">
-            {stage.owner_role ? `Anyone in ${stage.owner_role}` : "Nobody yet"}
+            {stage.owner_role ? `Anyone in ${deptName(tenant, stage.owner_role)}` : "Nobody yet"}
           </option>
           {assignable.map((m) => (
             <option key={m.id} value={m.id}>{m.name || m.email}</option>
@@ -268,7 +275,7 @@ function AddTaskToStage({ workflowId, stage, members, user, onAdded, priorTasks 
 }
 
 /* ───────────────────────────── one stage block ────────────────────────── */
-function StageBlock({ stage, card, members, user, canEdit, onApprove, approving, onChanged, priorTasks = [] }) {
+function StageBlock({ stage, card, members, user, tenant, canEdit, onApprove, approving, onChanged, priorTasks = [] }) {
   const current = stage.state === "current";
   const complete = stage.state === "done";
   const gate = stage.approval;
@@ -303,7 +310,7 @@ function StageBlock({ stage, card, members, user, canEdit, onApprove, approving,
       </header>
 
       <p className="mt-1 pl-[34px] text-[11.5px] text-slate-500">
-        {stage.owner_role ? `${stage.owner_role} owns this stage` : "No owner set for this stage"}
+        {stage.owner_role ? `${deptName(tenant, stage.owner_role)} owns this stage` : "No owner set for this stage"}
         {stage.entered_at ? ` · arrived ${timeAgo(stage.entered_at)}` : ""}
         {overdueHere ? ` · ${overdueHere} overdue` : ""}
       </p>
@@ -319,7 +326,7 @@ function StageBlock({ stage, card, members, user, canEdit, onApprove, approving,
           <SealCheck size={14} weight="bold" aria-hidden="true" className="shrink-0" />
           {gateOpen ? (
             <>
-              <span className="min-w-0 flex-1">Needs {gate.role} sign-off before it can leave this stage</span>
+              <span className="min-w-0 flex-1">Needs {deptName(tenant, gate.role)} sign-off before it can leave this stage</span>
               {current && canApprove && (
                 <button type="button" onClick={onApprove} disabled={approving}
                   data-testid={`wf-approve-stage-${stage.key}`}
@@ -343,13 +350,14 @@ function StageBlock({ stage, card, members, user, canEdit, onApprove, approving,
             {complete ? "Nothing was tracked here." : "No work on this stage yet."}
           </p>
         )}
-        {(stage.tasks || []).map((t) => <TaskRow key={t.id} task={t} />)}
+        {(stage.tasks || []).map((t) => <TaskRow key={t.id} task={t} tenant={tenant} />)}
         {canEdit && card.stage && (
           <AddTaskToStage
             workflowId={card.id}
             stage={stage}
             members={members}
             user={user}
+            tenant={tenant}
             onAdded={onChanged}
             priorTasks={priorTasks}
           />
@@ -569,6 +577,7 @@ export default function WorkflowDetail({ workflowId, open, onOpenChange, onAdvan
                 card={card}
                 members={membersQ.data || []}
                 user={user}
+                tenant={tenant}
                 canEdit={canEdit}
                 approving={approving}
                 onApprove={approve}
@@ -581,7 +590,7 @@ export default function WorkflowDetail({ workflowId, open, onOpenChange, onAdvan
             {card?.unstaged_tasks?.length > 0 && (
               <section className={`${DRAWER_CARD} p-4`} data-testid="wf-detail-unstaged">
                 <p className={DRAWER_LABEL}>On this card, not on a stage</p>
-                {card.unstaged_tasks.map((t) => <TaskRow key={t.id} task={t} />)}
+                {card.unstaged_tasks.map((t) => <TaskRow key={t.id} task={t} tenant={tenant} />)}
               </section>
             )}
 

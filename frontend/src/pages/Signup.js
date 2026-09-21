@@ -134,7 +134,13 @@ export default function Signup() {
        over again — which is the thing this is for. */
     if (authLoading || started.current) return undefined;
     started.current = true;
-    let live = true;
+    /* 2026-09-21 — NO "live" GUARD HERE. Found clicking Register in the
+       browser: arriving at /signup from another screen (the session already
+       settled) mounts this with authLoading false, React's dev double-mount
+       ran the effect, cancelled it, and the re-run bailed on `started` — so
+       the cancelled run was the only one, it skipped setDraftReady, and the
+       wizard drew NOTHING. `started` already makes this run once; the state
+       it sets belongs to a page that stays mounted while it runs. */
     (async () => {
       /* 2026-09-20 — "Add a company" from the profile menu is a NEW company,
          not the half-finished signup this browser may still be holding. Drop
@@ -150,7 +156,6 @@ export default function Signup() {
         }
       }
       const { stepData } = await startOrResume();
-      if (!live) return;
       if (hasSavedAnswers(stepData)) {
         const saved = formFromDraft(stepData);
         setForm((f) => ({ ...f, ...saved }));
@@ -169,7 +174,7 @@ export default function Signup() {
       }
       setDraftReady(true);
     })();
-    return () => { live = false; };
+    return undefined;
     // Once, as soon as the session is known.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading]);

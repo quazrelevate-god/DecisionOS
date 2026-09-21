@@ -42,10 +42,15 @@ def test_the_page_is_the_requesters_side_only():
     assert "leave-settings-toggle" not in body and "<ApproverConfig" not in body
 
 
-def test_my_work_on_desktop_can_request_leave():
-    mywork = _fe("pages", "MyWork.js")
-    assert "import { LeaveCard, RequestLeaveDialog } from \"./Leave\";" in mywork
-    assert "<RequestLeaveDialog" in mywork
+def test_leave_is_marked_from_team_beside_add_member():
+    """2bbcb64 (Ruban, 2026-09-21) moved Mark Leave off My Work's header onto
+    Team's, next to Add member — "that's where people go to see who's out" —
+    and not behind Manage team, so anyone can mark their own. This test used to
+    check My Work; it follows the button, and keeps the one-shared-form rule."""
+    team = _fe("pages", "Team.js")
+    assert 'import { RequestLeaveDialog' in team, "Team imports the shared form"
+    assert "<RequestLeaveDialog" in team
+    assert "<RequestLeaveDialog" not in _fe("pages", "MyWork.js"), "My Work's header is just New Task now"
     assert "export function RequestLeaveDialog" in _fe("pages", "Leave.js"), "one form, shared"
 
 

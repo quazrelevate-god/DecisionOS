@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { RegenerateWithAi } from "./RegenerateWithAi";
+import { StageWorkReview } from "./StageWorkReview";
 import { useAuth } from "../context/AuthContext";
 import api, { formatApiError } from "../lib/api";
 import { opModel } from "../lib/operatingModel";
@@ -224,6 +225,25 @@ export function OperatingModelEditor() {
       setSaving(false);
     }
   };
+  /* 2026-09-21 — the backfill. The server wrote the work into stages that were
+     still empty; mirror exactly those into the editor's own copy rather than
+     reloading it, so any unsaved change the owner has made elsewhere here
+     survives. A stage the owner filled locally in the meantime keeps theirs. */
+  const stageWorkApplied = async (_data, fills) => {
+    setModel((m) => ({
+      ...m,
+      pipelines: m.pipelines.map((p) => ({
+        ...p,
+        stages: p.stages.map((s) => {
+          const f = fills.find((x) => x.pipeline_key === p.key && x.stage_key === s.key);
+          if (!f || (s.tasks || []).length) return s;
+          return { ...s, tasks: f.tasks.map((t) => ({ _uid: uid(), title: t.title, role: t.role || "", evidence_required: false })) };
+        }),
+      })),
+    }));
+    if (refreshTenant) await refreshTenant();
+  };
+
   const regenerate = async () => {
     setRegen(true);
     try {
@@ -247,6 +267,8 @@ export function OperatingModelEditor() {
       <p className="text-xs text-muted-foreground mb-4">
         The workflow pipelines and task categories that shape your Workflows board and My Work — tailored to <span className="font-semibold">{tenant?.industry || "your industry"}</span>. Each stage owns its task templates + approval gate. Add your own or let AI regenerate.
       </p>
+
+      <StageWorkReview model={model} roleOptions={ROLE_OPTS} onApplied={stageWorkApplied} />
 
       <p className="label-mono text-muted-foreground mb-2">Workflow pipelines</p>
       <div className="space-y-4">

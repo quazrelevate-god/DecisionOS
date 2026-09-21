@@ -149,9 +149,29 @@ if (process.env.NODE_ENV !== "production") {
 // to do. Consent grant lives in Settings; the retry is manual so the
 // founder is aware the AI call is happening.
 let _consentToastShownAt = 0;
+
+/* 2026-09-21 — A SESSION THAT ENDS UNDER AN OPEN APP. Found running several
+   people on several browsers: when a session ends while the app is open
+   (signed out in another tab, expired, revoked by an admin), nothing noticed.
+   The Desk stayed on screen and its pollers kept asking every few seconds,
+   each answer a 401 — 20 failed calls in 45 seconds per tab, forever, while
+   the person looked at a Desk that had silently stopped updating. This only
+   RAISES the signal; AuthContext confirms with /auth/me before it signs the
+   tab out, so one stray 401 on a single route can never throw anyone out.
+   The auth endpoints themselves are excluded: a wrong code or an expired
+   invite is a 401 that belongs to the form that sent it. */
+const AUTH_PATHS = ["/auth/", "/signup/"];
+export const SESSION_LOST_EVENT = "dos:session-lost";
+
 api.interceptors.response.use(
   (r) => r,
   (err) => {
+    if (err?.response?.status === 401) {
+      const url = String(err?.config?.url || "");
+      if (!AUTH_PATHS.some((p) => url.includes(p))) {
+        try { window.dispatchEvent(new Event(SESSION_LOST_EVENT)); } catch (e) { /* no window */ }
+      }
+    }
     if (err?.response?.status === 451) {
       // Debounce: don't fire the same toast 5x per second if many AI
       // calls fail in the same render.

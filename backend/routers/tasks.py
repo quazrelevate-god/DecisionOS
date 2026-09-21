@@ -97,6 +97,8 @@ from services.tasks import (
 # import was dead (immediately shadowed) -- removed in Epic 8 Sprint 8 (U8-08.2).
 
 
+from shared.due import due_day  # noqa: E402
+
 router = APIRouter(prefix="/api")
 
 
@@ -535,7 +537,7 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
     if inp.due_date:
         due = f"{inp.due_date}T{inp.due_time}:00" if inp.due_time else inp.due_date
     elif isinstance(inp.due_in_days, int):
-        due = (datetime.now(timezone.utc) + timedelta(days=inp.due_in_days)).isoformat()
+        due = due_day(inp.due_in_days)   # a day, not an instant (shared/due.py)
     # D1 — how often this comes back. A repeat with no date has nothing to
     # move, so it is refused rather than stored and quietly ignored.
     try:

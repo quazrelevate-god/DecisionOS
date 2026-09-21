@@ -145,9 +145,14 @@ async def on_stage_enter(
         title = (tmpl.get("title") or "").strip()
         if not title:
             continue
-        role = (tmpl.get("role") or "").strip()
-        if role and role not in role_keys:
-            role = ""  # tolerate role rename -- unassigned rather than blocked
+        # 2026-09-21: the operating model names departments generically
+        # ("sales") while the company's departments are its own
+        # ("sales_&_exporter_relations"). Comparing with `==` blanked every
+        # role that did not match word for word, so the stage's work went to
+        # nobody and the card never moved. Resolve it to the real department;
+        # only a role that fits none — or two — is left unassigned.
+        from shared.roles import resolve_role
+        role = resolve_role((tmpl.get("role") or "").strip(), role_keys) or ""
         # Idempotency check.
         existing = await db.tasks.find_one(
             {"tenant_id": tenant_id, "workflow_id": workflow_id,

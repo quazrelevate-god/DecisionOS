@@ -1,6 +1,6 @@
 {
-  "count": 340,
-  "sha": "51eee59614bf4a4d1abb8f5a5b201e086a469a28166fbe3835acb8096b959ddf",
+  "count": 342,
+  "sha": "0d38aa89119b1543146081dbc2ea33b7709641235a16be2e632896065df92dd3",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -328,6 +328,8 @@
     "POST /api/tenant/finance-categories/regenerate",
     "POST /api/tenant/lexicon/regenerate",
     "POST /api/tenant/operating-model/regenerate",
+    "POST /api/tenant/operating-model/stage-work",
+    "POST /api/tenant/operating-model/stage-work/suggest",
     "POST /api/tenant/roles",
     "POST /api/transcribe",
     "POST /api/users",

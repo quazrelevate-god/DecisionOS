@@ -50,7 +50,14 @@ async def ai_generate_lexicon(industry: str, company_size: str = "", roles=None,
 
 async def ai_generate_operating_model(industry: str, company_size: str = "", roles=None, description: str = "") -> dict:
     """AI-design the industry's operating model: workflow pipelines (with stages) + task categories."""
-    role_labels = ", ".join([r.get("label") for r in (roles or []) if r.get("label")]) or "not specified"
+    # 2026-09-21: the prompt asks for each stage's department "as a slug
+    # matching one of the tenant's departments" — and was only ever shown their
+    # LABELS, so it invented generic slugs ("sales") that match nothing the
+    # company has. It is shown the keys now, and whatever it answers is
+    # resolved onto them below.
+    role_labels = ", ".join(
+        f"{r.get('key')} ({r.get('label')})" if r.get("key") else r.get("label")
+        for r in (roles or []) if r.get("label") or r.get("key")) or "not specified"
     system = render("generators.operating_model")
     prompt = (
         f"Industry: {industry or 'general business'}\n"
@@ -66,7 +73,17 @@ async def ai_generate_operating_model(industry: str, company_size: str = "", rol
     except Exception as e:
         logger.error(f"ai_generate_operating_model failed: {e}")
         data = {}
-    return normalize_operating_model(data or {})
+    om = normalize_operating_model(data or {})
+    keys = [r.get("key") for r in (roles or []) if r.get("key")] + ["owner"]
+    if len(keys) > 1:
+        from shared.roles import resolve_role
+        for p in om.get("pipelines") or []:
+            for s in p.get("stages") or []:
+                if isinstance(s, dict):
+                    s["role"] = resolve_role(s.get("role"), keys) or s.get("role") or ""
+                    for t in s.get("tasks") or []:
+                        t["role"] = resolve_role(t.get("role"), keys) or t.get("role") or ""
+    return om
 
 
 async def tenant_operating_model(tenant_id: str) -> dict:

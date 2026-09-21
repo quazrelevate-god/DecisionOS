@@ -14,6 +14,8 @@ WhatsApp capture approved from the review queue (services/captures.py):
            first stage with no history, a capture's calendar entry); work
            already under way is never deleted.
 """
+from typing import Optional
+
 from fastapi import HTTPException
 
 import core as _core
@@ -194,7 +196,60 @@ async def _claim(user: dict, decision_id: str, status: str) -> None:
         raise HTTPException(status_code=409, detail="This decision was just decided by someone else.")
 
 
-async def _run_workflow_moves(user: dict, d: dict, made: dict) -> list:
+async def planned_moves(tid: str, d: dict, only_existing: bool = False) -> list:
+    """Where approving this decision will move each workflow it touches:
+    [{workflow_id, title, target}] -- the one rule both the move and the review
+    of work left behind read, so the review can never describe a different
+    move than the one approval makes."""
+    from services.workflow_engine import _load_pipeline
+    did = d["id"]
+    move_to = {w["workflow_id"]: w["move_to"] for w in (d.get("proposal") or {}).get("workflows") or []
+               if w.get("mode") == "existing" and w.get("workflow_id") and w.get("move_to")}
+    ids = [] if only_existing else [w["id"] async for w in db.workflows.find(
+        {"tenant_id": tid, "decision_id": did}, {"_id": 0, "id": 1})]
+    ids += list(move_to)
+    out = []
+    for wid in dict.fromkeys(ids):
+        wf = await db.workflows.find_one({"id": wid, "tenant_id": tid}, {"_id": 0})
+        if not wf:
+            continue
+        stages = wf.get("stages") or []
+        pipeline = await _load_pipeline(tid, wf.get("type") or "")
+        appr = (pipeline or {}).get("approval_stage")
+        cur = stages.index(wf["stage"]) if wf.get("stage") in stages else -1
+        target = move_to.get(wid)
+        if not target and appr in stages and stages.index(appr) == cur + 1 and wf.get("decision_id") == did:
+            target = appr
+        if not target or target not in stages or stages.index(target) <= cur:
+            target = None
+        out.append({"workflow_id": wid, "title": wf.get("title") or "Workflow", "target": target,
+                    "wf": wf, "pipeline": pipeline, "appr": appr})
+    return out
+
+
+async def moves_preview(user: dict, decision_id: str) -> list:
+    """For the decision review: each EXISTING card this approval will move,
+    from where to where, and the open work it would leave behind."""
+    from services.workflow_engine import leftover_tasks
+    tid = user["tenant_id"]
+    d = await db.decisions.find_one({"id": decision_id, "tenant_id": tid}, {"_id": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Not found")
+    out = []
+    for m in await planned_moves(tid, d, only_existing=True):
+        if not m["target"]:
+            continue
+        labels = {s.get("key"): s.get("label") for s in (m["pipeline"] or {}).get("stages") or []
+                  if isinstance(s, dict)}
+        left = await leftover_tasks(tid, m["workflow_id"])
+        out.append({"workflow_id": m["workflow_id"], "title": m["title"],
+                    "from": m["wf"].get("stage"), "from_label": labels.get(m["wf"].get("stage")) or m["wf"].get("stage"),
+                    "to": m["target"], "to_label": labels.get(m["target"]) or m["target"],
+                    "tasks": left["tasks"]})
+    return out
+
+
+async def _run_workflow_moves(user: dict, d: dict, made: dict, resolutions: Optional[dict] = None) -> list:
     """Move the workflows an approved decision touches, and say what happened:
       * a workflow it created fires its first stage's automation (template
         tasks, side-effects) — creating it used to skip that;
@@ -204,43 +259,44 @@ async def _run_workflow_moves(user: dict, d: dict, made: dict) -> list:
         approval stage moves into it — every pipeline, not only procurement.
         Approving the decision IS that approval, so the owner-only gate on the
         approval stage does not silently stop a manager who approves."""
-    from services.workflow_engine import WorkflowAdvanceError, _load_pipeline, advance, on_stage_enter
+    from services.workflow_engine import WorkflowAdvanceError, advance, on_stage_enter
     tid, did = user["tenant_id"], d["id"]
     reason = f"Decision approved by {user.get('name') or 'the approver'}: {d.get('title') or ''}"[:300]
-    move_to = {w["workflow_id"]: w["move_to"] for w in (d.get("proposal") or {}).get("workflows") or []
-               if w.get("mode") == "existing" and w.get("workflow_id") and w.get("move_to")}
     new_ids = set(made.get("workflow_ids") or [])
-    ids = [w["id"] async for w in db.workflows.find({"tenant_id": tid, "decision_id": did}, {"_id": 0, "id": 1})]
-    ids += list(move_to)
     lines = []
-    for wid in dict.fromkeys(ids):
-        wf = await db.workflows.find_one({"id": wid, "tenant_id": tid}, {"_id": 0})
-        if not wf:
-            continue
-        title = wf.get("title") or "Workflow"
-        if wid in new_ids:
+    for m in await planned_moves(tid, d):
+        wid, title, target, appr = m["workflow_id"], m["title"], m["target"], m["appr"]
+        stages = m["wf"].get("stages") or []
+        pipeline = m["pipeline"]
+        # A card this decision just created fires its first stage's work --
+        # unless approval moves it straight on, in which case that stage is only
+        # passed through and its work would be created only to be skipped.
+        if wid in new_ids and not target:
             try:
                 await on_stage_enter(tid, wid, user["id"], user.get("name") or "")
             except Exception as e:  # automation must never undo an approval
                 logger.warning(f"[ASK-32] first-stage automation failed for workflow {wid}: {e}")
-        stages = wf.get("stages") or []
-        pipeline = await _load_pipeline(tid, wf.get("type") or "")
-        appr = (pipeline or {}).get("approval_stage")
-        cur = stages.index(wf["stage"]) if wf.get("stage") in stages else -1
-        target = move_to.get(wid)
-        if not target and appr in stages and stages.index(appr) == cur + 1 and wf.get("decision_id") == did:
-            target = appr
-        if not target or target not in stages or stages.index(target) <= cur:
+        if not target:
             continue
         try:
+            first = True
             for _ in range(len(stages)):
                 now = (await db.workflows.find_one({"id": wid, "tenant_id": tid}, {"_id": 0, "stage": 1}) or {}).get("stage")
                 at = stages.index(now) if now in stages else -1
                 if at < 0 or at >= stages.index(target):
                     break
                 nxt = stages[at + 1]
+                # 2026-09-21 -- work left behind. The first step settles the open
+                # work on the stage the card leaves (the approver's choices from
+                # the review; anything they did not choose for is kept, carried
+                # to where the card lands). Stages in between are passed
+                # through: no work is created on them. Only the landing stage
+                # gets its work.
                 await advance(tid, wid, user["id"], user.get("name") or "", "owner" if nxt == appr else (user.get("role") or ""),
-                              target_stage=nxt, note=reason, override=True, reason=reason)
+                              target_stage=nxt, note=reason, override=True, reason=reason,
+                              resolutions=(resolutions or {}) if first else None, carry_to=target,
+                              enter=(nxt == target), skip_ids=made.get("task_ids") or [])
+                first = False
             await db.tasks.update_many({"tenant_id": tid, "decision_id": did, "workflow_id": wid, "source": {"$ne": "engine"}},
                                        {"$set": {"stage_key": target}})
             label = next((s.get("label") for s in (pipeline or {}).get("stages") or [] if s.get("key") == target), None)
@@ -362,7 +418,8 @@ async def remove_proposal_item(user: dict, decision_id: str, kind: str, key: str
     return await _save_proposal(user, d, f"Removed before approval: {_KIND_WORD[kind]} “{name}”")
 
 
-async def approve_decision_flow(user: dict, decision_id: str, *, authorized: bool = False) -> dict:
+async def approve_decision_flow(user: dict, decision_id: str, *, authorized: bool = False,
+                                resolutions: Optional[dict] = None) -> dict:
     from services.voice import materialize_proposal
     tid = user["tenant_id"]
     d = await _load_for_decision(user, decision_id, authorized)
@@ -394,7 +451,7 @@ async def approve_decision_flow(user: dict, decision_id: str, *, authorized: boo
 
     # ASK-32 Phase 4.3 — the workflows this decision touches move by themselves
     # (WE-07: through the engine, with a reason in history and the audit log).
-    for line in await _run_workflow_moves(user, d, made):
+    for line in await _run_workflow_moves(user, d, made, resolutions):
         await add_decision_event(decision_id, line, user["name"], "workflow")
     for t in await db.tasks.find({"tenant_id": tid, "decision_id": decision_id,
                                   "source": {"$nin": ["reminder", "meeting"]}}, {"_id": 0}).to_list(100):

@@ -67,6 +67,7 @@ import { deptName } from "../lib/departments";
 import { userPerms } from "../lib/perms";
 import { canAssignPerson } from "../lib/taskAccess";
 import { proposalCreatesText } from "../lib/decisionProposal";
+import { LeftoverReview } from "./workflow/LeftoverReview";
 
 /* ── helpers shared with the Desk's decision cards ───────────────────────── */
 export function raisedByLabel(d) {
@@ -332,11 +333,26 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
     </Card>
   ) : null);
 
+  /* 2026-09-21 — WORK LEFT BEHIND. A decision that moves an existing card
+     forward ("Bluewave confirmed" -> Inquiry to Order Confirmed) used to leave
+     every open task on the stages it passed, still in people's My Work. Before
+     approving, the approver sees each card it moves and the open work there,
+     and says for each task: done, not needed, or keep (it moves with the
+     card). Nothing chosen = everything kept, so a plain Approve loses nothing. */
+  const movesQ = useQuery({
+    queryKey: ["decision-moves", decisionId],
+    queryFn: () => api.get(`/decisions/${decisionId}/moves`).then((r) => r.data),
+    enabled: !!decisionId && open && !!canDecide,
+  });
+  const leftMoves = (movesQ.data || []).filter((m) => (m.tasks || []).length > 0);
+  const [leftChoices, setLeftChoices] = useState({});
+
   const approveM = useMutation({
     /* ASK-50 — priority, proof and approval are already on the proposal (the
        card below saves them as they change), so approving creates the tasks
        with them; nothing is patched afterwards. */
-    mutationFn: () => api.post(`/decisions/${decisionId}/approve`),
+    mutationFn: () => api.post(`/decisions/${decisionId}/approve`,
+      Object.keys(leftChoices).length ? { resolutions: leftChoices } : undefined),
     onSuccess: (res) => {
       const c = res?.data?.created_on_approval;
       const made = c ? [
@@ -565,6 +581,25 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
                       <p className="mt-3 text-xs text-slate-500" data-testid="decision-task-settings-note">
                         {rows.length === 1 ? "For the task" : rows.length === 2 ? "For both tasks" : `For all ${rows.length} tasks`} — kept with the decision and applied when it's approved.
                       </p>
+                    </Card>
+                  )}
+
+                  {mayDecide && leftMoves.length > 0 && (
+                    <Card label="Work these moves leave behind" testid="decision-leftover-card">
+                      <div className="space-y-4">
+                        {leftMoves.map((m) => (
+                          <div key={m.workflow_id} data-testid={`decision-leftover-${m.workflow_id}`}>
+                            <p className="text-sm text-slate-700">
+                              <span className="font-semibold">{m.title}</span> moves from {m.from_label} to {m.to_label}.
+                              {" "}{m.tasks.length === 1 ? "1 task is" : `${m.tasks.length} tasks are`} still open on {m.from_label}:
+                            </p>
+                            <div className="mt-2.5">
+                              <LeftoverReview tasks={m.tasks} value={leftChoices} onChange={setLeftChoices}
+                                toLabel={m.to_label} testid={`decision-leftover-review-${m.workflow_id}`} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </Card>
                   )}
 

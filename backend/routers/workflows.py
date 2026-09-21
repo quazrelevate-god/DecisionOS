@@ -349,6 +349,17 @@ async def update_workflow(workflow_id: str, inp: WorkflowUpdateInput,
         {"id": workflow_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
 
 
+@router.get("/workflows/{workflow_id}/leftover")
+async def workflow_leftover(workflow_id: str, user: dict = Depends(get_current_user)):
+    """The open work on the card's current stage -- what the "work left
+    behind" review lists when a move would leave it (2026-09-21)."""
+    from services.workflow_engine import leftover_tasks
+    wf = await db.workflows.find_one({"id": workflow_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "id": 1})
+    if not wf:
+        raise HTTPException(status_code=404, detail="Not found")
+    return await leftover_tasks(user["tenant_id"], workflow_id)
+
+
 @router.post("/workflows/{workflow_id}/approve-stage")
 async def approve_workflow_stage(workflow_id: str,
                                  user: dict = Depends(require_perm("workflows"))):
@@ -426,6 +437,7 @@ async def advance_workflow(workflow_id: str, inp: WorkflowAdvanceInput,
             note=inp.note or "",
             override=bool(getattr(inp, "override", False)),
             reason=(getattr(inp, "reason", "") or ""),
+            resolutions=getattr(inp, "resolutions", None),
         )
     except WorkflowAdvanceError as e:
         raise HTTPException(status_code=e.http_status, detail=str(e))

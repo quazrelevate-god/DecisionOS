@@ -627,7 +627,7 @@ def prod_data():
             "role": "sales",
             "created_at": "2026-01-01T00:00:00+00:00",
         }
-        for i in range(1, 6)  # 5 users: more than a trial plan's 3 seats
+        for i in range(1, 18)  # 17 users: more than a trial plan's 15 seats (was 3 until 2026-09-21)
     ]
     users[0]["email"] = "U1@Acme.com"
     users[1]["role"] = "production"

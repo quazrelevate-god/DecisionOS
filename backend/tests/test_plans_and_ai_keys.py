@@ -136,7 +136,7 @@ class TestEffectivePlan:
         from services.plans import effective_plan
         ep = effective_plan({"plan": "trial"})
         assert ep["key"] == "trial"
-        assert ep["seat_limit"] == 3
+        assert ep["seat_limit"] == 15   # 2026-09-21: 3 -> 15, the team the product is for
         assert ep["quotas"]["stt_minutes"] == 30
         assert ep["features"]["whatsapp"] is False
 
@@ -230,8 +230,9 @@ class TestEnforceSeatLimit:
         from services.auth.membership import create_membership
         db = _FakeDB()
         _run(db.tenants.insert_one({"id": "t1", "plan": "trial"}))
-        # trial cap = 3 — add 3 active members
-        for i in range(3):
+        # trial cap = 15 (2026-09-21, was 3) — fill every seat
+        from services.plans import PLAN_DEFINITIONS, PLAN_TRIAL
+        for i in range(PLAN_DEFINITIONS[PLAN_TRIAL]["seat_limit"]):
             _run(create_membership(db, user_id=f"u{i}", tenant_id="t1", role="sales"))
         from fastapi import HTTPException
         with pytest.raises(HTTPException) as exc_info:

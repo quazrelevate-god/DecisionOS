@@ -1,6 +1,6 @@
 """Decisions request schemas (Epic 8 Sprint 5 -- consolidated from routers).
 """
-from typing import Optional
+from typing import Dict, Optional
 
 from pydantic import BaseModel, Field
 
@@ -29,3 +29,11 @@ class DecisionCommentInput(BaseModel):
 class DecisionApproverInput(BaseModel):
     """ASK-32 2.5 — hand a waiting decision to someone else who can approve."""
     approver_id: str = Field(..., min_length=1, max_length=64)
+
+
+class DecisionApproveInput(BaseModel):
+    """2026-09-21 -- work left behind: what happens to the open tasks on a
+    stage a card this decision moves will leave. task id -> "done" |
+    "not_needed" | "keep". A task not named is kept (carried to where the card
+    lands). The body is optional: approving with no choices keeps everything."""
+    resolutions: Optional[Dict[str, str]] = None

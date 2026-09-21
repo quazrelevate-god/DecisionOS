@@ -347,6 +347,121 @@ async def record_stage_approval(
 
 
 # ---------------------------------------------------------------------------
+# Work left behind (2026-09-21) -- what happens to a stage's OPEN tasks when
+# the card leaves it.
+#
+# Yokesh, after watching a decision walk a card Inquiry -> Sampling -> Order
+# Confirmed and leave five open tasks stranded on stages it had left: show the
+# tasks, and let the person say for each one whether it was done, is no longer
+# needed, or still has to happen. Until now there were two roads and both ended
+# the same way -- the board refused the move (409) and offered only an
+# override with a typed reason; a decision forced the override itself -- and
+# either way the open work stayed on a stage the card had passed, still in
+# people's My Work, while the card read "Inquiry: done, 0 of 3 done".
+#
+#   done        closed now -- and it releases whatever waited on it and brings
+#               the next occurrence of a routine, exactly as a normal close does
+#   not_needed  cancelled, with the reason on its timeline
+#   keep        still to do: it MOVES WITH THE CARD to the stage it lands on,
+#               so it is never stranded, and it holds that stage's gate like any
+#               other work there -- the same loop the board already runs
+#
+# A task nobody chose for is KEPT. Nothing is ever closed that the person did
+# not close.
+# ---------------------------------------------------------------------------
+LEFTOVER_ACTIONS = ("done", "not_needed", "keep")
+
+
+async def leftover_tasks(tenant_id: str, workflow_id: str) -> dict:
+    """The open work on the card's CURRENT stage, with who holds each piece."""
+    wf = await db.workflows.find_one(
+        {"id": workflow_id, "tenant_id": tenant_id}, {"_id": 0, "stage": 1, "type": 1})
+    if not wf:
+        return {"stage": None, "stage_label": None, "tasks": []}
+    stage_key = wf.get("stage")
+    rows = await db.tasks.find(
+        {"tenant_id": tenant_id, "workflow_id": workflow_id, "stage_key": stage_key,
+         "status": {"$nin": ["done", "cancelled"]}},
+        {"_id": 0, "id": 1, "title": 1, "status": 1, "due_date": 1,
+         "assignee_id": 1, "assignee_role": 1},
+    ).sort("created_at", 1).to_list(200)
+    ids = [t["assignee_id"] for t in rows if t.get("assignee_id")]
+    names = {}
+    if ids:
+        async for u in db.users.find({"id": {"$in": ids}, "tenant_id": tenant_id},
+                                     {"_id": 0, "id": 1, "name": 1}):
+            names[u["id"]] = u.get("name")
+    for t in rows:
+        t["assignee_name"] = names.get(t.get("assignee_id"))
+    pipeline = await _load_pipeline(tenant_id, wf.get("type") or "")
+    so = _stage_object(pipeline, stage_key) if pipeline else None
+    return {"stage": stage_key, "stage_label": (so or {}).get("label") or stage_key, "tasks": rows}
+
+
+async def resolve_leftover(tenant_id: str, workflow_id: str, resolutions: Optional[dict],
+                           carry_to: str, actor: dict, skip_ids=None) -> dict:
+    """Apply the person's choices to the open work on the card's current stage.
+
+    `resolutions` maps task id -> done | not_needed | keep. Tasks it does not
+    name are KEPT. Returns counts per action.
+    """
+    from core import now_iso as _now
+    wf = await db.workflows.find_one(
+        {"id": workflow_id, "tenant_id": tenant_id}, {"_id": 0, "stage": 1, "type": 1, "title": 1})
+    if not wf:
+        return {"done": 0, "not_needed": 0, "keep": 0}
+    pipeline = await _load_pipeline(tenant_id, wf.get("type") or "")
+    so = _stage_object(pipeline, carry_to) if pipeline else None
+    carry_label = (so or {}).get("label") or carry_to
+    open_rows = await db.tasks.find(
+        {"tenant_id": tenant_id, "workflow_id": workflow_id, "stage_key": wf.get("stage"),
+         "status": {"$nin": ["done", "cancelled"]}},
+        {"_id": 0},
+    ).to_list(200)
+    # Work created by the very step that is moving the card (a decision's own
+    # new tasks) never sat on this stage — it is not "left behind".
+    skip = set(skip_ids or [])
+    open_rows = [t for t in open_rows if t["id"] not in skip]
+    choices = {str(k): str(v) for k, v in (resolutions or {}).items()}
+    counts = {"done": 0, "not_needed": 0, "keep": 0}
+    # The task router owns what a close sets off; deferred so the engine keeps
+    # no import-time dependency on a router (services already do this).
+    from routers.tasks import _log_task_event, _release_dependents, _spawn_next_occurrence
+    who = actor.get("name") or "Someone"
+    for t in open_rows:
+        action = choices.get(t["id"], "keep")
+        if action not in LEFTOVER_ACTIONS:
+            action = "keep"
+        if action == "done":
+            await db.tasks.update_one({"id": t["id"], "tenant_id": tenant_id}, {"$set": {
+                "status": "done", "progress": 100, "waiting_on": None,
+                "updated_at": _now(), "last_action": f"Marked done by {who} as the card moved on"}})
+            await _log_task_event(actor, t["id"], "task_done", f"Completed task '{t['title']}'",
+                                  f"Marked done by {who} as the card moved on")
+            # What a normal close sets off -- never the workflow advance itself,
+            # which is the move this is part of.
+            try:
+                await _release_dependents(actor, t)
+                await _spawn_next_occurrence(actor, t)
+            except Exception as e:  # noqa: BLE001 -- never block the move
+                logger.warning(f"[leftover] close follow-ups skipped for {t['id']}: {e}")
+        elif action == "not_needed":
+            await db.tasks.update_one({"id": t["id"], "tenant_id": tenant_id}, {"$set": {
+                "status": "cancelled", "cancel_reason": "Not needed — the card moved on",
+                "updated_at": _now(), "last_action": f"Not needed — {who} moved the card on"}})
+            await _log_task_event(actor, t["id"], "task_status", f"'{t['title']}' not needed",
+                                  f"Not needed — {who} moved the card on")
+        else:
+            await db.tasks.update_one({"id": t["id"], "tenant_id": tenant_id}, {"$set": {
+                "stage_key": carry_to, "updated_at": _now(),
+                "last_action": f"Carried to {carry_label}"}})
+            await _log_task_event(actor, t["id"], "task_status", f"'{t['title']}' carried to {carry_label}",
+                                  f"Still to do — carried to {carry_label} with the card")
+        counts[action] += 1
+    return counts
+
+
+# ---------------------------------------------------------------------------
 # advance -- the atomic transition (WE-06 + WE-07 + WE-09)
 # ---------------------------------------------------------------------------
 class WorkflowAdvanceError(Exception):
@@ -368,8 +483,21 @@ async def advance(
     note: str = "",
     override: bool = False,
     reason: str = "",
+    resolutions: Optional[dict] = None,
+    carry_to: Optional[str] = None,
+    enter: bool = True,
+    skip_ids=None,
 ) -> dict:
     """Move a workflow forward one stage -- atomically.
+
+    2026-09-21 -- work left behind:
+      * `resolutions` (task id -> done | not_needed | keep) settles the open
+        work on the stage being left BEFORE the gate is checked, so a person
+        who has said what happens to every open task passes the gate without
+        an override. Unnamed tasks are kept. `carry_to` is where kept work
+        goes -- the stage the card finally lands on (defaults to this step's).
+      * `enter=False` for a stage the card is only passing through on its way
+        further: no work is created there just to be skipped.
 
     Contract:
       * target_stage MUST be exactly current+1. Skipping is disallowed.
@@ -434,6 +562,13 @@ async def advance(
             "Only the owner can approve this stage",
             "owner_only_approval", 403,
         )
+
+    # Work left behind: say what happens to it, then check the gate.
+    if resolutions is not None:
+        await resolve_leftover(
+            tenant_id, workflow_id, resolutions, carry_to or target_stage,
+            {"tenant_id": tenant_id, "id": actor_id, "name": actor_name, "role": actor_role},
+            skip_ids=skip_ids)
 
     # Contract check unless the caller override'd.
     if not override:
@@ -510,8 +645,8 @@ async def advance(
 
     # WE-06: fire on_stage_enter for the new stage. If terminal, also
     # execute any exit hooks the stage carries.
-    enter_summary = await on_stage_enter(
-        tenant_id, workflow_id, actor_id, actor_name)
+    enter_summary = (await on_stage_enter(tenant_id, workflow_id, actor_id, actor_name)
+                     if enter else {"task_ids": [], "side_effects_fired": [], "passed_through": True})
 
     # Terminal marker + terminal-only hook execution. The current
     # stage's own side_effects fire via on_stage_enter above; if the

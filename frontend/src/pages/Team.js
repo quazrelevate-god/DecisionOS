@@ -303,6 +303,25 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
   const togglePerm = (key) => setForm((f) => ({ ...f, permissions: f.permissions.includes(key) ? f.permissions.filter((k) => k !== key) : [...f.permissions, key] }));
 
   const [ownerConfirm, setOwnerConfirm] = useState(null);
+  /* 2026-09-21 — THE SEAT LIMIT, SAID WHERE IT BITES. Adding a member past the
+     plan's seats used to come back as a toast that was gone in seconds, while
+     this dialog stayed open with everything typed in and nothing on it — it
+     read as "the button does nothing". The refusal now sits on the dialog, with
+     the way out; and a dialog opened when every seat is taken says so before
+     anyone fills it in. */
+  const [seatWall, setSeatWall] = useState(null);
+  useEffect(() => { if (!open) setSeatWall(null); }, [open]);
+  const wallRef = useRef(null);
+  useEffect(() => { if (seatWall) wallRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }, [seatWall]);
+  const planQ = useQuery({
+    queryKey: ["tenant-plan"],
+    queryFn: () => api.get("/tenant/plan").then((r) => r.data),
+    enabled: open && !editing,
+  });
+  const seatsFull = !editing && planQ.data?.seat_limit != null
+    && planQ.data.seats_used >= planQ.data.seat_limit;
+  const wall = seatWall || (seatsFull
+    ? { seats_used: planQ.data.seats_used, seat_limit: planQ.data.seat_limit } : null);
   const save = async (confirmed = false) => {
     const promotingToOwner = form.role === "owner" && (!editing || initial.role !== "owner");
     const demotingOwner = editing && initial.role === "owner" && form.role !== "owner";
@@ -375,7 +394,9 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
         onInvite({ token: res.data.invite_token, name: form.name, phone_masked: d.length >= 4 ? "•••• " + d.slice(-4) : "••••" });
       }
     } catch (e) {
-      toast.error(formatApiError(e.response?.data?.detail) || "Failed");
+      const detail = e.response?.data?.detail;
+      if (detail?.code === "seat_limit_reached") setSeatWall(detail);
+      else toast.error(formatApiError(detail) || "Failed");
     } finally {
       setBusy(false);
     }
@@ -392,6 +413,19 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
             : editing ? "Job title, department, reporting line and what they can open."
             : "Who they are, where they sit in the team, and what they can open."}
         </SheetHead>
+
+        {/* At the TOP — found in the browser: at the foot of this long form the
+            owner filled everything in before ever seeing it. */}
+        {wall && (
+          <div role="alert" ref={wallRef} data-testid="member-seat-wall"
+            className="mb-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-inset ring-amber-200">
+            <p className="font-semibold">All {wall.seat_limit} seats on your plan are in use.</p>
+            <p className="mt-0.5 text-[13px]">
+              Remove someone who has left (their seat frees up at once), or ask us to add seats — then add{" "}
+              {form.name || "them"}. What you've typed here is kept.
+            </p>
+          </div>
+        )}
 
         <div className="space-y-5">
           <section className="space-y-3">
@@ -769,6 +803,10 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
   // U7-09.TEAM v2 (2026-08-17): the profile dialog every card opens.
   const [profileUser, setProfileUser] = useState(null);
   const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
+  const { data: seatPlan } = useQuery({
+    queryKey: ["tenant-plan"],
+    queryFn: () => api.get("/tenant/plan").then((r) => r.data),
+  });
   const outQ = useQuery({
     queryKey: ["leaves", "on-leave-today"],
     queryFn: () => api.get("/leaves/on-leave").then((r) => r.data),
@@ -777,7 +815,10 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
   });
   // U7-09.TEAM v2: readOnly lets People render this view-only.
   const canManageTeam = !readOnly && hasPerm(user, "team_manage");
-  const refresh = () => qc.invalidateQueries({ queryKey: ["users"] });
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["users"] });
+    qc.invalidateQueries({ queryKey: ["tenant-plan"] });   // the seat count moves with the team
+  };
   const members = useMemo(() => usersQ.data || [], [usersQ.data]);
   const out = useMemo(() => outQ.data || [], [outQ.data]);
   const outIds = useMemo(() => new Set(out.map((p) => p.user_id).filter(Boolean)), [out]);
@@ -974,6 +1015,17 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
           <RequestLeaveDialog
             onDone={() => qc.invalidateQueries({ queryKey: ["leaves"] })}
             triggerClassName={`flex h-12 shrink-0 items-center gap-2 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`} />
+          {/* Seats in use, before the limit bites — only for the people who
+              add members. */}
+          {canManageTeam && seatPlan?.seat_limit != null && (
+            <span data-testid="team-seats"
+              title="People on the team, including invites not yet accepted"
+              className={`hidden h-12 shrink-0 items-center rounded-pill px-4 text-xs font-medium sm:flex ${
+                seatPlan.seats_used >= seatPlan.seat_limit ? "bg-amber-50 text-amber-900 ring-1 ring-inset ring-amber-200"
+                  : `text-slate-600 ${GLASS_PILL}`}`}>
+              {seatPlan.seats_used} of {seatPlan.seat_limit} seats
+            </span>
+          )}
           {canManageTeam && (
             <MemberDialog roleOptions={roleOptions} members={members} onSaved={refresh} onInvite={setInvite}
               trigger={

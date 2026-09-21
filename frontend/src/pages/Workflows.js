@@ -71,6 +71,7 @@ import {
 } from "../components/karma/glass";
 import { GlassSelect } from "../components/karma/GlassSelect";
 import WorkflowDetail from "../components/workflow/WorkflowDetail";
+import { LeftoverReview } from "../components/workflow/LeftoverReview";
 /* C2 (2026-09-21) — stuck / late / needs-you, computed in ONE place. These
    rules were written for the Desk's Workflows tile (ASK-52) and the file says
    in its own header that the board should read the same numbers "so the two do
@@ -416,6 +417,9 @@ export default function Workflows() {
   const tabLabel = pipeline?.label || "";
 
   const [openId, setOpenId] = useState(null);             // C1 — the card open in the drawer
+  /* 2026-09-21 — work left behind: {wf, targetStage, stageLabel, tasks, choices}
+     while the "Move on" review is open. */
+  const [leftCtx, setLeftCtx] = useState(null);
   const [overrideCtx, setOverrideCtx] = useState(null);   // {wf, blockedReason, targetStage}
   // Drag state. `dragId` is what is in flight; `overStage` is the column
   // under the pointer, used only to paint the drop target.
@@ -444,6 +448,7 @@ export default function Workflows() {
   const _postAdvance = async (wf, targetStage, opts = {}) => {
     const body = { stage: targetStage, note: t("workflows.moved_to", { stage: labelOf(targetStage) }) };
     if (opts.override) { body.override = true; body.reason = opts.reason; }
+    if (opts.resolutions) body.resolutions = opts.resolutions;
     const { data } = await api.patch(`/workflows/${wf.id}/advance`, body);
     /* A5 (2026-09-21) — the engine has always detected the second of two
        people pressing at once (the compare-and-swap on stage_version), and the
@@ -468,7 +473,19 @@ export default function Workflows() {
     } catch (e) {
       const status = e.response?.status;
       const detail = e.response?.data?.detail || t("workflows.cannot_advance");
-      if (status === 409) {
+      if (status === 409 && /task\(s\) still open/.test(detail)) {
+        /* 2026-09-21 — THE GATE ASKS INSTEAD OF WALLING. Open work on the stage
+           used to leave one way out: an override with a typed reason, and the
+           work stranded behind the card. Now the person sees the tasks and says
+           what happens to each; having answered, no override is needed. The
+           gate itself is unchanged — nothing leaves a stage by accident. */
+        try {
+          const { data: left } = await api.get(`/workflows/${wf.id}/leftover`);
+          setLeftCtx({ wf, targetStage, stageLabel: left.stage_label, tasks: left.tasks || [], choices: {} });
+        } catch {
+          setOverrideCtx({ wf, blockedReason: detail.replace(/^Stage not ready:\s*/, ""), targetStage });
+        }
+      } else if (status === 409) {
         setOverrideCtx({ wf, blockedReason: detail.replace(/^Stage not ready:\s*/, ""), targetStage });
       } else {
         toast.error(detail);
@@ -954,6 +971,50 @@ export default function Workflows() {
           })}
         </div>
       </div>
+
+      {/* 2026-09-21 — work left behind, on the board's own move. */}
+      <Dialog open={!!leftCtx} onOpenChange={(v) => { if (!v) setLeftCtx(null); }}>
+        <DialogContent className="max-w-lg max-h-[calc(90vh/var(--ui-scale,1))] overflow-y-auto" data-testid="wf-leftover-dialog">
+          {/* pr-8: the dialog's close sits at the top right — the words must not run under it. */}
+          <DialogHeader className="pr-8">
+            <DialogTitle>Move on to {leftCtx ? labelOf(leftCtx.targetStage) : ""}?</DialogTitle>
+            <DialogDescription>
+              {leftCtx && (leftCtx.tasks.length === 1 ? "1 task is" : `${leftCtx.tasks.length} tasks are`)} still open
+              on {leftCtx?.stageLabel}. Say what happens to each — anything you leave on Keep moves with the card.
+            </DialogDescription>
+          </DialogHeader>
+          {leftCtx && (
+            <LeftoverReview tasks={leftCtx.tasks} value={leftCtx.choices}
+              onChange={(upd) => setLeftCtx((c) => (c ? { ...c, choices: typeof upd === "function" ? upd(c.choices) : upd } : c))}
+              toLabel={labelOf(leftCtx.targetStage)} testid="wf-leftover-review" />
+          )}
+          <DialogFooter className="gap-2">
+            <button type="button" onClick={() => setLeftCtx(null)}
+              className="min-h-10 rounded-pill px-4 text-sm font-medium text-muted-foreground hover:text-foreground">
+              Not yet
+            </button>
+            <button type="button" data-testid="wf-leftover-confirm" disabled={busyId === leftCtx?.wf?.id}
+              onClick={async () => {
+                const ctx = leftCtx;
+                if (!ctx) return;
+                setBusyId(ctx.wf.id);
+                try {
+                  // Every open task is answered: an unchosen one is sent as Keep.
+                  const resolutions = Object.fromEntries(ctx.tasks.map((t) => [t.id, ctx.choices[t.id] || "keep"]));
+                  await _postAdvance(ctx.wf, ctx.targetStage, { resolutions });
+                  setLeftCtx(null);
+                } catch (e) {
+                  toast.error(e.response?.data?.detail || t("workflows.cannot_advance"));
+                } finally {
+                  setBusyId(null);
+                }
+              }}
+              className="min-h-10 rounded-pill bg-neutral-900 px-5 text-sm font-semibold text-white disabled:opacity-50">
+              Move to {leftCtx ? labelOf(leftCtx.targetStage) : ""}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* C1 — the card, opened. Everything a person could not do to a workflow
           (add a task to a stage, give a stage's approval, correct the card)

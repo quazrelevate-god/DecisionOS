@@ -5,7 +5,7 @@ server.py in Sprint 7 (U8-07.2) so the demo seeder in bootstrap/ and the AI
 workflow generator can share them without importing server. server.py re-exports
 both names for backward-compatible `from server import WORKFLOW_STAGES`.
 """
-from typing import Optional
+from typing import Dict, Optional
 from pydantic import BaseModel
 
 
@@ -63,3 +63,7 @@ class WorkflowAdvanceInput(BaseModel):
     # invisible.
     override: Optional[bool] = False
     reason: Optional[str] = ""
+    # 2026-09-21 -- work left behind: task id -> "done" | "not_needed" | "keep".
+    # Sent from the review the board shows when a stage still has open work;
+    # having said what happens to every task, the person needs no override.
+    resolutions: Optional[Dict[str, str]] = None

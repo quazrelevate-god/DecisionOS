@@ -52,6 +52,7 @@ async def _decision_participants(tenant_id: str, d: dict) -> set:
 
 # Request models consolidated into models/ (Epic 8 Sprint 5).
 from models.decisions import (
+    DecisionApproveInput,
     DecisionApproverInput,
     DecisionCommentInput,
     DecisionProposalTaskInput,
@@ -199,13 +200,24 @@ async def add_decision_task(decision_id: str, inp: TaskCreateInput, user: dict =
     )
 
 
+@router.get("/decisions/{decision_id}/moves")
+async def decision_moves(decision_id: str, user: dict = Depends(get_current_user)):
+    """The cards approving this decision will move, and the open work each
+    would leave behind -- what the review asks about (2026-09-21)."""
+    from services.decision_flow import moves_preview
+    return await moves_preview(user, decision_id)
+
+
 @router.post("/decisions/{decision_id}/approve")
-async def approve_decision(decision_id: str, user: dict = Depends(require_perm("decisions_approve"))):
+async def approve_decision(decision_id: str, inp: Optional[DecisionApproveInput] = None,
+                           user: dict = Depends(require_perm("decisions_approve"))):
     """ASK-32 Phase 1: only while pending, only by the named approver or an
-    owner; creates what the decision proposed (services.decision_flow)."""
+    owner; creates what the decision proposed (services.decision_flow).
+    2026-09-21: `resolutions` -- what happens to work a moved card leaves
+    behind (task id -> done | not_needed | keep; unnamed tasks are kept)."""
     from services.decision_flow import approve_decision_flow
     from services.enrich import enrich_decision
-    d = await approve_decision_flow(user, decision_id)
+    d = await approve_decision_flow(user, decision_id, resolutions=(inp.resolutions if inp else None))
     # FIX-003-B (S2-05): explicit tenant_id for defense-in-depth.
     return await enrich_decision(d, tenant_id=user["tenant_id"])
 

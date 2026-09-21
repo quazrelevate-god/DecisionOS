@@ -18,10 +18,12 @@ from services.plans import (
 
 
 # --- seat limits per plan (T10-06) ------------------------------------------
-def test_default_is_trial_3_seats():
+def test_default_is_trial_15_seats():
+    """2026-09-21 (Yokesh): 3 -> 15. The product is for a 10-15 person
+    company; at 3 seats a trial hit the wall at its third hire."""
     ep = effective_plan({})
     assert ep["key"] == PLAN_TRIAL
-    assert ep["seat_limit"] == 3
+    assert ep["seat_limit"] == 15
 
 
 def test_starter_10_seats():
@@ -46,8 +48,8 @@ def test_seat_limit_override_wins():
 
 def test_seat_limit_override_can_set_unlimited():
     ep = effective_plan({"plan": "trial", "seat_limit_override": None})
-    # override None is 'not set' (the code uses `is not None`), so base trial 3 stands
-    assert ep["seat_limit"] == 3
+    # override None is 'not set' (the code uses `is not None`), so base trial 15 stands
+    assert ep["seat_limit"] == 15
 
 
 # --- quota overrides --------------------------------------------------------

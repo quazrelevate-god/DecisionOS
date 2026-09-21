@@ -63,7 +63,13 @@ TRIAL_DAYS = 14
 # quota-enforcer (S3-04) can look them up directly.
 PLAN_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     PLAN_TRIAL: {
-        "seat_limit": 3,
+        # 2026-09-21 (Yokesh): 3 -> 15. DecisionOS is for a 10-15 person
+        # company, and its workflows, hand-offs and approvals only show what
+        # they do with the team in them. At 3 seats a founder trying it could
+        # add two people and then hit a wall — found running a real company
+        # through it by hand. Existing trials pick this up at once (the limit is
+        # read from here, not stored on the tenant).
+        "seat_limit": 15,
         "quotas": {
             "llm_tokens_total": 300_000,     # ~$1 of Sonnet 4.6 cost
             "stt_minutes": 30,

@@ -573,6 +573,16 @@ export default function WorkflowDetail({ workflowId, open, onOpenChange, onAdvan
                     <span className="min-w-0 flex-1 text-[13.5px] text-slate-700">
                       Held here: {card.readiness?.reason || "this stage is not finished"}.
                     </span>
+                    {/* 2026-09-21 — the way on is to say what happens to that work
+                        (the board's "Move on" review), not to force it. */}
+                    {next && onAdvance && (card.readiness?.open_task_ids || []).length > 0
+                      && !card.readiness?.missing_approval && (
+                      <button type="button" data-testid="wf-detail-move-on"
+                        onClick={() => onAdvance(card, next.key)}
+                        className={`inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-pill px-4 text-[13px] font-medium text-slate-800 ${GLASS_PILL}`}>
+                        Move on to {next.label}…
+                      </button>
+                    )}
                   </>
                 )}
               </div>

@@ -122,21 +122,21 @@ def test_auto_invoice_concurrent_double_completion(with_test_db):
 # reservations at the cap boundary -> exactly the remaining seats are admitted.
 # ---------------------------------------------------------------------------
 def test_seat_limit_atomic_reservation(with_test_db):
-    from services.plans import reserve_seat, release_seat
+    from services.plans import reserve_seat, release_seat, PLAN_DEFINITIONS, PLAN_TRIAL
     from fastapi import HTTPException
+    cap = PLAN_DEFINITIONS[PLAN_TRIAL]["seat_limit"]   # 15 since 2026-09-21 (was 3)
 
     async def scenario(db):
         tid = "t1"
-        await db.tenants.insert_one({"id": tid, "plan": "trial"})   # trial = 3 seats
-        # already 2 active members -> exactly ONE seat left
+        await db.tenants.insert_one({"id": tid, "plan": "trial"})
+        # already cap-1 active members -> exactly ONE seat left
         await db.memberships.insert_many([
-            {"tenant_id": tid, "user_id": "u1", "status": "active"},
-            {"tenant_id": tid, "user_id": "u2", "status": "active"},
+            {"tenant_id": tid, "user_id": f"u{i}", "status": "active"} for i in range(cap - 1)
         ])
 
         async def reserve():
             try:
-                await reserve_seat(db, tid)   # atomic $inc gate; seats_used lazily seeded to 2
+                await reserve_seat(db, tid)   # atomic $inc gate; seats_used lazily seeded to cap-1
                 return True
             except HTTPException:
                 return False
@@ -152,7 +152,7 @@ def test_seat_limit_atomic_reservation(with_test_db):
 
     admitted, seats_used, freed_ok = with_test_db(scenario)
     assert admitted == 1, "exactly ONE of 3 racing reservations wins the last seat (no over-provision)"
-    assert seats_used == 3, "seats_used lands exactly at the cap, never above"
+    assert seats_used == cap, "seats_used lands exactly at the cap, never above"
     assert freed_ok is True, "releasing a seat lets the next reservation through"
 
 

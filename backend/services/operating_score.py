@@ -19,6 +19,10 @@ from services.ai.pii import redact_pii
 # instead of a bare float() that crashes the whole score on one malformed amount.
 # This is the same accepted services->routers.ledger helper edge ingestion uses.
 from routers.ledger import parse_amount as _amt
+# PILOT-1 D: one rule for "late" (shared/due.py), the screens' own. Every count
+# below used `due_date < now` with `now` a UTC timestamp, which made a task due
+# TODAY overdue all day.
+from shared.due import is_overdue
 
 
 # S9 (U8-09.5): shared short-TTL cache for the company operating view. The view
@@ -53,22 +57,32 @@ def _is_open_task(t):
 
 
 def _score_execution(tasks, now):
-    """Task-execution score; returns (execution, done, open_tasks, overdue, actionable)."""
+    """Task-execution score; returns (execution, done, open_tasks, overdue, actionable).
+
+    PILOT-1 D: with no tasks to measure, Execution is None — left out and the
+    other categories' weights re-balance — rather than an invented 70."""
     done = sum(1 for t in tasks if t.get("status") == "done")
     open_tasks = [t for t in tasks if _is_open_task(t)]
-    overdue = sum(1 for t in open_tasks if t.get("due_date") and t["due_date"] < now)
+    overdue = sum(1 for t in open_tasks if is_overdue(t.get("due_date"), now))
     actionable = done + len(open_tasks)
-    completion = (done / actionable) if actionable else 0.7
+    if not actionable:
+        return None, done, open_tasks, overdue, actionable
+    completion = done / actionable
     overdue_ratio = (overdue / len(open_tasks)) if open_tasks else 0
     return _clamp100(completion * 100 - overdue_ratio * 40), done, open_tasks, overdue, actionable
 
 
 def _score_sales(decisions):
-    """Decision-approval score; returns (sales, total_dec, approved)."""
+    """Decision-approval score; returns (sales, total_dec, approved).
+
+    PILOT-1 D: no decisions yet is None (left out), not an invented 70. (What
+    this category measures, and what it is called, is a recommendation in the
+    PILOT-1 report — the name "Sales" is unchanged here.)"""
     total_dec = len(decisions)
     approved = sum(1 for d in decisions if d.get("status") == "approved")
-    approved_rate = (approved / total_dec) if total_dec else 0.7
-    return _clamp100(approved_rate * 100), total_dec, approved
+    if not total_dec:
+        return None, total_dec, approved
+    return _clamp100(approved / total_dec * 100), total_dec, approved
 
 
 def _score_employees(tasks, members, now):
@@ -78,7 +92,7 @@ def _score_employees(tasks, members, now):
         mine = [t for t in tasks if t.get("assignee_id") == mbr["id"] or (not t.get("assignee_id") and t.get("assignee_role") == mbr["role"])]
         m_done = sum(1 for t in mine if t.get("status") == "done")
         m_open = [t for t in mine if _is_open_task(t)]
-        m_overdue = sum(1 for t in m_open if t.get("due_date") and t["due_date"] < now)
+        m_overdue = sum(1 for t in m_open if is_overdue(t.get("due_date"), now))
         m_action = m_done + len(m_open)
         m_comp = (m_done / m_action) if m_action else 0
         m_score = _clamp100(m_comp * 100 - (m_overdue / len(m_open) if m_open else 0) * 40) if m_action else None
@@ -123,20 +137,31 @@ async def _company_operating_view(tid: str, viewer: dict, now: str) -> dict:
         inv_count = len(invs)
         total_billed = sum(_amt(i.get("amount")) for i in invs if i.get("type") == "sales_invoice")
         total_paid = sum(_amt(p.get("amount")) for p in pays)
-        overdue_inv = sum(1 for i in invs if i.get("type") == "sales_invoice" and i.get("status") != "paid" and i.get("due_date") and i["due_date"] < now)
-    collected = (min(total_paid, total_billed) / total_billed) if total_billed else 0.7
-    finance = _clamp100(collected * 100 - overdue_inv * 5) if can_finance else None
+        overdue_inv = sum(1 for i in invs if i.get("type") == "sales_invoice" and i.get("status") != "paid"
+                          and is_overdue(i.get("due_date"), now))
+    # PILOT-1 D: nothing billed yet is nothing to score — left out, not 70.
+    finance = None
+    if can_finance and total_billed:
+        collected = min(total_paid, total_billed) / total_billed
+        finance = _clamp100(collected * 100 - overdue_inv * 5)
 
     sales, total_dec, approved = _score_sales(decisions)
 
     open_complaints = sum(1 for c in complaints if c.get("status") != "resolved")
-    responsiveness = _clamp100(100 - open_complaints * 12 - overdue * 3)
+    # PILOT-1 D: a company with no complaints on record and no open work has no
+    # loops to close — Responsiveness is left out rather than a free 100.
+    responsiveness = (_clamp100(100 - open_complaints * 12 - overdue * 3)
+                      if (complaints or open_tasks) else None)
 
     categories = {"execution": execution, "finance": finance, "sales": sales, "responsiveness": responsiveness}
+    # Why a category has no number: the viewer may not see money, or there is
+    # nothing yet to measure. The screen says which.
+    unscored = {k: ("no_access" if k == "finance" and not can_finance else "no_data")
+                for k, v in categories.items() if v is None}
     weights = {"execution": 0.35, "finance": 0.25, "sales": 0.2, "responsiveness": 0.2}
     avail = {k: v for k, v in categories.items() if v is not None}
-    wsum = sum(weights[k] for k in avail) or 1
-    overall = _clamp100(sum(avail[k] * weights[k] for k in avail) / wsum)
+    wsum = sum(weights[k] for k in avail)
+    overall = _clamp100(sum(avail[k] * weights[k] for k in avail) / wsum) if avail else None
 
     enough_data = actionable >= 3 or inv_count > 0
 
@@ -144,7 +169,8 @@ async def _company_operating_view(tid: str, viewer: dict, now: str) -> dict:
     employees = _score_employees(tasks, members, now)
 
     payload = {
-        "company": {"overall": overall if enough_data else None, "categories": categories, "enough_data": enough_data},
+        "company": {"overall": overall if enough_data else None, "categories": categories, "enough_data": enough_data,
+                    "unscored": unscored},
         "stats": {"done": done, "open": len(open_tasks), "overdue": overdue,
                   "total_decisions": total_dec, "approved": approved, "open_complaints": open_complaints,
                   "outstanding": round(total_billed - total_paid, 2) if can_finance else None},
@@ -189,8 +215,7 @@ async def _self_operating_view(tid: str, viewer: dict, now: str) -> dict:
          "status": 1, "workflow_id": 1, "stage_key": 1, "category": 1}
     ).sort([("due_date", 1)]).to_list(5)
     for t in my_open:
-        due = t.get("due_date")
-        t["is_overdue"] = bool(due and due < now)
+        t["is_overdue"] = is_overdue(t.get("due_date"), now)
 
     # Active workflows where the viewer owns the CURRENT stage -- pull via
     # tasks (workflow_id + stage_key == wf.current_stage). Cheap dedupe.
@@ -251,7 +276,7 @@ async def compute_employee_stats(tenant_id: str, target: dict) -> dict:
         {"_id": 0}).to_list(3000)
     done = [t for t in tasks if t.get("status") == "done"]
     open_tasks = [t for t in tasks if _is_open_task(t)]
-    overdue = [t for t in open_tasks if t.get("due_date") and t["due_date"] < now]
+    overdue = [t for t in open_tasks if is_overdue(t.get("due_date"), now)]
     actionable = len(done) + len(open_tasks)
 
     def has_attach(t, kind=None):

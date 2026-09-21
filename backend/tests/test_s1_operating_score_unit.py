@@ -35,11 +35,12 @@ def test_clamp100_rounds_and_bounds(raw, expected):
 
 
 # --- _score_execution (T10-01.2 / T10-07) -----------------------------------
-def test_execution_empty_tasks_defaults_to_70():
-    """actionable==0 -> completion default 0.7 -> score 70. The 'new tenant
-    looks 70% healthy with zero data' default."""
+def test_execution_with_no_tasks_is_left_out_not_70():
+    """This pinned the 'new tenant looks 70% healthy with zero data' default.
+    PILOT-1 D (2026-09-21) fixed it: nothing to measure is None, and the
+    overall re-balances over the categories that do have data."""
     score, done, open_tasks, overdue, actionable = _score_execution([], NOW)
-    assert (score, done, actionable) == (70, 0, 0)
+    assert (score, done, actionable) == (None, 0, 0)
 
 
 def test_execution_all_done_is_100():
@@ -74,8 +75,9 @@ def test_execution_empty_due_date_is_NOT_overdue():
 
 
 # --- _score_sales (T10-01.2) ------------------------------------------------
-def test_sales_no_decisions_defaults_to_70():
-    assert _score_sales([])[0] == 70
+def test_sales_with_no_decisions_is_left_out_not_70():
+    """PILOT-1 D: no decisions yet is None, not an invented 70."""
+    assert _score_sales([])[0] is None
 
 
 def test_sales_all_approved_is_100():

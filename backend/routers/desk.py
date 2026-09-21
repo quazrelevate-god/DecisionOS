@@ -34,6 +34,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 
 from core import db, get_current_user, now_iso, new_id
+from shared.due import overdue_query, today_ist  # PILOT-1 D: one rule for today and for late
 
 
 router = APIRouter(prefix="/api")
@@ -49,8 +50,10 @@ _IST_OFFSET = timedelta(hours=5, minutes=30)
 
 def _today_ist() -> str:
     """IST 'today' as YYYY-MM-DD. Use for anything compared to date-only
-    fields (due_date, attendance.date, leaves.from_date/to_date)."""
-    return (datetime.now(timezone.utc) + _IST_OFFSET).date().isoformat()
+    fields (due_date, attendance.date, leaves.from_date/to_date).
+    PILOT-1 D: one definition of today for the whole backend (shared/due.py),
+    which the operating score now uses too."""
+    return today_ist()
 
 
 def _yesterday_ist_window_utc() -> tuple[str, str]:
@@ -102,9 +105,10 @@ async def _delayed_count(tid: str, user: dict) -> int:
     """Count tasks past due_date, not done/cancelled. Owner sees all,
     non-owner sees their own. IST-today so we roll the "delayed" cliff
     at IST-midnight (E2-56)."""
-    today = _today_ist()
-    q = {"tenant_id": tid, "status": {"$nin": ["done", "cancelled"]},
-         "due_date": {"$lt": today, "$ne": None}}
+    # PILOT-1 D: the one "late" rule (shared/due.py) — an earlier day, or a
+    # time today that has passed — the rule the screens and the score use, so
+    # the Delayed tile and the score beside it count the same tasks.
+    q = {"tenant_id": tid, "status": {"$nin": ["done", "cancelled"]}, "$and": [overdue_query()]}
     if user.get("role") != "owner":
         # ASK-26: a task I am on alongside the lead is mine to deliver too.
         q["$or"] = [{"assignee_id": user["id"]}, {"co_assignee_ids": user["id"]}]
@@ -558,7 +562,8 @@ async def _cards_on_fire(tid: str, user: dict) -> list:
         # ASK-26: if I am on it, it is my own todo (My Work), not a chase.
         "co_assignee_ids": {"$ne": uid},
         "status": {"$nin": ["done", "cancelled"]},
-        "due_date": {"$lt": today, "$ne": None},
+        # PILOT-1 D: the one "late" rule (shared/due.py), as Delayed uses.
+        "$and": [overdue_query()],
     }
     # ASK-28 Phase 7 (plan 7.3): the same ladder as the reminders — a manager
     # also chases their direct reports' tasks once they reach the manager step

@@ -19,6 +19,7 @@ import { GlassSelect } from "../../components/karma/GlassSelect";
 import { GLASS_MENU, GLASS_MENU_ITEM, INK_PILL } from "../../components/karma/glass";
 import { AREA, FIELD, Field, FileField, SHEET_CONTENT, SheetFoot, SheetHead, fmt } from "./financeKit";
 import { DraftNote } from "../../components/karma/DraftNote";
+import { PartyPicker } from "../../components/karma/PartyPicker";
 import { useDraft } from "../../hooks/useDraft";
 
 const withCurrent = (list, value) => (value && !list.includes(value) ? [value, ...list] : list);
@@ -31,14 +32,7 @@ const withCurrent = (list, value) => (value && !list.includes(value) ? [value, .
    browser cannot store a file for later. */
 const KEPT_LABEL = "Kept from before — not saved yet";
 
-const formData = (fields, file) => {
-  const fd = new FormData();
-  Object.entries(fields).forEach(([k, v]) => fd.append(k, v ?? ""));
-  if (file) fd.append("file", file);
-  return fd;
-};
-
-const EXPENSE_BLANK = { title: "", amount: "", vendor_name: "", category: "", date: "", status: "unpaid", notes: "" };
+const EXPENSE_BLANK = { title: "", amount: "", vendor_name: "", vendor_id: "", category: "", date: "", status: "unpaid", notes: "" };
 
 export function AddExpenseDialog({ open, onOpenChange, categories = [], onDone }) {
   const { t } = useTranslation();
@@ -113,7 +107,9 @@ export function AddExpenseDialog({ open, onOpenChange, categories = [], onDone }
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label={t("finance.f_vendor", { vendor: L.vendor_singular })} htmlFor={`${uid}-vendor`}>
-              <input id={`${uid}-vendor`} data-testid="expense-vendor" className={FIELD} value={f.vendor_name} onChange={(e) => set("vendor_name", e.target.value)} />
+              <PartyPicker kind="vendor" noun={L.vendor_singular} id={`${uid}-vendor`} testid="expense-vendor"
+                name={f.vendor_name} linkedId={f.vendor_id}
+                onChange={({ name, id }) => setF((s) => ({ ...s, vendor_name: name, vendor_id: id }))} />
             </Field>
             <Field label={t("finance.c_category")} htmlFor={`${uid}-category`}
               aside={(
@@ -139,10 +135,12 @@ export function AddExpenseDialog({ open, onOpenChange, categories = [], onDone }
   );
 }
 
-const ASSET_BLANK = { name: "", purchase_amount: "", category: "Equipment", vendor_name: "", purchase_date: "", status: "active", notes: "" };
+const ASSET_BLANK = { name: "", purchase_amount: "", category: "Equipment", vendor_name: "", vendor_id: "", purchase_date: "", status: "active", notes: "" };
 
 export function AddAssetDialog({ open, onOpenChange, categories = [], onDone }) {
   const { t } = useTranslation();
+  const { tenant } = useAuth();
+  const L = lex(tenant);
   const uid = useId();
   const [f, setF, draft] = useDraft("asset", ASSET_BLANK);
   const [file, setFile] = useState(null);
@@ -188,8 +186,10 @@ export function AddAssetDialog({ open, onOpenChange, categories = [], onDone }) 
                 options={withCurrent(categories, f.category).map((c) => ({ value: c, label: c }))} />
             </Field>
           </div>
-          <Field label={t("finance.c_vendor")} htmlFor={`${uid}-vendor`}>
-            <input id={`${uid}-vendor`} className={FIELD} value={f.vendor_name} onChange={(e) => set("vendor_name", e.target.value)} />
+          <Field label={L.vendor_singular} htmlFor={`${uid}-vendor`}>
+            <PartyPicker kind="vendor" noun={L.vendor_singular} id={`${uid}-vendor`} testid="asset-vendor"
+              name={f.vendor_name} linkedId={f.vendor_id}
+              onChange={({ name, id }) => setF((s) => ({ ...s, vendor_name: name, vendor_id: id }))} />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label={t("finance.purchase_date")} htmlFor={`${uid}-date`}>
@@ -213,10 +213,12 @@ export function AddAssetDialog({ open, onOpenChange, categories = [], onDone }) 
   );
 }
 
-const INVENTORY_BLANK = { item: "", sku: "", quantity: "", unit: "unit", unit_cost: "", category: "", vendor_name: "", notes: "" };
+const INVENTORY_BLANK = { item: "", sku: "", quantity: "", unit: "unit", unit_cost: "", category: "", vendor_name: "", vendor_id: "", notes: "" };
 
 export function AddInventoryDialog({ open, onOpenChange, cur, onDone }) {
   const { t } = useTranslation();
+  const { tenant } = useAuth();
+  const L = lex(tenant);
   const uid = useId();
   const [f, setF, draft] = useDraft("inventory", INVENTORY_BLANK);
   const [file, setFile] = useState(null);
@@ -271,8 +273,10 @@ export function AddInventoryDialog({ open, onOpenChange, cur, onDone }) {
             <Field label={t("finance.c_category")} htmlFor={`${uid}-category`}>
               <input id={`${uid}-category`} className={FIELD} value={f.category} onChange={(e) => set("category", e.target.value)} />
             </Field>
-            <Field label={t("finance.c_vendor")} htmlFor={`${uid}-vendor`}>
-              <input id={`${uid}-vendor`} className={FIELD} value={f.vendor_name} onChange={(e) => set("vendor_name", e.target.value)} />
+            <Field label={L.vendor_singular} htmlFor={`${uid}-vendor`}>
+              <PartyPicker kind="vendor" noun={L.vendor_singular} id={`${uid}-vendor`} testid="inv-vendor"
+                name={f.vendor_name} linkedId={f.vendor_id}
+                onChange={({ name, id }) => setF((s) => ({ ...s, vendor_name: name, vendor_id: id }))} />
             </Field>
           </div>
           {value > 0 && (
@@ -288,7 +292,7 @@ export function AddInventoryDialog({ open, onOpenChange, cur, onDone }) {
   );
 }
 
-const INCOME_BLANK = { title: "", customer_name: "", amount: "", number: "", date: "", due_date: "", status: "unpaid", notes: "" };
+const INCOME_BLANK = { title: "", customer_name: "", contact_id: "", amount: "", number: "", date: "", due_date: "", status: "unpaid", notes: "" };
 
 export function AddIncomeDialog({ open, onOpenChange, onDone }) {
   const { tenant } = useAuth();
@@ -339,7 +343,9 @@ export function AddIncomeDialog({ open, onOpenChange, onDone }) {
             </Field>
           </div>
           <Field label={`${L.customer_singular} name`} htmlFor={`${uid}-customer`}>
-            <input id={`${uid}-customer`} data-testid="income-customer" className={FIELD} value={f.customer_name} onChange={(e) => set("customer_name", e.target.value)} />
+            <PartyPicker kind="customer" noun={L.customer_singular} id={`${uid}-customer`} testid="income-customer"
+              name={f.customer_name} linkedId={f.contact_id}
+              onChange={({ name, id }) => setF((s) => ({ ...s, customer_name: name, contact_id: id }))} />
           </Field>
           {/* Phone: a third of the sheet is too narrow for a date field, so the
               invoice number takes a row and the two dates share the next. */}

@@ -939,6 +939,17 @@ function resolve(method, path, q, body = {}) {
   if (p.startsWith('/ledger/ai/')) return financeAi(seg[3] || 'brief');
   if (p === '/ledger/ask') return { answer: 'Krishna Garments is your single biggest problem: ₹4,00,000, 31 days late.', sources: ['i_1'] };
   if (p === '/ledger/reclassify-purchases') return { updated: 3, message: 'Rechecked 3 earlier bills' };
+  /* PILOT-1 E — mirrors routers/ledger.list_parties: the narrow supplier /
+     buyer list a finance form's picker reads. */
+  if (p === '/ledger/parties') {
+    const kinds = { vendor: ['vendor'], customer: ['customer', 'dealer'] }[q.get('kind') || 'vendor'];
+    if (!kinds) return refuse(400, 'kind must be vendor or customer');
+    const needle = (q.get('q') || '').trim().toLowerCase();
+    return CONTACTS.filter((c) => kinds.includes(c.type))
+      .filter((c) => !needle || `${c.name} ${c.company || ''}`.toLowerCase().includes(needle))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((c) => ({ id: c.id, name: c.name, company: c.company || '', type: c.type }));
+  }
   if (p === '/expenses' || p === '/expenses/with-file') return method === 'GET' ? EXPENSES : { ...OK, expense: EXPENSES[0] };
   if (p === '/expenses/suggest-category') return { category: 'Raw Material', confidence: 0.88 };
   if (p === '/assets' || p === '/assets/with-file') return method === 'GET' ? ASSETS : { ...OK, asset: ASSETS[0] };

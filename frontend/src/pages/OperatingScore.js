@@ -224,11 +224,22 @@ function OverallCard({ title, score, caption, delta, onExplain, testid }) {
   );
 }
 
-function CategoryCard({ cat, value, onOpen }) {
+/* PILOT-1 D — a category with no number says WHY. It used to be only "No
+   access to this area" (Finance, for someone who cannot see money). A category
+   with nothing to measure yet — no invoices, no decisions — used to be scored
+   70 instead; it is left out of the overall now, and says so. */
+const UNSCORED_WORDS = {
+  no_access: "No access to this area",
+  no_data: "Nothing to score yet — left out of the total",
+};
+
+function CategoryCard({ cat, value, reason, onOpen }) {
   const has = value != null;
+  const why = UNSCORED_WORDS[reason] || UNSCORED_WORDS.no_access;
   return (
     <button type="button" onClick={onOpen} disabled={!has} data-testid={`operating-cat-${cat.key}`}
-      aria-label={has ? `${cat.label}: ${value} out of 100 — see breakdown` : `${cat.label}: not available`}
+      data-unscored={has ? undefined : (reason || "no_access")}
+      aria-label={has ? `${cat.label}: ${value} out of 100 — see breakdown` : `${cat.label}: ${why}`}
       className={`group flex min-w-0 flex-col p-4 text-left transition-[transform,box-shadow] duration-200 enabled:hover:-translate-y-0.5 enabled:hover:shadow-[0_18px_40px_-18px_hsl(150_15%_20%/0.35)] disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 motion-reduce:transition-none ${CARD}`}>
       <span className="flex w-full items-center gap-2 text-[15px] font-medium text-slate-800">
         <cat.icon size={18} aria-hidden="true" className="shrink-0 text-slate-600" />
@@ -241,7 +252,7 @@ function CategoryCard({ cat, value, onOpen }) {
       </span>
       <Bar value={value} label={`${cat.label} score`} className="mt-4" testid={`operating-meter-${cat.key}`} />
       <span className="mt-3 flex items-center gap-1 text-xs font-medium text-slate-500">
-        {has ? <>See breakdown <CaretRight size={11} weight="bold" aria-hidden="true" /></> : "No access to this area"}
+        {has ? <>See breakdown <CaretRight size={11} weight="bold" aria-hidden="true" /></> : why}
       </span>
     </button>
   );
@@ -458,7 +469,8 @@ function OwnerView({ data }) {
             />
             <div className="grid grid-cols-2 gap-3 sm:gap-4" data-testid="operating-categories">
               {CATS.map((c) => (
-                <CategoryCard key={c.key} cat={c} value={company.categories[c.key]} onOpen={() => setDrillCat(c.key)} />
+                <CategoryCard key={c.key} cat={c} value={company.categories[c.key]} reason={company.unscored?.[c.key]}
+                  onOpen={() => setDrillCat(c.key)} />
               ))}
             </div>
             <DoTheseFirst actions={actions} onDrill={setDrillCat} note={demo ? demoDex.explainer : null} className="lg:col-span-2 xl:col-span-1" />

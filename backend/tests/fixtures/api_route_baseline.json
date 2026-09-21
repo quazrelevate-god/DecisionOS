@@ -1,6 +1,6 @@
 {
-  "count": 346,
-  "sha": "b5c2b4049a48b9e25e7b18bfc11de025cb3f9bc2dbf5a9cbde2581614af2e1bf",
+  "count": 348,
+  "sha": "e78da96a321c72543d4152cd72b217e1f381cb580d6454ec69a7878072642a3e",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -130,6 +130,7 @@
     "GET /api/payables",
     "GET /api/payments",
     "GET /api/revenue",
+    "GET /api/routines/setup",
     "GET /api/support/tickets",
     "GET /api/support/tickets/{ticket_id}",
     "GET /api/tasks",
@@ -303,6 +304,7 @@
     "POST /api/revenue/payment/{pid}/match",
     "POST /api/revenue/payment/{pid}/standalone",
     "POST /api/revenue/with-file",
+    "POST /api/routines/setup",
     "POST /api/signup/check-email",
     "POST /api/signup/interview/answer",
     "POST /api/signup/interview/back",

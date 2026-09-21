@@ -54,6 +54,7 @@ from routers.tenant_settings import router as tenant_settings_router
 from routers.finance import router as finance_router
 from routers.whatsapp import router as whatsapp_router
 from routers.files import router as files_router
+from routers.routines import router as routines_router
 from routers.health import router as health_router
 
 # Every extracted domain router, in the exact order server.py mounted them.
@@ -103,6 +104,7 @@ _DOMAIN_ROUTERS = (
     finance_router,    # Epic 8 S3: finance + document ingestion extracted
     whatsapp_router,   # Epic 8 S3: WhatsApp webhook + status/logs extracted
     files_router,      # Epic 8 S3: file upload/download extracted
+    routines_router,   # 2026-09-21: the sign-up routines, confirmed and made to repeat
     health_router,     # Epic 8 S3: /api/health + /api/ root (last off the api router)
 )
 

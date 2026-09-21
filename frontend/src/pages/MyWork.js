@@ -58,6 +58,7 @@ import {
 // 2026-09-14, founder — every dropdown on this page is the app's own glass
 // list; none of them opens the operating system's picker.
 import { GlassSelect } from "../components/karma/GlassSelect";
+import { RoutinesNudge } from "../components/routines/RoutinesSetup";
 import { DraftNote } from "../components/karma/DraftNote";
 import { useDraft } from "../hooks/useDraft";
 import { draftScope, hasDraft, hasDraftUnder } from "../lib/drafts";
@@ -4430,6 +4431,9 @@ export default function MyWork({ only = null }) {
         </div>
       </header>
       </>}
+
+      {/* 2026-09-21 — sign-up routines still waiting for the owner's answer. */}
+      {isOwner && !approvalsPage && <RoutinesNudge />}
 
       {focusDenied && (
         /* ASK-28 TK-04 — say which it is (a task that no longer exists, or one

@@ -602,7 +602,8 @@ def test_blocked_work_looks_blocked_in_the_list():
 def test_a_task_can_be_made_to_repeat_and_says_so():
     """D1 on screen."""
     form = _fe("pages", "Tasks.js")
-    assert 'data-testid="task-repeat-every"' in form
+    # GlassSelect (the app's own list) takes testid and puts it on its trigger.
+    assert 'testid="task-repeat-every"' in form
     assert "repeat_every: form.repeat_every || null" in form
     work = _fe("pages", "MyWork.js")
     assert "function repeatLabel(" in work
@@ -620,7 +621,7 @@ def test_the_warning_before_a_deadline_is_the_companys_to_set():
 def test_work_can_be_told_to_wait_for_other_work():
     """D3 on screen — offered on a stage, which is where order matters."""
     src = _fe("components", "workflow", "WorkflowDetail.js")
-    assert 'data-testid={`wf-add-task-after-${stage.key}`}' in src
+    assert 'testid={`wf-add-task-after-${stage.key}`}' in src   # a GlassSelect prop
     assert "depends_on: after ? [after] : undefined" in src
 
 

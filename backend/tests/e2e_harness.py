@@ -37,6 +37,7 @@ _DB_MODULES = [
     "services.finance_signals",
     "services.workflows", "services.ai.agent_tools",
     "routers.access", "routers.tenant_settings",
+    "services.routines",   # 2026-09-21: the sign-up routines
 ]
 
 # fire-and-forget writers to neutralise: (module, attr, kind) where kind is

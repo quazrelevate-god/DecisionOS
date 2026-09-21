@@ -12,6 +12,7 @@ import { DexWave } from "../../components/mobile/DexWave";
 import { CountUp } from "../../components/karma";
 // ASK-36 5 — the app's one loading animation.
 import { Loader } from "../../components/common";
+import { RoutinesSetup, niceDate } from "../../components/routines/RoutinesSetup";
 
 // What Dex is "doing" while the real AI build runs (30-60s). Loops until done.
 const WAIT_LINES = [
@@ -231,6 +232,8 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
   const [line, setLine] = useState(0);
   // stage: 'building' → 'preview' (refine) → 'registering' → 'reveal'
   const [stage, setStage] = useState("building");
+  // 2026-09-21 — the routines the founder started on the reveal screen.
+  const [routinesStarted, setRoutinesStarted] = useState(null);
   const [bp, setBp] = useState(null);        // current blueprint (may be regenerated)
   const [welcome, setWelcome] = useState("");
   const [error, setError] = useState("");
@@ -951,6 +954,30 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                 </div>
               </div>
             )}
+            {/* 2026-09-21 — THE ROUTINES, MADE TRUE. The count above used to be
+                a promise nothing kept: the routines were stored and never
+                created. Now the founder ticks the ones the company does and
+                they start as real repeating tasks. Entering without answering
+                keeps them waiting on My Work — nothing is created blind. */}
+            <div className="mb-8" data-testid="reveal-routines">
+              {routinesStarted ? (
+                <p className="text-sm text-slate-700" data-testid="reveal-routines-done">
+                  {routinesStarted.length === 0
+                    ? "No routines started — you can make any task repeat later."
+                    : `${routinesStarted.length === 1 ? "1 routine" : `${routinesStarted.length} routines`} started. The first is due ${
+                        niceDate(routinesStarted.map((c) => c.due_date).sort()[0])}.`}
+                </p>
+              ) : (
+                <>
+                  <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Start your routines</p>
+                  <p className="mb-3 max-w-xl text-sm text-slate-600">
+                    Tick the ones {payload.company_name} really does, and how often. Each comes back when the last one is done.
+                  </p>
+                  <RoutinesSetup testid="reveal-routines-setup" showLater={false}
+                    onDone={(d) => { if (d) setRoutinesStarted(d.created || []); }} />
+                </>
+              )}
+            </div>
             <button onClick={onEnter} data-testid="signup-enter-button"
               className="kr-pop flex h-14 items-center gap-2 rounded-pill bg-kr-ink px-10 font-medium text-white">
               Enter DecisionOS <ArrowRight size={18} weight="bold" />

@@ -344,10 +344,18 @@ function ledgerSummary() {
     by_category: Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([category, amount]) => ({ category, amount })),
     by_vendor: Object.entries(byVendor).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([vendor, amount]) => ({ vendor, amount })),
     by_month: Object.keys(byMonth).sort().slice(-6).map((month) => ({ month, amount: byMonth[month] })),
-    categories: ['Raw Material', 'Salaries', 'Utilities', 'Job Work', 'Logistics', 'Maintenance', 'Professional Fees', 'Other'],
-    asset_categories: ['Machinery', 'Vehicle', 'Utility', 'Building', 'IT'],
+    categories: [...FIN_CATS.expense],
+    asset_categories: [...FIN_CATS.asset],
   };
 }
+
+/* PILOT-1 F — the company's category lists, kept in memory so a category added
+   from a form (POST /ledger/categories) shows in the next list, as it does on
+   the real server. A restart is the fixture's own list again. */
+const FIN_CATS = {
+  expense: ['Raw Material', 'Salaries', 'Utilities', 'Job Work', 'Logistics', 'Maintenance', 'Professional Fees', 'Other'],
+  asset: ['Machinery', 'Vehicle', 'Utility', 'Building', 'IT'],
+};
 
 // ---------------------------------------------------------------------------
 // Desk chip builders — mirrors backend/routers/desk.py
@@ -699,7 +707,9 @@ function resolve(method, path, q, body = {}) {
 
   // --- auth ---
   if (p === '/auth/me' || p === '/auth/login' || p === '/auth/register' || p === '/auth/otp/verify') {
-    return { user: me, tenant: TENANT };
+    /* PILOT-1 F — the tenant carries its finance categories, as the real
+       /auth/me does; Settings > Money's editor reads them from here. */
+    return { user: me, tenant: { ...TENANT, finance_categories: { expense: [...FIN_CATS.expense], asset: [...FIN_CATS.asset] } } };
   }
   if (p === '/auth/logout') return OK;
   if (p === '/auth/otp/request') return { sent: true, dev_code: '123456' };
@@ -949,6 +959,19 @@ function resolve(method, path, q, body = {}) {
       .filter((c) => !needle || `${c.name} ${c.company || ''}`.toLowerCase().includes(needle))
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((c) => ({ id: c.id, name: c.name, company: c.company || '', type: c.type }));
+  }
+  /* PILOT-1 F — mirrors routers/ledger.add_finance_category. */
+  if (p === '/ledger/categories' && method === 'POST') {
+    const kind = String(body.kind || '').toLowerCase();
+    if (!['expense', 'asset'].includes(kind)) return refuse(400, 'kind must be expense or asset');
+    const name = String(body.name || '').replace(/\s+/g, ' ').trim();
+    if (!name) return refuse(400, 'Give the category a name.');
+    const list = FIN_CATS[kind];
+    const same = list.find((c) => c.toLowerCase() === name.toLowerCase());
+    if (same) return { kind, category: same, categories: [...list], added: false };
+    const rest = list.filter((c) => c.toLowerCase() !== 'other');
+    FIN_CATS[kind] = [...rest, name, ...(list.some((c) => c.toLowerCase() === 'other') || kind === 'expense' ? ['Other'] : [])];
+    return { kind, category: name, categories: [...FIN_CATS[kind]], added: true };
   }
   if (p === '/expenses' || p === '/expenses/with-file') return method === 'GET' ? EXPENSES : { ...OK, expense: EXPENSES[0] };
   if (p === '/expenses/suggest-category') return { category: 'Raw Material', confidence: 0.88 };

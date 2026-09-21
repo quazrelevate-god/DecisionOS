@@ -3,7 +3,8 @@
 // Quick capture "Add expense" all open the same dialog (the old phone button
 // clicked a selector nothing carried — FN-08). Every choice is our own
 // dropdown, never the operating system's list.
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Buildings, CaretDown, CurrencyInr, Package, Plus, Receipt, Sparkle } from "@phosphor-icons/react";
@@ -31,6 +32,85 @@ const withCurrent = (list, value) => (value && !list.includes(value) ? [value, .
    and Cancel or Save is what empties it. The attached bill is not kept; a
    browser cannot store a file for later. */
 const KEPT_LABEL = "Kept from before — not saved yet";
+
+/* PILOT-1 F — "+ NEW CATEGORY", WHERE THE CATEGORY IS CHOSEN.
+   The pilot client: "Need to be able to customize and add categories." The
+   list was editable only in Settings > Money, behind Manage Team, and nobody
+   goes to Settings in the middle of an expense. The last entry of the list now
+   opens a name field in place; Add saves it to the company's list (POST
+   /ledger/categories — anyone with Finance access) and files this record under
+   it. Renaming and removing stay in Settings. */
+const NEW_CATEGORY = "__new_category__";
+
+function CategoryField({ kind, value, onChange, categories, withAuto = false, autoLabel, id, testid }) {
+  const qc = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const inputRef = useRef(null);
+  const open = () => { setAdding(true); setName(""); setError(""); setTimeout(() => inputRef.current?.focus(), 0); };
+  const add = async () => {
+    const clean = name.replace(/\s+/g, " ").trim();
+    if (!clean) { setError("Give it a name"); inputRef.current?.focus(); return; }
+    setBusy(true);
+    try {
+      const { data } = await api.post("/ledger/categories", { kind, name: clean });
+      onChange(data.category);
+      toast.success(data.added ? `Added “${data.category}” to your categories` : `“${data.category}” is already a category`);
+      qc.invalidateQueries({ queryKey: ["ledger-summary"] });
+      setAdding(false);
+    } catch (e) {
+      setError(e.response?.data?.detail || "Could not add the category");
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (adding) {
+    return (
+      <div className="space-y-1.5" data-testid={`${testid}-new`}>
+        <div className="flex min-w-0 gap-2">
+          <input ref={inputRef} id={id} value={name} maxLength={40} disabled={busy}
+            data-testid={`${testid}-new-name`} aria-label="New category name"
+            aria-invalid={error ? "true" : undefined}
+            onChange={(e) => { setName(e.target.value); if (error) setError(""); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); add(); }
+              if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setAdding(false); }
+            }}
+            placeholder="New category"
+            className="nm-field h-11 min-w-0 flex-1 px-4 text-sm text-slate-800 placeholder:text-slate-400" />
+          <button type="button" onClick={add} disabled={busy} data-testid={`${testid}-new-add`}
+            className={`h-11 shrink-0 rounded-pill px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40 disabled:opacity-50 ${INK_PILL}`}>
+            {busy ? "Adding…" : "Add"}
+          </button>
+          <button type="button" onClick={() => setAdding(false)} disabled={busy} data-testid={`${testid}-new-cancel`}
+            aria-label="Cancel the new category"
+            className="h-11 shrink-0 rounded-pill px-3 text-sm font-medium text-slate-600 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40">
+            Cancel
+          </button>
+        </div>
+        {error && <p role="alert" className="text-xs font-medium text-kr-accent">{error}</p>}
+      </div>
+    );
+  }
+  return (
+    <GlassSelect id={id} variant="field" triggerClassName={FIELD} testid={testid} ariaLabel="Category"
+      value={value} onChange={(v) => (v === NEW_CATEGORY ? open() : onChange(v))}
+      options={[
+        ...(withAuto ? [{ value: "", label: autoLabel }] : []),
+        ...withCurrent(categories, value).map((c) => ({ value: c, label: c })),
+        { value: NEW_CATEGORY, label: "+ New category" },
+      ]} />
+  );
+}
+
+const formData = (fields, file) => {
+  const fd = new FormData();
+  Object.entries(fields).forEach(([k, v]) => fd.append(k, v ?? ""));
+  if (file) fd.append("file", file);
+  return fd;
+};
 
 const EXPENSE_BLANK = { title: "", amount: "", vendor_name: "", vendor_id: "", category: "", date: "", status: "unpaid", notes: "" };
 
@@ -119,9 +199,9 @@ export function AddExpenseDialog({ open, onOpenChange, categories = [], onDone }
                   {suggesting ? t("finance.thinking") : t("finance.ai_suggest")}
                 </button>
               )}>
-              <GlassSelect id={`${uid}-category`} variant="field" triggerClassName={FIELD} testid="expense-category" ariaLabel={t("finance.c_category")}
-                value={f.category} onChange={(v) => set("category", v)}
-                options={[{ value: "", label: t("finance.auto") }, ...withCurrent(categories, f.category).map((c) => ({ value: c, label: c }))]} />
+              <CategoryField kind="expense" id={`${uid}-category`} testid="expense-category"
+                value={f.category} onChange={(v) => set("category", v)} categories={categories}
+                withAuto autoLabel={t("finance.auto")} />
             </Field>
           </div>
           <Field label={t("finance.f_notes")} htmlFor={`${uid}-notes`}>
@@ -181,9 +261,8 @@ export function AddAssetDialog({ open, onOpenChange, categories = [], onDone }) 
                 value={f.purchase_amount} onChange={(e) => set("purchase_amount", e.target.value)} />
             </Field>
             <Field label={t("finance.c_category")} htmlFor={`${uid}-category`}>
-              <GlassSelect id={`${uid}-category`} variant="field" triggerClassName={FIELD} testid="asset-category" ariaLabel={t("finance.c_category")}
-                value={f.category} onChange={(v) => set("category", v)}
-                options={withCurrent(categories, f.category).map((c) => ({ value: c, label: c }))} />
+              <CategoryField kind="asset" id={`${uid}-category`} testid="asset-category"
+                value={f.category} onChange={(v) => set("category", v)} categories={categories} />
             </Field>
           </div>
           <Field label={L.vendor_singular} htmlFor={`${uid}-vendor`}>

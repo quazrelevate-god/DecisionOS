@@ -2,9 +2,25 @@ import { useState } from "react";
 import { RegenerateWithAi } from "./RegenerateWithAi";
 import { useAuth } from "../context/AuthContext";
 import api, { formatApiError } from "../lib/api";
+import { userPerms } from "../lib/perms";
 import { toast } from "sonner";
-import { Tag, FloppyDisk, Plus, Trash } from "@phosphor-icons/react";
+import { Tag, FloppyDisk, Plus, X } from "@phosphor-icons/react";
+import { GLASS_PILL } from "./karma/glass";
 
+/* PILOT-1 F — the Settings side of finance categories, on the current design
+ * system. It was the last card in Settings still on the retired kit:
+ * label-mono captions, hairline nm-edge boxes around bare inputs, a brand-blue
+ * "Add" link and a square ink button. Now: the kr-bento card its neighbours
+ * use, plain labels, each category an .nm-field pill with a 44px remove, a
+ * glass "Add", and the ink Save pill.
+ *
+ * Who may change what, unchanged on the server and now said on the screen:
+ * renaming and removing need Manage Team (PATCH /tenant/finance-categories);
+ * anyone with Finance access can ADD one — from the category list on the
+ * expense and asset forms (POST /ledger/categories). Someone without Manage
+ * Team sees the lists and is told where to add, instead of an editor whose
+ * Save would be refused.
+ */
 let _uid = 0;
 const uid = () => `fc${Date.now()}_${_uid++}`;
 
@@ -14,31 +30,48 @@ const fromTenant = (tenant) => {
   return { expense: withUids(fc.expense || []), asset: withUids(fc.asset || []) };
 };
 
-function CategoryGroup({ title, items, onSet, onAdd, onDel, testid }) {
+const LABEL = "mb-2.5 block text-sm font-medium text-slate-700";
+
+function CategoryGroup({ title, items, onSet, onAdd, onDel, testid, canEdit }) {
   return (
     <div data-testid={testid}>
-      <p className="label-mono text-muted-foreground mb-2">{title}</p>
-      <div className="flex flex-wrap gap-2">
+      <p className={LABEL}>{title}</p>
+      <ul className="flex flex-wrap gap-2">
         {items.map((c, i) => (
-          <div key={c._uid} className="flex items-center gap-1 border border-nm-edge/40 rounded-md pl-2 pr-1 py-1" data-testid={`${testid}-item-${i}`}>
-            <input className="bg-transparent text-sm w-32 focus:outline-none" value={c.label}
-              data-testid={`${testid}-input-${i}`}
-              onChange={(e) => onSet(i, e.target.value)} />
-            <button onClick={() => onDel(i)} title="Remove" className="text-muted-foreground hover:text-kr-accent">
-              <Trash size={13} weight="bold" />
-            </button>
-          </div>
+          <li key={c._uid} data-testid={`${testid}-item-${i}`}
+            className="nm-field flex h-11 min-w-0 items-center gap-0.5 rounded-pill pl-4 pr-0.5">
+            {canEdit ? (
+              <>
+                <input className="w-32 min-w-0 bg-transparent text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
+                  value={c.label} placeholder="Category name" aria-label={`Category ${i + 1}`}
+                  data-testid={`${testid}-input-${i}`}
+                  onChange={(e) => onSet(i, e.target.value)} />
+                <button type="button" onClick={() => onDel(i)} aria-label={`Remove ${c.label || "this category"}`} title="Remove"
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-400 transition-colors hover:text-kr-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40">
+                  <X size={14} weight="bold" aria-hidden="true" />
+                </button>
+              </>
+            ) : (
+              <span className="pr-3.5 text-sm text-slate-700" data-testid={`${testid}-label-${i}`}>{c.label}</span>
+            )}
+          </li>
         ))}
-        <button onClick={onAdd} data-testid={`${testid}-add`} className="flex items-center gap-1 text-sm font-semibold text-brand-blue hover:underline px-2 py-1">
-          <Plus size={13} weight="bold" /> Add
-        </button>
-      </div>
+        {canEdit && (
+          <li>
+            <button type="button" onClick={onAdd} data-testid={`${testid}-add`}
+              className={`flex h-11 items-center gap-1.5 rounded-pill px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40 ${GLASS_PILL}`}>
+              <Plus size={14} weight="bold" aria-hidden="true" /> Add
+            </button>
+          </li>
+        )}
+      </ul>
     </div>
   );
 }
 
 export function FinanceCategoriesEditor() {
-  const { tenant, refreshTenant } = useAuth();
+  const { user, tenant, refreshTenant } = useAuth();
+  const canEdit = user?.role === "owner" || userPerms(user).includes("team_manage");
   const [cats, setCats] = useState(() => fromTenant(tenant));
   const [saving, setSaving] = useState(false);
   const [regen, setRegen] = useState(false);
@@ -80,30 +113,38 @@ export function FinanceCategoriesEditor() {
   };
 
   return (
-    <div className="nm-tile p-5" data-testid="settings-finance-categories-card">
-      <div className="flex items-center gap-2 mb-1">
-        <Tag size={20} weight="bold" className="text-muted-foreground" />
-        <h2 className="text-base font-medium">Finance Categories</h2>
+    <div className="kr-bento p-5 lg:p-6" data-testid="settings-finance-categories-card">
+      <div className="mb-1 flex items-center gap-2">
+        <Tag size={20} weight="bold" aria-hidden="true" className="text-muted-foreground" />
+        <h2 className="text-base font-medium">Finance categories</h2>
       </div>
-      <p className="text-xs text-muted-foreground mb-4">
-        The buckets your Expenses and Assets are filed under — AI-generated for <span className="font-semibold">{tenant?.industry || "your industry"}</span>. Edit them or let AI regenerate. “Other” is always kept.
+      <p className="mb-5 text-sm text-muted-foreground">
+        The buckets your expenses and assets are filed under — set up for{" "}
+        <span className="font-medium text-foreground">{tenant?.industry || "your industry"}</span>. “Other” is always kept.
+        {" "}Anyone with Finance access can add one from the category list while adding an expense or asset.
       </p>
 
-      <div className="space-y-5">
-        <CategoryGroup title="Expense categories" items={cats.expense} testid="fc-expense"
+      <div className="space-y-6">
+        <CategoryGroup title="Expense categories" items={cats.expense} testid="fc-expense" canEdit={canEdit}
           onSet={(i, v) => setItem("expense", i, v)} onAdd={() => addItem("expense")} onDel={(i) => delItem("expense", i)} />
-        <CategoryGroup title="Asset categories" items={cats.asset} testid="fc-asset"
+        <CategoryGroup title="Asset categories" items={cats.asset} testid="fc-asset" canEdit={canEdit}
           onSet={(i, v) => setItem("asset", i, v)} onAdd={() => addItem("asset")} onDel={(i) => delItem("asset", i)} />
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-3">
-        <button onClick={save} disabled={saving} data-testid="fc-save"
-          className="flex items-center gap-2 bg-kr-ink text-white px-5 py-2 text-sm font-medium rounded-lg transition-all disabled:opacity-60">
-          <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Categories"}
-        </button>
-        <RegenerateWithAi onConfirm={regenerate} busy={regen} testid="fc-regenerate"
-          replaces="your expense and asset categories" />
-      </div>
+      {canEdit ? (
+        <div className="mt-6 flex flex-wrap gap-3">
+          <button type="button" onClick={save} disabled={saving} data-testid="fc-save"
+            className="kr-lift flex h-11 items-center gap-2 rounded-pill bg-kr-ink px-5 text-sm font-medium text-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40 disabled:opacity-60">
+            <FloppyDisk size={16} weight="bold" aria-hidden="true" /> {saving ? "Saving…" : "Save categories"}
+          </button>
+          <RegenerateWithAi onConfirm={regenerate} busy={regen} testid="fc-regenerate"
+            replaces="your expense and asset categories" />
+        </div>
+      ) : (
+        <p className="mt-5 text-xs text-muted-foreground" data-testid="fc-readonly-note">
+          Renaming or removing a category needs Manage Team — ask the owner.
+        </p>
+      )}
     </div>
   );
 }

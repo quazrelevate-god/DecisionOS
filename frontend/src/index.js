@@ -5,6 +5,7 @@ import "@/index.css";
 import "@/i18n";
 import App from "@/App";
 import * as serviceWorkerRegistration from "@/serviceWorkerRegistration";
+import { keepFocusedInView } from "./lib/keepFocusedInView";
 
 // ASK-33 Phase 5 — dark mode is removed; the app is designed light-only. A
 // "dark" saved by the old theme switch is cleared rather than applied. (The Dex
@@ -36,3 +37,6 @@ root.render(
 // An update is not force-activated: swapping the bundle under someone
 // mid-approval is worse than serving yesterday's shell for one more session.
 serviceWorkerRegistration.register();
+// JOURNEY-1 J13 — the field being typed in stays on screen when the keyboard
+// opens (lib/keepFocusedInView.js).
+keepFocusedInView();

@@ -5,6 +5,7 @@ import "@/index.css";
 import "@/i18n";
 import App from "@/App";
 import * as serviceWorkerRegistration from "@/serviceWorkerRegistration";
+import { toast } from "sonner";
 import { keepFocusedInView } from "./lib/keepFocusedInView";
 
 // ASK-33 Phase 5 — dark mode is removed; the app is designed light-only. A
@@ -34,9 +35,21 @@ root.render(
 );
 
 // MPWA-05: register the worker (production only — see the module for why).
-// An update is not force-activated: swapping the bundle under someone
-// mid-approval is worse than serving yesterday's shell for one more session.
-serviceWorkerRegistration.register();
+// JOURNEY-1 J13 — the new worker takes over at once (service-worker.js,
+// skipWaiting), but the page on screen keeps running the version it loaded,
+// and nothing said a new one had arrived. Now it says so, and the person
+// chooses the moment: nothing reloads under someone mid-approval, and what
+// they were typing is kept anyway (lib/drafts.js).
+serviceWorkerRegistration.register({
+  onUpdate: () => {
+    toast("DecisionOS has been updated", {
+      id: "app-updated",
+      description: "Refresh to use the new version. Anything you are typing is kept.",
+      duration: Infinity,
+      action: { label: "Refresh", onClick: () => window.location.reload() },
+    });
+  },
+});
 // JOURNEY-1 J13 — the field being typed in stays on screen when the keyboard
 // opens (lib/keepFocusedInView.js).
 keepFocusedInView();

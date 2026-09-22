@@ -17,9 +17,9 @@ company, and every screen was looked at by eye.
 | Journeys walked | **13** (J1–J13). Five desktop journeys were also walked on the phone, and J13 covered the installed phone app. |
 | Finished end to end by a real person's route | **9 of 13**. Three were stopped part-way by a missing control: J7 (part payment), J8 (logging a complaint, moving a buyer's stage) and J6 (escalating). J12 ran out of time on one step. |
 | Findings filed by the testers | 94 |
-| Confirmed after the lead merged duplicates and re-checked them | **3 P0 · 18 P1 bugs · 18 P1 judgment calls · 29 P2** |
-| Dropped | 10 test artifacts and 9 already in the bug report, listed at the end |
-| Fixed in this pass | **all 3 P0s and 14 of the 18 P1 bugs**, each re-checked on a fresh copy (see *Fixes*). Still open: a PDF decision takes ~6 minutes (for Yokesh), and three layouts that break at 150% text size (see *Fixes*). |
+| Confirmed after the lead merged duplicates and re-checked them | **3 P0 · 15 P1 bugs · 20 P1 judgment calls · 29 P2** |
+| Dropped | 11 test artifacts and 9 already in the bug report, listed at the end |
+| Fixed in this pass | **all 3 P0s and 14 of the 15 P1 bugs**, each re-checked on a fresh copy (see *Fixes*). The one left open is a PDF decision that takes ~6 minutes (for Yokesh). |
 
 ### The ten things a customer would hit first
 
@@ -77,8 +77,9 @@ Every phone finding says which phone it was:
 |---|---|---|
 | **iPhone engine** | Everything after sign-in matched Chromium: the black card, the decision dialog, the Dex well, the dock, More, notifications, Settings, a native date picker, and Amit's whole task loop including a photo. Sign-in itself failed only because this setup serves plain http on localhost, where WebKit drops the secure cookie; production is HTTPS | No difference found |
 | **Android slow** (CPU 4×, slow 4G) | A cold open to a usable Desk takes ~22 s. Almost all of it is the sign-in round trip, and the button shows nothing while it waits (J13b-02). No stutter: 0 long tasks opening the black card and More | Your call (a progress state on the sign-in button; look at what sign-in waits for) |
-| **Big text 125%** | Finance: two KPI cards' trend chips sit under the dock at rest (you can scroll them clear) (J13b-03) | See *Fixes* |
-| **Big text 150%** | The greeting is cut to "Good …"; "Show all 4" prints over the third row of the black card; "Revenue billed" is cut mid-digit ("₹22,85,0…"); More-panel labels are cut ("Appro…", "Workfl…") (J13b-04/05/06) | See *Fixes* |
+| **Big text 125%** | Finance: two cards' trend chips sit under the dock when the page first opens; scrolling brings them clear (J13b-03) | Not a bug: nothing is out of reach |
+| **Big text 150%** | "Revenue billed" was cut mid-digit ("₹22,85,0…") (J13b-05) | **Fixed.** A money figure that doesn't fit takes a second line, breaking after a comma. Pixel-identical at the normal text size, on the phone and on desktop |
+| **Big text 150%** | The greeting is cut to "Good …"; "Show all 4" prints over the third row of the black card (J13b-04); More-panel labels are cut ("Appro…", "Workfl…") (J13b-06) | **Your call.** The phone Desk is built to be exactly one screen, with a card exactly three rows tall and each greeting line truncating on its own (the founder's ASK-42/43/46/47). At 150% text something has to give, and choosing what is a design decision |
 | **Android 360, Hindi and Tamil** | Desk, My Work, a task, Finance, More and New Task all still fit. No new breaks beyond the known nav-only translation | Worked |
 | **iPad** | Portrait (820×1180) gets the phone layout, centred; landscape (1180×820) the desktop layout, and every screen checked works | Worked |
 | **Touch** | A sheet's scroll doesn't drag the page; the phone's Back closes the open dialog or drawer, not the page; a double tap doesn't zoom and didn't save twice. The New Task sheet's only close button is 35 px, under the 44 px floor (J13b-07, P2) | Worked |
@@ -369,9 +370,9 @@ Not covered in J12: two people approving the same item at the same moment. This 
 
 | id | sev | what | status |
 |---|---|---|---|
-| J13b-04 | P1 bug | At 150% text: the greeting is cut to "Good …" and "Show all 4" prints over a row | See *Fixes* |
-| J13b-05 · 03 | P1 bug | At 150% (and partly 125%): "Revenue billed" is cut mid-digit | See *Fixes* |
-| J13b-06 | P1 bug | At 150%: More-panel labels are cut ("Appro…") | See *Fixes* |
+| J13b-05 | P1 bug | At 150% text: "Revenue billed" is cut mid-digit | **Fixed** (wraps after a comma; pixel-identical at the normal size) |
+| J13b-04 | P1 judgment | At 150% text: the greeting is cut to "Good …" and "Show all 4" prints over a row of the one-screen phone Desk | Your call |
+| J13b-06 | P1 judgment | At 150% text: More-panel labels are cut ("Appro…") | Your call |
 | J13b-02 | P1 judgment | ~22 s cold sign-in on a slow Android with no progress shown | Your call |
 | J13b-07 | P2 | New Task's close button is 35 px, under the 44 px floor | Listed below |
 
@@ -399,7 +400,8 @@ Not covered in J12: two people approving the same item at the same moment. This 
 | 16 | **Leave and a manager's waiting items** (J11-02) | Open question with Yokesh (ASK-5); nothing changed here |
 | 17 | **Accounts team with no Finance.** An "Accounts & GST" team the AI builds at sign-up gets no Finance access (J1-05) | Give any team whose name says accounts, finance or billing the Finance permission when the AI builds it |
 | 18 | **Slow sign-in on a slow phone** (~22 s, nothing shown) (J13b-02) | Show "Signing you in…" on the button at once, then see what the sign-in round trip waits for |
-| 19 | **Automatic brief refresh.** The Finance brief now *says* it is out of date; it could refresh itself instead (one AI call when the books have changed and the page is opened) | Refresh it automatically; the cost is small |
+| 19 | **The phone Desk at large text** (J13b-04/06). It is designed as exactly one screen: a three-row card, a greeting that truncates. At 150% the greeting is cut to "Good …", "Show all" prints over a row, and More labels are cut | Above a text size of about 125%, let the Desk scroll: size the card to its rows and let the greeting wrap. Give More's labels a second line. At the normal size nothing changes |
+| 20 | **Automatic brief refresh.** The Finance brief now *says* it is out of date; it could refresh itself instead (one AI call when the books have changed and the page is opened) | Refresh it automatically; the cost is small |
 
 ## P2: polish, listed and not fixed
 
@@ -453,6 +455,7 @@ Not covered in J12: two people approving the same item at the same moment. This 
 - **J3-02 and the J6 timing:** measurements, not findings.
 - **J4-02:** closed by its own tester.
 - **J13b-01:** WebKit couldn't sign in over this setup's plain http; production is HTTPS.
+- **J13b-03:** trend chips under the dock only when resting at the top; scrolling brings them clear.
 
 **Already in the bug report (9):** FN-07 (J9-01, J10-02), GL-02 (J9p-01…03), DD-03 (J9-04), CR-13 (J8-04), ASK-5 (J8-08), DX-01 (J5p-01).
 
@@ -475,8 +478,9 @@ Not covered in J12: two people approving the same item at the same moment. This 
 | The Desk says when its numbers are the phone's saved copy | J13a-01 |
 | The field being typed in stays in view when the keyboard opens | J13a-02 |
 | "DecisionOS has been updated · Refresh" | J13a-03 |
+| A money figure is never cut short at large text | J13b-05 |
 
-**Re-walked after fixing**, on a fresh world serving a new production build:
+**Re-walked after fixing.** On a fresh copy of the company, serving a new production build, I walked the steps each fix touched, as a person would: not every whole journey again. The testers' scripts are in `.audit-artifacts/journey-1/journeys/` for a full re-walk:
 - the buyer fix as Rajesh (desktop and phone) and as Priya with CRM access but no Finance;
 - the overdue rule: the Desk ₹6,85,000 equals the page's 2 invoices, ₹6,85,000;
 - the score words, "All open", "Profit to date" and the out-of-date note;
@@ -485,7 +489,8 @@ Not covered in J12: two people approving the same item at the same moment. This 
 - reassigned while typing (says why, keeps the words);
 - the keyboard (the field stays in view in a 420 px screen);
 - the Desk on a server answering 6 s late ("Showing data from 3:37 pm · Refresh");
-- a removed person told at sign-in.
+- a removed person told at sign-in;
+- the Finance money figures at 150% text (whole, and 0 pixels different at the normal size, on phone and desktop).
 
 All passed. The backend fixes have `with_test_db` tests (new: `test_journey1_*`), and the existing sign-in, invite, Desk-narrative and Desk-latency tests pass. Two existing tests were updated, with notes: a suspended member is now refused at the code step, and the Desk summary makes one more read, in the same parallel batch.
 

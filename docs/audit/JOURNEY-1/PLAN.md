@@ -116,10 +116,10 @@ id · severity (P0 / P1 / P2) · who · surface (desktop / phone 390 / phone 360
 - [x] Re-look at every P0/P1 screenshot; re-run anything that could be the test (timing, stale page, another tester) on a fresh world
 - [x] `docs/audit/JOURNEY-1/REPORT.md` — top: journeys walked / finished end to end, the ten things a customer hits first; **the phone app section**; each journey as a short story; not covered
 - [x] Commit the report + P0/P1 screenshots only (≤ ~150 KB each); full set stays in `.audit-artifacts/journey-1/`
-- [ ] Fix every confirmed P0 and every P1 bug — one commit each; backend fixes `backend:` with `with_test_db` tests; parallel where files don't overlap
-- [ ] Judgment calls and P2s listed with a recommendation, not fixed
-- [ ] Re-walk the journeys that had fixes; mark each finding fixed / still open
-- [ ] Put the stack away: stop worlds + container; `backend/.env` untouched (verify `DB_NAME=founder-os-58` unchanged and not committed)
+- [x] Fix every confirmed P0 and every P1 bug — 16 fix commits (4 `backend:` with `with_test_db` tests). All 3 P0s and 14 of 15 P1 bugs fixed; J5-01 (PDF decision ~6 min, model latency) left for Yokesh
+- [x] Judgment calls (20, with a recommendation each) and P2s (29) listed, not fixed
+- [x] Re-walked the fixed steps on a fresh world with a new production build (all pass); each finding marked fixed / open / your call in the report
+- [x] Put the stack away: worlds and serve processes stopped, the MongoDB container stopped (kept, not deleted — `docker start dos-journey-mongo` + `kit/world.sh N` brings a world back); `backend/.env` untouched and never committed
 
 ## 8 · Rules that still hold
 

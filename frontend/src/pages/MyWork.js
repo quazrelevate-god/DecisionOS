@@ -209,6 +209,7 @@ export const updateDraftName = (taskId, stepId) => `task-update:${taskId}${stepI
 const UPDATE_BLANK = { text: "", action: "note", toId: "", toRole: "" };
 
 function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel, noteOnly = false }) {
+  const qc = useQueryClient();
   const { user } = useAuth();
   // ASK-28 Phase 7 — Escalate goes to your reporting manager first, the owner
   // only if you have none (the server decides; this names who it will be).
@@ -246,7 +247,25 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel, no
         : action === "escalate" ? `Escalated to ${sentTo || escalateTo?.name || "your manager"}` : "Handed off");
       draft.discard();
       onDone();
-    } catch (e) { toast.error(e.response?.data?.detail || "Could not post update"); }
+    } catch (e) {
+      /* JOURNEY-1 J12 — the task changed under the person while they typed:
+         Rajesh gave it to someone else, or it was deleted. The refusal used to
+         be the only sign — the drawer went on showing a task that was no
+         longer theirs (or no longer existed), and a deleted one said nothing
+         at all. Say what happened, keep the words (the draft), and bring the
+         screen up to date so what they see is what is true. */
+      const status = e.response?.status;
+      if (status === 404) {
+        toast.error("This task was deleted by someone else. What you typed is kept here — copy it if you need it.");
+      } else if (status === 403) {
+        toast.error(`${e.response?.data?.detail || "You can't update this task any more"} — it may have been given to someone else. Your words are kept.`);
+      } else {
+        toast.error(e.response?.data?.detail || "Could not post update");
+      }
+      if (status === 403 || status === 404) {
+        qc.invalidateQueries({ predicate: (q) => String(q.queryKey?.[0] ?? "").startsWith("task") });
+      }
+    }
     finally { setBusy(false); }
   };
 

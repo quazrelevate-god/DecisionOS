@@ -181,6 +181,22 @@ export function financeMetrics({ summary, revenue, expenses, assets, inventory, 
 }
 
 /** What the brief's banner states: outstanding receivables and the oldest overdue. */
+/** JOURNEY-1 J2 — the newest entry in the books (invoice, payment or expense),
+ *  as a time, so a brief written before it can say so. */
+export function latestEntryAt(revenue, expenses) {
+  let latest = 0;
+  const see = (r) => {
+    for (const k of ["updated_at", "created_at"]) {
+      const t = Date.parse(r?.[k] || "");
+      if (Number.isFinite(t) && t > latest) latest = t;
+    }
+  };
+  (revenue?.invoices || []).forEach(see);
+  (revenue?.payments || []).forEach(see);
+  (expenses || []).forEach(see);
+  return latest || null;
+}
+
 export function receivableFacts(revenue, summary, now = Date.now()) {
   const invoices = revenue?.invoices || [];
   const overdue = invoices.filter((i) => isInvoiceOverdue(i, now));

@@ -15,7 +15,7 @@ import {
 } from "@phosphor-icons/react";
 import { AiPanel } from "./FinanceAi";
 import { CARD, DeltaChip, EmptyNote, SMALL_PILL, Sparkline, TONE_CHIP, compactMoney, fmt } from "./financeKit";
-import { LIST_LIMIT, categorySlices, financeMetrics, receivableFacts } from "./ledgerMath";
+import { LIST_LIMIT, categorySlices, financeMetrics, latestEntryAt, receivableFacts } from "./ledgerMath";
 
 export function OverviewTab({ summary, revenue, expenses, assets, inventory, period, cur, onViewExpenses }) {
   const { t } = useTranslation();
@@ -26,6 +26,7 @@ export function OverviewTab({ summary, revenue, expenses, assets, inventory, per
     [summary, revenue, expenses, assets, inventory, period],
   );
   const facts = useMemo(() => receivableFacts(revenue, summary), [revenue, summary]);
+  const changedAt = useMemo(() => latestEntryAt(revenue, expenses), [revenue, expenses]);
   const slices = useMemo(() => categorySlices(m.byCategory, m.allCategories), [m]);
   const p = m.period;
   const trendSpan = p.days ? p.label.toLowerCase() : "the last 12 months";
@@ -55,9 +56,12 @@ export function OverviewTab({ summary, revenue, expenses, assets, inventory, per
         </p>
       )}
 
-      <AiPanel scope="brief" variant="brief" positive={profitToDate >= 0}
+      {/* JOURNEY-1 J7 — "Estimated profit" sat beside the period's Net profit
+          tile and disagreed with it by six times, because it is everything to
+          date. Its name now says so. */}
+      <AiPanel scope="brief" variant="brief" positive={profitToDate >= 0} changedAt={changedAt}
         facts={[
-          { label: "Estimated profit", value: short(profitToDate), testid: "brief-fact-profit" },
+          { label: "Profit to date", value: short(profitToDate), testid: "brief-fact-profit" },
           { label: "Outstanding receivables", value: short(facts.outstanding || 0), testid: "brief-fact-receivables" },
           { label: "Oldest overdue", value: facts.oldestOverdueDays != null ? `${facts.oldestOverdueDays} days` : "None", testid: "brief-fact-overdue" },
         ]} />

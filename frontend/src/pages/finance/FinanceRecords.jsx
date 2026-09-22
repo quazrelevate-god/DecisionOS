@@ -19,7 +19,7 @@ import { AiPanel } from "./FinanceAi";
 import {
   AttachmentLink, CARD, EmptyNote, FIELD, LoadError, SMALL_INK, SMALL_PILL, SourceTag, TONE_CHIP, Tag, fmt,
 } from "./financeKit";
-import { daysSince, isInvoiceOverdue, overdueDays } from "./ledgerMath";
+import { latestEntryAt, daysSince, isInvoiceOverdue, overdueDays } from "./ledgerMath";
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
@@ -320,7 +320,7 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, init
         endpoint="/revenue/payment" standaloneLabel={{ btn: "Standalone income", done: "Marked as standalone income" }}
         onChange={onChange} />
 
-      <AiPanel scope="revenue" scopeLabel="revenue" />
+      <AiPanel scope="revenue" scopeLabel="revenue" changedAt={latestEntryAt(data, [])} />
 
       <ListCard title="Sales & service invoices" count={invoices.length}
         action={invoices.length > 0 && (
@@ -398,7 +398,7 @@ export function ExpensesTab({ rows, loading, error, payables, cur, onDelete, onC
         unmatched={payables?.unmatched_payments} open={payables?.open_invoices || []} cur={cur}
         endpoint="/payables/payment" standaloneLabel={{ btn: "Standalone expense", done: "Booked as a standalone expense" }}
         onChange={onChange} />
-      <AiPanel scope="expenses" scopeLabel={t("finance.t_expenses").toLowerCase()} />
+      <AiPanel scope="expenses" scopeLabel={t("finance.t_expenses").toLowerCase()} changedAt={latestEntryAt(null, rows)} />
       <ListCard title={t("finance.t_expenses")} count={loading || error ? null : rows.length}>
         <Records loading={loading} error={error} what="expenses" rows={rows}
           empty={<EmptyNote icon={Receipt} title={t("finance.empty_exp_title")} hint={t("finance.empty_exp_hint")} />}>

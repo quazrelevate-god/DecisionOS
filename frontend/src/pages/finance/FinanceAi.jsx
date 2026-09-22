@@ -41,7 +41,7 @@ function splitHeadline(text) {
 // FN-12: answers can carry markdown the page would print literally.
 const plain = (s) => String(s || "").replace(/\*\*(.+?)\*\*/g, "$1").replace(/^#{1,6}\s+/gm, "");
 
-export function AiPanel({ scope, variant = "inline", scopeLabel, facts, positive = true }) {
+export function AiPanel({ scope, variant = "inline", scopeLabel, facts, positive = true, changedAt = null }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const { tenant } = useAuth();
@@ -58,6 +58,12 @@ export function AiPanel({ scope, variant = "inline", scopeLabel, facts, positive
   const members = useMemo(() => usersQ.data || [], [usersQ.data]);
   const roleOptions = useMemo(() => [{ key: "owner", label: "Owner" }, ...(tenant?.roles || [])], [tenant]);
   const brief = variant === "brief";
+  /* JOURNEY-1 J2 — the brief is written once and kept until someone presses
+     Refresh. After a new founder's first expense it still said "books appear
+     completely empty", beside the loss that expense made, into the next day.
+     When the books have changed since it was written, it says so. */
+  const writtenAt = Date.parse(data?.generated_at || "");
+  const outOfDate = !isLoading && !isError && Number.isFinite(writtenAt) && changedAt != null && changedAt > writtenAt;
 
   const headline = data?.headline || data?.summary || "";
   const [title, line] = splitHeadline(headline);
@@ -132,6 +138,13 @@ export function AiPanel({ scope, variant = "inline", scopeLabel, facts, positive
         </div>
       </div>
 
+      {outOfDate && !refreshing && (
+        <p role="status" data-testid={`ai-out-of-date-${scope}`}
+          className="mt-4 flex items-center gap-2 rounded-2xl bg-amber-50 px-3.5 py-2.5 text-sm text-amber-900 ring-1 ring-inset ring-amber-100">
+          <ArrowClockwise size={14} weight="bold" aria-hidden="true" className="shrink-0" />
+          <span>Written before your latest entries — press Refresh for {brief ? "a brief" : "an analysis"} that includes them.</span>
+        </p>
+      )}
       {isLoading ? (
         <div className="mt-5 space-y-2.5" aria-busy="true">
           <p className="sr-only">{t("finance.analysing_fin")}</p>

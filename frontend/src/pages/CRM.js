@@ -44,6 +44,7 @@ import { GlassSelect } from "../components/karma/GlassSelect";
 import { DraftNote } from "../components/karma/DraftNote";
 import { useDraft } from "../hooks/useDraft";
 import { cn } from "@/lib/utils";
+import { LogComplaintDialog } from "../components/crm/LogComplaintDialog";
 
 const CUSTOMER_TYPES = ["customer", "dealer"];
 const VENDOR_TYPES = ["vendor"];
@@ -347,6 +348,14 @@ const blankContact = (type) => ({
   type, name: "", company: "", phone: "", email: "", address: "", tax_id: "", tags: "",
   status: "lead", assigned_id: "", notes: "", lifecycle_stage: "",
 });
+// JOURNEY-1 J8 — the same window edits a contact that exists.
+const contactForm = (c) => ({
+  type: c.type || "customer", name: c.name || "", company: c.company || "", phone: c.phone || "",
+  email: c.email || "", address: c.address || "", tax_id: c.tax_id || "",
+  tags: Array.isArray(c.tags) ? c.tags.join(", ") : (c.tags || ""),
+  status: c.status || "lead", assigned_id: c.assigned_id || "", notes: c.notes || "",
+  lifecycle_stage: c.lifecycle_stage || "",
+});
 
 function Field({ label, htmlFor, required = false, wide = false, hint, children }) {
   return (
@@ -377,13 +386,25 @@ function FormSection({ label, children }) {
    Opened with a type (`type`); the switch inside can still change it, and a
    stage that does not exist for the new type is cleared (E2-03 — never a
    "churned" supplier). Everything shows at once, in sections: who they are,
-   how to reach them, where they stand, the rest. */
-function CrmContactDialog({ type, onClose, onSaved, users, labels }) {
+   how to reach them, where they stand, the rest.
+
+   JOURNEY-1 J8 (2026-09-22) — and the Edit window. Given a `contact` it opens
+   on that contact's details and saves them back (PATCH /contacts/:id). A
+   buyer could not be changed after it was added — not a wrong phone number,
+   not the step from Lead to Qualified — because the only edit form lived on
+   the retired Contacts page. `onLogComplaint` adds a way to log a complaint
+   from here, for the people who can see CRM but not a buyer's full page. */
+export function CrmContactDialog({ type, contact, onClose, onSaved, users, labels, onLogComplaint }) {
+  const editing = !!contact;
   /* PILOT-1 A — a contact half-typed is kept (lib/drafts.js), one per kind of
      contact the window was opened for. It used to start blank on every open,
      so closing it to look up a phone number threw the rest away. The X,
-     Escape and a click beside it keep the fields; Cancel and Save empty them. */
-  const [form, setForm, draft] = useDraft(type ? `new-contact:${type}` : null, blankContact(type || "customer"));
+     Escape and a click beside it keep the fields; Cancel and Save empty them.
+     An edit keeps its own draft, one per contact. */
+  const [form, setForm, draft] = useDraft(
+    editing ? `edit-contact:${contact.id}` : type ? `new-contact:${type}` : null,
+    editing ? contactForm(contact) : blankContact(type || "customer"),
+  );
   const [busy, setBusy] = useState(false);
   const cancel = () => { draft.discard(); onClose(); };
 
@@ -399,14 +420,16 @@ function CrmContactDialog({ type, onClose, onSaved, users, labels }) {
     if (!form.name.trim()) { toast.error("Name is required"); return; }
     setBusy(true);
     try {
-      await api.post("/contacts", {
+      const payload = {
         type: form.type, name: form.name.trim(), company: form.company, phone: form.phone, email: form.email,
         address: form.address, tax_id: form.tax_id, status: form.status,
-        assigned_id: form.assigned_id || null, notes: form.notes, birthday: "",
+        assigned_id: form.assigned_id || null, notes: form.notes,
         tags: form.tags ? form.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
         lifecycle_stage: form.lifecycle_stage || "",
-      });
-      toast.success(`${typeName} added`);
+      };
+      if (editing) await api.patch(`/contacts/${contact.id}`, payload);
+      else await api.post("/contacts", { ...payload, birthday: "" });
+      toast.success(editing ? `${form.name.trim()} saved` : `${typeName} added`);
       draft.discard();
       onSaved();
       onClose();
@@ -418,7 +441,7 @@ function CrmContactDialog({ type, onClose, onSaved, users, labels }) {
   };
 
   return (
-    <Dialog open={!!type} onOpenChange={(o) => { if (!o && !busy) onClose(); }}>
+    <Dialog open={editing || !!type} onOpenChange={(o) => { if (!o && !busy) onClose(); }}>
       <DialogContent data-testid="crm-contact-dialog" className={`max-h-[calc(90dvh/var(--ui-scale,1))] max-w-3xl overflow-y-auto ${SHEET}`}>
         <div className="flex items-start gap-3.5">
           <span aria-hidden="true"
@@ -426,7 +449,9 @@ function CrmContactDialog({ type, onClose, onSaved, users, labels }) {
             <Icon size={22} weight="regular" />
           </span>
           <DialogHeader className="min-w-0 flex-1 space-y-1 text-left">
-            <DialogTitle className="text-lg font-semibold text-neutral-900">New {typeName.toLowerCase()}</DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-neutral-900">
+              {editing ? `Edit ${contact.name}` : `New ${typeName.toLowerCase()}`}
+            </DialogTitle>
             <DialogDescription className="text-sm text-neutral-600">{TYPE_META[form.type]?.hint}</DialogDescription>
           </DialogHeader>
           <button type="button" onClick={onClose} disabled={busy} aria-label="Close" data-testid="crm-contact-close" className={GLASS_ICON_BTN}>
@@ -511,14 +536,20 @@ function CrmContactDialog({ type, onClose, onSaved, users, labels }) {
           </FormSection>
         </div>
 
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
+          {editing && onLogComplaint && CUSTOMER_TYPES.includes(form.type) && (
+            <button type="button" onClick={() => onLogComplaint(contact)} disabled={busy} data-testid="crm-contact-log-complaint"
+              className={`mr-auto flex min-h-11 items-center gap-2 rounded-pill px-5 text-sm font-medium text-rose-700 transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline disabled:opacity-40 ${GLASS_PILL}`}>
+              <Warning size={15} weight="bold" aria-hidden="true" /> Log complaint
+            </button>
+          )}
           <button type="button" onClick={cancel} disabled={busy} data-testid="crm-contact-cancel"
             className={`h-11 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}>
             Cancel
           </button>
           <button type="button" onClick={save} disabled={busy} data-testid="crm-contact-save"
             className={`h-11 rounded-pill px-6 text-sm font-medium disabled:opacity-50 ${INK_PILL}`}>
-            {busy ? "Adding…" : `Add ${typeName.toLowerCase()}`}
+            {editing ? (busy ? "Saving…" : "Save changes") : busy ? "Adding…" : `Add ${typeName.toLowerCase()}`}
           </button>
         </div>
       </DialogContent>
@@ -554,6 +585,8 @@ export default function CRM() {
   };
   const [page, setPage] = useState(1);
   const [adding, setAdding] = useState(null); // "customer" | "vendor" while the New window is open
+  const [editing, setEditing] = useState(null); // a contact, while its Edit window is open
+  const [complaintFor, setComplaintFor] = useState(null); // a contact, while Log complaint is open
 
   // RBAC P1 (2026-09-15): People access, not the role name (the server's rule).
   const canManage = hasPerm(user, "people");
@@ -662,7 +695,13 @@ export default function CRM() {
     touched: touchedLabel(daysSince(c.updated_at || c.created_at)),
     ownerName: c.assigned_id ? userName[c.assigned_id] : null,
   });
-  const openProfile = (c) => () => { if (can360) navigate(`/contacts/${c.id}`); };
+  /* JOURNEY-1 J8 — the full page needs Finance (the server's rule); someone
+     who manages CRM without it used to get a card that did nothing when
+     tapped. Now it opens that buyer's Edit window, which can log a complaint. */
+  const openProfile = (c) => () => {
+    if (can360) navigate(`/contacts/${c.id}`);
+    else if (canManage) setEditing(c);
+  };
 
   const SCOPES = [
     { key: "customers", label: L.customer_plural, icon: AddressBook, count: scopeCounts.customers },
@@ -679,6 +718,9 @@ export default function CRM() {
           className="hidden" data-testid="crm-import-csv-input" />
       )}
       <CrmContactDialog type={adding} onClose={() => setAdding(null)} onSaved={refresh} users={users} labels={typeLabels} />
+      <CrmContactDialog contact={editing} onClose={() => setEditing(null)} onSaved={refresh} users={users} labels={typeLabels}
+        onLogComplaint={(c) => { setEditing(null); setTimeout(() => setComplaintFor(c), 0); }} />
+      <LogComplaintDialog contact={complaintFor} onClose={() => setComplaintFor(null)} />
 
       {/* KM-27 — the controls pin with the title: they act ON the list, so
           they are the last things to scroll away. */}
@@ -771,7 +813,7 @@ export default function CRM() {
       ) : view === "grid" ? (
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-3 lg:gap-4" data-testid="crm-grid">
           {visible.map((c) => (
-            <ContactCard key={c.id} c={c} info={describe(c)} onOpen={openProfile(c)} canOpen={can360} />
+            <ContactCard key={c.id} c={c} info={describe(c)} onOpen={openProfile(c)} canOpen={can360 || canManage} />
           ))}
         </div>
       ) : (
@@ -782,7 +824,7 @@ export default function CRM() {
           </div>
           <ul className="divide-y divide-slate-900/[0.05]">
             {visible.map((c) => (
-              <ContactRow key={c.id} c={c} info={describe(c)} onOpen={openProfile(c)} canOpen={can360} />
+              <ContactRow key={c.id} c={c} info={describe(c)} onOpen={openProfile(c)} canOpen={can360 || canManage} />
             ))}
           </ul>
         </div>

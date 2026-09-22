@@ -8,11 +8,14 @@ import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { Chip, EmptyState, DexBadge } from "../components/common";
 import { money, typeLabel, formatPhone } from "../lib/format";
+import { lex } from "../lib/lexicon";
+import { CrmContactDialog } from "./CRM";
+import { LogComplaintDialog } from "../components/crm/LogComplaintDialog";
 import { toast } from "sonner";
 import {
   ArrowLeft, Phone, EnvelopeSimple, MapPin, Receipt, CurrencyCircleDollar,
   Warning, Truck, TrendUp, Brain, CheckSquare, Buildings, Sparkle, Heart, ShieldWarning,
-  Note, Clock, ChatCircleDots, WhatsappLogo, Handshake, FlowArrow,
+  Note, Clock, ChatCircleDots, WhatsappLogo, Handshake, FlowArrow, PencilSimple,
 } from "@phosphor-icons/react";
 
 // Epic 2 Sprint 1 (E2-08): activity kind -> icon + colour. Small map
@@ -99,9 +102,17 @@ export default function ContactProfile() {
   const isMobile = useIsMobile();
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, tenant } = useAuth();
   const canView = hasPerm(user, "finance");
   const qc = useQueryClient();
+  // JOURNEY-1 J8 — change a buyer and log a complaint against them (the
+  // server asks for People access for both, as it does for adding one).
+  const canManage = hasPerm(user, "people");
+  const [editOpen, setEditOpen] = useState(false);
+  const [complaintOpen, setComplaintOpen] = useState(false);
+  const { data: users } = useQuery({
+    queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data), enabled: canManage, retry: false,
+  });
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["contact-profile", id],
@@ -197,10 +208,29 @@ export default function ContactProfile() {
     );
   };
 
-  if (isMobile) return <ContactProfileMobile />;
+  const L = lex(tenant);
+  const typeLabels = { customer: L.customer_singular, dealer: "Dealer", vendor: L.vendor_singular };
+  const dialogs = canManage && (
+    <>
+      <CrmContactDialog contact={editOpen ? c : null} onClose={() => setEditOpen(false)} users={users} labels={typeLabels}
+        onSaved={() => { qc.invalidateQueries({ queryKey: ["contact-profile", id] }); qc.invalidateQueries({ queryKey: ["crm-contacts"] }); }} />
+      <LogComplaintDialog contact={complaintOpen ? c : null} onClose={() => setComplaintOpen(false)} />
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <>
+        <ContactProfileMobile canManage={canManage} onEdit={() => setEditOpen(true)}
+          onLogComplaint={isVendor ? null : () => setComplaintOpen(true)} />
+        {dialogs}
+      </>
+    );
+  }
 
   return (
     <div>
+      {dialogs}
       {/* U7-07: label matches the nav item ("CRM") + route lands on
           /crm directly instead of hitting the redirect. */}
       <button onClick={() => navigate("/crm")} data-testid="profile-back" className="flex items-center gap-2 text-sm text-muted-foreground mb-5 hover:text-foreground transition-colors">
@@ -209,9 +239,25 @@ export default function ContactProfile() {
 
       {/* Header */}
       <div className="card-brutal p-6 mb-6" data-testid="profile-header">
+        <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-2 mb-2">
           <Chip value={typeLabel(c.type)} className={c.type === "customer" ? "bg-brand-50 text-brand-700" : "bg-muted text-muted-foreground"} />
           <Chip value={c.status} />
+        </div>
+        {canManage && (
+          <div className="flex shrink-0 flex-wrap justify-end gap-2" data-testid="profile-actions">
+            {!isVendor && (
+              <button type="button" onClick={() => setComplaintOpen(true)} data-testid="profile-log-complaint"
+                className="flex min-h-10 items-center gap-1.5 rounded-pill border border-border bg-card px-4 text-sm font-medium text-rose-700 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline">
+                <Warning size={15} weight="bold" aria-hidden="true" /> Log complaint
+              </button>
+            )}
+            <button type="button" onClick={() => setEditOpen(true)} data-testid="profile-edit"
+              className="flex min-h-10 items-center gap-1.5 rounded-pill border border-border bg-card px-4 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline">
+              <PencilSimple size={15} weight="bold" aria-hidden="true" /> Edit
+            </button>
+          </div>
+        )}
         </div>
         <h1 className="font-display text-3xl">{c.name}</h1>
         {c.company && <p className="text-muted-foreground flex items-center gap-2 mt-1"><Buildings size={14} weight="bold" /> {c.company}</p>}

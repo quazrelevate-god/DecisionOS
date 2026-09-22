@@ -12,7 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft, CaretDown, Phone, EnvelopeSimple, CurrencyInr, ArrowRight,
-  ClockCounterClockwise, Sparkle, FileText, ListChecks, Warning, MapPin,
+  ClockCounterClockwise, Sparkle, FileText, ListChecks, Warning, MapPin, PencilSimple,
 } from "@phosphor-icons/react";
 import api from "../../lib/api";
 import { inr } from "../../lib/format";
@@ -66,7 +66,11 @@ const Row = ({ label, value }) => (
   </p>
 );
 
-export default function ContactProfileMobile() {
+/* JOURNEY-1 J8 — the phone's buyer page could only be read: no way to fix a
+   phone number, move a buyer on a stage or log the complaint Priya just heard
+   on the road. `onEdit` / `onLogComplaint` come from ContactProfile, which owns
+   the two windows (the same ones the desktop page and CRM open). */
+export default function ContactProfileMobile({ canManage = false, onEdit, onLogComplaint }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const { data, isLoading, error } = useQuery({
@@ -160,6 +164,22 @@ export default function ContactProfileMobile() {
             </a>
           )}
         </div>
+        {canManage && (
+          <div className="mt-2 flex flex-wrap gap-touch-gap" data-testid="cp-actions">
+            {onLogComplaint && (
+              <button type="button" onClick={onLogComplaint} data-testid="cp-log-complaint"
+                className="kr-pop flex flex-1 items-center justify-center gap-2 rounded-pill px-4 text-sm font-semibold text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
+                style={{ minHeight: "var(--control-h-md)" }}>
+                <Warning size={20} weight="bold" aria-hidden="true" /> Log complaint
+              </button>
+            )}
+            <button type="button" onClick={onEdit} data-testid="cp-edit"
+              className="kr-pop flex flex-1 items-center justify-center gap-2 rounded-pill px-4 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
+              style={{ minHeight: "var(--control-h-md)" }}>
+              <PencilSimple size={20} weight="bold" aria-hidden="true" /> Edit
+            </button>
+          </div>
+        )}
         {(c.city || c.address) && (
           <p className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
             <MapPin size={16} weight="bold" aria-hidden="true" />

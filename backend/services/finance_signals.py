@@ -207,20 +207,42 @@ def _fmt_amt(a, cur="INR") -> str:
     return f"{sym}{float(a or 0):,.0f}"
 
 
+def receivable_overdue(inv: dict, now: datetime = None) -> bool:
+    """THE rule for "this customer invoice is overdue" (JOURNEY-1, 2026-09-22).
+
+    Unpaid, something still owed, and at least FINANCE_CHASE_DAYS past its due
+    date. The Desk's "To collect (overdue)" counted by this rule while the
+    Finance page it opens counted "30 days since it was raised", due date or
+    not — so the tile said ₹6.8L and the page's Overdue filter ₹4L. The page
+    now reads this answer off each invoice (GET /revenue: `overdue`)."""
+    if inv.get("type", "sales_invoice") != "sales_invoice" or inv.get("status") == "paid":
+        return False
+    if _inv_remaining(inv) <= 0.01:
+        return False
+    now = now or datetime.now(timezone.utc)
+    cutoff = (now - timedelta(days=FINANCE_CHASE_DAYS)).strftime("%Y-%m-%d")
+    due = str(inv.get("due_date") or "")[:10]
+    return bool(due) and due <= cutoff
+
+
+def days_past_due(inv: dict, now: datetime = None):
+    """Whole days since the due date, or None with no due date."""
+    due = str(inv.get("due_date") or "")[:10]
+    if not due:
+        return None
+    try:
+        d = datetime.strptime(due, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+    return max(0, ((now or datetime.now(timezone.utc)) - d).days)
+
+
 async def _overdue_receivables(tenant_id: str) -> list:
     """Sales invoices unpaid and overdue by at least FINANCE_CHASE_DAYS days."""
     now = datetime.now(timezone.utc)
-    cutoff = (now - timedelta(days=FINANCE_CHASE_DAYS)).strftime("%Y-%m-%d")
     rows = await db.invoices.find(
         {"tenant_id": tenant_id, "type": "sales_invoice", "status": {"$ne": "paid"}}, {"_id": 0}).to_list(3000)
-    out = []
-    for r in rows:
-        if _inv_remaining(r) <= 0.01:
-            continue
-        due = str(r.get("due_date") or "")[:10]
-        if due and due <= cutoff:
-            out.append(r)
-    return out
+    return [r for r in rows if receivable_overdue(r, now)]
 
 
 async def _bills_due_or_overdue(tenant_id: str) -> list:

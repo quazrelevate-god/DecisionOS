@@ -980,8 +980,15 @@ async def list_revenue(user: dict = Depends(require_ledger)):
     currency = await _currency(tid)
     invoices = await db.invoices.find({"tenant_id": tid, "type": "sales_invoice"}, {"_id": 0}).sort("created_at", -1).to_list(3000)
     payments = await db.payments.find({"tenant_id": tid, "direction": "in"}, {"_id": 0}).sort("created_at", -1).to_list(3000)
+    # JOURNEY-1 — each invoice says whether it is overdue by the Desk's own
+    # rule, so the tile and the page it opens can never disagree again.
+    from datetime import datetime as _dt, timezone as _tz
+    from services.finance_signals import days_past_due, receivable_overdue
+    now = _dt.now(_tz.utc)
     for i in invoices:
         i["balance"] = _remaining(i)
+        i["overdue"] = receivable_overdue(i, now)
+        i["days_past_due"] = days_past_due(i, now)
     billed = sum(_num(i.get("amount")) for i in invoices)
     received = sum(_num(p.get("amount")) for p in payments)
     outstanding = sum(_remaining(i) for i in invoices if i.get("status") != "paid")

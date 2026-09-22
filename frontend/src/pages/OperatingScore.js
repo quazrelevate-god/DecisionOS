@@ -835,7 +835,9 @@ function CategoryDrill({ cat, value, drivers, drill, onClose }) {
 
           {!drivers.length && !drill?.items && (
             <p className="text-sm text-slate-500">
-              A per-driver breakdown is not wired for this category yet — the score above is live, the detail is not.
+              {/* JOURNEY-1 J2 — this line read "not wired for this category yet": a
+                  note to a programmer, on a founder's screen. */}
+              The score above is up to date. A breakdown of what makes it up isn't shown for this part yet.
             </p>
           )}
 
@@ -895,7 +897,9 @@ function FormulaPanel({ open, weights = DEFAULT_WEIGHTS, setWeights, panelRef })
                 ))}
               </div>
               <p className="mt-3 text-xs text-slate-500">
-                {total !== 100 ? "Weights should add up to 100%. Pick a preset or adjust the sliders." : "Local preview only — saving weights lands with the backend."}
+                {/* JOURNEY-1 J2 — was "saving weights lands with the backend". Say
+                    plainly that this is a what-if and the score does not change. */}
+                {total !== 100 ? "Weights should add up to 100%. Pick a preset or adjust the sliders." : "A what-if only — these weights aren't saved, and your score keeps its standard weights."}
               </p>
             </div>
           )}

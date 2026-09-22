@@ -76,7 +76,8 @@ export function scoreActions(stats, categories = null) {
     out.push({
       key: "first-close",
       label: "Close your first task",
-      why: "Completion rate has no denominator until something finishes.",
+      // JOURNEY-1 J2 — was "Completion rate has no denominator…".
+      why: "Execution counts what gets finished — until the first task is done, it has nothing to count.",
       to: "/my-work",
     });
   }

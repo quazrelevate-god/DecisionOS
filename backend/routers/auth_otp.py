@@ -38,6 +38,19 @@ async def _split_by_invite(choices):
     return await split_live_and_pending(db, choices)
 
 
+def _no_longer(gone: list) -> str:
+    """JOURNEY-1 — what a person removed from a company hears at sign-in,
+    instead of a code and then an empty Desk."""
+    name = (gone[0].get("tenant_name") if gone else "") or "this company"
+    return (f"You're no longer part of {name} on DecisionOS. "
+            "If that's a mistake, ask the owner to add you again.")
+
+
+async def _split_three(choices):
+    from services.auth.phone import split_by_membership
+    return await split_by_membership(db, choices)
+
+
 @router.post("/auth/otp/request")
 async def request_otp(inp: OtpRequestInput):
     norm = _norm_phone(inp.phone)
@@ -52,7 +65,8 @@ async def request_otp(inp: OtpRequestInput):
     if not choices:
         raise HTTPException(status_code=404, detail="No account is registered with this mobile number")
     # Invited but not yet in: only the invite link opens those (see INVITE_FIRST).
-    live, pending = await _split_by_invite(choices)
+    # Removed or suspended: told so, and no code is sent (JOURNEY-1).
+    live, pending, gone = await _split_three(choices)
     if inp.tenant_id:
         # Caller already knows which workspace to log into (either
         # single-tenant match on a prior attempt, or user picked from
@@ -62,10 +76,13 @@ async def request_otp(inp: OtpRequestInput):
         if not picked:
             if any(c["tenant_id"] == inp.tenant_id for c in pending):
                 raise HTTPException(status_code=403, detail=INVITE_FIRST)
+            left = [c for c in gone if c["tenant_id"] == inp.tenant_id]
+            if left:
+                raise HTTPException(status_code=403, detail=_no_longer(left))
             raise HTTPException(status_code=404, detail="This number is not registered in the selected workspace")
         return await _issue_otp(norm, inp.phone, tenant_id=picked["tenant_id"])
     if not live:
-        raise HTTPException(status_code=403, detail=INVITE_FIRST)
+        raise HTTPException(status_code=403, detail=INVITE_FIRST if pending or not gone else _no_longer(gone))
     choices = live
     if len(choices) == 1:
         # Single-tenant fast path: keeps backward compat with every
@@ -169,9 +186,11 @@ async def verify_otp(inp: OtpVerifyInput, response: Response):
         if not choices:
             raise HTTPException(status_code=404, detail="Account not found")
     else:
-        live, pending = await _split_by_invite(choices)
+        live, pending, gone = await _split_three(choices)
         if not live:
-            raise HTTPException(status_code=403, detail=INVITE_FIRST)
+            raise HTTPException(status_code=403, detail=INVITE_FIRST if pending or not gone else _no_longer(gone))
+        if inp.tenant_id and any(c["tenant_id"] == inp.tenant_id for c in gone):
+            raise HTTPException(status_code=403, detail=_no_longer([c for c in gone if c["tenant_id"] == inp.tenant_id]))
         if inp.tenant_id and any(c["tenant_id"] == inp.tenant_id for c in pending):
             raise HTTPException(status_code=403, detail=INVITE_FIRST)
         choices = live

@@ -113,14 +113,22 @@ def test_a_suspended_member_cannot_sign_their_way_back_in(with_test_db):
         try:
             await _seed_invited(db, status=STATUS_SUSPENDED)
             await aotp.invite_start("tok-invite")
-            await aotp.verify_otp(OtpVerifyInput(phone=PHONE, code=CODE), Response())
+            # JOURNEY-1 (2026-09-22): the code step now refuses a suspended or
+            # removed member outright, with the reason, instead of completing a
+            # sign-in whose every request is then refused.
+            refused = None
+            try:
+                await aotp.verify_otp(OtpVerifyInput(phone=PHONE, code=CODE), Response())
+            except HTTPException as e:
+                refused = e
             row = await find_membership(db, "u-invited", "tA")
             live = await find_membership(db, "u-invited", "tA", statuses=LIVE_STATUSES)
-            return row["status"], live
+            return row["status"], live, refused
         finally:
             restore()
 
-    status, live = with_test_db(scenario)
+    status, live, refused = with_test_db(scenario)
+    assert refused is not None and refused.status_code == 403 and "no longer part of" in refused.detail
     assert status == STATUS_SUSPENDED, "suspension is a decision about them, not a login state"
     assert live is None, "and they still hold no live membership"
 

@@ -142,19 +142,43 @@ async def find_tenant_choices_for_phone(db, norm: str) -> list:
 # so the onboarding chooser, the sign-in picker and the switcher cannot drift
 # apart.
 # ---------------------------------------------------------------------------
+async def split_by_membership(db, choices: list):
+    """(live, pending, gone) for the companies a mobile number belongs to.
+
+    pending = invited, never signed in (their way in is the invite link).
+    gone    = removed or suspended (JOURNEY-1, 2026-09-22). These used to count
+              as live: a person the owner had removed could still get a code,
+              sign in, and land on a Desk whose every request was then refused
+              ("You no longer have access…") — an empty, spinning Desk with no
+              reason given. Now they are told at the door.
+    Anything else — an active membership, or a user from before memberships
+    existed — is live.
+    """
+    from services.auth.membership import (
+        find_membership, STATUS_PENDING, STATUS_REMOVED, STATUS_SUSPENDED,
+    )
+    live, pending, gone = [], [], []
+    for c in choices:
+        status = (await find_membership(db, c["user_id"], c["tenant_id"]) or {}).get("status")
+        if status == STATUS_PENDING:
+            pending.append(c)
+        elif status in (STATUS_REMOVED, STATUS_SUSPENDED):
+            gone.append(c)
+        else:
+            live.append(c)
+    return live, pending, gone
+
+
 async def split_live_and_pending(db, choices: list):
     """(live, pending) — pending = invited to that workspace, never signed in.
 
     Moved here from routers/auth_otp.py (2026-09-20) so signup can apply the
     same rule without a router importing another router. An invited member's
     first way in is their invite link (auth_otp.INVITE_FIRST), so a pending
-    workspace is never offered as something to sign into.
+    workspace is never offered as something to sign into. A workspace the
+    person was removed from is neither (split_by_membership).
     """
-    from services.auth.membership import find_membership, STATUS_PENDING
-    live, pending = [], []
-    for c in choices:
-        m = await find_membership(db, c["user_id"], c["tenant_id"])
-        (pending if (m or {}).get("status") == STATUS_PENDING else live).append(c)
+    live, pending, _gone = await split_by_membership(db, choices)
     return live, pending
 
 

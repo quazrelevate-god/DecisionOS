@@ -17,7 +17,7 @@ company, and every screen was looked at by eye.
 | Journeys walked | **13** (J1–J13). Five desktop journeys were also walked on the phone, and J13 covered the installed phone app. |
 | Finished end to end by a real person's route | **9 of 13**. Three were stopped part-way by a missing control: J7 (part payment), J8 (logging a complaint, moving a buyer's stage) and J6 (escalating). J12 ran out of time on one step. |
 | Findings filed by the testers | 94 |
-| Confirmed after the lead merged duplicates and re-checked them | **3 P0 · 15 P1 bugs · 20 P1 judgment calls · 29 P2** |
+| Confirmed after the lead merged duplicates and re-checked them | **3 P0 · 15 P1 bugs · 20 judgment calls · 30 polish** (finding by finding in [STATUS.md](STATUS.md)) |
 | Dropped | 11 test artifacts and 9 already in the bug report, listed at the end |
 | Fixed in this pass | **all 3 P0s and 14 of the 15 P1 bugs**, each re-checked on a fresh copy (see *Fixes*). The one left open is a PDF decision that takes ~6 minutes (for Yokesh). |
 
@@ -403,7 +403,7 @@ Not covered in J12: two people approving the same item at the same moment. This 
 | 19 | **The phone Desk at large text** (J13b-04/06). It is designed as exactly one screen: a three-row card, a greeting that truncates. At 150% the greeting is cut to "Good …", "Show all" prints over a row, and More labels are cut | Above a text size of about 125%, let the Desk scroll: size the card to its rows and let the greeting wrap. Give More's labels a second line. At the normal size nothing changes |
 | 20 | **Automatic brief refresh.** The Finance brief now *says* it is out of date; it could refresh itself instead (one AI call when the books have changed and the page is opened) | Refresh it automatically; the cost is small |
 
-## P2: polish, listed and not fixed
+## Polish, listed and not fixed
 
 - **Native OS dropdowns,** against the standing rule: sign-up Industry (J1-02, J2-01), Settings currency (J7-03), leave type (J8-06), the CRM activity kind (J8-11).
 - **Software words:**

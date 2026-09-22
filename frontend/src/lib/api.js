@@ -195,4 +195,39 @@ api.interceptors.response.use(
   }
 );
 
+/* JOURNEY-1 J13 — WHICH ANSWERS CAME FROM THE PHONE'S CACHE, NOT THE SERVER.
+ *
+ * The service worker answers a screen's data from its cache when the network
+ * takes more than 3 s (service-worker.js, NetworkFirst), and stamps what it
+ * stores with `x-dos-cached-at`. A response straight from the server never
+ * carries that header, so its presence is exactly "this is the copy from
+ * <time>". On a slow line the Desk showed a Delayed count that had already
+ * changed, and nothing on screen said so. Screens read this through
+ * useServedFromCache and say "Showing figures from 9:12 am". */
+const cachedAnswers = new Map();          // request url -> ISO time it was stored
+const cacheListeners = new Set();
+const noteCache = (url, at) => {
+  const had = cachedAnswers.get(url);
+  if (at) cachedAnswers.set(url, at); else cachedAnswers.delete(url);
+  if (had !== at) cacheListeners.forEach((fn) => { try { fn(); } catch (e) { /* a listener's own problem */ } });
+};
+api.interceptors.response.use((res) => {
+  const url = String(res?.config?.url || "");
+  if (url) noteCache(url, res?.headers?.["x-dos-cached-at"] || null);
+  return res;
+});
+/** The oldest cached time among the answers whose url starts with one of
+ *  `prefixes`, or null when every one of them came from the server. */
+export function cachedSince(prefixes) {
+  let oldest = null;
+  cachedAnswers.forEach((at, url) => {
+    if (prefixes.some((p) => url.startsWith(p)) && (!oldest || at < oldest)) oldest = at;
+  });
+  return oldest;
+}
+export function onCacheChange(fn) {
+  cacheListeners.add(fn);
+  return () => cacheListeners.delete(fn);
+}
+
 export default api;

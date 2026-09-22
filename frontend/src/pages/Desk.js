@@ -53,6 +53,8 @@ import { useDeskMetrics } from "./desk/useDeskMetrics";
    is the app's own answer to exactly this and says so in its note: a JS branch
    keeps a single copy in the document. */
 import { useIsMobile } from "../hooks/useIsMobile";
+import { useServedFromCache } from "../hooks/useServedFromCache";
+import { StaleStamp } from "../components/mobile/StaleStamp";
 // ASK-33 — the well on the left column's floor is Dex's Decide door. It owns
 // the capture hooks and hosts the repurposed InsightWell container itself.
 import { DeskDexWell } from "./desk/DeskDexWell";
@@ -636,6 +638,9 @@ function StackCard({ tone, title, count, line, tail, loading, empty, to, testid 
   );
 }
 
+// The Desk's own data, as its requests name it (baseURL /api).
+const DESK_DATA = ["/desk", "/tasks", "/workflows", "/operating-score", "/ledger/summary", "/leaves", "/brief"];
+
 export default function Desk() {
   const navigate = useNavigate();
   const { user, tenant } = useAuth();
@@ -728,6 +733,10 @@ export default function Desk() {
      feed and the task list the KPI tiles read, so the row leaves the column
      the moment it is signed off. */
   const qc = useQueryClient();
+  /* JOURNEY-1 J13 — on a slow line the phone's saved copy stands in for the
+     server after 3 s (service-worker.js), and the Desk used to show those
+     numbers as if they were live. Now it says when they are from. */
+  const cachedAt = useServedFromCache(DESK_DATA);
   const [openTaskId, setOpenTaskId] = useState(null);
   const openTask = openTaskId ? (approvalsQ.data || []).find((t) => t.id === openTaskId) : null;
   const usersQ = useQuery({
@@ -1038,6 +1047,7 @@ export default function Desk() {
     <div
       data-testid="desk-page"
       data-phone-expanded={phoneExpanded ? "true" : undefined}
+      data-cached={cachedAt ? "true" : undefined}
       className={cn(
         "flex flex-col gap-3 lg:gap-6 lg:min-h-0 lg:flex-1",
         /* ASK-42 A — h-full, not a copy of the shell's arithmetic. This was
@@ -1053,6 +1063,10 @@ export default function Desk() {
         "max-lg:h-full"
       )}
     >
+      {cachedAt && (
+        <StaleStamp at={cachedAt} offline={typeof navigator !== "undefined" && navigator.onLine === false}
+          onRetry={() => qc.invalidateQueries()} className="shrink-0" data-testid="desk-stale" />
+      )}
       {/* ── LIGHT ZONE ───────────────────────────────────────────────── */}
       {/* KR-8.6 — the split and the gaps are MEASURED off the reference:
           36 / 56 with a wide 8% trough between. */}

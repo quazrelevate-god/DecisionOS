@@ -278,7 +278,10 @@ def test_desk_summary_counters_run_side_by_side(monkeypatch):
     out, took = asyncio.new_event_loop().run_until_complete(go())
     # nine counts one after another was 9 x LAT
     assert took < 4 * LAT, f"desk summary took {took:.3f}s"
-    assert db.calls == 9
+    # JOURNEY-1 (2026-09-22): a tenth read, the company's currency for the
+    # briefing's money words — in the same side-by-side batch, so the timing
+    # bound above is unchanged.
+    assert db.calls == 10
     assert out["counters"]["delayed"] == 1
     assert out["narrative"] == "stub" and out["greeting"].endswith("Priya")
 

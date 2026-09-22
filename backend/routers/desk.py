@@ -215,8 +215,38 @@ async def _complaints_trend(tid: str) -> dict:
     return {"value": open_now, "new_7d": new_7d, "direction": direction}
 
 
+_CUR_SYMBOL = {"INR": "₹", "USD": "$", "EUR": "€", "GBP": "£", "AED": "AED ", "SGD": "S$"}
+
+
+def money_words(amount, currency: str = "INR") -> str:
+    """An amount the way the company says it (JOURNEY-1, 2026-09-22): rupees
+    in lakh and crore — "₹6.85 lakh" — never "$685,000". The briefing's model
+    was handed a bare number and wrote it in dollars on an Indian company's
+    Desk."""
+    a = float(amount or 0)
+    cur = (currency or "INR").upper()
+    sym = _CUR_SYMBOL.get(cur, f"{cur} ")
+    if cur == "INR":
+        if a >= 1e7:
+            return f"{sym}{a / 1e7:.2f}".rstrip("0").rstrip(".") + " crore"
+        if a >= 1e5:
+            return f"{sym}{a / 1e5:.2f}".rstrip("0").rstrip(".") + " lakh"
+        whole = f"{int(round(a))}"
+        if len(whole) > 3:  # Indian grouping: 12,34,567
+            head, tail = whole[:-3], whole[-3:]
+            groups = []
+            while len(head) > 2:
+                groups.insert(0, head[-2:])
+                head = head[:-2]
+            if head:
+                groups.insert(0, head)
+            whole = ",".join(groups + [tail])
+        return f"{sym}{whole}"
+    return f"{sym}{a:,.0f}"
+
+
 def _narrative(*, delayed: int, completed_yday: int, pending_decisions: int,
-                cash: dict, is_owner: bool) -> str:
+               cash: dict, is_owner: bool, sees_money: bool = True, currency: str = "INR") -> str:
     """Deterministic template narrative. LLM variant lands in E2-48
     (Backlog). Ordered by urgency -- delays first (bad), completed next
     (good), cash-flow last (steady)."""
@@ -228,14 +258,18 @@ def _narrative(*, delayed: int, completed_yday: int, pending_decisions: int,
         )
     if completed_yday > 0:
         bits.append(f"{completed_yday} completed yesterday")
-    if cash.get("clear"):
+    # JOURNEY-1 — money only for people who can see money. Amit (production)
+    # was told to chase the company's receivables, a job he cannot open.
+    if not sees_money:
+        pass
+    elif cash.get("clear"):
         bits.append("cash-flow all clear")
     else:
         n_over = int(cash.get("overdue_receivables_amount") or 0)
         n_unm = int(cash.get("unmatched_payments") or 0)
         parts = []
         if n_over > 0:
-            parts.append(f"Rs {n_over:,.0f} in overdue receivables")
+            parts.append(f"{money_words(n_over, currency)} in overdue receivables")
         if n_unm > 0:
             parts.append(f"{n_unm} payments to match")
         if parts:
@@ -263,18 +297,25 @@ _desk_log = _logging.getLogger("decisionos")
 DESK_NARRATIVE_TTL = 900  # seconds (15 min): identical counters within the window reuse the narrative
 
 
-async def ai_desk_narrative(*, delayed, completed_yday, pending_decisions, cash, is_owner, tenant_id) -> str:
+async def ai_desk_narrative(*, delayed, completed_yday, pending_decisions, cash, is_owner, tenant_id,
+                            sees_money: bool = True, currency: str = "INR") -> str:
     """The Desk briefing, LLM-generated from the same counters the template used, cached per tenant
     by a hash of those counters (so it only regenerates when the numbers actually change). Falls back
     to the deterministic _narrative on any cache/LLM error -- the Desk must never break."""
     counters = {"delayed": int(delayed or 0), "completed_yesterday": int(completed_yday or 0),
                 "pending_decisions": int(pending_decisions or 0) if is_owner else 0,
-                "cash_clear": bool(cash.get("clear")),
-                "overdue_receivables": int(cash.get("overdue_receivables_amount") or 0),
-                "payments_to_match": int(cash.get("unmatched_payments") or 0),
                 "is_owner": bool(is_owner)}
+    # JOURNEY-1 — the money counters go to the model only for someone who can
+    # see money, and with the amount already written in the company's words
+    # (the model wrote "$685,000" from a bare number).
+    if sees_money:
+        over = int(cash.get("overdue_receivables_amount") or 0)
+        counters.update({"cash_clear": bool(cash.get("clear")),
+                         "overdue_receivables": money_words(over, currency) if over else "none",
+                         "payments_to_match": int(cash.get("unmatched_payments") or 0)})
     fallback = _narrative(delayed=delayed, completed_yday=completed_yday,
-                          pending_decisions=pending_decisions, cash=cash, is_owner=is_owner)
+                          pending_decisions=pending_decisions, cash=cash, is_owner=is_owner,
+                          sees_money=sees_money, currency=currency)
     key = _hashlib.md5(_json.dumps(counters, sort_keys=True).encode()).hexdigest()
     now = datetime.now(timezone.utc)
     try:
@@ -294,7 +335,8 @@ async def ai_desk_narrative(*, delayed, completed_yday, pending_decisions, cash,
         system = render("desk.narrative")
         chat = claude_chat(task="desk.narrative", session_id=f"desk-{tenant_id}",
                            system_message=system).with_model(*model_for("desk.narrative"))
-        resp = await chat.send_message(UserMessage(text=_json.dumps(counters)))
+        # ensure_ascii=False — the model reads "₹6.85 lakh", not "\u20b96.85 lakh".
+        resp = await chat.send_message(UserMessage(text=_json.dumps(counters, ensure_ascii=False)))
         cleaned = (resp or "").strip().strip('"')[:600]
         if cleaned:
             text = cleaned
@@ -328,19 +370,25 @@ async def desk_summary(user: dict = Depends(get_current_user)):
     # database connection) for ~7 s against a remote database while the Desk
     # loaded, and the member's first save queued behind it.
     (delayed, completed_yday, pending_decisions, cash, weekly_completion,
-     complaints) = await asyncio.gather(
+     complaints, tenant_row) = await asyncio.gather(
         _delayed_count(tid, user),
         _completed_yesterday(tid, user),
         _pending_decisions_for(tid, user),
         _cash_flow_status(tid),
         _weekly_completion_rate(tid, user),
         _complaints_trend(tid),
+        # JOURNEY-1 — the company's currency, for the briefing's money words.
+        db.tenants.find_one({"id": tid}, {"_id": 0, "currency": 1}),
     )
 
+    from core.permissions import user_perms
+    tenant_row = tenant_row or {}
     narrative = await ai_desk_narrative(
         delayed=delayed, completed_yday=completed_yday,
         pending_decisions=pending_decisions, cash=cash,
         is_owner=is_owner, tenant_id=tid,
+        sees_money="finance" in user_perms(user),
+        currency=tenant_row.get("currency") or "INR",
     )
 
     # Shortcuts: which top-of-Desk quick-links to render.

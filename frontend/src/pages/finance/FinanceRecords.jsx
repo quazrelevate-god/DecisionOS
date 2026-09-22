@@ -19,7 +19,7 @@ import { AiPanel } from "./FinanceAi";
 import {
   AttachmentLink, CARD, EmptyNote, FIELD, LoadError, SMALL_INK, SMALL_PILL, SourceTag, TONE_CHIP, Tag, fmt,
 } from "./financeKit";
-import { REVENUE_OVERDUE_DAYS, daysSince, isInvoiceOverdue } from "./ledgerMath";
+import { daysSince, isInvoiceOverdue, overdueDays } from "./ledgerMath";
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
@@ -272,7 +272,7 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, init
           {s.status === "partial" && <span className="text-xs text-slate-500">bal {f(s.balance)}</span>}
           {isInvoiceOverdue(s) && (
             <Tag tone="bad" className="normal-case" data-testid={`revenue-overdue-${s.id}`}>
-              <WarningCircle size={11} weight="bold" aria-hidden="true" /> {daysSince(s.date)}d overdue
+              <WarningCircle size={11} weight="bold" aria-hidden="true" /> {overdueDays(s)}d overdue
             </Tag>
           )}
         </span>
@@ -309,7 +309,7 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, init
         <button type="button" onClick={() => setStatusFilter("overdue")} data-testid="revenue-overdue-callout"
           className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-[1.25rem] bg-rose-50/90 px-4 py-3 text-left text-sm font-medium text-rose-800 ring-1 ring-inset ring-rose-100 transition-colors hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300">
           <WarningCircle size={18} weight="bold" aria-hidden="true" />
-          {plural(overdueCount, "invoice")} overdue — awaiting more than {REVENUE_OVERDUE_DAYS} days
+          {plural(overdueCount, "invoice")} overdue — a week or more past the due date
           <span className="ml-auto text-xs font-semibold">Show only overdue →</span>
         </button>
       )}

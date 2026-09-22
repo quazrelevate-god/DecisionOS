@@ -64,8 +64,21 @@ export function daysSince(iso, now = Date.now()) {
   return d < 0 ? null : d;
 }
 
+/* JOURNEY-1 J3 / J7 — ONE RULE FOR OVERDUE, AND IT IS THE SERVER'S.
+   This counted "raised more than 30 days ago" and ignored the due date, while
+   the Desk's "To collect (overdue)" — the tile that opens this page — counted
+   "a week or more past the due date". Same company, same minute: ₹6.8L on the
+   tile, ₹4L here. Each invoice now carries the server's answer (GET /revenue:
+   `overdue`, `days_past_due`, services/finance_signals.receivable_overdue);
+   the old reading stays only for an answer that predates it. */
 export const isInvoiceOverdue = (inv, now = Date.now()) =>
-  inv.status !== "paid" && (daysSince(inv.date, now) || 0) > REVENUE_OVERDUE_DAYS;
+  typeof inv.overdue === "boolean"
+    ? inv.overdue
+    : inv.status !== "paid" && (daysSince(inv.date, now) || 0) > REVENUE_OVERDUE_DAYS;
+
+/** Days an overdue invoice is past its due date (the old reading: since it was raised). */
+export const overdueDays = (inv, now = Date.now()) =>
+  inv.days_past_due != null ? inv.days_past_due : daysSince(inv.date, now);
 
 const categoryName = (c) => String(c || "").trim() || "Uncategorized";
 const vendorName = (v) => String(v || "").trim() || "Unspecified";
@@ -174,7 +187,7 @@ export function receivableFacts(revenue, summary, now = Date.now()) {
   return {
     outstanding: revenue?.totals?.outstanding ?? summary?.totals?.revenue_outstanding ?? 0,
     overdueCount: overdue.length,
-    oldestOverdueDays: overdue.length ? Math.max(...overdue.map((i) => daysSince(i.date, now) || 0)) : null,
+    oldestOverdueDays: overdue.length ? Math.max(...overdue.map((i) => overdueDays(i, now) || 0)) : null,
   };
 }
 

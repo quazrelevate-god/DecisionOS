@@ -3429,8 +3429,12 @@ function TaskPriorityColumns({ list, openId, setOpenId, cardProps, band = "high"
    Department dropdown beside it lists departments; "Completed" sitting among
    Sales and Logistics asked the reader to hold two meanings in one control. */
 /* ASK-28 TK-07 — the two stages, the two flags, then the lenses. */
+/* JOURNEY-1 J6 — the first option was "All statuses", but it lists the work
+   still open (finished work is under Done — ASK-24's one rule), so the task
+   Amit had just finished vanished from a list that said it showed everything.
+   The words now say what the list holds. */
 const STATUS_FILTER_OPTIONS = [
-  { key: "", label: "All statuses" },
+  { key: "", label: "All open" },
   { key: "todo", label: "To do" },
   { key: "in_progress", label: "Doing" },
   { key: "waiting", label: "Waiting on someone" },

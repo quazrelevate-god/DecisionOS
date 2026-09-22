@@ -99,10 +99,11 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const contactType = type === "purchase_payment" ? "vendor" : "customer";
   const contactLabel = contactType === "customer" ? custLabel : vendLabel;
-  const { data: contacts } = useQuery({
+  const { data: contacts, isError: contactsRefused } = useQuery({
     queryKey: ["contacts", contactType, "", ""],
     queryFn: () => api.get(`/contacts?type=${contactType}`).then((r) => r.data),
     enabled: open,
+    retry: false,
   });
   const pickContact = (id) => {
     const c = (contacts || []).find((x) => x.id === id);
@@ -204,12 +205,21 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
               {/* 2026-09-14, founder — GlassSelect, as on New Task: the field
                   keeps this form's look, the list is the app's glass, never
                   the operating system's. */}
-              <GlassSelect id="wf-contact" testid="wf-contact-select" variant="field" triggerClassName={`${inp} mt-1`}
-                ariaLabel={contactLabel} value={form.contact_id} onChange={pickContact}
-                options={[
-                  { value: "", label: t("workflows.select_contact", { label: contactLabel.toLowerCase() }) },
-                  ...(contacts || []).map((c) => ({ value: c.id, label: c.company || c.name })),
-                ]} />
+              {/* JOURNEY-1 J8 — CRM is closed to Sales unless an owner opens it
+                  (FIX-FUP-51), and this list used to come up silently empty for
+                  them. Say why, and send them to the name field below. */}
+              {contactsRefused ? (
+                <p data-testid="wf-contact-refused" className="mt-1 rounded-2xl bg-slate-900/[0.04] px-4 py-2.5 text-sm text-slate-600">
+                  You can't pick from CRM yet — type the name below, or ask an owner for Contacts access.
+                </p>
+              ) : (
+                <GlassSelect id="wf-contact" testid="wf-contact-select" variant="field" triggerClassName={`${inp} mt-1`}
+                  ariaLabel={contactLabel} value={form.contact_id} onChange={pickContact}
+                  options={[
+                    { value: "", label: t("workflows.select_contact", { label: contactLabel.toLowerCase() }) },
+                    ...(contacts || []).map((c) => ({ value: c.id, label: c.company || c.name })),
+                  ]} />
+              )}
             </div>
             <div>
               <label className={lbl} htmlFor="wf-amount">{t("workflows.amount_ph")}</label>

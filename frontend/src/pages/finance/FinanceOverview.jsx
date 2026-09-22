@@ -89,7 +89,14 @@ function KpiTile({ id, icon: Icon, tone, label, value, metric, to, goodWhenUp = 
         <DeltaChip change={metric.change} goodWhenUp={goodWhenUp} neutral={neutral} prevLabel={prevLabel} />
       </span>
       <span className="mt-4 text-sm text-slate-600">{label}</span>
-      <span className="mt-1 truncate text-[1.35rem] font-semibold leading-tight text-slate-900 sm:text-[1.45rem]" title={value}>{value}</span>
+      {/* JOURNEY-1 J13 — never cut a money figure short. At a phone's larger
+          text size "Revenue billed" read "₹22,85,0…"; a figure that does not
+          fit now takes a second line instead of losing its last digits, and
+          breaks after a comma ("₹22,85," / "000") rather than mid-group. At
+          the normal size it fits, and nothing moves. */}
+      <span className="mt-1 text-[1.35rem] font-semibold leading-tight text-slate-900 [overflow-wrap:anywhere] sm:text-[1.45rem]" title={value}>
+        {String(value ?? "").replace(/,/g, ",\u200B")}
+      </span>
       <Sparkline points={metric.trend} tone={tone} label={trendLabel} className="mt-3" />
     </Link>
   );

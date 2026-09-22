@@ -1,6 +1,21 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import api, { SESSION_LOST_EVENT } from "../lib/api";
 import { clearAllDrafts } from "../lib/drafts";
+
+/* JOURNEY-1 J12 — what this browser keeps under a person's id (their My Work
+   filters, mywork-prefs-<tenant>-<user>) goes when they sign out. */
+function forgetPersonOnDevice(person) {
+  const id = person?.id;
+  if (!id) return;
+  try {
+    const doomed = [];
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const k = localStorage.key(i);
+      if (k && k.includes(id)) doomed.push(k);
+    }
+    doomed.forEach((k) => localStorage.removeItem(k));
+  } catch (e) { /* storage blocked: nothing was kept either */ }
+}
 import { toast } from "sonner";
 import { setAppLanguage } from "../i18n";
 
@@ -133,16 +148,23 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
+    /* PILOT-1 A — unsent words (lib/drafts.js) leave with the person. A
+       session that merely ENDS under the open app (above) keeps them: that is
+       not the person choosing to leave, and they are scoped to them, so they
+       come back when the same person signs in again.
+       JOURNEY-1 J12 — and they leave FIRST, before anything is awaited. The
+       phone's Sign out (Settings) starts a full page load straight after
+       calling this, which cut the wait for the server short, so the drafts
+       were never cleared: on a shared phone Amit's unsent update was still
+       on the device when Priya signed in. His My Work filters too — they
+       name him, and they go with him. */
+    clearAllDrafts();
+    forgetPersonOnDevice(user);
     try {
       await api.post("/auth/logout");
     } catch (e) {
       // ignore network errors on logout
     }
-    /* PILOT-1 A — unsent words (lib/drafts.js) leave with the person. A
-       session that merely ENDS under the open app (above) keeps them: that is
-       not the person choosing to leave, and they are scoped to them, so they
-       come back when the same person signs in again. */
-    clearAllDrafts();
     setUser(null);
     setTenant(null);
   };

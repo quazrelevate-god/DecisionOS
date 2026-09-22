@@ -88,3 +88,23 @@ def resolve_role(role: Optional[str], role_keys: Iterable[str]) -> Optional[str]
     if fam:
         return _unique([k for k in depts if _words(k) & fam])
     return None
+
+
+def dept_name(roles: Optional[Iterable[dict]], key: Optional[str]) -> str:
+    """A department's NAME, never its key (JOURNEY-1, 2026-09-22).
+
+    The backend twin of frontend/src/lib/departments.js deptName: the
+    company's own label for the key, else the key made readable. A new
+    founder's approved decision logged "Task assigned to
+    order_intake_&_customer_coordination" on the decision he had just approved.
+    """
+    if not key:
+        return ""
+    if key == "owner":
+        return "Owner"
+    for r in roles or []:
+        if isinstance(r, dict) and r.get("key") == key and r.get("label"):
+            return str(r["label"])
+    text = str(key).replace("_&_", " & ").replace("_", " ").strip()
+    return text[:1].upper() + text[1:]
+

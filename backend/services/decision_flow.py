@@ -418,6 +418,20 @@ async def remove_proposal_item(user: dict, decision_id: str, kind: str, key: str
     return await _save_proposal(user, d, f"Removed before approval: {_KIND_WORD[kind]} “{name}”")
 
 
+async def task_assigned_line(tid: str, t: dict, roles: list) -> str:
+    """The decision's timeline line for one task it created — the person by
+    name, or the department by its name (JOURNEY-1: it printed the raw key,
+    `order_intake_&_customer_coordination`)."""
+    from shared.roles import dept_name
+    who = None
+    if t.get("assignee_id"):
+        m = await db.users.find_one({"id": t["assignee_id"], "tenant_id": tid}, {"_id": 0, "name": 1})
+        who = (m or {}).get("name")
+    if not who and t.get("assignee_role"):
+        who = f"the {dept_name(roles, t['assignee_role'])} team"
+    return f"Task assigned to {who or 'the team'}: {t['title']}"
+
+
 async def approve_decision_flow(user: dict, decision_id: str, *, authorized: bool = False,
                                 resolutions: Optional[dict] = None) -> dict:
     from services.voice import materialize_proposal
@@ -453,14 +467,10 @@ async def approve_decision_flow(user: dict, decision_id: str, *, authorized: boo
     # (WE-07: through the engine, with a reason in history and the audit log).
     for line in await _run_workflow_moves(user, d, made, resolutions):
         await add_decision_event(decision_id, line, user["name"], "workflow")
+    roles = ((await db.tenants.find_one({"id": tid}, {"_id": 0, "roles": 1})) or {}).get("roles") or []
     for t in await db.tasks.find({"tenant_id": tid, "decision_id": decision_id,
                                   "source": {"$nin": ["reminder", "meeting"]}}, {"_id": 0}).to_list(100):
-        who = None
-        if t.get("assignee_id"):
-            m = await db.users.find_one({"id": t["assignee_id"], "tenant_id": tid}, {"_id": 0, "name": 1})
-            who = (m or {}).get("name")
-        who = who or t.get("assignee_role") or "team"
-        await add_decision_event(decision_id, f"Task assigned to {who}: {t['title']}", user["name"], "assigned")
+        await add_decision_event(decision_id, await task_assigned_line(tid, t, roles), user["name"], "assigned")
         # ASK-50 — a task that needs approval before work starts is locked; as
         # with New Task, the APPROVER hears about it first, and the doer when it
         # is approved and can actually be started.

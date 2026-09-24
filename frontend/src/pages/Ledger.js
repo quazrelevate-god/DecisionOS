@@ -56,7 +56,7 @@ const TABS = [
 ];
 const PERIOD_KEY = "finance.period";
 
-function SectionTabs({ tab, setTab, pendingCount, isMobile }) {
+function SectionTabs({ tab, setTab, pendingCount, isMobile, tabs = TABS }) {
   const { t } = useTranslation();
   const prefix = isMobile ? "ledger-tab-mobile" : "ledger-tab";
   /* 2026-09-15, founder — on a phone all six tabs fit the screen, as in the
@@ -65,8 +65,8 @@ function SectionTabs({ tab, setTab, pendingCount, isMobile }) {
   if (isMobile) {
     return (
       <div role="group" aria-label={t("nav.finance", "Finance")} data-testid="ledger-tabs-mobile"
-        className={`relative grid w-full grid-cols-6 gap-0.5 rounded-[1.25rem] p-1 ${GLASS_PILL}`}>
-        {TABS.map((tb) => {
+        className={cn("relative grid w-full gap-0.5 rounded-[1.25rem] p-1", tabs.length === 6 ? "grid-cols-6" : "grid-cols-1", GLASS_PILL)}>
+        {tabs.map((tb) => {
           const active = tab === tb.key;
           return (
             <button key={tb.key} type="button" onClick={() => setTab(tb.key)} aria-pressed={active} data-testid={`${prefix}-${tb.key}`}
@@ -95,7 +95,7 @@ function SectionTabs({ tab, setTab, pendingCount, isMobile }) {
     <div className="flex justify-center">
       <div role="group" aria-label={t("nav.finance", "Finance")} data-testid={isMobile ? "ledger-tabs-mobile" : "ledger-tabs"}
         className={`inline-flex gap-1 rounded-pill p-1 ${GLASS_PILL}`}>
-        {TABS.map((tb) => {
+        {tabs.map((tb) => {
           const active = tab === tb.key;
           return (
             <button key={tb.key} type="button" onClick={() => setTab(tb.key)} aria-pressed={active} data-testid={`${prefix}-${tb.key}`}
@@ -277,12 +277,22 @@ function OverviewSkeleton() {
 
 export default function Ledger() {
   const { t } = useTranslation();
-  const { tenant } = useAuth();
+  const { tenant, user } = useAuth();
+  /* FN-07 (JOURNEY-1 J9-01, J10-02) — FINANCE SHOWS WHAT YOU CAN ACTUALLY
+     OPEN. This page is two things at once: the ledger, which is behind the
+     `finance` permission on every endpoint (routers/ledger.py require_ledger),
+     and the capture inbox, which anyone with `data_input` may use — which is
+     why the nav offers it to both. What it did NOT do was tell them apart, so
+     a sales person with data_input arrived at Overview and watched six calls
+     come back 403. They get the Inbox, which is theirs, and the ledger tabs
+     are not offered or fetched at all. */
+  const canLedger = user?.role === "owner" || hasPerm(user, "finance");
+  const tabs = canLedger ? TABS : TABS.filter((tb) => tb.key === "inbox");
   const isMobile = useIsMobile();
   const qc = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const tab = TABS.some((tb) => tb.key === tabParam) ? tabParam : "overview";
+  const tab = tabs.some((tb) => tb.key === tabParam) ? tabParam : (canLedger ? "overview" : "inbox");
   // KR-10 — /inbox and Ops link to ?tab=revenue&filter=overdue.
   const filterParam = searchParams.get("filter") || "all";
   const setTab = (key) => setSearchParams((prev) => {
@@ -303,12 +313,12 @@ export default function Ledger() {
   const invalidate = () => ["ledger-summary", "expenses", "assets", "inventory", "revenue", "payables"]
     .forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
 
-  const summaryQ = useQuery({ queryKey: ["ledger-summary"], queryFn: () => api.get("/ledger/summary").then((r) => r.data) });
-  const expensesQ = useQuery({ queryKey: ["expenses"], queryFn: () => api.get("/expenses", { params: { limit: LIST_LIMIT } }).then((r) => r.data) });
-  const assetsQ = useQuery({ queryKey: ["assets"], queryFn: () => api.get("/assets", { params: { limit: LIST_LIMIT } }).then((r) => r.data) });
-  const inventoryQ = useQuery({ queryKey: ["inventory"], queryFn: () => api.get("/inventory", { params: { limit: LIST_LIMIT } }).then((r) => r.data) });
-  const revenueQ = useQuery({ queryKey: ["revenue"], queryFn: () => api.get("/revenue").then((r) => r.data) });
-  const payablesQ = useQuery({ queryKey: ["payables"], queryFn: () => api.get("/payables").then((r) => r.data) });
+  const summaryQ = useQuery({ queryKey: ["ledger-summary"], queryFn: () => api.get("/ledger/summary").then((r) => r.data), enabled: canLedger });
+  const expensesQ = useQuery({ queryKey: ["expenses"], queryFn: () => api.get("/expenses", { params: { limit: LIST_LIMIT } }).then((r) => r.data), enabled: canLedger });
+  const assetsQ = useQuery({ queryKey: ["assets"], queryFn: () => api.get("/assets", { params: { limit: LIST_LIMIT } }).then((r) => r.data), enabled: canLedger });
+  const inventoryQ = useQuery({ queryKey: ["inventory"], queryFn: () => api.get("/inventory", { params: { limit: LIST_LIMIT } }).then((r) => r.data), enabled: canLedger });
+  const revenueQ = useQuery({ queryKey: ["revenue"], queryFn: () => api.get("/revenue").then((r) => r.data), enabled: canLedger });
+  const payablesQ = useQuery({ queryKey: ["payables"], queryFn: () => api.get("/payables").then((r) => r.data), enabled: canLedger });
   const capPendingQ = useQuery({
     queryKey: ["captures-pending"],
     queryFn: () => api.get("/captures/pending-count").then((r) => r.data),
@@ -338,7 +348,7 @@ export default function Ledger() {
           under the Finance title instead (2026-09-15, founder) — see below. */}
       {!isMobile && (
         <StickyHeader>
-          <SectionTabs tab={tab} setTab={setTab} pendingCount={pendingCount} isMobile={isMobile} />
+          <SectionTabs tab={tab} setTab={setTab} pendingCount={pendingCount} isMobile={isMobile} tabs={tabs} />
         </StickyHeader>
       )}
       {/* 2026-09-15, founder — on a phone the Finance title and the section
@@ -348,7 +358,7 @@ export default function Ledger() {
       {isMobile && (
         <StickyHeader className="mb-5 flex flex-col gap-6" data-testid="finance-mobile-header">
           <h1 className="font-display text-3xl">{t("finance.title")}</h1>
-          <SectionTabs tab={tab} setTab={setTab} pendingCount={pendingCount} isMobile={isMobile} />
+          <SectionTabs tab={tab} setTab={setTab} pendingCount={pendingCount} isMobile={isMobile} tabs={tabs} />
         </StickyHeader>
       )}
       <div className="mb-5 lg:mb-6">
@@ -365,7 +375,7 @@ export default function Ledger() {
               <GlassSelect testid="finance-period" ariaLabel="Period" value={period} onChange={setPeriod} align="end" icon={CalendarBlank}
                 options={PERIODS.map((p) => ({ value: p.value, label: p.label }))} triggerClassName="h-11 w-auto min-w-[11rem] text-sm" />
             )}
-            <AddRecordControl tab={tab} onPick={setAdding} />
+            {canLedger && <AddRecordControl tab={tab} onPick={setAdding} />}
           </div>
         </div>
       </div>

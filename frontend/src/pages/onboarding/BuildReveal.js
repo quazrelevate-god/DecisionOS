@@ -12,7 +12,6 @@ import { DexWave } from "../../components/mobile/DexWave";
 import { CountUp } from "../../components/karma";
 // ASK-36 5 — the app's one loading animation.
 import { Loader } from "../../components/common";
-import { RoutinesSetup, niceDate } from "../../components/routines/RoutinesSetup";
 
 // What Dex is "doing" while the real AI build runs (30-60s). Loops until done.
 const WAIT_LINES = [
@@ -230,10 +229,8 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                               savedBlueprint = null, onBlueprint, onFixPhone, onChangeEmail }) {
   const [pct, setPct] = useState(0);
   const [line, setLine] = useState(0);
-  // stage: 'building' → 'preview' (refine) → 'registering' → 'reveal'
+  // stage: 'building' → 'preview' (refine) → 'registering' → the app
   const [stage, setStage] = useState("building");
-  // 2026-09-21 — the routines the founder started on the reveal screen.
-  const [routinesStarted, setRoutinesStarted] = useState(null);
   const [bp, setBp] = useState(null);        // current blueprint (may be regenerated)
   const [welcome, setWelcome] = useState("");
   const [error, setError] = useState("");
@@ -383,7 +380,14 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
           approval_rules: bp.approval_rules || [],
         },
       });
-      setStage("reveal");
+      /* J1-04 / J2-03 (JOURNEY-1) — ONE CONFIRM SCREEN. Pressing "Looks good
+         — Enter DecisionOS" used to build the company and then show a second
+         screen, with the same counts and the same words on the button, asking
+         to enter again. The founder has already said yes; this is the door, so
+         open it. The routines that screen offered are not lost — My Work's
+         RoutinesNudge asks for them in the app, where a founder can answer
+         with their company in front of them. */
+      onEnter();
     } catch (e) {
       const detail = e.response?.data?.detail;
       /* 2026-09-17 — a founder whose first press was lost (the proxy giving up
@@ -921,69 +925,6 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
         )}
 
         {/* --------------------------------------------------------- REVEAL */}
-        {stage === "reveal" && bp && (
-          <motion.div key="reveal" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}
-            className="kr-well__pane rounded-[1.75rem] p-6 sm:p-9">
-            <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Ready</p>
-            <h1 className="mb-4 font-display text-3xl leading-[1.04] sm:text-4xl lg:text-5xl">
-              {payload.company_name} now runs on DecisionOS.
-            </h1>
-            {welcome && <p data-testid="build-welcome-line" className="text-base leading-relaxed mb-8 max-w-xl">{welcome}</p>}
-            <div className="mb-6 grid grid-cols-2 gap-3" data-testid="build-counts">
-              {counts.map((c, i) => (
-                <motion.div key={c.label} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 + i * 0.1 }}
-                  /* KM-65 — .kr-frost-min: a flat tile drawn by its hairline,
-                     with none of .kr-pop's lift. These three are a readout —
-                     "2 departments, 4 recurring tasks, 1 approval rule" — and
-                     they sat raised, in the same material as "Looks good, Enter
-                     DecisionOS" directly below them. */
-                  className="kr-frost-min rounded-2xl p-4 text-center">
-                  <p className="text-3xl font-semibold tabular-nums">{c.n}</p>
-                  <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{c.label}</p>
-                </motion.div>
-              ))}
-            </div>
-            {workflowNames.length > 0 && (
-              <div className="mb-8">
-                <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Your workflows — named after how you actually work</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {workflowNames.slice(0, 6).map((n, i) => (
-                    <motion.span key={n} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.5 + i * 0.08 }}
-                      className="kr-pressed rounded-pill bg-[hsl(var(--kr-gold)/.22)] px-3 py-1.5 text-xs">{n}</motion.span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {/* 2026-09-21 — THE ROUTINES, MADE TRUE. The count above used to be
-                a promise nothing kept: the routines were stored and never
-                created. Now the founder ticks the ones the company does and
-                they start as real repeating tasks. Entering without answering
-                keeps them waiting on My Work — nothing is created blind. */}
-            <div className="mb-8" data-testid="reveal-routines">
-              {routinesStarted ? (
-                <p className="text-sm text-slate-700" data-testid="reveal-routines-done">
-                  {routinesStarted.length === 0
-                    ? "No routines started — you can make any task repeat later."
-                    : `${routinesStarted.length === 1 ? "1 routine" : `${routinesStarted.length} routines`} started. The first is due ${
-                        niceDate(routinesStarted.map((c) => c.due_date).sort()[0])}.`}
-                </p>
-              ) : (
-                <>
-                  <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Start your routines</p>
-                  <p className="mb-3 max-w-xl text-sm text-slate-600">
-                    Tick the ones {payload.company_name} really does, and how often. Each comes back when the last one is done.
-                  </p>
-                  <RoutinesSetup testid="reveal-routines-setup" showLater={false}
-                    onDone={(d) => { if (d) setRoutinesStarted(d.created || []); }} />
-                </>
-              )}
-            </div>
-            <button onClick={onEnter} data-testid="signup-enter-button"
-              className="kr-pop flex h-14 items-center gap-2 rounded-pill bg-kr-ink px-10 font-medium text-white">
-              Enter DecisionOS <ArrowRight size={18} weight="bold" />
-            </button>
-          </motion.div>
-        )}
       </AnimatePresence>
     </div>
   );

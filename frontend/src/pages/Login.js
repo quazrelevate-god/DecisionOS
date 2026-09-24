@@ -52,7 +52,12 @@ export default function Login() {
      they do is ask for the code. */
   const _opened = new URLSearchParams(window.location.search);
   const _fromSignup = _opened.get("phone") || "";
-  const [loginTab, setLoginTab] = useState(_fromSignup ? "otp" : "password");
+  /* J2-13 (JOURNEY-1) — THE PAGE OPENS ON MOBILE + CODE. It opened on Email &
+     password, which is a form most people here cannot fill: somebody who signed
+     up by number, or who was invited, has no password at all, and the next
+     morning this screen asked them for one. Everybody has their phone. The
+     password tab is still one tap away for the people who set one. */
+  const [loginTab, setLoginTab] = useState("otp");
   const [otpPhone, setOtpPhone] = useState(_fromSignup);
   const [otpCode, setOtpCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
@@ -166,6 +171,10 @@ export default function Login() {
     } catch (err) { setError(formatApiError(err.response?.data?.detail) || "Failed"); }
     finally { setBusy(false); }
   };
+  /* The server's two refusals for a number it does not hold (auth_otp.py):
+     "No account is registered with this mobile number" and "This number is not
+     registered in the selected workspace". Matched on the words they share. */
+  const unknownNumber = /not registered|no account is registered/i.test(error || "");
   const submitOtp = async (e) => {
     e.preventDefault(); setError(""); setBusy(true);
     try { await loginWithOtp(otpPhone, otpCode, otpTenant, invite?.token); navigate("/"); }
@@ -215,7 +224,9 @@ export default function Login() {
           <Link
             to="/signup"
             data-testid="login-register-link"
-            className="kr-pop hidden h-9 shrink-0 items-center rounded-pill px-4 text-xs font-medium lg:flex"
+            /* J1-01 — this was `hidden lg:flex`: on a phone, the screen the
+               app opens on had no way to sign up at all. */
+            className="kr-pop flex h-9 shrink-0 items-center rounded-pill px-4 text-xs font-medium"
           >
             Create a workspace
           </Link>
@@ -313,6 +324,19 @@ export default function Login() {
                     </div>
                   )}
                   {error && <p data-testid="auth-error" className="text-sm text-danger-600 font-semibold">{error}</p>}
+                  {/* J1-01 (JOURNEY-1) — A NUMBER WE DO NOT KNOW IS A NEW
+                      CUSTOMER, NOT AN ERROR. The phone opens here, the number
+                      came back "not registered", and the only way on was a
+                      line of small print. Somebody standing at a locked door
+                      is told where the open one is, with their number carried
+                      across so they do not type it twice. */}
+                  {unknownNumber && (
+                    <button type="button" data-testid="otp-start-company"
+                      onClick={() => navigate(`/signup?phone=${encodeURIComponent(otpPhone)}`)}
+                      className="kr-pop flex h-12 w-full items-center justify-center rounded-pill px-4 text-sm font-medium">
+                      Start a new company with this number
+                    </button>
+                  )}
                   {/* While the workspaces are on screen they ARE the buttons:
                       a Send OTP beside them would only ask the question again. */}
                   {!otpChoices && (

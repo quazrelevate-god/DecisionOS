@@ -83,13 +83,18 @@ function buildTiles({ user, t }) {
     },
     { key: "workflows", to: "/workflows", label: t("nav.workflows", "Workflows"), icon: FlowArrow, perm: "workflows" },
     { key: "journal", to: "/journal", label: t("nav.journal", "Journal"), icon: BookOpen, ownerOnly: true },
+    /* GL-02 (JOURNEY-1 J9p-01..03, J10-03) — OPS IS NOT OWNER-ONLY. The page
+       behind it has never been: /operating-score is Protected with no
+       permission, so anybody signed in may open it, and on a laptop anybody
+       can. This tile was the phone's only door to it and it was shut, which is
+       how a team member ended up looking at a score dial on their Desk with no
+       way to find out what it meant. */
     {
       key: "operating-score",
       to: "/operating-score",
       // Not t("nav.ops") — that bundle says "Ops", which is jargon for a tile.
       label: t("allapps.ops", "Ops"),
       icon: Gauge,
-      ownerOnly: true,
     },
     // RBAC P1 (2026-09-15): /team is open to everyone (read-only without Manage
     // team), so the tile is too — it hid the page from teammates on a phone.

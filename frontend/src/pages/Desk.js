@@ -1137,13 +1137,21 @@ export default function Desk() {
                 desktop keeps it (the row below), and `scope` still drives the
                 numeral, so a phone simply shows the company score the Desk has
                 always opened on. */}
-            <div className="flex shrink-0 items-center gap-3 lg:hidden" aria-hidden={!scoreReady}>
+            {/* J1-12 / J2-08 / J10-03 (JOURNEY-1) — THE DIAL HAS A NAME AND A
+                DOOR. It was an unlabelled number beside an unlabelled arc that
+                did nothing when tapped, and on a phone a non-owner had no way
+                to the page that explains it. It is the way there now. The name
+                is the link's own, not a caption: this Desk is exactly one
+                screen (ASK-42) and a caption line here is a row of decisions. */}
+            <Link to="/operating-score" data-testid="desk-score-link-phone"
+              aria-label="Operating score — open the score page"
+              className="flex shrink-0 items-center gap-3 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 lg:hidden">
               <div className="flex items-baseline">
                 <span className="font-display text-6xl leading-none">{scoreReady ? shownScore : "—"}</span>
                 {scoreReady && <span className="ml-1 text-sm text-muted-foreground">/100</span>}
               </div>
               <ArcGauge value={scoreReady ? shownScore : null} size={110} className="w-24 shrink-0 text-foreground" />
-            </div>
+            </Link>
           </div>
 
           {/* ASK-25 · the score row, desktop: slider over the numeral on the
@@ -1166,6 +1174,14 @@ export default function Desk() {
                   />
                 </p>
               )}
+              {/* J2-08 — the number's name, and the way to what is behind it.
+                  The slider above stays outside the link: a control inside a
+                  link is a control you cannot use. */}
+              <Link to="/operating-score" data-testid="desk-score-link"
+                className="group flex items-center gap-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40">
+                Operating score
+                <CaretRight size={11} weight="bold" aria-hidden="true" className="transition-transform group-hover:translate-x-0.5" />
+              </Link>
               <div className="flex items-baseline gap-2.5">
                 <BigNumeral
                   text={scoreReady ? String(shownScore) : "—"}
@@ -1183,12 +1199,16 @@ export default function Desk() {
                 </p>
               )}
             </div>
-            <ArcGauge
-              value={scoreReady ? shownScore : null}
-              size={206}
-              className="w-[206px] shrink-0 justify-self-end text-foreground"
-              testid="desk-gauge"
-            />
+            <Link to="/operating-score" aria-label="Operating score — open the score page"
+              data-testid="desk-gauge-link"
+              className="justify-self-end rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40">
+              <ArcGauge
+                value={scoreReady ? shownScore : null}
+                size={206}
+                className="w-[206px] shrink-0 text-foreground"
+                testid="desk-gauge"
+              />
+            </Link>
           </div>
 
           {/* ASK-46 — ON DESKTOP THE WELL IS STILL HERE, in the hero's left

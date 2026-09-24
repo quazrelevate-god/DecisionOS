@@ -537,14 +537,23 @@ export default function Layout({ children }) {
           {/* KR-5: the reference's outlined circle. The badge goes ORANGE: a
               notification count is alert grammar, exactly what --kr-accent
               exists for. */}
+          {/* J2-14 (JOURNEY-1) — THE BADGE COUNTS WHAT NEEDS THEM, on the
+              desktop as well. It wore the raw unread count, so on a first day
+              it read "3 need you" beside a Desk with nothing waiting: the
+              three were the welcome and the two the sign-up wrote. The phone's
+              bell has counted only approvals, escalations and mentions since
+              MPWA-03 (§8) — `bellCount`, ten lines up — and a badge that means
+              one thing on a phone and another on a laptop is two badges. The
+              panel below still says how many are NEW, which is every one of
+              them: that word is honest, "need you" was not. */}
           <button data-testid="notif-bell"
-            aria-label={unread > 0 ? `Notifications, ${unread} need you` : "Notifications"}
+            aria-label={bellCount > 0 ? `Notifications, ${bellCount} need you` : "Notifications"}
             className="relative h-10 w-10 rounded-full border border-kr-ink/55 grid place-items-center text-foreground/90 transition-colors hover:bg-white/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline">
             <Bell size={18} weight="regular" />
-            {unread > 0 && (
+            {bellCount > 0 && (
               <span data-testid="notif-count"
                 className="absolute -top-1.5 -right-1.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-kr-accent px-1 text-[10px] font-bold leading-none text-white">
-                {unread > 99 ? "99+" : unread}
+                {bellCount > 99 ? "99+" : bellCount}
               </span>
             )}
           </button>

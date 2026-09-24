@@ -55,8 +55,13 @@ export default function Signup() {
   const navigate = useNavigate();
 
   const [phase, setPhase] = useState("basics");
+  /* J1-01 (JOURNEY-1) — somebody whose number the sign-in page did not know is
+     sent here with it ("/signup?phone=..."), so the first thing they are asked
+     is not the thing they just typed. It is still confirmed by a texted code
+     like any other; carrying it across saves the retype, nothing more. */
+  const _phoneFromLogin = new URLSearchParams(window.location.search).get("phone") || "";
   const [form, setForm] = useState({
-    company_name: "", name: "", email: "", phone: "", team_size: "",
+    company_name: "", name: "", email: "", phone: _phoneFromLogin, team_size: "",
     // the company's own contact address (a second company asks for it instead
     // of a second sign-in; blank is fine and Settings can fill it in later)
     support_email: "",

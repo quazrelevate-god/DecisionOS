@@ -215,6 +215,9 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel, no
   // only if you have none (the server decides; this names who it will be).
   const managerId = members.find((m) => m.id === user?.id)?.reporting_manager_id;
   const escalateTo = managerId && managerId !== user?.id ? members.find((m) => m.id === managerId) : null;
+  // J12-01 — who this person may actually hand work to (see the picker below).
+  const handoffPeople = members.filter((m) => m.id !== user?.id && canAssignPerson(user, m));
+  const handoffTeams = roleOptions.filter((r) => canAssignTeam(user, r.key));
   /* PILOT-1 A — THE WORDS OUTLIVE THE FORM. They lived in this component's
      state, so anything that took the form off the screen — a click beside the
      drawer, the phone's Back, a look at another screen, a reload — took the
@@ -306,19 +309,26 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel, no
           );
         })}
       </div>
+      {/* J12-01 (JOURNEY-1) — THE PICKER OFFERS ONLY PEOPLE IT CAN HAND TO.
+          A hand-off gives somebody work, so the server puts it through the
+          same assign rules as New Task (_check_assignable in routers/tasks.py)
+          — and this list had none of them, so it named colleagues the Post
+          would always refuse. The refusal was clear; being asked to choose
+          from a list where some names cannot be chosen is not. Same two
+          helpers the New Task dialog uses, so the two lists cannot drift. */}
       {action === "handoff" && (
         <div className="space-y-2">
           <GlassSelect value={toId} onChange={setToId} ariaLabel="Hand off to a team member"
             testid={`update-member-${taskId}`}
             options={[
-              { value: "", label: "Hand off to a team member" },
-              ...members.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` })),
+              { value: "", label: handoffPeople.length ? "Hand off to a team member" : "Nobody you can hand this to" },
+              ...handoffPeople.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` })),
             ]} />
           <GlassSelect value={toRole} onChange={setToRole} disabled={!!toId} ariaLabel="Or hand off to a whole team"
             testid={`update-team-${taskId}`}
             options={[
               { value: "", label: `…or to a whole team${toId ? " (member selected)" : ""}` },
-              ...roleOptions.map((r) => ({ value: r.key, label: r.label })),
+              ...handoffTeams.map((r) => ({ value: r.key, label: r.label })),
             ]} />
         </div>
       )}

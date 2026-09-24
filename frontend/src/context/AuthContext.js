@@ -160,6 +160,20 @@ export function AuthProvider({ children }) {
        name him, and they go with him. */
     clearAllDrafts();
     forgetPersonOnDevice(user);
+    /* JOURNEY-1 J12-05 — AND THE SAVED SCREENS GO WITH THEM. The service
+       worker empties the API cache when the sign-out POST passes through it
+       (service-worker.js, the /api/auth/logout route), which is a condition
+       and not a guarantee: no worker yet on a first load, an installed app
+       whose worker is being replaced, a browser without one at all. On a
+       shared phone the next person would then open the app to the last
+       person's Desk, drawn from the cache before the first request comes
+       back. Emptied from the page as well, where CacheStorage is the same
+       store, so it does not depend on the request being seen. Done BEFORE the
+       network call: the phone's Sign out starts a page load straight after
+       this returns and anything left awaiting is cut short. */
+    if (typeof caches !== "undefined") {
+      try { await caches.delete("decisionos-api"); } catch (e) { /* no cache to clear */ }
+    }
     try {
       await api.post("/auth/logout");
     } catch (e) {

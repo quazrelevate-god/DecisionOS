@@ -71,6 +71,23 @@ export function fullTime(iso) {
   return dt.toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+/* J2-07 (JOURNEY-1) — A DATE A PERSON READS. Finance printed the stored
+   string: "2026-09-22" in the Date column of every expense, invoice, payment
+   and asset. That is how the database holds a day, not how a shopkeeper reads
+   one. Sorting is unaffected — the tables sort on the raw value, which these
+   columns still carry.
+   Date-only strings are pinned to UTC on purpose: "2026-09-22" parsed as local
+   time is midnight, and west of Greenwich that prints as the 21st. */
+export function shortDate(value) {
+  if (!value) return "";
+  const iso = String(value);
+  const dt = new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00Z` : iso);
+  if (Number.isNaN(dt.getTime())) return iso;
+  const opts = { day: "numeric", month: "short", year: "numeric" };
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) opts.timeZone = "UTC";
+  return dt.toLocaleDateString(undefined, opts);
+}
+
 export const CONTACT_TYPE_LABELS = { customer: "Customer", vendor: "Supplier", dealer: "Dealer" };
 export const typeLabel = (t) => CONTACT_TYPE_LABELS[t] || (t ? String(t).charAt(0).toUpperCase() + String(t).slice(1) : "");
 

@@ -53,6 +53,16 @@ const STATUSES = [
   { key: "active", label: "Active" },
   { key: "inactive", label: "Inactive" },
 ];
+/* J2-07 (JOURNEY-1) — A SUPPLIER IS NOT A LEAD. The three statuses are shared
+   by everyone in CRM, and a wholesaler who added the mill she buys her oil
+   from watched it filed as a "Lead" — sales language for somebody who has not
+   bought anything yet, said about a company she pays every month. The ladder
+   stays one ladder (the server's enum, and one filter over the whole list);
+   for a supplier its first rung is spoken as "New". A supplier you have just
+   added is also ACTIVE by default, because that is why you added them. */
+const statusesFor = (type) => (VENDOR_TYPES.includes(type)
+  ? STATUSES.map((s) => (s.key === "lead" ? { ...s, label: "New" } : s))
+  : STATUSES);
 
 // E2-03: lifecycle stages. Customers travel a sales funnel, suppliers a
 // procurement journey. Each stage is a card chip tone (components/karma/glass
@@ -346,7 +356,8 @@ const TYPE_META = {
 };
 const blankContact = (type) => ({
   type, name: "", company: "", phone: "", email: "", address: "", tax_id: "", tags: "",
-  status: "lead", assigned_id: "", notes: "", lifecycle_stage: "",
+  status: VENDOR_TYPES.includes(type) ? "active" : "lead",
+  assigned_id: "", notes: "", lifecycle_stage: "",
 });
 // JOURNEY-1 J8 — the same window edits a contact that exists.
 const contactForm = (c) => ({
@@ -508,7 +519,7 @@ export function CrmContactDialog({ type, contact, onClose, onSaved, users, label
             <Field label="Status">
               <GlassSelect testid="crm-contact-status" ariaLabel="Status" value={form.status} triggerClassName="h-11 text-sm"
                 onChange={(v) => setForm((f) => ({ ...f, status: v }))}
-                options={STATUSES.map((s) => ({ value: s.key, label: s.label }))} />
+                options={statusesFor(form.type).map((s) => ({ value: s.key, label: s.label }))} />
             </Field>
             <Field label="Stage">
               <GlassSelect testid="crm-contact-lifecycle" ariaLabel="Lifecycle stage" value={form.lifecycle_stage} triggerClassName="h-11 text-sm"

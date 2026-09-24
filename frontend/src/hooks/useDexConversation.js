@@ -39,7 +39,11 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
   // "voice" -> the bar draws the wave, the FAB is a microphone.
   // "type"  -> the bar is a text field, the FAB is a send button.
   const [mode, setMode] = useState("voice");
-  const [draft, setDraft] = useDraft(draftName, "");
+  /* J4-03 (JOURNEY-1) — the third value is the draft's own state: whether
+     these words were read back from a previous visit, and how to throw them
+     away. The well says so; a decision kept on a device and never mentioned is
+     a decision the founder believes they made. */
+  const [draft, setDraft, draftKept] = useDraft(draftName, "");
   // ASK-32 1.6 — files attached to the next decision, and the held recording
   // the draft came from (its words are reviewed here, then sent on as ONE note).
   const [pendingFiles, setPendingFiles] = useState([]);
@@ -411,7 +415,7 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
     dex?.startRecording?.();
   }, [ask, draft, dex, mode]);
 
-  return { log, busy, mode, setMode, draft, setDraft, setDraftFromVoice, ask, attach, removeFile, retry, adopt, canRetry, submit, fabIntent, pendingFiles };
+  return { log, busy, mode, setMode, draft, setDraft, draftKept, setDraftFromVoice, ask, attach, removeFile, retry, adopt, canRetry, submit, fabIntent, pendingFiles };
 }
 
 export default useDexConversation;

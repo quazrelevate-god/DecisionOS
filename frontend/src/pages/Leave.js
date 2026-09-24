@@ -248,7 +248,14 @@ export function LeaveCard({ lv, canAct, onRefresh, highlight, mine = false }) {
 
   const decide = async (kind) => {
     try {
-      await api.post(`/leaves/${lv.id}/${kind}`, { note });
+      /* J8-07 (JOURNEY-1) — THE OUTCOME SHOWS AT ONCE. The approver pressed
+         Approve, was told "Approved", and the card under their hand still said
+         Pending until the page was reloaded: this was the one handler that
+         threw the server's answer away and waited for the list to come round
+         again. `answer` and `withdraw` beside it have applied it since
+         2026-09-19; the endpoint returns the updated leave for exactly this. */
+      const { data } = await api.post(`/leaves/${lv.id}/${kind}`, { note });
+      applyNow(data);
       toast.success(kind === "approve" ? "Approved" : kind === "reject" ? "Rejected" : "Info requested");
       setAction(null); setNote("");
       // ASK-4: no auto-open on approve any more -- the Impact dialog is gone.

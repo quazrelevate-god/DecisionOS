@@ -20,6 +20,9 @@ import {
   AttachmentLink, CARD, EmptyNote, FIELD, LoadError, SMALL_INK, SMALL_PILL, SourceTag, TONE_CHIP, Tag, fmt,
 } from "./financeKit";
 import { latestEntryAt, daysSince, isInvoiceOverdue, overdueDays } from "./ledgerMath";
+// J2-07 — the Date columns printed the stored "2026-09-22". shortDate reads it
+// back as a day ("22 Sep 2026"); the tables still SORT on the raw value.
+import { shortDate } from "../../lib/format";
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
@@ -170,7 +173,7 @@ function NeedsMatchingPanel({ title, hint, unmatched, open, cur, endpoint, stand
             className="flex flex-wrap items-center gap-2.5 rounded-2xl bg-white/70 p-3 ring-1 ring-inset ring-slate-900/[0.05]">
             <span className="text-sm font-semibold text-slate-900">{f(p.remaining ?? p.amount)}</span>
             <span className="min-w-0 flex-1 truncate text-xs text-slate-500">
-              {p.contact_name || "Unknown"}{p.date ? ` · ${p.date}` : ""}{p.invoice_number ? ` · ref ${p.invoice_number}` : ""}
+              {p.contact_name || "Unknown"}{p.date ? ` · ${shortDate(p.date)}` : ""}{p.invoice_number ? ` · ref ${p.invoice_number}` : ""}
               {p.applied > 0 ? ` · ${f(p.applied)} already applied` : ""}
             </span>
             <InvoicePicker open={open} value={picks[p.id] || ""} onChange={(v) => setPicks((s) => ({ ...s, [p.id]: v }))} cur={cur} testid={`match-picker-${p.id}`} />
@@ -262,7 +265,7 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, init
     { key: "customer", head: "Customer", role: "meta", tdClass: "text-slate-600",
       value: (s) => s.contact_name, cell: (s) => s.contact_name || "—" },
     { key: "date", head: "Date", role: "meta", tdClass: "tabular-nums text-slate-600",
-      value: (s) => s.date, cell: (s) => s.date || "—" },
+      value: (s) => s.date, cell: (s) => shortDate(s.date) || "—" },
     { key: "status", head: "Status", role: "chip",
       cell: (s) => (
         <span className="inline-flex flex-wrap items-center gap-1.5">
@@ -285,7 +288,7 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, init
   const paymentColumns = [
     { key: "customer", head: "Customer", role: "title", tdClass: "font-medium text-slate-900",
       cell: (p) => <>{p.contact_name || "—"}<SourceTag source={p.source} /></> },
-    { key: "date", head: "Date", role: "meta", tdClass: "tabular-nums text-slate-600", value: (p) => p.date, cell: (p) => p.date || "—" },
+    { key: "date", head: "Date", role: "meta", tdClass: "tabular-nums text-slate-600", value: (p) => p.date, cell: (p) => shortDate(p.date) || "—" },
     { key: "method", head: "Method", role: "meta", tdClass: "text-slate-600", value: (p) => p.method, cell: (p) => p.method || "—" },
     { key: "ref", head: "Reference", role: "meta", tdClass: "text-slate-600",
       value: (p) => p.reference || p.invoice_number, cell: (p) => p.reference || p.invoice_number || "—" },
@@ -380,7 +383,7 @@ export function ExpensesTab({ rows, loading, error, payables, cur, onDelete, onC
       cell: (e) => <>{e.title}<SourceTag source={e.source} /><AttachmentLink att={e.attachment} /></> },
     { key: "category", head: t("finance.c_category"), role: "chip", cell: (e) => (e.category ? <Tag className="normal-case">{e.category}</Tag> : <span className="text-slate-400">—</span>) },
     { key: "vendor", head: t("finance.c_vendor"), role: "meta", tdClass: "text-slate-600", value: (e) => e.vendor_name, cell: (e) => e.vendor_name || "—" },
-    { key: "date", head: t("finance.c_date"), role: "meta", tdClass: "tabular-nums text-slate-600", value: (e) => e.date, cell: (e) => e.date || "—" },
+    { key: "date", head: t("finance.c_date"), role: "meta", tdClass: "tabular-nums text-slate-600", value: (e) => e.date, cell: (e) => shortDate(e.date) || "—" },
     { key: "status", head: t("finance.c_status"), role: "chip",
       cell: (e) => (
         <Tag tone={e.status === "paid" ? "good" : e.status === "awaiting_bill" ? "quiet" : "warn"}>
@@ -422,7 +425,7 @@ export function AssetsTab({ rows, loading, error, cur, onDelete }) {
       cell: (a) => <>{a.name}<SourceTag source={a.source} /><AttachmentLink att={a.attachment} /></> },
     { key: "category", head: t("finance.c_category"), role: "chip", cell: (a) => (a.category ? <Tag className="normal-case">{a.category}</Tag> : <span className="text-slate-400">—</span>) },
     { key: "vendor", head: t("finance.c_vendor"), role: "meta", tdClass: "text-slate-600", value: (a) => a.vendor_name, cell: (a) => a.vendor_name || "—" },
-    { key: "bought", head: t("finance.a_bought"), role: "meta", tdClass: "tabular-nums text-slate-600", value: (a) => a.purchase_date, cell: (a) => a.purchase_date || "—" },
+    { key: "bought", head: t("finance.a_bought"), role: "meta", tdClass: "tabular-nums text-slate-600", value: (a) => a.purchase_date, cell: (a) => shortDate(a.purchase_date) || "—" },
     { key: "status", head: t("finance.c_status"), role: "chip",
       cell: (a) => {
         const st = STATUS[a.status] || { tone: "quiet", label: a.status || "—" };

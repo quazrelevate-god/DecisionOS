@@ -44,6 +44,7 @@ import { VoiceRipple, DESK_RIPPLE } from "../../components/karma/VoiceRipple";
 import { DexWave } from "../../components/mobile/DexWave";
 // ASK-34 item 5 — the same picture the founder met at signup (BuildReveal).
 import { DexForgeFit } from "../onboarding/DexForge";
+import { DraftNote } from "../../components/karma/DraftNote";
 
 // A capture lands in several caches at once — the same set Layout refreshes
 // after the phone's Dex (refreshAfterCapture).
@@ -626,6 +627,18 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
       ))}
     </ul>
   ) : null;
+  /* J4-03 (JOURNEY-1) — THE WELL SAYS IT KEPT SOMETHING. A decision typed and
+     not sent is held on the device (lib/drafts.js) and was read back into the
+     field in silence. A founder who leaves half a sentence here and comes back
+     to it tomorrow has no way to tell what they are looking at: something they
+     sent, or something still sitting in their hand. It says which now, and
+     Discard is how they let it go. It is not a decision until it is sent. */
+  const keptDraft = chat.draftKept?.restored && chat.draft.trim() ? (
+    <DraftNote testid="dex-well-draft" className="mb-1.5"
+      label="Kept from before — not sent to Dex yet"
+      onDiscard={() => { chat.setDraft(""); chat.draftKept.discard(); }} />
+  ) : null;
+
   /* 2026-09-21 — the desktop's own prompt line under "Dex" ("Tell Dex what you
      decided — speak or type.") is gone with the label: both now sit in the
      floor on every size (phoneTitle), as they have on the phone since ASK-48. */
@@ -1064,7 +1077,9 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
          stay at the top of the pane — raised above the ripple, which fills the
          pane behind everything. */
       label={null}
-      prompt={phone ? attachments : (attachments && <div className="relative z-10">{attachments}</div>)}
+      prompt={phone
+        ? ((keptDraft || attachments) && <>{keptDraft}{attachments}</>)
+        : ((keptDraft || attachments) && <div className="relative z-10">{keptDraft}{attachments}</div>)}
       body={body}
       /* ASK-47 — AND WHILE AN ENDING IS SHOWING, THE PHONE'S WELL IS THE
          ENDING. The well is a fixed box, and an ending already carries the only

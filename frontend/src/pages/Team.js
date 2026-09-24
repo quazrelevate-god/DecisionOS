@@ -130,7 +130,11 @@ function InviteLinkModal({ info, onClose }) {
           className={`flex h-11 items-center justify-center gap-2 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
           <WhatsappLogo size={16} weight="bold" aria-hidden="true" /> Share on WhatsApp
         </a>
-        <p className="text-xs text-neutral-500">Auto-SMS delivery starts once your SMS provider is connected — until then, share this link directly. Link expires in 7 days.</p>
+        {/* J1-06 (JOURNEY-1) — this used to say "once your SMS provider is
+            connected", which reads to an owner as something of theirs that is
+            broken. Nothing of theirs is: we do not text the link yet, so they
+            send it. Say that. */}
+        <p className="text-xs text-neutral-500">Send this link to them yourself — WhatsApp, a message, however you normally reach them. It stops working after 7 days.</p>
       </DialogContent>
     </Dialog>
   );

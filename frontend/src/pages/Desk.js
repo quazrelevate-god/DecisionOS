@@ -254,9 +254,16 @@ function DeskRow({ r, first, testid }) {
       }`}
     >
       <div className="flex min-w-0 flex-col gap-0.5">
-        <p className={`truncate text-[15px] font-medium leading-5 tracking-[-0.006em] ${r.deferred ? "text-white" : "text-neutral-300"}`}>{r.title}</p>
+        {/* J3-03 (JOURNEY-1) — a decision's title was cut mid-word with
+            nowhere to read the rest. On the desktop the list scrolls (the
+            `scroll` branch below), so a long one takes a second line there.
+            The phone keeps one line: its Desk is exactly three rows and a
+            "Show all" by design (ASK-42), and a row that can double in height
+            is a different card. Both carry the full title as a tooltip. */}
+        <p title={r.title}
+          className={`truncate text-[15px] font-medium leading-5 tracking-[-0.006em] lg:whitespace-normal lg:line-clamp-2 ${r.deferred ? "text-white" : "text-neutral-300"}`}>{r.title}</p>
         {(r.meta || r.deferred) && (
-          <p className="truncate text-xs leading-4 text-neutral-500">
+          <p title={r.meta || undefined} className="truncate text-xs leading-4 text-neutral-500">
             {r.deferred && <span className="font-medium text-neutral-300">Set aside</span>}
             {r.deferred && r.meta ? " · " : ""}
             {r.meta}

@@ -17,6 +17,8 @@ Two entry points, sharing one schema:
 """
 from __future__ import annotations
 
+import re
+
 _PRIORITIES = {"low", "medium", "high"}
 _DEC_TYPES = {"directive", "approval", "policy", "observation"}
 
@@ -75,6 +77,36 @@ def validate_extract(data) -> list[str]:
     return v[:_MAX_VIOLATIONS]
 
 
+# J1-09 (JOURNEY-1) -- a decision preview reached a founder's screen reading
+# "...for [current period]". The model had left one of its own template slots in
+# the text. The prompt now forbids it (extraction.extract 1.2), but a prompt is
+# a request, not a guarantee, and this text goes straight onto a card the owner
+# is asked to approve. So every string the extraction hands downstream is
+# scrubbed here as well.
+#
+# The shape matched is a template slot and only that: an all-lowercase phrase in
+# square brackets, 3-30 characters, no digits. "[current period]", "[amount]",
+# "[vendor name]" go; "[3]", "[GST]", "[Note: paid]" stay, because a human might
+# have written them. The preposition in front of a slot goes with it, so
+# "the budget for [current period]" reads "the budget" and not "the budget for".
+_LEAD = r"(?:\s+\b(?:for|to|by|of|in|on|at|from|with|per|during|until)\b)?"
+_SLOT = re.compile(_LEAD + r"\s*\[[a-z][a-z _/-]{2,30}\]")
+_DANGLING = re.compile(r"\s+\b(?:for|to|by|of|in|on|at|from|with|per|and|the|a)\s*$", re.I)
+
+
+def _unslot(v):
+    """Drop template slots from one value; keep the original if nothing is left."""
+    if not isinstance(v, str) or "[" not in v:
+        return v
+    out = _SLOT.sub("", v)
+    out = re.sub(r"\s+([,.;:])", r"\1", out)          # " ," left by a removal
+    out = re.sub(r"\s{2,}", " ", out).strip()
+    for _ in range(2):                                # "...budget for the" -> "...budget"
+        out = _DANGLING.sub("", out)
+    out = out.strip(" ,;:-")
+    return out if out else v
+
+
 def coerce_extract(data, transcript: str = "") -> dict:
     """Guarantee the downstream contract regardless of model output.
 
@@ -84,7 +116,7 @@ def coerce_extract(data, transcript: str = "") -> dict:
     and adds the enum/confidence hardening."""
     d = data if isinstance(data, dict) else {}
     out: dict = {}
-    out["summary"] = d.get("summary") if _nonempty_str(d.get("summary")) else (transcript or "")[:200]
+    out["summary"] = _unslot(d.get("summary")) if _nonempty_str(d.get("summary")) else (transcript or "")[:200]
     conf = d.get("confidence")
     out["confidence"] = float(conf) if isinstance(conf, (int, float)) and 0 <= conf <= 1 else 0.8
 
@@ -97,6 +129,8 @@ def coerce_extract(data, transcript: str = "") -> dict:
                 it["priority"] = "medium"
             if key == "decisions" and "type" in it and it.get("type") not in _DEC_TYPES:
                 it["type"] = "directive"
+            for k, v in list(it.items()):     # J1-09: no template slots on a card
+                it[k] = _unslot(v)
         out[key] = items
     return out
 

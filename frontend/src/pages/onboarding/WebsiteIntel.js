@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, ArrowLeft, Globe, MagnifyingGlass, CheckCircle } from "@phosphor-icons/react";
 import api from "../../lib/api";
 import { INDUSTRIES } from "../../lib/format";
+import { GlassSelect } from "../../components/karma/GlassSelect";
 
 const MODELS = ["B2B", "B2C", "B2B & B2C", "D2C", "Marketplace", "Services"];
 const SCAN_LINES = [
@@ -178,10 +179,10 @@ export function WebsiteIntel({ companyName, onDone, onBack }) {
               <div className="grid gap-4 border-t border-white/50 pt-4 sm:grid-cols-2">
                 <div>
                   <label className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Industry</label>
-                  <select data-testid="signup-intel-industry" value={industry} onChange={(e) => setIndustry(e.target.value)}
-                    className="kr-pressed mt-1.5 h-11 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-1 focus:ring-foreground/40">
-                    {INDUSTRIES.map((i) => <option key={i} value={i}>{i}</option>)}
-                  </select>
+                  <GlassSelect variant="field" testid="signup-intel-industry" ariaLabel="Industry"
+                    value={industry} onChange={setIndustry}
+                    options={INDUSTRIES.map((i) => ({ value: i, label: i }))}
+                    triggerClassName="kr-pressed mt-1.5 h-11 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-1 focus:ring-foreground/40" />
                 </div>
                 <div>
                   <label className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">You sell to</label>
@@ -269,11 +270,10 @@ export function WebsiteIntel({ companyName, onDone, onBack }) {
             <div className="space-y-5">
               <div>
                 <label className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Industry</label>
-                <select autoFocus data-testid="signup-manual-industry" value={industry} onChange={(e) => setIndustry(e.target.value)}
-                  className="kr-pressed mt-1.5 h-12 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-1 focus:ring-foreground/40">
-                  <option value="">Select industry…</option>
-                  {INDUSTRIES.map((i) => <option key={i} value={i}>{i}</option>)}
-                </select>
+                <GlassSelect variant="field" testid="signup-manual-industry" ariaLabel="Industry"
+                  value={industry} onChange={setIndustry} placeholder="Select industry…"
+                  options={INDUSTRIES.map((i) => ({ value: i, label: i }))}
+                  triggerClassName="kr-pressed mt-1.5 h-12 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-1 focus:ring-foreground/40" />
               </div>
               <div>
                 <label className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">You sell to</label>

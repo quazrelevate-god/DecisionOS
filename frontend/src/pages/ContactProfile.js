@@ -9,6 +9,7 @@ import { hasPerm } from "../lib/perms";
 import { Chip, EmptyState, DexBadge } from "../components/common";
 import { money, typeLabel, formatPhone } from "../lib/format";
 import { lex } from "../lib/lexicon";
+import { GlassSelect } from "../components/karma/GlassSelect";
 import { CrmContactDialog } from "./CRM";
 import { LogComplaintDialog } from "../components/crm/LogComplaintDialog";
 import { toast } from "sonner";
@@ -346,16 +347,15 @@ export default function ContactProfile() {
       <Section icon={ChatCircleDots} title="Recent Activity" count={(activities || []).length}>
         {canWriteActivity && (
           <div className="nm-tile p-3 mb-3 flex flex-col md:flex-row gap-2" data-testid="crm-activity-logger">
-            <select
+            <GlassSelect
+              variant="field"
               value={actKind}
-              onChange={(e) => setActKind(e.target.value)}
-              data-testid="crm-activity-kind"
-              className="nm-inset px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-            >
-              {Object.entries(ACTIVITY_META).map(([k, m]) => (
-                <option key={k} value={k}>{m.label}</option>
-              ))}
-            </select>
+              onChange={setActKind}
+              testid="crm-activity-kind"
+              ariaLabel="Kind of activity"
+              options={Object.entries(ACTIVITY_META).map(([k, m]) => ({ value: k, label: m.label }))}
+              triggerClassName="nm-inset px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
             <input
               value={actText}
               onChange={(e) => setActText(e.target.value)}

@@ -7,13 +7,19 @@ from prompts.base import Prompt, register
 # --- ai_extract: founder directive -> structured operational JSON -------------
 EXTRACT = register(Prompt(
     name="extraction.extract",
+    # 1.2 (2026-09-24, JOURNEY-1 J1-09) — plain finished words. A decision
+    # preview reached a founder reading "...for [current period]": the model
+    # left one of its own template slots in the text. Everything here is shown
+    # to a business owner as finished writing, so the prompt now says so. The
+    # extraction is also scrubbed in services/ai/validation.py, because a
+    # prompt is a request and that card asks for an approval.
     # 1.1 (2026-09-16) — the decision guard. A live workspace was raising
     # decisions for remarks: "the new office chairs arrived and everyone likes
     # them" came back as a decision titled "Office chairs received and approved
     # by team", 0 tasks, waiting for an owner's approval. This channel is where
     # an owner records what they DECIDED; a report on how things are going is
     # not a decision, and the prompt now says so with examples.
-    version="1.1",
+    version="1.2",
     intent="Convert a founder's spoken/written directive into structured decisions/tasks/workflow_events/reminders/meeting_events/memory_notes JSON.",
     template=(
         "You are the extraction engine of DecisionOS, an operating brain for small businesses. "
@@ -77,7 +83,12 @@ EXTRACT = register(Prompt(
         "onboard each user, etc.) are handled later inside that task's AI execution guide, so keep them OUT of separate tasks. "
         "Only create multiple tasks when the work genuinely goes to DIFFERENT people/roles, or is a clearly separate deliverable "
         'for the same person that cannot be part of the same guided checklist. Put the fuller scope in the task\'s "description". '
-        "Pick assignee_role ONLY from the provided role list. Infer sensible owners and due dates. If nothing applies, use empty arrays."
+        "Pick assignee_role ONLY from the provided role list. Infer sensible owners and due dates. If nothing applies, use empty arrays. "
+        "\n\nPLAIN, FINISHED WORDS. Every string you return is shown to a business owner exactly as you write it. "
+        "NEVER leave a placeholder or a template slot in the text — no '[current period]', '[amount]', '[vendor name]', "
+        "'[date]', 'TBD', 'XXX'. If you know the value, write it ('for September', 'Rs 85,000'). If you do not, leave "
+        "the phrase out altogether and write a shorter sentence. A card the owner is asked to approve must never ask "
+        "them to fill in a blank."
     ),
 ))
 

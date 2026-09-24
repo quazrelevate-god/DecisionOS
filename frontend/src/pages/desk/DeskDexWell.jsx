@@ -549,17 +549,15 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
      the left, the keyboard on the right — so the field is a door there as
      well. */
   const fieldOpen = typing || !!chat.draft || transcribing;
-  // Sent or cleared: the door closes again and the ripple has the well back.
-  // (A phone closes it on a timer; the desktop closes it when the field is left
-  // empty — onBlur below — because a desk is where people pause before typing.)
-  useEffect(() => {
-    if (!phone || !typing) return;
-    if (!chat.draft && !transcribing && !dex.recording && !chat.busy) {
-      const t = setTimeout(() => setTyping(false), 2500);
-      return () => clearTimeout(t);
-    }
-    return undefined;
-  }, [phone, typing, chat.draft, transcribing, dex.recording, chat.busy]);
+  /* Sent or cleared: the door closes again and the ripple has the well back —
+     when the field is LEFT, not on a clock.
+
+     J1-13 (JOURNEY-1) — the phone used to close it 2.5s after it opened if
+     nothing had been typed yet. A tester opened the keyboard, looked up what
+     they wanted to say, and the field had gone. Somebody who taps "Type
+     instead" is about to type; how long they take to start is not ours to
+     judge. It closes on blur now, the same rule the desk always had, so the
+     only thing that shuts it is leaving it. */
   /* 2026-09-21 · THE DESKTOP WELL'S RIPPLE RUNS INWARD. The stage is the whole
      pane and the waves start at its inner wall; the mic sits in the middle of
      the space above the floor. Measured in the pane's own pixels: `hole` is the
@@ -917,6 +915,7 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
       <button
         type="button"
         data-testid="desk-dex-attach"
+        data-dex-floor="1"
         onClick={() => fileInputRef.current?.click()}
         disabled={!canCapture || chat.busy}
         aria-busy={attaching || undefined}
@@ -978,7 +977,18 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
               if (e.key === "Enter") { e.preventDefault(); send(); }
               if (e.key === "Escape" && !chat.draft.trim()) { e.preventDefault(); setTyping(false); }
             }}
-            onBlur={() => { if (!phone && !chat.draft.trim() && !transcribing) setTyping(false); }}
+            /* A tap on attach or on the keyboard circle blurs the field on
+               its way to a button in this same row, so look where the focus
+               landed — and at what is in the field NOW, not what was in it
+               when this handler was made — before closing anything. */
+            onBlur={() => {
+              if (chat.draft.trim() || transcribing) return;
+              setTimeout(() => {
+                if (document.activeElement?.getAttribute?.("data-dex-floor") === "1") return;
+                if (fieldRef.current?.value?.trim()) return;
+                setTyping(false);
+              }, 120);
+            }}
             // Short enough to fit whole at 360px, where the field is ~150px of text.
             placeholder={transcribing ? "Transcribing…" : "Type a decision…"}
             aria-label="Tell Dex what you decided"
@@ -1021,6 +1031,7 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
       <button
         type="button"
         data-testid="desk-dex-keyboard"
+        data-dex-floor="1"
         data-intent={chat.draft.trim() ? "send" : "type"}
         onClick={() => {
           if (chat.draft.trim()) { send(); setTyping(false); return; }

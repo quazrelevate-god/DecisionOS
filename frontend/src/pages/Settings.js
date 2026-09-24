@@ -104,9 +104,10 @@ function MoneyAndApprovalsCard() {
       <div className="space-y-5">
         <div>
           <label className="label-mono text-muted-foreground">Default currency</label>
-          <select data-testid="settings-currency" className={`${inp} mt-1 max-w-[200px]`} value={currency} onChange={(e) => setCurrency(e.target.value)}>
-            {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
+          <GlassSelect variant="field" testid="settings-currency" ariaLabel="Currency"
+            value={currency} onChange={setCurrency}
+            options={CURRENCIES.map((c) => ({ value: c, label: c }))}
+            triggerClassName={`${inp} mt-1 max-w-[200px]`} />
         </div>
 
         <div>

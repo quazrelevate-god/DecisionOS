@@ -5,6 +5,7 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader, StickyHeader, EmptyState } from "../components/common";
 import { timeAgo } from "../lib/format";
+import { GlassSelect } from "../components/karma/GlassSelect";
 import { toast } from "sonner";
 import {
   Plus, WarningOctagon, CheckCircle, XCircle, ChatCircleText, Gear, Clock, ArrowCounterClockwise, PaperPlaneTilt,
@@ -98,9 +99,10 @@ export function RequestLeaveDialog({ onDone, triggerClassName }) {
         <div className="space-y-3">
           <div>
             <label className="label-mono text-muted-foreground">Leave Type</label>
-            <select data-testid="leave-type-select" className={`${inp} mt-1`} value={form.leave_type} onChange={set("leave_type")}>
-              {LEAVE_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
-            </select>
+            <GlassSelect variant="field" testid="leave-type-select" ariaLabel="Leave type"
+              value={form.leave_type} onChange={(v) => setForm({ ...form, leave_type: v })}
+              options={LEAVE_TYPES.map((t) => ({ value: t.key, label: t.label }))}
+              triggerClassName={`${inp} mt-1`} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -161,9 +163,10 @@ function AbsenceDialog({ onDone }) {
         <div className="space-y-3">
           <div>
             <label className="label-mono text-muted-foreground">Reason</label>
-            <select data-testid="absence-reason-select" className={`${inp} mt-1`} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })}>
-              {ABSENCE_REASONS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
-            </select>
+            <GlassSelect variant="field" testid="absence-reason-select" ariaLabel="Reason"
+              value={form.reason} onChange={(v) => setForm({ ...form, reason: v })}
+              options={ABSENCE_REASONS.map((r) => ({ value: r.key, label: r.label }))}
+              triggerClassName={`${inp} mt-1`} />
           </div>
           <textarea data-testid="absence-note-input" className={inp} rows={2} placeholder="Optional note" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
         </div>
@@ -409,13 +412,14 @@ export function ApproverConfig({ roleOptions, members }) {
         {roleOptions.filter((r) => r.key !== "owner").map((r) => (
           <div key={r.key} className="flex items-center gap-3">
             <span className="w-32 shrink-0 text-sm font-semibold">{r.label}</span>
-            <select data-testid={`leave-approver-${r.key}`}
-                className="kr-pressed h-11 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--kr-gold))]"
-              value={map[r.key] || ""} onChange={(e) => setMap({ ...map, [r.key]: e.target.value })}>
-              <option value="">Owner (default)</option>
-              {nonOwner.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
-              {members.filter((m) => m.role === "owner").map((m) => <option key={m.id} value={m.id}>{m.name} · owner</option>)}
-            </select>
+            <GlassSelect variant="field" testid={`leave-approver-${r.key}`} ariaLabel={`Who approves ${r.label || r.key}`}
+              triggerClassName="kr-pressed h-11 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--kr-gold))]"
+              value={map[r.key] || ""} onChange={(v) => setMap({ ...map, [r.key]: v })}
+              options={[
+                { value: "", label: "Owner (default)" },
+                ...nonOwner.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` })),
+                ...members.filter((m) => m.role === "owner").map((m) => ({ value: m.id, label: `${m.name} · owner` })),
+              ]} />
           </div>
         ))}
       </div>

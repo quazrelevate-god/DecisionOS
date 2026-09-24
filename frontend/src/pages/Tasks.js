@@ -19,6 +19,10 @@ import { ApprovalPanel } from "../components/karma/ApprovalPanel";
 import { GlassSelect } from "../components/karma/GlassSelect";
 import { DraftNote } from "../components/karma/DraftNote";
 import { useDraft } from "../hooks/useDraft";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
+  AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
+} from "../components/ui/alert-dialog";
 
 const COLUMNS = [
   { key: "blocked", label: "Pending Approval" },
@@ -110,6 +114,20 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
   const [dueError, setDueError] = useState("");
   const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
+  /* J9-02 (JOURNEY-1) — LEAVING A HALF-WRITTEN TASK NOW ASKS.
+     The words were never actually lost: useDraft has kept them since PILOT-1 A
+     and brings them back the next time New Task opens. But the closing gave no
+     sign of that, so a tester who pressed Back believed they had lost the lot —
+     and the one person it really costs is the one who MEANT to throw it away
+     and now carries it around. Founder's call: offer both. */
+  const [askLeave, setAskLeave] = useState(false);
+  const written = () => !!(form.title.trim() || form.description.trim()
+    || form.expected_output.trim() || files.length);
+  const close = (keep) => {
+    if (!keep) { formDraft.discard(); setForm(blank()); }
+    setFiles([]); setTitleError(""); setDueError("");
+    setAskLeave(false); setOpen(false); onOpenChange?.(false);
+  };
   const fileRef = useRef(null);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const personId = form.assign.startsWith("u:") ? form.assign.slice(2) : "";
@@ -228,6 +246,9 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
   const titleInp = "w-full rounded-none border-0 border-b-2 border-solid border-kr-ink/15 bg-transparent px-0.5 pb-2 pt-1 font-display text-xl text-foreground placeholder:text-foreground/35 transition-colors focus:border-kr-ink focus:outline-none focus-visible:outline-none aria-[invalid=true]:border-kr-accent";
   return (
     <Dialog open={open} onOpenChange={(o) => {
+      // J9-02: closing with words in the form asks first (keep, or discard).
+      // Escape and the X both land here; an empty form closes straight away.
+      if (!o && written()) { setAskLeave(true); return; }
       setOpen(o);
       // A fresh form picks up the Department My Work is on now.
       if (o && !form.title) setForm((f) => ({ ...f, task_type: firstType() }));
@@ -324,11 +345,15 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                    lg:data-[state=closed]:[--tw-exit-translate-x:-50%] lg:data-[state=closed]:[--tw-exit-translate-y:-48%]`}
       >
         <DialogHeader className="shrink-0 pr-11">
+          {/* J13b-07 (JOURNEY-1) — 44px on touch, the app's own floor. It was
+              h-9 (36px, and 35 under the phone's ui-scale) and it is this
+              sheet's ONLY way out on a phone. A mouse keeps the smaller one. */}
           <DialogPrimitiveClose
             data-testid="task-dialog-close"
             aria-label="Close"
-            className="kr-pop absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full text-foreground/70">
-            <X size={15} weight="bold" aria-hidden="true" />
+            className="kr-pop absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full text-foreground/70 lg:h-9 lg:w-9">
+            <X size={16} weight="bold" aria-hidden="true" className="lg:hidden" />
+            <X size={15} weight="bold" aria-hidden="true" className="hidden lg:block" />
           </DialogPrimitiveClose>
           <DialogTitle className="font-display text-xl">New Task</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">What, who and when. The rest is optional.</DialogDescription>
@@ -643,6 +668,34 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
           </button>
         </DialogFooter>
       </DialogContent>
+
+      {/* J9-02 — the ask, on the way out. Escape or a click outside goes back
+          to the form, which is the third answer and needs no button. */}
+      <AlertDialog open={askLeave} onOpenChange={setAskLeave}>
+        <AlertDialogContent data-testid="new-task-leave-ask" className="kr-bento max-w-md border-0">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display text-xl">Keep this task for later?</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground">
+              You have written something and not created it yet. Keep it and the words come back
+              the next time you open New Task on this device. Discard throws them away now.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel asChild>
+              <button data-testid="new-task-leave-discard" onClick={() => close(false)}
+                className={`flex h-11 items-center justify-center rounded-pill px-5 text-sm font-medium text-foreground/80 ${GLASS_PILL}`}>
+                Discard
+              </button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <button data-testid="new-task-leave-keep" onClick={() => close(true)}
+                className={`flex h-11 items-center justify-center rounded-pill px-5 text-sm font-medium ${INK_PILL}`}>
+                Keep it
+              </button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

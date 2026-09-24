@@ -90,6 +90,36 @@ def resolve_role(role: Optional[str], role_keys: Iterable[str]) -> Optional[str]
     return None
 
 
+# J1-05 (JOURNEY-1) — WHAT A NEW TEAM CAN SEE ON ITS FIRST DAY.
+# A founder's first act after signing up was to add his accountant to the
+# "Accounts & GST" team the AI had just built him — and that team had no
+# access to Money. Every team onboarding invents is a CUSTOM role key, and a
+# custom key falls through to _BASE_PERMS, which does not include finance. So
+# the accountant he had just hired could not open the accounts.
+#
+# The rule is deliberately narrow and deliberately NOT the model's to make:
+# a team whose name is about money gets Finance, everybody else starts on the
+# base. Nothing here opens Contacts, because Sales and Finance losing CRM by
+# default was the founder's own change of 13 August (FIX-FUP-51) and this is
+# not the place to quietly undo it.
+_MONEY_WORDS = FAMILIES[0] | {
+    "gst", "tax", "taxes", "taxation", "invoice", "invoices", "invoicing",
+    "receivable", "receivables", "payable", "payables", "books", "bookkeeping",
+    "ledger", "expense", "expenses", "purchase", "purchasing", "procurement",
+}
+
+
+def starting_perms(*names: Optional[str]) -> list:
+    """The EXTRA permissions a team starts with, read off what it is called.
+
+    Returns only what is added on top of the base set, so a caller can decide
+    whether to store a full list or merge. Empty for most teams."""
+    words = set()
+    for n in names:
+        words |= _words(n or "")
+    return ["finance"] if words & _MONEY_WORDS else []
+
+
 def dept_name(roles: Optional[Iterable[dict]], key: Optional[str]) -> str:
     """A department's NAME, never its key (JOURNEY-1, 2026-09-22).
 

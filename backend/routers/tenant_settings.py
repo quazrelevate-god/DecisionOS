@@ -565,11 +565,15 @@ async def get_tenant_plan(user: dict = Depends(get_current_user)):
     ep = effective_plan(tenant)
     # Include seats_used so the UI can render "X of Y seats used"
     # without a second round trip.
-    from services.auth.membership import list_memberships_for_tenant, LIVE_STATUSES
-    active = await list_memberships_for_tenant(
-        db, user["tenant_id"], statuses=LIVE_STATUSES,
+    # J12-09 (JOURNEY-1): an invitation takes a seat from the moment it is
+    # sent, so this counts SEAT_STATUSES and not LIVE_STATUSES — the screen
+    # said "0 of 15 seats" over a workspace with 23 people invited.
+    from services.auth.membership import list_memberships_for_tenant, SEAT_STATUSES, STATUS_PENDING
+    taken = await list_memberships_for_tenant(
+        db, user["tenant_id"], statuses=SEAT_STATUSES,
     )
-    ep["seats_used"] = len(active)
+    ep["seats_used"] = len(taken)
+    ep["seats_invited"] = sum(1 for m in taken if m.get("status") == STATUS_PENDING)
     return ep
 
 

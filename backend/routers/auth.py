@@ -22,8 +22,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, Backgr
 from core import (
     db, get_current_user, get_current_user_optional, hash_password, verify_password, create_token,
     set_auth_cookie, clear_auth_cookie, set_usage_tenant, new_id, now_iso,
-    login_response, logger,
+    login_response, logger, _BASE_PERMS,
 )
+# J1-05 — what a team the AI just named starts out able to see.
+from shared.roles import starting_perms
 
 
 router = APIRouter(prefix="/api/auth")
@@ -346,7 +348,20 @@ async def register(inp: RegisterInput, request: Request, response: Response,
         k = r.get("key")
         if k and k != "owner" and k not in seen:
             seen.add(k)
-            clean_roles.append({"key": k, "label": r.get("label") or k.replace("_", " ").title()})
+            label = r.get("label") or k.replace("_", " ").title()
+            # J1-05 (JOURNEY-1) — a team the AI names for the company's own work
+            # is a CUSTOM role key, and a custom key falls through to
+            # _BASE_PERMS. So the "Accounts & GST" team a founder was given at
+            # sign-up had no access to Money, and the accountant he added to it
+            # on day one could not open the accounts. A team whose name is about
+            # money starts with Finance (shared/roles.starting_perms); the rest
+            # start on the base, unchanged. Settings -> Team roles -> Access is
+            # still where an owner decides differently.
+            extra = starting_perms(k, label)
+            role_doc = {"key": k, "label": label}
+            if extra:
+                role_doc["permissions"] = sorted(set(_BASE_PERMS) | set(extra))
+            clean_roles.append(role_doc)
 
     # WE-EPIC5-BUG-2 (2026-08-16): before we can call the AI helpers,
     # the RBAC-25 DPDP consent gate needs a tenant doc with granted

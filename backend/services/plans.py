@@ -209,23 +209,38 @@ async def enforce_seat_limit(db, tenant_id: str) -> None:
     Called by team.py create_user before insert.
 
     Uses the memberships collection (FIX-004-B) as the authoritative
-    source of "active members" — status in LIVE_STATUSES.
+    source, counting SEAT_STATUSES — active members AND people who have been
+    invited and not yet signed in.
+
+    J12-09 (JOURNEY-1): this counted LIVE_STATUSES, so a person became a seat
+    only the first time they signed in and invites were effectively unlimited —
+    "0 of 15 seats" beside 23 invitations, every one of them able to walk in.
+    The invite is the commitment, so the invite is the seat; cancelling it
+    (POST /users/{id}/uninvite) gives the seat straight back, which is what the
+    message below tells the owner to do.
     """
-    from services.auth.membership import list_memberships_for_tenant, LIVE_STATUSES
+    from services.auth.membership import list_memberships_for_tenant, SEAT_STATUSES, STATUS_PENDING
     tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
     ep = effective_plan(tenant or {})
     cap = ep["seat_limit"]
     if cap is None:
         return   # unlimited
-    active = await list_memberships_for_tenant(db, tenant_id, statuses=LIVE_STATUSES)
-    if len(active) >= cap:
+    taken = await list_memberships_for_tenant(db, tenant_id, statuses=SEAT_STATUSES)
+    if len(taken) >= cap:
+        waiting = sum(1 for m in taken if m.get("status") == STATUS_PENDING)
+        # Name the way out that costs nothing: an invitation nobody has used is
+        # a seat the owner can have back this minute.
+        how = ("Cancel an invitation nobody has used yet, remove a member, or upgrade."
+               if waiting else "Remove a member, or upgrade to add more.")
         raise HTTPException(
             status_code=402,
             detail={
                 "code": "seat_limit_reached",
-                "message": (f"You've reached your plan's seat limit ({cap}). "
-                             f"Upgrade to add more members, or remove an existing member first."),
-                "seats_used": len(active),
+                "message": (f"All {cap} seats are taken"
+                            + (f", {waiting} by invitations that haven't been used yet. " if waiting else ". ")
+                            + how),
+                "seats_used": len(taken),
+                "seats_invited": waiting,
                 "seat_limit": cap,
                 "plan": ep["key"],
             },

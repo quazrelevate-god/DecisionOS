@@ -54,8 +54,17 @@ def _resolve_meeting_date(when: str, due_in_days) -> str:
         return (now + timedelta(days=1)).date().isoformat()
     for name, idx in _WEEKDAYS.items():
         if name in w:
+            # J5-02 (JOURNEY-1) — "NEXT WEDNESDAY" IS THE COMING WEDNESDAY.
+            # Said on a Tuesday, it used to come back as the Wednesday EIGHT
+            # days away: this already resolves to the next occurrence of the
+            # day, and "next" then added a second week on top. Nobody in a
+            # workshop means "a week on Wednesday" when they say "next
+            # Wednesday" the day before — they mean tomorrow. Said ON a
+            # Wednesday it is still the one after, because `or 7` refuses
+            # today. "Next week Wednesday" is the other phrase, and that one
+            # does mean the following week, so it keeps the extra seven.
             ahead = (idx - now.weekday()) % 7 or 7  # next occurrence, not today
-            if "next" in w:
+            if "next week" in w:
                 ahead += 7
             return (now + timedelta(days=ahead)).date().isoformat()
     if isinstance(due_in_days, int):

@@ -34,6 +34,35 @@ from shared.due import is_overdue
 _OPS_CACHE_TTL_SECONDS = 90
 
 
+# J8-09 (JOURNEY-1) — ...AND IT IS NO LONGER TTL-ONLY. 90 seconds of staleness
+# is fine for a number nobody is watching. It is not fine beside the Desk,
+# which is live: a tester approved a task, watched the Desk move, opened the
+# score page and found the old number, and there is no way to tell that from
+# the score being broken. (Raised again in PILOT-1 D.)
+#
+# The invalidation is a READ-SIDE probe rather than a bump on every write.
+# Every write worth scoring already writes a row to db.activity through
+# core.log_activity -- 76 call sites -- and db.activity is indexed on
+# (tenant_id, created_at). One existence check for a row newer than the cache
+# is cheaper than the four full-tenant scans it guards, and it cannot be
+# forgotten at the seventy-seventh write site the way a bump can.
+async def _written_since(tid: str, computed_at: Optional[str]) -> bool:
+    """True when anything has been logged in this tenant since ``computed_at``.
+
+    Times are ISO-8601 UTC strings from now_iso(), which sort lexicographically,
+    so Mongo compares them directly. Any error answers True: recomputing is
+    always correct, and a cache that cannot be trusted should not be used."""
+    if not computed_at:
+        return True
+    try:
+        row = await db.activity.find_one(
+            {"tenant_id": tid, "created_at": {"$gt": computed_at}}, {"_id": 1})
+        return row is not None
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"operating_score staleness probe failed: {e}")
+        return True
+
+
 def _cache_fresh(computed_at: Optional[str], now: str, ttl: int) -> bool:
     """True if a cache entry stamped ``computed_at`` is younger than ``ttl`` at ``now``."""
     if not computed_at:
@@ -113,7 +142,8 @@ async def _company_operating_view(tid: str, viewer: dict, now: str) -> dict:
     cache_key = f"{tid}:{int(can_finance)}"
     try:
         cached = await db.operating_score_cache.find_one({"_id": cache_key}, {"_id": 0})
-        if cached and _cache_fresh(cached.get("computed_at"), now, _OPS_CACHE_TTL_SECONDS):
+        if cached and _cache_fresh(cached.get("computed_at"), now, _OPS_CACHE_TTL_SECONDS) \
+                and not await _written_since(tid, cached.get("computed_at")):
             return cached["payload"]
     except Exception as e:
         logger.warning(f"operating_score cache read failed: {e}")

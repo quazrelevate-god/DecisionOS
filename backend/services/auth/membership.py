@@ -69,6 +69,16 @@ VALID_STATUSES = {STATUS_PENDING, STATUS_ACTIVE, STATUS_SUSPENDED, STATUS_REMOVE
 # The pseudo-statuses `get_current_user` will honor as a live session.
 LIVE_STATUSES = {STATUS_ACTIVE}
 
+# J12-09 (JOURNEY-1) — WHAT TAKES UP A SEAT, which is NOT the same question as
+# what makes a live session. Seats were counted with LIVE_STATUSES, so a person
+# only became a seat the first time they SIGNED IN. An owner could therefore
+# invite as many people as they liked: the audit's workspace showed "0 of 15
+# seats" with 23 people invited, and every one of them could have walked in.
+# The invite is the commitment, so the invite is the seat. Cancel the
+# invitation (POST /users/{id}/uninvite) and the seat comes straight back.
+# `suspended` stays uncounted, as it always was.
+SEAT_STATUSES = {STATUS_ACTIVE, STATUS_PENDING}
+
 
 async def create_membership(
     db,

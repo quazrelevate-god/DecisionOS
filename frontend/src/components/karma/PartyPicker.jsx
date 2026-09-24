@@ -16,8 +16,9 @@
  * list, arrow keys and Enter to choose, Escape to close.
  */
 import { useId, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Check, Plus } from "@phosphor-icons/react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Check, Plus, UserPlus } from "@phosphor-icons/react";
 import api from "../../lib/api";
 import { cn } from "../../lib/utils";
 import { Popover, PopoverAnchor, PopoverContent } from "../ui/popover";
@@ -55,10 +56,38 @@ export function PartyPicker({ kind = "vendor", name = "", linkedId = "", onChang
   }, [parties, q]);
   const exact = parties.find((p) => norm(p.name) === q) || null;
   const offerNew = !!q && !exact;
-  // The rows the keyboard walks: the matches, then "use this name" if offered.
-  const rows = offerNew ? [...shown, { id: "", name: name.trim(), _new: true }] : shown;
+  /* J2-04 (JOURNEY-1) — AND THE NAME CAN BECOME A REAL SUPPLIER, HERE.
+     A wholesaler typed the mill's name on her first bill and it stayed a name:
+     nothing ever became a supplier, so the supplier page never counted her oil
+     and the next bill was typed again from memory. The only way to make it
+     real was CRM, which a finance person does not necessarily have. This adds
+     them through Finance's own narrow door (POST /ledger/parties, a name and
+     nothing else) and links the record to them in the same tap. "Just use the
+     name" is still there under it, for a one-off nobody needs to keep. */
+  const rows = offerNew
+    ? [...shown, { id: "", name: name.trim(), _add: true }, { id: "", name: name.trim(), _new: true }]
+    : shown;
+
+  const qc = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const addToCrm = async (row) => {
+    if (adding) return;
+    setAdding(true);
+    try {
+      const { data } = await api.post("/ledger/parties", { kind, name: row.name });
+      await qc.invalidateQueries({ queryKey: ["ledger-parties", kind] });
+      onChange?.({ name: data.name, id: data.id });
+      toast.success(data.already_existed
+        ? `${data.name} was already in CRM — linked`
+        : `${data.name} added as a ${word}`);
+      setOpen(false);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || `Could not add that ${word}`);
+    } finally { setAdding(false); }
+  };
 
   const choose = (row) => {
+    if (row._add) { addToCrm(row); return; }
     onChange?.({ name: row.name, id: row._new ? "" : row.id });
     setOpen(false);
   };
@@ -140,20 +169,27 @@ export function PartyPicker({ kind = "vendor", name = "", linkedId = "", onChang
           )}
           {shown.length > 0 && !q && <li className={GLASS_MENU_LABEL} aria-hidden="true">In CRM</li>}
           {rows.map((row, i) => (
-            <li key={row._new ? "__new__" : row.id} id={`${listId}-${i}`} role="option" aria-selected={i === active}
-              data-testid={testid ? `${testid}-option-${row._new ? "new" : row.id}` : undefined}
+            <li key={row._add ? "__add__" : row._new ? "__new__" : row.id} id={`${listId}-${i}`} role="option" aria-selected={i === active}
+              data-testid={testid ? `${testid}-option-${row._add ? "add" : row._new ? "new" : row.id}` : undefined}
               onMouseDown={(e) => e.preventDefault()}
               onMouseEnter={() => setActive(i)}
               onClick={() => choose(row)}
               className={cn(
                 "relative flex min-h-11 w-full cursor-pointer select-none items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-700 lg:min-h-10",
                 i === active && "bg-slate-900/[0.06] text-slate-900",
-                row._new && "mt-1 border-t border-slate-900/[0.06] pt-2.5",
+                row._add && "mt-1 border-t border-slate-900/[0.06] pt-2.5 font-medium text-slate-900",
               )}>
-              {row._new ? (
+              {row._add ? (
+                <>
+                  <UserPlus size={14} weight="bold" aria-hidden="true" className="shrink-0 text-slate-600" />
+                  <span className="min-w-0 truncate">
+                    {adding ? "Adding…" : `Add “${row.name}” as a ${word}`}
+                  </span>
+                </>
+              ) : row._new ? (
                 <>
                   <Plus size={14} weight="bold" aria-hidden="true" className="shrink-0 text-slate-500" />
-                  <span className="min-w-0 truncate">Use “{row.name}” — not in CRM</span>
+                  <span className="min-w-0 truncate">Just use the name “{row.name}”</span>
                 </>
               ) : (
                 <>

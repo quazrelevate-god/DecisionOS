@@ -19,7 +19,7 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithM
 from core import (
     db, claude_chat, EMERGENT_LLM_KEY, VISION_MODEL,
     _extract_json, new_id, now_iso, logger, log_usage, _est_tokens,
-    get_current_user, user_perms, log_activity,
+    get_current_user, user_perms, log_activity, require_perm,
 )
 # FIX-007-B (S4-10): Brain-context writes for finance events so
 # "how did we settle the Kapoor invoice?" queries can find the answer.
@@ -292,6 +292,10 @@ async def create_expense(tenant_id: str, user_id: str, data: dict, source: str =
         "date": data.get("date") or now_iso()[:10],
         "status": data.get("status") if data.get("status") in ("paid", "unpaid", "awaiting_bill") else "unpaid",
         "notes": (data.get("notes") or "").strip(), "source": source,
+        # J7 (JOURNEY-1) — "pending" holds a high-value expense out of the books
+        # until an owner approves it (see add_expense). None for everything else,
+        # which is every expense written before this and most written after.
+        "approval_status": data.get("approval_status") or None,
         "invoice_id": data.get("invoice_id"), "payment_id": data.get("payment_id"),
         "ingestion_id": data.get("ingestion_id"),
         "workflow_id": data.get("workflow_id"),
@@ -330,12 +334,24 @@ async def create_expense(tenant_id: str, user_id: str, data: dict, source: str =
         except Exception as _e:
             logger.warning(f"S4-10 expense brain_context failed for {eid}: {_e}")
     # An "Asset Purchase" expense also becomes a tracked Asset.
+    #
+    # J7-07 (JOURNEY-1) — AND THIS IS NOW THE ONLY PLACE THAT HAPPENS. The same
+    # bill for the same machine was booked two different ways depending on how
+    # it arrived: typed into Finance it became an expense AND an asset, but
+    # photographed and filed through the capture inbox it became an asset
+    # ALONE — so the money never showed up in what the company had spent. The
+    # ingestion route calls this function now (services/ingestion.py), with the
+    # asset's own name and category ridden in on `data` so the AI's reading of
+    # the bill is not thrown away for a guess.
     if category == "Asset Purchase":
+        _aname = (data.get("asset_name") or "").strip() or doc["title"]
         await create_asset(tenant_id, user_id, {
-            "name": doc["title"], "category": guess_asset_category(f"{doc['title']} {doc['notes']}"),
+            "name": _aname,
+            "category": (data.get("asset_category") or "").strip()
+                        or guess_asset_category(f"{_aname} {doc['notes']}"),
             "purchase_amount": amount,
             "currency": currency, "purchase_date": doc["date"], "vendor_name": doc["vendor_name"],
-            "expense_id": eid, "notes": "Auto-created from expense",
+            "expense_id": eid, "notes": data.get("asset_notes") or "Auto-created from expense",
         }, source=source)
     return doc
 
@@ -660,6 +676,52 @@ async def list_parties(kind: str = "vendor", q: Optional[str] = None,
              "type": r.get("type")} for r in rows if r.get("id")]
 
 
+class NewPartyInput(BaseModel):
+    kind: str = "vendor"
+    name: str
+
+
+@router.post("/ledger/parties")
+async def add_party(inp: NewPartyInput, user: dict = Depends(require_ledger)):
+    """J2-04 (JOURNEY-1) — ADD A SUPPLIER FROM THE EXPENSE FORM.
+
+    A wholesaler typed the mill's name on her first bill, and it stayed a name:
+    nothing in the app ever became a supplier, so the supplier page never
+    counted her oil and the next bill was typed again from memory. The picker
+    offered "use this name", and the only way to make it real was CRM — which
+    Finance does not necessarily have.
+
+    So this is the same narrow door GET /ledger/parties already is: behind
+    Finance's own permission, and it creates a CONTACT WITH A NAME and nothing
+    else. It does not open CRM, and it cannot edit anybody who is already
+    there. A supplier is Active, not a Lead — you are adding them because you
+    are paying them (J2-07)."""
+    types = PARTY_KINDS.get(inp.kind)
+    if not types:
+        raise HTTPException(status_code=400, detail="kind must be vendor or customer")
+    name = (inp.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Give the contact a name")
+    tid = user["tenant_id"]
+    ctype = "vendor" if inp.kind == "vendor" else "customer"
+    existing = await db.contacts.find_one(
+        {"tenant_id": tid, "type": {"$in": list(types)},
+         "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
+        {"_id": 0, "id": 1, "name": 1, "company": 1, "type": 1})
+    if existing:                    # already there: link to them, don't duplicate
+        return {**existing, "already_existed": True}
+    cid = new_id()
+    await db.contacts.insert_one({
+        "id": cid, "tenant_id": tid, "type": ctype, "name": name, "company": "",
+        "phone": "", "email": "", "address": "", "tax_id": "", "tags": [],
+        "status": "active" if ctype == "vendor" else "lead",
+        "assigned_id": None, "notes": f"Added from a {inp.kind} field in Finance.",
+        "lifecycle_stage": "", "created_by": user["id"], "created_at": now_iso(),
+    })
+    await log_activity(tid, user["id"], "contact_added", f"Added {ctype} '{name}' from Finance", "contact", cid)
+    return {"id": cid, "name": name, "company": "", "type": ctype, "already_existed": False}
+
+
 async def _linked_party(tenant_id: str, contact_id: str, kind: str) -> Optional[dict]:
     """The CRM contact a record is being linked to, or None when none was sent.
     A link to someone who is not in this company's CRM, or not that kind of
@@ -741,6 +803,7 @@ async def add_finance_category(inp: NewCategoryInput, user: dict = Depends(requi
 # Request models consolidated into models/ (Epic 8 Sprint 5).
 from models.finance import (
     ExpenseInput,
+    ExpenseApprovalInput,
     AssetInput,
     InventoryInput,
     SuggestCategoryInput,
@@ -759,11 +822,86 @@ async def list_expenses(user: dict = Depends(require_ledger),
         .sort("created_at", -1).skip(offset).limit(limit).to_list(limit)
 
 
+# J7 (JOURNEY-1) — THE HIGH-VALUE THRESHOLD APPLIES TO EVERY EXPENSE, HOWEVER
+# IT IS ENTERED. The owner sets a figure (Settings -> high_value_threshold) and
+# a WhatsApp capture above it waits for them. Typed into Finance by hand, the
+# same figure went straight into the books: the audit put a Rs 6,00,000 expense
+# through as a finance person and nobody was asked anything. A threshold that
+# depends on which door the money came through is not a threshold.
+#
+# What it does NOT do: block the person, or lose what they typed. The expense
+# is saved, marked, and left out of the totals until an owner says yes. An
+# owner entering their own expense is not asked to approve themselves.
+async def _needs_owner_approval(tenant_id: str, user: dict, amount) -> bool:
+    if user.get("role") == "owner":
+        return False
+    try:
+        amt = float(amount or 0)
+    except (TypeError, ValueError):
+        return False
+    if amt <= 0:
+        return False
+    from services.captures import _capture_settings
+    threshold, _signoff = await _capture_settings(tenant_id)
+    return amt >= threshold
+
+
+async def _tell_the_owners(tenant_id: str, user: dict, doc: dict) -> None:
+    from services.notifications import push_notification, _approver_ids
+    approvers = [a for a in await _approver_ids(tenant_id) if a and a != user["id"]]
+    if not approvers:
+        return
+    await push_notification(
+        tenant_id, approvers, 2,
+        f"{user.get('name') or 'Somebody'} recorded a {doc.get('currency') or ''} "
+        f"{_num(doc.get('amount')):,.0f} expense — '{doc.get('title')}'. It needs your approval "
+        f"before it counts.",
+        entity_type="expense", entity_id=doc["id"], ntype="approval",
+        title=doc.get("title"), sender=user.get("name"),
+    )
+
+
 @router.post("/expenses")
 async def add_expense(inp: ExpenseInput, user: dict = Depends(require_ledger)):
-    doc = await create_expense(user["tenant_id"], user["id"], inp.model_dump(), source="manual", write_brain=True)
+    data = inp.model_dump()
+    held = await _needs_owner_approval(user["tenant_id"], user, data.get("amount"))
+    if held:
+        data["approval_status"] = "pending"
+    doc = await create_expense(user["tenant_id"], user["id"], data, source="manual", write_brain=True)
     await log_activity(user["tenant_id"], user["id"], "expense_added", f"Added expense '{doc['title']}'", "expense", doc["id"])
+    if held:
+        await _tell_the_owners(user["tenant_id"], user, doc)
     return doc
+
+
+@router.post("/expenses/{eid}/approval")
+async def decide_expense(eid: str, inp: ExpenseApprovalInput,
+                         user: dict = Depends(require_perm("approvals"))):
+    """J7 — an owner (or anyone who may approve) says yes or no to a high-value
+    expense. Yes puts it in the books; no leaves it on the list, marked, so the
+    person who typed it can see what happened to it rather than finding it gone."""
+    e = await db.expenses.find_one({"id": eid, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    if not e:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    if e.get("approval_status") not in ("pending",):
+        raise HTTPException(status_code=400, detail="This expense isn't waiting for approval")
+    decision = "approved" if inp.approve else "rejected"
+    await db.expenses.update_one(
+        {"id": eid, "tenant_id": user["tenant_id"]},
+        {"$set": {"approval_status": decision, "approved_by": user["id"],
+                  "approved_at": now_iso(), "approval_note": (inp.note or "").strip() or None,
+                  "updated_at": now_iso()}})
+    await log_activity(user["tenant_id"], user["id"], f"expense_{decision}",
+                       f"{decision.title()} expense '{e.get('title')}'", "expense", eid)
+    if e.get("created_by") and e["created_by"] != user["id"]:
+        from services.notifications import push_notification
+        await push_notification(
+            user["tenant_id"], [e["created_by"]], 1,
+            f"{user.get('name')} {decision} your expense '{e.get('title')}'"
+            + (f": {inp.note.strip()}" if (inp.note or "").strip() else ""),
+            entity_type="expense", entity_id=eid, ntype=decision,
+            title=e.get("title"), sender=user.get("name"))
+    return await db.expenses.find_one({"id": eid, "tenant_id": user["tenant_id"]}, {"_id": 0})
 
 
 ALLOWED_UPLOAD_MIMES = ("image/", "application/pdf")
@@ -823,8 +961,15 @@ async def add_expense_with_file(
     data, _ = await _read_attachment(file, "expense", user["tenant_id"], typed)
     if not (str(data.get("title") or "").strip()) and not _num(data.get("amount")):
         raise HTTPException(status_code=400, detail="Add a title/amount or attach a readable bill")
+    # J7 — the same threshold as the typed route above; a bill photographed
+    # into this form is the same money as one typed into that one.
+    held = await _needs_owner_approval(user["tenant_id"], user, data.get("amount"))
+    if held:
+        data["approval_status"] = "pending"
     doc = await create_expense(user["tenant_id"], user["id"], data, source="manual", write_brain=True)
     await log_activity(user["tenant_id"], user["id"], "expense_added", f"Added expense '{doc['title']}'", "expense", doc["id"])
+    if held:
+        await _tell_the_owners(user["tenant_id"], user, doc)
     return doc
 
 
@@ -1010,6 +1155,54 @@ async def list_revenue(user: dict = Depends(require_ledger)):
     }
 
 
+# J1-11 (JOURNEY-1) — A PURCHASE THE OWNER APPROVED LEAVES A TRACE IN MONEY.
+# A founder approved "a second press brake, Rs 18 lakh" on his first day and
+# Money showed nothing at all, anywhere. It was not a bug in the books: the
+# purchase is a commitment, not a bill, and the expense is written when the
+# procurement workflow reaches its last stage (FIX-001-B). But between the
+# approval and the bill — which for a machine is weeks — the money was invisible.
+#
+# So Money now READS the commitment rather than booking it: open purchase
+# workflows carrying an amount, listed as approved and not yet billed. Nothing
+# is created, no total moves, and the row disappears the moment the real
+# expense exists, because that is the same workflow_id.
+_BUY_WORDS = {"purchase", "purchases", "purchasing", "procurement", "procure", "buy", "buying",
+              "vendor", "vendors", "supplier", "suppliers", "supply", "sourcing",
+              "material", "materials", "raw", "stock", "inventory", "capex"}
+
+
+def _is_purchase_pipeline(*names) -> bool:
+    words = set()
+    for n in names:
+        words |= {w for w in re.split(r"[^a-z]+", str(n or "").lower()) if w}
+    return bool(words & _BUY_WORDS)
+
+
+async def _committed_purchases(tid: str) -> list:
+    """Approved purchase workflows with an amount and no bill yet."""
+    out = []
+    wfs = await db.workflows.find(
+        {"tenant_id": tid, "amount": {"$gt": 0}},
+        {"_id": 0, "id": 1, "type": 1, "title": 1, "amount": 1, "counterparty": 1,
+         "stage": 1, "stages": 1, "decision_id": 1, "created_at": 1},
+    ).sort("created_at", -1).to_list(300)
+    for w in wfs:
+        stages = w.get("stages") or []
+        if stages and w.get("stage") == stages[-1]:
+            continue                      # finished: the expense is the trace now
+        if not _is_purchase_pipeline(w.get("type"), w.get("title")):
+            continue
+        if await db.expenses.find_one({"tenant_id": tid, "workflow_id": w["id"]}, {"_id": 1}):
+            continue                      # already in the books
+        out.append({
+            "id": w["id"], "title": w.get("title") or "Purchase",
+            "amount": _num(w.get("amount")), "counterparty": w.get("counterparty") or "",
+            "stage": w.get("stage") or "", "decision_id": w.get("decision_id"),
+            "date": (w.get("created_at") or "")[:10],
+        })
+    return out
+
+
 @router.get("/payables")
 async def list_payables(user: dict = Depends(require_ledger)):
     """Supplier side: open purchase bills + supplier payments needing manual matching."""
@@ -1022,6 +1215,7 @@ async def list_payables(user: dict = Depends(require_ledger)):
     unmatched = [{**p, "remaining": _pay_remaining(p)} for p in payments
                  if _pay_remaining(p) > 0.01 and p.get("match_status") != "standalone"]
     open_bills = [b for b in bills if b.get("status") != "paid" and _remaining(b) > 0.01]
+    committed = await _committed_purchases(tid)
     return {
         "currency": currency,
         "totals": {"unmatched_count": len(unmatched), "open_bill_count": len(open_bills),
@@ -1030,6 +1224,8 @@ async def list_payables(user: dict = Depends(require_ledger)):
         "open_invoices": [{"id": b["id"], "number": b.get("number"), "title": b.get("title"),
                            "contact_name": b.get("contact_name"), "amount": _num(b.get("amount")),
                            "balance": _remaining(b), "date": b.get("date")} for b in open_bills],
+        # J1-11 — approved, not yet billed. Read, never booked (see above).
+        "committed": committed,
     }
 
 
@@ -1348,7 +1544,12 @@ async def reclassify_purchases(user: dict = Depends(require_ledger)):
 async def ledger_summary(user: dict = Depends(require_ledger)):
     tid = user["tenant_id"]
     currency = await _currency(tid)
-    expenses = await db.expenses.find({"tenant_id": tid}, {"_id": 0}).to_list(5000)
+    # J7 (JOURNEY-1): an expense waiting for an owner's approval is not spend
+    # yet, and one they turned down never will be. Both stay on the Expenses
+    # list, marked, so the person who typed it can see what happened to it —
+    # they are simply not counted. An approved one joins these totals at once.
+    expenses = await db.expenses.find(
+        {"tenant_id": tid, "approval_status": {"$nin": ["pending", "rejected"]}}, {"_id": 0}).to_list(5000)
     assets = await db.assets.find({"tenant_id": tid}, {"_id": 0}).to_list(5000)
     inventory = await db.inventory.find({"tenant_id": tid}, {"_id": 0}).to_list(5000)
     sales = await db.invoices.find({"tenant_id": tid, "type": "sales_invoice"}, {"_id": 0}).to_list(5000)

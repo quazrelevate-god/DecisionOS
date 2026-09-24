@@ -171,6 +171,24 @@ async def deprovision_user(
             {"$set": set_fields},
         )
         report["tasks_reassigned"] = getattr(res, "modified_count", 0)
+        # J12-07 (JOURNEY-1) — AND THE PERSON WHO INHERITS IT IS TOLD. Work
+        # moved onto somebody's plate in silence: their My Work grew by three
+        # tasks overnight, with nothing to say where they came from or that a
+        # colleague had left. They find out by noticing, which is how a due
+        # date gets missed. One notification, naming who left and how many.
+        if reassign_to_user_id and report["tasks_reassigned"]:
+            n = report["tasks_reassigned"]
+            leaver = await db.users.find_one({"id": target_user_id, "tenant_id": tenant_id},
+                                             {"_id": 0, "name": 1}) or {}
+            who = (leaver.get("name") or "").strip() or "a colleague who has left"
+            from services.notifications import push_notification
+            await push_notification(
+                tenant_id, [reassign_to_user_id], 2,
+                f"{n} open {'task' if n == 1 else 'tasks'} moved to you from {who}, who has left the company. "
+                f"They are on My Work now — check the dates.",
+                entity_type="task", ntype="handoff",
+                title=f"{n} {'task' if n == 1 else 'tasks'} from {who}",
+            )
     except Exception as e:
         logger.warning(f"[deprovision] task reassign failed: {e}")
 

@@ -178,6 +178,17 @@ _KW_STOP = {
     "who", "the", "and", "for", "with", "our", "have", "not", "paid", "unpaid", "completed",
     "done", "open", "status", "report", "decision", "decisions", "workflow", "workflows",
     "leave", "leaves", "record", "records", "company", "business",
+    # DX-01 / J5p-01 (JOURNEY-1) — the words a money question is MADE of. An
+    # owner asked "how much do customers owe us in total?" and was told, in
+    # bold, that the receivables table was empty, beside a ledger holding
+    # Rs 7,49,000. The planner was right (invoices, unpaid, by contact); the
+    # keywords it carried were words from the QUESTION, and "owe" and
+    # "receivable" are not names of anything, so retrieval ran
+    # {number|contact_name ~ /owe|receivable/i} and matched nothing.
+    "owe", "owes", "owed", "owing", "receivable", "receivables", "payable",
+    "payables", "due", "dues", "balance", "balances", "total", "totals",
+    "much", "many", "most", "money", "amount", "amounts", "collect",
+    "collection", "collections", "revenue", "spend", "spent", "profit", "loss",
 }
 
 
@@ -291,21 +302,32 @@ async def _retrieve(plan: dict, scope: dict, user: Optional[dict] = None):
         return {"records": rows, "entity": entity}
 
     # Finance entities (already gated upstream)
+    #
+    # DX-01 / J5p-01 — AND A KEYWORD MISS OVER MONEY IS NOT AN ANSWER OF ZERO.
+    # The stop list above cannot know every word somebody might use, and the
+    # keywords are the question's words, not record names. So on a money entity
+    # a filter that matches NOTHING while the collection HOLDS something is
+    # treated as a bad filter and dropped, rather than narrated as "you have no
+    # invoices". Wrong-but-broad beats confidently empty: the numbers are
+    # computed from the rows by code either way, and an owner reading "zero
+    # outstanding" over Rs 7,49,000 stops trusting the whole thing.
+    async def _money(coll, filters):
+        q = {"tenant_id": tid}
+        if rx and filters:
+            q["$or"] = [{f: rx} for f in filters]
+        rows = await coll.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
+        if not rows and rx and filters:
+            rows = await coll.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+            if rows:
+                logger.info(f"[ask] {entity}: keyword filter matched nothing over {len(rows)} rows — dropped")
+        return rows
+
     if entity == "invoices":
-        q = {"tenant_id": tid}
-        if rx:
-            q["$or"] = [{"number": rx}, {"contact_name": rx}]
-        rows = await db.invoices.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
-        return {"records": rows, "entity": entity}
+        return {"records": await _money(db.invoices, ["number", "contact_name"]), "entity": entity}
     if entity == "payments":
-        rows = await db.payments.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(1000)
-        return {"records": rows, "entity": entity}
+        return {"records": await _money(db.payments, None), "entity": entity}
     if entity == "expenses":
-        q = {"tenant_id": tid}
-        if rx:
-            q["$or"] = [{"title": rx}, {"vendor_name": rx}, {"category": rx}]
-        rows = await db.expenses.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
-        return {"records": rows, "entity": entity}
+        return {"records": await _money(db.expenses, ["title", "vendor_name", "category"]), "entity": entity}
     return {"records": [], "entity": entity}
 
 

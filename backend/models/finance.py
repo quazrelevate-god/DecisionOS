@@ -20,6 +20,12 @@ class ExpenseInput(BaseModel):
     notes: Optional[str] = ""
 
 
+class ExpenseApprovalInput(BaseModel):
+    """J7 (JOURNEY-1) — an owner's answer on a high-value expense."""
+    approve: bool
+    note: Optional[str] = ""
+
+
 class AssetInput(BaseModel):
     name: str
     category: Optional[str] = "Other"

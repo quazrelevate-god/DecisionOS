@@ -345,14 +345,28 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
             li_text = " ".join(str(li.get("description", "")) for li in (inv.get("line_items") or []) if isinstance(li, dict))
             inv_cur = inv.get("currency") or currency
             if purchase_type == "asset":
+                # J7-07 (JOURNEY-1) — ONE RULE FOR A MACHINE ON A BILL. This
+                # branch used to create the ASSET ALONE, while the same bill
+                # typed into Finance by hand created an expense that then
+                # created the asset (routers/ledger.create_expense, the "Asset
+                # Purchase" branch). Same bill, same machine, two different
+                # sets of books: photographed, the money never appeared in what
+                # the company had spent at all. It goes through the one path
+                # now, carrying the asset's own name and category so the AI's
+                # reading of the bill is kept.
                 _aname = (inv.get("asset_name") or li_text[:60] or f"Asset from {vend}").strip()
-                await create_asset(tenant_id, user_id, {
-                    "name": _aname,
-                    "category": inv.get("asset_category") or guess_asset_category(f"{_aname} {li_text}"),
-                    "purchase_amount": amount, "currency": inv_cur,
-                    "purchase_date": inv.get("date") or "", "vendor_name": vend,
-                    "notes": f"From bill {inv.get('number') or ''} · {li_text[:150]}".strip(),
+                await create_expense(tenant_id, user_id, {
+                    "title": f"{vend} — Bill {inv.get('number') or ''}".strip(),
+                    "amount": amount, "currency": inv_cur,
+                    "category": "Asset Purchase",
+                    "vendor_name": vend, "vendor_id": cid,
+                    "date": inv.get("date") or "", "status": "unpaid",
+                    "invoice_id": inv_id, "ingestion_id": ingestion_id, "notes": li_text[:200],
+                    "asset_name": _aname,
+                    "asset_category": inv.get("asset_category") or guess_asset_category(f"{_aname} {li_text}"),
+                    "asset_notes": f"From bill {inv.get('number') or ''} · {li_text[:150]}".strip(),
                 }, source=source)
+                created["expenses"] += 1
                 created["assets"] = created.get("assets", 0) + 1
             elif purchase_type == "inventory":
                 try:

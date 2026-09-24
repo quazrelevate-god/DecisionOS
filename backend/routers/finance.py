@@ -225,7 +225,20 @@ async def contact_profile(contact_id: str, user: dict = Depends(require_perm("fi
         {"tenant_id": tid, "$or": [{"title": loose_rx}, {"summary": loose_rx}]}, {"_id": 0}
     ).sort("created_at", -1).to_list(100) if name else []
 
-    total_billed = sum(float(i.get("amount") or 0) for i in invoices)
+    # J2-04 (JOURNEY-1) — A SUPPLIER'S PAGE COUNTS WHAT YOU PAID THEM, not only
+    # the bills that arrived with a document. A wholesaler's oil supplier showed
+    # nothing at all: her expenses named him (vendor_name, vendor_id) but this
+    # page read invoices and payments only, and a typed expense is neither.
+    expenses = await db.expenses.find(
+        {"tenant_id": tid, "approval_status": {"$nin": ["pending", "rejected"]},
+         "$or": [{"vendor_id": contact_id}, {"vendor_name": name_rx}]},
+        {"_id": 0}).sort("created_at", -1).to_list(500) if name or contact_id else []
+    # An expense raised FROM a bill is that bill; counting both would double it.
+    billed_ids = {i.get("id") for i in invoices}
+    direct_expenses = [e for e in expenses if e.get("invoice_id") not in billed_ids]
+    total_expensed = sum(float(e.get("amount") or 0) for e in direct_expenses)
+
+    total_billed = sum(float(i.get("amount") or 0) for i in invoices) + total_expensed
     total_paid = sum(float(p.get("amount") or 0) for p in payments)
     outstanding = round(total_billed - total_paid, 2)
     last_payment = payments[0].get("date") if payments else None
@@ -252,6 +265,7 @@ async def contact_profile(contact_id: str, user: dict = Depends(require_perm("fi
                     "outstanding": outstanding, "last_payment": last_payment,
                     "open_complaints": len([x for x in complaints if x.get("status") != "resolved"])},
         "invoices": invoices,
+        "expenses": direct_expenses,     # J2-04: what was paid to them without a bill on file
         "payments": payments,
         "complaints": complaints,
         "workflows": workflows,

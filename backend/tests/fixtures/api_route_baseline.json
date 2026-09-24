@@ -1,6 +1,6 @@
 {
-  "count": 348,
-  "sha": "e78da96a321c72543d4152cd72b217e1f381cb580d6454ec69a7878072642a3e",
+  "count": 350,
+  "sha": "4c3d07fc7d848a5bed60a3aaf7271bbcd1935773c33fd0ff1a2a431bf50a5bb4",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -269,6 +269,7 @@
     "POST /api/expenses",
     "POST /api/expenses/suggest-category",
     "POST /api/expenses/with-file",
+    "POST /api/expenses/{eid}/approval",
     "POST /api/files",
     "POST /api/follow-up/run",
     "POST /api/inbox/{item_id}/status",
@@ -288,6 +289,7 @@
     "POST /api/ledger/ai/{scope}/refresh",
     "POST /api/ledger/ask",
     "POST /api/ledger/categories",
+    "POST /api/ledger/parties",
     "POST /api/ledger/reclassify-purchases",
     "POST /api/me/acting-as",
     "POST /api/meetings",

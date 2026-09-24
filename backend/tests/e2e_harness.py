@@ -39,6 +39,11 @@ _DB_MODULES = [
     "routers.access", "routers.tenant_settings",
     "services.routines",   # 2026-09-21: the sign-up routines
     "services.workflow_timing",  # 2026-09-22: stage days, stuck alert, target
+    # 2026-09-24 (JOURNEY-1 J5p-01): Dex's retrieval. Its module-level db was
+    # reaching the production client from inside an isolated test — it only
+    # read, and the event loop refused before it got that far, but a test that
+    # can touch the live database is a test that will.
+    "routers.brain",
 ]
 
 # fire-and-forget writers to neutralise: (module, attr, kind) where kind is

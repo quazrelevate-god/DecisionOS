@@ -11,6 +11,8 @@ import {
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import api from "../../lib/api";
+import { useAuth } from "../../context/AuthContext";
+import { hasPerm } from "../../lib/perms";
 import { DataList } from "../../components/karma/DataList";
 import { GlassSelect } from "../../components/karma/GlassSelect";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
@@ -375,27 +377,93 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, init
   );
 }
 
+/* J1-11 (JOURNEY-1) — APPROVED, NOT YET BILLED. A founder approved "a second
+   press brake, Rs 18 lakh" on his first day and Money showed nothing anywhere.
+   That was not the books being wrong: a purchase the owner has approved is a
+   commitment, and the expense is written when the procurement reaches its last
+   stage. But between the approval and the bill — weeks, for a machine — the
+   money was invisible, and the one screen he would look for it on said nothing.
+   Read from the open purchase workflows (GET /payables `committed`), never
+   booked: no total moves, and a row leaves the moment the real bill exists. */
+function CommittedPanel({ rows, cur, testid = "payables-committed" }) {
+  const f = fmt(cur);
+  if (!rows || rows.length === 0) return null;
+  const total = rows.reduce((n, r) => n + (Number(r.amount) || 0), 0);
+  return (
+    <section className={`p-5 ${CARD}`} data-testid={testid}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-base font-semibold text-slate-900">
+          Approved, not yet billed <span className="font-normal text-slate-500">({rows.length})</span>
+        </h2>
+        <span className="text-sm font-semibold tabular-nums text-slate-900">{f(total)}</span>
+      </div>
+      <p className="mt-1 text-sm text-slate-500">
+        Purchases you have approved. Nothing is in your books until the bill arrives — these are here
+        so the money is not a surprise.
+      </p>
+      <ul className="mt-4 space-y-2">
+        {rows.map((r) => (
+          <li key={r.id} data-testid={`${testid}-item-${r.id}`}
+            className="flex flex-wrap items-center gap-2.5 rounded-2xl bg-white/70 p-3 ring-1 ring-inset ring-slate-900/[0.05]">
+            <span className="text-sm font-semibold tabular-nums text-slate-900">{f(r.amount)}</span>
+            <span className="min-w-0 flex-1 truncate text-xs text-slate-500">
+              {r.title}{r.counterparty ? ` · ${r.counterparty}` : ""}{r.date ? ` · ${shortDate(r.date)}` : ""}
+            </span>
+            <Tag tone="quiet">{r.stage || "in progress"}</Tag>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function ExpensesTab({ rows, loading, error, payables, cur, onDelete, onChange }) {
   const { t } = useTranslation();
   const f = fmt(cur);
+  const { user } = useAuth();
+  const canApprove = user?.role === "owner" || hasPerm(user, "approvals");
+  const decide = async (e, approve) => {
+    try {
+      await api.post(`/expenses/${e.id}/approval`, { approve });
+      toast.success(approve ? "Approved — it counts now" : "Not approved");
+      onChange?.();
+    } catch (err) { toast.error(err.response?.data?.detail || "Could not save that"); }
+  };
   const columns = [
     { key: "title", head: t("finance.c_title"), role: "title", tdClass: "font-medium text-slate-900",
       cell: (e) => <>{e.title}<SourceTag source={e.source} /><AttachmentLink att={e.attachment} /></> },
     { key: "category", head: t("finance.c_category"), role: "chip", cell: (e) => (e.category ? <Tag className="normal-case">{e.category}</Tag> : <span className="text-slate-400">—</span>) },
     { key: "vendor", head: t("finance.c_vendor"), role: "meta", tdClass: "text-slate-600", value: (e) => e.vendor_name, cell: (e) => e.vendor_name || "—" },
     { key: "date", head: t("finance.c_date"), role: "meta", tdClass: "tabular-nums text-slate-600", value: (e) => e.date, cell: (e) => shortDate(e.date) || "—" },
+    /* J7 (JOURNEY-1) — an expense over the company's high-value figure, typed
+       by somebody who is not the owner, waits for an owner before it counts.
+       The row says so, and anybody who may approve can answer here. */
     { key: "status", head: t("finance.c_status"), role: "chip",
       cell: (e) => (
+        e.approval_status === "pending" ? <Tag tone="warn">waiting for approval</Tag>
+        : e.approval_status === "rejected" ? <Tag tone="bad">not approved</Tag>
+        : (
         <Tag tone={e.status === "paid" ? "good" : e.status === "awaiting_bill" ? "quiet" : "warn"}>
           {e.status === "paid" ? t("finance.paid") : e.status === "awaiting_bill" ? "awaiting bill" : t("finance.unpaid")}
         </Tag>
+        )
       ) },
     { key: "amount", head: t("finance.c_amount"), role: "amount", align: "right", tdClass: "font-semibold tabular-nums text-slate-900", cell: (e) => f(e.amount) },
     { key: "act", head: <span className="sr-only">Actions</span>, role: "action", align: "right",
-      cell: (e) => <DeleteButton onClick={() => onDelete(e.id)} testid={`expense-delete-${e.id}`} label="Delete expense" /> },
+      cell: (e) => (
+        e.approval_status === "pending" && canApprove ? (
+          <span className="flex items-center justify-end gap-1.5">
+            <button type="button" className={SMALL_INK} data-testid={`expense-approve-${e.id}`}
+              onClick={() => decide(e, true)}>Approve</button>
+            <button type="button" className={SMALL_PILL} data-testid={`expense-reject-${e.id}`}
+              onClick={() => decide(e, false)}>Reject</button>
+          </span>
+        ) : <DeleteButton onClick={() => onDelete(e.id)} testid={`expense-delete-${e.id}`} label="Delete expense" />
+      ) },
   ];
   return (
     <div className="space-y-5">
+      <CommittedPanel rows={payables?.committed} cur={cur} />
       <NeedsMatchingPanel title="Supplier payments to match" testid="payables-needs-matching"
         hint="These payments to suppliers couldn’t be auto-linked to a purchase bill. Pick the bill they settle, or mark it as a standalone expense."
         unmatched={payables?.unmatched_payments} open={payables?.open_invoices || []} cur={cur}

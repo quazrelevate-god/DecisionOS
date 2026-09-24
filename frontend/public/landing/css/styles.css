@@ -1749,20 +1749,21 @@ body.modal-open{ overflow:hidden; }
 
 
 /* ============================================================
-   HERO v5 -- curved video card replaces the 6-card grid.
-   Sits in the middle depth plane (z:2) between hero-bg (0) and hero-fg (3).
-   Inherits the .hero-grid parallax transform so it moves with the copy.
+   HERO v5 -- the Decision Desk shot, in a soft glass frame.
+   Sits in the middle depth plane (z:2) between hero-bg (0) and hero-fg (3),
+   so the desk and the laptop in the foreground photo pass in front of it.
+   HERO v7 (bottom of this file) places it against the laptop and flies it in.
    ============================================================ */
-.hero-video-card{
+.hero-shot{
   position:relative;
+  display:block;
   width:100%;
-  aspect-ratio:1280/684;
   max-width:700px;
   margin-left:auto;
   margin-right:0;
   border-radius:clamp(12px, 1.4vw, 20px);
   overflow:hidden;
-  background:rgba(255,255,255,0.35);
+  background:#f6f4f1;
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.9),
     inset 0 0 0 1px rgba(255,255,255,0.35),
@@ -1771,21 +1772,15 @@ body.modal-open{ overflow:hidden; }
     0 14px 30px -14px rgba(24,18,7,0.3);
   isolation:isolate;
 }
-.hero-video{
-  position:absolute; inset:0;
-  width:100%; height:100%;
-  object-fit:cover;
-  object-position:center center;
+.hero-shot img{
   display:block;
-  z-index:0;
+  width:100%; height:auto;
 }
-/* Subtle luminous rim, painted over the video so glass depth still reads even
-   when the video is dark. */
-.hero-video-rim{
-  position:absolute; inset:0;
+/* Luminous rim over the shot, so the glass depth still reads. */
+.hero-shot::after{
+  content:""; position:absolute; inset:0;
   border-radius:inherit;
   pointer-events:none;
-  z-index:1;
   box-shadow:
     inset 0 0 0 1px rgba(255,255,255,0.55),
     inset 0 2px 0 rgba(255,255,255,0.4);
@@ -1794,13 +1789,17 @@ body.modal-open{ overflow:hidden; }
 /* Hide the (now-unused) 6-card grid rules so nothing accidentally renders. */
 .hero-mockup{ display:none !important; }
 
-/* Mobile: preserve the video card visibility even though the desk foreground
-   was hidden below 960px in v4. The card sits nicely in the compact stack. */
+/* Mobile: the shot sits in the compact stack, under the copy. */
 @media (max-width:960px){
-  .hero-video-card{
+  .hero{ display:block; }
+  /* Nothing floats over the compact hero any more -- the shot and the trust
+     band are both in the flow -- so the room that was being held for them
+     goes back, instead of opening a 240px gap under the buttons. */
+  .hero-content{ padding-bottom:24px; }
+  .hero-shot{
+    width:auto;
     max-width:none;
-    margin:12px 0 0;
-    aspect-ratio:16/10;
+    margin:16px 24px 0;
   }
 }
 
@@ -1840,12 +1839,6 @@ body.modal-open{ overflow:hidden; }
     filter:blur(calc(var(--hp,0) * 5px));
     will-change:transform, filter;
   }
-  .hero-video-card{
-    /* Group with copy + trust band -- ~68% apparent speed, visibly parallaxes */
-    transform:translate3d(0, calc(var(--hp,0) * 32vh), 0);
-    filter:blur(calc(var(--hp,0) * 5px));
-    will-change:transform, filter;
-  }
   .hero-dex{
     /* 60% apparent speed */
     transform:translate3d(0, calc(var(--hp,0) * 40vh), 0);
@@ -1862,7 +1855,7 @@ body.modal-open{ overflow:hidden; }
 
   /* Reduced motion: freeze the parallax + blur curves. */
   @media (prefers-reduced-motion: reduce){
-    .hero-bg, .hero-fg, .hero-copy, .hero-video-card, .hero-dex, .hero-partners{
+    .hero-bg, .hero-fg, .hero-copy, .hero-shot, .hero-dex, .hero-partners{
       transform:none; filter:none; opacity:1;
     }
   }
@@ -1871,8 +1864,130 @@ body.modal-open{ overflow:hidden; }
 /* Mobile: skip per-layer parallax below 960px. Hero scrolls normally. */
 @media (max-width:960px){
   .hero{ overflow:visible; }
-  .hero-bg, .hero-fg, .hero-copy, .hero-video-card,
+  .hero-bg, .hero-fg, .hero-copy, .hero-shot,
   .hero-dex, .hero-partners{
     transform:none !important; filter:none !important;
+  }
+}
+
+
+/* ============================================================
+   HERO v7 -- ONE LOCKED COMPOSITION  (2026-09-24)
+
+   THE PROBLEM THIS SOLVES. The hero was three things sized three different
+   ways: a desk photograph sized by width and pinned to the TOP of the hero by
+   a max-height, a mockup card sized by a grid column, and copy sized by vw
+   clamps. On a 1440x900 window they happened to line up. On a wide one they
+   did not: at 2560 the photo's laptop fell 40px BELOW the fold while the card
+   floated on alone, and the desk's front edge was cut off.
+
+   THE STAGE. The desk photograph is now the stage. It is 1920x1280, laid in
+   with object-fit:cover, bottom-anchored, over a box that is exactly the
+   window's width and height -- so the desk edge always sits on the fold and
+   the picture never leaves a gap, whatever the window.
+
+     --fs  one photo pixel, on screen. Anything that must hold its place
+           against the desk -- the Decision Desk shot, the trust band -- is
+           written in photo coordinates times --fs, so it keeps the same spot
+           beside the laptop at 1280 or at 3440.
+     --ks  the UI scale: 1 at the 1440x850 window this was drawn for, driven
+           by whichever of width/height is tighter. Type and the shot grow
+           with the window without the runaway zoom a cover scale gives.
+
+   Both are lengths that equal 1px at the reference size, so a number off the
+   design goes straight through: calc(60 * var(--ks)).
+   ============================================================ */
+@media (min-width:961px){
+  .hero{
+    /* 1cqw is 1% of the hero's OWN width, which excludes the scrollbar.
+       100vw does not, and 15px of error there puts the shot off the laptop. */
+    container-type:inline-size;
+    display:block;
+    --fs: max(calc(100cqw / 1920), calc(100svh / 1280));
+    --ks: clamp(0.76px, min(calc(100cqw / 1440), calc(100svh / 850)), 1.34px);
+    /* On a very wide, short window the photo has to zoom to span the width,
+       and the laptop climbs towards the middle of the screen with nothing
+       left above it. --stage-drop lets the desk hang below the fold by just
+       enough to hold the lid at 42% of the window's height. It is 0 on every
+       ordinary window (it only bites past about 2.3:1), and everything placed
+       in photo coordinates carries it, so the composition stays rigid. */
+    --stage-drop: min(0px, calc(58svh - 595 * var(--fs)));
+  }
+
+  /* --- the stage itself: full width, the window's height, on the fold --- */
+  .hero-fg{
+    top:auto; bottom:var(--stage-drop); left:0; right:0;
+    height:100svh; max-height:none;
+  }
+  .hero-fg img{
+    width:100%; height:100%;
+    object-fit:cover;
+    object-position:50% 100%;   /* bottom-anchored: the desk edge is the fold */
+  }
+
+  /* --- the copy: same gutter as before, now scaling with the composition --- */
+  .hero-content{ padding-left:clamp(24px, 5.5cqw, calc(80 * var(--ks))); }
+  .hero-grid{ display:block; }
+  .hero-copy{
+    position:absolute;
+    left:0; top:calc(244 * var(--ks));
+    width:calc(560 * var(--ks));
+    max-width:none;
+  }
+  .hero-copy .eyebrow{ font-size:calc(12.5 * var(--ks)); margin-bottom:calc(18 * var(--ks)); }
+  .hero-title{ font-size:calc(60 * var(--ks)); margin-bottom:calc(30 * var(--ks)); }
+  .hero-ctas{ gap:calc(20 * var(--ks)); }
+  .hero-ctas .btn-lg{ height:calc(52 * var(--ks)); padding:0 calc(28 * var(--ks)); font-size:calc(16 * var(--ks)); }
+  .btn-see{ font-size:calc(15.5 * var(--ks)); }
+  .btn-see-play{ width:calc(32 * var(--ks)) !important; height:calc(32 * var(--ks)) !important; }
+
+  /* --- the Decision Desk shot, pinned to the laptop ---
+     Photo coordinates: its right edge at x=1888, its foot at y=907. That is
+     the corner the laptop lid rises in front of, and it stays that corner at
+     every window size. max() keeps a gutter on a tall window, where the photo
+     is cropped sideways and x=1888 would fall off the right edge. */
+  .hero-shot{
+    position:absolute; z-index:2;
+    width:calc(698 * var(--ks));
+    max-width:none;
+    margin:0;
+    right:max(20px, calc(50cqw - 928 * var(--fs)));
+    /* ...and its foot at photo y=760, which is 55 photo pixels above the lid's
+       top edge -- the overlap the design was drawn with. The second term is a
+       guard for short 16:9 windows, where that foot would push the shot's head
+       up under the header pill. */
+    bottom:min(
+      calc(520 * var(--fs) + var(--stage-drop)),
+      calc(100svh - 88px - 365 * var(--ks))
+    );
+    border-radius:calc(18 * var(--ks));
+    transform-origin:50% 50%;
+
+    /* --- and the flight into the laptop ---
+       --hf runs 0 -> 1 over the first 40% of the hero's scroll (js/main.js);
+       --fly-x/y/shrink are measured off the real laptop by the same script,
+       so the shot lands on it however the window is shaped. It does not need
+       to be hidden at the end: .hero-fg sits at z:3 above it, so the lid and
+       the desk swallow it. */
+    transform:
+      translate3d(calc(var(--hf,0) * var(--fly-x, 0px)), calc(var(--hf,0) * var(--fly-y, 0px)), 0)
+      perspective(1400px)
+      rotateX(calc(var(--hf,0) * 34deg))
+      rotateZ(calc(var(--hf,0) * -6deg))
+      scale(calc(1 - var(--hf,0) * var(--fly-shrink, 0.78)));
+    opacity:calc(1 - var(--hf,0) * var(--hf,0) * 1.15);
+    filter:blur(calc(var(--hf,0) * 2.5px));
+    will-change:transform, opacity;
+  }
+
+  /* --- the trust band rides the photo, not the window --- */
+  .hero-partners{
+    bottom:clamp(56px, calc(107 * var(--fs) + var(--stage-drop)), 160px);
+    width:min(calc(780 * var(--ks)), calc(100cqw - 48px));
+  }
+
+  /* Reduced motion: the shot stays on the desk, still and whole. */
+  @media (prefers-reduced-motion: reduce){
+    .hero-shot{ transform:none; opacity:1; filter:none; }
   }
 }

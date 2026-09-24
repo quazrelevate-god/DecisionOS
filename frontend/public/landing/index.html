@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Urbanist:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/landing/css/styles.css?v=99">
+<link rel="stylesheet" href="/landing/css/styles.css?v=100">
 </head>
 <body>
 
@@ -68,15 +68,17 @@
             <span class="btn-see-label">See how it works</span>
             <span class="btn-see-play" aria-hidden="true"><svg viewBox="0 0 12 12" width="10" height="10"><path d="M3 2 L10 6 L3 10 Z" fill="currentColor"/></svg></span>
           </a>
-        </div></div>
-      <div class="hero-video-card" aria-hidden="true">
-        <video class="hero-video" autoplay muted loop playsinline preload="auto" poster="/landing/assets/img/hero-bg.jpg">
-          <source src="/landing/assets/img/hero-mockup.webm?v=2" type="video/webm">
-          <source src="/landing/assets/img/hero-mockup.mp4?v=2" type="video/mp4">
-        </video>
-        <div class="hero-video-rim" aria-hidden="true"></div>
-      </div></div>
+        </div>
+      </div>
     </div>
+  </div>
+  <!-- The Decision Desk itself. It is a sibling of the copy, not a grid cell, so
+       it can be placed in the desk photo's own coordinates (see HERO v7) and fly
+       into the laptop on scroll. -->
+  <picture class="hero-shot" aria-hidden="true">
+    <source srcset="/landing/assets/img/hero-desk.webp?v=100" type="image/webp">
+    <img src="/landing/assets/img/hero-desk.jpg?v=100" alt="" width="1735" height="907" fetchpriority="high" decoding="async">
+  </picture>
 <div class="hero-partners" aria-label="Trusted by">
       <p class="hp-title">Trusted by founder&#8209;led businesses</p>
       <div class="hp-marquee">
@@ -871,7 +873,7 @@ fetch("/api/auth/me", { credentials: "include" })
   })
   .catch(function () { /* offline, or the API is down: it is a static page, show it */ });
 </script>
-<script src="/landing/js/main.js?v=99"></script>
+<script src="/landing/js/main.js?v=100"></script>
 <!-- ============ ACCESS MODAL ============ -->
 <div class="modal-root" id="access-modal" hidden>
   <div class="modal-scrim" data-close></div>

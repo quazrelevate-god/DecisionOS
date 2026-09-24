@@ -64,6 +64,45 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, { passive: true });
 
+  /* ---------- the Decision Desk shot flies into the laptop ----------
+     The laptop sits at a known place in the desk photograph (1920x1280): the
+     lid is the box x 1280..1720, y 685..1000. The photo is laid in with
+     object-fit:cover, bottom-anchored (see HERO v7 in styles.css), so from the
+     <img>'s box on screen we can say exactly where that lid is now, and hand
+     the shot the vector that takes it there. Measured on load and on resize --
+     never per frame; the scroll driver only moves --hf along it. */
+  const heroShot = document.querySelector('.hero-shot');
+  const deskPhoto = document.querySelector('.hero-fg img');
+  const LID = { x: 1500, y: 842, w: 440 };   // lid centre, and its width, in photo pixels
+
+  const aimShot = () => {
+    if (!hero || !heroShot || !deskPhoto) return;
+    if (window.innerWidth < 961) {                 // phones keep the shot where it is
+      ['--fly-x', '--fly-y', '--fly-shrink'].forEach(v => hero.style.removeProperty(v));
+      return;
+    }
+    // offset* rather than getBoundingClientRect, deliberately: these are layout
+    // numbers, blind to transforms. A rect would be read mid-entrance-animation
+    // on first paint and aim the flight 60px past the laptop.
+    const photo = deskPhoto.parentElement;         // the <picture class="hero-fg">
+    if (!photo.offsetWidth || !photo.offsetHeight || !heroShot.offsetWidth) return;
+    const s = Math.max(photo.offsetWidth / 1920, photo.offsetHeight / 1280);   // cover
+    const x0 = photo.offsetLeft + (photo.offsetWidth - 1920 * s) / 2;          // cropped from the centre
+    const y0 = photo.offsetTop + photo.offsetHeight - 1280 * s;                // ...and off the top
+
+    const cx = heroShot.offsetLeft + heroShot.offsetWidth / 2;
+    const cy = heroShot.offsetTop + heroShot.offsetHeight / 2;
+
+    hero.style.setProperty('--fly-x', (x0 + LID.x * s - cx).toFixed(1) + 'px');
+    hero.style.setProperty('--fly-y', (y0 + LID.y * s - cy).toFixed(1) + 'px');
+    // Ends a little smaller than the lid, so it reads as going *into* the screen.
+    hero.style.setProperty('--fly-shrink', (1 - Math.min(0.5, (LID.w * s * 0.82) / heroShot.offsetWidth)).toFixed(3));
+  };
+
+  aimShot();
+  window.addEventListener('resize', aimShot);
+  window.addEventListener('load', aimShot);
+
   /* ---------- pinned hero defocuses as §2 climbs over it ---------- */
   if (hero && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const driveHero = () => {
@@ -71,6 +110,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const y = window.scrollY - Inertia.lag;
       const travel = Math.max(1, hero.offsetHeight * 0.82);
       hero.style.setProperty('--hp', Math.min(1, Math.max(0, y / travel)).toFixed(3));
+      // The flight is quicker than the rest of the hero: it is over in the
+      // first 40% of the hero's scroll, eased in and out so it neither jumps
+      // off the mark nor slams into the laptop.
+      const f = Math.min(1, Math.max(0, y / Math.max(1, hero.offsetHeight * 0.40)));
+      hero.style.setProperty('--hf', (f * f * (3 - 2 * f)).toFixed(3));
     };
     Inertia.sub(driveHero);
     window.addEventListener('resize', driveHero);

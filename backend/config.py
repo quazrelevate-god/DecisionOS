@@ -379,6 +379,18 @@ ROLES = ["owner", "sales", "operations", "finance"]
 # migration; clean_perms drops the dead key from anything still carrying it.
 PERMISSION_KEYS = [
     "inbox", "voice_capture", "data_input", "people", "finance",
+    # J7-04 / J8-01 (JOURNEY-1, founder 24 Sep): CRM SPLITS BY WHICH SIDE OF
+    # THE BUSINESS A CONTACT IS ON. "people" was one door to both lists, so
+    # giving Sales the buyers they live in also gave them every supplier's
+    # price and terms — and FIX-FUP-51 answered that by shutting the door on
+    # both. These two open one side each:
+    #   crm_buyers     customers and dealers  — the sales side
+    #   crm_suppliers  vendors                — the buying side
+    # "people" stays, and means BOTH: every tenant and every role setting made
+    # before today keeps exactly the access it had. Holding both new keys is
+    # the same thing as holding "people", which is how a team that is both
+    # sales and finance ends up with the whole of CRM.
+    "crm_buyers", "crm_suppliers",
     "workflows", "tasks", "brain", "ask", "brain_export",
     "approvals", "decisions_approve", "leave_approve", "team_manage",
     # ASK-28 TK-08 (plan Phase 6): opt-in task access, off for every role by

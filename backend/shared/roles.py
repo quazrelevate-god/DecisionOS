@@ -109,6 +109,17 @@ _MONEY_WORDS = FAMILIES[0] | {
 }
 
 
+# J7-04 / J8-01 (founder, 24 Sep) — AND WHICH SIDE OF CRM IT STARTS ON.
+# Sales lives in the buyers; Finance lives in the suppliers. A team that is
+# BOTH — "Sales & Accounts", which small companies really do have — gets both,
+# which is the whole of CRM. Nobody gets the other side by accident, and an
+# owner can grant it in Settings -> Team roles -> Access the moment they want
+# to. FAMILIES[1] is the selling family (see above).
+_SELLING_WORDS = FAMILIES[1] | {"buyer", "buyers", "dealer", "dealers", "retail",
+                                "distribution", "distributor", "distributors",
+                                "enquiry", "enquiries", "leads", "quotation", "quotations"}
+
+
 def starting_perms(*names: Optional[str]) -> list:
     """The EXTRA permissions a team starts with, read off what it is called.
 
@@ -117,7 +128,12 @@ def starting_perms(*names: Optional[str]) -> list:
     words = set()
     for n in names:
         words |= _words(n or "")
-    return ["finance"] if words & _MONEY_WORDS else []
+    out = []
+    if words & _MONEY_WORDS:
+        out += ["finance", "crm_suppliers"]
+    if words & _SELLING_WORDS:
+        out += ["crm_buyers"]
+    return sorted(set(out))
 
 
 def dept_name(roles: Optional[Iterable[dict]], key: Optional[str]) -> str:

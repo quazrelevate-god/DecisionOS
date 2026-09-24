@@ -49,7 +49,64 @@ async def _resolve_leave_approver(tenant_id: str, requester: dict):
     return None, None
 
 
-async def _create_leave(tenant_id, requester, leave_type, from_date, to_date, day_portion, reason, is_emergency):
+# ASK-5 / J11-02 (JOURNEY-1, founder 24 Sep) — WHO HOLDS THE APPROVALS WHILE
+# SOMEBODY IS AWAY. A manager going on leave left every decision and escalation
+# waiting on them, waiting on them: leave changed who was in the building and
+# nothing else. The founder's rule is that an approver is ASKED to name a cover
+# when they raise the leave, and the cover is switched on by the APPROVAL of
+# that leave, for exactly the days of it.
+#
+# The mechanism already existed and nothing read it from here: `acting_as` on
+# the user (RBAC-26, services/delegation) is a dated window, so the hand-back
+# is not a job anybody has to run — the window simply ends. Withdrawing or
+# rejecting the leave takes it off again.
+APPROVAL_PERMS = ("approvals", "decisions_approve", "leave_approve")
+
+
+def approves_things(user: dict) -> bool:
+    """Whether this person has anything waiting on them to sign off."""
+    from core import user_perms
+    return user.get("role") == "owner" or bool(set(user_perms(user)) & set(APPROVAL_PERMS))
+
+
+async def _set_cover(tenant_id: str, lv: dict) -> None:
+    """Switch the cover on for the days of an approved leave."""
+    delegate = (lv or {}).get("delegate_user_id")
+    if not delegate or delegate == lv.get("user_id"):
+        return
+    who = await db.users.find_one({"id": delegate, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1})
+    if not who:
+        return
+    await db.users.update_one(
+        {"id": lv["user_id"], "tenant_id": tenant_id},
+        {"$set": {"acting_as": {
+            "delegate_user_id": delegate,
+            "from": lv["from_date"], "to": lv["to_date"],
+            "reason": f"On leave ({lv.get('leave_type') or 'leave'})",
+            "leave_id": lv["id"],
+        }}})
+    await push_notification(
+        tenant_id, [delegate], 2,
+        f"{lv.get('user_name')} is on leave {lv['from_date']}"
+        + (f" to {lv['to_date']}" if lv["to_date"] != lv["from_date"] else "")
+        + ". Their approvals come to you until they are back.",
+        entity_type="leave", entity_id=lv["id"], ntype="handoff",
+        title="Covering approvals", sender=lv.get("user_name"))
+    await log_activity(tenant_id, lv["user_id"], "leave_cover_set",
+                       f"{lv.get('user_name')}'s approvals go to {who.get('name')} while they are away",
+                       "leave", lv["id"])
+
+
+async def _clear_cover(tenant_id: str, lv: dict) -> None:
+    """Take the cover off again — the leave was withdrawn, rejected or cancelled.
+    Only the window THIS leave set; a cover somebody arranged by hand stays."""
+    await db.users.update_one(
+        {"id": (lv or {}).get("user_id"), "tenant_id": tenant_id, "acting_as.leave_id": (lv or {}).get("id")},
+        {"$set": {"acting_as": None}})
+
+
+async def _create_leave(tenant_id, requester, leave_type, from_date, to_date, day_portion, reason, is_emergency,
+                        delegate_user_id=None):
     approver_id, approver_name = await _resolve_leave_approver(tenant_id, requester)
     # No one above the requester to sign it off (an owner, or a company with no
     # other approver): the leave is RECORDED, not requested — created already
@@ -70,12 +127,17 @@ async def _create_leave(tenant_id, requester, leave_type, from_date, to_date, da
         "reason": reason or "", "is_emergency": bool(is_emergency),
         "status": "approved" if auto_approved else "pending",
         "approver_id": approver_id, "approver_name": approver_name,
+        # ASK-5 — who covers this person's approvals while they are away. Kept
+        # on the request so the approver can see it before they say yes.
+        "delegate_user_id": (delegate_user_id or None) if approves_things(requester) else None,
         "info_note": None, "created_at": now,
         "decided_at": now if auto_approved else None,
         "decided_by": requester["id"] if auto_approved else None,
         "history": history,
     }
     await db.leaves.insert_one(doc)
+    if auto_approved:
+        await _set_cover(tenant_id, doc)      # ASK-5: recorded leave is approved leave
     label = "Emergency absence" if is_emergency else f"{leave_type.title()} leave"
     span = doc["from_date"] + (f" → {doc['to_date']}" if doc["to_date"] != doc["from_date"] else "")
     if auto_approved:

@@ -8,7 +8,9 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from core import db, logger, new_id, now_iso, log_activity, require_perm, require_role
+from core import db, logger, new_id, now_iso, log_activity, require_perm, require_role, get_current_user
+# J7-04 / J8-01 — which side of CRM the caller holds (core/permissions.py).
+from core import crm_types, may_see_contact, SUPPLIER_TYPES
 from models.contacts import CONTACT_STATUS, CONTACT_TYPES, LIFECYCLE_STAGES
 from services.enrich import enrich_contacts
 
@@ -26,11 +28,34 @@ from models.contacts import (
 )
 
 
+# J7-04 / J8-01 (JOURNEY-1, founder 24 Sep) — CRM IS TWO LISTS BEHIND ONE
+# DOOR, and the door now has two keys. `people` is both, `crm_buyers` is
+# customers and dealers, `crm_suppliers` is vendors. Every endpoint below
+# answers for the sides the caller holds and refuses the others by NAME, so a
+# salesperson can add the buyer she just met without being handed every
+# supplier's price and terms — which is what FIX-FUP-51 was protecting when it
+# shut the door on both.
+async def require_crm(user: dict = Depends(get_current_user)) -> dict:
+    """Any CRM access at all. Which side is decided per request, below."""
+    if not crm_types(user):
+        raise HTTPException(status_code=403, detail="You don't have access to Contacts")
+    return user
+
+
+def _refuse_other_side(user: dict, contact_type: str) -> None:
+    if may_see_contact(user, contact_type):
+        return
+    side = "suppliers" if contact_type in SUPPLIER_TYPES else "customers"
+    raise HTTPException(status_code=403, detail=f"You don't have access to {side}")
+
+
 @router.get("/contacts")
 async def list_contacts(type: Optional[str] = None, status: Optional[str] = None, q: Optional[str] = None,
-                        user: dict = Depends(require_perm("people"))):
-    query = {"tenant_id": user["tenant_id"]}
+                        user: dict = Depends(require_crm)):
+    allowed = crm_types(user)
+    query = {"tenant_id": user["tenant_id"], "type": {"$in": list(allowed)}}
     if type:
+        _refuse_other_side(user, type)
         query["type"] = type
     if status:
         query["status"] = status
@@ -44,9 +69,10 @@ async def list_contacts(type: Optional[str] = None, status: Optional[str] = None
 @router.post("/contacts")
 # RBAC P1 (2026-09-15): People access, not the role name — a custom role with
 # People was refused although the buttons showed (owners pass).
-async def create_contact(inp: ContactInput, user: dict = Depends(require_perm("people"))):
+async def create_contact(inp: ContactInput, user: dict = Depends(require_crm)):
     if inp.type not in CONTACT_TYPES:
         raise HTTPException(status_code=400, detail="Invalid contact type")
+    _refuse_other_side(user, inp.type)
     status = inp.status if inp.status in CONTACT_STATUS else "lead"
     cid = new_id()
     # E2-03: accept lifecycle_stage from the union of customer +
@@ -69,10 +95,14 @@ async def create_contact(inp: ContactInput, user: dict = Depends(require_perm("p
 
 
 @router.patch("/contacts/{contact_id}")
-async def update_contact(contact_id: str, inp: ContactUpdateInput, user: dict = Depends(require_perm("people"))):
+async def update_contact(contact_id: str, inp: ContactUpdateInput, user: dict = Depends(require_crm)):
     c = await db.contacts.find_one({"id": contact_id, "tenant_id": user["tenant_id"]})
     if not c:
         raise HTTPException(status_code=404, detail="Not found")
+    _refuse_other_side(user, c.get("type"))
+    # ...and it cannot be moved to a side the editor does not hold either.
+    if inp.type is not None:
+        _refuse_other_side(user, inp.type)
     updates = {k: v for k, v in inp.model_dump().items() if v is not None}
     if "type" in updates and updates["type"] not in CONTACT_TYPES:
         updates.pop("type")
@@ -136,7 +166,11 @@ async def update_contact(contact_id: str, inp: ContactUpdateInput, user: dict = 
 
 
 @router.delete("/contacts/{contact_id}")
-async def delete_contact(contact_id: str, user: dict = Depends(require_perm("people"))):
+async def delete_contact(contact_id: str, user: dict = Depends(require_crm)):
+    c = await db.contacts.find_one({"id": contact_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "type": 1})
+    if not c:
+        raise HTTPException(status_code=404, detail="Not found")
+    _refuse_other_side(user, c.get("type"))
     res = await db.contacts.delete_one({"id": contact_id, "tenant_id": user["tenant_id"]})
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Not found")

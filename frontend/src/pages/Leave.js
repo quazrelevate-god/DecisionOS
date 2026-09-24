@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { hasPerm } from "../lib/perms";
 import { PageHeader, StickyHeader, EmptyState } from "../components/common";
 import { timeAgo } from "../lib/format";
 import { GlassSelect } from "../components/karma/GlassSelect";
@@ -65,8 +66,25 @@ const fmtRange = (lv) => lv.from_date === lv.to_date ? lv.from_date : `${lv.from
 export function RequestLeaveDialog({ onDone, triggerClassName }) {
   const [open, setOpen] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
-  const [form, setForm] = useState({ leave_type: "casual", from_date: today, to_date: today, day_portion: "full", reason: "" });
+  const [form, setForm] = useState({ leave_type: "casual", from_date: today, to_date: today, day_portion: "full", reason: "", delegate_user_id: "" });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  /* ASK-5 / J11-02 (JOURNEY-1, founder 24 Sep) — AN APPROVER IS ASKED WHO
+     COVERS THEM. Leave used to change who was in the building and nothing
+     else: every decision and escalation waiting on a manager went on waiting
+     on them while they were away. Whoever they name here holds their
+     approvals for exactly the days of the leave, switched on when the leave
+     is approved and off again by its own last date — nobody has to remember
+     to hand it back. Only shown to somebody who has approvals to hand over. */
+  const { user } = useAuth();
+  const iApprove = user?.role === "owner"
+    || ["approvals", "decisions_approve", "leave_approve"].some((p) => hasPerm(user, p));
+  const membersQ = useQuery({
+    queryKey: ["team-members"],
+    queryFn: () => api.get("/users").then((r) => r.data),
+    enabled: open && iApprove,
+    staleTime: 60_000,
+  });
+  const covers = (membersQ.data || []).filter((m) => m.id !== user?.id && m.status !== "removed");
   const submit = async () => {
     if (!form.from_date || !form.to_date) return toast.error("Pick dates");
     if (form.to_date < form.from_date) return toast.error("End date cannot be before start date");
@@ -76,7 +94,7 @@ export function RequestLeaveDialog({ onDone, triggerClassName }) {
       // approved, so don't call it "submitted for approval".
       toast.success(data?.status === "approved" ? "Leave recorded" : "Leave request submitted");
       setOpen(false);
-      setForm({ leave_type: "casual", from_date: today, to_date: today, day_portion: "full", reason: "" });
+      setForm({ leave_type: "casual", from_date: today, to_date: today, day_portion: "full", reason: "", delegate_user_id: "" });
       onDone?.();
     } catch (e) { toast.error(e.response?.data?.detail || "Could not submit"); }
   };
@@ -122,6 +140,22 @@ export function RequestLeaveDialog({ onDone, triggerClassName }) {
               className={`flex-1 rounded-pill px-3 py-2 text-xs font-medium transition-all ${form.day_portion === "half" ? "kr-pop text-foreground" : "text-foreground/60 hover:text-foreground/85"}`}>Half Day</button>
           </div>
           <textarea data-testid="leave-reason-input" className={inp} rows={2} placeholder="Reason" value={form.reason} onChange={set("reason")} />
+          {iApprove && (
+            <div>
+              <label className="label-mono text-muted-foreground">Who covers your approvals?</label>
+              <GlassSelect variant="field" testid="leave-delegate-select" ariaLabel="Who covers your approvals"
+                value={form.delegate_user_id} onChange={(v) => setForm({ ...form, delegate_user_id: v })}
+                options={[
+                  { value: "", label: covers.length ? "Nobody — they wait for me" : "Nobody else to ask" },
+                  ...covers.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` })),
+                ]}
+                triggerClassName={`${inp} mt-1`} />
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Decisions and approvals waiting on you go to them for these days, and come back to you
+                the day you return.
+              </p>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <button data-testid="leave-submit" onClick={submit} className="kr-lift rounded-pill bg-kr-ink px-5 py-2.5 text-sm font-medium text-white transition-all">Submit</button>

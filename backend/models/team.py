@@ -47,6 +47,11 @@ class LeaveRequestInput(BaseModel):
     to_date: str                              # ISO date
     day_portion: Optional[str] = "full"       # "full" | "half"
     reason: Optional[str] = ""
+    # ASK-5 / J11-02 (founder 24 Sep): who holds this person's approvals while
+    # they are away. Only meaningful for somebody who approves things; the
+    # service ignores it for everybody else, and it is switched on by the
+    # APPROVAL of the leave, for exactly its days.
+    delegate_user_id: Optional[str] = None
 
 
 class AbsenceInput(BaseModel):

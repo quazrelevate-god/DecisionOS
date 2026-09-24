@@ -476,7 +476,15 @@ export default function Login() {
           there, and a ground fixes it without changing the colour. */}
       <footer className="flex justify-center px-4 pb-5 lg:px-8">
         <p className="kr-frost w-fit max-w-full rounded-pill px-4 py-1.5 text-center text-[11px] text-muted-foreground">
-          Voice-first · AI-structured · Multi-tenant
+          {/* J1-03 / J2-02 (JOURNEY-1, founder 24 Sep) — THE THREE THINGS THIS
+              IS, in the founder's own words: the workflow engine is the
+              product, the Decision Desk and Workflows are what it runs, Dex is
+              how you talk to it. "Voice-first · AI-structured · Multi-tenant"
+              was a line about our architecture, printed in their footer:
+              "multi-tenant" is a promise to US that other companies' data is
+              not in theirs, and it is not a sentence a workshop owner has ever
+              needed to read. */}
+          Workflow as an engine · Decision Desk · Dex
         </p>
       </footer>
     </div>

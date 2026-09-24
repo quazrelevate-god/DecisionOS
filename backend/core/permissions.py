@@ -20,11 +20,46 @@ from config import PERMISSION_KEYS  # noqa: F401
 # the perm granted explicitly via Settings > Roles (or per-user
 # via membership.permissions). Owner still passes via the
 # "owner -> all PERMISSION_KEYS" branch in user_perms().
+# 2026-09-24 (JOURNEY-1 J7-04 / J8-01, founder): and the answer to the
+# question FIX-FUP-51 could not answer. Shutting the door on "people" was
+# right — Sales does not need every supplier's price and terms — but it also
+# took away the buyers Sales lives in and the suppliers Finance lives in, so
+# neither could add the contact in front of them. Each side is its own key
+# now, and each role starts holding the side it works in. Nobody gets the
+# other one by default; an owner grants it in Settings -> Team roles -> Access.
 _BASE_PERMS = {"inbox", "data_input", "workflows", "tasks", "brain", "ask"}
 ROLE_DEFAULT_PERMS = {
-    "sales": _BASE_PERMS,
-    "finance": _BASE_PERMS | {"finance"},
+    "sales": _BASE_PERMS | {"crm_buyers"},
+    "finance": _BASE_PERMS | {"finance", "crm_suppliers"},
 }
+
+
+# --- Which side of CRM someone may see --------------------------------------
+# J7-04 / J8-01 (JOURNEY-1, founder 24 Sep). A contact's `type` says which side
+# it is on; these say which sides a person may open. One place, so the router,
+# the nav and the Desk cannot disagree about it.
+BUYER_TYPES = ("customer", "dealer")
+SUPPLIER_TYPES = ("vendor",)
+
+
+def crm_types(user: dict) -> tuple:
+    """The contact types this person may see, in CONTACT_TYPES order.
+
+    Empty means no CRM at all, which is still the default for a role nobody
+    has granted anything to."""
+    perms = user_perms(user)
+    types = []
+    if "people" in perms or "crm_buyers" in perms:
+        types.extend(BUYER_TYPES)
+    if "people" in perms or "crm_suppliers" in perms:
+        types.extend(SUPPLIER_TYPES)
+    return tuple(types)
+
+
+def may_see_contact(user: dict, contact_type: str) -> bool:
+    """A single contact, by its type. An unknown type is refused rather than
+    waved through: a contact we cannot place is not one we can safely show."""
+    return (contact_type or "") in crm_types(user)
 
 
 def user_perms(user: dict) -> set:

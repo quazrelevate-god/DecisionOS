@@ -232,8 +232,11 @@ function App() {
                 /contacts/:id (ContactProfile 360°) still works so any deep-links
                 or Brain-cited sources continue to resolve. */}
             <Route path="/contacts" element={<Navigate to="/crm" replace />} />
-            <Route path="/contacts/:id" element={<Protected perm="people"><ContactProfile /></Protected>} />
-            <Route path="/crm" element={<Protected perm="people"><CRM /></Protected>} />
+            {/* J7-04 / J8-01 — either side of CRM opens the page; the page
+                itself shows only the side you hold, and the server refuses
+                the other one by name. */}
+            <Route path="/contacts/:id" element={<Protected perms={["people", "crm_buyers", "crm_suppliers"]}><ContactProfile /></Protected>} />
+            <Route path="/crm" element={<Protected perms={["people", "crm_buyers", "crm_suppliers"]}><CRM /></Protected>} />
             {/* Epic 2 Sprint 4 (E2-27): /ingest merged into /finance's Inbox tab. */}
             <Route path="/ingest" element={<Navigate to="/finance?tab=inbox" replace />} />
             <Route path="/tasks" element={<Navigate to="/my-work" replace />} />

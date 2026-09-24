@@ -55,6 +55,38 @@ _CATEGORY_KEYWORDS = [
 ]
 
 
+# J2-06 (JOURNEY-1, founder 24 Sep) — BUYING STOCK IS NOT A LOSS.
+# A wholesaler's first act is buying Rs 86,400 of groundnut oil to sell. Under
+# "revenue minus everything spent" her profit read MINUS Rs 86,400, in red, on
+# day one — arithmetically right and commercially nonsense: she has not lost
+# anything, she has turned cash into stock sitting in the godown. The same is
+# true of the press brake a workshop buys: money out, not money gone.
+#
+# So profit is revenue minus what it COSTS TO RUN THE PLACE. Stock and
+# equipment are counted, and shown, as their own figures beside it. This is not
+# an accountant's P&L — a real one recognises the cost of stock when the stock
+# is SOLD, which needs inventory valuation this app does not keep — but it is
+# the honest version of the number a shopkeeper is actually asking for, and it
+# no longer tells them they lost money by opening for business.
+_STOCK_CATEGORIES = {"raw material", "stock", "inventory", "goods", "purchases", "trading goods"}
+_CAPITAL_CATEGORIES = {"asset purchase"}
+
+
+def _spend_split(expenses) -> tuple:
+    """(operating, stock, capital) out of one expense list."""
+    operating = stock = capital = 0.0
+    for e in expenses:
+        amt = _num(e.get("amount"))
+        cat = str(e.get("category") or "").strip().lower()
+        if cat in _STOCK_CATEGORIES:
+            stock += amt
+        elif cat in _CAPITAL_CATEGORIES:
+            capital += amt
+        else:
+            operating += amt
+    return operating, stock, capital
+
+
 def guess_expense_category(text: str) -> str:
     t = (text or "").lower()
     for cat, kws in _CATEGORY_KEYWORDS:
@@ -1570,6 +1602,7 @@ async def ledger_summary(user: dict = Depends(require_ledger)):
         if m:
             by_month[m] = by_month.get(m, 0) + amt
     months = sorted(by_month.keys())[-6:]
+    _operating, _stock, _capital = _spend_split(expenses)   # J2-06
     fc = await get_finance_categories(tid)
     return {
         "currency": currency,
@@ -1580,7 +1613,13 @@ async def ledger_summary(user: dict = Depends(require_ledger)):
             "inventory_count": len(inventory), "inventory_value": round(sum(_num(i.get("value")) for i in inventory), 2),
             "revenue_billed": round(revenue_billed, 2), "revenue_received": round(revenue_received, 2),
             "revenue_outstanding": round(revenue_outstanding, 2), "sales_count": len(sales),
-            "net_profit": round(revenue_billed - total, 2),
+            # J2-06 — profit is revenue minus what it costs to RUN the place.
+            # Stock and equipment are money out, not money gone; they are
+            # counted separately so the figures still add up to total_spend.
+            "operating_spend": round(_operating, 2),
+            "stock_spend": round(_stock, 2),
+            "capital_spend": round(_capital, 2),
+            "net_profit": round(revenue_billed - _operating, 2),
         },
         "by_category": [{"category": k, "amount": round(v, 2)} for k, v in sorted(by_cat.items(), key=lambda x: -x[1])],
         "by_vendor": [{"vendor": k, "amount": round(v, 2)} for k, v in sorted(by_vendor.items(), key=lambda x: -x[1])[:8]],
@@ -1637,6 +1676,7 @@ async def _finance_context(tid: str, scope: str) -> dict:
     def _top(d, n=8):
         return sorted(({"name": k, "amount": round(val, 2)} for k, val in d.items()), key=lambda x: -x["amount"])[:n]
 
+    _operating, _stock, _capital = _spend_split(expenses)   # J2-06, the page's own split
     ctx = {
         "currency": currency, "today": now_iso()[:10],
         "totals": {
@@ -1646,7 +1686,13 @@ async def _finance_context(tid: str, scope: str) -> dict:
             "inventory_count": len(inventory), "inventory_value": round(sum(_num(i.get("value")) for i in inventory), 2),
             "revenue_billed": round(revenue_billed, 2), "revenue_received": round(revenue_received, 2),
             "revenue_outstanding": round(revenue_outstanding, 2), "sales_count": len(sales),
-            "net_profit": round(revenue_billed - total, 2),
+            # J2-06 — profit is revenue minus what it costs to RUN the place.
+            # Stock and equipment are money out, not money gone; they are
+            # counted separately so the figures still add up to total_spend.
+            "operating_spend": round(_operating, 2),
+            "stock_spend": round(_stock, 2),
+            "capital_spend": round(_capital, 2),
+            "net_profit": round(revenue_billed - _operating, 2),
         },
         "by_category": _top(by_cat), "by_vendor": _top(by_vendor),
         "by_month": [{"month": m, "amount": round(by_month[m], 2)} for m in sorted(by_month)[-6:]],

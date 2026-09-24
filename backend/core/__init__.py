@@ -87,6 +87,8 @@ from core.security import (  # noqa: F401,E402
 # callers keep importing user_perms / clean_perms / _BASE_PERMS from core.
 from core.permissions import (  # noqa: F401
     _BASE_PERMS, ROLE_DEFAULT_PERMS, user_perms, clean_perms,
+    # J7-04 / J8-01: which side of CRM a person may open.
+    BUYER_TYPES, SUPPLIER_TYPES, crm_types, may_see_contact,
 )
 
 

@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from core import db, get_current_user, new_id, now_iso, require_role, require_perm
+from core import db, get_current_user, new_id, now_iso, require_role, require_perm, may_see_contact
 
 # E2-08: allowed activity kinds. Kept small on purpose -- more kinds
 # = harder to scan the timeline. `other` is the escape hatch.
@@ -111,16 +111,20 @@ async def outstanding_by_contact(user: dict = Depends(get_current_user)):
 async def log_activity_for_contact(
     contact_id: str,
     inp: ActivityInput,
-    user: dict = Depends(require_perm("people")),
+    user: dict = Depends(get_current_user),
 ):
     """Log a manual CRM activity against a contact. Anyone with People access
     (write path; RBAC P1 2026-09-15 — was the owner/sales role names). Reads are open to anyone with `finance` perm since the
     360 profile is Owner/Finance-only anyway (E2-08 spec)."""
     tid = user["tenant_id"]
     contact = await db.contacts.find_one(
-        {"id": contact_id, "tenant_id": tid}, {"_id": 0, "id": 1, "name": 1})
+        {"id": contact_id, "tenant_id": tid}, {"_id": 0, "id": 1, "name": 1, "type": 1})
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
+    # J7-04 / J8-01 — writing on a contact needs that SIDE of CRM, not "people":
+    # a salesperson logs a call with her buyer; she does not touch suppliers.
+    if not may_see_contact(user, contact.get("type")):
+        raise HTTPException(status_code=403, detail="You don't have access to this contact")
     kind = inp.kind.strip().lower()
     if kind not in CRM_ACTIVITY_KINDS:
         raise HTTPException(

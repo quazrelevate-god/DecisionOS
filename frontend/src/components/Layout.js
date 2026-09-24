@@ -74,7 +74,8 @@ const NAV = [
   // active workflows). Founder ask: 'if the team person login and go the
   // ops it have to show the individuals person metrics'.
   { to: "/operating-score", label: "Ops", tkey: "ops", icon: Gauge, testid: "nav-ops" },
-  { to: "/crm", label: "CRM", tkey: "crm", icon: AddressBook, testid: "nav-crm", perm: "people" },
+  // J7-04 / J8-01 — CRM is in the nav for either side of it.
+  { to: "/crm", label: "CRM", tkey: "crm", icon: AddressBook, testid: "nav-crm", perms: ["people", "crm_buyers", "crm_suppliers"] },
   // U7-09.TEAM (2026-08-17): Team nav visible to every user. Non-perm
   // viewers get a read-only roster; owner + team_manage users get the
   // edit affordances inside the page.

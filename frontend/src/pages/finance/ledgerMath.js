@@ -81,6 +81,19 @@ export const overdueDays = (inv, now = Date.now()) =>
   inv.days_past_due != null ? inv.days_past_due : daysSince(inv.date, now);
 
 const categoryName = (c) => String(c || "").trim() || "Uncategorized";
+
+/* J2-06 — the categories that are money OUT but not money GONE: stock bought
+   to sell, and equipment bought to work with. The same two sets the server
+   splits on (routers/ledger._STOCK_CATEGORIES / _CAPITAL_CATEGORIES); they are
+   written here as well rather than fetched, because this math runs on every
+   keystroke of a period change and one wrong-footed round trip would put the
+   page and the tile below it into an argument. */
+const STOCK_CATEGORIES = new Set(["raw material", "stock", "inventory", "goods", "purchases", "trading goods"]);
+const CAPITAL_CATEGORIES = new Set(["asset purchase"]);
+const isStockOrCapital = (c) => {
+  const k = String(c || "").trim().toLowerCase();
+  return STOCK_CATEGORIES.has(k) || CAPITAL_CATEGORIES.has(k);
+};
 const vendorName = (v) => String(v || "").trim() || "Unspecified";
 
 const inside = (t, a, b) => t != null && t > a && t <= b;
@@ -115,6 +128,11 @@ export function financeMetrics({ summary, revenue, expenses, assets, inventory, 
     spend: (expenses || []).map((e) => ({
       t: timeOf(e.date, e.created_at), v: num(e.amount),
       category: categoryName(e.category), vendor: vendorName(e.vendor_name),
+      // J2-06: whether this one is the cost of RUNNING the place, or stock
+      // and equipment — money out, but not money gone. Same rule as the
+      // server's _spend_split, so a period on this page and the all-time
+      // figure from /ledger/summary cannot tell different stories.
+      operating: !isStockOrCapital(e.category),
     })),
     assets: (assets || []).map((a) => ({ t: timeOf(a.purchase_date, a.created_at), v: num(a.purchase_amount) })),
     stock: (inventory || []).map((i) => ({ t: timeOf(i.created_at), v: num(i.value) })),
@@ -140,14 +158,21 @@ export function financeMetrics({ summary, revenue, expenses, assets, inventory, 
   const billed = flow(rows.billed, tt.revenue_billed);
   const received = flow(rows.received, tt.revenue_received);
   const spend = flow(rows.spend, tt.total_spend);
-  // Net profit is the server's definition: billed minus spend.
-  const netNow = billed.value - spend.value;
+  /* J2-06 (JOURNEY-1, founder 24 Sep) — PROFIT IS REVENUE MINUS WHAT IT COSTS
+     TO RUN THE PLACE. A wholesaler's first act is buying stock to sell; under
+     "revenue minus everything spent" her profit read minus the whole purchase,
+     in red, on day one. She had not lost anything — she had turned cash into
+     stock in the godown. Stock and equipment are still counted and still
+     shown, as Spend and as their own tiles; they are simply not a loss. */
+  const operatingRows = rows.spend.filter((r) => r.operating);
+  const operating = flow(operatingRows, tt.operating_spend);
+  const netNow = billed.value - operating.value;
   const net = {
     value: windowed ? netNow : (tt.net_profit ?? netNow),
     change: windowed
-      ? change(netNow, sumIn(rows.billed, prevStart, start) - sumIn(rows.spend, prevStart, start))
+      ? change(netNow, sumIn(rows.billed, prevStart, start) - sumIn(operatingRows, prevStart, start))
       : null,
-    trend: billed.trend.map((v, i) => v - spend.trend[i]),
+    trend: billed.trend.map((v, i) => v - operating.trend[i]),
   };
   const balance = (list, total) => ({
     value: total ?? balanceAt(list, Infinity),

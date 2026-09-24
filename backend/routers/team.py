@@ -126,7 +126,18 @@ async def _decide_leave(leave_id, user, new_status, note, ntype, employee_msg):
     await log_activity(user["tenant_id"], user["id"], f"leave_{new_status}",
                        f"{new_status.replace('_', ' ').title()} {lv.get('user_name')}'s leave",
                        "leave", leave_id)
-    return await db.leaves.find_one({"id": leave_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    lv_after = await db.leaves.find_one({"id": leave_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    # ASK-5 / J11-02 (founder 24 Sep) — THE COVER IS SWITCHED BY THE DECISION,
+    # not by the request: nobody hands their approvals over for a leave that
+    # was turned down. The window is the leave's own dates, so the hand-back
+    # needs no sweeper — services/delegation.is_active_now simply stops
+    # answering when the last day is past.
+    from services.leave import _set_cover, _clear_cover
+    if new_status == "approved":
+        await _set_cover(user["tenant_id"], lv_after or {})
+    elif new_status in ("rejected", "cancelled"):
+        await _clear_cover(user["tenant_id"], lv_after or {})
+    return lv_after
 
 
 # ---------------------------------------------------------------------------
@@ -923,6 +934,9 @@ async def withdraw_leave(leave_id: str, inp: LeaveDecisionInput, user: dict = De
                                 title=f"{lv.get('leave_type', 'Leave').title()} leave", sender=user.get("name"))
     await log_activity(user["tenant_id"], user["id"], "leave_withdrawn",
                        f"{user.get('name')} withdrew their leave", "leave", leave_id)
+    # ASK-5 — taking the request back takes the cover off with it.
+    from services.leave import _clear_cover
+    await _clear_cover(user["tenant_id"], lv)
     return await db.leaves.find_one({"id": leave_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
 
 

@@ -47,7 +47,7 @@ const STEPS = [
   {
     key: "name", eyebrow: "About you", type: "text", placeholder: "Your full name",
     q: () => "And your name?",
-    sub: () => "You'll be the owner of this workspace.",
+    sub: () => "You'll be the owner of this company on DecisionOS.",
     validate: (v) => (v.trim().length >= 2 ? "" : "We'd love to know your name"),
     onlyWhenNew: true,
   },
@@ -276,7 +276,7 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
       const verdict = await emailAvailability(email);
       if (verdict !== "taken") return;
       setIdx(steps.findIndex((st) => st.key === "email"));
-      setError("This email already has a workspace — sign in instead, or use another address.");
+      setError("This email already runs a company here — sign in instead, or use another address.");
     })();
     // Once, on mount: this answers "what was restored", not "what is typed".
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -309,7 +309,7 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
       const verdict = await emailAvailability(v);
       setChecking(false);
       if (verdict === "taken") {
-        setError("This email already has a workspace — sign in instead, or use another address.");
+        setError("This email already runs a company here — sign in instead, or use another address.");
         return;
       }
       /* WE COULD NOT CHECK IT — and that needs a DELIBERATE choice, not a
@@ -392,7 +392,7 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
           <h1 className="mb-2 font-display text-3xl leading-[1.04] sm:text-4xl lg:text-5xl">
             {existing ? (existing.workspaces.length
               ? `Welcome back${first(existing.name) ? `, ${first(existing.name)}` : ""}.`
-              : "You've been invited to a workspace.")
+              : "You've been invited to a company.")
               : step.confirmByCode && codeFor ? "Enter the code we just texted you." : step.q(form, identity?.name)}
           </h1>
           <p className="mb-7 text-sm text-muted-foreground">

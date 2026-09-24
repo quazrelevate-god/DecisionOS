@@ -31,12 +31,19 @@ export function OverviewTab({ summary, revenue, expenses, assets, inventory, per
   const p = m.period;
   const trendSpan = p.days ? p.label.toLowerCase() : "the last 12 months";
   const totals = summary?.totals || {};
-  const profitToDate = totals.net_profit ?? ((totals.revenue_billed || 0) - (totals.total_spend || 0));
+  // J2-06 — revenue minus what it costs to RUN the place; stock and equipment
+  // are money out, not money gone, and are counted on their own tiles.
+  const profitToDate = totals.net_profit
+    ?? ((totals.revenue_billed || 0) - (totals.operating_spend ?? totals.total_spend ?? 0));
+  const setAside = (totals.stock_spend || 0) + (totals.capital_spend || 0);
 
   const tiles = [
     { id: "revenue", icon: cur === "INR" ? CurrencyInr : CurrencyCircleDollar, tone: "emerald", label: "Revenue billed", metric: m.billed, to: "/finance?tab=revenue" },
     { id: "received", icon: DownloadSimple, tone: "sky", label: "Received", metric: m.received, to: "/finance?tab=revenue" },
-    { id: "net-profit", icon: ChartPieSlice, tone: "orange", label: "Net profit", metric: m.net, to: "/finance?tab=expenses" },
+    { id: "net-profit", icon: ChartPieSlice, tone: "orange", label: "Net profit", metric: m.net, to: "/finance?tab=expenses",
+      // J2-06 — say what it leaves out, on the tile, so nobody has to guess
+      // why it does not match revenue minus spend.
+      note: setAside > 0 ? "stock & equipment not counted as a loss" : undefined },
     { id: "spend", icon: TrendUp, tone: "slate", label: t("finance.k_spend"), metric: m.spend, to: "/finance?tab=expenses", goodWhenUp: false },
     { id: "assets", icon: Cube, tone: "violet", label: t("finance.k_asset"), metric: m.assets, to: "/finance?tab=assets", neutral: true },
     { id: "inventory", icon: Package, tone: "amber", label: t("finance.k_inv"), metric: m.stock, to: "/finance?tab=inventory", neutral: true },
@@ -78,7 +85,7 @@ export function OverviewTab({ summary, revenue, expenses, assets, inventory, per
   );
 }
 
-function KpiTile({ id, icon: Icon, tone, label, value, metric, to, goodWhenUp = true, neutral = false, prevLabel, trendLabel }) {
+function KpiTile({ id, icon: Icon, tone, label, value, metric, to, goodWhenUp = true, neutral = false, prevLabel, trendLabel, note }) {
   return (
     <Link to={to} data-testid={`kpi-${id}`}
       className={`group flex min-w-0 flex-col p-4 transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_40px_-18px_hsl(150_15%_20%/0.35)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 motion-reduce:transition-none sm:p-5 ${CARD}`}>
@@ -97,6 +104,8 @@ function KpiTile({ id, icon: Icon, tone, label, value, metric, to, goodWhenUp = 
       <span className="mt-1 text-[1.35rem] font-semibold leading-tight text-slate-900 [overflow-wrap:anywhere] sm:text-[1.45rem]" title={value}>
         {String(value ?? "").replace(/,/g, ",\u200B")}
       </span>
+      {/* J2-06 — a figure that leaves something out says so on its own face. */}
+      {note && <span className="mt-1 text-[11px] leading-snug text-slate-500">{note}</span>}
       <Sparkline points={metric.trend} tone={tone} label={trendLabel} className="mt-3" />
     </Link>
   );

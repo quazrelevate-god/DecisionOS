@@ -802,7 +802,10 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                   )}
                 </div>
                 <p className="mb-3 text-xs text-muted-foreground">
-                  Speak or type any workflow, approval, or team detail Dex missed — he&apos;ll rewire the OS.
+                  {/* J1-03 — "rewire the OS" is our word for our thing. What
+                      the founder is looking at is their company's workflows,
+                      so say that. */}
+                  Speak or type any workflow, approval or team detail Dex missed — he&apos;ll rebuild it.
                 </p>
                 {showRefine && (
                   <>

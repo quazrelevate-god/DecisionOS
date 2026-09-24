@@ -5,7 +5,19 @@ import api from "../../lib/api";
 import { INDUSTRIES } from "../../lib/format";
 import { GlassSelect } from "../../components/karma/GlassSelect";
 
-const MODELS = ["B2B", "B2C", "B2B & B2C", "D2C", "Marketplace", "Services"];
+/* J1-03 / J2-02 (JOURNEY-1, founder 24 Sep) — "WHO DO YOU SELL TO", ANSWERED
+   IN WORDS. This row asked a sheet-metal shop owner to pick between B2B, B2C,
+   D2C and Marketplace in his first two minutes. The stored VALUES are
+   untouched — the blueprint prompt and every tenant already written read them
+   — only what is printed on the chip changes. */
+const MODELS = [
+  { value: "B2B", label: "Other businesses" },
+  { value: "B2C", label: "Shops & the public" },
+  { value: "B2B & B2C", label: "Both" },
+  { value: "D2C", label: "Straight to buyers" },
+  { value: "Marketplace", label: "On a marketplace" },
+  { value: "Services", label: "Services" },
+];
 const SCAN_LINES = [
   "Opening your homepage…",
   "Reading what you do…",
@@ -192,10 +204,10 @@ export function WebsiteIntel({ companyName, onDone, onBack }) {
                          pressed recipe is reduced to a 1px whisper so it can
                          double as the input trough, which left the chosen chip
                          all but indistinguishable. See index.css. */
-                      <button key={m} data-testid={`signup-model-${m}`} onClick={() => setModel(m)}
-                        aria-pressed={model === m}
-                        className={`flex h-9 items-center rounded-pill px-4 text-xs font-medium ${model === m ? "kr-chip-on" : "kr-pop"}`}>
-                        {m}
+                      <button key={m.value} data-testid={`signup-model-${m.value}`} onClick={() => setModel(m.value)}
+                        aria-pressed={model === m.value}
+                        className={`flex h-9 items-center rounded-pill px-4 text-xs font-medium ${model === m.value ? "kr-chip-on" : "kr-pop"}`}>
+                        {m.label}
                       </button>
                     ))}
                   </div>
@@ -279,10 +291,10 @@ export function WebsiteIntel({ companyName, onDone, onBack }) {
                 <label className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">You sell to</label>
                 <div className="mt-1.5 flex flex-wrap gap-2">
                   {MODELS.map((m) => (
-                    <button key={m} data-testid={`signup-manual-model-${m}`} onClick={() => setModel(m)}
-                      aria-pressed={model === m}
-                      className={`flex h-10 items-center rounded-pill px-4 text-xs font-medium ${model === m ? "kr-chip-on" : "kr-pop"}`}>
-                      {m}
+                    <button key={m.value} data-testid={`signup-manual-model-${m.value}`} onClick={() => setModel(m.value)}
+                      aria-pressed={model === m.value}
+                      className={`flex h-10 items-center rounded-pill px-4 text-xs font-medium ${model === m.value ? "kr-chip-on" : "kr-pop"}`}>
+                      {m.label}
                     </button>
                   ))}
                 </div>

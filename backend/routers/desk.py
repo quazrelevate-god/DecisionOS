@@ -405,12 +405,19 @@ async def desk_summary(user: dict = Depends(get_current_user)):
         "trends": {
             "weekly_completion_rate": weekly_completion,
             "complaints_trend": complaints,
-            "cash_flow": {
+            # J9-04 (DD-03), founder 24 Sep — AND THE FIGURE DOES NOT TRAVEL
+            # TO SOMEBODY WHO MAY NOT SEE IT. The Desk's tiles are hidden for
+            # a person without Finance (pages/Desk.js), but a hidden tile is a
+            # decision the browser makes; this is the one the server makes.
+            # The narrative has left money out of their briefing since J10-01;
+            # the trend block was still carrying the company's receivables to
+            # every salesperson's device.
+            "cash_flow": ({
                 "clear": cash.get("clear"),
                 "overdue_receivables_amount": cash.get("overdue_receivables_amount") or 0,
                 "unmatched_payments": cash.get("unmatched_payments") or 0,
                 "direction": "flat" if cash.get("clear") else "down",
-            },
+            } if ("finance" in user_perms(user) or is_owner) else None),
         },
         "shortcuts": shortcuts,
         "counters": {

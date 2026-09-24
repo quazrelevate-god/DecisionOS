@@ -29,7 +29,7 @@ import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { hasPerm } from "../lib/perms";
+import { hasPerm, canSeeBuyers } from "../lib/perms";
 import { inrCompact } from "../lib/format";
 import { cn } from "../lib/utils";
 // ASK-36 2 — which decisions the founder read and set aside (see the file).
@@ -732,6 +732,19 @@ export default function Desk() {
     [approvalsQ.data, user] // eslint-disable-line react-hooks/exhaustive-deps
   );
   const showApprovals = user?.role === "owner" || hasPerm(user, "approvals") || approvals.length > 0;
+  /* J9-04 (DD-03) and J8-04 (CR-13), founder 24 Sep — A TILE IS ONLY SHOWN TO
+     SOMEBODY WHO CAN OPEN IT. A salesperson's Desk carried "To collect
+     (overdue)" — a company receivables figure she has no Finance access to —
+     and a Complaints count that opened CRM and refused her. A number you
+     cannot act on beside a door that shuts in your face is worse than an
+     empty space: it teaches people that the app is not for them. If they want
+     the figure they ask an owner for the access, and then it appears.
+     The tiles that stay are the ones everybody holds: their work, and the
+     boards. What the tiles COUNT is still company-wide — the founder's call of
+     24 Sep is that the Desk is for the people who make decisions, and a
+     per-person Desk is phase two. */
+  const seesMoney = user?.role === "owner" || hasPerm(user, "finance");
+  const seesComplaints = canSeeBuyers(user);
   /* 2026-09-14, founder — "if I click the open icon for the approvals, open
      the drawer in the Decision Desk itself, don't go to My Work". The row
      opens TaskCard's drawer (drawerOnly) over this page; the people list and
@@ -1240,14 +1253,14 @@ export default function Desk() {
               value: String(m.counters ? m.counters.delayed : m.work?.overdue ?? "…"),
               urgent: (m.counters?.delayed ?? m.work?.overdue ?? 0) > 0,
               to: "/my-work?filter=overdue", testid: "kpi-delayed-m" },
-            { icon: ChatCircleText, label: "Complaints",
+            ...(seesComplaints ? [{ icon: ChatCircleText, label: "Complaints",
               value: String(m.complaints ? m.complaints.value : "…"),
               urgent: (m.complaints?.new_7d || 0) > 0,
-              to: "/crm", testid: "kpi-complaints-m" },
-            { icon: HandCoins, label: "Overdue",
+              to: "/crm", testid: "kpi-complaints-m" }] : []),
+            ...(seesMoney ? [{ icon: HandCoins, label: "Overdue",
               value: m.cash ? inrCompact(m.cash.overdue) : "…",
               urgent: (m.cash?.overdue || 0) > 0,
-              to: "/finance?tab=revenue&filter=overdue", testid: "kpi-collect-m" },
+              to: "/finance?tab=revenue&filter=overdue", testid: "kpi-collect-m" }] : []),
             /* ASK-52 · the fourth pill is the boards, not the ledger. It
                carries the desktop card's headline number and nothing else
                the card carries: how many cards need attention, out of how
@@ -1308,6 +1321,7 @@ export default function Desk() {
             countUp
             testid="kpi-delayed"
           />
+          {seesComplaints && (
           <StatTile
             icon={ChatCircleText}
             label="Complaints"
@@ -1320,6 +1334,8 @@ export default function Desk() {
             countUp
             testid="kpi-complaints"
           />
+          )}
+          {seesMoney && (
           <StatTile
             icon={HandCoins}
             alert={(m.cash?.overdue || 0) > 0}
@@ -1329,6 +1345,7 @@ export default function Desk() {
             to="/finance?tab=revenue&filter=overdue"
             testid="kpi-collect"
           />
+          )}
           {/* ASK-52 — THE WORKFLOWS CARD, TWO CELLS WIDE, where Weakest and Net
               profit were. The grid reflows around it: the three tiles that can
               raise the alert dot (Delayed, Complaints, To collect) take the top
@@ -1340,6 +1357,7 @@ export default function Desk() {
             loading={workflowsQ.isLoading}
             className="lg:col-span-2"
           />
+          {seesMoney && (
           <StatTile
             icon={Receipt}
             label="Spend, this month"
@@ -1350,6 +1368,7 @@ export default function Desk() {
             to="/finance"
             testid="kpi-spend"
           />
+          )}
         </div>
       </div>
 

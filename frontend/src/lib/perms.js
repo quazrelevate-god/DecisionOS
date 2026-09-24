@@ -3,7 +3,16 @@ export const PERMISSIONS = [
   { key: "inbox", label: "Decision Desk" },
   { key: "voice_capture", label: "Voice Box (Decision Desk capture)" },
   { key: "data_input", label: "Data Input" },
-  { key: "people", label: "People / Contacts" },
+  { key: "people", label: "People / Contacts (both sides of CRM)" },
+  /* J7-04 / J8-01 (JOURNEY-1, founder 24 Sep) — CRM SPLITS BY SIDE.
+     "people" was one door to two lists, so giving Sales the buyers they live
+     in also handed them every supplier's price and terms; FIX-FUP-51 answered
+     that by shutting the door on both, and neither Sales nor Finance could add
+     the contact in front of them. One key per side now. "people" stays and
+     means both, so nothing set before today changes; holding both new keys is
+     the same as holding it. */
+  { key: "crm_buyers", label: "Customers & dealers (CRM)" },
+  { key: "crm_suppliers", label: "Suppliers (CRM)" },
   // 2026-09-16 — one Finance permission. "Finance Ledger" was a second toggle
   // for the same page: every ledger endpoint accepted either key and the page
   // had no per-tab gate. A small business has one finance person.
@@ -29,8 +38,10 @@ export const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 // sensitive); Owner still passes via the role==='owner' branch below.
 const BASE = ["inbox", "data_input", "workflows", "tasks", "brain", "ask"];
 export const ROLE_DEFAULT_PERMS = {
-  sales: [...BASE],
-  finance: [...BASE, "finance"],
+  // Each role starts holding the side of CRM it works in (see above, and the
+  // server's core/permissions.py, which this mirrors).
+  sales: [...BASE, "crm_buyers"],
+  finance: [...BASE, "finance", "crm_suppliers"],
 };
 
 export function defaultPermsForRole(role) {
@@ -62,3 +73,10 @@ export function hasPerm(user, perm) {
   if (user.role === "owner") return true;
   return userPerms(user).includes(perm);
 }
+
+/* J7-04 / J8-01 — which side of CRM a person may open. The mirror of the
+   server's core/permissions.crm_types; the nav, the CRM page and the Desk's
+   tiles all read these, so none of them can offer a door the API will shut. */
+export const canSeeBuyers = (user) => hasPerm(user, "people") || hasPerm(user, "crm_buyers");
+export const canSeeSuppliers = (user) => hasPerm(user, "people") || hasPerm(user, "crm_suppliers");
+export const canSeeAnyCrm = (user) => canSeeBuyers(user) || canSeeSuppliers(user);

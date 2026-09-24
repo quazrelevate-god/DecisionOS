@@ -22,7 +22,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "react-i18next";
-import { hasPerm } from "../lib/perms";
+import { hasPerm, canSeeBuyers, canSeeSuppliers } from "../lib/perms";
 import { lex } from "../lib/lexicon";
 import { SkeletonGrid, StickyHeader } from "../components/common";
 import { inr, money } from "../lib/format";
@@ -313,7 +313,10 @@ function Pager({ page, pages, total, pageSize, onPage }) {
    non-modal mode did not close on an outside click, while the modal one closes
    on an outside click and on Escape. The dialog opens a tick after the menu has
    closed, so the menu handing focus back does not fight the dialog's trap. */
-function AddContactMenu({ canManage, canImport, csvBusy, onPick, customerLabel, vendorLabel }) {
+// J7-04 / J8-01 — "New customer" and "New supplier" are offered per side, so
+// the menu never opens a form the server will refuse to save.
+function AddContactMenu({ canManage, canImport, csvBusy, onPick, customerLabel, vendorLabel,
+                          seesBuyers = true, seesSuppliers = true }) {
   const [open, setOpen] = useState(false);
   const item = (key, Icon, title, hint, testid, disabled = false) => (
     <DropdownMenuItem key={key} disabled={disabled} data-testid={testid} onSelect={() => onPick(key)}
@@ -340,8 +343,8 @@ function AddContactMenu({ canManage, canImport, csvBusy, onPick, customerLabel, 
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={8} collisionPadding={12}
         className={`${GLASS_MENU} w-[min(20rem,calc(100vw-1.5rem))] p-1.5`} data-testid="crm-add-menu-list">
-        {canManage && item("customer", AddressBook, `New ${customerLabel}`, "A retail account, a regular buyer or a dealer", "crm-add-customer")}
-        {canManage && item("vendor", Truck, `New ${vendorLabel}`, "A supplier, vendor or raw-material source", "crm-add-supplier")}
+        {canManage && seesBuyers && item("customer", AddressBook, `New ${customerLabel}`, "A retail account, a regular buyer or a dealer", "crm-add-customer")}
+        {canManage && seesSuppliers && item("vendor", Truck, `New ${vendorLabel}`, "A supplier, vendor or raw-material source", "crm-add-supplier")}
         {canManage && canImport && <DropdownMenuSeparator className="mx-2 my-1 h-px bg-slate-900/[0.06]" />}
         {canImport && item("import", UploadSimple, csvBusy ? "Uploading…" : "Import from spreadsheet", "Bulk-add via CSV or Excel", "crm-import-csv", csvBusy)}
       </DropdownMenuContent>
@@ -580,8 +583,15 @@ export default function CRM() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  // U7-07: two scopes, Buyers and Suppliers. Complaints show on the cards.
-  const [scope, setScope] = useState("customers"); // customers | suppliers
+  /* U7-07: two scopes, Buyers and Suppliers. Complaints show on the cards.
+     J7-04 / J8-01 (JOURNEY-1, founder 24 Sep) — AND YOU SEE THE SIDES YOU
+     HOLD. Sales starts with the buyers, Finance with the suppliers, a team
+     that is both has both; an owner grants the other side in Settings -> Team
+     roles -> Access. The switcher below shows only what is yours, and the
+     page opens on it, so nobody is offered a list the server will refuse. */
+  const seesBuyers = canSeeBuyers(user);
+  const seesSuppliers = canSeeSuppliers(user);
+  const [scope, setScope] = useState(seesBuyers ? "customers" : "suppliers");
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
   // E2-70: a deep link like /crm?sort=outstanding lands on that order.
@@ -600,7 +610,9 @@ export default function CRM() {
   const [complaintFor, setComplaintFor] = useState(null); // a contact, while Log complaint is open
 
   // RBAC P1 (2026-09-15): People access, not the role name (the server's rule).
-  const canManage = hasPerm(user, "people");
+  // J7-04 / J8-01 — adding and editing is per SIDE now, not one "people" key:
+  // whoever may see a list may keep it, which is the point of the split.
+  const canManage = seesBuyers || seesSuppliers;
   const can360 = hasPerm(user, "finance");
   const canImport = hasPerm(user, "data_input");
 
@@ -715,8 +727,8 @@ export default function CRM() {
   };
 
   const SCOPES = [
-    { key: "customers", label: L.customer_plural, icon: AddressBook, count: scopeCounts.customers },
-    { key: "suppliers", label: L.vendor_plural, icon: Truck, count: scopeCounts.suppliers },
+    ...(seesBuyers ? [{ key: "customers", label: L.customer_plural, icon: AddressBook, count: scopeCounts.customers }] : []),
+    ...(seesSuppliers ? [{ key: "suppliers", label: L.vendor_plural, icon: Truck, count: scopeCounts.suppliers }] : []),
   ];
   const scopeLabel = SCOPES.find((s) => s.key === scope)?.label || "";
   const filtering = !!q || !!status;
@@ -749,6 +761,7 @@ export default function CRM() {
           </div>
           {(canManage || canImport) && (
             <AddContactMenu canManage={canManage} canImport={canImport} csvBusy={csvBusy} onPick={pickAdd}
+              seesBuyers={seesBuyers} seesSuppliers={seesSuppliers}
               customerLabel={L.customer_singular} vendorLabel={L.vendor_singular} />
           )}
         </div>

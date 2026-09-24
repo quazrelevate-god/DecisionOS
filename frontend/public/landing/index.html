@@ -7,8 +7,8 @@
 <meta name="description" content="The AI operating system that remembers every decision, organises every task, and executes the way your business actually runs.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Urbanist:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/landing/css/styles.css?v=44">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/landing/css/styles.css?v=98">
 </head>
 <body>
 
@@ -17,7 +17,7 @@
 <!-- ============ NAV ============ -->
 <header class="site-header" id="site-header">
   <div class="header-pill">
-    <a href="#top" class="logo" aria-label="DecisionOS"><span class="wordmark">Decision<span>OS</span></span></a>
+    <a href="#top" class="logo"><img src="/landing/assets/img/logo.png" alt="DecisionOS"></a>
     <nav class="main-nav" aria-label="Primary">
       <a href="#problem">The Problem</a>
       <a href="#whats-inside">Who It&rsquo;s For</a>
@@ -50,20 +50,55 @@
 <div class="pin-scope">
 <section class="hero" id="top">
   <div class="hero-media">
-    <img class="hero-photo" src="/landing/assets/img/hero-photo.jpg" alt="" aria-hidden="true">
+    <img class="hero-bg" src="/landing/assets/img/hero-bg.jpg" alt="" aria-hidden="true">
     <div class="hero-scrim"></div>
   </div>
+  <picture class="hero-fg" aria-hidden="true">
+    <source srcset="/landing/assets/img/hero-fg.webp" type="image/webp">
+    <img src="/landing/assets/img/hero-fg.png" alt="">
+  </picture>
   <div class="wrap hero-content">
-    <div class="hero-copy">
-      <p class="eyebrow reveal">The operating brain for founder-led businesses</p>
-      <h1 class="hero-title reveal" style="--d:.08s">Get dangerously<br>organised.<em>Without hiring a single manager.</em></h1>
-      <div class="reveal" style="--d:.16s">
-        <a href="/signup" class="btn btn-primary btn-lg">Start free <span aria-hidden="true">→</span></a>
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow reveal">The operating brain for founder-led businesses</p>
+        <h1 class="hero-title reveal" style="--d:.08s">Get dangerously<br>organised.<em>Without hiring a single manager.</em></h1>
+        <div class="hero-ctas reveal" style="--d:.16s">
+          <a href="/signup" class="btn btn-primary btn-lg">Start free <span aria-hidden="true">&rarr;</span></a>
+          <a href="#how-it-works" class="btn-see">
+            <span class="btn-see-label">See how it works</span>
+            <span class="btn-see-play" aria-hidden="true"><svg viewBox="0 0 12 12" width="10" height="10"><path d="M3 2 L10 6 L3 10 Z" fill="currentColor"/></svg></span>
+          </a>
+        </div></div>
+      <div class="hero-video-card" aria-hidden="true">
+        <video class="hero-video" autoplay muted loop playsinline preload="auto" poster="/landing/assets/img/hero-bg.jpg">
+          <source src="/landing/assets/img/hero-mockup.webm?v=2" type="video/webm">
+          <source src="/landing/assets/img/hero-mockup.mp4?v=2" type="video/mp4">
+        </video>
+        <div class="hero-video-rim" aria-hidden="true"></div>
+      </div></div>
+    </div>
+<div class="hero-partners" aria-label="Trusted by">
+      <p class="hp-title">Trusted by founder&#8209;led businesses</p>
+      <div class="hp-marquee">
+        <div class="hp-track" aria-hidden="true">
+          <span class="hp-brand"><b>ACME</b><em>PACKAGING</em></span>
+          <span class="hp-brand hp-serif"><b>Rapid</b><em>LOGISTICS</em></span>
+          <span class="hp-brand hp-serif"><b>GreenLeaf</b><em>AGRI</em></span>
+          <span class="hp-brand"><b>BuildX</b><em>CONSTRUCTIONS</em></span>
+          <span class="hp-brand"><b>NEXORA</b><em>INDUSTRIES</em></span>
+          <span class="hp-brand hp-serif"><b>Skyline</b><em>INTERIORS</em></span>
+          <span class="hp-brand"><b>ACME</b><em>PACKAGING</em></span>
+          <span class="hp-brand hp-serif"><b>Rapid</b><em>LOGISTICS</em></span>
+          <span class="hp-brand hp-serif"><b>GreenLeaf</b><em>AGRI</em></span>
+          <span class="hp-brand"><b>BuildX</b><em>CONSTRUCTIONS</em></span>
+          <span class="hp-brand"><b>NEXORA</b><em>INDUSTRIES</em></span>
+          <span class="hp-brand hp-serif"><b>Skyline</b><em>INTERIORS</em></span>
+        </div>
       </div>
     </div>
   </div>
-  <a href="#problem" class="scroll-cue" aria-label="Scroll to next section"><span></span></a>
 </section>
+
 
 <!-- ============ 02 · THE FOUNDER PROBLEM ============ -->
 <section class="section lap-next" id="problem">
@@ -670,7 +705,6 @@
           <li>Tasks, owners &amp; due dates</li>
           <li>30-day memory</li>
         </ul>
-        <a href="/signup" class="btn btn-secondary pc-cta">Start free</a>
       </article>
 
       <article class="pc pc-featured">
@@ -685,7 +719,6 @@
           <li>The AI CFO &amp; inventory</li>
           <li>Unlimited Company Brain</li>
         </ul>
-        <a href="/signup" class="btn btn-primary pc-cta">Start free</a>
       </article>
 
       <article class="pc">
@@ -699,7 +732,6 @@
           <li>Business DNA &amp; recommendations</li>
           <li>Priority onboarding</li>
         </ul>
-        <a href="/signup" class="btn btn-secondary pc-cta">Start free</a>
       </article>
     </div>
 
@@ -792,7 +824,7 @@
 <!-- ============ FOOTER ============ -->
 <footer class="site-footer">
   <div class="wrap footer-inner">
-    <a href="#top" class="logo" aria-label="DecisionOS"><span class="wordmark">Decision<span>OS</span></span></a>
+    <a href="#top" class="logo"><img src="/landing/assets/img/logo.png" alt="DecisionOS"></a>
     <nav class="footer-nav" aria-label="Footer">
       <a href="#problem">The Problem</a>
       <a href="#whats-inside">Who It&rsquo;s For</a>
@@ -839,6 +871,53 @@ fetch("/api/auth/me", { credentials: "include" })
   })
   .catch(function () { /* offline, or the API is down: it is a static page, show it */ });
 </script>
-<script src="/landing/js/main.js?v=44"></script>
+<script src="/landing/js/main.js?v=98"></script>
+<!-- ============ ACCESS MODAL ============ -->
+<div class="modal-root" id="access-modal" hidden>
+  <div class="modal-scrim" data-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="access-title">
+    <button class="modal-x" type="button" data-close aria-label="Close">&times;</button>
+    <h3 id="access-title">Request early access</h3>
+    <p class="modal-sub">Tell us how your team runs today. We will set up your Company Brain around it.</p>
+    <form class="modal-form" id="access-form">
+      <input type="text" name="name" placeholder="Your name" required>
+      <input type="text" name="business" placeholder="Business name" required>
+      <input type="tel" name="phone" placeholder="Phone number" required>
+      <input type="tel" name="whatsapp" placeholder="WhatsApp number">
+      <input type="email" name="email" placeholder="Email address" required>
+      <button type="submit" class="btn btn-primary btn-lg">Request Early Access <span aria-hidden="true">&rarr;</span></button>
+      <p class="modal-note" id="modal-note"></p>
+    </form>
+  </div>
+</div>
+
+  <script>
+    // Autoplay for hero video: retry on every reasonable event, then
+    // poll every 250ms up to 6 seconds so a delayed policy-flip still
+    // catches. Stops as soon as playback is confirmed running.
+    (function(){
+      var v = document.querySelector('.hero-video');
+      if (!v) return;
+      var tryPlay = function(){
+        if (!v.paused && !v.ended) return true;
+        var p = v.play();
+        if (p && p.catch) p.catch(function(){});
+        return !v.paused;
+      };
+      ['loadedmetadata','loadeddata','canplay','canplaythrough'].forEach(function(evt){
+        v.addEventListener(evt, tryPlay);
+      });
+      window.addEventListener('load', tryPlay);
+      tryPlay();
+      // Poll until playing, or give up after 6s (24 attempts).
+      var tries = 0;
+      var poll = setInterval(function(){
+        if (tryPlay() || ++tries > 24) clearInterval(poll);
+      }, 250);
+      // Fallback: first user interaction always unblocks autoplay.
+      var resume = function(){ tryPlay(); document.removeEventListener('pointerdown', resume, true); };
+      document.addEventListener('pointerdown', resume, true);
+    })();
+  </script>
 </body>
 </html>

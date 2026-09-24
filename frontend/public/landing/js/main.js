@@ -46,7 +46,11 @@ document.addEventListener('DOMContentLoaded', () => {
   let ticking = false;
 
   const syncHeader = () => {
-    const trigger = hero ? hero.offsetHeight * 0.5 : 360;   // halfway down the hero
+    // Half a screen in. On a desktop the hero IS a screen, so this is halfway
+    // down the hero; on a phone the hero stacks two or three screens tall, and
+    // half of that would leave the menu out of reach for most of the first
+    // scroll. Whichever is shorter keeps the same feel on both.
+    const trigger = hero ? Math.min(hero.offsetHeight, window.innerHeight) * 0.5 : 360;
     const show = window.scrollY > trigger;
     header.classList.toggle('is-visible', show);
     if (!show && header.classList.contains('nav-open')) {

@@ -109,6 +109,25 @@ button{ font-family:inherit; cursor:pointer; }
   transform:translateX(-50%) translateY(0);
   opacity:1; visibility:visible; pointer-events:auto;
 }
+/* ...which is what the line above always claimed, and had stopped doing: the
+   resting state had been set to match .is-visible, so the pill sat over the
+   hero from the first paint. It is out of the hero again, and swipes down at
+   the halfway mark (js/main.js). Only where the pill carries the full nav --
+   at 860 and under it is the one way into the menu, so it stays put there.
+   visibility, not just opacity, so a keyboard cannot tab into a pill nobody
+   can see. */
+@media (min-width:861px){
+  .site-header{
+    transform:translateX(-50%) translateY(-140%);
+    opacity:0; visibility:hidden; pointer-events:none;
+    transition:transform .55s cubic-bezier(.16,1,.3,1), opacity .35s ease, visibility 0s linear .55s;
+  }
+  .site-header.is-visible{
+    transform:translateX(-50%) translateY(0);
+    opacity:1; visibility:visible; pointer-events:auto;
+    transition:transform .55s cubic-bezier(.16,1,.3,1), opacity .35s ease, visibility 0s;
+  }
+}
 .header-pill{
   display:flex; align-items:center; gap:22px;
   height:60px; padding:0 8px 0 24px;
@@ -1763,7 +1782,8 @@ body.modal-open{ overflow:hidden; }
   margin-right:0;
   border-radius:clamp(12px, 1.4vw, 20px);
   overflow:hidden;
-  background:#f6f4f1;
+  /* Glass, not a sticker: a little of the mountain reads through it. */
+  background:rgba(255,255,255,0.22);
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.9),
     inset 0 0 0 1px rgba(255,255,255,0.35),
@@ -1775,6 +1795,8 @@ body.modal-open{ overflow:hidden; }
 .hero-shot img{
   display:block;
   width:100%; height:auto;
+  opacity:.92;                     /* the resting translucency; the flight's
+                                      fade lives on .hero-shot and multiplies */
 }
 /* Luminous rim over the shot, so the glass depth still reads. */
 .hero-shot::after{
@@ -1975,8 +1997,11 @@ body.modal-open{ overflow:hidden; }
       rotateX(calc(var(--hf,0) * 34deg))
       rotateZ(calc(var(--hf,0) * -6deg))
       scale(calc(1 - var(--hf,0) * var(--fly-shrink, 0.78)));
-    opacity:calc(1 - var(--hf,0) * var(--hf,0) * 1.15);
-    filter:blur(calc(var(--hf,0) * 2.5px));
+    /* Holds its own for the first breath, then goes quickly: nothing is left
+       to see by the halfway mark, so the turn and the shrink read as a hint
+       rather than as an animation you can line up against the laptop. */
+    opacity:calc(1 - var(--hf,0) * var(--hf,0) * 4.2);
+    filter:blur(calc(var(--hf,0) * 5px));
     will-change:transform, opacity;
   }
 

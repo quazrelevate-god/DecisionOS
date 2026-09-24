@@ -46,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let ticking = false;
 
   const syncHeader = () => {
-    const trigger = hero ? hero.offsetHeight * 0.55 : 360;
+    const trigger = hero ? hero.offsetHeight * 0.5 : 360;   // halfway down the hero
     const show = window.scrollY > trigger;
     header.classList.toggle('is-visible', show);
     if (!show && header.classList.contains('nav-open')) {

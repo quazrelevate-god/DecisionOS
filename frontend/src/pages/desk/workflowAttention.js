@@ -166,6 +166,14 @@ export function workflowAttention({ workflows, userId, isOwner = false, pipeline
   };
 }
 
+/** The words on the move button. `Approve <stage>` reads as English until the
+ *  stage is named for the approval itself, and then it stutters. */
+function moveLabel(needsSignOff, stage) {
+  const name = String(stage || "").trim();
+  if (!needsSignOff) return `Advance to ${name}`;
+  return /^(approv|sign[-\s]?off)/i.test(name) ? "Approve" : `Approve ${name}`;
+}
+
 /** The Next up half of the tile: what it says, and the move it offers. */
 function nextUpOf(c, pipelines) {
   const w = c.w;
@@ -189,10 +197,13 @@ function nextUpOf(c, pipelines) {
     nextStage: c.nextStage,
     // The board's own button, in the board's own words: the move only an owner
     // may make reads as the approval it is.
-    actionLabel: c.nextStage
-      ? (c.needsSignOff ? `Approve ${stageLabel(pipelines, w.type, c.nextStage)}`
-        : `Advance to ${stageLabel(pipelines, w.type, c.nextStage)}`)
-      : null,
+    // J14-09 (JOURNEY-1) — "APPROVE APPROVED" WAS ON THE OWNER'S FIRST CARD.
+    // The label is built as a verb plus the stage it moves to, which reads well
+    // for "Approve Quotation" and badly when the stage is itself called
+    // Approved, Approval or Sign-off: the audit found "Approve Approved" on the
+    // Desk's NEXT UP card. When the stage's own name already says the verb, the
+    // verb alone is the sentence.
+    actionLabel: c.nextStage ? moveLabel(c.needsSignOff, stageLabel(pipelines, w.type, c.nextStage)) : null,
   };
 }
 

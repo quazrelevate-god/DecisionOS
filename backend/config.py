@@ -392,7 +392,20 @@ PERMISSION_KEYS = [
     # sales and finance ends up with the whole of CRM.
     "crm_buyers", "crm_suppliers",
     "workflows", "tasks", "brain", "ask", "brain_export",
-    "approvals", "decisions_approve", "leave_approve", "team_manage",
+    # J14-13 (JOURNEY-1, founder) — "APPROVE TASKS & WHATSAPP CAPTURES" WAS TWO
+    # POWERS IN ONE TICK, and a workshop owner handing out access has never
+    # heard of a WhatsApp capture. They are separate now and each says what it
+    # does:
+    #   approvals         waving through WORK and MONEY — a task that needs
+    #                     sign-off before it starts or after it is done, and an
+    #                     expense over the high-value line
+    #   captures_approve  waving through what the AI DRAFTED from a message —
+    #                     the Finance inbox, which is where those land
+    # Nobody loses anything: user_perms() gives captures_approve to everyone who
+    # already holds approvals, so every existing role and person keeps exactly
+    # the access they had. Finance starts with it because that inbox is theirs
+    # (the founder's call on J14).
+    "approvals", "captures_approve", "decisions_approve", "leave_approve", "team_manage",
     # ASK-28 TK-08 (plan Phase 6): opt-in task access, off for every role by
     # default (the owner has them via the all-perms shortcut).
     #   tasks_assign_any  give tasks to anyone, not only self / own team / reports

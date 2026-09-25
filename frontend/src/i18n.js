@@ -16,7 +16,19 @@ const resources = {
         crm: "CRM", team: "Team", ops: "Ops",
         brain: "Dex", finance: "Finance", capture: "Capture", meetings: "Meeting Notes", settings: "Settings",
       },
-      bottomnav: { desk: "Desk", brief: "Brief", work: "Work", crm: "CRM", brain: "Dex" },
+      /* J14-11 (JOURNEY-1) — THE DESK IS THE SCREEN, SO THE DESK GETS THE WORDS.
+         Switching to Tamil changed TWO words on the whole Desk — the dock's
+         first two labels — because those were the only ones with a key. The
+         switcher was never broken; there was nothing for it to switch to. Money
+         and More were already asked for through t() and simply did not exist in
+         any bundle, so they fell back to English in all three languages. */
+      bottomnav: { desk: "Desk", brief: "Brief", work: "Work", crm: "CRM", brain: "Dex",
+        money: "Money", more: "More" },
+      desk: {
+        delayed: "Delayed", complaints: "Complaints", overdue: "Overdue", workflows: "Workflows",
+        decisions: "Decisions", approvals: "Approvals", watch: "Watch",
+        show_all: "Show all {{count}}", show_fewer: "Show fewer",
+      },
       header: {
         signed_in_as: "Signed in as", send_digest: "Send Daily Digest", sign_out: "Sign out",
         notifications: "Notifications", view_all: "View all", new: "new", all_caught_up: "You're all caught up.",
@@ -146,7 +158,13 @@ const resources = {
         people: "लोग", crm: "सीआरएम", team: "टीम", ops: "ऑप्स",
         brain: "डेक्स", finance: "वित्त", capture: "कैप्चर", meetings: "मीटिंग नोट्स", settings: "सेटिंग्स",
       },
-      bottomnav: { desk: "डेस्क", brief: "ब्रीफ़", work: "काम", crm: "सीआरएम", brain: "डेक्स" },
+      bottomnav: { desk: "डेस्क", brief: "ब्रीफ़", work: "काम", crm: "सीआरएम", brain: "डेक्स",
+        money: "पैसा", more: "और" },
+      desk: {
+        delayed: "देरी", complaints: "शिकायतें", overdue: "बकाया", workflows: "वर्कफ़्लो",
+        decisions: "निर्णय", approvals: "मंज़ूरियाँ", watch: "नज़र",
+        show_all: "सभी {{count}} दिखाएँ", show_fewer: "कम दिखाएँ",
+      },
       header: {
         signed_in_as: "साइन इन:", send_digest: "दैनिक डाइजेस्ट भेजें", sign_out: "साइन आउट",
         notifications: "सूचनाएँ", view_all: "सभी देखें", new: "नई", all_caught_up: "आप पूरी तरह अपडेट हैं।",
@@ -263,7 +281,13 @@ const resources = {
         people: "நபர்கள்", crm: "CRM", team: "குழு", ops: "இயக்கம்",
         brain: "டெக்ஸ்", finance: "நிதி", capture: "பதிவு", meetings: "கூட்டக் குறிப்புகள்", settings: "அமைப்புகள்",
       },
-      bottomnav: { desk: "மேசை", brief: "சுருக்கம்", work: "வேலை", crm: "CRM", brain: "டெக்ஸ்" },
+      bottomnav: { desk: "மேசை", brief: "சுருக்கம்", work: "வேலை", crm: "CRM", brain: "டெக்ஸ்",
+        money: "பணம்", more: "மேலும்" },
+      desk: {
+        delayed: "தாமதம்", complaints: "புகார்கள்", overdue: "நிலுவை", workflows: "பணிப்பாய்வு",
+        decisions: "முடிவுகள்", approvals: "ஒப்புதல்கள்", watch: "கவனிப்பு",
+        show_all: "அனைத்து {{count}} காட்டு", show_fewer: "குறைவாகக் காட்டு",
+      },
       header: {
         signed_in_as: "உள்நுழைந்தவர்", send_digest: "தினசரி சுருக்கம் அனுப்பு", sign_out: "வெளியேறு",
         notifications: "அறிவிப்புகள்", view_all: "அனைத்தையும் காண்க", new: "புதியவை", all_caught_up: "அனைத்தும் முடிந்தது.",

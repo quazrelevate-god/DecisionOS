@@ -87,13 +87,30 @@ _CAPITAL_CATEGORIES = {"asset purchase", "asset purchases", "capital expenditure
 
 
 def _is_stock_category(name) -> bool:
+    """J14-14 — "RAW" ON ITS OWN WAS TOO GENEROUS.
+
+    The founder asked for this rule to be pushed at from more angles than the
+    one case it was written for, and the edge-case pass found a real one: any
+    category containing the word `raw` counted as stock, so "Raw water charges"
+    — a utility bill, money genuinely gone — was taken out of the running costs
+    and the month's profit read HIGHER than it was. That is the dangerous
+    direction to be wrong in: a founder acts on a profit figure.
+
+    `raw` now has to be qualifying something — raw material, raw stock, raw
+    goods — or standing alone as the whole category name. Everything else falls
+    through to being a running cost, which is the honest direction.
+    """
     words = [w for w in re.split(r"[^a-z]+", str(name or "").lower()) if w]
     if not words:
         return False
-    if "raw" in words:
-        return True                       # Raw Material, Raw Materials, Raw Stock
     if set(words) & _STOCK_WORDS:
         return True                       # Stock, Inventory, Trading Goods
+    if "raw" in words:
+        # Raw Material(s), Raw Stock, Raw Goods — but not Raw Water Charges.
+        rest = set(words) - {"raw"}
+        if not rest:
+            return True                   # the category is just "Raw"
+        return bool(rest & (_STOCK_WORDS | {"material", "materials"}))
     return len(words) == 1 and words[0] in _STOCK_ALONE
 
 

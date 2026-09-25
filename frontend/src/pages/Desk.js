@@ -27,6 +27,9 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
+// J14-11 — the Desk had no translator at all, which is why switching to
+// Tamil changed two words in the dock and nothing on the screen itself.
+import { useTranslation } from "react-i18next";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm, canSeeBuyers } from "../lib/perms";
@@ -417,7 +420,10 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
             the note and the pill are still the only way to the rest: the
             phone's version of this column is a separate conversation. */}
         <div className={`mt-auto flex shrink-0 items-end justify-between gap-3 pt-2 ${scroll ? "lg:hidden" : ""}`}>
-          <p className="min-w-0 flex-1 truncate text-xs text-neutral-500">{more}</p>
+          {/* J14-07 — "2 more waiting" is four words; at 150% text `truncate`
+              cut it to ", 2 waiting" with the number stranded from what it
+              counts. It wraps now, like the greeting above it. */}
+          <p className="min-w-0 flex-1 text-xs leading-tight text-neutral-500 [overflow-wrap:anywhere]">{more}</p>
           {cta && (
             <button
               type="button"
@@ -461,6 +467,7 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
    measurement read the height of three rows and the card grew to exactly the
    size it already was. */
 function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, open, scrolls, onToggleExpanded, children }) {
+  const { t } = useTranslation();
   const showAll = open;
 
   /* ASK-35 1.1 — THREE, AND THEN A CONTROL: the Desk's job on a phone is to say
@@ -593,7 +600,7 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
             aria-expanded={showAll}
             className="mt-1 flex h-11 w-full shrink-0 items-center justify-center gap-1 text-[13px] font-medium text-white/70 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-0"
           >
-            {showAll ? "Show fewer" : `Show all ${rows.length}`}
+            {showAll ? t("desk.show_fewer", "Show fewer") : t("desk.show_all", { count: rows.length, defaultValue: `Show all ${rows.length}` })}
             <CaretDown size={12} weight="bold" aria-hidden="true" className={showAll ? "rotate-180" : ""} />
           </button>
         )}
@@ -649,6 +656,7 @@ function StackCard({ tone, title, count, line, tail, loading, empty, to, testid 
 const DESK_DATA = ["/desk", "/tasks", "/workflows", "/operating-score", "/ledger/summary", "/leaves", "/brief"];
 
 export default function Desk() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user, tenant } = useAuth();
   const m = useDeskMetrics();
@@ -949,10 +957,12 @@ export default function Desk() {
       </span>
     ),
   });
+  /* J14-11 (JOURNEY-1) — these three were written in English in the code, so a
+     Tamil Desk showed them in English however the switcher was set. */
   const phoneTabs = [
-    tabOption("decisions", "Decisions", decisionCount ?? 0, "needs"),
-    tabOption("approvals", "Approvals", approvalsQ.data ? approvals.length : 0, "flag"),
-    tabOption("watch", "Watch", watchCount, "today"),
+    tabOption("decisions", t("desk.decisions", "Decisions"), decisionCount ?? 0, "needs"),
+    tabOption("approvals", t("desk.approvals", "Approvals"), approvalsQ.data ? approvals.length : 0, "flag"),
+    tabOption("watch", t("desk.watch", "Watch"), watchCount, "today"),
   ];
   const decisionRows = decisionCards.map((c) => ({
     id: c.id,
@@ -1137,8 +1147,18 @@ export default function Desk() {
                         second. 20px on a phone (the founder: "it's okay to
                         shrink the font"), which is what makes "Good afternoon,"
                         fit a 320px screen with the display zoomed. */}
-                    <span className="block truncate">{greeting.slice(0, gi + 1)}</span>
-                    <span className="block truncate text-muted-foreground lg:text-5xl lg:font-bold lg:leading-[1.08] lg:tracking-[-0.02em] lg:text-foreground">{greeting.slice(gi + 1)}.</span>
+                    {/* J14-07 (JOURNEY-1) — AT 150% TEXT THE OWNER'S OWN NAME
+                        WAS CUT. `truncate` is a one-line promise: at the
+                        default size both lines fit and nothing shows, but a
+                        founder who has turned the phone's text up reads
+                        "Good e… / Rajkum…" on his own Desk. Wrapping instead of
+                        cutting costs nothing at the normal size — neither line
+                        wraps, because neither has to — and at 150% the name
+                        takes a second line rather than an ellipsis. The clamp
+                        keeps the row from running away if somebody's name is
+                        very long AND the text is very large. */}
+                    <span className="block line-clamp-2 [overflow-wrap:anywhere]">{greeting.slice(0, gi + 1)}</span>
+                    <span className="block line-clamp-2 [overflow-wrap:anywhere] text-muted-foreground lg:text-5xl lg:font-bold lg:leading-[1.08] lg:tracking-[-0.02em] lg:text-foreground">{greeting.slice(gi + 1)}.</span>
                   </>}
             </h1>
 
@@ -1249,15 +1269,15 @@ export default function Desk() {
           data-testid="desk-kpi-strip"
         >
           {[
-            { icon: Timer, label: "Delayed",
+            { icon: Timer, label: t("desk.delayed", "Delayed"),
               value: String(m.counters ? m.counters.delayed : m.work?.overdue ?? "…"),
               urgent: (m.counters?.delayed ?? m.work?.overdue ?? 0) > 0,
               to: "/my-work?filter=overdue", testid: "kpi-delayed-m" },
-            ...(seesComplaints ? [{ icon: ChatCircleText, label: "Complaints",
+            ...(seesComplaints ? [{ icon: ChatCircleText, label: t("desk.complaints", "Complaints"),
               value: String(m.complaints ? m.complaints.value : "…"),
               urgent: (m.complaints?.new_7d || 0) > 0,
               to: "/crm", testid: "kpi-complaints-m" }] : []),
-            ...(seesMoney ? [{ icon: HandCoins, label: "Overdue",
+            ...(seesMoney ? [{ icon: HandCoins, label: t("desk.overdue", "Overdue"),
               value: m.cash ? inrCompact(m.cash.overdue) : "…",
               urgent: (m.cash?.overdue || 0) > 0,
               to: "/finance?tab=revenue&filter=overdue", testid: "kpi-collect-m" }] : []),

@@ -30,7 +30,9 @@ from config import PERMISSION_KEYS  # noqa: F401
 _BASE_PERMS = {"inbox", "data_input", "workflows", "tasks", "brain", "ask"}
 ROLE_DEFAULT_PERMS = {
     "sales": _BASE_PERMS | {"crm_buyers"},
-    "finance": _BASE_PERMS | {"finance", "crm_suppliers"},
+    # J14-13 — the AI-drafted items from WhatsApp land in the Finance inbox, so
+    # the people who live in that inbox start able to act on them.
+    "finance": _BASE_PERMS | {"finance", "crm_suppliers", "captures_approve"},
 }
 
 
@@ -116,6 +118,12 @@ def user_perms(user: dict) -> set:
         exp = str(g.get("expires_at") or "")
         if perm in PERMISSION_KEYS and (not exp or exp > now):
             base.add(perm)
+    # J14-13 — approving work used to include approving what the AI drafted from
+    # a message, because they were one permission. Splitting them must not take
+    # anything away from anybody who already had the combined one, so holding
+    # `approvals` still means holding both.
+    if "approvals" in base:
+        base.add("captures_approve")
     return base
 
 

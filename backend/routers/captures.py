@@ -102,7 +102,7 @@ async def edit_capture(cid: str, inp: CaptureEditInput, user: dict = Depends(get
 
 
 @router.post("/captures/{cid}/reassign")
-async def reassign_capture(cid: str, inp: CaptureActionInput, user: dict = Depends(require_perm("approvals"))):
+async def reassign_capture(cid: str, inp: CaptureActionInput, user: dict = Depends(require_perm("captures_approve"))):
     # FIX-004-C (RBAC-05): reassigning a captured draft rewrites the
     # target person on a real record about to be committed. Only users
     # with the approvals permission (owner + designated approvers)
@@ -120,7 +120,7 @@ async def reassign_capture(cid: str, inp: CaptureActionInput, user: dict = Depen
 
 
 @router.post("/captures/{cid}/reject")
-async def reject_capture(cid: str, inp: CaptureActionInput, user: dict = Depends(require_perm("approvals"))):
+async def reject_capture(cid: str, inp: CaptureActionInput, user: dict = Depends(require_perm("captures_approve"))):
     # FIX-004-C (RBAC-05): same rationale as reassign — approvals perm gate.
     await _get_draft(cid, user)
     await db.capture_drafts.update_one({"id": cid}, {"$set": {
@@ -131,7 +131,7 @@ async def reject_capture(cid: str, inp: CaptureActionInput, user: dict = Depends
 
 
 @router.post("/captures/{cid}/clarify")
-async def clarify_capture(cid: str, inp: CaptureActionInput, user: dict = Depends(require_perm("approvals"))):
+async def clarify_capture(cid: str, inp: CaptureActionInput, user: dict = Depends(require_perm("captures_approve"))):
     # FIX-004-C (RBAC-05): approvals perm gate — clarify shapes what
     # the approver will see, same authority tier as approve/reject.
     d = await _get_draft(cid, user)
@@ -145,7 +145,7 @@ async def clarify_capture(cid: str, inp: CaptureActionInput, user: dict = Depend
 
 
 @router.post("/captures/{cid}/approve")
-async def approve_capture(cid: str, user: dict = Depends(require_perm("approvals"))):
+async def approve_capture(cid: str, user: dict = Depends(require_perm("captures_approve"))):
     # FIX-004-C (RBAC-05): approving a capture creates real workflow /
     # task / decision records. Explicit approvals-permission gate;
     # was auth-only which let any employee commit captured drafts.

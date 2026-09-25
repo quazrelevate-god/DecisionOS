@@ -8,7 +8,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from core import db, new_id, now_iso, log_activity, get_current_user, require_role, require_perm
+from core import (db, new_id, now_iso, log_activity, get_current_user, require_role,
+                  require_perm, crm_types, may_see_contact)
 from services.ai import brain_context
 from services.inbox import add_inbox_item
 from services.finance_signals import run_followup
@@ -28,12 +29,31 @@ from models.complaints import (
 
 
 @router.post("/complaints")
-async def create_complaint(inp: ComplaintInput, user: dict = Depends(require_perm("people"))):  # RBAC P1: People access, not the role name
+async def create_complaint(inp: ComplaintInput, user: dict = Depends(get_current_user)):
+    """J14-05 (JOURNEY-1) — COMPLAINING ABOUT A CUSTOMER NEEDS THE CUSTOMER.
+
+    This asked for `people`, which is access to BOTH sides of the address book.
+    A salesperson holds crm_buyers only, so the audit watched her open Ashok
+    Pumps on her phone, write "two brackets bent on the last lot", press Log
+    complaint — and get a 403. The screen she was given had the button on it.
+
+    The rule that fits the job: you may log a complaint about a contact you are
+    allowed to see. Suppliers still need supplier access, customers customer
+    access, and somebody with no CRM at all still gets nothing. A complaint with
+    no contact attached (a general one) falls back to needing either side, since
+    there is no contact to judge it by.
+    """
     name = None
     if inp.customer_id:
-        c = await db.contacts.find_one({"id": inp.customer_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "name": 1, "company": 1})
-        if c:
-            name = c.get("company") or c.get("name")
+        c = await db.contacts.find_one({"id": inp.customer_id, "tenant_id": user["tenant_id"]},
+                                       {"_id": 0, "name": 1, "company": 1, "type": 1})
+        if not c:
+            raise HTTPException(status_code=404, detail="That contact isn't in this workspace.")
+        if not may_see_contact(user, c.get("type")):
+            raise HTTPException(status_code=403, detail="You don't have access to this contact.")
+        name = c.get("company") or c.get("name")
+    elif not crm_types(user):
+        raise HTTPException(status_code=403, detail="You don't have access to contacts.")
     cid = new_id()
     doc = {"id": cid, "tenant_id": user["tenant_id"], "customer_id": inp.customer_id, "customer_name": name,
            "text": inp.text, "severity": inp.severity or "medium", "status": "open",
@@ -56,8 +76,17 @@ async def list_complaints(status: Optional[str] = None, user: dict = Depends(get
 
 
 @router.patch("/complaints/{cid}/resolve")
-async def resolve_complaint(cid: str, user: dict = Depends(require_perm("people"))):
+async def resolve_complaint(cid: str, user: dict = Depends(get_current_user)):
+    """J14-05 — closing a complaint follows the same rule as raising one: the
+    contact it is about decides, not access to the whole address book."""
     c = await db.complaints.find_one({"id": cid, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    if c and c.get("customer_id"):
+        who = await db.contacts.find_one({"id": c["customer_id"], "tenant_id": user["tenant_id"]},
+                                         {"_id": 0, "type": 1})
+        if who and not may_see_contact(user, who.get("type")):
+            raise HTTPException(status_code=403, detail="You don't have access to this contact.")
+    elif not crm_types(user):
+        raise HTTPException(status_code=403, detail="You don't have access to contacts.")
     res = await db.complaints.update_one({"id": cid, "tenant_id": user["tenant_id"]}, {"$set": {"status": "resolved", "resolved_at": now_iso()}})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Not found")

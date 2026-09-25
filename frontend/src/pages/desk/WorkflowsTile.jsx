@@ -171,7 +171,13 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
                 {nextUp.reasonLabel}
               </span>
             </div>
-            <p className="mt-1.5 truncate text-sm font-medium text-foreground" title={nextUp.title} data-testid={`${testid}-next-title`}>
+            {/* J14-09 (JOURNEY-1) — THE ONE THING HE HAS TO SIGN OFF, CUT IN HALF.
+                One line and an ellipsis: "Second press brake — Coimbat…", on the
+                card that asks for his approval. There is room underneath — the
+                Requested line and two buttons sit below it — so this was a clamp,
+                not a space problem. Two lines, then clamp: a long title reads,
+                and the tile still cannot grow without limit. */}
+            <p className="mt-1.5 line-clamp-2 text-sm font-medium text-foreground" title={nextUp.title} data-testid={`${testid}-next-title`}>
               {nextUp.title}
             </p>
             <p className="mt-1 truncate text-xs text-muted-foreground" title={`${nextUp.stage}${nextUp.note ? ` · ${nextUp.note}` : ""}`}>

@@ -250,6 +250,10 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
       // Escape and the X both land here; an empty form closes straight away.
       if (!o && written()) { setAskLeave(true); return; }
       setOpen(o);
+      // J14-01 — this dialog is hidden, not unmounted, so ask the draft to read
+      // itself again on the way in; otherwise words kept from a previous visit
+      // come back with nothing saying they were kept.
+      if (o) formDraft.reload();
       // A fresh form picks up the Department My Work is on now.
       if (o && !form.title) setForm((f) => ({ ...f, task_type: firstType() }));
       onOpenChange?.(o);
@@ -347,11 +351,15 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
         <DialogHeader className="shrink-0 pr-11">
           {/* J13b-07 (JOURNEY-1) — 44px on touch, the app's own floor. It was
               h-9 (36px, and 35 under the phone's ui-scale) and it is this
-              sheet's ONLY way out on a phone. A mouse keeps the smaller one. */}
+              sheet's ONLY way out on a phone. A mouse keeps the smaller one.
+              J14-06 — h-11 was still 35 ON THE GLASS, because the phone's zoom
+              shrinks it: 44 CSS pixels at --ui-scale 0.8 is 35 real ones, which
+              is what the audit measured and what a thumb misses. --touch-min
+              divides by the scale, so this lands at 44 wherever it is drawn. */}
           <DialogPrimitiveClose
             data-testid="task-dialog-close"
             aria-label="Close"
-            className="kr-pop absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full text-foreground/70 lg:h-9 lg:w-9">
+            className="kr-pop absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full text-foreground/70 [min-height:var(--touch-min)] [min-width:var(--touch-min)] lg:h-9 lg:w-9 lg:[min-height:auto] lg:[min-width:auto]">
             <X size={16} weight="bold" aria-hidden="true" className="lg:hidden" />
             <X size={15} weight="bold" aria-hidden="true" className="hidden lg:block" />
           </DialogPrimitiveClose>

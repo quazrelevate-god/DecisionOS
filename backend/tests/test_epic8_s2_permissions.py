@@ -44,20 +44,26 @@ def test_tenant_role_map_when_no_explicit_perms():
 
 def test_role_defaults_sales_and_finance():
     assert user_perms({"role": "sales"}) == set(ROLE_DEFAULT_PERMS["sales"])
-    # One Finance permission since 2026-09-16 ("ledger" merged into it).
-    assert user_perms({"role": "finance"}) == set(_BASE_PERMS) | {"finance"}
+    # One Finance permission since 2026-09-16 ("ledger" merged into it), the
+    # supplier side of CRM since J7-04/J8-01, and captures_approve since J14-13.
+    # Read from the table rather than spelled out, so the next change to the
+    # defaults does not need this line edited as well.
+    assert user_perms({"role": "finance"}) == set(ROLE_DEFAULT_PERMS["finance"])
 
 
 def test_unknown_custom_role_falls_back_to_base():
     assert user_perms({"role": "some_custom_role"}) == set(_BASE_PERMS)
 
 
+# A temporary grant ADDS to whatever the role already holds, so these compare
+# against the role's own defaults rather than _BASE_PERMS — otherwise every
+# change to what Sales starts with breaks two tests that are not about that.
 def test_temp_grant_added_when_not_expired():
     out = user_perms({
         "role": "sales",
         "_temp_grants": [{"perm": "finance", "expires_at": "2999-01-01T00:00:00"}],
     })
-    assert out == set(_BASE_PERMS) | {"finance"}
+    assert out == set(ROLE_DEFAULT_PERMS["sales"]) | {"finance"}
 
 
 def test_temp_grant_ignored_when_expired():
@@ -66,7 +72,7 @@ def test_temp_grant_ignored_when_expired():
         "_temp_grants": [{"perm": "finance", "expires_at": "2000-01-01T00:00:00"}],
     })
     assert "finance" not in out
-    assert out == set(_BASE_PERMS)
+    assert out == set(ROLE_DEFAULT_PERMS["sales"])
 
 
 def test_temp_grant_no_expiry_treated_as_active():

@@ -219,6 +219,22 @@
         --tabs-trigger-h: 1.75rem;  /* 28 */
     }
 
+    /* J14-08 (JOURNEY-1) — A TABLET HELD PORTRAIT IS NOT A BIG PHONE.
+       Below lg the app is one centred column capped at 28rem (MPWA-14, above),
+       which is right on a phone — it fills the screen — and reads as unfinished
+       on an 820px iPad held portrait: a 435px column of app with 190px of empty
+       surface down each side. The audit's words were "usable, but it looks
+       unfinished on a tablet".
+       This widens the column for the tablet band only, so the same layout uses
+       the room it has. It is deliberately NOT a tablet layout: a two-column
+       design for this width is a design decision, not a defect fix, and it is
+       not mine to invent. Landscape is already the desktop layout and untouched. */
+    @media (min-width: 768px) and (max-width: 1023.98px) {
+        :root {
+            --app-shell: calc(40rem / var(--ui-scale, 1));
+        }
+    }
+
     @media (max-width: 1023.98px) {
         :root {
             --control-h-sm: 2.75rem;    /* 44 */
@@ -681,7 +697,19 @@
    is 47 again on the glass, whatever the scale is. Every piece of mobile
    chrome that used to say env(safe-area-inset-*) says var(--sa-*) now; they
    are identical at scale 1, which is every desktop width. */
+/* J14-06 (JOURNEY-1) · 44 PIXELS ON THE GLASS, NOT 44 BEFORE THE ZOOM.
+   The phone runs at --ui-scale 0.8 (ASK-43) and the zoom multiplies every
+   length like any other, so a control written as 44 is PAINTED at 35 — which is
+   what the audit measured on New Task's close button, the only way out of that
+   sheet on a phone, and what a thumb misses. Same correction the safe-area
+   insets get below, and for the same reason: some measurements are about the
+   physical screen, not the layout.
+   Used deliberately, on the controls where missing costs something, rather than
+   on --control-h-sm: lifting the global floor would widen every small control
+   on every phone screen by a quarter, which is a change nobody asked for. */
 :root {
+    --touch-min: calc(2.75rem / var(--ui-scale, 1));
+
     --sa-top:    calc(env(safe-area-inset-top, 0px)    / var(--ui-scale, 1));
     --sa-bottom: calc(env(safe-area-inset-bottom, 0px) / var(--ui-scale, 1));
     --sa-left:   calc(env(safe-area-inset-left, 0px)   / var(--ui-scale, 1));

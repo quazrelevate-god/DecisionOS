@@ -3724,7 +3724,16 @@ export default function MyWork({ only = null }) {
   // ASK-28 TK-02 — how many task approvals wait on me (the server already
   // limits the feed to what I may approve), for the switcher's count. A named
   // approver who holds no approval access still gets the view.
-  const waitingOnMe = (apprTasksQ.data || []).filter(isPendingApproval).length;
+  const waitingTasks = (apprTasksQ.data || []).filter(isPendingApproval).length;
+  /* J14-02 (JOURNEY-1) — THE NUMBER HAS TO COUNT THE LEAVE TOO.
+     It counted tasks only, so the pill said 2 while the tabs inside it read
+     Tasks 2 and Leave 1: a founder who cleared his approvals to zero still had
+     somebody's leave sitting unanswered. Both sub-tabs of one screen belong in
+     the one number on the way in. */
+  const waitingLeave = canApproveLeave
+    ? (leavesQ.data || []).filter((l) => l.status === "pending" || l.status === "info_requested").length
+    : 0;
+  const waitingOnMe = waitingTasks + waitingLeave;
   const showApprovalsView = canApprove || waitingOnMe > 0;
   const focusQ = useQuery({
     queryKey: ["task", focusTaskId],
@@ -3733,6 +3742,51 @@ export default function MyWork({ only = null }) {
   });
   const focusDenied = !!focusTaskId && focusQ.isError && [403, 404].includes(focusQ.error?.response?.status);
   const focusMissing = focusDenied && focusQ.error?.response?.status === 404;
+  /* J14-04 (JOURNEY-1) — NOBODY GETS MOVED OR DELETED IN SILENCE.
+     The audit reassigned a task while a man was mid-sentence on it, and deleted
+     another while he had it open. His words survived both, but his screen said
+     nothing either time: he would have finished typing and posted an update on
+     work that was no longer his, or on a card that no longer existed.
+     While a task is open this watches the task itself (the pulse refreshes it),
+     and speaks up the moment it moves away or goes. The toast is deliberately
+     the only interruption — nothing is closed under a thumb mid-tap except when
+     the task is genuinely gone, where there is nothing left to stay on. */
+  const openTaskQ = useQuery({
+    queryKey: ["task", openId],
+    queryFn: () => api.get(`/tasks/${openId}`).then((r) => r.data),
+    enabled: !!openId && openId !== focusTaskId, retry: false,
+  });
+  const openTask = openId === focusTaskId ? focusQ.data : openTaskQ.data;
+  const openTaskStatus = !!openId
+    ? (openId === focusTaskId ? focusQ : openTaskQ).error?.response?.status
+    : undefined;
+  const openTaskGone = openTaskStatus === 404;
+  /* Reassigned away from him, the server stops letting him read it at all — the
+     task is somebody else's now, so /tasks/{id} answers 403, not 404. That
+     refusal IS the news, and it is the only signal he gets. */
+  const openTaskNotHisAnyMore = openTaskStatus === 403;
+  const wasMine = useRef(null);
+  useEffect(() => {
+    if (!openId) { wasMine.current = null; return; }
+    if (openTaskGone) {
+      toast.info(t("mywork.task_removed_live", "This task was removed while you had it open."));
+      setOpenId(null);
+      wasMine.current = null;
+      return;
+    }
+    if (openTaskNotHisAnyMore) {
+      toast.info(t("mywork.task_moved_live", "This task is no longer yours — somebody reassigned it. Anything you have typed is kept."));
+      wasMine.current = null;
+      return;
+    }
+    if (!openTask) return;
+    const mineNow = openTask.assignee_id === user?.id
+      || (openTask.co_assignee_ids || []).includes(user?.id);
+    if (wasMine.current === true && mineNow === false) {
+      toast.info(t("mywork.task_moved_live", "This task is no longer yours — somebody reassigned it. Anything you have typed is kept."));
+    }
+    wasMine.current = mineNow;
+  }, [openId, openTask, openTaskGone, openTaskNotHisAnyMore]); // eslint-disable-line react-hooks/exhaustive-deps
   // ASK-28 TK-04 — a link to a task opens it, including when My Work is
   // already open (a notification clicked from here)...
   useEffect(() => { if (focusTaskId) setOpenId(focusTaskId); }, [focusTaskId]);

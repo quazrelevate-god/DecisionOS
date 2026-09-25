@@ -7,6 +7,7 @@ import { hasPerm } from "../lib/perms";
 import { PageHeader, StickyHeader, EmptyState } from "../components/common";
 import { timeAgo } from "../lib/format";
 import { GlassSelect } from "../components/karma/GlassSelect";
+import { GlassDateField } from "../components/karma/GlassDateField";
 import { toast } from "sonner";
 import {
   Plus, WarningOctagon, CheckCircle, XCircle, ChatCircleText, Gear, Clock, ArrowCounterClockwise, PaperPlaneTilt,
@@ -123,13 +124,26 @@ export function RequestLeaveDialog({ onDone, triggerClassName }) {
               triggerClassName={`${inp} mt-1`} />
           </div>
           <div className="grid grid-cols-2 gap-3">
+            {/* J14-10 (JOURNEY-1) — THE APP'S OWN CALENDAR, NOT THE PHONE'S.
+                These two were <input type="date">, which hands the picker to the
+                operating system: an OS date wheel in the middle of a DecisionOS
+                sheet, on the one form every worker in the company uses, and the
+                date printed in whatever order the device is set to. The leave
+                type beside them has been the app's own list since KM-3; these
+                are the same argument. Shows 29 Sept 2026 whatever the handset
+                thinks, and still speaks ISO to the form and the server. */}
             <div>
               <label className="label-mono text-muted-foreground">From</label>
-              <input data-testid="leave-from-date" type="date" className={`${inp} mt-1`} value={form.from_date} onChange={set("from_date")} />
+              <GlassDateField testid="leave-from-date" ariaLabel="From" placeholder="First day"
+                value={form.from_date} onChange={(v) => setForm({ ...form, from_date: v })}
+                triggerClassName={`${inp} mt-1`} />
             </div>
             <div>
               <label className="label-mono text-muted-foreground">To</label>
-              <input data-testid="leave-to-date" type="date" className={`${inp} mt-1`} value={form.to_date} onChange={set("to_date")} />
+              <GlassDateField testid="leave-to-date" ariaLabel="To" placeholder="Last day"
+                min={form.from_date || undefined}
+                value={form.to_date} onChange={(v) => setForm({ ...form, to_date: v })}
+                triggerClassName={`${inp} mt-1`} />
             </div>
           </div>
           {/* KM-3 — same track treatment as leave-tabs above. */}

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { useSkyFade } from "../hooks/useSkyFade";
+import { usePulse } from "../hooks/usePulse";
 import { hasPerm } from "../lib/perms";
 import { toast } from "sonner";
 import api, { formatApiError } from "../lib/api";
@@ -213,6 +214,10 @@ function WorkspaceSwitcher() {
 export default function Layout({ children }) {
   const { user, tenant, logout } = useAuth();
   const { t } = useTranslation();
+  /* J14-03 — one small "has anything moved?" for the whole signed-in app, which
+     refreshes the lists that changed. Mounted here rather than on each screen so
+     the cost does not grow with what is open. See hooks/usePulse.js. */
+  usePulse(!!user);
   // NAV/BOTTOM_NAV/hasPerm are stable module-level refs; only `user` can change.
   const navMain = useMemo(() => NAV.filter((n) => {
     if (n.ownerOnly && user?.role !== "owner") return false;

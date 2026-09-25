@@ -97,7 +97,15 @@ function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
       <span aria-hidden="true" className="grid h-6 w-11 place-items-center">
         <Icon size={20} weight={active ? "fill" : "regular"} />
       </span>
-      <span className="max-w-full truncate text-[length:var(--text-label)] font-semibold leading-none">
+      {/* J14-07 (JOURNEY-1) — THE DOCK'S WORDS ARE NOT CUT AT BIG TEXT.
+          `truncate` fits the label to one line, which is right at the default
+          size and wrong the moment somebody turns the phone's text up: the
+          audit read "Mor…" at 150%. The slot's height is a MINIMUM (index.css,
+          .dock-item), so a second line grows the dock rather than spilling, and
+          at the normal size nothing wraps because nothing has to. The whole
+          point of ASK-37's labels is that an unlabelled icon is a guess — half
+          a word is a worse one. */}
+      <span className="max-w-full text-center text-[length:var(--text-label)] font-semibold leading-tight [overflow-wrap:anywhere]">
         {label}
       </span>
     </>

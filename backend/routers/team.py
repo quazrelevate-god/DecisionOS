@@ -107,9 +107,12 @@ async def _decide_leave(leave_id, user, new_status, note, ntype, employee_msg):
         raise HTTPException(status_code=409, detail=f"{lv.get('user_name') or 'They'} withdrew this request.")
     entry = {"action": new_status, "by": user["id"], "by_name": user.get("name"),
              "note": note or "", "at": now_iso()}
-    updates = {"status": new_status, "decided_at": now_iso(), "decided_by": user["id"]}
+    updates = {"status": new_status, "decided_at": now_iso(), "decided_by": user["id"],
+               # J14-03 — `updated_at` is what every "has anything moved?" reader
+               # looks at, and deciding a leave is the biggest move it makes.
+               "updated_at": now_iso()}
     if new_status == "info_requested":
-        updates = {"status": new_status, "info_note": note or ""}
+        updates = {"status": new_status, "info_note": note or "", "updated_at": now_iso()}
     # E2-57: tenant_id in the filter is defense-in-depth. UUID collision
     # is astronomically unlikely but a hostile caller with a leave_id
     # from another tenant would otherwise flip its status without
@@ -282,6 +285,96 @@ async def deprovision_member(user_id: str, inp: DeprovisionInput,
     return report
 
 
+@router.get("/users/deactivated")
+async def list_deactivated(user: dict = Depends(require_perm("team_manage"))):
+    """J14-12 (JOURNEY-1) — THE PEOPLE WHO LEFT ARE STILL SOMEWHERE.
+
+    Removing somebody hid them from the team list and kept their mobile number
+    reserved for ever, so adding them back on their own number was refused with
+    a message naming a person the owner could no longer see anywhere — and a
+    worker who leaves in April and comes back in September is an ordinary year
+    in a workshop.
+
+    The founder's call: removing is DEACTIVATING. They drop out of the team, the
+    number stays theirs, and they can be brought back. Erasing somebody for good
+    is a second, deliberate act, and that is the one that frees the number.
+
+    This is the list behind that: who is deactivated, and when.
+    """
+    from services.auth.membership import list_memberships_for_tenant
+    memberships = await list_memberships_for_tenant(db, user["tenant_id"])
+    live = {m["user_id"] for m in memberships if m.get("status") != "removed"}
+    gone = [m for m in memberships if m.get("status") == "removed" and m["user_id"] not in live]
+    if not gone:
+        return []
+    rows = await db.users.find(
+        {"id": {"$in": [m["user_id"] for m in gone]}, "tenant_id": user["tenant_id"]},
+        {"_id": 0, "id": 1, "name": 1, "phone": 1, "email": 1, "role": 1, "title": 1, "avatar_url": 1},
+    ).to_list(500)
+    when = {m["user_id"]: m.get("removed_at") or m.get("updated_at") for m in gone}
+    for r in rows:
+        r["deactivated_at"] = when.get(r["id"])
+    return rows
+
+
+@router.post("/users/{user_id}/reactivate")
+async def reactivate_member(user_id: str, user: dict = Depends(require_perm("team_manage"))):
+    """J14-12 — bring a deactivated person back, on the number they always had.
+
+    Their access comes back as it was; their history was never deleted. A seat
+    has to be free, the same as adding anybody.
+    """
+    from services.auth.membership import find_membership, update_membership, STATUS_ACTIVE
+    target = await db.users.find_one({"id": user_id, "tenant_id": user["tenant_id"]},
+                                     {"_id": 0, "id": 1, "name": 1, "role": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="Member not found")
+    m = await find_membership(db, user_id, user["tenant_id"])
+    if not m or m.get("status") != "removed":
+        raise HTTPException(status_code=400, detail="This person is already on the team.")
+    # update_membership reserves the seat on the way back to active, and refuses
+    # at the cap — the same gate a new member goes through.
+    await update_membership(db, user_id=user_id, tenant_id=user["tenant_id"],
+                            updates={"status": STATUS_ACTIVE})
+    await db.users.update_one({"id": user_id, "tenant_id": user["tenant_id"]},
+                              {"$set": {"updated_at": now_iso()}})
+    await log_activity(user["tenant_id"], user["id"], "user_reactivated",
+                       f"{user['name']} brought {target.get('name')} back onto the team")
+    return {"ok": True, "reactivated": user_id, "name": target.get("name")}
+
+
+@router.delete("/users/{user_id}/forever")
+async def erase_member(user_id: str, user: dict = Depends(require_role("owner"))):
+    """J14-12 — erase a deactivated person for good, and free their number.
+
+    Owner-only and deliberately the harder of the two doors: it throws away the
+    account itself, which is what makes the mobile number usable by somebody
+    else in this workspace. What their work left behind — tasks, decisions,
+    contacts, the audit log — is NOT deleted: it is history, and a company that
+    loses its history because somebody left is worse off than one carrying a
+    deactivated row. Only a deactivated person can be erased, so nobody is
+    removed from the team and erased in one unconsidered press.
+    """
+    from services.auth.membership import find_membership, remove_membership
+    if user_id == user["id"]:
+        raise HTTPException(status_code=400, detail="You can't erase yourself.")
+    target = await db.users.find_one({"id": user_id, "tenant_id": user["tenant_id"]},
+                                     {"_id": 0, "id": 1, "name": 1, "phone": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="Member not found")
+    m = await find_membership(db, user_id, user["tenant_id"])
+    if m and m.get("status") != "removed":
+        raise HTTPException(
+            status_code=400,
+            detail="Deactivate them first. Erasing is for people who have already left.",
+        )
+    await remove_membership(db, user_id=user_id, tenant_id=user["tenant_id"])
+    await db.users.delete_one({"id": user_id, "tenant_id": user["tenant_id"]})
+    await log_activity(user["tenant_id"], user["id"], "user_erased",
+                       f"{user['name']} erased {target.get('name')} and freed their mobile number")
+    return {"ok": True, "erased": user_id, "name": target.get("name"), "phone_freed": True}
+
+
 @router.post("/users/{user_id}/uninvite")
 async def uninvite_user(user_id: str, user: dict = Depends(require_perm("team_manage"))):
     """FIX-004-E (RBAC-17): revoke a pending invite before the invitee
@@ -365,9 +458,22 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
     if len(_norm_phone(phone)) >= 10:
         _clash = await db.users.find_one(
             {"tenant_id": user["tenant_id"], "phone_norm": _norm_phone(phone)},
-            {"_id": 0, "name": 1},
+            {"_id": 0, "id": 1, "name": 1},
         )
         if _clash:
+            # J14-12 — say WHERE they are, not just that the number is taken.
+            # A deactivated person is invisible on the Team page, so "that number
+            # is already Murugan's" named somebody the owner could not find and
+            # left them stuck. Now it points at the one action that fixes it.
+            from services.auth.membership import find_membership as _find_m
+            _m = await _find_m(db, _clash["id"], user["tenant_id"])
+            if _m and _m.get("status") == "removed":
+                raise HTTPException(
+                    status_code=400,
+                    detail=(f"{_clash.get('name')} still has this number — they are deactivated, "
+                            f"not gone. Bring them back from Deactivated on the Team page, or erase "
+                            f"them for good there to free the number."),
+                )
             raise HTTPException(
                 status_code=400,
                 detail=f"That mobile number is already {_clash.get('name')}'s in this workspace.",

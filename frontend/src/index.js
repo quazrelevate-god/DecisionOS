@@ -16,11 +16,20 @@ try { localStorage.removeItem("decisionos-theme"); } catch { /* storage blocked 
 // MPWA-05: count sessions so InstallPrompt can wait for the third one (§8).
 serviceWorkerRegistration.bumpSessionCount();
 
+/* J14-03 (JOURNEY-1) — COMING BACK TO THE APP SHOWS WHAT IS TRUE NOW.
+   refetchOnWindowFocus was off, so a phone put down and picked up again showed
+   whatever it held when it was last looked at. With the 60s staleTime it stays
+   cheap: coming back inside a minute of the last fetch still serves the cache
+   and asks nothing. Reconnecting does the same, which is the factory-floor case
+   — out of signal, back in signal, look at the screen.
+   The steady drip while a screen is OPEN is hooks/usePulse.js, which asks one
+   question for the whole app rather than one per list. */
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 60_000,
-      refetchOnWindowFocus: false,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
     },
   },
 });

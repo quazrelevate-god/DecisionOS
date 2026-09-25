@@ -5,6 +5,8 @@
  *
  *   draft.restored  true when the form opened with words kept from before
  *   draft.discard() Post / Save / Cancel / Discard: forget it and empty the form
+ *   draft.reload()  read the kept words again — for a form that is hidden
+ *                   rather than unmounted when it closes (see below)
  *
  * `name` null keeps nothing, so a form can switch drafts off where it makes no
  * sense (an edit of an existing record, say) and still use the same code.
@@ -74,13 +76,29 @@ export function useDraft(name, initial, { omit = [] } = {}) {
     setState((s) => ({ value: v, restored: s.restored && !isBlankDraft(v, initialRef.current, omitRef.current) }));
   }, [name, scope]);
 
+  /* J14-01 (JOURNEY-1) — A DIALOG THAT NEVER UNMOUNTS NEVER LOOKED AGAIN.
+     `restored` is decided once, when the component mounts. A screen like the
+     Desk's Dex well remounts on every visit, so it re-reads and says "Kept
+     from before". New Task does not: its dialog is mounted with the page and
+     only hidden, so the words came back on the next open with nothing to say
+     they had been kept — and a founder who meant to throw them away carried
+     them around instead. A form that outlives its own closing calls this when
+     it opens. */
+  const reload = useCallback(() => {
+    const next = load();
+    valueRef.current = next.value;
+    setState(next);
+    // load reads refs only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, scope]);
+
   const discard = useCallback(() => {
     if (name && scope) clearDraft(scope, name);
     valueRef.current = initialRef.current;
     setState({ value: initialRef.current, restored: false });
   }, [name, scope]);
 
-  return [state.value, setValue, { restored: state.restored, discard }];
+  return [state.value, setValue, { restored: state.restored, discard, reload }];
 }
 
 export default useDraft;

@@ -29,18 +29,26 @@ def test_owner_exclusions_subtract():
     assert "tasks" in perms
 
 
-def test_sales_gets_base_only():
+def test_sales_gets_base_plus_the_buyers_side():
+    """J7-04 / J8-01 (24 Sep) — Sales starts holding the side of CRM it works
+    in. It does NOT get suppliers, and it does not get anything else.
+    (This assertion said `== _BASE_PERMS` until J14 and had been failing since
+    the CRM split landed.)"""
     perms = user_perms({"role": "sales"})
-    assert perms == set(_BASE_PERMS)
-    for denied in ("finance", "people", "approvals", "team_manage"):
+    assert perms == set(_BASE_PERMS) | {"crm_buyers"}
+    for denied in ("finance", "people", "crm_suppliers", "approvals", "team_manage"):
         assert denied not in perms
 
 
-def test_finance_gets_base_plus_finance():
-    """2026-09-16 — one Finance permission; "ledger" was merged into it."""
+def test_finance_gets_base_plus_finance_and_its_own_side():
+    """2026-09-16 — one Finance permission; "ledger" was merged into it.
+    J7-04 / J8-01 — plus the supplier side of CRM, which is the side it buys on.
+    J14-13 — plus captures_approve: the AI-drafted items from WhatsApp land in
+    the Finance inbox, so the people who live in that inbox can act on them.
+    Finance still cannot approve WORK or spending (`approvals`) or decisions."""
     perms = user_perms({"role": "finance"})
-    assert perms == set(_BASE_PERMS) | {"finance"}
-    for denied in ("team_manage", "approvals", "decisions_approve", "people"):
+    assert perms == set(_BASE_PERMS) | {"finance", "crm_suppliers", "captures_approve"}
+    for denied in ("team_manage", "approvals", "decisions_approve", "people", "crm_buyers"):
         assert denied not in perms
 
 

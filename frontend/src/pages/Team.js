@@ -819,9 +819,38 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
   });
   // U7-09.TEAM v2: readOnly lets People render this view-only.
   const canManageTeam = !readOnly && hasPerm(user, "team_manage");
+  /* J14-12 (JOURNEY-1) — THE PEOPLE WHO LEFT ARE SOMEWHERE, NOT NOWHERE.
+     Removing somebody took them off this page and kept their mobile number
+     reserved for ever, so bringing them back on their own number was refused
+     with a message naming a person the owner could no longer see. The founder's
+     call: removing is deactivating. They sit here, quietly, with two ways out —
+     back onto the team, or erased for good, which is the one that frees the
+     number. */
+  const goneQ = useQuery({
+    queryKey: ["users", "deactivated"],
+    queryFn: () => api.get("/users/deactivated").then((r) => r.data),
+    enabled: canManageTeam,
+  });
+
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["users"] });
     qc.invalidateQueries({ queryKey: ["tenant-plan"] });   // the seat count moves with the team
+  };
+  /* J14-12 — bring back / erase. One place, so both say what happened and both
+     leave the page telling the truth, including the seat count. */
+  const [teamBusy, setTeamBusy] = useState(false);
+  const runTeam = async (request, done) => {
+    if (teamBusy) return;
+    setTeamBusy(true);
+    try {
+      await request();
+      toast.success(done);
+      refresh();
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "That didn't work — try again");
+    } finally {
+      setTeamBusy(false);
+    }
   };
   const members = useMemo(() => usersQ.data || [], [usersQ.data]);
   const out = useMemo(() => outQ.data || [], [outQ.data]);
@@ -1077,6 +1106,51 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
           onOpen={setProfileUser}
           renderAdd={canvasAdd}
         />
+      )}
+
+      {/* J14-12 — deactivated people, and the two doors. */}
+      {canManageTeam && (goneQ.data || []).length > 0 && (
+        <section data-testid="team-deactivated" className="mt-8">
+          <h2 className="label-mono text-muted-foreground">
+            Deactivated · {(goneQ.data || []).length}
+          </h2>
+          <p className="mt-1 max-w-prose text-sm text-muted-foreground">
+            They are off the team and cannot sign in. Their mobile number is still theirs, so
+            bringing them back needs nothing typed again. Erasing frees the number — and only an
+            owner can do it.
+          </p>
+          <ul className="mt-3 flex flex-col gap-2">
+            {(goneQ.data || []).map((u) => (
+              <li key={u.id} data-testid={`deactivated-${u.id}`}
+                className="kr-pop flex flex-wrap items-center gap-3 rounded-2xl px-3 py-2.5">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-foreground">{u.name}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {u.phone}{u.title ? ` · ${u.title}` : ""}
+                  </span>
+                </span>
+                <button type="button" data-testid={`reactivate-${u.id}`}
+                  disabled={teamBusy}
+                  onClick={() => runTeam(() => api.post(`/users/${u.id}/reactivate`), `${u.name} is back on the team`)}
+                  className="kr-lift rounded-pill bg-kr-ink px-4 py-2 text-xs font-medium text-white">
+                  Bring back
+                </button>
+                {isOwner && (
+                  <button type="button" data-testid={`erase-${u.id}`} disabled={teamBusy}
+                    onClick={() => {
+                      // Erasing is the one that cannot be undone, so it is asked
+                      // for in the words of what it actually does.
+                      if (!window.confirm(`Erase ${u.name} for good? Their work stays in the company's history, but the account goes and the mobile number ${u.phone} can be used by somebody else. This cannot be undone.`)) return;
+                      runTeam(() => api.delete(`/users/${u.id}/forever`), `${u.name} erased — ${u.phone} is free again`);
+                    }}
+                    className="rounded-pill px-3 py-2 text-xs font-medium text-kr-accent hover:bg-kr-accent/10">
+                    Erase for good
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <MemberProfileDialog

@@ -22,9 +22,18 @@ export const PERMISSIONS = [
   { key: "brain", label: "Company Brain" },
   { key: "ask", label: "Ask AI" },
   { key: "brain_export", label: "Export Company Brain" },
-  { key: "approvals", label: "Approve tasks & WhatsApp captures" },
-  { key: "decisions_approve", label: "Approve Decisions" },
-  { key: "leave_approve", label: "Approve Leave" },
+  /* J14-13 (JOURNEY-1, founder) — THE APPROVE BOXES SAY WHAT THEY DO.
+     "Approve tasks & WhatsApp captures" was two different powers behind one
+     tick, and half of it in a word — "capture" — that only this product uses.
+     An owner handing out access has to be able to read these without being
+     told what they mean. Each one now names the thing it lets somebody wave
+     through, and the pair that were joined are separate keys (config.py).
+     Nobody loses access: holding the old `approvals` still carries the new
+     `captures_approve` with it. */
+  { key: "approvals", label: "Approve work and spending" },
+  { key: "captures_approve", label: "Approve what the AI drafted from a message" },
+  { key: "decisions_approve", label: "Approve decisions" },
+  { key: "leave_approve", label: "Approve leave" },
   { key: "team_manage", label: "Manage Team" },
   // ASK-28 TK-08 (plan Phase 6) — off for every role unless ticked here.
   { key: "tasks_assign_any", label: "Assign tasks to anyone" },
@@ -41,7 +50,10 @@ export const ROLE_DEFAULT_PERMS = {
   // Each role starts holding the side of CRM it works in (see above, and the
   // server's core/permissions.py, which this mirrors).
   sales: [...BASE, "crm_buyers"],
-  finance: [...BASE, "finance", "crm_suppliers"],
+  // J14-13 — the AI-drafted items from WhatsApp land in the Finance inbox, so
+  // the people who live in that inbox start able to act on them. Mirrors
+  // core/permissions.py ROLE_DEFAULT_PERMS.
+  finance: [...BASE, "finance", "crm_suppliers", "captures_approve"],
 };
 
 export function defaultPermsForRole(role) {

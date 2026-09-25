@@ -166,20 +166,35 @@ class TestEndpointGates:
             f"require_perm('workflows'); got: {line}"
         )
 
-    def test_rbac_05_captures_all_gated_on_approvals(self):
+    def test_rbac_05_captures_all_gated_on_captures_approve(self):
         """RBAC-05: all 4 /captures/{id}/* endpoints (approve, reject,
-        reassign, clarify) must require perm('approvals'). Approving a
-        capture creates real workflow/task data — same privilege tier
-        as decisions_approve for direct decisions."""
+        reassign, clarify) must be gated. Approving a capture creates real
+        workflow/task data — same privilege tier as decisions_approve for
+        direct decisions.
+
+        J14-13 — the key is `captures_approve` now, not `approvals`. They were
+        one permission called "Approve tasks & WhatsApp captures", which is two
+        different powers behind one tick and half of it in a word only this
+        product uses. Nothing was taken away: user_perms() gives
+        captures_approve to everyone holding approvals, so every role and person
+        set before the split kept exactly the access they had."""
         import server
         for name in ("approve_capture", "reject_capture",
                       "reassign_capture", "clarify_capture"):
             fn = getattr(server, name, None)
             assert fn is not None, f"{name} not exported from server"
             line = _dep_source_marker(fn)
-            assert "require_perm(\"approvals\")" in line, (
-                f"RBAC-05: {name} must gate on require_perm('approvals'); got: {line}"
+            assert "require_perm(\"captures_approve\")" in line, (
+                f"RBAC-05: {name} must gate on require_perm('captures_approve'); got: {line}"
             )
+
+    def test_rbac_05b_the_old_approvals_key_still_opens_captures(self):
+        """J14-13 — the split must not quietly take access away from anybody who
+        already had the combined permission."""
+        from core.permissions import user_perms
+        held = user_perms({"role": "manager", "permissions": ["approvals"],
+                           "permissions_custom": True})
+        assert "captures_approve" in held
 
     def test_rbac_06_follow_up_run_requires_team_manage(self):
         """RBAC-06: manual full-tenant follow-up sweep = LLM cost +

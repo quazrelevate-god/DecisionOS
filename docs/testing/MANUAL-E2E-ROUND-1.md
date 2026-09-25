@@ -15,7 +15,7 @@ playing put their phone down.
 | | |
 |---|---|
 | **Where** | The staging build — **never** the pilot client's live company. Fill in the URL here: `________________` |
-| **Sign-in codes** | Members sign in with a mobile number and a texted code. Either (a) set `DEV_OTP_IN_RESPONSE=1` on staging, and the code fills itself in with a toast — use obviously fake numbers; or (b) wire a real SMS provider and use five real numbers. **Never set that flag on production.** |
+| **Sign-in codes** | Members sign in with a mobile number and a texted code, and five testers need five numbers. See **Sign-in codes on staging** below — the flag on its own is not enough. |
 | **Email** | Only the founder needs one. Use `+tag` addresses on one inbox: `you+vetri.raj@…` etc. |
 | **Browsers** | Chrome and Safari between you. One person on an iPhone, one on Android, if you have both. |
 | **Screenshots** | Every failure gets one. Name it `R<round>-<check>-<what>.png`, e.g. `R4-12-approve-does-nothing.png`. |
@@ -24,6 +24,27 @@ playing put their phone down.
 **One company, five accounts.** Everybody joins the same workspace. That is the
 whole point — most of what breaks in this app breaks between people, not
 inside one screen.
+
+### Sign-in codes on staging
+
+For the code to come back in the API response — so five people sign in with
+invented numbers and nobody's real phone is texted — **all three** of these have
+to be true on the staging service. Two of them are easy to miss.
+
+| Set this | Why |
+|---|---|
+| `DEV_OTP_IN_RESPONSE=1` | The explicit permission. Off by default. |
+| **No SMS provider.** `APM_SMS_API_KEY` blank, and no complete Twilio trio (`TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` + `TWILIO_FROM_NUMBER`) | The one people miss. `services/otp.py` returns the code only when it was **not sent**: the moment APM sends one it sets `dev = False`, and the flag is ignored. Leave APM on and you will text whatever numbers you type. |
+| `ENV` is **not** `prod` | With no provider a `prod` service refuses to boot, on purpose (S0-04). |
+
+All three are read **at boot** (`config.py:208`), so **redeploy or restart after
+changing them** — nothing takes effect until you do.
+
+Put the provider keys back when the test is over, and take the flag out.
+
+> **Never on production.** With the flag on and no provider, `/auth/otp/request`
+> hands a working sign-in code to anyone who asks, for any number they name.
+> That is account takeover, not a debug convenience.
 
 ---
 

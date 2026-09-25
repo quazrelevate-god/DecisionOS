@@ -14,7 +14,8 @@ playing put their phone down.
 
 | | |
 |---|---|
-| **Where** | The staging build — **never** the pilot client's live company. Fill in the URL here: `________________` |
+| **Where** | The staging build. URL: `________________` |
+| **Which database** | **The pilot client's own**, by the founder's decision of 25 September. Vetri Engineering Works is a NEW company inside it — beside the client's, never inside it — and it is removed afterwards by `scripts/purge_test_tenant_0925.py`. Read *Taking it out again* below **before** Round 0, not after Round 10. |
 | **Sign-in codes** | Members sign in with a mobile number and a texted code, and five testers need five numbers. See **Sign-in codes on staging** below — the flag on its own is not enough. |
 | **Email** | Only the founder needs one. Use `+tag` addresses on one inbox: `you+vetri.raj@…` etc. |
 | **Browsers** | Chrome and Safari between you. One person on an iPhone, one on Android, if you have both. |
@@ -24,6 +25,38 @@ playing put their phone down.
 **One company, five accounts.** Everybody joins the same workspace. That is the
 whole point — most of what breaks in this app breaks between people, not
 inside one screen.
+
+### Taking it out again
+
+The test runs in the client's live database, so the company it creates has to
+come out of it cleanly afterwards. It can, and here is exactly why: DecisionOS
+is multi-tenant. A new company gets its own `tenant_id`, and every collection
+that matters carries that field on every document. So the test sits **beside**
+the client's company, not inside it, and removing it is a delete by one id.
+
+Two things make that true rather than hopeful:
+
+1. **Write down the tenant_id on day one** (check 0-15, below). Without it you
+   are matching on a company name afterwards, which is a worse way to find
+   things you are about to delete.
+2. **Nobody signs into the client's own company.** Five new accounts, five
+   invented numbers, one new company. If anybody signs in as one of the
+   client's people, or edits one of their records, that is not test data any
+   more and this script will not touch it.
+
+When the round is finished:
+
+```
+# read it first — it prints the company, the date and every count, and touches nothing
+python scripts/purge_test_tenant_0925.py --company "Vetri Engineering"
+
+# then, having read that
+python scripts/purge_test_tenant_0925.py --tenant <id> --phones 9000000001,9000000002,... --apply
+```
+
+Everything is copied to `cleanup_archive` and to a JSON file **before** anything
+is deleted, and `--restore <run_id>` puts the whole company back. The script
+refuses to remove the client's own workspace by name.
 
 ### Sign-in codes on staging
 
@@ -154,6 +187,7 @@ Desktop, in a **private window**, so nothing is remembered from before.
 | 0-12 | Desktop | Click the score | Open the Operating Score page. Read it — **no programmer words** ("not wired", "no denominator") |
 | 0-13 | Desktop | Settings → check the departments the AI built | Real names, no `under_scores` or raw keys on screen |
 | 0-14 | Desktop | Settings → is there anything saying you agreed to AI processing? | It should match what screen 0-9 told you. If it claims an agreement you never saw, that is a finding |
+| 0-15 | Desktop | **Write down the new company's `tenant_id`** — Settings, or the URL of any record, or ask the backend | It is what takes this whole company back out of the client's database afterwards. **Do not start Round 1 without it.** Write it here: `________________` |
 
 ---
 

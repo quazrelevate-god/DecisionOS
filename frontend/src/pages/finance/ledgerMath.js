@@ -88,12 +88,24 @@ const categoryName = (c) => String(c || "").trim() || "Uncategorized";
    written here as well rather than fetched, because this math runs on every
    keystroke of a period change and one wrong-footed round trip would put the
    page and the tile below it into an argument. */
-const STOCK_CATEGORIES = new Set(["raw material", "stock", "inventory", "goods", "purchases", "trading goods"]);
-const CAPITAL_CATEGORIES = new Set(["asset purchase"]);
-const isStockOrCapital = (c) => {
-  const k = String(c || "").trim().toLowerCase();
-  return STOCK_CATEGORIES.has(k) || CAPITAL_CATEGORIES.has(k);
+/* R10-33 — matched on WORDS, not on an exact name. Every company's categories
+   are generated for it at sign-up, and the generator's own name for this one is
+   "Raw Materials" — plural — so an exact-string set never fired on a real
+   tenant. Narrower than "contains the word material" on purpose: "Packaging
+   Materials" is the cost of running the place, and taking it out of profit
+   would flatter it. Same rule as the server's _is_stock_category. */
+const STOCK_WORDS = new Set(["stock", "inventory", "goods", "trading"]);
+const STOCK_ALONE = new Set(["material", "materials", "purchase", "purchases", "raw"]);
+const CAPITAL_CATEGORIES = new Set(["asset purchase", "asset purchases", "capital expenditure", "capex"]);
+const isStockCategory = (c) => {
+  const words = String(c || "").toLowerCase().split(/[^a-z]+/).filter(Boolean);
+  if (!words.length) return false;
+  if (words.includes("raw")) return true;
+  if (words.some((w) => STOCK_WORDS.has(w))) return true;
+  return words.length === 1 && STOCK_ALONE.has(words[0]);
 };
+const isStockOrCapital = (c) =>
+  isStockCategory(c) || CAPITAL_CATEGORIES.has(String(c || "").trim().toLowerCase());
 const vendorName = (v) => String(v || "").trim() || "Unspecified";
 
 const inside = (t, a, b) => t != null && t > a && t <= b;

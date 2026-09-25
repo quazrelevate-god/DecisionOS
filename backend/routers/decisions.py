@@ -22,7 +22,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from core import db, get_current_user, require_perm, new_id, now_iso
+from core import db, get_current_user, require_perm, require_role, new_id, now_iso
 from models.tasks import TaskCreateInput
 from services.ai import brain_context
 from services.tenancy import ensure_owned, tenant_filter  # FIX-001-C
@@ -105,8 +105,16 @@ async def decision_timeline(decision_id: str, user: dict = Depends(get_current_u
     return {"title": d.get("title"), "status": d.get("status"), "timeline": tl}
 
 
+# R9-10 (manual round 1, 25 Sep) — THE JOURNAL IS OWNER-ONLY AT THE DOOR, not
+# only in the browser. It was gated on `brain`, which is in _BASE_PERMS — so
+# every member of every company held it, and this endpoint hands back every
+# decision title and every memory note in the tenant: pay decisions, supplier
+# blacklists, prices. The route (App.js `ownerOnly`), the phone's More panel
+# and the Desk shortcut have always treated it as the owner's alone, and the
+# JOURNEY-1 access matrix recorded it as "refused, explained" — because the
+# tester checked the screen, which does refuse. Nobody had asked the API.
 @router.get("/journal")
-async def ceo_journal(q: str = "", user: dict = Depends(require_perm("brain"))):
+async def ceo_journal(q: str = "", user: dict = Depends(require_role("owner"))):
     tid = user["tenant_id"]
     tokens = [re.escape(t) for t in q.split() if len(t) >= 2]
     rx = {"$regex": "|".join(tokens), "$options": "i"} if tokens else {"$exists": True}

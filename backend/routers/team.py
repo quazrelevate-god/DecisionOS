@@ -772,9 +772,15 @@ async def create_leave(inp: LeaveRequestInput, user: dict = Depends(get_current_
         raise HTTPException(status_code=400, detail="Invalid leave type")
     if inp.to_date[:10] < inp.from_date[:10]:
         raise HTTPException(status_code=400, detail="End date cannot be before start date")
+    # ASK-5 / J11-02 — and WHO COVERS THEM reaches the service. Without this
+    # argument the field was accepted by the model, honoured by _create_leave
+    # and dropped in between, so every cover was silently None and _set_cover
+    # never fired. Found by the machine pass of round 1 (R10-34); the unit test
+    # missed it because it called _create_leave directly.
     return await _create_leave(user["tenant_id"], user, inp.leave_type,
                                inp.from_date, inp.to_date,
-                               inp.day_portion, inp.reason, is_emergency=False)
+                               inp.day_portion, inp.reason, is_emergency=False,
+                               delegate_user_id=inp.delegate_user_id)
 
 
 @router.post("/leaves/absence")

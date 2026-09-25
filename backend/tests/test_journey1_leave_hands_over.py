@@ -116,3 +116,28 @@ def test_the_delegate_is_told(with_test_db):
 
     notes = with_test_db(scenario)
     assert any("on leave" in n["message"] and "approvals come to you" in n["message"] for n in notes), notes
+
+
+def test_the_route_actually_passes_the_cover_through(with_test_db):
+    """R10-34 (manual round 1) — THE BUG THE TESTS ABOVE COULD NOT SEE.
+
+    Every test above calls _create_leave directly, so all of them passed while
+    the HTTP route dropped `delegate_user_id` on the floor: the model accepted
+    it, the service honoured it, and nothing carried it between the two. Every
+    cover was silently None. This one goes through routers.team.create_leave,
+    the way the phone does."""
+    async def scenario(db):
+        import routers.team as team
+        from models.team import LeaveRequestInput
+        with e2e_env(db, keep={"services.notifications.push_notification"}):
+            await _seed(db)
+            lv = await team.create_leave(
+                LeaveRequestInput(leave_type="casual", from_date=_day(1), to_date=_day(3),
+                                  day_portion="full", reason="Wedding",
+                                  delegate_user_id=AMIT["id"]),
+                user=KARTHIK)
+            return lv
+
+    lv = with_test_db(scenario)
+    assert lv["delegate_user_id"] == AMIT["id"], \
+        "the route must carry the cover to the service, not only the model"

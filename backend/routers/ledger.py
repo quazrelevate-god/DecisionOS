@@ -68,8 +68,33 @@ _CATEGORY_KEYWORDS = [
 # is SOLD, which needs inventory valuation this app does not keep — but it is
 # the honest version of the number a shopkeeper is actually asking for, and it
 # no longer tells them they lost money by opening for business.
-_STOCK_CATEGORIES = {"raw material", "stock", "inventory", "goods", "purchases", "trading goods"}
-_CAPITAL_CATEGORIES = {"asset purchase"}
+# R10-33 (manual round 1, 25 Sep) — MATCHED ON WORDS, NOT ON AN EXACT NAME.
+# This was a set of exact strings including "raw material". Every company's
+# categories are generated for it at sign-up, and the generator's own name for
+# this one is "Raw Materials" — plural. So on a freshly built tenant the split
+# never fired, profit went red on the first stock purchase again, and the fix
+# looked like it worked only because the unit test passed the singular.
+#
+# The rule now: a category is STOCK if it says "raw", or names stock outright,
+# or is just "material(s)" / "purchase(s)". It is deliberately narrower than
+# "contains the word material": "Packaging Materials" and "Quality Control"
+# are the cost of running the place, and taking them out of profit would flatter
+# it. When in doubt a category stays an operating cost, which is the honest
+# direction to be wrong in.
+_STOCK_WORDS = {"stock", "inventory", "goods", "trading"}
+_STOCK_ALONE = {"material", "materials", "purchase", "purchases", "raw"}
+_CAPITAL_CATEGORIES = {"asset purchase", "asset purchases", "capital expenditure", "capex"}
+
+
+def _is_stock_category(name) -> bool:
+    words = [w for w in re.split(r"[^a-z]+", str(name or "").lower()) if w]
+    if not words:
+        return False
+    if "raw" in words:
+        return True                       # Raw Material, Raw Materials, Raw Stock
+    if set(words) & _STOCK_WORDS:
+        return True                       # Stock, Inventory, Trading Goods
+    return len(words) == 1 and words[0] in _STOCK_ALONE
 
 
 def _spend_split(expenses) -> tuple:
@@ -78,7 +103,7 @@ def _spend_split(expenses) -> tuple:
     for e in expenses:
         amt = _num(e.get("amount"))
         cat = str(e.get("category") or "").strip().lower()
-        if cat in _STOCK_CATEGORIES:
+        if _is_stock_category(cat):
             stock += amt
         elif cat in _CAPITAL_CATEGORIES:
             capital += amt

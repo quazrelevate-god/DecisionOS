@@ -50,6 +50,28 @@ def test_case_matters_not_at_all():
     assert stock == 300
 
 
+def test_the_names_a_real_tenants_categories_actually_use():
+    """R10-33 (manual round 1): this was an exact-string set holding "raw
+    material", and the category generator's own name for it is "Raw Materials".
+    So on every freshly built company the split never fired and profit went red
+    on the first stock purchase — the unit test passed only because it typed
+    the singular. These are the categories one real sign-up produced."""
+    from routers.ledger import _is_stock_category as stock_cat
+    for name in ["Raw Materials", "Raw Material", "raw materials", "Stock",
+                 "Inventory", "Trading Goods", "Materials", "Purchases"]:
+        assert stock_cat(name), f"{name!r} is stock"
+
+
+def test_and_the_ones_that_are_the_cost_of_running_the_place():
+    """Narrower than "contains the word material" on purpose: taking these out
+    of profit would flatter it."""
+    from routers.ledger import _is_stock_category as stock_cat
+    for name in ["Packaging Materials", "Quality Control", "Direct Labour",
+                 "Factory Overhead", "Power & Utilities", "Freight & Logistics",
+                 "GST Compliance", "Office & Admin", "Insurance", "Other", "", None]:
+        assert not stock_cat(name), f"{name!r} is a running cost"
+
+
 def test_her_first_day_is_not_a_loss(with_test_db):
     """The walk itself: stock bought, nothing sold yet."""
     async def scenario(db):

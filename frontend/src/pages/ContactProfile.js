@@ -11,7 +11,7 @@ import { money, typeLabel, formatPhone } from "../lib/format";
 import { lex } from "../lib/lexicon";
 import { GlassSelect } from "../components/karma/GlassSelect";
 import { CrmContactDialog } from "./CRM";
-import { LogComplaintDialog } from "../components/crm/LogComplaintDialog";
+import { LogComplaintDialog, severityLabel } from "../components/crm/LogComplaintDialog";
 import { toast } from "sonner";
 import {
   ArrowLeft, Phone, EnvelopeSimple, MapPin, Receipt, CurrencyCircleDollar,
@@ -509,7 +509,7 @@ export default function ContactProfile() {
         <div className="space-y-2">{complaints.map((cp) => (
           <div key={cp.id} data-testid={`profile-complaint-${cp.id}`} className="nm-tile p-3">
             <div className="flex flex-wrap items-center gap-2 mb-1">
-              <Chip value={cp.severity} /><Chip value={cp.status} />
+              <Chip value={severityLabel(cp.severity)} /><Chip value={cp.status} />
               {cp.status !== "resolved" && (
                 <button type="button" disabled={resolving === cp.id}
                   onClick={() => resolveComplaint(cp)} data-testid={`profile-complaint-resolve-${cp.id}`}

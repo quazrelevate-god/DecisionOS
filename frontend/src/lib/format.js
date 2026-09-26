@@ -88,7 +88,14 @@ export function shortDate(value) {
   return dt.toLocaleDateString(undefined, opts);
 }
 
-export const CONTACT_TYPE_LABELS = { customer: "Customer", vendor: "Supplier", dealer: "Dealer" };
+/* 2026-09-27 — "Dealer" is the stored value; "Partner" is the word. J15 put
+   the rename in pages/CRM.js's own constant, so the CRM page said Partner
+   while the contact's own page and pages/Contacts.js — both of which read
+   this map — still said Dealer about the same company. The word belongs
+   here, where every screen takes it from. The VALUE stays `dealer`:
+   renaming it is a migration across every tenant's contacts, invoices and
+   ledger rules for a word on a screen. */
+export const CONTACT_TYPE_LABELS = { customer: "Customer", vendor: "Supplier", dealer: "Partner" };
 export const typeLabel = (t) => CONTACT_TYPE_LABELS[t] || (t ? String(t).charAt(0).toUpperCase() + String(t).slice(1) : "");
 
 export const INDUSTRIES = [

@@ -22,11 +22,16 @@ import { DraftNote } from "../karma/DraftNote";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 import { DRAWER_TRACK, GLASS_ICON_BTN, GLASS_PILL, GLASS_SHEET, INK_PILL } from "../karma/glass";
 
-const SEVERITY = [
+export const SEVERITY = [
   { key: "low", label: "Minor" },
   { key: "medium", label: "Serious" },
   { key: "high", label: "Urgent" },
 ];
+/* 2026-09-27 — the words this dialog asks in are the words the complaint is
+   read back in. It was asked as Minor / Serious / Urgent and shown as its
+   stored value, so a founder who ticked "Serious" saw a chip saying
+   "medium" on the contact's page and on the CRM card. */
+export const severityLabel = (k) => SEVERITY.find((s) => s.key === k)?.label || k || "";
 const BLANK = { text: "", severity: "medium" };
 
 /** Refresh everything that counts open complaints: CRM's cards, the buyer's

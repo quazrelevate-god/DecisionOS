@@ -44,7 +44,11 @@ import { GlassSelect } from "../components/karma/GlassSelect";
 import { DraftNote } from "../components/karma/DraftNote";
 import { useDraft } from "../hooks/useDraft";
 import { cn } from "@/lib/utils";
-import { LogComplaintDialog } from "../components/crm/LogComplaintDialog";
+import { LogComplaintDialog, severityLabel } from "../components/crm/LogComplaintDialog";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
+  AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
+} from "../components/ui/alert-dialog";
 
 /* J15 (founder, 26 Sep) — THREE KINDS, NOT TWO GROUPS WITH A SWITCH INSIDE.
    A dealer was a type you could only reach by adding a customer and then
@@ -62,6 +66,10 @@ const VENDOR_TYPES = ["vendor"];
    server's BUYER_TYPES, which has not changed. */
 const BUYER_TYPES = [...CUSTOMER_TYPES, ...PARTNER_TYPES];
 const PARTNER_LABEL = "Partner";
+/* Which tab a kind lives on — used when a contact is added, so the list shows
+   the thing that was just made. */
+const scopeForType = (t) => (VENDOR_TYPES.includes(t) ? "suppliers"
+  : PARTNER_TYPES.includes(t) ? "partners" : "customers");
 const PARTNER_LABEL_PLURAL = "Partners";
 const STATUSES = [
   { key: "lead", label: "Lead" },
@@ -363,7 +371,7 @@ function AddContactMenu({ canManage, canImport, csvBusy, onPick, customerLabel, 
             three different things behind one door, and the only way to make a
             dealer was to add a customer and change it afterwards. */}
         {canManage && seesBuyers && item("customer", AddressBook, `New ${customerLabel}`, "Someone who buys from you", "crm-add-customer")}
-        {canManage && seesBuyers && item("dealer", Storefront, `New ${PARTNER_LABEL.toLowerCase()}`, "A dealer or distributor who resells what you sell", "crm-add-partner")}
+        {canManage && seesBuyers && item("dealer", Storefront, `New ${PARTNER_LABEL}`, "A dealer or distributor who resells what you sell", "crm-add-partner")}
         {canManage && seesSuppliers && item("vendor", Truck, `New ${vendorLabel}`, "Someone you buy from \u2014 a supplier or raw-material source", "crm-add-supplier")}
         {canManage && canImport && <DropdownMenuSeparator className="mx-2 my-1 h-px bg-slate-900/[0.06]" />}
         {canImport && item("import", UploadSimple, csvBusy ? "Uploading…" : "Import from spreadsheet", "Bulk-add via CSV or Excel", "crm-import-csv", csvBusy)}
@@ -448,13 +456,19 @@ export function CrmContactDialog({ type, contact, onClose, onSaved, users, label
      stayed for ever. The server has had DELETE /contacts/:id all along; this is
      the door to it. Asked for in the words of what it does, because it takes
      the contact with it and there is no undo. */
+  /* 2026-09-27 — THE CONFIRM IS THE APP'S OWN. This asked through
+     window.confirm, which some browsers and embed contexts answer with a
+     silent false and no visible dialog: pressing Delete did nothing at all
+     and looked like a dead button (reproduced in the preview — no dialog, no
+     request). It is the third time this has been paid for here: FUP-49 took
+     window.confirm off My Work's Complete, ASK-2 took it off the workflow
+     card's delete, and both left the same note. Radix AlertDialog renders the
+     same in every context, and it is the app's own material rather than the
+     operating system's chrome. */
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const removeContact = async () => {
     if (!contact) return;
-    const ok = window.confirm(
-      `Delete ${contact.name}? Their card goes for good \u2014 what they are attached to elsewhere `
-      + "(invoices, complaints, decisions) stays as history. This cannot be undone.",
-    );
-    if (!ok) return;
+    setConfirmDelete(false);
     setBusy(true);
     try {
       await api.delete(`/contacts/${contact.id}`);
@@ -626,7 +640,7 @@ export function CrmContactDialog({ type, contact, onClose, onSaved, users, label
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm text-slate-800">{cp.text}</span>
                     <span className="mt-0.5 block text-xs text-slate-500">
-                      {cp.severity ? `${cp.severity} \u00b7 ` : ""}{touchedLabel(daysSince(cp.created_at))}
+                      {cp.severity ? `${severityLabel(cp.severity)} \u00b7 ` : ""}{touchedLabel(daysSince(cp.created_at))}
                     </span>
                   </span>
                   <button type="button" onClick={() => resolveComplaint(cp)} disabled={busy}
@@ -644,7 +658,7 @@ export function CrmContactDialog({ type, contact, onClose, onSaved, users, label
           {/* J15 (founder) — DELETING. Hard left, away from Save, in the
               warning ink: it is the one control here that cannot be undone. */}
           {editing && (
-            <button type="button" onClick={removeContact} disabled={busy} data-testid="crm-contact-delete"
+            <button type="button" onClick={() => setConfirmDelete(true)} disabled={busy} data-testid="crm-contact-delete"
               className="flex min-h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-kr-accent transition-colors hover:bg-kr-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline disabled:opacity-40">
               <Trash size={15} weight="bold" aria-hidden="true" /> Delete
             </button>
@@ -667,6 +681,27 @@ export function CrmContactDialog({ type, contact, onClose, onSaved, users, label
             {editing ? (busy ? "Saving…" : "Save changes") : busy ? "Adding…" : `Add ${typeName.toLowerCase()}`}
           </button>
         </div>
+
+        {/* The confirm, in the app's own material. */}
+        <AlertDialog open={confirmDelete} onOpenChange={(v) => { if (!busy) setConfirmDelete(v); }}>
+          <AlertDialogContent data-testid="crm-contact-delete-confirm">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {contact?.name}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Their card goes for good. What they are attached to elsewhere — invoices,
+                complaints, decisions — stays as history. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={busy}>Keep them</AlertDialogCancel>
+              <AlertDialogAction onClick={removeContact} disabled={busy}
+                data-testid="crm-contact-delete-confirm-action"
+                className="bg-danger-600 text-white hover:bg-danger-600/90">
+                {busy ? "Deleting…" : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );
@@ -852,7 +887,12 @@ export default function CRM() {
         <input ref={csvInputRef} type="file" accept=".csv,.xlsx,.xls" onChange={onCsvChosen}
           className="hidden" data-testid="crm-import-csv-input" />
       )}
-      <CrmContactDialog type={adding} onClose={() => setAdding(null)} onSaved={refresh} users={users} labels={typeLabels} />
+      {/* 2026-09-27 — the tab follows what was just added. Adding a partner
+          from its own door left the screen on Buyers, which on a new workspace
+          still read "No relationships yet": the toast said it had worked and
+          the screen said nothing was there. */}
+      <CrmContactDialog type={adding} onClose={() => setAdding(null)} users={users} labels={typeLabels}
+        onSaved={() => { setScope(scopeForType(adding)); refresh(); }} />
       {/* J15 — the window also carries this contact's open complaints, so the
           one that logged them is the one that can close them. */}
       <CrmContactDialog contact={editing} onClose={() => setEditing(null)} onSaved={refresh} users={users} labels={typeLabels}

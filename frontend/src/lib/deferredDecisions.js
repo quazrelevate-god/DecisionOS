@@ -7,11 +7,22 @@
  * "where did that go?" has no answer on screen. This remembers the ones they
  * set aside, and the column draws those rows differently.
  *
+ * PILOT-2 B — "LATER" IS "SAVE AS DRAFT" NOW, and a draft stays a draft until
+ * it is issued or thrown away. So the mark is no longer cleared by OPENING the
+ * decision (Desk used to call clearDeferred on every open): looking at a draft
+ * and closing it again leaves it a draft. It goes when the decision is
+ * approved or rejected (DecisionDialog calls clearDeferred), and pruneDeferred
+ * below catches the ones decided somewhere else.
+ *
  * WHY THE CLIENT AND NOT THE SERVER. There is no such field on a decision, and
  * there should not be one on my say-so: "I looked at this and deferred it" is a
  * fact about this person on this device, not about the decision. backend/ is
  * untouched. localStorage rather than memory, because the whole point is that
  * it survives the reload where the founder comes back looking for it.
+ * PILOT-2 B — and that is now an honesty problem, because "Save as draft"
+ * promises something saved: the DECISION is saved on the server, but the draft
+ * MARK is only on this device. docs/PILOT-2_DRAFT_FLAG_ASK.md is the backend
+ * ask that makes it travel; until it ships, the mark is per-device.
  *
  * IT PRUNES ITSELF. A deferred id that no longer appears in the feed has been
  * approved or rejected, so it stops being deferred — pruneDeferred is called
@@ -39,7 +50,7 @@ function write(ids) {
 
 export function getDeferred() { return read(); }
 
-/** Called when "Later" is pressed on a ready decision. */
+/** Called when "Save as draft" is pressed on a ready decision. */
 export function deferDecision(id) {
   if (!id) return;
   const ids = read();
@@ -47,7 +58,7 @@ export function deferDecision(id) {
   write([...ids, id]);
 }
 
-/** Called when the row is acted on — approved, rejected, or opened and decided. */
+/** Called when the decision is decided — approved or rejected. Not on open. */
 export function clearDeferred(id) {
   if (!id) return;
   const ids = read();

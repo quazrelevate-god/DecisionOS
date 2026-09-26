@@ -42,7 +42,7 @@
 // The Desk opens it in place (pages/Desk.js); /decisions/:id still mounts it
 // for notifications and pasted links.
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
 import { timeAgo } from "../lib/format";
@@ -68,6 +68,7 @@ import { userPerms } from "../lib/perms";
 import { canAssignPerson } from "../lib/taskAccess";
 import { proposalCreatesText } from "../lib/decisionProposal";
 import { LeftoverReview } from "./workflow/LeftoverReview";
+import { clearDeferred, getDeferred, subscribeDeferred } from "../lib/deferredDecisions";
 
 /* ── helpers shared with the Desk's decision cards ───────────────────────── */
 export function raisedByLabel(d) {
@@ -167,6 +168,15 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
      bigger sweep desk.py says it is — this is the same widened filter desk.py
      itself uses to build the feed. */
   const canDecide = d?.status === "pending" || d?.status === "pending_approval";
+  /* PILOT-2 B — "(Draft)" AFTER THE TITLE, the other half of what the client
+     asked for: a decision saved as a draft says so in its own screen, not only
+     in the Desk's column. Only while it can still be decided — a draft that has
+     been approved or rejected is not a draft. The mark is this device's
+     (lib/deferredDecisions); docs/PILOT-2_DRAFT_FLAG_ASK.md is the ask that
+     makes it travel. */
+  const [drafts, setDrafts] = useState(getDeferred);
+  useEffect(() => subscribeDeferred(setDrafts), []);
+  const isDraft = canDecide && !!decisionId && drafts.includes(decisionId);
   const amount = useMemo(() => extractAmount(d), [d]);
   const wfLabel = useMemo(() => workflowLabel(d), [d]);
   const tasks = d?.tasks || [];
@@ -360,6 +370,8 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
         c.workflow_ids ? `${c.workflow_ids} workflow${c.workflow_ids === 1 ? "" : "s"}` : null,
       ].filter(Boolean) : [];
       toast.success(made.length ? `Approved — ${made.join(" and ")} created` : "Approved");
+      // PILOT-2 B — issued, so it is not a draft any more.
+      clearDeferred(decisionId);
       // ASK-32 Phase 3 — stay open: the popup now shows what was created, with links.
       invalidate();
     },
@@ -367,7 +379,12 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
   });
   const rejectM = useMutation({
     mutationFn: () => api.post(`/decisions/${decisionId}/reject`),
-    onSuccess: () => { toast.success(proposing ? "Rejected — nothing was created" : "Rejected"); invalidate(); onClose && onClose(); },
+    onSuccess: () => {
+      toast.success(proposing ? "Rejected — nothing was created" : "Rejected");
+      clearDeferred(decisionId); // PILOT-2 B — thrown away, so not a draft either.
+      invalidate();
+      onClose && onClose();
+    },
     onError: (e) => toast.error(e.response?.data?.detail || "Could not reject"),
   });
   const busy = approveM.isPending || rejectM.isPending;
@@ -439,6 +456,9 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
                 <div className="min-w-0 flex-1">
                   <DialogTitle className="text-left text-[22px] font-semibold leading-tight tracking-tight text-slate-900">
                     {d.title}
+                    {isDraft && (
+                      <span className="font-normal text-slate-500" data-testid="decision-draft-mark"> (Draft)</span>
+                    )}
                   </DialogTitle>
                   <DialogDescription className="sr-only">Review this decision</DialogDescription>
                   <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">

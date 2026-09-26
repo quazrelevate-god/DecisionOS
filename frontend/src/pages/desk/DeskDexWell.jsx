@@ -122,7 +122,8 @@ function AttachmentChip({ file, onRemove, disabled }) {
  *                                             and stops being the workspace, so
  *                                             the Desk can fade what it covers
  * @param {Function}        [onLater]          ASK-36 2 — told the decision id
- *                                             when a ready one is set aside
+ *                                             when a ready one is saved as a
+ *                                             draft (PILOT-2 B)
  * @param {Function}        [onReview]         ASK-33 Phase 3 — opens a ready
  *                                             decision in the Desk's existing
  *                                             DecisionDialog
@@ -688,14 +689,17 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
         {/* ASK-36 2 — "Later" is a decision about the decision: it was read,
             understood and set aside. The Desk's Decisions column marks the rows
             that happened to, so the founder can find what they walked away
-            from instead of hunting for it among everything else. */}
+            from instead of hunting for it among everything else.
+            PILOT-2 B — the client's word for it is "Save as draft", and the
+            column's mark says "Draft". The testid keeps its old name so the
+            verify scripts and the audit trail still find it. */}
         <button
           type="button"
           data-testid="desk-dex-later"
           onClick={() => { onLater?.(outcome.decisionId); collapse(); }}
           className={quietPill}
         >
-          Later
+          Save as draft
         </button>
       </div>
     </div>

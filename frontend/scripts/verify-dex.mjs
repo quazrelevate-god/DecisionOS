@@ -20,7 +20,7 @@
  *   B  type, NOTHING TO DECIDE: Dex's answer, one way out, not an error
  *   C  attach a file, AI-consent FAILURE: the reason untruncated, the Settings
  *      link at the phone's touch floor, Retry re-sends that capture
- *   D  the three ways out — Later, Got it, Not now — collapse the workspace back
+ *   D  the three ways out — Save as draft, Got it, Not now — collapse the workspace back
  *      to its resting height and leave the composer ready for the next capture
  *   E  one capture at a time (ASK-33.1): a second send while the first is still
  *      being read is refused in plain words, the first still reports its ending,
@@ -337,8 +337,9 @@ async function run(viewport) {
     (await toasts(page, 'Dex is still reading your last one').count()) === 1);
   check(`${w} E: the first capture still reaches its ending`,
     await until(async () => (await well.getByTestId('dex-outcome-ready').count()) === 1));
-  await well.getByRole('button', { name: 'Later' }).click();
-  check(`${w} D: "Later" gives it back as well`,
+  // PILOT-2 B — "Later" is "Save as draft".
+  await well.getByRole('button', { name: 'Save as draft' }).click();
+  check(`${w} D: "Save as draft" gives it back as well`,
     await until(async () => (await geometry(page)).ripple === true, 6000));
   await page.waitForTimeout(800);
   await typeAndSend(page, 'Ask Priya to book the Tirupur truck for Thursday');
@@ -348,7 +349,7 @@ async function run(viewport) {
   // ------------------------------------------------- F · the sheet is Ask-only
   check(`${w} F: no decide path opened the sheet, all run long`, (await sheet(page).count()) === 0);
   await until(async () => (await well.getByTestId('dex-outcome-ready').count()) === 1);
-  await well.getByRole('button', { name: 'Later' }).click();
+  await well.getByRole('button', { name: 'Save as draft' }).click();
   await page.waitForTimeout(700);
   await page.getByTestId('dex-fab').click();
   await sheet(page).waitFor({ timeout: 8000 }).catch(() => {});

@@ -36,7 +36,7 @@ import { hasPerm, canSeeBuyers } from "../lib/perms";
 import { inrCompact } from "../lib/format";
 import { cn } from "../lib/utils";
 // ASK-36 2 — which decisions the founder read and set aside (see the file).
-import { clearDeferred, deferDecision, getDeferred, pruneDeferred, subscribeDeferred } from "../lib/deferredDecisions";
+import { deferDecision, getDeferred, pruneDeferred, subscribeDeferred } from "../lib/deferredDecisions";
 import { selfScore } from "../lib/karmaScore";
 import { isDemoTenant, demoDelta } from "./_operatingScoreDemo";
 import { opModel } from "../lib/operatingModel";
@@ -249,8 +249,10 @@ function DeskRow({ r, first, testid }) {
            fill of that hue, a hairline ring of it around the whole row, and a
            soft outer glow in it so the row lifts off the card rather than
            merely tinting. Still not kr.accent, which is alert grammar and not
-           this; still spoken as "Set aside" in the meta line, so it is not
-           colour alone. */
+           this; still spoken in the meta line, so it is not colour alone.
+           PILOT-2 B — the word is "Draft" now, the client's: "somewhere near
+           that yellow colour code, give it as draft, so people can understand
+           the yellow means draft". The hue stays the section's own. */
         r.deferred
           ? "-mx-2 rounded-xl border-l-[3px] border-l-[hsl(var(--kr-glass-from))] bg-[hsl(var(--kr-glass-from)/0.16)] px-2 shadow-[inset_0_0_0_1px_hsl(var(--kr-glass-from)/0.30),0_0_16px_-4px_hsl(var(--kr-glass-from)/0.55)]"
           : ""
@@ -267,7 +269,7 @@ function DeskRow({ r, first, testid }) {
           className={`truncate text-[15px] font-medium leading-5 tracking-[-0.006em] lg:whitespace-normal lg:line-clamp-2 ${r.deferred ? "text-white" : "text-neutral-300"}`}>{r.title}</p>
         {(r.meta || r.deferred) && (
           <p title={r.meta || undefined} className="truncate text-xs leading-4 text-neutral-500">
-            {r.deferred && <span className="font-medium text-neutral-300">Set aside</span>}
+            {r.deferred && <span className="font-medium text-neutral-300">Draft</span>}
             {r.deferred && r.meta ? " · " : ""}
             {r.meta}
           </p>
@@ -921,9 +923,9 @@ export default function Desk() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [phoneExpanded]);
-  /* ASK-36 2 — the ids of decisions set aside with "Later". Subscribed rather
-     than read once, because the well writes to the store while this page is
-     mounted. */
+  /* ASK-36 2 — the ids of decisions set aside with "Later" — PILOT-2 B, "Save
+     as draft". Subscribed rather than read once, because the well writes to the
+     store while this page is mounted. */
   const [deferred, setDeferred] = useState(getDeferred);
   useEffect(() => subscribeDeferred(setDeferred), []);
   const watchCount = (counters?.due_today || 0) + (canApproveLeave ? pendingLeaves.length : 0) + (counters?.on_fire || 0);
@@ -969,8 +971,10 @@ export default function Desk() {
     title: c.title,
     meta: c.context_line,
     amount: Number(c.amount) > 0 ? inrCompact(c.amount) : null,
-    onOpen: () => { clearDeferred(c.target_id); setOpenDecisionId(c.target_id); },
-    // ASK-36 2 — read, then set aside. The row says so.
+    /* PILOT-2 B — opening a draft does not un-draft it: it stays one until it
+       is approved or rejected (DecisionDialog clears the mark then). */
+    onOpen: () => setOpenDecisionId(c.target_id),
+    // ASK-36 2 — read, then saved as a draft. The row says so.
     deferred: deferred.includes(c.target_id),
   }));
   /* ASK-41 1 — the row opens the task; TaskCard's drawer is where it is
@@ -1042,7 +1046,7 @@ export default function Desk() {
        covering the greeting, the score cluster and the KPI strip. */
     growToPhoneRef={heroRef}
     onExpandedChange={setDexExpanded}
-    onReview={(id) => { clearDeferred(id); setOpenDecisionId(id); }}
+    onReview={(id) => setOpenDecisionId(id)}
     onLater={(id) => { deferDecision(id); setDeferred(getDeferred()); }}
           />
   );

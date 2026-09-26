@@ -1814,6 +1814,8 @@ async def ledger_ask(inp: LedgerAskInput, user: dict = Depends(require_ledger)):
         chat = claude_chat(task="ledger.ask", session_id=f"ledger-ask-{user['tenant_id']}-{new_id()}", system_message=system).with_model(*model_for("ledger.ask"))
         resp = await chat.send_message(UserMessage(text=f"Finance data:\n{json.dumps(ctx)}\n\nQuestion: {q}"))
         answer = (resp or "").strip()
+    except HTTPException:
+        raise   # 2026-09-26: a deliberate refusal (451 consent) is not "AI is busy"
     except Exception as e:  # noqa: BLE001
         logger.warning(f"Ledger ask failed: {e}")
         raise HTTPException(status_code=502, detail="AI is busy, please try again")

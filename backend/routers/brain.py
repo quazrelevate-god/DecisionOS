@@ -819,6 +819,15 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
 
     try:
         plan = await _plan(q, prev, user.get("language"))
+    except HTTPException:
+        # 2026-09-26 — A REFUSAL IS NOT A FAULT. The consent gate raises 451
+        # from inside the LLM guard (services/ai/llm_limits), and this catch
+        # turned it into "AI planning error" (502): a company with AI switched
+        # off was told the AI was broken, and the app could not offer the
+        # switch because the code it keys on never arrived. Anything the AI
+        # layer says deliberately — 451 here, a quota refusal tomorrow —
+        # travels on unchanged; only a genuine fault becomes a 502.
+        raise
     except Exception:
         logger.exception("brain planning failed")
         raise HTTPException(status_code=502, detail="AI planning error")

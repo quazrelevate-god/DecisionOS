@@ -25,6 +25,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { toastAiConsentOr } from "../lib/aiConsent";
 import {
   ArrowRight, Buildings, CalendarBlank, Camera, ChartPieSlice, ChatCircleDots, CurrencyInr, FilePdf,
   Package, Plus, Receipt, Sparkle, Tray, UploadSimple,
@@ -141,7 +142,8 @@ function QuickCapture({ pendingCount, isMobile, onIngested, onOpenInbox, onAddEx
       fd.append("file", file);
       const { data } = await api.post(endpoint, fd, { headers: { "Content-Type": "multipart/form-data" } });
       if (data.status === "failed") {
-        toast.error("Extraction failed: " + (data.error || "unreadable file"));
+        // 2026-09-26 — a consent refusal here read as "Extraction failed: 451: {…}".
+        toastAiConsentOr(data.error, "Extraction failed: " + (data.error || "unreadable file"));
       } else {
         setActive(data);
         toast.success("Extracted — review below");

@@ -24,7 +24,12 @@
 // and nothing else.
 import { proposalCounts, executionSummaryCounts, proposalCreatesText } from "./decisionProposal";
 
-export const AI_CONSENT_CODE = "ai_consent_required";
+// 2026-09-26 — one source for the code, the link and the sentence
+// (lib/aiConsent), so the capture note, the toast and every other surface
+// cannot drift apart. Re-exported because callers already import them here.
+import { AI_CONSENT_CODE, AI_CONSENT_HREF } from "./aiConsent";
+
+export { AI_CONSENT_CODE, AI_CONSENT_HREF };
 
 /* THE LINK, AND THE SCREEN IT NEEDED.
    ASK-33.1 took the link off because Settings had no AI-consent section, and a
@@ -32,7 +37,7 @@ export const AI_CONSENT_CODE = "ai_consent_required";
    merged 2026-09-16) built that screen — Settings › Business › AI processing,
    reading and writing /tenant/ai-consent — so the link is back on, pointing
    where lib/api.js's own 451 toast now points. */
-export const AI_CONSENT_HREF = "/settings?tab=business#ai-consent";
+
 
 /* ASK-34 · THE STAGES, IN THE FOUNDER'S WORDS — one copy for both surfaces.
    The note walks queued -> transcribing -> structuring (ASK-32's poll); these

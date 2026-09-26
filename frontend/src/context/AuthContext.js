@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import api, { SESSION_LOST_EVENT } from "../lib/api";
+import { setViewerIsOwner } from "../lib/aiConsent";
 import { clearAllDrafts } from "../lib/drafts";
 
 /* JOURNEY-1 J12 — what this browser keeps under a person's id (their My Work
@@ -30,6 +31,13 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (user?.language) setAppLanguage(user.language);
   }, [user?.language]);
+
+  /* 2026-09-26 — "AI is off for this company" reads differently for the person
+     who can turn it on. The axios interceptor that says it is not inside React
+     (lib/api.js), so the answer is kept beside the words (lib/aiConsent). */
+  useEffect(() => {
+    setViewerIsOwner(user?.role === "owner");
+  }, [user?.role]);
 
   useEffect(() => {
     // Session is restored from the HttpOnly cookie via /auth/me.

@@ -17,6 +17,7 @@
 // POST /voice-notes/text, POST /files. Nothing new, nothing renamed.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { toastAiConsentOr } from "../lib/aiConsent";
 import api from "../lib/api";
 
 export const BARS = 28;
@@ -177,7 +178,12 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
         }
         if (note.status === "failed" || note.error) {
           setSending(false);
-          toast.error(note.error || "Could not transcribe that");
+          /* 2026-09-26 — THIS LINE PRINTED A PYTHON DICT AT A FOUNDER. A
+             capture is processed after its request has gone, so the reason
+             comes back written on the note ("451: {'code': …}"); it was
+             toasted as-is. Consent refusals now get the sentence and the
+             switch (lib/aiConsent); everything else keeps its own reason. */
+          toastAiConsentOr(note.error, note.error || "Could not transcribe that");
           return;
         }
       } catch { /* a dropped poll is not a failure — the next one may land */ }

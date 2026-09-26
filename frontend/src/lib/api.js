@@ -1,5 +1,5 @@
 import axios from "axios";
-import { toast } from "sonner";
+import { showAiConsentToast } from "./aiConsent";
 
 /* DEPLOY-3 — an EMPTY backend url is now the correct production value, and
    the `|| ""` is what makes it usable. The app is served by a node process
@@ -148,7 +148,6 @@ if (process.env.NODE_ENV !== "production") {
 // toast that links to Settings > AI Consent so the founder knows what
 // to do. Consent grant lives in Settings; the retry is manual so the
 // founder is aware the AI call is happening.
-let _consentToastShownAt = 0;
 
 /* 2026-09-21 — A SESSION THAT ENDS UNDER AN OPEN APP. Found running several
    people on several browsers: when a session ends while the app is open
@@ -173,23 +172,11 @@ api.interceptors.response.use(
       }
     }
     if (err?.response?.status === 451) {
-      // Debounce: don't fire the same toast 5x per second if many AI
-      // calls fail in the same render.
-      const now = Date.now();
-      if (now - _consentToastShownAt > 8000) {
-        _consentToastShownAt = now;
-        toast.error(
-          "AI features need the owner's consent. Open Settings › Business › AI processing to turn them on, then try again.",
-          {
-            duration: 8000,
-            action: {
-              label: "Open Settings",
-              // RBAC P1 (2026-09-15): the section this points at now exists.
-              onClick: () => { window.location.href = "/settings?tab=business#ai-consent"; },
-            },
-          }
-        );
-      }
+      /* 2026-09-26 — the words, the debounce and the button now live in
+         lib/aiConsent (the same helper the capture and extraction paths use),
+         so a refusal reads the same wherever it lands, and an owner is offered
+         the switch while everyone else is told who can throw it. */
+      showAiConsentToast();
     }
     return Promise.reject(err);
   }

@@ -27,6 +27,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
+import { isAiConsentError, aiConsentMessage } from "../lib/aiConsent";
 import { Books, ArrowLeft, Broom, Sparkle } from "@phosphor-icons/react";
 import { AiAnswer, ASK_SUGGESTIONS } from "./AskAI";
 import { DocumentsPanel } from "./BrainDocuments";
@@ -74,8 +75,13 @@ export default function Brain() {
       const { data } = await api.post("/ask", { question: text, context_id: ctxId });
       if (data.query_context_id) setCtxId(data.query_context_id);
       setLog((l) => [...l, { id: uid(), role: "ai", resp: data }]);
-    } catch {
-      setLog((l) => [...l, { id: uid(), role: "ai", resp: { type: "ANSWER", answer: t("ask.error") } }]);
+    } catch (e) {
+      /* 2026-09-26 — "AI service error. Please try again." was what a company
+         with AI switched off was told, however many times they tried. When it
+         is the consent gate, say that instead; the toast beside it carries the
+         way to the screen that turns it on (lib/aiConsent). */
+      const answer = isAiConsentError(e) ? aiConsentMessage() : t("ask.error");
+      setLog((l) => [...l, { id: uid(), role: "ai", resp: { type: "ANSWER", answer } }]);
     } finally {
       setBusy(false);
     }

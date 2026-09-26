@@ -278,19 +278,25 @@ def accept_invite(b, who, link, tag):
 def decide(p, text, tag):
     """Type a decision on the Desk, let Dex read it, review, approve."""
     p.goto(f"{BASE}/inbox", wait_until="domcontentloaded")
-    assert wait(p, "desk-dex-composer", 40000), "no Desk composer"
+    # ASK-47 — the field is behind the keyboard circle.
+    assert wait(p, "desk-dex-keyboard", 40000), "no Desk well"
+    if not p.locator('[data-testid="desk-dex-composer"]:visible').count():
+        vis(p, "desk-dex-keyboard").click()
+    assert wait(p, "desk-dex-composer", 10000), "no Desk composer"
     box = p.locator('[data-testid="desk-dex-composer"] textarea:visible, [data-testid="desk-dex-composer"] input:visible').first
     box.click()
     box.fill(text)
     box.press("Enter")
-    got = wait(p, "desk-dex-review", 180000)
+    # PILOT-2 A — a typed decision goes straight to the Dex pop-up, and its
+    # third step ("What Dex made") IS the review: the counts over
+    # DecisionDialog's own breakdown, with Approve pinned at the foot. There
+    # is no Review button any more.
+    got = wait(p, "dex-popup-counts", 180000)
     outcome = vis(p, "desk-dex-summary").inner_text()[:200] if p.locator('[data-testid="desk-dex-summary"]:visible').count() else ""
     rec(f"{tag}-dex-reads-the-typed-decision", got, outcome or "no outcome")
     shot(p, f"{tag}_05_dex_read")
     if not got:
         return None
-    vis(p, "desk-dex-review").click()
-    assert wait(p, "decision-dialog", 20000), "no decision dialog"
     p.wait_for_timeout(2500)
     tasks = [x.inner_text().split("\n")[0] for x in p.locator('[data-testid^="decision-timeline-task-"]:visible').all()]
     extras = [x.inner_text().split("\n")[0] for x in p.locator('[data-testid^="decision-timeline-extra-"]:visible').all()]
@@ -300,6 +306,8 @@ def decide(p, text, tag):
     decisions = api(p, "/decisions?status=pending")
     vis(p, "decision-approve").click()
     p.wait_for_timeout(6000)
+    if p.locator('[data-testid="decision-panel-done"]:visible').count():
+        vis(p, "decision-panel-done").click()
     return decisions
 
 

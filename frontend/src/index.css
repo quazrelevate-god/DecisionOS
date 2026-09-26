@@ -3383,31 +3383,9 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
             inset -12px -12px 24px hsl(0 0% 100% / .78);
     }
 
-    /* ASK-33 Phase 2 — the Dex well's expansion on the Desk (lg only).
-       On send the well's pane lifts out of the flow, anchored to the well's
-       floor, and its height runs from the resting box up to the top of the KPI
-       grid (pages/desk/DeskDexWell); the greeting and the score row fade as it
-       passes over them (pages/Desk.js). ONE curve for both — a long ease-out,
-       so the growth carries on a little and settles instead of stopping dead.
-       The fade leads on the way up (no delay) and trails on the way down (the
-       240ms delay applies only as it returns), so collapsing is the same move
-       in reverse. */
-    .kr-dex-grow {
-        transition: height 640ms cubic-bezier(.16, 1, .3, 1);
-    }
-    .kr-dex-fade {
-        transition: opacity 360ms cubic-bezier(.16, 1, .3, 1) 240ms;
-    }
-    .kr-dex-fade[data-dex-faded="true"] {
-        opacity: 0;
-        pointer-events: none;
-        transition-delay: 0ms;
-    }
-    @media (prefers-reduced-motion: reduce) {
-        /* No growth, no fade: the expanded state is simply painted. */
-        .kr-dex-grow,
-        .kr-dex-fade { transition: none; }
-    }
+    /* ASK-33 Phase 2's .kr-dex-grow / .kr-dex-fade — the Dex well growing
+       over the hero while the greeting faded — are retired with the growth
+       itself (PILOT-2 A): the capture happens in its own pop-up now. */
 
     /* The raised twin: same light, opposite direction. Shadows sit OUTSIDE,
        dark to the lower-right, highlight to the upper-left — so it reads as

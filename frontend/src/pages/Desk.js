@@ -679,11 +679,9 @@ export default function Desk() {
     pipelines: opModel(tenant).pipelines,
   }), [workflowsQ.data, user, tenant]);
 
-  const heroRef = useRef(null);
-  // ASK-33 Phase 2 — the expanded Dex well grows to this grid's top, and while
-  // it is the workspace the greeting and the score row above it fade.
-  const kpiGridRef = useRef(null);
-  const [dexExpanded, setDexExpanded] = useState(false);
+  /* PILOT-2 A — the Dex well no longer grows over the hero (ASK-33 Phase 2's
+     expansion, and the fade it ran over the greeting and the score row): the
+     capture happens in its own pop-up now (pages/desk/DexCapturePopup). */
 
   // Owner sees Company/You; everyone else only ever has their own view.
   const [scope, setScope] = useState("company");
@@ -1041,11 +1039,8 @@ export default function Desk() {
     )}
     testid="desk-insight"
     phone={isMobile}
-    growToRef={kpiGridRef}
-    /* ASK-35 2.2 — below lg the well grows to the top of the HERO,
-       covering the greeting, the score cluster and the KPI strip. */
-    growToPhoneRef={heroRef}
-    onExpandedChange={setDexExpanded}
+    /* PILOT-2 A — the well's own capture is reviewed in its pop-up; this
+       opens any OTHER decision a late toast names, in DecisionDialog. */
     onReview={(id) => setOpenDecisionId(id)}
     onLater={(id) => { deferDecision(id); setDeferred(getDeferred()); }}
           />
@@ -1109,7 +1104,7 @@ export default function Desk() {
           the well, so eight pixels each is 24 handed to the sheet — and on a
           6.1" screen with a 47px notch inset and a 34px home indicator, 24px is
           what a row of the list costs. Desktop is untouched. */}
-      <div ref={heroRef} className="kr-hero flex flex-col gap-3 lg:grid lg:shrink-0 lg:grid-cols-[minmax(0,29fr)_minmax(0,45fr)] lg:gap-20">
+      <div className="kr-hero flex flex-col gap-3 lg:grid lg:shrink-0 lg:grid-cols-[minmax(0,29fr)_minmax(0,45fr)] lg:gap-20">
         {/* LEFT column — greeting, the score row, the well on the floor.
             KR-14.2 · MOBILE — display:contents so its children flow into
             the outer column and the KPI strip can slot between them. */}
@@ -1125,7 +1120,7 @@ export default function Desk() {
               height and `items-center` centres the shorter half against the
               taller, so neither can now push the other down. lg is unchanged —
               there the greeting has its own column and all the room it wants. */}
-          <div className="kr-dex-fade order-1 flex items-center justify-between gap-4 lg:order-none lg:block lg:items-start" data-dex-faded={dexExpanded ? "true" : "false"}>
+          <div className="order-1 flex items-center justify-between gap-4 lg:order-none lg:block lg:items-start">
             {/* ASK-43 — 22px on a phone, down from 24. The founder's screen was
                 showing "Good afternoon,…" with the name eaten by the clamp; the
                 app's new 0.8 scale (hooks/useUiScale) already gives this line
@@ -1194,7 +1189,7 @@ export default function Desk() {
           {/* ASK-25 · the score row, desktop: slider over the numeral on the
               left, the gauge to the right on the same floor. items-end lands
               the gauge's diameter on the numeral's baseline (KR-8.8). */}
-          <div className="kr-dex-fade hidden lg:grid lg:grid-cols-[auto_minmax(0,1fr)] lg:items-end lg:gap-5" data-dex-faded={dexExpanded ? "true" : "false"}>
+          <div className="hidden lg:grid lg:grid-cols-[auto_minmax(0,1fr)] lg:items-end lg:gap-5">
             <div className="flex flex-col items-start gap-2.5">
               {isOwnerView && (
                 <ScopeSlider options={SCOPE_OPTIONS} value={scope} onChange={setScope} label="Score scope" testid="desk-scope" />
@@ -1268,8 +1263,8 @@ export default function Desk() {
             greeting above it. Anything it covers fades; anything it does not,
             does not. */}
         <div
-          className="kr-dex-fade order-3 grid grid-cols-2 gap-2 lg:hidden"
-          data-dex-faded={dexExpanded ? "true" : "false"}
+          className="order-3 grid grid-cols-2 gap-2 lg:hidden"
+         
           data-testid="desk-kpi-strip"
         >
           {[
@@ -1333,7 +1328,7 @@ export default function Desk() {
             step down); the tiles follow, they are not sized on their own. */}
         {/* ASK-52 — still three columns and two rows; the second row is the
             two-wide Workflows card plus one tile. */}
-        <div ref={kpiGridRef} className="order-3 hidden min-w-0 grid-cols-2 gap-3 lg:order-none lg:grid lg:auto-rows-fr lg:grid-cols-3" data-testid="desk-kpi-grid">
+        <div className="order-3 hidden min-w-0 grid-cols-2 gap-3 lg:order-none lg:grid lg:auto-rows-fr lg:grid-cols-3" data-testid="desk-kpi-grid">
           <StatTile
             icon={Timer}
             label="Delayed"

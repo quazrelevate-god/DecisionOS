@@ -7,73 +7,75 @@
 // takes what the founder decided — spoken or typed, with a file if it helps.
 //
 // NOTHING NEW UNDERNEATH. The capture machine is useDexCapture on the
-// "capture" channel: a spoken decision is HELD and its words come back into
-// the field for review (KM-51, ASK-32 1.6). The conversation is
-// useDexConversation on the "decide" channel: POST /voice-notes/text, or
-// /voice-notes/{id}/submit for a held recording, with the attached file ids
-// riding along and read by the pipeline (ASK-32 1.6 / plan 5.4). Those are the
-// endpoints the phone's Decide door already used — this is a second entry
-// point to one flow, not a second flow.
+// "capture" channel: a spoken decision is HELD and its words come back for
+// review (KM-51, ASK-32 1.6). The conversation is useDexConversation on the
+// "decide" channel: POST /voice-notes/text, or /voice-notes/{id}/submit for a
+// held recording, with the attached file ids riding along and read by the
+// pipeline (ASK-32 1.6 / plan 5.4). Those are the endpoints the phone's Decide
+// door already used — this is a second entry point to one flow, not a second
+// flow.
+//
+// PILOT-2 A — THE WELL IS THE DOOR AGAIN, AND ONLY THE DOOR. The pilot client:
+// a long spoken decision was poured into the well's two-line field, where it
+// could not be read or edited, and the ending that followed was a counts-only
+// screen that made him press Review to see anything real. So the capture now
+// happens in ONE pop-up (DexCapturePopup): what was said, Dex reading it, and
+// what Dex made — the last of those being DecisionDialog's own breakdown with
+// Approve, Save as draft and Reject. What is left here is the door: the ripple
+// and its mic, the paperclip, the keyboard and send, and the kept-draft note.
+// The workspace the well used to become, its desktop growth to the top of the
+// KPI grid (ASK-33 Phase 2 / ASK-35 G2), the fade it ran over the hero, the
+// counts screen and ASK-47's pinned action row inside a scrolling ending are
+// all gone with it: they existed only to make room for work that has moved
+// into the pop-up.
 //
 // WHY ITS OWN COMPONENT, AND meterState:false. The Desk renders an ArcGauge,
 // six StatTiles and three columns. KM-60: the mic meter samples every 55ms,
 // and writing that to React state re-renders whoever owns the hook. So the
-// meter stays in a ref — DexWave reads levelsRef on its own animation frame,
-// exactly as Layout does for the dock — and the hooks live HERE rather than in
-// Desk, so a keystroke in the field or a recording tick re-renders this well
-// and nothing else on the page.
+// meter stays in a ref — the ripple reads levelsRef on its own animation frame
+// — and the hooks live HERE rather than in Desk, so a keystroke in the field or
+// a recording tick re-renders this well (and its pop-up) and nothing else.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  PaperPlaneRight, Paperclip, X, Check, WarningCircle, File as FileGlyph,
-  Keyboard,
-} from "@phosphor-icons/react";
-import api from "../../lib/api";
+import { PaperPlaneRight, Paperclip, X, Check, File as FileGlyph, Keyboard } from "@phosphor-icons/react";
 import { useAuth } from "../../context/AuthContext";
-import { captureOutcome, decisionCounts, failureReason, isReading, readyLine, stageLabel, OUTCOME_COPY } from "../../lib/dexOutcome";
+import { captureOutcome, failureReason, isReading, OUTCOME_COPY } from "../../lib/dexOutcome";
 import { toastDexOutcome } from "../../lib/dexOutcomeToast";
 import { hasPerm } from "../../lib/perms";
 import { cn } from "../../lib/utils";
 import { useDexCapture } from "../../hooks/useDexCapture";
 import { useDexConversation } from "../../hooks/useDexConversation";
 import { InsightWell } from "../../components/karma";
-// ASK-47 — the ripple the founder signed off in the lab, now the phone's mic.
+// ASK-47 — the ripple the founder signed off in the lab, now the mic.
 import { VoiceRipple, DESK_RIPPLE } from "../../components/karma/VoiceRipple";
 import { DexWave } from "../../components/mobile/DexWave";
-// ASK-34 item 5 — the same picture the founder met at signup (BuildReveal).
-import { DexForgeFit } from "../onboarding/DexForge";
 import { DraftNote } from "../../components/karma/DraftNote";
+import { DexCapturePopup } from "./DexCapturePopup";
 
 // A capture lands in several caches at once — the same set Layout refreshes
 // after the phone's Dex (refreshAfterCapture).
 const REFRESH_KEYS = ["captures-pending", "desk", "inbox", "tasks", "dex-inflight-count"];
 // The note walks queued -> transcribing -> structuring; these are its endings.
 const ENDINGS = ["done", "nothing", "failed", "slow"];
-/* ASK-33 Phase 2 named the stages here; ASK-34 A3 moved the words to
-   lib/dexOutcome (STAGE_COPY) when the phone's DexChat started printing the
-   same four. */
-const isDesktop = () => typeof window !== "undefined" && !!window.matchMedia?.("(min-width: 1024px)").matches;
-const prefersReducedMotion = () =>
-  typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+// The pop-up's step for each ending (lib/dexOutcome's kinds).
+const ENDING_STEP = { ready: "made", nothing: "nothing", failed: "failed", slow: "slow" };
+// What the well says about a capture whose pop-up has been closed.
+const STATUS_LINE = {
+  reading: "Dex is reading it",
+  ready: "Decision ready",
+  nothing: "Dex answered",
+  failed: "That didn't go through",
+  slow: "Still working on it",
+};
 
 /* The floor's circles: the raised .kr-pop the compact well has always used
    (ASK-25), pressed out of the same sheet the well is pressed into. 40px from
    lg, as the old Chase-it pill and Brain circle were; below lg the app's own
    touch rule (index.css, --control-h-sm) lifts every button to 44px (MPWA-01
-   §5.1). No pseudo-element hit area on top of that: at 44px it only stuck 2px
-   out of the circle and the floor row, which the mobile audit counts as
-   horizontal overflow. */
+   §5.1). */
 const CIRCLE =
   "kr-pop relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60 disabled:opacity-40";
-/* ASK-34 item 5 — DEX IS THINKING, AND IT LOOKS LIKE THE FORGE.
-   The expanded well showed the stages as text alone. DexForge is the picture
-   the founder already met once, at signup, while Dex built their company out
-   of what they had just said — the same moment, so the product reads as one
-   thing rather than two. ASK-34 A3 puts the same picture in the phone's
-   DexChat, so the scale-to-fit wrapper it needs lives beside the forge itself
-   (DexForgeFit) rather than being written twice. */
 
 /** One attached file: a preview (the image itself, or a file glyph), its name,
  *  and a remove. Removing only drops it from the next note; the upload stays
@@ -113,33 +115,17 @@ function AttachmentChip({ file, onRemove, disabled }) {
 }
 
 /**
- * @param {React.RefObject} [growToPhoneRef]   ASK-35 2.2 — the same, below lg:
- *                                             the Desk's hero
- * @param {React.RefObject} [growToRef]        ASK-33 Phase 2 — the element whose
- *                                             top the expanded well grows to
- *                                             (the Desk's KPI grid)
- * @param {Function}        [onExpandedChange] told true/false as the well becomes
- *                                             and stops being the workspace, so
- *                                             the Desk can fade what it covers
- * @param {Function}        [onLater]          ASK-36 2 — told the decision id
- *                                             when a ready one is saved as a
- *                                             draft (PILOT-2 B)
- * @param {Function}        [onReview]         ASK-33 Phase 3 — opens a ready
- *                                             decision in the Desk's existing
- *                                             DecisionDialog
+ * @param {boolean}  [phone]    the phone's arrangement (ASK-47): the ripple is
+ *                              the centre of a near-square well
+ * @param {Function} [onLater]  ASK-36 2 / PILOT-2 B — told the decision id when
+ *                              a ready one is saved as a draft
+ * @param {Function} [onReview] opens a decision that is NOT this well's capture
+ *                              in the Desk's DecisionDialog (a late toast for an
+ *                              older one)
  */
-/* ASK-47 — `phone` IS THE WHOLE OF THE NEW ARRANGEMENT. On a phone this well
-   is a big, near-square container with the ripple mic at its centre, a
-   voice-first floor, and NO growth: it is the same box in every state, because
-   the founder's rearrangement gives the screen's other half to a card that
-   pops. On desktop nothing here changes — the well still grows to the top of
-   the KPI grid, still shows what was said and the stages it is passing, and
-   the row of controls at its foot is the one ASK-33 drew. */
-export function DeskDexWell({ className, testid, phone = false, growToRef, growToPhoneRef, onExpandedChange, onReview, onLater }) {
+export function DeskDexWell({ className, testid, phone = false, onReview, onLater }) {
   const { user } = useAuth();
-  // The gate every Dex capture surface uses (DexFab, DexCaptureBar). This used to
-  // list DexSheet too; DexSheet was removed from Layout in 97c2bfc (KM-23) and is
-  // not mounted — the live sheet is DexChat, opened behind DexFab's gate.
+  // The gate every Dex capture surface uses (DexFab, DexCaptureBar).
   const canCapture = user?.role === "owner" || hasPerm(user, "voice_capture");
   const qc = useQueryClient();
   const refresh = useCallback(
@@ -158,47 +144,73 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
     onTranscript: (text, noteId) => draftSinkRef.current?.(text, noteId),
     onCaptured: refresh,
   });
-  // PILOT-1 A — what is typed here survives leaving the Desk and a reload.
+  // PILOT-1 A — what is typed here survives leaving the Desk and a reload. And
+  // PILOT-2 A — the transcript being edited in the pop-up IS this draft, so it
+  // survives the same way.
   const chat = useDexConversation({ dex, open: true, channel: "decide", onCommitted: refresh, userId: user?.id, draftName: "dex-well" });
-  draftSinkRef.current = chat.setDraftFromVoice;
-  // For toasts, which act long after the render that raised them.
+  // For toasts and handlers, which act long after the render that made them.
   const chatRef = useRef(chat);
   chatRef.current = chat;
+
+  /* PILOT-2 A — WHERE THE CAPTURE IS.
+       idle     nothing under way; the well is the door
+       said     step 1: a recording's words, read and edited in the pop-up
+       reading  step 2: sent, and Dex is reading it
+       ended    step 3, or the ending that is not a decision
+     `popupOpen` is separate on purpose: closing the pop-up is not the same as
+     stopping the capture. Close it while Dex reads and the note carries on; the
+     well says where it got to and opens it again. */
+  const [phase, setPhase] = useState("idle");
+  const [popupOpen, setPopupOpen] = useState(false);
+  const popupOpenRef = useRef(false);
+  popupOpenRef.current = popupOpen;
+  const [steps, setSteps] = useState([]);
+  const [sentText, setSentText] = useState("");
+  const [outcome, setOutcome] = useState(null);
+  const outcomeRef = useRef(null);
+  outcomeRef.current = outcome;
+  // A Discard pressed while the words were still on their way: drop them when
+  // they land rather than filling a draft the founder just threw away.
+  const ignoreTranscriptRef = useRef(false);
+
+  /* THE PILL IS FOR TYPING. "The two-line pill never holds a transcript
+     again": a recording's words go to the pop-up, and a draft kept from before
+     is offered there too (the kept-draft note's Open). `pillDraft` is true only
+     while the words in the draft were typed into the pill in this visit. */
+  const [pillDraft, setPillDraft] = useState(false);
+  /* Between "stop" and the upload starting, `dex.sending` is not yet true, so
+     step 1 would say for a moment that nothing came through. `waitingWords`
+     covers that gap: set on stop, cleared when the words land or when the
+     capture hook gives up on them (its own toast says why). */
+  const [waitingWords, setWaitingWords] = useState(false);
+  draftSinkRef.current = (text, noteId) => {
+    setWaitingWords(false);
+    if (ignoreTranscriptRef.current) { ignoreTranscriptRef.current = false; return; }
+    setPillDraft(false);
+    chat.setDraftFromVoice(text, noteId);
+  };
+  const wasSendingRef = useRef(false);
+  useEffect(() => {
+    if (wasSendingRef.current && !dex.sending) setWaitingWords(false);
+    wasSendingRef.current = !!dex.sending;
+  }, [dex.sending]);
 
   const [attaching, setAttaching] = useState(false);
   const fileInputRef = useRef(null);
 
-  // KM-53 — the window between "stop" and the words coming back, as Layout
-  // computes it for the dock: the upload and the transcript poll, narrowed to
-  // the moment there is genuinely nothing in the field yet.
-  const transcribing = !!dex.sending && !chat.draft;
-  /* ASK-33.2 — THE FIELD IS THE COMPOSER. It is a text field by default; the
-     wave takes its place only while recording, and hands the words back to it
-     when the recording stops (KM-51). There is no mode to switch into. */
+  // KM-53 — the window between "stop" and the words coming back.
+  const transcribing = (!!dex.sending || waitingWords) && !chat.draft;
   const recording = !!dex.recording;
-  const canSend = !!chat.draft.trim() || chat.pendingFiles.length > 0;
-  /* ASK-36 1 — AN ATTACHMENT MUST NOT EAT THE MICROPHONE. `canSend` drove this,
-     and pendingFiles makes canSend true — so the moment a document was attached
-     the mic turned into a send arrow and the only way left to say what to do
-     with it was to type. On the very screen whose own words are "Attached. Say
-     or type what to do with it". Only TEXT in the field turns it into send now;
-     a file on its own leaves the mic a mic, which is the whole point of
-     attaching something and then speaking about it. Sending a bare file with no
-     instruction is still possible — the field's Enter key sends whatever
-     `canSend` allows — it just is not what the button offers. */
-  const intent = dex.recording ? "stop" : chat.draft.trim() ? "send" : "mic";
 
-  /* ASK-33 Phase 5 — THE FIELD GROWS TO TWO LINES, no further, so a decision
-     can be read back whole before it is sent (at 360px one line holds about
-     half of "Tell Suresh to ship the indigo lot before Friday"). Measured from
-     the field's own line height and padding, so the phone's 16px text and the
-     desktop's 14px both land on exactly two lines; past that it scrolls inside
-     itself.
-     ASK-34 item 1 — the pill stays FULLY ROUNDED as it grows. It used to drop
-     to a 22px radius at two lines, on the fear that a 999px end would clip the
-     text; measured, it does not. At 68px tall each end is a 34px arc, the text
-     sits 10px in from the top and the arc is only 9.9px in at that height —
-     the px-4 padding clears it by 6px. */
+  /* ASK-47 — VOICE FIRST, AND THE KEYBOARD IS A DOOR. The field is not on
+     screen until there is something to type: the keyboard circle opens it, and
+     leaving it empty closes it again (J1-13: on blur, never on a clock). */
+  const [typing, setTyping] = useState(false);
+  const fieldOpen = typing || (pillDraft && !!chat.draft);
+
+  /* ASK-33 Phase 5 — THE FIELD GROWS TO TWO LINES, no further (it holds what
+     is TYPED; a long spoken capture is read in the pop-up). Measured from the
+     field's own line height and padding. */
   const fieldRef = useRef(null);
   useLayoutEffect(() => {
     const el = fieldRef.current;
@@ -210,7 +222,7 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
     const max = Math.round(line * 2 + pad);
     el.style.height = `${Math.min(el.scrollHeight, max)}px`;
     el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
-  }, [chat.draft, recording]);
+  }, [chat.draft, recording, fieldOpen]);
 
   /* The decision exists once the note is structured, not when it is sent, so
      the Desk's feeds refresh again at the ending — otherwise the Decisions
@@ -223,200 +235,55 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
     refresh();
   }, [stage, refresh]);
 
-  /* ASK-33 Phase 2 — THE EXPANSION. ASK-35 G2: ON BOTH SURFACES NOW.
-     On SEND, and only on send, the well becomes the workspace: its pane lifts
-     out of the flow, anchored to the well's floor, and grows upward until its
-     top meets a target beside or above it, while the Desk fades what it passes
-     over. The well's own box never changes size, so nothing else on the page
-     moves. One long ease-out drives the growth and the fade (index.css
-     .kr-dex-grow / .kr-dex-fade), so it settles rather than stops, and
-     collapsing is the same move run backwards. Under prefers-reduced-motion the
-     transitions are off and the expanded state is simply painted.
-
-     ON SEND, AND ON NOTHING ELSE. This is the whole reason KM-23 exists and it
-     is the one rule that must not bend: the workspace opens from send() and
-     from no other path. Never from `dex.understanding` becoming truthy, never
-     from a poll result, never from any capture state — the poll re-populates
-     that state after an ending, so a workspace keyed off it re-opens itself
-     once the founder has dismissed it, which IS the ghost card KM-23 deleted.
-     onRetry goes through the same setOutcome/expand pair while the pane is
-     already open; it never opens one.
-
-     WHAT IT GROWS TO, PER SURFACE. Desktop takes the top of the KPI grid beside
-     it (growToRef), which on that layout is the top of the hero. The phone has
-     no grid beside it — the strip is above the well — so its honest equivalent
-     is the top of the HERO itself (growToPhoneRef): the workspace covers the
-     greeting, the score cluster and the 2x2 KPI strip, exactly as the desktop
-     one covers the greeting, the slider, the numeral and the gauge. */
-  const wellRef = useRef(null);
-  // { from, to, phase }: "start" paints the resting height, "open" is grown,
-  // "closing" runs back down and then returns the pane to the flow.
-  const [grow, setGrow] = useState(null);
-  const [steps, setSteps] = useState([]);
-  const [sentText, setSentText] = useState("");
-  const [outcome, setOutcome] = useState(null);
-  // ASK-47 — the phone's stand-in for `growing`; see `workspace` below.
-  const [phoneWorking, setPhoneWorking] = useState(false);
-  const growing = !!grow;
-  const growPhase = grow?.phase;
-
-  const measure = useCallback(() => {
-    const well = wellRef.current;
-    // ASK-35 2.2 — the target is the surface's own: the KPI grid on desktop,
-    // the hero on a phone.
-    const grid = (isDesktop() ? growToRef : growToPhoneRef)?.current;
-    if (!well || !grid) return null;
-    const rest = well.offsetHeight;
-    const wb = well.getBoundingClientRect();
-    const gb = grid.getBoundingClientRect();
-    // UI-SCALE: rects are in visual px, offsetHeight in the element's own px.
-    const k = wb.height ? rest / wb.height : 1;
-    return { from: rest, to: Math.round(rest + Math.max(0, (wb.top - gb.top) * k)) };
-  }, [growToRef, growToPhoneRef]);
-
-  const expand = () => {
-    setSteps([]);
-    /* ASK-47 — a phone's well does not grow. It is a fixed box in every state;
-       what changes inside it is what it is showing. The founder: "remove the
-       entire growing feature of the dex card to the entire screen to the top.
-       Make it static." */
-    if (phone) { setPhoneWorking(true); return; }
-    // Already the workspace (a second capture sent from it): stay open.
-    if (grow && grow.phase !== "closing") return;
-    const m = measure();
-    if (!m) return;
-    setGrow({ ...m, phase: prefersReducedMotion() ? "open" : "start" });
-  };
-
-  const collapse = useCallback(() => {
-    // ASK-47 — on a phone there is nothing to shrink; the well just stops
-    // showing the capture and goes back to being an invitation.
-    if (phone) { setPhoneWorking(false); return; }
-    if (prefersReducedMotion()) { setGrow(null); return; }
-    setGrow((g) => (g ? { ...g, phase: "closing" } : g));
-  }, [phone]);
-
-  /* ASK-35 2.2 — RE-MEASURE ONCE THE PANE IS OUT OF THE FLOW. expand() measures
-     inside the send handler, when the composer may still be two lines tall with
-     the words about to be sent: the well is 157 there and 150 a frame later,
-     once ask() has cleared the draft — so the pane was built 7px too tall and
-     its top overshot the target by exactly that. Measured again after the lift,
-     the well is its resting self (the pane is absolute, so nothing of the
-     conversation is in its box) and the number is right whatever the field was
-     doing. Two frames, because that is when the flow has settled. */
-  useEffect(() => {
-    if (!growing) return undefined;
-    let second = 0;
-    const first = requestAnimationFrame(() => {
-      second = requestAnimationFrame(() => {
-        const m = measure();
-        if (m) setGrow((g) => (g && g.to !== m.to ? { ...g, to: m.to } : g));
-      });
-    });
-    return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
-  }, [growing, measure]);
-
-  // Two frames at the resting height give the transition a value to leave.
-  useEffect(() => {
-    if (growPhase !== "start") return undefined;
-    let second = 0;
-    const first = requestAnimationFrame(() => {
-      second = requestAnimationFrame(() => setGrow((g) => (g?.phase === "start" ? { ...g, phase: "open" } : g)));
-    });
-    return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
-  }, [growPhase]);
-
-  // Back in the flow once the shrink lands — with a fallback, should the
-  // transitionend never arrive.
-  useEffect(() => {
-    if (growPhase !== "closing") return undefined;
-    const t = setTimeout(() => setGrow(null), 900);
-    return () => clearTimeout(t);
-  }, [growPhase]);
-  const onPaneTransitionEnd = (e) => {
-    if (e.target === e.currentTarget && e.propertyName === "height" && growPhase === "closing") setGrow(null);
-  };
-
-  /* The target stays the constraint at any size: re-measure on resize. ASK-35
-     G2 removed the "let go entirely below lg" branch — crossing the breakpoint
-     now just swaps which element measure() reads, and dropping the workspace on
-     a resize would throw away a capture the founder is still watching. */
-  useEffect(() => {
-    if (!growing) return undefined;
-    const onResize = () => {
-      const m = measure();
-      if (m) setGrow((g) => (g ? { ...g, ...m } : g));
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [growing, measure]);
-
-  /* ASK-47 — WHAT `growing` MEANT, ON A PHONE, WITHOUT GROWING. Everything
-     that made the workspace work — the stage list, the endings, the reset on
-     the way out — hung off `growing`, which is now false on a phone by
-     construction. `workspace` is that same idea with the geometry taken out of
-     it: the well is showing a capture rather than an invitation. On desktop it
-     IS `growing`, unchanged. */
-  const workspace = phone ? phoneWorking : growing;
-  const expanded = growing && growPhase !== "closing";
-  useEffect(() => { onExpandedChange?.(expanded); }, [expanded, onExpandedChange]);
-
   // The REAL stages the note walks, as the poll reports them — not a spinner.
   useEffect(() => {
-    if (!workspace || !stage || ENDINGS.includes(stage)) return;
+    if (phase !== "reading" || !stage || ENDINGS.includes(stage)) return;
     setSteps((s) => (s.includes(stage) ? s : [...s, stage]));
-  }, [workspace, stage]);
+  }, [phase, stage]);
 
-  /* ASK-33 Phase 3 — THE ENDINGS (plan 5.1, 5.2). When the note ends while the
-     well is the workspace, lib/dexOutcome reads what it came to — a decision
-     ready, nothing to decide, or a failure — and the well shows that instead
-     of settling back down. It is read here, in the render the ending arrives
-     in, because useDexConversation clears the understanding straight after. */
-  const growingRef = useRef(false);
-  growingRef.current = workspace;
+  /* ASK-33 Phase 3 — THE ENDINGS. When the note this well sent ends,
+     lib/dexOutcome reads what it came to — a decision ready, nothing to decide,
+     or a failure — and the pop-up's last step is that. It is read here, in the
+     render the ending arrives in, because useDexConversation clears the
+     understanding straight after. Only while this well is READING a capture:
+     the poll re-populates that state after an ending, and anything keyed off it
+     alone would re-open itself once dismissed (KM-23's ghost card). */
   useEffect(() => {
-    if (!workspace || !ENDINGS.includes(stage)) return;
-    setOutcome(captureOutcome(dex.understanding));
-  }, [workspace, stage, dex.understanding]);
-  // Collapsed is done with: the next send starts clean.
-  useEffect(() => { if (!workspace) setOutcome(null); }, [workspace]);
+    if (phase !== "reading" || !ENDINGS.includes(stage)) return;
+    const o = captureOutcome(dex.understanding);
+    if (!o) return;
+    setOutcome(o);
+    setPhase("ended");
+  }, [phase, stage, dex.understanding]);
 
-  /* A ready decision is read live, on DecisionDialog's own cache key, so the
-     counts follow any edit made in Review — and once it is decided (approved or
-     rejected there) the well settles back down. Later leaves it undecided, in
-     the Decisions column and at /inbox?decision=<id>, both unchanged. */
-  const readyId = outcome?.kind === "ready" ? outcome.decisionId : null;
-  const decisionQ = useQuery({
-    queryKey: ["decision", readyId],
-    queryFn: () => api.get(`/decisions/${readyId}`).then((r) => r.data),
-    enabled: !!readyId,
-  });
-  const readyDecision = decisionQ.data || outcome?.decision || null;
-  useEffect(() => {
-    if (readyId && readyDecision?.status && readyDecision.status !== "pending_approval") collapse();
-  }, [readyId, readyDecision, collapse]);
-
-  /* ASK-33 Phase 1 — Dex's reply to a send, as a toast, where the well has no
-     screen for it. ASK-35 G2: both surfaces have that screen now, so this is
-     the LATE ENDING path and only that — the founder collapsed the workspace
-     before the note finished, and the answer still has to reach them rather
-     than being dropped on the floor. The words and actions are the sheet's own
-     late toasts' (lib/dexOutcomeToast). The "reading it now" acknowledgement is
-     skipped because it lands while the note is still being followed. */
+  /* ASK-33 Phase 1 — THE LATE ENDING. The pop-up was closed before the note
+     finished, so the answer still has to reach the founder rather than being
+     dropped: the sheet's own late toasts (lib/dexOutcomeToast), whose Review
+     opens the pop-up again at step 3. The one ending the poll cannot see is a
+     send that never reached the pipeline (ask()'s catch) — a failure with a
+     reason, shown the same way. The "reading it now" acknowledgement is skipped
+     because it lands while the note is still being followed. */
   const awaitingReplyRef = useRef(false);
   const seenLogRef = useRef(0);
   const understandingRef = useRef(null);
   understandingRef.current = dex.understanding;
-  // A kept capture's Retry, from its toast: the ending is reported the same way.
+  // A kept capture's Retry, from its failure notice: the ending is reported the
+  // same way, and the pop-up can be opened on it.
   const retryKept = async (o) => {
     endingRef.current = null;
     awaitingReplyRef.current = true;
+    setOutcome(null);
+    setSteps([]);
+    setPhase("reading");
     const ok = await chatRef.current.retry(o.retry);
     if (!ok) awaitingReplyRef.current = false;
   };
   const toastEndingRef = useRef(null);
   toastEndingRef.current = (message) => toastDexOutcome(message, {
-    onReview: (id) => onReview?.(id),
+    onReview: (id) => {
+      if (outcomeRef.current?.decisionId === id) { setPopupOpen(true); return; }
+      onReview?.(id);
+    },
     onRetry: retryKept,
     canRetry: () => !!chatRef.current.canRetry,
   });
@@ -426,89 +293,125 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
     if (!awaitingReplyRef.current) return;
     const u = understandingRef.current;
     if (u && !ENDINGS.includes(u.status)) return;
-    const reply = fresh.filter((m) => m.role === "dex").pop();
+    const reply = fresh.filter((m) => m.role === "dex" && !m.reading).pop();
     if (!reply) return;
     awaitingReplyRef.current = false;
-    /* ASK-33 Phase 3 — on desktop the workspace shows the ending itself (see
-       THE ENDINGS), so no toast. The one ending it cannot see is a send that
-       never reached the pipeline — ask()'s catch — and that is a failure with
-       a reason, shown the same way. */
-    if (growingRef.current) {
-      if (!endingRef.current) setOutcome({ kind: "failed", ...failureReason(reply.text) });
-      return;
+    if (!endingRef.current) {
+      setOutcome({ kind: "failed", ...failureReason(reply.text) });
+      setPhase("ended");
     }
-    // The workspace was dismissed before the ending arrived: say it in a toast.
-    toastEndingRef.current(reply);
+    if (!popupOpenRef.current) toastEndingRef.current(reply);
   }, [chat.log]);
 
-  /* ASK-35 G2 — THE HAND-OFF IS GONE. ASK-33 Phase 4-B had the well send the
-     capture and pass it to DexChat, because below lg the well had no workspace
-     to show an ending in. It has one now (see THE EXPANSION), so the phone
-     reads its own answer where it asked the question — and `handToSheet`, the
-     `dos:open-dex` decide dispatch and THE GUARD that existed for the case
-     nothing took the hand-off all go with it. The Ask sheet is untouched.
-
-     ASK-33.1 — the capture being read may still be the ASK SHEET's, and this
-     well cannot see that hook. Layout answers on an event. It stays: the sheet
-     can still be busy on /ask and must still be able to refuse a send. */
+  /* ASK-33.1 — the capture being read may still be the ASK SHEET's, and this
+     well cannot see that hook. Layout answers on an event. */
   const sheetReading = () => {
     const ev = new CustomEvent("dos:dex-state", { detail: { reading: false } });
     window.dispatchEvent(ev);
     return !!ev.detail.reading;
   };
+  const stillReading = () => isReading(dex) || sheetReading();
 
-  const send = async () => {
-    if (!canSend || dex.sending || chat.busy) return;
+  /* THE ONE SEND, for both ways in: the pill's Enter or send arrow (a typed
+     capture, which skips step 1 — the founder has already read what they
+     typed), and the pop-up's Next (a spoken one, read and edited first). Either
+     way the pop-up is at step 2 as the words leave. */
+  const send = () => {
+    const c = chatRef.current;
+    if (!(c.draft.trim() || c.pendingFiles.length > 0) || dex.sending || c.busy) return;
     /* ASK-33.1 — ONE CAPTURE AT A TIME. A second send while Dex is still reading
-       the first retires that poll: the decision would still land in the Decisions
-       column, but a FAILURE would have nowhere to land (plan 5.2). Refused in the
-       founder's words, and released the moment the first note ends. */
-    if (isReading(dex) || sheetReading()) { toast(OUTCOME_COPY.stillReading); return; }
+       the first retires that poll: the decision would still land in the
+       Decisions column, but a FAILURE would have nowhere to land (plan 5.2).
+       Refused in the founder's words, and released the moment the first ends. */
+    if (stillReading()) { toast(OUTCOME_COPY.stillReading); return; }
     endingRef.current = null;
-    /* ASK-35 2.1 — ONE PATH, BOTH SURFACES. This is the only place the
-       workspace opens. */
     awaitingReplyRef.current = true;
-    setSentText(chat.draft.trim() || chat.pendingFiles.map((f) => f.name).join(", "));
+    setSentText(c.draft.trim() || c.pendingFiles.map((f) => f.name).join(", "));
     setOutcome(null);
-    expand();
-    /* ASK-35 2.4 — below lg the page scrolls, so the well may be half off the
-       screen when the founder sends from it. Bring the whole workspace into
-       view; on desktop the Desk is one screen and there is nothing to scroll. */
-    if (!isDesktop()) {
-      requestAnimationFrame(() => wellRef.current?.scrollIntoView({
-        behavior: prefersReducedMotion() ? "auto" : "smooth",
-        block: "end",
-      }));
-    }
-    chat.ask(chat.draft);
+    setSteps([]);
+    setPhase("reading");
+    setPopupOpen(true);
+    setPillDraft(false);
+    setTyping(false);
+    c.ask(c.draft);
   };
 
-  // Outcome C — Retry re-sends the same capture; the workspace thinks again.
+  // Step 1 opens the moment a recording stops, so the words have a place to
+  // land that is big enough to read them in (KM-51 holds the recording).
+  const openSaid = () => {
+    ignoreTranscriptRef.current = false;
+    setPillDraft(false);
+    setTyping(false);
+    setOutcome(null);
+    setPhase("said");
+    setPopupOpen(true);
+  };
+
+  // Step 1's Discard: the words, the held recording and the files that were
+  // going with them. Nothing was sent, so nothing else changes.
+  const discard = () => {
+    const c = chatRef.current;
+    if (transcribing) ignoreTranscriptRef.current = true;
+    setWaitingWords(false);
+    c.setDraftFromVoice("", null);
+    c.draftKept?.discard?.();
+    c.pendingFiles.forEach((f) => c.removeFile(f.id));
+    setPhase("idle");
+    setPopupOpen(false);
+  };
+
+  /* Closing is never cancelling. Step 1: the words stay, as a kept draft the
+     well offers back. Step 2: the note keeps being read, and the well says so.
+     An ending: the capture is finished — its decision waits in the Decisions
+     column, and this well goes back to being the door. */
+  const closePopup = () => {
+    setPopupOpen(false);
+    if (phase === "said") setPhase("idle");
+    if (phase === "ended") { setPhase("idle"); setOutcome(null); }
+  };
+
+  // Outcome C — Retry re-sends the same capture; Dex reads it again.
   const onRetry = async () => {
     setOutcome(null);
     setSteps([]);
+    setPhase("reading");
     endingRef.current = null;
     awaitingReplyRef.current = true;
-    const ok = await chat.retry();
+    const ok = await chatRef.current.retry();
     if (!ok) {
       awaitingReplyRef.current = false;
       setOutcome((o) => o || { kind: "failed", ...failureReason("") });
+      setPhase("ended");
     }
   };
 
-  /* The mic circle: stop while recording; send once there is something to
-     send (a draft, or a file on its own); otherwise record. */
-  /* ASK-33.2 — the mic is the mode switch: it starts a recording, stops one
-     (the words land in the field for review, KM-51), and sends once there is
-     something to send. DexFab's three intents, on the Desk. */
+  // PILOT-2 B — Save as draft: marked in the Decisions column, and the pop-up
+  // is done. The decision itself was saved on the server when Dex made it.
+  const saveDraft = (id) => {
+    onLater?.(id);
+    toast("Saved as a draft", { description: "It's in Decisions on the Desk, marked Draft." });
+    setPopupOpen(false);
+    setPhase("idle");
+    setOutcome(null);
+  };
+
+  /* THE MIC — the ripple's hub. It stops a recording (and opens step 1 for the
+     words); it records; and when words are already waiting it does the thing
+     they are waiting for: typed ones in the pill are sent, kept ones are
+     opened in the pop-up to be read first. */
   const onMic = () => {
-    if (dex.recording) { dex.stopRecording(); return; }
+    if (dex.recording) { setWaitingWords(true); dex.stopRecording(); openSaid(); return; }
     // Upload or transcript still on its way: a tap here would record over the
     // words that are about to come back (KM-51).
     if (dex.sending || chat.busy) return;
-    // The button does what its glyph says, and its glyph follows the FIELD, not
-    // the attachments (see `intent`).
-    if (chat.draft.trim()) { send(); return; }
+    if (chat.draft.trim()) {
+      if (fieldOpen) send(); else openSaid();
+      return;
+    }
+    /* ASK-33.1 — and one at a time for recording too: the transcript poll
+       shares the capture hook's one follow, so a new recording while Dex reads
+       the last note would leave that note's ending unreported. */
+    if (stillReading()) { toast(OUTCOME_COPY.stillReading); return; }
     dex.startRecording();
   };
 
@@ -525,46 +428,23 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
     }
   };
 
-  // The FAB's glyphs (DexFab), so the two Dex controls speak one language.
-  const micLabel = intent === "stop" ? "Stop recording" : intent === "send" ? "Send to Dex" : "Speak to Dex";
+  const kept = !!chat.draft.trim() && !fieldOpen;
+  const micLabel = recording ? "Stop recording"
+    : chat.draft.trim() ? (fieldOpen ? "Send to Dex" : "Open what you said")
+    : "Speak to Dex";
 
   /* ASK-47 — WHAT THE RIPPLE READS. useDexCapture keeps a rolling window of
-     samples for the dock's wave (`levelsRef`); the ripple wants one number, so
-     it takes the newest. A ref read on the ripple's own frame, which is why
-     this costs the well no renders at all. */
+     samples (`levelsRef`); the ripple wants one number, so it takes the newest.
+     A ref read on the ripple's own frame, which is why this costs the well no
+     renders at all. */
   const readLevel = useCallback(() => {
     const bars = dex.levelsRef?.current;
     return Array.isArray(bars) ? bars[bars.length - 1] || 0 : 0;
   }, [dex.levelsRef]);
-  /* And how big it is drawn: the well measures itself so the ripple fills what
-     the page gave it, whatever phone that turns out to be — the founder's
-     "maintain this layout and scale on every screen". */
-  /* ASK-47 — VOICE FIRST, AND THE KEYBOARD IS A DOOR. On a phone the field is
-     not on screen until there is something to type or something to read: the
-     founder chose it over a field that is always there, and it is what makes
-     the ripple the centre of the well rather than a decoration above a form.
-     It opens three ways — the keyboard button, a transcript coming back, or a
-     draft that already exists — and closes when the draft is sent or cleared. */
-  const [typing, setTyping] = useState(false);
-  /* 2026-09-21 — and on desktop too, on the founder's call: the desktop well
-     takes the phone's layout — the mic in the middle as the trigger, attach on
-     the left, the keyboard on the right — so the field is a door there as
-     well. */
-  const fieldOpen = typing || !!chat.draft || transcribing;
-  /* Sent or cleared: the door closes again and the ripple has the well back —
-     when the field is LEFT, not on a clock.
 
-     J1-13 (JOURNEY-1) — the phone used to close it 2.5s after it opened if
-     nothing had been typed yet. A tester opened the keyboard, looked up what
-     they wanted to say, and the field had gone. Somebody who taps "Type
-     instead" is about to type; how long they take to start is not ours to
-     judge. It closes on blur now, the same rule the desk always had, so the
-     only thing that shuts it is leaving it. */
   /* 2026-09-21 · THE DESKTOP WELL'S RIPPLE RUNS INWARD. The stage is the whole
      pane and the waves start at its inner wall; the mic sits in the middle of
-     the space above the floor. Measured in the pane's own pixels: `hole` is the
-     flex-1 box the ripple would otherwise have occupied, and its centre is the
-     mic's centre. */
+     the space above the floor. Measured in the pane's own pixels. */
   const holeRef = useRef(null);
   const [hub, setHub] = useState(null);
   useEffect(() => {
@@ -587,15 +467,15 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
     fit();
     return () => ro.disconnect();
   });
+  // And on a phone the well measures itself so the ripple fills what the page
+  // gave it, whatever phone that turns out to be.
+  const wellRef = useRef(null);
   const [rippleSize, setRippleSize] = useState(220);
   useEffect(() => {
     if (!phone) return undefined;
     const el = wellRef.current;
     if (!el || typeof ResizeObserver === "undefined") return undefined;
     const fit = () => {
-      /* The square the well can hold: its own width less the pane's padding,
-         its height less the label, the prompt and the floor. In the element's
-         OWN pixels (offsetWidth), which is the space the ripple is drawn in. */
       const room = Math.min(el.offsetWidth - 40, el.offsetHeight - 128);
       setRippleSize((s) => {
         // Never bigger than 300, never smaller than a 44px hub can live in.
@@ -609,18 +489,10 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
     return () => ro.disconnect();
   }, [phone]);
 
-  /* The line under "Dex". Attached files take its place rather than adding a
-     row, so the well never changes height. The row's py-2 / -my-2 pair gives
-     each remove its 44px target without moving anything around it. */
-  /* ASK-33 Phase 3 — files attached for the NEXT capture show while the well
-     is the workspace too, now that it stays open on an ending; only the prompt
-     line gives way there. */
-  /* ASK-48 — SPLIT IN TWO, because only half of it moved. The phone's PROMPT
-     LINE is in the floor now, centred between the circles; the attachment chips
-     are not a prompt, they are what is going to be sent, and they stay at the
-     top of the pane where both surfaces have always shown them. Passing the
-     whole of `prompt` as null on a phone took the chips with it — attach a file
-     and nothing appeared. */
+  const rippleDisabled = !canCapture || (!recording && (dex.sending || chat.busy));
+
+  /* The top of the pane: what is going to be sent, what was kept, and — once
+     the pop-up has been closed on a capture — where that capture got to. */
   const attachments = chat.pendingFiles.length > 0 ? (
     <ul aria-label="Attached files" className="-mb-2 -mt-0.5 flex min-w-0 gap-touch-gap overflow-x-auto py-2 [scrollbar-width:none]">
       {chat.pendingFiles.map((f) => (
@@ -628,184 +500,61 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
       ))}
     </ul>
   ) : null;
-  /* J4-03 (JOURNEY-1) — THE WELL SAYS IT KEPT SOMETHING. A decision typed and
-     not sent is held on the device (lib/drafts.js) and was read back into the
-     field in silence. A founder who leaves half a sentence here and comes back
-     to it tomorrow has no way to tell what they are looking at: something they
-     sent, or something still sitting in their hand. It says which now, and
-     Discard is how they let it go. It is not a decision until it is sent. */
-  const keptDraft = chat.draftKept?.restored && chat.draft.trim() ? (
+  /* J4-03 (JOURNEY-1) — THE WELL SAYS IT KEPT SOMETHING, and PILOT-2 A — it
+     offers it back where it can be read: a kept capture opens in the pop-up's
+     first step, never in the two-line pill. It is not a decision until sent. */
+  const keptDraft = kept && !popupOpen ? (
     <DraftNote testid="dex-well-draft" className="mb-1.5"
-      label="Kept from before — not sent to Dex yet"
-      onDiscard={() => { chat.setDraft(""); chat.draftKept.discard(); }} />
+      label={chat.draftKept?.restored ? "Kept from before — not sent to Dex yet" : "What you said is kept — not sent to Dex yet"}
+      onOpen={openSaid}
+      onDiscard={discard} />
   ) : null;
-
-  /* 2026-09-21 — the desktop's own prompt line under "Dex" ("Tell Dex what you
-     decided — speak or type.") is gone with the label: both now sit in the
-     floor on every size (phoneTitle), as they have on the phone since ASK-48. */
-
-  /* ASK-33 Phase 2 — the workspace while the proposal builds: what was sent,
-     then each stage the note has reached, the current one live. */
-  /* ASK-33 Phase 3 — the three endings, as the workspace shows them. Nothing
-     here is a review surface: Review hands off to DecisionDialog, which already
-     has the rows, the people and dates to change, what was said and the links
-     to what approval creates (ASK-32 Phase 3). */
-  const outcomeCounts = decisionCounts(readyDecision);
-  /* ASK-47 — AN ENDING'S CONTROLS ARE NEVER THE PART THAT SCROLLS. A phone's
-     well is a fixed box now, and a ready decision — headline, title, four count
-     tiles — is taller than it. The whole ending was one scroller, so Review and
-     Later sat below its fold: on screen by their coordinates, invisible to the
-     eye and to a thumb. What scrolls is what there is to READ; the row of
-     buttons is pinned under it, always whole, always reachable. `contents` on
-     desktop, where the well grows and nothing needed splitting. */
-  const readPane = phone ? "kr-scroll-quiet min-h-0 flex-1 overflow-y-auto" : "contents";
-  const quietPill = "kr-pop flex h-10 items-center rounded-pill px-4 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60";
-  const inkPill = "flex h-10 items-center rounded-pill bg-kr-ink px-5 text-sm font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60 disabled:opacity-40";
-  const outcomeView = !outcome ? null : outcome.kind === "ready" ? (
-    <div data-testid="dex-outcome-ready" className="flex min-h-0 flex-1 flex-col">
-      <div className={readPane}>
-      <p data-testid="desk-dex-summary" className="text-[17px] font-semibold leading-snug text-foreground">
-        {readyLine(readyDecision, user?.id)}
-      </p>
-      {readyDecision?.title && (
-        <p className="mt-1 line-clamp-2 text-sm leading-snug text-foreground/70">{readyDecision.title}</p>
-      )}
-      {/* ASK-35 2.6 — TWO ACROSS ON A PHONE. Four tiles in a 296px row gave
-          each label a 44px box, and "Approvals" and "Meetings" were both cut
-          at 360. The tile is the same tile; there are two of them per line. */}
-      <dl className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
-        {[["Tasks", outcomeCounts.tasks], ["People", outcomeCounts.people], ["Approvals", outcomeCounts.approvals], ["Meetings", outcomeCounts.meetings]].map(([label, n]) => (
-          <div key={label} className="kr-pop min-w-0 rounded-2xl px-3 py-2.5">
-            <dt className="truncate text-[11px] font-medium text-foreground/60">{label}</dt>
-            <dd className="mt-1 font-display text-2xl leading-none tabular-nums text-foreground">{n}</dd>
-          </div>
-        ))}
-      </dl>
-      </div>
-      <div className="mt-auto flex shrink-0 flex-wrap items-center gap-2 pt-4">
-        <button type="button" data-testid="desk-dex-review" onClick={() => onReview?.(outcome.decisionId)} className={inkPill}>
-          Review
-        </button>
-        {/* ASK-36 2 — "Later" is a decision about the decision: it was read,
-            understood and set aside. The Desk's Decisions column marks the rows
-            that happened to, so the founder can find what they walked away
-            from instead of hunting for it among everything else.
-            PILOT-2 B — the client's word for it is "Save as draft", and the
-            column's mark says "Draft". The testid keeps its old name so the
-            verify scripts and the audit trail still find it. */}
-        <button
-          type="button"
-          data-testid="desk-dex-later"
-          onClick={() => { onLater?.(outcome.decisionId); collapse(); }}
-          className={quietPill}
-        >
-          Save as draft
-        </button>
-      </div>
-    </div>
-  ) : outcome.kind === "nothing" ? (
-    /* Not an error, and it must not look like one: plain words, one way out. */
-    <div data-testid="dex-outcome-nothing" className="flex min-h-0 flex-1 flex-col">
-      <div className={readPane}>
-        <p className="text-[17px] font-semibold leading-snug text-foreground">{OUTCOME_COPY.nothing}</p>
-        {outcome.answer && (
-          <p className="mt-2 whitespace-pre-line break-words text-[15px] leading-relaxed text-foreground/80">{outcome.answer}</p>
-        )}
-      </div>
-      <div className="mt-auto shrink-0 pt-4">
-        <button type="button" onClick={collapse} className={quietPill}>Got it</button>
-      </div>
-    </div>
-  ) : outcome.kind === "failed" ? (
-    <div data-testid="dex-outcome-failed" role="alert" className="flex min-h-0 flex-1 flex-col">
-      {/* Phase 5 — a long raw reason scrolls inside its own block, so Retry and
-          Not now stay whole and in view beneath it rather than sliding under
-          the composer. */}
-      <p className="flex min-h-0 shrink items-start gap-2 overflow-y-auto text-[17px] font-semibold leading-snug text-foreground">
-        <WarningCircle size={20} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0 text-rose-600" />
-        {/* The reason is the whole point of this ending: it wraps, never truncates. */}
-        <span className="min-w-0 break-words">{outcome.message}</span>
-      </p>
-      {/* ASK-35 2.6 — it is the one way out of the one failure that matters,
-          and it was a 20px line of text. It keeps the underline that says it is
-          a link and takes the 44px floor below lg (MPWA-01 §5.1); on desktop it
-          stays exactly the inline link it was. */}
-      {outcome.href && (
-        <Link
-          to={outcome.href}
-          data-testid="dex-outcome-settings"
-          className="mt-2 inline-flex w-fit shrink-0 items-center text-sm font-medium text-foreground underline underline-offset-4 max-lg:min-h-touch"
-        >
-          {outcome.linkLabel}
-        </Link>
-      )}
-      <div className="mt-auto flex shrink-0 flex-wrap items-center gap-2 pt-4">
-        <button type="button" data-testid="dex-outcome-retry" onClick={onRetry} disabled={chat.busy} className={inkPill}>
-          Retry
-        </button>
-        <button type="button" onClick={collapse} className={quietPill}>Not now</button>
-      </div>
-    </div>
-  ) : (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className={readPane}>
-        <p className="text-[15px] leading-relaxed text-foreground/80">{OUTCOME_COPY.slow}</p>
-      </div>
-      <div className="mt-auto shrink-0 pt-4">
-        <button type="button" onClick={collapse} className={quietPill}>OK</button>
-      </div>
-    </div>
-  );
-
-  const shownSteps = ["sending", ...steps];
-  /* ASK-47 · THE PHONE'S WELL, WHICH IS THREE THINGS IN ONE BOX.
-       at rest      the ripple, with the mic at its centre — the invitation
-       while it works   DexForge alone, centred, and nothing else
-       when it ends the outcome, exactly as desktop shows it
-     The founder on the middle one: "remove everything and just use that dex
-     forge building animating element in the center that's it and give the
-     result". So the quote of what was said and the list of stages it is
-     passing are not drawn here — the forge IS the progress, and the ending is
-     the report. Both of those still exist on desktop, where there is room for
-     a workspace that narrates itself. */
-  const phoneBody = !phone ? null : outcome ? (
-    <div className="mt-2 flex min-h-0 flex-1 flex-col" aria-live="polite">{outcomeView}</div>
-  ) : workspace ? (
-    <div className="grid min-h-0 flex-1" aria-live="polite" data-testid="desk-dex-working">
-      {prefersReducedMotion() ? (
-        <p className="place-self-center text-sm text-foreground/70">{stageLabel(shownSteps[shownSteps.length - 1])}</p>
+  const statusKey = phase === "reading" ? "reading" : phase === "ended" ? outcome?.kind : null;
+  const capturePill = !popupOpen && statusKey ? (
+    <button
+      type="button"
+      onClick={() => setPopupOpen(true)}
+      data-testid="dex-well-status"
+      data-status={statusKey}
+      className="kr-pop mb-1.5 flex min-h-11 w-fit max-w-full items-center gap-2 rounded-pill px-4 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60"
+    >
+      {statusKey === "reading" ? (
+        <span aria-hidden="true" className="relative grid h-3 w-3 shrink-0 place-items-center">
+          <span className="absolute inset-0 animate-ping rounded-full bg-kr-ink/25 motion-reduce:animate-none" />
+          <span className="h-1.5 w-1.5 rounded-full bg-kr-ink" />
+        </span>
       ) : (
-        /* `h-full w-full`, not `flex-1`: this wrapper is a GRID and a grid item
-           has no flex to grow with — the forge came out 0px tall for exactly
-           that reason. The grid stretches it instead, and the forge centres
-           its own drawing inside whatever box it is given. */
-        <DexForgeFit testid="desk-dex-forge" label="Dex is building what you decided" className="h-full min-h-0 w-full min-w-0" />
+        <Check size={14} weight="bold" aria-hidden="true" className="shrink-0" />
       )}
-    </div>
-  ) : (
-    /* THE RIPPLE IS THE INVITATION. It runs off the capture the page already
-       owns — useDexCapture's meter through `readLevel` — rather than opening a
-       second stream onto the same microphone, and pressing its hub is pressing
-       the same control the composer's mic used to be. At rest it breathes;
-       while it is listening it answers the room. */
+      <span className="min-w-0 truncate">{STATUS_LINE[statusKey] || STATUS_LINE.reading}</span>
+      <span className="shrink-0 font-medium underline underline-offset-4">Open</span>
+    </button>
+  ) : null;
+  const top = (capturePill || keptDraft || attachments)
+    ? <div className="relative z-10">{capturePill}{keptDraft}{attachments}</div>
+    : null;
+
+  /* THE RIPPLE IS THE INVITATION, on both surfaces. It runs off the capture the
+     page already owns — useDexCapture's meter through `readLevel` — rather than
+     opening a second stream onto the same microphone. At rest it breathes;
+     while it is listening it answers the room. */
+  const body = phone ? (
     <div className="grid min-h-0 flex-1 place-items-center" data-testid="desk-dex-ripple">
       <VoiceRipple
         size={rippleSize}
         // ASK-48 — the founder's own settings, dialled in the lab.
         config={DESK_RIPPLE}
         readLevel={readLevel}
-        listening={dex.recording}
+        listening={recording}
         onPress={onMic}
-        disabled={!canCapture || (!dex.recording && (dex.sending || chat.busy))}
+        disabled={rippleDisabled}
         label={micLabel}
       />
     </div>
-  );
-
-  const desktopRipple = (
+  ) : (
     /* The space the mic is centred in. The ripple itself is positioned against
-       the pane (it is not), so it covers the whole well and its waves start at
-       the well's own wall. */
+       the pane, so it covers the whole well and its waves start at the well's
+       own wall. */
     <div ref={holeRef} className="min-h-0 flex-1" data-testid="desk-dex-ripple">
       {hub && (
         <VoiceRipple
@@ -816,119 +565,32 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
           // Quieter at rest than the phone's: the wave covers the whole well.
           idle={0.1}
           readLevel={readLevel}
-          listening={dex.recording}
+          listening={recording}
           onPress={onMic}
-          disabled={!canCapture || (!dex.recording && (dex.sending || chat.busy))}
+          disabled={rippleDisabled}
           label={micLabel}
         />
       )}
     </div>
   );
 
-  const body = phone ? phoneBody : growing ? (
-    <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-y-auto animate-in fade-in-0 duration-300 motion-reduce:animate-none" aria-live="polite">
-      {outcome ? outcomeView : (
-      /* ASK-34 item 5 — TWO COLUMNS, NOT ONE LAYER OVER ANOTHER. The stages
-         keep the left, left-aligned, exactly as they were; the forge takes the
-         space beside them and is centred in it, with a 24px trough between so
-         neither crowds the other. It is drawn only while Dex is reading — the
-         branch it sits in is the one an outcome replaces, so it leaves the
-         instant a result arrives. Under prefers-reduced-motion it is not drawn
-         at all and the stage text stands alone. */
-      /* ASK-35 2.5 — SIDE BY SIDE ON DESKTOP, STACKED ON A PHONE. At 390 the
-         two-column split gave the forge about 150px and the stages about 150px,
-         which is not a layout, it is two cramped columns. Below lg the quote and
-         the stages take the top, full width, and the forge sits under them in
-         whatever height is left — with a floor, so a long stage list cannot
-         crush it to nothing. */
-      <div className="flex min-h-0 flex-1 gap-6 max-lg:flex-col max-lg:gap-2">
-        {/* Half each on desktop. The forge is WIDTH-bound at that size —
-            measured, the box it gets is wider than 304 only past 2xl — so every
-            pixel the stages do not need is a pixel it draws with. */}
-        <div className="flex min-w-0 flex-col lg:flex-1">
-          {/* Two lines on a phone, three on desktop: the pane is the same 354px
-              tall either way, and every line the quote takes is a line the forge
-              loses. What was said is still one tap from being read in full. */}
-          {/* ASK-42 A — ONE line on a phone, two from lg, three from xl. The
-              hero above this workspace gave up 46px to the black sheet's third
-              row, and the workspace is measured from the hero's top: it is that
-              much shorter now, and the first thing to give is the echo of words
-              the founder said ten seconds ago. What was said is still in the
-              element, and still one tap from being read in full. */}
-          {sentText && (
-            <p className="line-clamp-1 text-[15px] leading-snug text-foreground lg:line-clamp-2 xl:line-clamp-3">&ldquo;{sentText}&rdquo;</p>
-          )}
-          {/* Tighter on a phone: four stages at 10px apart cost 110px of a
-              234px body, and every pixel they do not need is a pixel the forge
-              under them draws with. */}
-          <ol className="mt-2 space-y-1 lg:mt-4 lg:space-y-2.5" aria-label="What Dex is doing">
-            {shownSteps.map((s, i) => {
-              const current = i === shownSteps.length - 1;
-              return (
-                /* ASK-42 A — the stage rows read at 13px with a 16px line on a
-                   phone (the app's own --text-label floor), 14px from lg. Four
-                   stages at the desktop size no longer fit the workspace the
-                   shorter hero leaves, and the choice is between a stage the
-                   founder cannot see and a stage a point smaller. */
-                <li key={s} className={cn("flex items-center gap-2.5 text-[length:var(--text-label)] leading-4 lg:text-sm lg:leading-normal", current ? "font-medium text-foreground" : "text-foreground/55")}>
-                  {current ? (
-                    <span aria-hidden="true" className="relative grid h-4 w-4 shrink-0 place-items-center">
-                      <span className="absolute inset-0 animate-ping rounded-full bg-kr-ink/20 motion-reduce:animate-none" />
-                      <span className="h-2 w-2 rounded-full bg-kr-ink" />
-                    </span>
-                  ) : (
-                    <Check size={14} weight="bold" aria-hidden="true" className="shrink-0" />
-                  )}
-                  {stageLabel(s)}
-                </li>
-              );
-            })}
-          </ol>
-        </div>
-        {!prefersReducedMotion() && (
-          <DexForgeFit
-            testid="desk-dex-forge"
-            label="Dex is building what you decided"
-            /* A floor, so a four-stage list cannot crush it to nothing — but a
-               LOW one. At 7.5rem the quote, the four stages and the forge came
-               to more than the pane holds and the body started scrolling, which
-               is the nested-scroller trap Group 1 spent its height rules
-               avoiding; the forge was cut off at the composer. 5rem fits the
-               worst case (four stages, a two-line quote) with room over. */
-            className="min-h-0 min-w-0 flex-1 max-lg:min-h-[4.5rem]"
-          />
-        )}
-      </div>
-      )}
-    </div>
-  ) : desktopRipple;
-
-  /* ASK-48 — THE TITLE COMES DOWN INTO THE FLOOR. "Dex" and "Tell Dex what you
-     decided." sat at the top-left of the well, above the ripple, which left the
-     mic off-centre in what is left and the two circles huddled at the bottom
-     left. The founder: keep attach on the left, put the keyboard at the right
-     END of the well, and fit the two lines centred BETWEEN them. So the floor
-     is a three-part row — one circle, the words, one circle — the words take
-     the space between and centre in it, and the top of the well is nothing but
-     the ripple. On desktop the title stays where InsightWell has always put
-     it. */
-  const phoneTitle = (
+  /* ASK-48 — THE TITLE IS IN THE FLOOR, centred between the two circles, on
+     every size (2026-09-21). */
+  const floorTitle = (
     <div className="pointer-events-none min-w-0 flex-1 px-2 text-center">
       <span className="block text-xs font-semibold tracking-wide text-foreground/75">Dex</span>
-      {!workspace && !outcome && (
-        <span className="mt-0.5 block truncate text-[13px] leading-snug text-foreground/70">
-          {canCapture ? "Tell Dex what you decided." : "Ask an owner to turn on capture."}
-        </span>
-      )}
+      <span className="mt-0.5 block truncate text-[13px] leading-snug text-foreground/70">
+        {!canCapture ? "Ask an owner to turn on capture."
+          : transcribing ? "Transcribing what you said…"
+          : "Tell Dex what you decided."}
+      </span>
     </div>
   );
 
   const floor = (
     <>
-      {/* ASK-33.2 — THREE ELEMENTS, NO EXPANSION: attach · field · mic.
-          The [+] that revealed two circles is gone (founder, 2026-09-16), and
-          with it the reveal's containment invariant, its invisible hitbox and
-          the draft it used to hide. Attach is one tap on its own circle. */}
+      {/* ASK-33.2 — attach · field · keyboard. Attach is one tap on its own
+          circle; any file type — the pipeline reads what it can (plan 5.4). */}
       <button
         type="button"
         data-testid="desk-dex-attach"
@@ -942,43 +604,18 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
       >
         <Paperclip size={17} weight="bold" aria-hidden="true" />
       </button>
-      {/* Any file type — the pipeline reads what it can (plan 5.4). */}
       <input ref={fileInputRef} type="file" className="hidden" tabIndex={-1} onChange={onPickFile} />
 
-      {/* THE FIELD IS SUNKEN. It wore .kr-pop, inherited from the "Chase it"
-          button it replaced — and KM-62 / KM-65 keep that raised recipe for
-          things you PRESS. An input is not a button, so the circles either
-          side stay raised and the field is pressed into the well.
-          ASK-34 items 1 and 2 — and the recipe is .nm-field, not .nm-inset.
-          nm-inset is a CONTAINER recipe: bg-nm-sunken, a flat grey step under
-          the canvas, which is why the pill read as a form control dropped on
-          the well rather than the old "Chase it" pill pressed into it.
-          .nm-field is the app's own field (pages/Settings.js, pages/Leave.js,
-          pages/MyWork.js): WHITE at 80%, a 1px inset hairline and a 2px inner
-          shadow off the top edge — white and concave at once, which is exactly
-          what was asked for. It also carries the app's OWN focus treatment
-          (index.css .nm-field:focus-within — ring-2 ring-neutral-900/25), so
-          the hand-rolled ring-kr-ink/60 goes: that was the black outline, and
-          it was black because it was written here instead of taken from the
-          recipe. Focus is not lost — NM-4 §5 still has its visible ring, in
-          the neutral every other field in the app uses.
-          KM-53 — while transcribing it is read-only: the words arrive as a
-          setDraft that would wipe anything typed in the gap. */}
-      {/* ASK-47 — NOT RENDERED until there is something to type or read. It was
-          `hidden` for one revision, which does nothing here: the attribute is a
-          UA `display: none` and .nm-field sets `display: flex`, so a class beat
-          it and the field stayed on screen. Absent is absent. */}
-      {fieldOpen && (
+      {/* THE FIELD IS SUNKEN — .nm-field, the app's own field with its own
+          focus ring (ASK-34 items 1 and 2). NOT RENDERED until there is
+          something to type (ASK-47); a recording started while it is open
+          draws its wave in it (KM-51), and gives way to step 1 when it stops. */}
+      {fieldOpen ? (
       <div
         data-testid="desk-dex-composer"
         data-mode={recording ? "voice" : "type"}
-        /* min-h from the same token that lifts the circles and the field to
-           44px below lg (index.css --control-h-sm), so the pill never sits
-           shorter than its neighbours on a phone. */
         className={cn(
           "nm-field flex min-h-[var(--control-h-sm)] min-w-0 flex-1 items-center overflow-hidden rounded-pill",
-          // A fixed 40px while it draws the wave; as a field it takes the
-          // field's own height, one line or two.
           recording ? "h-10" : "h-auto"
         )}
       >
@@ -987,133 +624,109 @@ export function DeskDexWell({ className, testid, phone = false, growToRef, growT
             ref={fieldRef}
             rows={1}
             value={chat.draft}
-            readOnly={transcribing}
             disabled={!canCapture}
-            onChange={(e) => chat.setDraft(e.target.value)}
+            onChange={(e) => { setPillDraft(true); chat.setDraft(e.target.value); }}
             onKeyDown={(e) => {
               if (e.key === "Enter") { e.preventDefault(); send(); }
               if (e.key === "Escape" && !chat.draft.trim()) { e.preventDefault(); setTyping(false); }
             }}
-            /* A tap on attach or on the keyboard circle blurs the field on
-               its way to a button in this same row, so look where the focus
-               landed — and at what is in the field NOW, not what was in it
-               when this handler was made — before closing anything. */
+            /* A tap on attach or on the keyboard circle blurs the field on its
+               way to a button in this same row, so look where the focus landed
+               — and at what is in the field NOW — before closing anything. */
             onBlur={() => {
-              if (chat.draft.trim() || transcribing) return;
+              if (chat.draft.trim()) return;
               setTimeout(() => {
                 if (document.activeElement?.getAttribute?.("data-dex-floor") === "1") return;
                 if (fieldRef.current?.value?.trim()) return;
                 setTyping(false);
               }, 120);
             }}
-            // Short enough to fit whole at 360px, where the field is ~150px of text.
-            placeholder={transcribing ? "Transcribing…" : "Type a decision…"}
+            placeholder="Type a decision…"
             aria-label="Tell Dex what you decided"
-            className={cn(
-              // Enter still sends (onKeyDown); the text wraps, it never breaks lines.
-              "block min-w-0 flex-1 resize-none bg-transparent px-4 py-2.5 text-sm leading-5 text-foreground focus:outline-none max-lg:leading-6 [scrollbar-width:none]",
-              // A status being waited on should not wear the grey of a hint.
-              transcribing ? "animate-pulse placeholder:text-foreground/75" : "placeholder:text-foreground/45"
-            )}
+            className="block min-w-0 flex-1 resize-none bg-transparent px-4 py-2.5 text-sm leading-5 text-foreground placeholder:text-foreground/45 focus:outline-none max-lg:leading-6 [scrollbar-width:none]"
           />
         ) : (
-          /* Recording: the field becomes the wave, and gives the words back to
-             the field when it stops (KM-51). tone="ink" — KM-62's light-surface
-             ribbons; levelsRef, not levels, so the meter never renders the well
-             (KM-60). It mounts only while recording, so nothing animates at
-             rest — which is also what let the mobile audit settle. */
+          /* tone="ink" — KM-62's light-surface ribbons; levelsRef, not levels,
+             so the meter never renders the well (KM-60). */
           <div className="h-full min-w-0 flex-1 px-4 py-1.5">
             <DexWave tone="ink" state="listening" levelsRef={dex.levelsRef} />
           </div>
         )}
       </div>
-      )}
+      ) : floorTitle}
 
-      {/* ASK-48 — and on a phone the words go here, between the two circles,
-          taking the space they leave. The field, when it is open, takes that
-          same space — so the two never fight for it. */}
-      {!fieldOpen && phoneTitle}
-
-      {/* ASK-47 — ON A PHONE THIS CIRCLE IS NO LONGER THE MICROPHONE. The mic
-          is the ripple in the middle of the well, so what belongs here is the
-          other way in: a keyboard, which opens the field. Once there is
-          something in the field — typed or just transcribed — the same circle
-          is the send arrow, because that is the only thing left to do with it.
-          Desktop keeps the mic exactly where ASK-33 put it: there the ripple is
-          not on screen and this is the only way to speak. */}
-      {/* 2026-09-21 — the desktop's floor mic (desk-dex-mic, retired) is gone
-          with the phone's: the mic is the ripple in the middle of the well on
-          both, and this circle is the keyboard — the send arrow once there is
-          something to send. */}
+      {/* The other way in: a keyboard, which opens the field — and once there
+          is something typed in it, the send arrow. A kept capture opens in the
+          pop-up instead of the pill. */}
       <button
         type="button"
         data-testid="desk-dex-keyboard"
         data-dex-floor="1"
-        data-intent={chat.draft.trim() ? "send" : "type"}
+        data-intent={fieldOpen && chat.draft.trim() ? "send" : "type"}
         onClick={() => {
-          if (chat.draft.trim()) { send(); setTyping(false); return; }
+          if (fieldOpen && chat.draft.trim()) { send(); return; }
+          if (kept) { openSaid(); return; }
           setTyping(true);
           requestAnimationFrame(() => fieldRef.current?.focus());
         }}
-        disabled={!canCapture || chat.busy || dex.recording}
-        aria-label={chat.draft.trim() ? "Send to Dex" : "Type instead"}
-        title={chat.draft.trim() ? "Send to Dex" : "Type instead"}
+        disabled={!canCapture || chat.busy || recording}
+        aria-label={fieldOpen && chat.draft.trim() ? "Send to Dex" : "Type instead"}
+        title={fieldOpen && chat.draft.trim() ? "Send to Dex" : "Type instead"}
         className={CIRCLE}
       >
-        {chat.draft.trim()
+        {fieldOpen && chat.draft.trim()
           ? <PaperPlaneRight size={17} weight="bold" aria-hidden="true" />
           : <Keyboard size={18} weight="bold" aria-hidden="true" />}
       </button>
 
       <span className="sr-only" aria-live="polite">
-        {dex.recording ? "Recording" : transcribing ? "Transcribing" : chat.busy ? "Sending to Dex" : ""}
+        {recording ? "Recording" : transcribing ? "Transcribing" : chat.busy ? "Sending to Dex" : ""}
       </span>
     </>
   );
 
+  const step = phase === "said" ? "said"
+    : phase === "reading" ? "reading"
+    : phase === "ended" ? (ENDING_STEP[outcome?.kind] || "slow")
+    : "said";
+
   return (
-    <InsightWell
-      compact
-      /* ASK-48 — on a phone the title and the prompt line are in the floor row
-         instead; the attachment chips still belong at the top of the pane. */
-      /* 2026-09-21 — and on desktop too: "Dex" and its line sit in the floor,
-         between attach and the keyboard, as on the phone. The attachment chips
-         stay at the top of the pane — raised above the ripple, which fills the
-         pane behind everything. */
-      label={null}
-      prompt={phone
-        ? ((keptDraft || attachments) && <>{keptDraft}{attachments}</>)
-        : ((keptDraft || attachments) && <div className="relative z-10">{keptDraft}{attachments}</div>)}
-      body={body}
-      /* ASK-47 — AND WHILE AN ENDING IS SHOWING, THE PHONE'S WELL IS THE
-         ENDING. The well is a fixed box, and an ending already carries the only
-         things there are to do with it — Review and Later, Got it, Retry and
-         Not now. Keeping the capture floor under that put two rows of controls
-         in one small box: at 360x640 the ending's buttons ended up UNDERNEATH
-         the floor, unclickable, and at 390 they were pushed under the fold of
-         the well's own pane. One at a time, so the way out of the ending is
-         always whole; dismissing it gives the ripple and the floor straight
-         back. Desktop is untouched — there the well grows and both fit. */
-      floor={phone && outcome ? null
-        : phone ? floor
-        /* Raised above the desktop's ripple, which covers the whole pane. */
-        : <div className="relative z-10 flex min-w-0 flex-1 items-center gap-2">{floor}</div>}
-      className={className}
-      testid={testid}
-      expanded={expanded}
-      wellRef={wellRef}
-      /* ASK-42 A — 12px of padding on a phone, not 16. The well is the last
-         band above the black sheet and the sheet has a floor of three rows to
-         keep on a 6.1" screen; eight pixels of padding are most of a fourth of
-         one. Desktop keeps p-4 (InsightWell's compact default). */
-      /* ASK-48 — `kr-well--sunk` below lg: a dimmer wash and a deeper press.
-         See index.css — the founder's "the well looks very transparent". */
-      paneClassName={cn("max-lg:flex-1 max-lg:p-3", phone && "kr-well--sunk", grow && growPhase !== "start" && "kr-dex-grow")}
-      paneStyle={grow
-        ? { position: "absolute", left: 0, right: 0, bottom: 0, zIndex: 10, height: growPhase === "open" ? grow.to : grow.from }
-        : undefined}
-      onPaneTransitionEnd={onPaneTransitionEnd}
-    />
+    <>
+      <InsightWell
+        compact
+        label={null}
+        prompt={top}
+        body={body}
+        floor={phone ? floor : <div className="relative z-10 flex min-w-0 flex-1 items-center gap-2">{floor}</div>}
+        className={className}
+        testid={testid}
+        wellRef={wellRef}
+        /* ASK-42 A — 12px of padding on a phone, not 16. ASK-48 —
+           `kr-well--sunk` below lg: a dimmer wash and a deeper press. */
+        paneClassName={cn("max-lg:flex-1 max-lg:p-3", phone && "kr-well--sunk")}
+      />
+      <DexCapturePopup
+        open={popupOpen && phase !== "idle"}
+        onClose={closePopup}
+        phone={phone}
+        step={step}
+        text={chat.draft}
+        onText={(v) => chat.setDraft(v)}
+        transcribing={transcribing}
+        files={chat.pendingFiles}
+        onRemoveFile={chat.removeFile}
+        busy={chat.busy}
+        onNext={send}
+        onDiscard={discard}
+        sentText={sentText}
+        stages={steps}
+        decisionId={outcome?.kind === "ready" ? outcome.decisionId : null}
+        userId={user?.id}
+        onSaveDraft={saveDraft}
+        outcome={outcome}
+        onRetry={onRetry}
+      />
+    </>
   );
 }
 

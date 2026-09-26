@@ -41,6 +41,16 @@
 //     ignored, which is the other half of KM-28 kept.
 // The Desk opens it in place (pages/Desk.js); /decisions/:id still mounts it
 // for notifications and pasted links.
+//
+// PILOT-2 A — ONE COMPONENT, TWO PLACES. What this card shows — the decision,
+// what was said, the tasks it creates with their people and dates, the
+// approver, the amount, the workflow, the history, and Approve / Reject — is
+// DecisionPanel now. DecisionDialog is that panel in this glass card; the
+// Desk's Dex pop-up (pages/desk/DexCapturePopup) puts the SAME panel in its
+// third step, "What Dex made", under the counts and over a pinned row of
+// actions. The founder: "One component, used in both places. If they drift
+// apart, this will be wrong within a week." So nothing about a decision is
+// drawn anywhere but here.
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -129,7 +139,27 @@ function Card({ label, right, children, testid, className = "" }) {
   );
 }
 
-export function DecisionDialog({ decisionId, open, onClose, variant = "modal" }) {
+/**
+ * The decision itself — everything DecisionDialog shows, without the card.
+ *
+ * @param {boolean}  [embedded]    PILOT-2 A — drawn inside another dialog (the
+ *                                 Desk's Dex pop-up): no title element of its
+ *                                 own (the host has one), no close, and the
+ *                                 actions pinned at the foot instead of in a
+ *                                 card, so they are never below the fold
+ * @param {Function} [lead]        (decision) => node, drawn at the top of the
+ *                                 scrolling body — the pop-up's counts
+ * @param {Function} [onSaveDraft] (decisionId) => void — offers "Save as draft"
+ *                                 beside Approve and Reject (embedded only)
+ * @param {object}   [closeRef]    the card's close, for its first focus
+ * @param {object}   [dirtyRef]    filled with () => bool: is anything typed or
+ *                                 in flight, which a stray outside tap must not
+ *                                 throw away (KM-28)
+ */
+export function DecisionPanel({
+  decisionId, open = true, onClose, embedded = false, lead = null, onSaveDraft = null,
+  closeRef: closeRefProp = null, dirtyRef = null,
+}) {
   const qc = useQueryClient();
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
@@ -146,7 +176,8 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
   // Focus lands on the close when the card opens, not on the card itself:
   // Radix focuses the content, and the content's focus ring is the app's
   // lavender outline drawn round the whole popup.
-  const closeRef = useRef(null);
+  const ownCloseRef = useRef(null);
+  const closeRef = closeRefProp || ownCloseRef;
 
   const { data: d, isError } = useQuery({
     queryKey: ["decision", decisionId],
@@ -354,7 +385,9 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
     queryFn: () => api.get(`/decisions/${decisionId}/moves`).then((r) => r.data),
     enabled: !!decisionId && open && !!canDecide,
   });
-  const leftMoves = (movesQ.data || []).filter((m) => (m.tasks || []).length > 0);
+  // A list, or nothing: an answer of any other shape is not a reason to take
+  // the whole review down (the fixture server once answered {}).
+  const leftMoves = (Array.isArray(movesQ.data) ? movesQ.data : []).filter((m) => (m.tasks || []).length > 0);
   const [leftChoices, setLeftChoices] = useState({});
 
   const approveM = useMutation({
@@ -402,99 +435,189 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
     } finally { setSending(false); }
   };
 
-  /* A stray tap outside must not throw away work in progress. */
-  const guardOutside = (e) => { if (note.trim() || busy || sending) e.preventDefault(); };
+  /* A stray tap outside must not throw away work in progress — the card that
+     hosts this panel asks through dirtyRef. */
+  if (dirtyRef) dirtyRef.current = () => !!(note.trim() || busy || sending);
 
   const statusChip =
     d?.status === "approved" ? "bg-emerald-50 text-emerald-800 ring-emerald-100"
     : d?.status === "rejected" ? "bg-rose-50 text-rose-800 ring-rose-100"
     : QUIET_CHIP;
 
+  /* The title block — the title (with "(Draft)" when it is one), the amount,
+     the chips and who raised it. In the card it is the dialog's own title, with
+     the close on its line; embedded it is a heading inside the host's body. */
+  const titleLine = d ? (
+    <>
+      {d.title}
+      {isDraft && (
+        <span className="font-normal text-slate-500" data-testid="decision-draft-mark"> (Draft)</span>
+      )}
+    </>
+  ) : null;
+  const facts = d ? (
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+      {amount && (
+        <p className="text-2xl font-semibold tabular-nums text-slate-900" data-testid="decision-amount">
+          {amount}
+        </p>
+      )}
+      {wfLabel && (
+        <span className={`${CHIP} ${QUIET_CHIP}`} data-testid="decision-workflow-chip">
+          <LinkSimple size={12} weight="bold" aria-hidden="true" /> Part of: {wfLabel}
+        </span>
+      )}
+      {/* ASK-41 1 — and the chip stays out of the way of both:
+          "Pending" beside an Approve button says nothing the
+          button does not, and it used to appear on exactly the
+          decisions that could not be decided here. */}
+      {d.status && !canDecide && (
+        <span className={`${CHIP} ${statusChip} capitalize`} data-testid="decision-status-chip">
+          {d.status.replace(/_/g, " ")}
+        </span>
+      )}
+      <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+        <RaisedByIcon d={d} size={13} weight="bold" aria-hidden="true" />
+        {raisedByLabel(d)} · {timeAgo(d.created_at)}
+      </span>
+    </div>
+  ) : null;
+
+  /* PILOT-2 A — THE ACTIONS, PINNED, when the panel is embedded. The Dex
+     pop-up's third step is the review, and its way on has to be whole and in
+     view however long the breakdown above it runs: Approve issues it, Save as
+     draft keeps it for later (PILOT-2 B), Reject throws it away — the same
+     two-press reject the card has. Someone who cannot decide it, or a decision
+     that already has been, gets the fact and one way out. */
+  const doneLabel = !d ? "" : canDecide ? `${waitingOn}. You'll be told when it's decided.`
+    : d.status === "approved" ? `Approved${d.decided_by_name ? ` by ${d.decided_by_name}` : ""}.`
+    : d.status === "rejected" ? `Rejected${d.decided_by_name ? ` by ${d.decided_by_name}` : ""}.`
+    : "Decided.";
+  const pinnedActions = embedded && d ? (
+    <div className="shrink-0 border-t border-slate-900/[0.06] px-5 pt-3 pb-[calc(0.75rem+var(--sa-bottom))] lg:px-7 lg:pb-4"
+      data-testid="decision-panel-actions">
+      {mayDecide && confirmReject && (
+        <p className="mb-2.5 text-xs text-rose-700" data-testid="decision-reject-warning">
+          {proposing
+            ? "Nothing it proposes will be created."
+            : "Tasks still waiting on it are cancelled; work already under way stays."}{" "}
+          Press Confirm reject to go ahead, or Approve to change your mind.
+        </p>
+      )}
+      {mayDecide ? (
+        <div className="flex gap-2.5" data-testid="decision-actions">
+          <button
+            type="button"
+            onClick={() => approveM.mutate()}
+            disabled={busy}
+            data-testid="decision-approve"
+            className={`flex h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-pill px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 focus-visible:ring-offset-2 disabled:opacity-60 lg:h-12 ${INK_PILL}`}
+          >
+            <CheckCircle size={16} weight="bold" aria-hidden="true" className="shrink-0" />
+            {approveM.isPending ? "Approving…" : "Approve"}
+          </button>
+          {onSaveDraft && (
+            <button
+              type="button"
+              onClick={() => onSaveDraft(decisionId)}
+              disabled={busy}
+              data-testid="desk-dex-later"
+              className={`flex h-14 min-w-0 flex-1 items-center justify-center rounded-pill px-4 text-sm font-medium text-slate-800 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 disabled:opacity-60 lg:h-12 ${GLASS_PILL}`}
+            >
+              Save as draft
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => (confirmReject ? rejectM.mutate() : setConfirmReject(true))}
+            disabled={busy}
+            data-testid="decision-reject"
+            className={`flex h-14 min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-pill px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 disabled:opacity-60 lg:h-12 ${
+              confirmReject ? MAROON_PILL : `text-slate-800 hover:bg-white ${GLASS_PILL}`}`}
+          >
+            {/* Three across a 360px phone leave "Confirm reject" no room for
+                its icon; the maroon and the warning line above say it. */}
+            {confirmReject
+              ? <><WarningCircle size={16} weight="bold" aria-hidden="true" className="shrink-0 max-lg:hidden" />{rejectM.isPending ? "Rejecting…" : "Confirm reject"}</>
+              : <><X size={16} weight="bold" aria-hidden="true" className="shrink-0" /> Reject</>}
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-3">
+          <p className="min-w-0 text-sm text-slate-600" data-testid="decision-panel-status">{doneLabel}</p>
+          <button type="button" onClick={() => onClose && onClose()} data-testid="decision-panel-done"
+            className={`flex h-12 shrink-0 items-center rounded-pill px-6 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 focus-visible:ring-offset-2 ${INK_PILL}`}>
+            Done
+          </button>
+        </div>
+      )}
+    </div>
+  ) : null;
+
+  if (isError) {
+    return embedded ? (
+      <div className="p-6" data-testid="decision-access-restricted">
+        <p className="text-lg font-semibold text-slate-900">Access restricted</p>
+        <p className="text-sm text-slate-600">You don't have access to this decision.</p>
+      </div>
+    ) : (
+      <div className="p-6" data-testid="decision-access-restricted">
+        <DialogHeader className="text-left">
+          <DialogTitle className="text-lg font-semibold text-slate-900">Access restricted</DialogTitle>
+          <DialogDescription className="text-sm text-slate-600">You don't have access to this decision.</DialogDescription>
+        </DialogHeader>
+        <DialogPrimitiveClose data-testid="decision-close" aria-label="Close" className={`${GLASS_ICON_BTN} absolute right-5 top-5`}>
+          <X size={16} weight="bold" aria-hidden="true" />
+        </DialogPrimitiveClose>
+      </div>
+    );
+  }
+  if (!d) {
+    return embedded ? (
+      <p className="p-6 text-sm text-slate-500" data-testid="decision-panel-loading">Loading…</p>
+    ) : (
+      <div className="p-6">
+        <DialogHeader className="text-left">
+          <DialogTitle className="sr-only">Decision</DialogTitle>
+          <DialogDescription className="sr-only">Loading the decision</DialogDescription>
+        </DialogHeader>
+        <p className="py-4 text-sm text-slate-500">Loading…</p>
+      </div>
+    );
+  }
+
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose && onClose()}>
-      <DialogContent
-        className={`${GLASS_SHEET} flex flex-col gap-0 p-0 outline-none [&>button.absolute]:hidden focus:outline-none focus-visible:outline-none focus-visible:ring-0
-                   left-0 top-0 h-full w-full max-w-none translate-x-0 translate-y-0 rounded-none
-                   [padding-top:var(--sa-top)] [padding-bottom:var(--sa-bottom)]
-                   lg:left-[50%] lg:top-[50%] lg:h-[calc(70vh/var(--ui-scale,1))] lg:w-[calc(70vw/var(--ui-scale,1))]
-                   lg:min-w-[52rem] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:rounded-[1.75rem]
-                   lg:[padding-top:0] lg:[padding-bottom:0]
-                   data-[state=open]:[--tw-enter-translate-x:0] data-[state=open]:[--tw-enter-translate-y:0]
-                   data-[state=closed]:[--tw-exit-translate-x:0] data-[state=closed]:[--tw-exit-translate-y:0]
-                   lg:data-[state=open]:[--tw-enter-translate-x:-50%] lg:data-[state=open]:[--tw-enter-translate-y:-48%]
-                   lg:data-[state=closed]:[--tw-exit-translate-x:-50%] lg:data-[state=closed]:[--tw-exit-translate-y:-48%]`}
-        onPointerDownOutside={guardOutside}
-        onInteractOutside={guardOutside}
-        onOpenAutoFocus={(e) => { e.preventDefault(); closeRef.current?.focus(); }}
-        data-variant={variant}
-        data-testid="decision-dialog"
-      >
-        {isError ? (
-          <div className="p-6" data-testid="decision-access-restricted">
-            <DialogHeader className="text-left">
-              <DialogTitle className="text-lg font-semibold text-slate-900">Access restricted</DialogTitle>
-              <DialogDescription className="text-sm text-slate-600">You don't have access to this decision.</DialogDescription>
-            </DialogHeader>
-            <DialogPrimitiveClose data-testid="decision-close" aria-label="Close" className={`${GLASS_ICON_BTN} absolute right-5 top-5`}>
-              <X size={16} weight="bold" aria-hidden="true" />
-            </DialogPrimitiveClose>
-          </div>
-        ) : !d ? (
-          <div className="p-6">
-            <DialogHeader className="text-left">
-              <DialogTitle className="sr-only">Decision</DialogTitle>
-              <DialogDescription className="sr-only">Loading the decision</DialogDescription>
-            </DialogHeader>
-            <p className="py-4 text-sm text-slate-500">Loading…</p>
-          </div>
-        ) : (
           <>
             {/* HEADER — title, the amount, the chips; the close on the
-                title's line. Sticky over the scrolling body. */}
+                title's line. Sticky over the scrolling body. Embedded, the
+                host's own header is the sticky one and this block scrolls
+                with the rest. */}
+            {!embedded && (
             <DialogHeader className="shrink-0 space-y-0 border-b border-slate-900/[0.06] px-5 pb-4 pt-5 text-left lg:px-7 lg:pt-6">
               <div className="flex items-start gap-4">
                 <div className="min-w-0 flex-1">
                   <DialogTitle className="text-left text-[22px] font-semibold leading-tight tracking-tight text-slate-900">
-                    {d.title}
-                    {isDraft && (
-                      <span className="font-normal text-slate-500" data-testid="decision-draft-mark"> (Draft)</span>
-                    )}
+                    {titleLine}
                   </DialogTitle>
                   <DialogDescription className="sr-only">Review this decision</DialogDescription>
-                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
-                    {amount && (
-                      <p className="text-2xl font-semibold tabular-nums text-slate-900" data-testid="decision-amount">
-                        {amount}
-                      </p>
-                    )}
-                    {wfLabel && (
-                      <span className={`${CHIP} ${QUIET_CHIP}`} data-testid="decision-workflow-chip">
-                        <LinkSimple size={12} weight="bold" aria-hidden="true" /> Part of: {wfLabel}
-                      </span>
-                    )}
-                    {/* ASK-41 1 — and the chip stays out of the way of both:
-                        "Pending" beside an Approve button says nothing the
-                        button does not, and it used to appear on exactly the
-                        decisions that could not be decided here. */}
-                    {d.status && !canDecide && (
-                      <span className={`${CHIP} ${statusChip} capitalize`} data-testid="decision-status-chip">
-                        {d.status.replace(/_/g, " ")}
-                      </span>
-                    )}
-                    <span className="inline-flex items-center gap-1 text-xs text-slate-500">
-                      <RaisedByIcon d={d} size={13} weight="bold" aria-hidden="true" />
-                      {raisedByLabel(d)} · {timeAgo(d.created_at)}
-                    </span>
-                  </div>
+                  {facts}
                 </div>
                 <DialogPrimitiveClose ref={closeRef} data-testid="decision-close" aria-label="Close" className={GLASS_ICON_BTN}>
                   <X size={16} weight="bold" aria-hidden="true" />
                 </DialogPrimitiveClose>
               </div>
             </DialogHeader>
+            )}
 
             {/* BODY — scrolls inside the card. Two columns from lg. */}
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 lg:px-7 lg:py-6">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 lg:px-7 lg:py-6" data-testid="decision-panel-body">
+              {lead && lead(d)}
+              {embedded && (
+                <div className="mb-4" data-testid="decision-panel-title">
+                  <h3 className="text-[22px] font-semibold leading-tight tracking-tight text-slate-900">{titleLine}</h3>
+                  {facts}
+                </div>
+              )}
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-5">
                 {/* LEFT — the decision and what to do about it */}
                 <div className="flex min-w-0 flex-col gap-4">
@@ -623,7 +746,9 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
                     </Card>
                   )}
 
-                  {mayDecide && (
+                  {/* Embedded, the same two actions (and Save as draft) are
+                      pinned at the foot instead — see pinnedActions. */}
+                  {mayDecide && !embedded && (
                     <Card label="Your call" testid="decision-actions-card">
                       <div className="flex flex-wrap gap-2.5" data-testid="decision-actions">
                         <button
@@ -845,8 +970,36 @@ export function DecisionDialog({ decisionId, open, onClose, variant = "modal" })
                 </div>
               </div>
             </div>
+            {pinnedActions}
           </>
-        )}
+  );
+}
+
+export function DecisionDialog({ decisionId, open, onClose, variant = "modal" }) {
+  const closeRef = useRef(null);
+  const dirtyRef = useRef(() => false);
+  /* A stray tap outside must not throw away work in progress. */
+  const guardOutside = (e) => { if (dirtyRef.current()) e.preventDefault(); };
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose && onClose()}>
+      <DialogContent
+        className={`${GLASS_SHEET} flex flex-col gap-0 p-0 outline-none [&>button.absolute]:hidden focus:outline-none focus-visible:outline-none focus-visible:ring-0
+                   left-0 top-0 h-full w-full max-w-none translate-x-0 translate-y-0 rounded-none
+                   [padding-top:var(--sa-top)] [padding-bottom:var(--sa-bottom)]
+                   lg:left-[50%] lg:top-[50%] lg:h-[calc(70vh/var(--ui-scale,1))] lg:w-[calc(70vw/var(--ui-scale,1))]
+                   lg:min-w-[52rem] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:rounded-[1.75rem]
+                   lg:[padding-top:0] lg:[padding-bottom:0]
+                   data-[state=open]:[--tw-enter-translate-x:0] data-[state=open]:[--tw-enter-translate-y:0]
+                   data-[state=closed]:[--tw-exit-translate-x:0] data-[state=closed]:[--tw-exit-translate-y:0]
+                   lg:data-[state=open]:[--tw-enter-translate-x:-50%] lg:data-[state=open]:[--tw-enter-translate-y:-48%]
+                   lg:data-[state=closed]:[--tw-exit-translate-x:-50%] lg:data-[state=closed]:[--tw-exit-translate-y:-48%]`}
+        onPointerDownOutside={guardOutside}
+        onInteractOutside={guardOutside}
+        onOpenAutoFocus={(e) => { e.preventDefault(); closeRef.current?.focus(); }}
+        data-variant={variant}
+        data-testid="decision-dialog"
+      >
+        <DecisionPanel decisionId={decisionId} open={open} onClose={onClose} closeRef={closeRef} dirtyRef={dirtyRef} />
       </DialogContent>
     </Dialog>
   );

@@ -26,11 +26,11 @@ import { hasPerm, canSeeBuyers, canSeeSuppliers } from "../lib/perms";
 import { lex } from "../lib/lexicon";
 import { SkeletonGrid, StickyHeader } from "../components/common";
 import { inr, money } from "../lib/format";
-import api from "../lib/api";
+import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
 import {
   AddressBook, ArrowsDownUp, CaretDown, CaretLeft, CaretRight, Clock, Coins, CurrencyInr, Funnel,
-  ListBullets, MagnifyingGlass, Plus, SquaresFour, Storefront, Truck, UploadSimple, Warning, X,
+  CheckCircle, ListBullets, MagnifyingGlass, Plus, SquaresFour, Storefront, Trash, Truck, UploadSimple, Warning, X,
 } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import {
@@ -46,8 +46,23 @@ import { useDraft } from "../hooks/useDraft";
 import { cn } from "@/lib/utils";
 import { LogComplaintDialog } from "../components/crm/LogComplaintDialog";
 
-const CUSTOMER_TYPES = ["customer", "dealer"];
+/* J15 (founder, 26 Sep) — THREE KINDS, NOT TWO GROUPS WITH A SWITCH INSIDE.
+   A dealer was a type you could only reach by adding a customer and then
+   flipping the type inside the window, and the flip stayed available on every
+   edit afterwards — which is a contact silently changing sides in the backend.
+   Each kind has its own way in now, its own tab, and no way to change what
+   something is after it exists.
+   PARTNER is the founder's word for what the data still calls `dealer`. The
+   stored value does not move: renaming it would be a migration across every
+   tenant's contacts, invoices and ledger rules for a word on a screen. */
+const CUSTOMER_TYPES = ["customer"];
+const PARTNER_TYPES = ["dealer"];
 const VENDOR_TYPES = ["vendor"];
+/* The buyer side of CRM, for anything that asks "is this ours to see?" — the
+   server's BUYER_TYPES, which has not changed. */
+const BUYER_TYPES = [...CUSTOMER_TYPES, ...PARTNER_TYPES];
+const PARTNER_LABEL = "Partner";
+const PARTNER_LABEL_PLURAL = "Partners";
 const STATUSES = [
   { key: "lead", label: "Lead" },
   { key: "active", label: "Active" },
@@ -343,8 +358,13 @@ function AddContactMenu({ canManage, canImport, csvBusy, onPick, customerLabel, 
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={8} collisionPadding={12}
         className={`${GLASS_MENU} w-[min(20rem,calc(100vw-1.5rem))] p-1.5`} data-testid="crm-add-menu-list">
-        {canManage && seesBuyers && item("customer", AddressBook, `New ${customerLabel}`, "A retail account, a regular buyer or a dealer", "crm-add-customer")}
-        {canManage && seesSuppliers && item("vendor", Truck, `New ${vendorLabel}`, "A supplier, vendor or raw-material source", "crm-add-supplier")}
+        {/* J15 — one way in per kind. The single "New customer" entry carried
+            the hint "a retail account, a regular buyer or a dealer", which is
+            three different things behind one door, and the only way to make a
+            dealer was to add a customer and change it afterwards. */}
+        {canManage && seesBuyers && item("customer", AddressBook, `New ${customerLabel}`, "Someone who buys from you", "crm-add-customer")}
+        {canManage && seesBuyers && item("dealer", Storefront, `New ${PARTNER_LABEL.toLowerCase()}`, "A dealer or distributor who resells what you sell", "crm-add-partner")}
+        {canManage && seesSuppliers && item("vendor", Truck, `New ${vendorLabel}`, "Someone you buy from \u2014 a supplier or raw-material source", "crm-add-supplier")}
         {canManage && canImport && <DropdownMenuSeparator className="mx-2 my-1 h-px bg-slate-900/[0.06]" />}
         {canImport && item("import", UploadSimple, csvBusy ? "Uploading…" : "Import from spreadsheet", "Bulk-add via CSV or Excel", "crm-import-csv", csvBusy)}
       </DropdownMenuContent>
@@ -354,7 +374,7 @@ function AddContactMenu({ canManage, canImport, csvBusy, onPick, customerLabel, 
 
 const TYPE_META = {
   customer: { icon: AddressBook, hint: "Someone who buys from you — a retail account or a regular." },
-  dealer: { icon: Storefront, hint: "A dealer or distributor who resells what you sell." },
+  dealer: { icon: Storefront, hint: "A dealer or distributor who resells what you sell." },   // shown as Partner
   vendor: { icon: Truck, hint: "Someone you buy from — a supplier or a raw-material source." },
 };
 const blankContact = (type) => ({
@@ -397,10 +417,10 @@ function FormSection({ label, children }) {
 }
 
 /* U7-07 → 2026-09-14 — the New buyer / New supplier window on the glass sheet.
-   Opened with a type (`type`); the switch inside can still change it, and a
-   stage that does not exist for the new type is cleared (E2-03 — never a
-   "churned" supplier). Everything shows at once, in sections: who they are,
-   how to reach them, where they stand, the rest.
+   Opened with a type (`type`), which is what the contact IS: J15 took the
+   switch out, so the kind cannot change after the window opens or ever again.
+   Everything shows at once, in sections: who they are, how to reach them,
+   where they stand, the rest.
 
    JOURNEY-1 J8 (2026-09-22) — and the Edit window. Given a `contact` it opens
    on that contact's details and saves them back (PATCH /contacts/:id). A
@@ -408,7 +428,8 @@ function FormSection({ label, children }) {
    not the step from Lead to Qualified — because the only edit form lived on
    the retired Contacts page. `onLogComplaint` adds a way to log a complaint
    from here, for the people who can see CRM but not a buyer's full page. */
-export function CrmContactDialog({ type, contact, onClose, onSaved, users, labels, onLogComplaint }) {
+export function CrmContactDialog({ type, contact, onClose, onSaved, users, labels, onLogComplaint,
+                                   complaints = [], onComplaintsChanged, onDeleted }) {
   const editing = !!contact;
   /* PILOT-1 A — a contact half-typed is kept (lib/drafts.js), one per kind of
      contact the window was opened for. It used to start blank on every open,
@@ -422,11 +443,50 @@ export function CrmContactDialog({ type, contact, onClose, onSaved, users, label
   const [busy, setBusy] = useState(false);
   const cancel = () => { draft.discard(); onClose(); };
 
-  const set = (key) => (e) => { const v = e.target.value; setForm((f) => ({ ...f, [key]: v })); };
-  const applyType = (t) => {
-    const valid = new Set(stagesForType(t).map((s) => s.key));
-    setForm((f) => ({ ...f, type: t, lifecycle_stage: valid.has(f.lifecycle_stage) ? f.lifecycle_stage : "" }));
+  /* J15 (founder) — DELETING A CONTACT. There was no way to: something added
+     by mistake, or a duplicate, or a customer who turned out to be a supplier,
+     stayed for ever. The server has had DELETE /contacts/:id all along; this is
+     the door to it. Asked for in the words of what it does, because it takes
+     the contact with it and there is no undo. */
+  const removeContact = async () => {
+    if (!contact) return;
+    const ok = window.confirm(
+      `Delete ${contact.name}? Their card goes for good \u2014 what they are attached to elsewhere `
+      + "(invoices, complaints, decisions) stays as history. This cannot be undone.",
+    );
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await api.delete(`/contacts/${contact.id}`);
+      draft.discard();
+      toast.success(`${contact.name} deleted`);
+      onSaved?.();
+      // A page that IS this contact cannot stay on it — the profile hands us a
+      // way off. The list just refreshes without them.
+      if (onDeleted) onDeleted(); else onClose();
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Could not delete them \u2014 try again");
+    } finally { setBusy(false); }
   };
+
+  /* J15 (founder) — RESOLVING A COMPLAINT. One could be logged from here and
+     then never closed from anywhere in the app: the count on the card only
+     ever went up. PATCH /complaints/:id/resolve existed and nothing called it. */
+  const openComplaints = complaints.filter((c) => c.status !== "resolved");
+  const resolveComplaint = async (cp) => {
+    setBusy(true);
+    try {
+      await api.patch(`/complaints/${cp.id}/resolve`);
+      toast.success("Complaint resolved");
+      onComplaintsChanged?.();
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Could not resolve it \u2014 try again");
+    } finally { setBusy(false); }
+  };
+
+  const set = (key) => (e) => { const v = e.target.value; setForm((f) => ({ ...f, [key]: v })); };
+  // J15 — applyType is gone with the switch it served: nothing changes a
+  // contact's kind after it exists. The kind arrives with the dialog.
   const typeName = labels[form.type] || "Contact";
   const Icon = TYPE_META[form.type]?.icon || AddressBook;
 
@@ -476,18 +536,18 @@ export function CrmContactDialog({ type, contact, onClose, onSaved, users, label
         {draft.restored && (
           <DraftNote onDiscard={() => draft.discard()} label="Kept from before — not saved yet" testid="crm-contact-draft" className="-my-2" />
         )}
-        <div role="group" aria-label="Contact type" data-testid="crm-contact-type" className={`flex gap-1 rounded-pill p-1 ${DRAWER_TRACK}`}>
-          {["customer", "dealer", "vendor"].map((key) => {
-            const on = form.type === key;
-            const TypeIcon = TYPE_META[key].icon;
-            return (
-              <button key={key} type="button" onClick={() => applyType(key)} aria-pressed={on} data-testid={`crm-contact-type-${key}`}
-                className={`flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-pill px-2 text-sm font-medium ${on ? `${GLASS_PILL} text-slate-900` : "text-slate-500 hover:text-slate-800"}`}>
-                <TypeIcon size={15} weight={on ? "fill" : "regular"} aria-hidden="true" className="shrink-0" />
-                <span className="truncate">{labels[key]}</span>
-              </button>
-            );
-          })}
+        {/* J15 (founder) — WHAT SOMETHING IS, IS DECIDED ON THE WAY IN.
+            This was a three-way switch, live on every edit, so a customer could
+            become a supplier with one tap — and everything downstream that
+            reads a contact's side (which CRM list it is in, who may see it,
+            which ledger rules apply) would quietly follow. The founder's call:
+            do not allow it. The kind is chosen from the Add menu and shown here
+            as a fact. Somebody filed under the wrong kind is deleted and added
+            again, which is one deliberate act rather than a silent one. */}
+        <div data-testid="crm-contact-type" data-type={form.type}
+          className="flex items-center gap-2 self-start rounded-pill px-3 py-1.5 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-900/[0.07]">
+          {(() => { const TypeIcon = TYPE_META[form.type]?.icon || AddressBook; return <TypeIcon size={15} weight="fill" aria-hidden="true" className="shrink-0" />; })()}
+          <span className="truncate">{labels[form.type] || form.type}</span>
         </div>
 
         <div className="space-y-4">
@@ -550,8 +610,49 @@ export function CrmContactDialog({ type, contact, onClose, onSaved, users, label
           </FormSection>
         </div>
 
+        {/* J15 (founder) — THE COMPLAINTS, AND THE WAY TO CLOSE THEM.
+            One could be logged from this window and never resolved from
+            anywhere, so the red count on the card only ever climbed. They are
+            listed here, newest first, each with the one button that ends it. */}
+        {editing && openComplaints.length > 0 && (
+          <section data-testid="crm-contact-complaints">
+            <p className={DRAWER_LABEL}>
+              {openComplaints.length === 1 ? "1 open complaint" : `${openComplaints.length} open complaints`}
+            </p>
+            <div className="flex flex-col gap-2">
+              {openComplaints.map((cp) => (
+                <div key={cp.id} data-testid={`crm-complaint-${cp.id}`}
+                  className="flex flex-wrap items-center gap-3 rounded-2xl px-3 py-2.5 ring-1 ring-inset ring-rose-900/[0.08] bg-rose-50/60">
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm text-slate-800">{cp.text}</span>
+                    <span className="mt-0.5 block text-xs text-slate-500">
+                      {cp.severity ? `${cp.severity} \u00b7 ` : ""}{touchedLabel(daysSince(cp.created_at))}
+                    </span>
+                  </span>
+                  <button type="button" onClick={() => resolveComplaint(cp)} disabled={busy}
+                    data-testid={`crm-complaint-resolve-${cp.id}`}
+                    className={`flex min-h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-sm font-medium text-slate-800 disabled:opacity-40 ${GLASS_PILL}`}>
+                    <CheckCircle size={15} weight="bold" aria-hidden="true" /> Resolve
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         <div className="flex flex-wrap justify-end gap-2">
-          {editing && onLogComplaint && CUSTOMER_TYPES.includes(form.type) && (
+          {/* J15 (founder) — DELETING. Hard left, away from Save, in the
+              warning ink: it is the one control here that cannot be undone. */}
+          {editing && (
+            <button type="button" onClick={removeContact} disabled={busy} data-testid="crm-contact-delete"
+              className="flex min-h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-kr-accent transition-colors hover:bg-kr-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline disabled:opacity-40">
+              <Trash size={15} weight="bold" aria-hidden="true" /> Delete
+            </button>
+          )}
+          {/* J15 — BUYER_TYPES, not CUSTOMER_TYPES: narrowing the customer list
+              to one kind must not take the complaint button off partners, who
+              had it before the split and have the same reason to need it. */}
+          {editing && onLogComplaint && BUYER_TYPES.includes(form.type) && (
             <button type="button" onClick={() => onLogComplaint(contact)} disabled={busy} data-testid="crm-contact-log-complaint"
               className={`mr-auto flex min-h-11 items-center gap-2 rounded-pill px-5 text-sm font-medium text-rose-700 transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline disabled:opacity-40 ${GLASS_PILL}`}>
               <Warning size={15} weight="bold" aria-hidden="true" /> Log complaint
@@ -683,12 +784,17 @@ export default function CRM() {
     const list = data || [];
     return {
       customers: list.filter((c) => CUSTOMER_TYPES.includes(c.type)).length,
+      // J15 — partners are their own tab, not a type hidden inside customers.
+      partners: list.filter((c) => PARTNER_TYPES.includes(c.type)).length,
       suppliers: list.filter((c) => VENDOR_TYPES.includes(c.type)).length,
     };
   }, [data]);
 
   const contacts = useMemo(() => {
-    const list = (data || []).filter((c) => (scope === "suppliers" ? VENDOR_TYPES : CUSTOMER_TYPES).includes(c.type));
+    const typesInScope = scope === "suppliers" ? VENDOR_TYPES
+      : scope === "partners" ? PARTNER_TYPES
+      : CUSTOMER_TYPES;
+    const list = (data || []).filter((c) => typesInScope.includes(c.type));
     const outMap = outstandingMap || {};
     const sorted = [...list];
     if (sort === "name") {
@@ -712,7 +818,8 @@ export default function CRM() {
   const visible = contacts.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const describe = (c) => ({
-    typeChip: CUSTOMER_TYPES.includes(c.type) ? L.customer_singular : L.vendor_singular,
+    typeChip: PARTNER_TYPES.includes(c.type) ? PARTNER_LABEL
+      : CUSTOMER_TYPES.includes(c.type) ? L.customer_singular : L.vendor_singular,
     stage: stageMeta(c.type, c.lifecycle_stage),
     signal: signalFor(complaintCountByContact[c.id] || 0, outstandingMap?.[c.id], currency),
     touched: touchedLabel(daysSince(c.updated_at || c.created_at)),
@@ -726,13 +833,18 @@ export default function CRM() {
     else if (canManage) setEditing(c);
   };
 
+  /* J15 (founder) — PARTNERS GET A TAB. They were folded into the customers
+     list with no way to see them on their own, which is why somebody who added
+     one could not find it again. Both are the buyer side, so they open and
+     close together with `crm_buyers` — nobody gains access by the split. */
   const SCOPES = [
     ...(seesBuyers ? [{ key: "customers", label: L.customer_plural, icon: AddressBook, count: scopeCounts.customers }] : []),
+    ...(seesBuyers ? [{ key: "partners", label: PARTNER_LABEL_PLURAL, icon: Storefront, count: scopeCounts.partners }] : []),
     ...(seesSuppliers ? [{ key: "suppliers", label: L.vendor_plural, icon: Truck, count: scopeCounts.suppliers }] : []),
   ];
   const scopeLabel = SCOPES.find((s) => s.key === scope)?.label || "";
   const filtering = !!q || !!status;
-  const typeLabels = { customer: L.customer_singular, dealer: "Dealer", vendor: L.vendor_singular };
+  const typeLabels = { customer: L.customer_singular, dealer: PARTNER_LABEL, vendor: L.vendor_singular };
 
   return (
     <div data-testid="crm-page">
@@ -741,8 +853,12 @@ export default function CRM() {
           className="hidden" data-testid="crm-import-csv-input" />
       )}
       <CrmContactDialog type={adding} onClose={() => setAdding(null)} onSaved={refresh} users={users} labels={typeLabels} />
+      {/* J15 — the window also carries this contact's open complaints, so the
+          one that logged them is the one that can close them. */}
       <CrmContactDialog contact={editing} onClose={() => setEditing(null)} onSaved={refresh} users={users} labels={typeLabels}
-        onLogComplaint={(c) => { setEditing(null); setTimeout(() => setComplaintFor(c), 0); }} />
+        onLogComplaint={(c) => { setEditing(null); setTimeout(() => setComplaintFor(c), 0); }}
+        complaints={editing ? (openComplaints || []).filter((cp) => cp.customer_id === editing.id) : []}
+        onComplaintsChanged={() => qc.invalidateQueries({ queryKey: ["complaints-open"] })} />
       <LogComplaintDialog contact={complaintFor} onClose={() => setComplaintFor(null)} />
 
       {/* KM-27 — the controls pin with the title: they act ON the list, so

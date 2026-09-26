@@ -74,7 +74,8 @@ const resources = {
         all_statuses: "All statuses",
         add_customer: "Add {{name}}", add_supplier: "Add {{name}}",
         empty_title: "No relationships yet",
-        empty_hint_manage: "Add your first customer or supplier from the buttons above.",
+        // J15 — three kinds now, each with its own way in.
+        empty_hint_manage: "Add your first one from the Add contact button \u2014 a customer, a partner or a supplier.",
         empty_hint: "No records match your filters.",
       },
       brain: {

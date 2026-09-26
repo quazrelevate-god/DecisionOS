@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import api from "../lib/api";
+import api, { formatApiError } from "../lib/api";
 import { useIsMobile } from "../hooks/useIsMobile";
 import ContactProfileMobile from "./mobile/ContactProfileMobile";
 import { useAuth } from "../context/AuthContext";
@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft, Phone, EnvelopeSimple, MapPin, Receipt, CurrencyCircleDollar,
   Warning, Truck, TrendUp, Brain, CheckSquare, Buildings, Sparkle, Heart, ShieldWarning,
-  Note, Clock, ChatCircleDots, WhatsappLogo, Handshake, FlowArrow, PencilSimple,
+  Note, Clock, ChatCircleDots, WhatsappLogo, Handshake, FlowArrow, PencilSimple, CheckCircle,
 } from "@phosphor-icons/react";
 
 // Epic 2 Sprint 1 (E2-08): activity kind -> icon + colour. Small map
@@ -111,6 +111,18 @@ export default function ContactProfile() {
   const canManage = hasPerm(user, "people");
   const [editOpen, setEditOpen] = useState(false);
   const [complaintOpen, setComplaintOpen] = useState(false);
+  // J15 — closing one, from the page that lists them.
+  const [resolving, setResolving] = useState(null);
+  const resolveComplaint = async (cp) => {
+    setResolving(cp.id);
+    try {
+      await api.patch(`/complaints/${cp.id}/resolve`);
+      toast.success("Complaint resolved");
+      qc.invalidateQueries({ queryKey: ["contact-profile", id] });
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Could not resolve it \u2014 try again");
+    } finally { setResolving(null); }
+  };
   const { data: users } = useQuery({
     queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data), enabled: canManage, retry: false,
   });
@@ -210,10 +222,19 @@ export default function ContactProfile() {
   };
 
   const L = lex(tenant);
-  const typeLabels = { customer: L.customer_singular, dealer: "Dealer", vendor: L.vendor_singular };
+  // J15 (founder) — "Dealer" reads as "Partner" everywhere a person sees it.
+  // The stored type stays `dealer`: renaming the value would be a migration
+  // across every tenant's contacts for a word on a screen.
+  const typeLabels = { customer: L.customer_singular, dealer: "Partner", vendor: L.vendor_singular };
   const dialogs = canManage && (
     <>
+      {/* J15 — the same window, so Delete and Resolve are here too. Deleting
+          the contact this page is ABOUT has to leave the page: staying would
+          show a profile of somebody who no longer exists. */}
       <CrmContactDialog contact={editOpen ? c : null} onClose={() => setEditOpen(false)} users={users} labels={typeLabels}
+        complaints={complaints}
+        onComplaintsChanged={() => qc.invalidateQueries({ queryKey: ["contact-profile", id] })}
+        onDeleted={() => { setEditOpen(false); navigate("/crm"); }}
         onSaved={() => { qc.invalidateQueries({ queryKey: ["contact-profile", id] }); qc.invalidateQueries({ queryKey: ["crm-contacts"] }); }} />
       <LogComplaintDialog contact={complaintOpen ? c : null} onClose={() => setComplaintOpen(false)} />
     </>
@@ -480,10 +501,24 @@ export default function ContactProfile() {
         ))}</div>
       </Section>
 
+      {/* J15 (founder) — AND A WAY TO CLOSE THEM. This page listed complaints
+          and offered nothing to do about one: the count on the CRM card only
+          ever went up. PATCH /complaints/:id/resolve has always existed and
+          nothing in the app called it. */}
       <Section icon={Warning} title="Complaints" count={complaints.length} hideWhenEmpty>
         <div className="space-y-2">{complaints.map((cp) => (
           <div key={cp.id} data-testid={`profile-complaint-${cp.id}`} className="nm-tile p-3">
-            <div className="flex items-center gap-2 mb-1"><Chip value={cp.severity} /><Chip value={cp.status} /></div>
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <Chip value={cp.severity} /><Chip value={cp.status} />
+              {cp.status !== "resolved" && (
+                <button type="button" disabled={resolving === cp.id}
+                  onClick={() => resolveComplaint(cp)} data-testid={`profile-complaint-resolve-${cp.id}`}
+                  className="ml-auto flex min-h-11 items-center gap-1.5 rounded-pill px-3 text-xs font-medium text-slate-800 ring-1 ring-inset ring-slate-900/[0.08] transition-colors hover:bg-white disabled:opacity-40">
+                  <CheckCircle size={14} weight="bold" aria-hidden="true" />
+                  {resolving === cp.id ? "Resolving\u2026" : "Resolve"}
+                </button>
+              )}
+            </div>
             <p className="text-sm">{cp.text}</p>
           </div>
         ))}</div>

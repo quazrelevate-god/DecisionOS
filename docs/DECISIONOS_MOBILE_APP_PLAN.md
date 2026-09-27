@@ -95,6 +95,40 @@ goes up.
 
 ---
 
+## Running it locally
+
+Two servers. The API is the repo's fixture server, not the real backend —
+`backend/` needs MongoDB and the only `MONGO_URL` configured here points at a
+live Railway instance, which is not something to aim a test stack at.
+
+```bash
+npm run build --prefix frontend   # only if you want the bundled assets fresh
+node frontend/scripts/fixture-server.mjs --port 8000
+cd frontend && BROWSER=none npm start
+```
+
+Both are also registered in `.claude/launch.json` as `mac-fixture-api` and
+`mac-frontend`. The four configs that were already in that file are Windows-only
+— `cmd.exe`, `D:\QE\...` — so they cannot run on macOS or Linux; the two `mac-`
+entries use relative paths and work from any checkout.
+
+### Live reload on a device
+
+`npm run cap:dev` prints the exact three commands to run, with your LAN IP
+already filled in. The reason it exists is that the same address has to appear
+in three places, and each wrong one fails in a way that looks like a different
+bug: `server.url` (webview shows a blank screen — on a phone, `localhost` is the
+phone), `REACT_APP_BACKEND_URL` (UI loads, every request fails), and
+`FIXTURE_CORS_ORIGIN` (requests are made, then refused, which reads in the
+console like an auth problem).
+
+Live reload is opt-in through `CAP_LIVE_RELOAD_URL`. That guard is the point:
+a store build carrying a `server.url` would load the app from whichever laptop
+was on that network and fail to start anywhere else. Since the variable is unset
+in every normal build, `npm run build && npx cap sync` cannot produce that
+binary. Verified both ways — with the variable, `capacitor.config.json` gains
+`url` and `cleartext`; without it, the `server` block is just `androidScheme`.
+
 ## Before the first store build
 
 Two things must be settled. Neither is a code change and neither is done.

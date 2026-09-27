@@ -80,7 +80,11 @@
     "verify:dex": "node scripts/verify-dex.mjs",
     "verify:pwa": "npm run build && node scripts/verify-pwa.mjs",
     "shots": "node scripts/shots.mjs",
-    "fixture-api": "node scripts/fixture-server.mjs --port 8000"
+    "fixture-api": "node scripts/fixture-server.mjs --port 8000",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:dev": "node scripts/cap-dev.mjs",
+    "cap:ios": "npx cap open ios",
+    "cap:android": "npx cap open android"
   },
   "browserslist": {
     "production": [

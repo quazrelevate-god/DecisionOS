@@ -28,6 +28,23 @@
       "runtimeArgs": ["/c", "set BROWSER=none&& set PORT=3001&& set REACT_APP_BACKEND_URL=http://localhost:8001&& npm --prefix D:\\QE\\DecisionOS\\frontend run start"],
       "port": 3001,
       "url": "http://localhost:3001"
+    },
+
+    {
+      "_comment": "macOS/Linux equivalents. The four configs above are Windows-only (cmd.exe, D:\\ paths) and cannot run anywhere else. These use relative paths, so they work from any checkout.",
+      "name": "mac-fixture-api",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "node frontend/scripts/fixture-server.mjs --port 8000"],
+      "port": 8000,
+      "url": "http://localhost:8000"
+    },
+    {
+      "_comment": "Reads REACT_APP_BACKEND_URL from frontend/.env (http://localhost:8000). Start mac-fixture-api first, or the app renders signed-out.",
+      "name": "mac-frontend",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "BROWSER=none npm --prefix frontend run start"],
+      "port": 3000,
+      "url": "http://localhost:3000"
     }
   ]
 }

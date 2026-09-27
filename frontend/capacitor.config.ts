@@ -33,6 +33,30 @@ const config: CapacitorConfig = {
     // Both are opaque origins, so every API call must go to an absolute
     // REACT_APP_BACKEND_URL — see docs/DECISIONOS_MOBILE_APP_PLAN.md.
     androidScheme: 'https',
+
+    // LIVE RELOAD — opt-in, and deliberately impossible to ship by accident.
+    //
+    // Point the native webview at the CRA dev server instead of the bundled
+    // assets, so a save in src/ reloads on the device without a rebuild.
+    // Enabled only when CAP_LIVE_RELOAD_URL is set in the environment:
+    //
+    //   npm run cap:dev          # sets it for you, from your LAN IP
+    //
+    // It must be a LAN address (http://192.168.x.x:3000), never localhost —
+    // on a device or simulator, localhost is the device itself.
+    //
+    // The guard matters more than the feature. A store build that carried a
+    // server.url would load the app from whichever laptop happened to be on
+    // that network, and would simply fail to start anywhere else. Because
+    // this reads an env var that is unset in every normal build, `npm run
+    // build && npx cap sync` can never produce that binary.
+    ...(process.env.CAP_LIVE_RELOAD_URL
+      ? {
+          url: process.env.CAP_LIVE_RELOAD_URL,
+          // Android blocks plaintext HTTP by default; the dev server is HTTP.
+          cleartext: true,
+        }
+      : {}),
   },
 };
 

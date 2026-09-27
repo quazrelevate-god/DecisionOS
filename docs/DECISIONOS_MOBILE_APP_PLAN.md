@@ -1,0 +1,170 @@
+# DecisionOS as a native app — plan
+
+Started 2026-09-27. Scope: packaging the existing web app as an iOS and Android
+app with Capacitor, and the branch rhythm that keeps the two from drifting.
+Redesigning screens for mobile is **out** of scope — the whole point is that
+there is nothing to redesign.
+
+---
+
+## The shape of it
+
+Capacitor is a native shell around a webview. The webview loads the output of
+`npm run build` — the same bytes the web app serves — from inside the app
+bundle. There is no second copy of the UI, no mobile-only source tree, and no
+port of any screen.
+
+That is the entire reason this approach was chosen over the Flutter app that
+used to live in `mobile/`. That app was a parallel implementation, and a
+parallel implementation drifts: it was last touched in `e3ac453` and by the time
+it was retired it was 318 commits behind the design system it was supposed to
+mirror. It is archived at the tag **`mobile-flutter-archive`** and is not coming
+back. Nothing is lost — `git checkout mobile-flutter-archive -- mobile/` brings
+all 176 files back if anyone ever needs to look.
+
+What Capacitor added to this repo is additive and small:
+
+| Path | What it is |
+|---|---|
+| `frontend/capacitor.config.ts` | appId, appName, `webDir: 'build'` |
+| `frontend/package.json` | `@capacitor/core`, `/ios`, `/android`; `@capacitor/cli` + `typescript` as dev deps |
+| `frontend/ios/` | generated Xcode project — signing, icons, splash, permission strings live here |
+| `frontend/android/` | generated Gradle project — same |
+
+No existing screen, component or stylesheet was touched.
+
+### What is committed and what is not
+
+The native projects **are** committed, because that is where the things you
+cannot regenerate live: signing configuration, app icons, the splash screen, and
+the `Info.plist` / `AndroidManifest.xml` permission strings you will write the
+first time the app asks for a camera or a file.
+
+The web assets copied *into* those projects are **not** committed —
+`ios/App/App/public/`, `android/app/src/main/assets/public/`, and the generated
+`capacitor.config.json` in each. Capacitor's own `.gitignore` files exclude
+them, and that is deliberate: those are build output. If they were committed,
+someone would eventually ship a store build carrying a snapshot of the UI from
+whenever they were last staged. Keeping them out means the only way to get web
+assets into a build is to run `npm run build && npx cap sync`, which always
+takes the current source.
+
+`ios/.gitignore` also excludes `App/Pods`. As it happens this project uses Swift
+Package Manager rather than CocoaPods, so no `Pods` directory is ever generated
+— but the rule is there, so the belt and the braces both hold.
+
+---
+
+## The merge rhythm
+
+Nobody should have to guess at this.
+
+**Daily, while the app is pre-TestFlight: `karma-redesign` merges INTO
+`mobile-capacitor`.** One direction only. The pilot client is live on
+`karma-redesign` and nothing native goes near it until the app is proven. This
+branch absorbs the web app's changes every day so the gap never grows to
+something that has to be reconciled in one sitting:
+
+```bash
+git checkout mobile-capacitor
+git merge karma-redesign
+cd frontend && npm run build && npx cap sync
+```
+
+The `cap sync` is not optional. A merge that brings in a screen change and stops
+at the merge leaves the native projects holding the *previous* build, and the
+next thing you open in Xcode will show you yesterday's UI and you will spend an
+hour wondering why.
+
+**Once the app is in TestFlight: `mobile-capacitor` merges back into
+`karma-redesign`.** At that point the packaging is proven and the additive files
+belong on the main line, so that whoever is working on the web app also builds
+the native projects without a special branch.
+
+**Every store build comes from a tagged commit.** Never from a working copy,
+never from whatever HEAD happened to be. Tag first, build from the tag, so that
+a crash report from the store maps to an exact tree:
+
+```bash
+git tag mobile-1.0.0-build7
+cd frontend && npm run build && npx cap sync
+```
+
+Use `mobile-<version>-build<n>`; `n` is the store build number and only ever
+goes up.
+
+---
+
+## Before the first store build
+
+Two things must be settled. Neither is a code change and neither is done.
+
+**1. `REACT_APP_BACKEND_URL` must be absolute.** `src/lib/api.js` falls back to
+a relative `/api` when the variable is unset. That is right for the web app,
+where the API is same-origin. It is wrong inside a native app: the webview
+serves from `capacitor://localhost` on iOS and `https://localhost` on Android,
+so a relative `/api` resolves to the app bundle itself and reaches no backend at
+all. Worse, a store build made on a developer machine with the current
+`frontend/.env` would bake in `http://localhost:8000` — a build that works
+perfectly on the machine that made it and is inert everywhere else. Set the
+production API URL in the build environment before `npm run build`, and check
+the built bundle for `localhost` before shipping.
+
+**2. The service worker needs a decision.** The build emits
+`build/service-worker.js` (Workbox, from the PWA work). Inside a webview whose
+assets are already local, it caches local files against local files, and its
+main effect is that it can serve a stale asset across an app update. It should
+probably be disabled for native builds. It has not been, and nothing here
+changes it.
+
+A third, cosmetic: the generated iOS and Android projects still carry
+Capacitor's placeholder launcher icons and splash images. They need the real
+artwork before submission.
+
+---
+
+## What has actually been proven (2026-09-27)
+
+The design system survives packaging. This was measured, not assumed.
+
+The packaged payload was compared against the web build byte for byte. Every
+file in `frontend/build` is byte-identical inside both native projects. The only
+difference is two files Capacitor injects, `cordova.js` and
+`cordova_plugins.js`, both of which are zero bytes because there are no Cordova
+plugins.
+
+Then the repo's own mobile audit (`npm run audit:mobile`, the MPWA-00 harness)
+was run twice against a live fixture API: once against the assets inside the iOS
+app bundle, once against `frontend/build` served directly as a control. Both
+runs walked 24 routes at 390×844 and 360×640:
+
+| | packaged payload | web control |
+|---|---|---|
+| routes walked | 24 | 24 |
+| findings | 962 | 962 |
+| console errors | 0 | 0 |
+
+The two reports are identical — the same counts on all nine rules, and zero
+findings present in one run and absent from the other. The app was also driven
+by hand at a 375×812 viewport from the packaged bundle: Desk and Finance render
+with the gauge, the gradient ground, the segment control, the sparklines and the
+bottom tab bar all intact.
+
+**Those 962 findings are the web app's, not the packaging's.** The audit is red
+on `karma-redesign` today — 715 touch targets under 44px, 140 text runs under
+13px, 38 currency values not in Indian digit grouping. Capacitor neither caused
+them nor hid them, which is exactly what the control run establishes. They are
+worth their own piece of work; they are not this one.
+
+### What has *not* been proven
+
+The app has never been compiled or run in a simulator. The machine this was done
+on has no Xcode (Command Line Tools only), no CocoaPods, no Java and no Android
+SDK, so neither `xcodebuild` nor `gradlew` can run here at all.
+
+So: the evidence above is that the *payload* is correct and renders correctly.
+The remaining unknowns are the ones only a real device build can answer —
+WKWebView rendering versus Chromium, the `capacitor://` scheme, safe-area insets
+against a physical notch, and keyboard behaviour. The first person with Xcode
+should run `npx cap open ios`, build to a simulator, and add what they find
+here.

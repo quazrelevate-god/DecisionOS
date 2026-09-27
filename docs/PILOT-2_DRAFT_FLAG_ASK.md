@@ -1,5 +1,15 @@
 # PILOT-2 B · A draft flag on the decision, so "Save as draft" travels
 
+> **SHIPPED 2026-09-27.** Built as asked: `draft` / `drafted_at` / `drafted_by`
+> on the decision, `POST`+`DELETE /api/decisions/{id}/draft` (403 for anyone who
+> cannot decide it, 409 once it is decided, idempotent), deciding clears the
+> flag in the same write as the status, and the Desk's cards carry `draft`.
+> The frontend reads it from the decision; `lib/deferredDecisions.js` is
+> retired, replaced by `lib/decisionDrafts.js`, and drafts already sitting in
+> someone's localStorage are posted once on their next load. Tests:
+> `backend/tests/test_decision_draft_travels.py` (11). Kept for the record of
+> why it was built this way; the flag is per DECISION, as recommended below.
+
 **For:** Yokesh (backend) · **From:** PILOT-2 part B · **Date:** 2026-09-27
 
 ## Why this is needed

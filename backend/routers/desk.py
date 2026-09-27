@@ -594,6 +594,11 @@ async def _cards_needs_decision(tid: str, user: dict) -> list:
             "amount_formatted": _format_amount(amount),
             # "review": mine to decide · "follow": I raised it, someone else decides.
             "cta": "follow" if following else "review",
+            # PILOT-2 B (2026-09-27): the Decisions column marks a draft row
+            # without a second request — and it is the same answer on every
+            # device, which is the whole point of moving the mark off
+            # localStorage.
+            "draft": bool(d.get("draft")),
             "target_id": d["id"],
             "target_kind": "decision",
         })

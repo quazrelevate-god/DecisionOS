@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import api, { SESSION_LOST_EVENT } from "../lib/api";
 import { setViewerIsOwner } from "../lib/aiConsent";
+import { carryOverLocalDrafts } from "../lib/decisionDrafts";
 import { clearAllDrafts } from "../lib/drafts";
 
 /* JOURNEY-1 J12 — what this browser keeps under a person's id (their My Work
@@ -38,6 +39,16 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     setViewerIsOwner(user?.role === "owner");
   }, [user?.role]);
+
+  /* PILOT-2 B (2026-09-27) — drafts saved before the flag moved to the server
+     live in this browser's localStorage. The first time a signed-in person
+     opens the app after the change, they are posted to their decisions and the
+     old list is dropped, so nobody loses a draft in the switch. Best effort:
+     a failure leaves the list to be tried again next time. */
+  useEffect(() => {
+    if (!user?.id) return;
+    carryOverLocalDrafts().catch(() => { /* tried again on the next load */ });
+  }, [user?.id]);
 
   useEffect(() => {
     // Session is restored from the HttpOnly cookie via /auth/me.

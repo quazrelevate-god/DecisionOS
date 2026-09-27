@@ -78,7 +78,7 @@ import { userPerms } from "../lib/perms";
 import { canAssignPerson } from "../lib/taskAccess";
 import { proposalCreatesText } from "../lib/decisionProposal";
 import { LeftoverReview } from "./workflow/LeftoverReview";
-import { isDraft as readDraft, subscribeDrafts, draftOverrides, settleDraft } from "../lib/decisionDrafts";
+import { isDraft as readDraft, subscribeDrafts, draftOverrides, settleDraft, saveAsDraft, clearDraft } from "../lib/decisionDrafts";
 
 /* ── helpers shared with the Desk's decision cards ───────────────────────── */
 export function raisedByLabel(d) {
@@ -390,6 +390,32 @@ export function DecisionPanel({
   const leftMoves = (Array.isArray(movesQ.data) ? movesQ.data : []).filter((m) => (m.tasks || []).length > 0);
   const [leftChoices, setLeftChoices] = useState({});
 
+  /* 2026-09-27 — THE DRAFT IS OFFERED WHEREVER THE DECISION IS, not only in
+     the pop-up the capture ended in. An owner who opens a decision the next
+     morning, sets its priority, moves it to Anand and then walks away has
+     already SAVED all of that (the panel writes each change as it is made) —
+     but the decision goes back to looking like one nobody has touched, so
+     tomorrow they cannot tell what they have already been through. This says
+     it, both ways: a draft can be taken off the mark without deciding it.
+     The capture pop-up keeps its own handler (it has a pop-up to close). */
+  const draftM = useMutation({
+    /* The wanted state travels WITH the click, and the message reads it back.
+       Taking it from `isDraft` in onSuccess said "No longer a draft" about a
+       draft just saved — by then the optimistic mark had already flipped. */
+    mutationFn: (next) => (onSaveDraft
+      ? Promise.resolve(onSaveDraft(decisionId))
+      : (next ? saveAsDraft(decisionId) : clearDraft(decisionId))),
+    onSuccess: (_res, next) => {
+      if (onSaveDraft) return;      // the caller says its own piece
+      toast.success(next ? "Saved as a draft" : "No longer a draft");
+      invalidate();
+    },
+    onError: (e) => {
+      if (onSaveDraft) return;      // and owns its own failure
+      toast.error(e?.response?.data?.detail || "Couldn't change the draft mark");
+    },
+  });
+
   const approveM = useMutation({
     /* ASK-50 — priority, proof and approval are already on the proposal (the
        card below saves them as they change), so approving creates the tasks
@@ -421,7 +447,7 @@ export function DecisionPanel({
     },
     onError: (e) => toast.error(e.response?.data?.detail || "Could not reject"),
   });
-  const busy = approveM.isPending || rejectM.isPending;
+  const busy = approveM.isPending || rejectM.isPending || draftM.isPending;
 
   const sendNote = async () => {
     if (!note.trim()) return;
@@ -517,15 +543,16 @@ export function DecisionPanel({
             <CheckCircle size={16} weight="bold" aria-hidden="true" className="shrink-0" />
             {approveM.isPending ? "Approving…" : "Approve"}
           </button>
-          {onSaveDraft && (
+          {!!decisionId && (
             <button
               type="button"
-              onClick={() => onSaveDraft(decisionId)}
+              onClick={() => draftM.mutate(!isDraft)}
               disabled={busy}
+              /* The testid the Dex suites look for, kept. */
               data-testid="desk-dex-later"
               className={`flex h-14 min-w-0 flex-1 items-center justify-center rounded-pill px-4 text-sm font-medium text-slate-800 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 disabled:opacity-60 lg:h-12 ${GLASS_PILL}`}
             >
-              Save as draft
+              {draftM.isPending ? "Saving…" : isDraft && !onSaveDraft ? "Not a draft" : "Save as draft"}
             </button>
           )}
           <button
@@ -775,6 +802,24 @@ export function DecisionPanel({
                             : <><X size={16} weight="bold" aria-hidden="true" /> Reject</>}
                         </button>
                       </div>
+                      {/* 2026-09-27 — AND THE THIRD ANSWER: not yet. The owner
+                          who opens this the morning after, sets the priority
+                          and moves the task to Anand has saved all of that
+                          (each change is written as it is made) — but with
+                          only Approve and Reject here, the decision goes back
+                          to looking untouched, and tomorrow they cannot tell
+                          it from the ones that arrived overnight. Below the
+                          two, because it is not a decision: it is the note
+                          that they have been here. */}
+                      <button
+                        type="button"
+                        onClick={() => draftM.mutate(!isDraft)}
+                        disabled={busy}
+                        data-testid="decision-save-draft"
+                        className="mt-2.5 flex h-11 w-full items-center justify-center rounded-pill px-5 text-sm font-medium text-slate-600 transition-colors hover:bg-white hover:text-slate-900 disabled:opacity-60"
+                      >
+                        {draftM.isPending ? "Saving…" : isDraft ? "Not a draft any more" : "Save as draft — decide later"}
+                      </button>
                       {confirmReject && (
                         <p className="mt-3 text-xs text-rose-700" data-testid="decision-reject-warning">
                           {proposing

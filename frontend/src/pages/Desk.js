@@ -1046,11 +1046,9 @@ export default function Desk() {
     /* PILOT-2 A — the well's own capture is reviewed in its pop-up; this
        opens any OTHER decision a late toast names, in DecisionDialog. */
     onReview={(id) => setOpenDecisionId(id)}
-    onLater={(id) => {
-      saveAsDraft(id)
-        .then(() => qc.invalidateQueries({ queryKey: ["desk"] }))
-        .catch((e) => toast.error(e.response?.data?.detail || "Couldn't save it as a draft"));
-    }}
+    /* The promise goes back to the well, which waits for it before it says
+       the draft is saved (PILOT-2 B, 2026-09-27). */
+    onLater={(id) => saveAsDraft(id).then((ok) => { qc.invalidateQueries({ queryKey: ["desk"] }); return ok; })}
           />
   );
 

@@ -1,6 +1,6 @@
 {
-  "count": 356,
-  "sha": "e33cfb5fd66d16118048077bb593c694ec97ccb7160417afb50b1b27d3ed917c",
+  "count": 357,
+  "sha": "ad6e0fadf3da341363f5f881e9099130175e2dbb9b9b90d40a4de6ab59ca351f",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -184,6 +184,7 @@
     "PATCH /api/captures/{cid}",
     "PATCH /api/complaints/{cid}/resolve",
     "PATCH /api/contacts/{contact_id}",
+    "PATCH /api/decisions/{decision_id}",
     "PATCH /api/decisions/{decision_id}/proposal/tasks/{key}",
     "PATCH /api/expenses/{eid}",
     "PATCH /api/inventory/{iid}",

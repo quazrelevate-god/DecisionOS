@@ -377,7 +377,7 @@ async def _save_proposal(user: dict, d: dict, label: str) -> dict:
     return await db.decisions.find_one(tenant_filter(d["id"], tid), {"_id": 0})
 
 
-async def edit_proposal_task(user: dict, decision_id: str, key: str, *, assignee_id=None, due_date=None,
+async def edit_proposal_task(user: dict, decision_id: str, key: str, *, title=None, assignee_id=None, due_date=None,
                              priority=None, evidence_required=None, approval_required=None,
                              approval_stage=None, approver_id=None) -> dict:
     """assignee_id: who does it (held to the same rule as giving anyone a task);
@@ -394,6 +394,19 @@ async def edit_proposal_task(user: dict, decision_id: str, key: str, *, assignee
     if not task:
         raise HTTPException(status_code=404, detail="That task is no longer in this decision.")
     changes = []
+    # 2026-09-27 — THE TASK'S OWN NAME. Dex names a task from speech and
+    # mishears; the name it lands with is the one the person doing it reads,
+    # searches for and reports against. It was the one thing on this screen
+    # that could not be corrected before approving — the founder either
+    # approved the wrong words or deleted the task and typed it again.
+    if title is not None:
+        clean = " ".join(str(title).split())
+        if not clean:
+            raise HTTPException(status_code=400, detail="Give the task a name.")
+        if clean != task.get("title"):
+            was = task.get("title")
+            task["title"] = clean
+            changes.append(f'renamed from "{was}"')
     if assignee_id and assignee_id != task.get("assignee_id"):
         target = await db.users.find_one({"id": assignee_id, "tenant_id": tid},
                                          {"_id": 0, "id": 1, "name": 1, "role": 1, "reporting_manager_id": 1})
@@ -439,6 +452,39 @@ async def edit_proposal_task(user: dict, decision_id: str, key: str, *, assignee
     if not changes:
         return d
     return await _save_proposal(user, d, f"Changed before approval: {task.get('title')} — {', '.join(changes)}")
+
+
+async def edit_decision_words(user: dict, decision_id: str, *, title=None, summary=None) -> dict:
+    """The decision's own title and text, before it is decided (2026-09-27).
+
+    Same gate as everything else on that screen (`_editable`): only while it
+    can still be decided, and only by somebody who may decide it. These words
+    outlive the screen — the Journal, the Company Brain and every later search
+    read them — so a mishearing corrected here is corrected everywhere.
+    """
+    d = await _editable(user, decision_id)
+    updates, changes = {}, []
+    if title is not None:
+        clean = " ".join(str(title).split())
+        if not clean:
+            raise HTTPException(status_code=400, detail="Give the decision a title.")
+        if clean != d.get("title"):
+            updates["title"] = clean
+            changes.append("title")
+    if summary is not None:
+        clean = str(summary).strip()
+        if not clean:
+            raise HTTPException(status_code=400, detail="A decision needs to say what was decided.")
+        if clean != (d.get("summary") or ""):
+            updates["summary"] = clean
+            changes.append("what it says")
+    if not updates:
+        return d
+    updates["updated_at"] = now_iso()
+    await db.decisions.update_one(tenant_filter(decision_id, user["tenant_id"]), {"$set": updates})
+    await add_decision_event(decision_id, f"Reworded before approval: {', '.join(changes)}",
+                             user.get("name") or "", "event")
+    return await db.decisions.find_one(tenant_filter(decision_id, user["tenant_id"]), {"_id": 0})
 
 
 async def remove_proposal_item(user: dict, decision_id: str, kind: str, key: str) -> dict:

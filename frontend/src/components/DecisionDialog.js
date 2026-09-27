@@ -61,7 +61,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
 import {
   ChatCircleText, User, WhatsappLogo, Microphone, PaperPlaneTilt,
-  CheckCircle, ArrowRight, LinkSimple, Check, X, WarningCircle, Play,
+  CheckCircle, ArrowRight, LinkSimple, Check, X, WarningCircle, Play, PencilSimple,
 } from "@phosphor-icons/react";
 import { Link } from "react-router-dom";
 import {
@@ -127,6 +127,76 @@ function TimelineDot({ tone = "muted", check = false }) {
 }
 
 /* A raised glass card with a small-caps label — the task drawer's section. */
+/* 2026-09-27 (Yokesh) — WORDS DEX MISHEARD, CORRECTED WHERE THEY ARE READ.
+   Dex writes a decision's title, its text and the name of every task it
+   proposes from what somebody said, and speech comes back misspelled — a
+   name, a fabric, a number. None of it could be corrected before approving:
+   the founder approved the wrong words and lived with them, because those
+   words are what the person doing the task reads, and what the Journal, the
+   Company Brain and every later search carry.
+
+   One control for all three. It reads as the text it is until you click it;
+   Enter or moving away saves, Escape puts it back. A save that the server
+   refuses (an empty name, a decision somebody else has just decided) puts the
+   old words back and says why, rather than leaving a lie on the screen. */
+function EditableText({ value, onSave, testid, multiline = false, disabled = false,
+                        className = "", inputClassName = "", placeholder = "" }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value || "");
+  const [saving, setSaving] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => { if (!editing) setDraft(value || ""); }, [value, editing]);
+  useEffect(() => { if (editing && ref.current) { ref.current.focus(); ref.current.select?.(); } }, [editing]);
+
+  if (!editing) {
+    return (
+      <button type="button" disabled={disabled} onClick={() => setEditing(true)}
+        data-testid={testid}
+        title={disabled ? undefined : "Click to correct the wording"}
+        className={`group inline-flex max-w-full items-start gap-1.5 text-left ${disabled ? "cursor-default" : "cursor-text hover:bg-white/60"} rounded-lg px-1 -mx-1 ${className}`}>
+        <span className="min-w-0">{value || <span className="text-slate-400">{placeholder}</span>}</span>
+        {!disabled && (
+          <PencilSimple size={12} weight="bold" aria-hidden="true"
+            className="mt-1 shrink-0 text-slate-400 opacity-0 transition-opacity group-hover:opacity-100" />
+        )}
+      </button>
+    );
+  }
+
+  const commit = async () => {
+    const next = draft.trim();
+    if (!next || next === (value || "").trim()) { setEditing(false); setDraft(value || ""); return; }
+    setSaving(true);
+    try {
+      await onSave(next);
+      setEditing(false);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not save those words");
+      setDraft(value || "");
+      setEditing(false);
+    } finally { setSaving(false); }
+  };
+  const Field = multiline ? "textarea" : "input";
+  return (
+    <Field
+      ref={ref}
+      value={draft}
+      disabled={saving}
+      rows={multiline ? 4 : undefined}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") { e.preventDefault(); setDraft(value || ""); setEditing(false); }
+        if (e.key === "Enter" && !multiline) { e.preventDefault(); e.currentTarget.blur(); }
+        if (e.key === "Enter" && multiline && (e.metaKey || e.ctrlKey)) { e.preventDefault(); e.currentTarget.blur(); }
+      }}
+      data-testid={`${testid}-input`}
+      aria-label="Correct the wording"
+      className={`w-full rounded-lg border border-slate-900/20 bg-white px-2 py-1 focus:border-slate-900 focus:outline-none disabled:opacity-60 ${inputClassName}`}
+    />
+  );
+}
+
 function Card({ label, right, children, testid, className = "" }) {
   return (
     <section className={`${DRAWER_CARD} p-4 lg:p-5 ${className}`} data-testid={testid}>
@@ -324,6 +394,13 @@ export function DecisionPanel({
     : "The owner";
   const people = (membersQ.data || []).filter((m) => canAssignPerson(user, m))
     .map((m) => ({ value: m.id, label: m.id === user?.id ? `${m.name} (you)` : m.name }));
+  /* 2026-09-27 — the decision's own words. PATCH /decisions/:id, the same
+     gate as the rest of this screen: only while it can still be decided, and
+     only by somebody who may decide it. */
+  const editWords = async (body) => {
+    await api.patch(`/decisions/${decisionId}`, body);
+    invalidate();
+  };
   const editTask = async (key, body) => {
     setEditBusy(true);
     try {
@@ -476,7 +553,10 @@ export function DecisionPanel({
      the close on its line; embedded it is a heading inside the host's body. */
   const titleLine = d ? (
     <>
-      {d.title}
+      {editable
+        ? <EditableText value={d.title} testid="decision-title-edit" inputClassName="text-[inherit] font-[inherit]"
+            onSave={(title) => editWords({ title })} />
+        : d.title}
       {isDraft && (
         <span className="font-normal text-slate-500" data-testid="decision-draft-mark"> (Draft)</span>
       )}
@@ -650,7 +730,13 @@ export function DecisionPanel({
                 {/* LEFT — the decision and what to do about it */}
                 <div className="flex min-w-0 flex-col gap-4">
                   <Card label="The decision" testid="decision-summary-card">
-                    {d.summary
+                    {editable ? (
+                      <div className="text-[15px] leading-relaxed text-slate-800" data-testid="decision-summary">
+                        <EditableText value={d.summary || ""} testid="decision-summary-edit" multiline
+                          placeholder="Say what was decided" inputClassName="text-[15px] leading-relaxed"
+                          onSave={(summary) => editWords({ summary })} />
+                      </div>
+                    ) : d.summary
                       ? <p className="text-[15px] leading-relaxed text-slate-800" data-testid="decision-summary">{d.summary}</p>
                       : <p className="text-sm text-slate-500">No summary was recorded.</p>}
                     {canDecide && (proposing ? !!createsText : blocked.length > 0) && (
@@ -879,7 +965,19 @@ export function DecisionPanel({
                             check={t.status === "done"}
                           />
                           <div className="min-w-0 flex-1">
-                            {proposing || !t.id
+                            {editable
+                              ? (
+                                <div className="text-sm text-slate-800">
+                                  {/* Its own call rather than editTask: a refusal has to
+                                      reach the control, so the old name comes back. */}
+                                  <EditableText value={t.title} testid={`decision-task-title-${t.key}`}
+                                    disabled={editBusy} inputClassName="text-sm"
+                                    onSave={(title) => api
+                                      .patch(`/decisions/${decisionId}/proposal/tasks/${t.key}`, { title })
+                                      .then(invalidate)} />
+                                </div>
+                              )
+                              : proposing || !t.id
                               ? <p className="text-sm text-slate-800">{t.title}</p>
                               : (
                                 <Link to={`/my-work?task=${t.id}`} onClick={() => onClose && onClose()}

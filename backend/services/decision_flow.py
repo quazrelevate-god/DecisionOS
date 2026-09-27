@@ -190,10 +190,51 @@ async def _claim(user: dict, decision_id: str, status: str) -> None:
     """Flip pending -> decided atomically, so two clicks cannot both act."""
     res = await db.decisions.update_one(
         {"id": decision_id, "tenant_id": user["tenant_id"], "status": {"$nin": list(DECIDED)}},
+        # PILOT-2 B: a decided decision is never a draft — cleared in the same
+        # write, so no screen can show a decided draft for even one poll.
         {"$set": {"status": status, "decided_at": now_iso(), "decided_by": user["id"],
-                  "decided_by_name": user.get("name")}})
+                  "decided_by_name": user.get("name"), "draft": False,
+                  "updated_at": now_iso()}})
     if not res.modified_count:
         raise HTTPException(status_code=409, detail="This decision was just decided by someone else.")
+
+
+# ---------------------------------------------------------------------------
+# PILOT-2 B (2026-09-27) — SAVE AS DRAFT, ON THE DECISION.
+#
+# The pilot client asked for Dex's "Later" to say "Save as draft". The rename
+# shipped, but the mark was a list of ids in one browser's localStorage
+# (ASK-36, when the button meant "I looked at this on this device"). "Save as
+# draft" promises something saved: the founder who saved one on the laptop and
+# opened the phone found the decision there with no mark on it, and a cleared
+# browser or a private window lost it altogether.
+#
+# So the flag is a field on the decision, not a bookmark in a device: the
+# client's words were "so people can understand the yellow means draft" — the
+# decision's state, for everyone who looks at it.
+# ---------------------------------------------------------------------------
+DRAFTABLE = ("pending", "pending_approval")
+
+
+async def set_draft(user: dict, decision_id: str, draft: bool) -> dict:
+    """Mark a decision as a draft, or take the mark off. Idempotent.
+
+    Only while it can still be decided, and only by somebody who may decide it
+    — a draft is a statement about the decision, so it is the deciders' to make.
+    """
+    tid = user["tenant_id"]
+    d = await db.decisions.find_one(tenant_filter(decision_id, tid), {"_id": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not can_decide(user, d):
+        raise HTTPException(status_code=403, detail="You can't decide this one, so you can't save it as a draft.")
+    if d.get("status") not in DRAFTABLE:
+        raise HTTPException(status_code=409, detail="This decision has already been decided.")
+    stamp = {"draft": bool(draft), "updated_at": now_iso()}
+    if draft:
+        stamp.update({"drafted_at": now_iso(), "drafted_by": user["id"]})
+    await db.decisions.update_one(tenant_filter(decision_id, tid), {"$set": stamp})
+    return await db.decisions.find_one(tenant_filter(decision_id, tid), {"_id": 0})
 
 
 async def planned_moves(tid: str, d: dict, only_existing: bool = False) -> list:

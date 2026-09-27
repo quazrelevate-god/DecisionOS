@@ -1,6 +1,6 @@
 {
-  "count": 354,
-  "sha": "abbafcb49b6cfe7100e078f64dde9f138dc46d3ca6256540e038b5f4a6babebb",
+  "count": 356,
+  "sha": "e33cfb5fd66d16118048077bb593c694ec97ccb7160417afb50b1b27d3ed917c",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -14,6 +14,7 @@
     "DELETE /api/auth/me/sessions/{jti}",
     "DELETE /api/brain/documents/{doc_id}",
     "DELETE /api/contacts/{contact_id}",
+    "DELETE /api/decisions/{decision_id}/draft",
     "DELETE /api/decisions/{decision_id}/proposal/{kind}/{key}",
     "DELETE /api/expenses/{eid}",
     "DELETE /api/inventory/{iid}",
@@ -265,6 +266,7 @@
     "POST /api/decisions/{decision_id}/approve",
     "POST /api/decisions/{decision_id}/approver",
     "POST /api/decisions/{decision_id}/comment",
+    "POST /api/decisions/{decision_id}/draft",
     "POST /api/decisions/{decision_id}/reject",
     "POST /api/decisions/{decision_id}/tasks",
     "POST /api/desk/nudge/{item_id}",

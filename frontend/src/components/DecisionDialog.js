@@ -78,7 +78,7 @@ import { userPerms } from "../lib/perms";
 import { canAssignPerson } from "../lib/taskAccess";
 import { proposalCreatesText } from "../lib/decisionProposal";
 import { LeftoverReview } from "./workflow/LeftoverReview";
-import { clearDeferred, getDeferred, subscribeDeferred } from "../lib/deferredDecisions";
+import { isDraft as readDraft, subscribeDrafts, draftOverrides, settleDraft } from "../lib/decisionDrafts";
 
 /* ── helpers shared with the Desk's decision cards ───────────────────────── */
 export function raisedByLabel(d) {
@@ -201,13 +201,13 @@ export function DecisionPanel({
   const canDecide = d?.status === "pending" || d?.status === "pending_approval";
   /* PILOT-2 B — "(Draft)" AFTER THE TITLE, the other half of what the client
      asked for: a decision saved as a draft says so in its own screen, not only
-     in the Desk's column. Only while it can still be decided — a draft that has
-     been approved or rejected is not a draft. The mark is this device's
-     (lib/deferredDecisions); docs/PILOT-2_DRAFT_FLAG_ASK.md is the ask that
-     makes it travel. */
-  const [drafts, setDrafts] = useState(getDeferred);
-  useEffect(() => subscribeDeferred(setDrafts), []);
-  const isDraft = canDecide && !!decisionId && drafts.includes(decisionId);
+     in the Desk's column. Only while it can still be decided — a decided one is
+     not a draft, and the server clears the flag in the same write as the
+     status. It reads `draft` off the decision itself now, so the phone and the
+     laptop agree (lib/decisionDrafts). */
+  const [draftMarks, setDraftMarks] = useState(draftOverrides);
+  useEffect(() => subscribeDrafts(setDraftMarks), []);
+  const isDraft = canDecide && !!decisionId && readDraft(d, draftMarks);
   const amount = useMemo(() => extractAmount(d), [d]);
   const wfLabel = useMemo(() => workflowLabel(d), [d]);
   const tasks = d?.tasks || [];
@@ -403,8 +403,9 @@ export function DecisionPanel({
         c.workflow_ids ? `${c.workflow_ids} workflow${c.workflow_ids === 1 ? "" : "s"}` : null,
       ].filter(Boolean) : [];
       toast.success(made.length ? `Approved — ${made.join(" and ")} created` : "Approved");
-      // PILOT-2 B — issued, so it is not a draft any more.
-      clearDeferred(decisionId);
+      // PILOT-2 B — issued, so it is not a draft any more (the server cleared
+      // the flag with the status; this drops our own optimistic answer).
+      settleDraft(decisionId);
       // ASK-32 Phase 3 — stay open: the popup now shows what was created, with links.
       invalidate();
     },
@@ -414,7 +415,7 @@ export function DecisionPanel({
     mutationFn: () => api.post(`/decisions/${decisionId}/reject`),
     onSuccess: () => {
       toast.success(proposing ? "Rejected — nothing was created" : "Rejected");
-      clearDeferred(decisionId); // PILOT-2 B — thrown away, so not a draft either.
+      settleDraft(decisionId); // PILOT-2 B — thrown away, so not a draft either.
       invalidate();
       onClose && onClose();
     },

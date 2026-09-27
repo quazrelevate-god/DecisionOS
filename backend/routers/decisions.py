@@ -240,6 +240,30 @@ async def reject_decision(decision_id: str, user: dict = Depends(require_perm("d
     return await enrich_decision(d, tenant_id=user["tenant_id"])
 
 
+@router.post("/decisions/{decision_id}/draft")
+async def save_decision_as_draft(decision_id: str, user: dict = Depends(get_current_user)):
+    """Save as draft (PILOT-2 B, 2026-09-27).
+
+    The mark used to live in one browser's localStorage, so a draft saved on
+    the laptop was not a draft on the phone. It is a field on the decision now;
+    `updated_at` is stamped with it, so /api/pulse carries it to every open
+    screen within a tick. Setting one that is already set is not an error.
+    """
+    from services.decision_flow import set_draft
+    from services.enrich import enrich_decision
+    d = await set_draft(user, decision_id, True)
+    return await enrich_decision(d, tenant_id=user["tenant_id"])
+
+
+@router.delete("/decisions/{decision_id}/draft")
+async def unsave_decision_draft(decision_id: str, user: dict = Depends(get_current_user)):
+    """Take the draft mark off, without deciding it."""
+    from services.decision_flow import set_draft
+    from services.enrich import enrich_decision
+    d = await set_draft(user, decision_id, False)
+    return await enrich_decision(d, tenant_id=user["tenant_id"])
+
+
 @router.patch("/decisions/{decision_id}/proposal/tasks/{key}")
 async def edit_decision_proposal_task(decision_id: str, key: str, inp: DecisionProposalTaskInput,
                                       user: dict = Depends(get_current_user)):

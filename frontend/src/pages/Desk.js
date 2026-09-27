@@ -26,6 +26,7 @@
 // decision page (KM-28).
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 // J14-11 — the Desk had no translator at all, which is why switching to
 // Tamil changed two words in the dock and nothing on the screen itself.
@@ -36,7 +37,7 @@ import { hasPerm, canSeeBuyers } from "../lib/perms";
 import { inrCompact } from "../lib/format";
 import { cn } from "../lib/utils";
 // ASK-36 2 — which decisions the founder read and set aside (see the file).
-import { deferDecision, getDeferred, pruneDeferred, subscribeDeferred } from "../lib/deferredDecisions";
+import { saveAsDraft, subscribeDrafts, draftOverrides, isDraft, settleDraft } from "../lib/decisionDrafts";
 import { selfScore } from "../lib/karmaScore";
 import { isDemoTenant, demoDelta } from "./_operatingScoreDemo";
 import { opModel } from "../lib/operatingModel";
@@ -823,7 +824,9 @@ export default function Desk() {
   /* Keyed on target_id, which IS the decision's id — desk.py writes the same
      value into `id` and `target_id`, and `target_id` is the one the well's
      ending hands back, so this is the field that can never drift. */
-  useEffect(() => { if (decisionCards.length) pruneDeferred(decisionCards.map((c) => c.target_id || c.id)); }, [decisionCards]);
+  /* PILOT-2 B — nothing to prune: deciding clears the flag server-side, in the
+     same write as the status, so a decided decision is never a draft. */
+  useEffect(() => { decisionCards.forEach((c) => settleDraft(c.target_id || c.id)); }, [decisionCards]);
   /* ASK-34 B1 — the phone's three tabs. `watch` is the group that was three
      stacked cards under the two columns: Due today, Leave requests, Slipping.
      Its badge is the three counts together, because the tab is the three feeds
@@ -921,11 +924,12 @@ export default function Desk() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [phoneExpanded]);
-  /* ASK-36 2 — the ids of decisions set aside with "Later" — PILOT-2 B, "Save
-     as draft". Subscribed rather than read once, because the well writes to the
-     store while this page is mounted. */
-  const [deferred, setDeferred] = useState(getDeferred);
-  useEffect(() => subscribeDeferred(setDeferred), []);
+  /* PILOT-2 B — a draft is the DECISION's state now (the card carries `draft`
+     from the server), so every device shows the same rows in yellow. What is
+     subscribed here is only the gap between the founder's tap and the next
+     fetch, so the row turns under their finger (lib/decisionDrafts). */
+  const [draftMarks, setDraftMarks] = useState(draftOverrides);
+  useEffect(() => subscribeDrafts(setDraftMarks), []);
   const watchCount = (counters?.due_today || 0) + (canApproveLeave ? pendingLeaves.length : 0) + (counters?.on_fire || 0);
   /* ASK-41 1 — the server's count, plainly. It used to subtract the rows an
      undo window was hiding; there is no such row any more. */
@@ -972,8 +976,8 @@ export default function Desk() {
     /* PILOT-2 B — opening a draft does not un-draft it: it stays one until it
        is approved or rejected (DecisionDialog clears the mark then). */
     onOpen: () => setOpenDecisionId(c.target_id),
-    // ASK-36 2 — read, then saved as a draft. The row says so.
-    deferred: deferred.includes(c.target_id),
+    // PILOT-2 B — read, then saved as a draft. The row says so, on any device.
+    deferred: isDraft(c, draftMarks),
   }));
   /* ASK-41 1 — the row opens the task; TaskCard's drawer is where it is
      approved or rejected. Its approval block carries both, and the reject there
@@ -1042,7 +1046,11 @@ export default function Desk() {
     /* PILOT-2 A — the well's own capture is reviewed in its pop-up; this
        opens any OTHER decision a late toast names, in DecisionDialog. */
     onReview={(id) => setOpenDecisionId(id)}
-    onLater={(id) => { deferDecision(id); setDeferred(getDeferred()); }}
+    onLater={(id) => {
+      saveAsDraft(id)
+        .then(() => qc.invalidateQueries({ queryKey: ["desk"] }))
+        .catch((e) => toast.error(e.response?.data?.detail || "Couldn't save it as a draft"));
+    }}
           />
   );
 

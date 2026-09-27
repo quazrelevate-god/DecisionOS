@@ -84,7 +84,9 @@
     "cap:sync": "npm run build && npx cap sync",
     "cap:dev": "node scripts/cap-dev.mjs",
     "cap:ios": "npx cap open ios",
-    "cap:android": "npx cap open android"
+    "cap:android": "npx cap open android",
+    "build:prod": "REACT_APP_BACKEND_URL=https://backend-production-c8640.up.railway.app craco build",
+    "cap:sync:prod": "npm run build:prod && npx cap sync"
   },
   "browserslist": {
     "production": [

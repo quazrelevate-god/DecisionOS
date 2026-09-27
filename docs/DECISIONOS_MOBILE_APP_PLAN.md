@@ -129,6 +129,55 @@ in every normal build, `npm run build && npx cap sync` cannot produce that
 binary. Verified both ways — with the variable, `capacitor.config.json` gains
 `url` and `cleartext`; without it, the `server` block is just `androidScheme`.
 
+## Talking to the real backend
+
+The API is `https://backend-production-c8640.up.railway.app`. Two things had to
+be settled before a native app could reach it, and both were measured against
+the live backend on 2026-09-27 rather than assumed.
+
+**CORS refuses the app's origin.** A preflight from `capacitor://localhost`
+(iOS) or `https://localhost` (Android) returns `400 Disallowed CORS origin` with
+no `Access-Control-Allow-Origin`. So does `http://localhost:3000`. This is not a
+misconfiguration — `backend/config.py` refuses to boot with `'*'` in prod on
+purpose, and the allow-list simply does not contain the app's origins.
+
+**Auth is cookies, which is worse.** `HttpOnly; SameSite=None; Secure` plus a
+CSRF double-submit and `allow_credentials=True`. From a `capacitor://` page
+those are third-party cookies, and WKWebView blocks them by default. Widening
+`CORS_ORIGINS` would have fixed the first problem and left this one.
+
+So `CapacitorHttp` is enabled instead. It routes `fetch`/`XHR` through native
+code: native requests are not made by a browser, so CORS never applies, and
+cookies use the platform cookie jar rather than the webview's. Nothing on the
+production backend had to change — which matters during a pilot week.
+
+### Building against production
+
+```bash
+cd frontend && npm run cap:sync:prod
+```
+
+`build:prod` sets `REACT_APP_BACKEND_URL` inline. It has to be inline:
+`craco.config.js` calls `require('dotenv').config()` at the top, which loads
+`.env` before react-scripts gets a turn, and `dotenv` never overwrites a key
+that is already set. A `.env.production` file is therefore silently ignored in
+this project — the build succeeds and quietly bakes in `http://localhost:8000`.
+That was tried and rejected before `build:prod` was added; do not re-add it.
+
+### Android APK
+
+```bash
+cd frontend && npm run cap:sync:prod
+cd android && ./gradlew assembleDebug
+# -> app/build/outputs/apk/debug/app-debug.apk
+```
+
+Toolchain, on the machine this was first built on: **JDK 21** (not 17 —
+`@capacitor/android`'s `build.gradle` sets `sourceCompatibility 21`, and 17
+fails with `invalid source release: 21`), Android SDK platform 36 and
+build-tools 36.0.0, with `sdk.dir` in `android/local.properties` (gitignored,
+machine-specific).
+
 ## Before the first store build
 
 Two things must be settled. Neither is a code change and neither is done.

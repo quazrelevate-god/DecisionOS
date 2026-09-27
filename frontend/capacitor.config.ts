@@ -14,6 +14,31 @@ const config: CapacitorConfig = {
   appName: 'DecisionOS',
   webDir: 'build',
 
+  plugins: {
+    // Route fetch/XHR through native code instead of the webview.
+    //
+    // Two things make this necessary rather than a preference, both measured
+    // against the Railway backend on 2026-09-27:
+    //
+    // 1. CORS. A preflight from capacitor://localhost (iOS) or
+    //    https://localhost (Android) comes back 400 "Disallowed CORS origin"
+    //    with no Access-Control-Allow-Origin. The backend's allow-list is
+    //    exact-match by design — config.py refuses to boot with '*' in prod —
+    //    and the app's origins are not on it. Native requests are not made by
+    //    a browser, so CORS does not apply to them at all.
+    //
+    // 2. Cookies. Auth is HttpOnly SameSite=None Secure cookies plus a CSRF
+    //    double-submit. From a capacitor:// page those are third-party
+    //    cookies, which WKWebView blocks by default; widening CORS would not
+    //    have fixed that. Native requests use the platform cookie jar.
+    //
+    // The alternative was adding capacitor://localhost to CORS_ORIGINS on a
+    // production backend mid-pilot, which changes more and fixes less.
+    CapacitorHttp: {
+      enabled: true,
+    },
+  },
+
   ios: {
     // The design system assumes a light ground (#F3F3F0). Without this the
     // webview inherits the device's dark appearance and scroll overflow

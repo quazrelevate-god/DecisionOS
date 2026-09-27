@@ -385,10 +385,23 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
     }
   };
 
-  // PILOT-2 B — Save as draft: marked in the Decisions column, and the pop-up
-  // is done. The decision itself was saved on the server when Dex made it.
-  const saveDraft = (id) => {
-    onLater?.(id);
+  /* PILOT-2 B — Save as draft: marked in the Decisions column, and the pop-up
+     is done. The decision itself was saved on the server when Dex made it.
+     2026-09-27 — IT WAITS FOR THE ANSWER NOW. This said "Saved as a draft" the
+     moment it was pressed and sent the request afterwards; when the mark was a
+     note in this browser that could not fail, so it never lied. It is a call
+     to the server now (the flag is on the decision, so it reaches the phone
+     too), and a refusal — no signal on the factory floor, or somebody decided
+     it thirty seconds ago — left the founder holding two contradictory
+     messages, the false one first. So: pressed, then saved, then said. A
+     failure keeps the pop-up open with what Dex made still in it. */
+  const saveDraft = async (id) => {
+    try {
+      await onLater?.(id);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Couldn't save it as a draft — it is still waiting on you.");
+      return;
+    }
     toast("Saved as a draft", { description: "It's in Decisions on the Desk, marked Draft." });
     setPopupOpen(false);
     setPhase("idle");

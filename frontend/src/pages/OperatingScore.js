@@ -42,9 +42,10 @@ import {
 } from "../components/karma/glass";
 import { GlassSelect } from "../components/karma/GlassSelect";
 import { cn } from "@/lib/utils";
+import { opModel } from "../lib/operatingModel";
+import { humanStage, taskStatusLabel, priorityLabel } from "../lib/format";
 import {
   isDemoTenant, demoDelta, demoDrivers, demoDrilldowns, demoDex,
-  DEFAULT_WEIGHTS, WEIGHT_PRESETS,
 } from "./_operatingScoreDemo";
 
 // U7-01.16: each category carries its formula and weight so the page can say
@@ -106,7 +107,9 @@ export default function OperatingScore() {
       .then((r) => r.data),
   });
 
-  if (isLoading || !data) return <OperatingScoreSkeleton />;
+  // The URL already says which page is coming, so the waiting shape is the
+  // right one and nothing rearranges under the eye when it lands (2026-09-29).
+  if (isLoading || !data) return <OperatingScoreSkeleton person={Boolean(userIdParam)} />;
 
   const isOwnerView = data.view === "owner" || Boolean(data.company);
   return isOwnerView ? <OwnerView data={data} /> : <SelfView data={data} />;
@@ -134,7 +137,7 @@ function PageHeader({ title, subtitle }) {
 }
 
 /** The owner is looking at someone else's page — a mode, so it is said. */
-function ViewAsBanner({ target }) {
+function ViewAsBanner({ target, roles = [] }) {
   if (!target) return null;
   return (
     <div className={`mb-5 flex flex-wrap items-center justify-between gap-3 px-4 py-3 ${DRAWER_CARD}`} data-testid="operating-view-as-banner">
@@ -143,7 +146,9 @@ function ViewAsBanner({ target }) {
           <Eye size={16} weight="bold" aria-hidden="true" />
         </span>
         <span className="truncate">Viewing <strong className="font-semibold text-slate-900">{target.name}</strong></span>
-        {target.role && <span className="text-slate-500">· {target.role}</span>}
+        {/* 2026-09-29: was the stored key — "sales_&_order_management". The
+            table two sections down had it right all along. */}
+        {target.role && <span className="text-slate-500">· {roleLabelFor(roles, target.role)}</span>}
       </p>
       <Link to="/operating-score" className={`inline-flex h-10 shrink-0 items-center gap-1.5 rounded-pill px-4 text-sm font-medium text-slate-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
         <ArrowLeft size={14} weight="bold" aria-hidden="true" /> Back to company
@@ -233,26 +238,36 @@ const UNSCORED_WORDS = {
   no_data: "Nothing to score yet — left out of the total",
 };
 
-function CategoryCard({ cat, value, reason, onOpen }) {
+/* 2026-09-29 — "See breakdown" is offered only when there IS one. The items
+   behind it (demoDrivers / demoDrilldowns) exist for the demo tenant alone, so
+   on every real company the card invited a click and the dialog answered "a
+   breakdown of what makes it up isn't shown for this part yet". A control that
+   cannot keep its promise is worse than no control: the card says what the
+   category MEASURES instead, which is true and useful, and the formula behind
+   it is one tap away under "How is this calculated?". */
+function CategoryCard({ cat, value, reason, onOpen, canDrill = false }) {
   const has = value != null;
+  const opens = has && canDrill;
   const why = UNSCORED_WORDS[reason] || UNSCORED_WORDS.no_access;
   return (
-    <button type="button" onClick={onOpen} disabled={!has} data-testid={`operating-cat-${cat.key}`}
+    <button type="button" onClick={opens ? onOpen : undefined} disabled={!opens} data-testid={`operating-cat-${cat.key}`}
       data-unscored={has ? undefined : (reason || "no_access")}
-      aria-label={has ? `${cat.label}: ${value} out of 100 — see breakdown` : `${cat.label}: ${why}`}
+      aria-label={opens ? `${cat.label}: ${value} out of 100 — see breakdown`
+        : has ? `${cat.label}: ${value} out of 100 — ${cat.plain}` : `${cat.label}: ${why}`}
       className={`group flex min-w-0 flex-col p-4 text-left transition-[transform,box-shadow] duration-200 enabled:hover:-translate-y-0.5 enabled:hover:shadow-[0_18px_40px_-18px_hsl(150_15%_20%/0.35)] disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 motion-reduce:transition-none ${CARD}`}>
       <span className="flex w-full items-center gap-2 text-[15px] font-medium text-slate-800">
         <cat.icon size={18} aria-hidden="true" className="shrink-0 text-slate-600" />
         <span className="min-w-0 flex-1 truncate">{cat.label}</span>
-        {has && <CaretRight size={13} weight="bold" aria-hidden="true" className="shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5" />}
+        {opens && <CaretRight size={13} weight="bold" aria-hidden="true" className="shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5" />}
       </span>
       <span className="mt-3 flex items-baseline gap-1.5">
         <span className="font-display text-4xl leading-none text-slate-900 tabular-nums">{has ? value : "—"}</span>
         <span className="text-sm text-slate-500">/ 100</span>
       </span>
       <Bar value={value} label={`${cat.label} score`} className="mt-4" testid={`operating-meter-${cat.key}`} />
-      <span className="mt-3 flex items-center gap-1 text-xs font-medium text-slate-500">
-        {has ? <>See breakdown <CaretRight size={11} weight="bold" aria-hidden="true" /></> : why}
+      <span className="mt-3 flex items-center gap-1 text-xs font-medium leading-relaxed text-slate-500">
+        {opens ? <>See breakdown <CaretRight size={11} weight="bold" aria-hidden="true" /></>
+          : has ? <span className="line-clamp-2">{cat.plain}</span> : why}
       </span>
     </button>
   );
@@ -261,7 +276,7 @@ function CategoryCard({ cat, value, reason, onOpen }) {
 const ACTION_ICON = { overdue: CheckCircle, complaints: ChatCircleText, weakest: ChartLineUp, "first-close": Flag };
 
 /** What to do first — derived from real stats (lib/karmaScore), claiming no lift. */
-function DoTheseFirst({ actions, onDrill, note, className = "" }) {
+function DoTheseFirst({ actions, onDrill, note, sub = "Key actions to improve your operating score.", className = "" }) {
   return (
     <section data-testid="operating-next-moves" className={`flex min-w-0 flex-col p-5 sm:p-6 ${CARD} ${className}`}>
       <div className="flex items-start gap-3">
@@ -270,7 +285,7 @@ function DoTheseFirst({ actions, onDrill, note, className = "" }) {
         </span>
         <div className="min-w-0">
           <h2 className="text-lg font-semibold text-slate-900">Do these first</h2>
-          <p className="text-sm text-slate-500">Key actions to improve your operating score.</p>
+          <p className="text-sm text-slate-500">{sub}</p>
         </div>
       </div>
       {note && <p className="mt-4 text-sm leading-relaxed text-slate-600" data-testid="operating-dex-note">{note}</p>}
@@ -429,7 +444,6 @@ function OwnerView({ data }) {
   const overall = company.overall;
   const enough = company.enough_data !== false;
   const [drillCat, setDrillCat] = useState(null);
-  const [weights, setWeights] = useState(DEFAULT_WEIGHTS);
   const [formulaOpen, setFormulaOpen] = useState(false);
   const formulaRef = useRef(null);
 
@@ -437,7 +451,15 @@ function OwnerView({ data }) {
     () => (data?.employees || []).filter((e) => e.score != null || e.open > 0 || e.done > 0),
     [data],
   );
-  const actions = useMemo(() => scoreActions(stats, company.categories), [stats, company.categories]);
+  /* Only offer what can be acted on. The "weakest category" item opens a
+     drill-down that has content for the demo tenant alone, so on a real
+     company the page's own first instruction — "open it to see what is
+     pulling it down" — led to a dialog that said there was nothing to see
+     (2026-09-29). Everything else here links somewhere real. */
+  const actions = useMemo(
+    () => scoreActions(stats, company.categories).filter((a) => a.to || (demo && a.drill)),
+    [stats, company.categories, demo],
+  );
   const explain = () => {
     setFormulaOpen(true);
     requestAnimationFrame(() => formulaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
@@ -470,7 +492,7 @@ function OwnerView({ data }) {
             <div className="grid grid-cols-2 gap-3 sm:gap-4" data-testid="operating-categories">
               {CATS.map((c) => (
                 <CategoryCard key={c.key} cat={c} value={company.categories[c.key]} reason={company.unscored?.[c.key]}
-                  onOpen={() => setDrillCat(c.key)} />
+                  canDrill={demo} onOpen={() => setDrillCat(c.key)} />
               ))}
             </div>
             <DoTheseFirst actions={actions} onDrill={setDrillCat} note={demo ? demoDex.explainer : null} className="lg:col-span-2 xl:col-span-1" />
@@ -485,7 +507,7 @@ function OwnerView({ data }) {
 
       <TeamExecution
         employees={rankedEmployees}
-        panel={enough ? <FormulaPanel open={formulaOpen} weights={weights} setWeights={setWeights} panelRef={formulaRef} /> : null}
+        panel={enough ? <FormulaPanel open={formulaOpen} panelRef={formulaRef} /> : null}
         toggle={enough ? <FormulaToggle open={formulaOpen} onToggle={() => setFormulaOpen((v) => !v)} /> : null}
       />
 
@@ -630,6 +652,22 @@ function TeamTable({ rows, offset, roles, continuation, continued }) {
 // ─── self view ───────────────────────────────────────────────────────────────
 
 function SelfView({ data }) {
+  const { tenant } = useAuth();
+  const roles = tenant?.roles || [];
+  /* The tenant's own words for a pipeline and its stages — the same ones the
+     board shows. Ops printed the stored keys ("order_management · stage
+     ready_for_dispatch") on a page a team member reads about their own work. */
+  const pipelines = useMemo(() => opModel(tenant).pipelines || [], [tenant]);
+  const wfWords = useMemo(() => {
+    const out = {};
+    pipelines.forEach((pl) => {
+      out[pl.key] = { label: pl.label || humanStage(pl.key), stages: {} };
+      (pl.stages || []).forEach((st) => { out[pl.key].stages[st.key] = st.label || humanStage(st.key); });
+    });
+    return out;
+  }, [pipelines]);
+  const wfLabel = (type) => wfWords[type]?.label || humanStage(type);
+  const stageLabel = (type, stage) => wfWords[type]?.stages?.[stage] || humanStage(stage);
   const {
     self, stats, my_open_work: openWork = [], my_active_workflows: activeWfs = [],
     peer_context: peer, view_as: viewAs,
@@ -639,10 +677,20 @@ function SelfView({ data }) {
   const actions = useMemo(() => scoreActions(stats), [stats]);
   const isViewAs = Boolean(viewAs);
   const firstName = self.name?.split(" ")[0] || "there";
+  /* Every link off this page has to land on the work it is ABOUT. Looking at
+     somebody else, "See all" and each tile used to open the viewer's own My
+     Work — the owner clicked Priya's 8 open tasks and got his own three.
+     ?view=all&person= is the list that holds theirs. */
+  const workLink = (extra = {}) => {
+    const q = new URLSearchParams(extra);
+    if (isViewAs && viewAs?.id) { q.set("view", "all"); q.set("person", viewAs.id); }
+    const qs = q.toString();
+    return qs ? `/my-work?${qs}` : "/my-work";
+  };
 
   return (
     <div data-testid="operating-page">
-      <ViewAsBanner target={viewAs} />
+      <ViewAsBanner target={viewAs} roles={roles} />
       <PageHeader
         title={isViewAs ? `${self.name}'s operating view` : `Hi ${firstName} — here's how you're doing`}
         subtitle={isViewAs ? "Their work, what is open and what to do first." : "Your work, what is open and what to do first."}
@@ -658,27 +706,32 @@ function SelfView({ data }) {
         <section className={`p-5 sm:p-6 ${CARD}`} data-testid="operating-self-stats">
           <SectionHead icon={User} title={isViewAs ? "Their execution" : "Your execution"} sub="Everything assigned, on record." />
           <div className="mt-4 grid grid-cols-2 gap-3">
-            <HealthTile icon={Check} tone="good" label="Completed" value={stats.completed} to="/my-work" testid="ops-self-completed"
+            <HealthTile icon={Check} tone="good" label="Completed" value={stats.completed} to={workLink({ status: "done" })} testid="ops-self-completed"
               instrument={<TileMeter value={stats.completion_rate} tone="good" label={`${stats.completed} of ${stats.actionable} done`} showValue={false} />} />
-            <HealthTile icon={ClipboardText} tone="quiet" label="Open" value={stats.open} to="/my-work" testid="ops-self-open"
+            <HealthTile icon={ClipboardText} tone="quiet" label="Open" value={stats.open} to={workLink()} testid="ops-self-open"
               instrument={<TileMeter value={pctOf(stats.open, stats.actionable)} tone="quiet" label={`${stats.open} of ${stats.actionable} open`} />} />
-            <HealthTile icon={Warning} tone="bad" label="Overdue" value={stats.overdue} to="/my-work?filter=overdue" testid="ops-self-overdue"
+            <HealthTile icon={Warning} tone="bad" label="Overdue" value={stats.overdue} to={workLink({ status: "overdue" })} testid="ops-self-overdue"
               instrument={<TileMeter value={pctOf(stats.overdue, stats.open)} tone="bad" label={`${stats.overdue} of ${stats.open} open overdue`} />} />
-            <HealthTile icon={ShieldCheck} tone="quiet" label="Proof rate" value={stats.proof_upload_rate} suffix="%" to="/my-work" testid="ops-self-proof"
+            <HealthTile icon={ShieldCheck} tone="quiet" label="Proof rate" value={stats.proof_upload_rate} suffix="%" to={workLink({ status: "done" })} testid="ops-self-proof"
               instrument={<TileMeter value={stats.proof_upload_rate} tone="quiet" label={`${stats.proof_upload_rate}% of done tasks carry proof`} showValue={false} />} />
           </div>
         </section>
-        <DoTheseFirst actions={actions} onDrill={() => {}} className="lg:col-span-2 xl:col-span-1" />
+        <DoTheseFirst actions={actions} onDrill={() => {}} className="lg:col-span-2 xl:col-span-1"
+          sub={isViewAs ? `Key actions to improve ${firstName}'s operating score.` : "Key actions to improve your operating score."} />
       </div>
 
       <div className="mt-5 grid gap-4 md:grid-cols-3">
         <BreakdownCard icon={ShieldCheck} label="Proof rate" value={`${stats.proof_upload_rate}%`} meter={stats.proof_upload_rate}
           detail={`${_pctToCount(stats.proof_upload_rate, stats.completed)} of ${stats.completed} done with photo or voice`}
-          hint={stats.proof_upload_rate < 40 && stats.completed >= 3 ? "Attach a photo or voice update on your next done task" : null} />
+          hint={stats.proof_upload_rate < 40 && stats.completed >= 3
+            ? (isViewAs ? `${firstName} could attach a photo or voice update on the next done task` : "Attach a photo or voice update on your next done task")
+            : null} />
         <BreakdownCard icon={ClipboardText} label="Plans in use" value={`${stats.plans_completed}/${stats.plans_used}`}
           meter={stats.plans_used > 0 ? (stats.plans_completed / stats.plans_used) * 100 : null}
           detail={`${stats.plans_used} accepted plan${stats.plans_used === 1 ? "" : "s"}, ${stats.plans_completed} finished`}
-          hint={stats.plans_used === 0 && stats.actionable >= 3 ? "Ask Dex to plan your next big task" : null} />
+          hint={stats.plans_used === 0 && stats.actionable >= 3
+            ? (isViewAs ? `${firstName} hasn't used a Dex plan yet` : "Ask Dex to plan your next big task")
+            : null} />
         <BreakdownCard icon={Check} label="Actionable" value={String(stats.actionable)}
           meter={stats.actionable > 0 ? (stats.completed / stats.actionable) * 100 : null}
           detail={`${stats.completed} done + ${stats.open} open`} />
@@ -687,7 +740,7 @@ function SelfView({ data }) {
       <section className={`mt-5 p-5 sm:p-6 ${CARD}`}>
         <div className="mb-3 flex items-center justify-between gap-3">
           <SectionHead icon={ClipboardText} title={isViewAs ? "Their open work" : "Your open work"} />
-          <Link to="/my-work" className="flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900">
+          <Link to={workLink()} className="flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900">
             See all <ArrowRight size={13} weight="bold" aria-hidden="true" />
           </Link>
         </div>
@@ -697,13 +750,20 @@ function SelfView({ data }) {
           <ul className="divide-y divide-slate-900/[0.06]" data-testid="operating-self-open">
             {openWork.map((t) => (
               <li key={t.id}>
-                <Link to="/my-work" className="group flex items-center gap-4 rounded-xl px-1 py-3 transition-colors hover:bg-white/60">
+                {/* 2026-09-29 — was "/my-work" for every row: five tasks, one
+                    destination, and from somebody else's page it landed the
+                    owner on his OWN list. ?task= is the deep link the board
+                    already uses (Workflows.js); it carries no person filter
+                    because My Work drops every filter that could hide a
+                    deep-linked task, by design, and widens the scope until the
+                    task is visible. */}
+                <Link to={`/my-work?task=${encodeURIComponent(t.id)}`} className="group flex items-center gap-4 rounded-xl px-1 py-3 transition-colors hover:bg-white/60">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-slate-900">{t.title}</p>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      {t.status} · {t.priority || "medium"}
+                      {taskStatusLabel(t.status)} · {priorityLabel(t.priority)}
                       {t.due_date ? ` · due ${_formatDate(t.due_date)}` : ""}
-                      {t.stage_key ? ` · stage ${t.stage_key}` : ""}
+                      {t.stage_key ? ` · ${humanStage(t.stage_key)}` : ""}
                     </p>
                   </div>
                   {t.is_overdue && (
@@ -731,10 +791,11 @@ function SelfView({ data }) {
               <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" data-testid="operating-self-workflows">
                 {activeWfs.map((w) => (
                   <li key={w.id}>
-                    <Link to="/workflows" className="flex h-full flex-col rounded-2xl bg-white/[0.05] p-4 ring-1 ring-inset ring-white/10 transition-colors hover:bg-white/[0.08]">
+                    <Link to={`/workflows?wf=${encodeURIComponent(w.id)}${w.type ? `&wf_type=${encodeURIComponent(w.type)}` : ""}`}
+                      className="flex h-full flex-col rounded-2xl bg-white/[0.05] p-4 ring-1 ring-inset ring-white/10 transition-colors hover:bg-white/[0.08]">
                       <p className="line-clamp-2 text-sm font-semibold leading-snug">{w.title}</p>
                       <p className="mt-auto pt-3 text-xs text-white/60">
-                        {w.type} · stage {w.stage}{w.counterparty ? ` · ${w.counterparty}` : ""}
+                        {wfLabel(w.type)} · {stageLabel(w.type, w.stage)}{w.counterparty ? ` · ${w.counterparty}` : ""}
                       </p>
                     </Link>
                   </li>
@@ -858,10 +919,19 @@ function CategoryDrill({ cat, value, drivers, drill, onClose }) {
 
 // ─── formula panel ───────────────────────────────────────────────────────────
 
-/* KM-28 — the formula and the weights, unfolded above the Team execution card.
-   The control that opens it is FormulaToggle, in the card's notch. */
-function FormulaPanel({ open, weights = DEFAULT_WEIGHTS, setWeights, panelRef }) {
-  const total = Object.values(weights).reduce((a, b) => a + b, 0);
+/* KM-28 — the formula, unfolded above the Team execution card. The control
+   that opens it is FormulaToggle, in the card's notch.
+
+   2026-09-29 — THE WEIGHT SLIDERS ARE GONE. "Customize weights for your
+   business" offered four presets and four sliders, and its own small print
+   admitted they were not saved. They did not even preview: moving Execution
+   from 35% to 45% left the score on screen exactly where it was, because
+   nothing downstream read them. A control on a page whose whole job is to be
+   trusted about numbers must either change a number or not be there. If
+   per-industry weights are wanted, they belong in the operating model beside
+   the pipelines, computed in services/operating_score.py — then the slider
+   would mean something. */
+function FormulaPanel({ open, panelRef }) {
   return (
     <div ref={panelRef}>
       {open && (
@@ -869,47 +939,13 @@ function FormulaPanel({ open, weights = DEFAULT_WEIGHTS, setWeights, panelRef })
           <p className="text-sm leading-relaxed text-slate-600">
             Overall is a weighted average across the four categories. Categories with no data yet are skipped and the remaining weights renormalize.
           </p>
-          {setWeights && (
-            <div className={`rounded-[1.25rem] p-4 ${DRAWER_TRACK}`}>
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-sm font-semibold text-slate-900">Customize weights for your business</p>
-                <span className={`text-xs tabular-nums ${total === 100 ? "text-slate-500" : "text-orange-600"}`}>total: {total}%</span>
-              </div>
-              <div className="mb-4 flex flex-wrap gap-2">
-                {Object.entries(WEIGHT_PRESETS).map(([k, p]) => (
-                  <button key={k} type="button" onClick={() => setWeights(p.weights)}
-                    className={`flex h-9 items-center rounded-pill px-4 text-xs font-medium text-slate-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-              <div className="space-y-3">
-                {CATS.map((c) => (
-                  <div key={c.key} className="flex items-center gap-3">
-                    <span className="flex w-36 shrink-0 items-center gap-2 text-xs font-medium text-slate-700">
-                      <c.icon size={14} aria-hidden="true" className="text-slate-500" /> {c.label}
-                    </span>
-                    <input type="range" min="0" max="60" step="5" value={weights[c.key]}
-                      onChange={(e) => setWeights({ ...weights, [c.key]: Math.max(0, Math.min(100, Number(e.target.value))) })}
-                      className="flex-1 accent-neutral-900" aria-label={`${c.label} weight`} />
-                    <span className="w-12 text-right text-xs font-medium tabular-nums text-slate-700">{weights[c.key]}%</span>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-3 text-xs text-slate-500">
-                {/* JOURNEY-1 J2 — was "saving weights lands with the backend". Say
-                    plainly that this is a what-if and the score does not change. */}
-                {total !== 100 ? "Weights should add up to 100%. Pick a preset or adjust the sliders." : "A what-if only — these weights aren't saved, and your score keeps its standard weights."}
-              </p>
-            </div>
-          )}
           <div className="grid gap-3 md:grid-cols-2">
             {CATS.map((c) => (
               <div key={c.key} className={`p-4 ${DRAWER_CARD}`}>
                 <div className="mb-1.5 flex items-center gap-2">
                   <c.icon size={15} aria-hidden="true" className="shrink-0 text-slate-500" />
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{c.label}</span>
-                  <span className="shrink-0 text-xs tabular-nums text-slate-500">weight {weights[c.key]}%</span>
+                  <span className="shrink-0 text-xs tabular-nums text-slate-500">weight {c.weight}%</span>
                 </div>
                 <p className="mb-2 text-xs leading-relaxed text-slate-500">{c.plain}</p>
                 <p className="inline-block rounded-pill bg-white/80 px-3 py-1 text-[11px] tabular-nums text-slate-700 ring-1 ring-inset ring-slate-900/[0.06]">{c.formula}</p>
@@ -1018,9 +1054,10 @@ function ChecklistItem({ done, label, hint, actionLabel, actionTo, icon: Icon = 
   );
 }
 
-function OperatingScoreSkeleton() {
+function OperatingScoreSkeleton({ person = false }) {
   return (
-    <div aria-busy="true" aria-live="polite" data-testid="operating-skeleton">
+    <div aria-busy="true" aria-live="polite" data-testid="operating-skeleton" data-shape={person ? "person" : "company"}>
+      {person && <div className="ds-skeleton mb-5 h-[62px] rounded-[1.25rem]" />}
       <div className="mb-6">
         <div className="ds-skeleton h-9 w-64 rounded-control" />
         <div className="ds-skeleton mt-3 h-4 w-96 max-w-full rounded-control" />
@@ -1032,9 +1069,18 @@ function OperatingScoreSkeleton() {
         </div>
         <div className="ds-skeleton h-[268px] rounded-[1.6rem] lg:col-span-2 xl:col-span-1" />
       </div>
-      <div className="mt-5 grid gap-5 xl:grid-cols-2">
-        {[0, 1].map((i) => <div key={i} className="ds-skeleton h-[176px] rounded-[1.6rem]" />)}
-      </div>
+      {person ? (
+        <>
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
+            {[0, 1, 2].map((i) => <div key={i} className="ds-skeleton h-[136px] rounded-[1.6rem]" />)}
+          </div>
+          <div className="ds-skeleton mt-5 h-[300px] rounded-[1.6rem]" />
+        </>
+      ) : (
+        <div className="mt-5 grid gap-5 xl:grid-cols-2">
+          {[0, 1].map((i) => <div key={i} className="ds-skeleton h-[176px] rounded-[1.6rem]" />)}
+        </div>
+      )}
     </div>
   );
 }

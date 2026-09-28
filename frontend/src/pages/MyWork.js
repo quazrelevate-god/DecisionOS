@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import api from "../lib/api";
-import { timeAgo, fullTime } from "../lib/format";
+import { timeAgo, fullTime, TASK_STATUS_LABELS } from "../lib/format";
 import { PageHeader, Chip, EmptyState, SkeletonCard, StickyHeader } from "../components/common";
 import { useAuth } from "../context/AuthContext";
 import { userPerms } from "../lib/perms";
@@ -138,10 +138,8 @@ const STATUS_OPTIONS = [
   { key: "todo", label: "To do" },
   { key: "in_progress", label: "Doing" },
 ];
-const STATUS_LABEL = {
-  todo: "To do", blocked: "To do", in_progress: "Doing", waiting: "Doing",
-  review: "Doing", done: "Done", cancelled: "Cancelled",
-};
+/* The words live in lib/format now, so Ops and My Work agree (2026-09-29). */
+const STATUS_LABEL = TASK_STATUS_LABELS;
 const STAGE_OF = { todo: "todo", blocked: "todo", in_progress: "in_progress", waiting: "in_progress", review: "in_progress", done: "done", cancelled: "cancelled" };
 const stageOf = (status) => STAGE_OF[status] || "todo";
 /* D1 — how a cadence reads on screen. Mirrors services/recurrence.describe so

@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { toastAiConsentOr } from "../lib/aiConsent";
 import api from "../lib/api";
+import { micProblem } from "../lib/native/mic";
 
 export const BARS = 28;
 
@@ -453,10 +454,11 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
       if (cancelStartRef.current) { try { mr.stop(); } catch { /* already gone */ } }
       // recording / secs / levels were set before the await — see the note above.
       return true;
-    } catch {
+    } catch (e) {
       abandon();
       stopMeter();
-      toast.error("Microphone not available");
+      // B02 — say whose permission it is, and where it is changed.
+      toast.error(micProblem(e));
       return false;
     }
   }, [watch, follow, onCaptured, stopMeter, pollTranscript]);

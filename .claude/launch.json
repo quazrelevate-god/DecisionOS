@@ -4,37 +4,58 @@
     {
       "name": "backend",
       "runtimeExecutable": "D:\\QE\\DecisionOS\\backend\\.venv\\Scripts\\python.exe",
-      "runtimeArgs": ["-m", "uvicorn", "server:app", "--app-dir", "D:\\QE\\DecisionOS\\backend", "--host", "127.0.0.1", "--port", "8000"],
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "server:app",
+        "--app-dir",
+        "D:\\QE\\DecisionOS\\backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8000"
+      ],
       "port": 8000,
       "url": "http://localhost:8000"
     },
     {
       "name": "frontend",
       "runtimeExecutable": "cmd.exe",
-      "runtimeArgs": ["/c", "set BROWSER=none&& npm --prefix D:\\QE\\DecisionOS\\frontend run start"],
+      "runtimeArgs": [
+        "/c",
+        "set BROWSER=none&& npm --prefix D:\\QE\\DecisionOS\\frontend run start"
+      ],
       "port": 3000,
       "url": "http://localhost:3000"
     },
     {
       "name": "sample-api",
       "runtimeExecutable": "cmd.exe",
-      "runtimeArgs": ["/c", "set FIXTURE_CORS_ORIGIN=http://localhost:3001&& node C:\\Users\\HP\\AppData\\Local\\Temp\\claude\\D--QE-DecisionOS\\36f4e781-6491-4ff8-9cef-bb8ae8097d08\\scratchpad\\fixture-team.mjs --port 8001"],
+      "runtimeArgs": [
+        "/c",
+        "set FIXTURE_CORS_ORIGIN=http://localhost:3001&& node C:\\Users\\HP\\AppData\\Local\\Temp\\claude\\D--QE-DecisionOS\\36f4e781-6491-4ff8-9cef-bb8ae8097d08\\scratchpad\\fixture-team.mjs --port 8001"
+      ],
       "port": 8001,
       "url": "http://localhost:8001"
     },
     {
       "name": "sample-frontend",
       "runtimeExecutable": "cmd.exe",
-      "runtimeArgs": ["/c", "set BROWSER=none&& set PORT=3001&& set REACT_APP_BACKEND_URL=http://localhost:8001&& npm --prefix D:\\QE\\DecisionOS\\frontend run start"],
+      "runtimeArgs": [
+        "/c",
+        "set BROWSER=none&& set PORT=3001&& set REACT_APP_BACKEND_URL=http://localhost:8001&& npm --prefix D:\\QE\\DecisionOS\\frontend run start"
+      ],
       "port": 3001,
       "url": "http://localhost:3001"
     },
-
     {
       "_comment": "macOS/Linux equivalents. The four configs above are Windows-only (cmd.exe, D:\\ paths) and cannot run anywhere else. These use relative paths, so they work from any checkout.",
       "name": "mac-fixture-api",
       "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "node frontend/scripts/fixture-server.mjs --port 8000"],
+      "runtimeArgs": [
+        "-c",
+        "node frontend/scripts/fixture-server.mjs --port 8000"
+      ],
       "port": 8000,
       "url": "http://localhost:8000"
     },
@@ -42,9 +63,38 @@
       "_comment": "Reads REACT_APP_BACKEND_URL from frontend/.env (http://localhost:8000). Start mac-fixture-api first, or the app renders signed-out.",
       "name": "mac-frontend",
       "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "BROWSER=none npm --prefix frontend run start"],
+      "runtimeArgs": [
+        "-c",
+        "BROWSER=none npm --prefix frontend run start"
+      ],
       "port": 3000,
       "url": "http://localhost:3000"
+    },
+    {
+      "name": "mac-backend-test",
+      "_comment": "Throwaway DB, and every messaging key blanked on the command line so no SMS or WhatsApp can leave.",
+      "runtimeExecutable": "/usr/bin/env",
+      "runtimeArgs": [
+        "APM_SMS_API_KEY=",
+        "APM_OTP_ENDPOINT=",
+        "TWILIO_ACCOUNT_SID=",
+        "TWILIO_AUTH_TOKEN=",
+        "TWILIO_FROM_NUMBER=",
+        "WHATSAPP_API_KEY=",
+        "WA_TENANT_ID=",
+        "/Users/verdecs/Desktop/decisionOS_pwa/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "server:app",
+        "--app-dir",
+        "/Users/verdecs/Desktop/decisionOS_pwa/backend",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8811"
+      ],
+      "port": 8811,
+      "url": "http://localhost:8811"
     }
   ]
 }

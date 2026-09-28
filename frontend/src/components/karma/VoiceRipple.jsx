@@ -68,6 +68,8 @@
  * real.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+// B02 — the mic sentence, which differs inside the APK.
+import { micProblem } from "../../lib/native/mic";
 
 /* The app's own metering curve (hooks/useDexCapture): RMS × 3.2 on a 0.65
    power, so ordinary speech uses the top half of the range instead of hugging
@@ -218,13 +220,8 @@ export function VoiceRipple({
       audioRef.current = { ctx, stream, analyser, data: new Uint8Array(analyser.fftSize) };
       setLive(true);
     } catch (e) {
-      setError(
-        e?.name === "NotAllowedError"
-          ? "The browser blocked the microphone. Allow it for this site and press again."
-          : e?.name === "NotFoundError"
-            ? "No microphone on this machine."
-            : e?.message || "Could not open the microphone."
-      );
+      // B02 — one source for this sentence, which differs in the APK.
+      setError(micProblem(e));
       setLive(false);
     }
   }, []);

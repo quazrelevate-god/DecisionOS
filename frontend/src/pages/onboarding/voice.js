@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import api from "../../lib/api";
 import { toast } from "sonner";
+// B02 — the mic sentence, which differs inside the APK.
+import { micProblem } from "../../lib/native/mic";
 
 // Sarvam bulbul:v3 voices for the assistant. Kept in sync with backend SUPPORTED_TTS_LANGS.
 export const SPOKEN_LANGS = [
@@ -107,8 +109,8 @@ export function useAnswerRecorder(onResult) {
       mediaRef.current = mr;
       mr.start();
       setRecording(true);
-    } catch {
-      toast.error("Microphone access denied — you can type your answer");
+    } catch (e) {
+      toast.error(micProblem(e));   // B02
     }
   };
   const stop = () => {

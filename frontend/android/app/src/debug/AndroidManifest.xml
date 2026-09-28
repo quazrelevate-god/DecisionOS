@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DEBUG BUILDS ONLY. This file is merged into debug APKs and is not part of a
+  release build, so nothing here can reach the store.
+
+  Why it exists: a debug APK is routinely pointed at a backend running on the
+  developer's own machine — http://10.0.2.2:8811 from the emulator, or a LAN
+  address from a phone. Android has refused cleartext HTTP by default since
+  targetSdk 28, so those requests fail with no error the webview can show, and
+  the app looks broken rather than unconfigured. Capacitor sets `cleartext`
+  for its live-reload server; an API on a different port is not covered by it.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application
+        android:usesCleartextTraffic="true"
+        tools:replace="android:usesCleartextTraffic" />
+</manifest>

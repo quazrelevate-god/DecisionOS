@@ -38,4 +38,30 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+      B02 (2026-09-29) · THE MICROPHONE, WHICH IS MOST OF THE PRODUCT.
+
+      Dex is spoken to: the Desk's ripple, the capture pop-up, the onboarding
+      interview, a note on a task. In the APK every one of them answered
+      "Microphone not available" the instant it was pressed, and the app never
+      appeared under Settings -> Apps -> DecisionOS -> Permissions at all.
+
+      Nothing in the web app was wrong. A webview's getUserMedia arrives at
+      Capacitor's BridgeWebChromeClient.onPermissionRequest, which maps
+      AUDIO_CAPTURE onto the Android runtime permissions below and launches the
+      system prompt. A runtime permission that is not DECLARED here cannot be
+      requested: the launcher returns denied immediately, without ever showing
+      a dialog, and Capacitor then calls request.deny(). So the founder saw an
+      error with no prompt, and no way to fix it in system settings either.
+
+      MODIFY_AUDIO_SETTINGS goes with it because Capacitor asks for both
+      together; it is not a runtime permission and raises no prompt of its own.
+
+      Camera is deliberately NOT here. Nothing in the app opens a camera stream
+      today — bills are attached through the file picker — and an undeclared
+      permission is one the store does not have to be told about.
+    -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 </manifest>

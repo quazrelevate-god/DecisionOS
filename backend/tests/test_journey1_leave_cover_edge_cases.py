@@ -17,13 +17,16 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from services.delegation import is_active_now
+from shared.due import IST
 
 NOW = datetime.now(timezone.utc)
 
 
 def _d(n):
-    """A date n days from today, as the app writes them."""
-    return (NOW + timedelta(days=n)).date().isoformat()
+    """A date n days from today, as the app writes them — and TODAY is the
+    company's day, not UTC's. Between 00:00 and 05:30 IST the two disagree, and
+    a test that said "today" in UTC was asking about yesterday."""
+    return (NOW.astimezone(IST) + timedelta(days=n)).date().isoformat()
 
 
 def _cover(delegate="u-rajkumar", frm=None, to=None, **extra):
@@ -119,3 +122,36 @@ def test_a_full_timestamp_is_read_as_the_day_it_falls_on():
     timestamp. Only the first ten characters decide, so both behave the same."""
     assert is_active_now(_cover(frm=f"{_d(-1)}T18:30:00+05:30", to=f"{_d(1)}T23:59:59+05:30")) is True
     assert is_active_now(_cover(frm=f"{_d(3)}T00:00:00Z", to=f"{_d(5)}T00:00:00Z")) is False
+
+
+# ---------------------------------------------------------------------------
+# The boundary itself, on a named day rather than on whatever day the suite
+# runs — this is the one that was wrong.
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("when,live", [
+    ("2026-10-08T09:00:00+05:30", True),    # the last morning: away
+    ("2026-10-08T23:59:00+05:30", True),    # and still away at the end of it
+    ("2026-10-09T00:01:00+05:30", False),   # back — the cover is off at midnight
+    ("2026-10-09T14:30:00+05:30", False),   # THE BUG: this said True until 17:30
+    ("2026-10-09T22:00:00+05:30", False),
+])
+def test_the_cover_is_off_at_midnight_after_the_last_day(when, live):
+    """It used to shift the UTC clock by -12h at this end, so a cover that
+    ended on the 8th stayed live until 12:00 UTC on the 9th — 17:30 IST, most
+    of a working day in which somebody else held the approvals of a man already
+    back at his desk, and every one of them was recorded in his name."""
+    ac = _cover(frm="2026-10-06", to="2026-10-08")
+    assert is_active_now(ac, datetime.fromisoformat(when)) is live
+
+
+def test_the_cover_is_off_until_midnight_on_the_first_day():
+    """And the same exactness at the other end, which used to switch on at
+    15:30 IST the afternoon before."""
+    ac = _cover(frm="2026-10-06", to="2026-10-08")
+    assert is_active_now(ac, datetime.fromisoformat("2026-10-05T23:59:00+05:30")) is False
+    assert is_active_now(ac, datetime.fromisoformat("2026-10-06T00:01:00+05:30")) is True
+
+
+def test_an_open_ended_cover_is_still_open_ended_far_in_the_future():
+    ac = _cover(frm="2026-10-06")
+    assert is_active_now(ac, datetime.fromisoformat("2027-04-01T10:00:00+05:30")) is True

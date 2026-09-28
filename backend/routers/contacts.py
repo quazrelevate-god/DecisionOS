@@ -124,6 +124,11 @@ async def update_contact(contact_id: str, inp: ContactUpdateInput, user: dict = 
     new_name = str(updates.get("name") or "").strip()
     name_changed = ("name" in updates and new_name and new_name != old_name)
     if updates:
+        # 2026-09-28 — stamped, so /api/pulse notices an edit. The signature it
+        # reads is "how many, and the newest stamp"; a rename that wrote no
+        # time at all looked to every other open screen like nothing had
+        # happened, and the old name sat there until the tab was refocused.
+        updates["updated_at"] = now_iso()
         await db.contacts.update_one({"id": contact_id}, {"$set": updates})
     if name_changed:
         tid = user["tenant_id"]

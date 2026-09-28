@@ -52,6 +52,7 @@ async def _decision_participants(tenant_id: str, d: dict) -> set:
 
 # Request models consolidated into models/ (Epic 8 Sprint 5).
 from models.decisions import (
+    DecisionEditInput,
     DecisionApproveInput,
     DecisionApproverInput,
     DecisionCommentInput,
@@ -272,10 +273,26 @@ async def edit_decision_proposal_task(decision_id: str, key: str, inp: DecisionP
     needs approving; applied when approval creates the task."""
     from services.decision_flow import edit_proposal_task
     from services.enrich import enrich_decision
-    d = await edit_proposal_task(user, decision_id, key, assignee_id=inp.assignee_id, due_date=inp.due_date,
+    d = await edit_proposal_task(user, decision_id, key, title=inp.title,
+                                 assignee_id=inp.assignee_id, due_date=inp.due_date,
                                  priority=inp.priority, evidence_required=inp.evidence_required,
                                  approval_required=inp.approval_required, approval_stage=inp.approval_stage,
                                  approver_id=inp.approver_id)
+    return await enrich_decision(d, tenant_id=user["tenant_id"])
+
+
+@router.patch("/decisions/{decision_id}")
+async def edit_decision(decision_id: str, inp: DecisionEditInput, user: dict = Depends(get_current_user)):
+    """Correct the decision's own words before it is decided (2026-09-27).
+
+    Dex writes the title and the text from what was said and it mishears — a
+    name, a fabric, a number. There was no way to fix either: the founder
+    approved the misspelling, and it is those words the Journal, the Brain and
+    every later search carry. Same gate as the rest of the review.
+    """
+    from services.decision_flow import edit_decision_words
+    from services.enrich import enrich_decision
+    d = await edit_decision_words(user, decision_id, title=inp.title, summary=inp.summary)
     return await enrich_decision(d, tenant_id=user["tenant_id"])
 
 

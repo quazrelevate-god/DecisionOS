@@ -224,9 +224,19 @@ export default function Login() {
           <Link
             to="/signup"
             data-testid="login-register-link"
-            /* J1-01 — this was `hidden lg:flex`: on a phone, the screen the
-               app opens on had no way to sign up at all. */
-            className="kr-pop flex h-9 shrink-0 items-center rounded-pill px-4 text-xs font-medium"
+            /* J1-01 made this visible at every width: on a phone, the screen
+               the app opens on had no way to sign up at all.
+               2026-09-29, founder — off the phone again. In the app it sat in
+               the middle of the header, beside the wordmark, and the first
+               thing the screen offered somebody opening DecisionOS to sign in
+               was a way to start a different company. The two paths J1-01
+               actually needed are both still on this screen and both below the
+               fold of the decision: "Need a workspace? Register" under the
+               form, and — the one that matters — "Start a new company with
+               this number" offered to a number we do not know. Desktop keeps
+               the pill: there it sits at the far right of a wide header,
+               nowhere near the form, and nobody has complained about it. */
+            className="kr-pop hidden h-9 shrink-0 items-center rounded-pill px-4 text-xs font-medium lg:flex"
           >
             Create a workspace
           </Link>

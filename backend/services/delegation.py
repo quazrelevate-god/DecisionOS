@@ -7,23 +7,40 @@ Approvals view and on the Desk, and is told when new ones arrive.
 
 2026-09-16 (RBAC P2): the setting was stored but nothing read it.
 """
-from datetime import datetime, timedelta, timezone
-from typing import Iterable, List
+from datetime import datetime
+from typing import Iterable, List, Optional
+
+from shared.due import today_ist
 
 
-def is_active_now(ac: dict) -> bool:
-    """Inclusive date window; an empty end means no bound on that side."""
+def is_active_now(ac: dict, now: Optional[datetime] = None) -> bool:
+    """Inclusive date window; an empty end means no bound on that side.
+
+    `now` is for the tests, which need to stand on a named day rather than on
+    whatever day the suite happens to run.
+    """
     if not (ac or {}).get("delegate_user_id"):
         return False
-    # Dates are picked in the person's own day, which can be up to 14 hours
-    # ahead of UTC and 12 behind (India is +5:30). A window is on while it is
-    # that date anywhere, so "from today" works first thing in the morning —
-    # comparing with the UTC date alone left it off until 5:30 am in India.
-    now = datetime.now(timezone.utc)
+    # THE WINDOW IS READ ON THE COMPANY'S OWN CALENDAR (2026-09-28).
+    # The dates are days a person picked — "away from the 6th to the 8th" — so
+    # the only question is what day it is HERE, and shared/due.today_ist is the
+    # one answer the whole product uses (due dates, working days, the reminder
+    # sweep). Both ends are then exact: on from the first day, off at midnight
+    # after the last.
+    #
+    # It used to shift the UTC clock instead — +14h at the start, -12h at the
+    # end, "on while it is that date anywhere in the world". The start was only
+    # early, which costs nothing; the END was LATE, and late means somebody
+    # still holds another person's approvals after they are back. A cover that
+    # ended on Friday stayed live until 12:00 UTC on Saturday — 17:30 IST, most
+    # of the working day — and every approval it let through was recorded in
+    # the absent person's name. The window exists so nobody has to remember to
+    # switch the hand-over off; one that switches off late gives that away.
+    today = today_ist(now)
     start, end = (ac.get("from") or "")[:10], (ac.get("to") or "")[:10]
-    if start and (now + timedelta(hours=14)).date().isoformat() < start:
+    if start and today < start:
         return False
-    if end and (now - timedelta(hours=12)).date().isoformat() > end:
+    if end and today > end:
         return False
     return True
 

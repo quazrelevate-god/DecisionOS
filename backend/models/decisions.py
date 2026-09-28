@@ -5,11 +5,28 @@ from typing import Dict, Optional
 from pydantic import BaseModel, Field
 
 
+class DecisionEditInput(BaseModel):
+    """2026-09-27 (Yokesh) — the words of a decision, before it is decided.
+
+    Dex writes the title and the summary from what was said, and it mishears:
+    a name, a fabric, a number. Until now they could not be corrected — the
+    founder approved the misspelling and lived with it, because the decision
+    is what the Brain, the Journal and every later search read. Both are
+    optional; one left out is left alone."""
+    title: Optional[str] = Field(None, max_length=200)
+    summary: Optional[str] = Field(None, max_length=4000)
+
+
 class DecisionProposalTaskInput(BaseModel):
     """ASK-32 Phase 3 — change a proposed task before approving.
     ASK-50 — and the three things New Task asks that a proposal could not say:
     priority, proof, and approval. Every field is optional; one left out is
     left as it is (services.proposal_task_settings holds the rules)."""
+    # 2026-09-27 — and the task's own name. A decision can propose several,
+    # and Dex names them from speech: "Complete Tiruppur dispatch paperwork"
+    # for what the founder calls the packing list. Renaming it afterwards in
+    # My Work is a second job on work that is already somebody's.
+    title: Optional[str] = Field(None, max_length=200)
     assignee_id: Optional[str] = Field(None, max_length=64)
     due_date: Optional[str] = Field(None, max_length=10)  # "YYYY-MM-DD"; "" = no due date
     priority: Optional[str] = Field(None, max_length=10)  # "low" | "medium" | "high"

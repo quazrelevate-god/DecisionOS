@@ -99,7 +99,10 @@ def test_delegate_approves_decides_sees_and_is_told(with_test_db):
     from services.delegation import acting_for, delegates_of
     from services.tasks import task_list_query
 
-    today = datetime.now(timezone.utc).date()
+    # The company's day, not UTC's: between 00:00 and 05:30 IST they disagree,
+    # and a window seeded on the wrong one is a window about yesterday.
+    from shared.due import IST
+    today = datetime.now(timezone.utc).astimezone(IST).date()
 
     async def scenario(db):
         await _seed(db)
@@ -112,13 +115,17 @@ def test_delegate_approves_decides_sees_and_is_told(with_test_db):
             held = await acting_for(db, T, "u-sales")
             assert held == ["u-fin"], held
             assert await delegates_of(db, T, ["u-fin", "u-owner"]) == ["u-sales"]
-            # "From today" in India (UTC+5:30) is on even while the UTC date is still yesterday.
+            # The window is read on the company's day (2026-09-28). "Leave from
+            # today" is on this morning; tomorrow's is not on yet, and one that
+            # ended is off. This used to shift the UTC clock instead, which was
+            # early at the start and LATE at the end — see
+            # test_journey1_leave_cover_edge_cases for the boundary itself.
             from services.delegation import is_active_now
-            ahead = (datetime.now(timezone.utc) + timedelta(hours=10)).date().isoformat()
-            assert is_active_now({"delegate_user_id": "x", "from": ahead, "to": ahead}) is True
-            far = (datetime.now(timezone.utc) + timedelta(days=3)).date().isoformat()
-            assert is_active_now({"delegate_user_id": "x", "from": far, "to": far}) is False
-            gone = (datetime.now(timezone.utc) - timedelta(days=3)).date().isoformat()
+            now = str(today)
+            assert is_active_now({"delegate_user_id": "x", "from": now, "to": now}) is True
+            soon = str(today + timedelta(days=1))
+            assert is_active_now({"delegate_user_id": "x", "from": soon, "to": soon}) is False
+            gone = str(today - timedelta(days=1))
             assert is_active_now({"delegate_user_id": "x", "from": gone, "to": gone}) is False
             priya = {**SALES, "_acting_for": held}
 

@@ -48,6 +48,21 @@ _WATCHED = (
     ("leaves", "leaves", ("updated_at", "decided_at", "replied_at", "withdrawn_at", "created_at")),
     ("decisions", "decisions", ("updated_at", "decided_at", "created_at")),
     ("notifications", "notifications", ("created_at",)),
+    # 2026-09-28 (Yokesh, after auditing every write in the app): the three
+    # kinds two people genuinely look at together, and which nothing else was
+    # telling them about.
+    #   workflows  — the shared board. A card moved by somebody else stayed
+    #                where it was on your screen until you refocused the tab,
+    #                which is the one case this whole mechanism exists for.
+    #   contacts   — added, renamed or deleted by whoever is on the phone.
+    #   complaints — resolving one changes a red count that other screens
+    #                carry (the CRM card, the contact's page, the Desk).
+    # A resolve writes `resolved_at` and nothing else, and a contact's edit
+    # now writes `updated_at` (routers/contacts) — without those stamps the
+    # signature would miss an edit in place, as it would have for leaves.
+    ("workflows", "workflows", ("updated_at", "created_at")),
+    ("contacts", "contacts", ("updated_at", "created_at")),
+    ("complaints", "complaints", ("resolved_at", "updated_at", "created_at")),
 )
 
 

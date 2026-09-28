@@ -33,6 +33,17 @@ const TOUCHES = {
   leaves: [["leaves"], ["leave"], ["desk"], ["desk-summary"]],
   decisions: [["decisions"], ["decision"], ["desk"], ["desk-summary"]],
   notifications: [["notifications"]],
+  /* 2026-09-28 (Yokesh, after an audit of every write in the app) — the three
+     kinds two people look at together and which nothing was telling them
+     about. The BOARD is the one that matters: a card somebody else moves is
+     exactly the case this mechanism was built for, and it was not watched.
+     The workflow counts and the Desk's own tile read the same move, so they
+     are refreshed with it; a contact's name is carried by the CRM list, its
+     own page and the finance parties list; a resolved complaint changes a red
+     count on the card, the contact's page and the Desk. */
+  workflows: [["workflows"], ["workflow"], ["workflows-counts"], ["desk"], ["desk-summary"]],
+  contacts: [["contacts"], ["crm-contacts"], ["contact-profile"], ["ledger-parties"]],
+  complaints: [["complaints"], ["complaints-open"], ["contact-profile"], ["crm-contacts"], ["desk"], ["desk-summary"]],
 };
 
 export function usePulse(enabled = true) {

@@ -37,6 +37,7 @@ _DB_MODULES = [
     "services.finance_signals",
     "services.workflows", "services.ai.agent_tools",
     "routers.access", "routers.tenant_settings",
+    "routers.pulse",       # 2026-09-28: the shared-screen watch
     "services.routines",   # 2026-09-21: the sign-up routines
     "services.workflow_timing",  # 2026-09-22: stage days, stuck alert, target
     # 2026-09-24 (JOURNEY-1 J5p-01): Dex's retrieval. Its module-level db was

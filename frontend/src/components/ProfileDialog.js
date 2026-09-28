@@ -7,6 +7,8 @@ import OtpBoxes from "./auth/OtpBoxes";
 import { passwordProblem } from "../lib/password";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { UserCircle, FloppyDisk, Lock, CheckCircle, Envelope } from "@phosphor-icons/react";
+// B11 — the dev OTP is ignored by a production build (lib/devOtp).
+import { devOtpFrom } from "../lib/devOtp";
 
 const inp = "w-full border border-border rounded-lg px-3 py-2 text-sm mt-1 bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
 
@@ -83,9 +85,9 @@ export function ProfileForm({ onSaved }) {
     try {
       const { data } = await api.post("/auth/phone/send-code", { phone: newPhone });
       setPhoneCodeFor(newPhone);
-      setPhoneCode(data.dev_otp || "");
+      setPhoneCode(devOtpFrom(data));
       setPhoneResendIn(30);
-      if (data.dev_otp) toast.info(`Dev OTP: ${data.dev_otp} (auto-filled)`);
+      if (devOtpFrom(data)) toast.info(`Dev OTP: ${devOtpFrom(data)} (auto-filled)`);
       else toast.success(`We texted a code to ${displayIndianMobile(newPhone)}`);
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Could not send the code");

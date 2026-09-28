@@ -118,6 +118,20 @@ export function useDeskMetrics() {
       tasks: tasksQ.isLoading,
       ledger: ledgerQ.isLoading,
     },
+    /* B10 (2026-09-29) — "we asked and it did not come back" is its own
+       answer, and the Desk had no word for it: a failed fetch left every
+       value on its loading ellipsis for as long as the app stayed open. A
+       query that errored WITH data already in hand is not failed — react-query
+       keeps the last good answer, and yesterday's number with the stale strip
+       over it beats a dash. */
+    failed: {
+      ops: opsQ.isError && !opsQ.data,
+      summary: summaryQ.isError && !summaryQ.data,
+      tasks: tasksQ.isError && !tasksQ.data,
+      ledger: ledgerQ.isError && !ledgerQ.data,
+      any: (opsQ.isError && !opsQ.data) || (summaryQ.isError && !summaryQ.data)
+        || (tasksQ.isError && !tasksQ.data) || (ledgerQ.isError && !ledgerQ.data),
+    },
   };
 }
 

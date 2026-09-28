@@ -126,13 +126,14 @@ export const demoDex = {
 // and nothing replaces the second, because no employee history exists to
 // derive it from.
 
-// ----- Category weight defaults + presets (Sprint 1 U7-01.17) -----
-// Owner can shift weights; frontend stores locally for now, backend later
-// persists to tenant.operating_score_weights.
-export const DEFAULT_WEIGHTS = { execution: 35, finance: 25, sales: 20, responsiveness: 20 };
-export const WEIGHT_PRESETS = {
-  balanced: { label: "Balanced (default)", weights: DEFAULT_WEIGHTS },
-  manufacturer: { label: "Manufacturer", weights: { execution: 45, finance: 25, sales: 15, responsiveness: 15 } },
-  services: { label: "Services", weights: { execution: 25, finance: 20, sales: 20, responsiveness: 35 } },
-  distributor: { label: "Distributor", weights: { execution: 30, finance: 40, sales: 20, responsiveness: 10 } },
-};
+// ----- Category weights: removed from the page (2026-09-29) -----
+// U7-01.17 shipped DEFAULT_WEIGHTS + four industry presets behind sliders on
+// the Ops page, with "frontend stores locally for now, backend later persists
+// to tenant.operating_score_weights". The backend half never came, so the
+// control moved four sliders and changed nothing: not the saved weights, not
+// even the score on screen beside it. It is gone, and these constants with it.
+//
+// The real weights live in one place, services/operating_score.py, and the
+// page reads them from CATS (which mirrors that file). If per-industry weights
+// are wanted, they belong in the operating model beside the pipelines and are
+// applied server-side — then a picker on this page would mean something.

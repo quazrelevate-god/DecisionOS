@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../lib/api";
 import { hasPerm, PERMISSIONS } from "../lib/perms";
@@ -658,6 +658,7 @@ const VALID_TAB_KEYS = new Set(TABS.map((t) => t.key));
 
 function SignOutCard() {
   const { logout } = useAuth();
+  const navigate = useNavigate();
   return (
     <div className="kr-bento p-5 sm:p-6" data-testid="settings-signout-card">
       <div className="flex items-center justify-between gap-4">
@@ -670,7 +671,15 @@ function SignOutCard() {
         {/* Not red: DS-1's own rule is that `danger` means money or a deadline
             at risk, "never chrome, borders, sign-out". Terminal is not
             alerting. */}
-        <button type="button" onClick={() => { logout(); window.location.href = "/login"; }}
+        {/* B07 (2026-09-29) — AWAIT IT, AND DO NOT RELOAD THE PAGE. This
+            called logout() without waiting and then set window.location,
+            and a full page load cancels the requests the old page had in
+            flight — including POST /auth/logout, which is the one that ends
+            the session on the SERVER. The cookie could outlive the sign-out:
+            on a shared phone the next person's first request carried a live
+            session. The header menu's sign-out was always fine because it
+            navigates through the router, which cancels nothing. */}
+        <button type="button" onClick={async () => { await logout(); navigate("/login", { replace: true }); }}
           data-testid="settings-signout"
           className="kr-pop flex h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-sm font-medium text-foreground">
           <SignOut size={15} weight="bold" aria-hidden="true" /> Sign out

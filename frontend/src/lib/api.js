@@ -12,7 +12,19 @@ import { showAiConsentToast } from "./aiConsent";
    "undefined/api" and every call 404s. */
 export const API = `${process.env.REACT_APP_BACKEND_URL || ""}/api`;
 
-const api = axios.create({ baseURL: API, withCredentials: true });
+/* B04 (2026-09-29) — A REQUEST THAT NEVER ANSWERS MUST STILL END.
+   There was no timeout, so axios inherited the browser's, which on a phone
+   holding a dead Wi-Fi association can be minutes. Every screen that waits on
+   a call sat on its skeleton for that whole time with nothing to press, and
+   the cold-start check for the session never resolved either way — which is
+   half of why a bad connection looked like being signed out.
+   30s, not 15: the founder's phone is on a village 4G cell and the backend is
+   in Singapore, and a slow answer is still an answer. The calls that are
+   legitimately slower than this — an upload, or anything waiting on the AI —
+   pass their own `timeout` at the call site and are unaffected. */
+export const API_TIMEOUT_MS = 30000;
+
+const api = axios.create({ baseURL: API, withCredentials: true, timeout: API_TIMEOUT_MS });
 
 /* 2026-09-20 — CSRF, the client's half of it.
  *
@@ -50,6 +62,24 @@ api.interceptors.request.use((config) => {
     config.headers = config.headers || {};
     config.headers[CSRF_HEADER] = token;
   }
+  return config;
+});
+
+/* B04 — AND THE CALLS THAT ARE HONESTLY SLOW KEEP THEIR TIME.
+   A 30s ceiling is right for a screen waiting on a list and wrong for a bill
+   being read by the AI or a voice note going up a village uplink. Rather than
+   ask forty call sites to remember a number, the two shapes that are slow BY
+   NATURE are recognised here: anything carrying a file, and the handful of
+   endpoints that wait on a model. A call site that sets its own `timeout`
+   still wins — that is what the comparison against the instance default is
+   for. */
+const SLOW_PATHS = ["/ask", "/transcribe", "/voice-notes", "/onboarding/", "/brain/documents", "/ingest/"];
+export const SLOW_TIMEOUT_MS = 120000;
+api.interceptors.request.use((config) => {
+  if (config.timeout !== API_TIMEOUT_MS) return config;   // the caller chose
+  const url = config.url || "";
+  const carriesFile = typeof FormData !== "undefined" && config.data instanceof FormData;
+  if (carriesFile || SLOW_PATHS.some((p) => url.includes(p))) config.timeout = SLOW_TIMEOUT_MS;
   return config;
 });
 

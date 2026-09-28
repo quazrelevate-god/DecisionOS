@@ -158,3 +158,18 @@ export function humanStage(s) {
   if (!s) return "";
   return String(s).replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 }
+
+/* 2026-09-29 — HOW A TASK'S STATE READS. The words My Work puts on a task,
+   kept here so every other screen says the same ones. The Ops page printed the
+   stored value instead — a team member's own page told them their work was
+   "todo" and "in_progress" — which is the same mistake humanStage was pulled
+   out to fix, one field along. `blocked` and `waiting`/`review` fold into the
+   three states people actually talk about. */
+export const TASK_STATUS_LABELS = {
+  todo: "To do", blocked: "To do", in_progress: "Doing", waiting: "Doing",
+  review: "Doing", done: "Done", cancelled: "Cancelled",
+};
+export const taskStatusLabel = (s) => TASK_STATUS_LABELS[s] || humanStage(s);
+
+/** "medium" -> "Medium". Priorities are stored lower-case. */
+export const priorityLabel = (p) => humanStage(p || "medium");

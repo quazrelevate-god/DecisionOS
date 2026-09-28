@@ -8,6 +8,8 @@ import { normIndianMobile, displayIndianMobile } from "../../lib/phone";
 import OtpBoxes from "../../components/auth/OtpBoxes";
 // ASK-36 5 — the app's one loading animation.
 import { Loader } from "../../components/common";
+// B11 — the dev OTP is ignored by a production build (lib/devOtp).
+import { devOtpFrom } from "../../lib/devOtp";
 
 // KM-19 — rebuilt on the Karma material. The step used to be a black
 // underline under a huge heading with a square indigo button beside it; the
@@ -195,9 +197,9 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
     try {
       const { data } = await api.post("/signup/phone/send-code", { phone: norm });
       setCodeFor(norm);
-      setCode(data.dev_otp || "");
+      setCode(devOtpFrom(data));
       setResendIn(30);
-      if (data.dev_otp) toast.info(`Dev OTP: ${data.dev_otp} (auto-filled)`);
+      if (devOtpFrom(data)) toast.info(`Dev OTP: ${devOtpFrom(data)} (auto-filled)`);
     } catch (e) {
       setError(formatApiError(e.response?.data?.detail) || "Couldn't text a code. Try again in a moment.");
     } finally {

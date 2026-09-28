@@ -35,6 +35,8 @@ import { useIsMobile } from "../hooks/useIsMobile";
 // 2026-09-16 it is a timeline there rather than cards, so only Leave.js's
 // status and leave-type labels are shared.
 import { RequestLeaveDialog, STATUS_META, typeLabel } from "./Leave";
+// B11 — the dev OTP is ignored by a production build (lib/devOtp).
+import { devOtpFrom } from "../lib/devOtp";
 
 const SHEET = `gap-5 rounded-[1.75rem] p-6 sm:rounded-[1.75rem] [&>button.absolute]:hidden ${GLASS_SHEET}`;
 /* 2026-09-16, founder: the profile pop-up is frosted glass like the Team tree's
@@ -224,9 +226,9 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
     try {
       const { data } = await api.post("/auth/phone/send-code", { phone: ownNewPhone });
       setPhoneCodeFor(ownNewPhone);
-      setPhoneCode(data?.dev_otp || "");
+      setPhoneCode(devOtpFrom(data));
       setPhoneResendIn(30);
-      if (data?.dev_otp) toast.info(`Dev OTP: ${data.dev_otp} (auto-filled)`);
+      if (devOtpFrom(data)) toast.info(`Dev OTP: ${devOtpFrom(data)} (auto-filled)`);
       else toast.success(`We texted a code to ${displayIndianMobile(ownNewPhone)}`);
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Could not send the code");

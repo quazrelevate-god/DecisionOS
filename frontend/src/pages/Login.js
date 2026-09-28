@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
@@ -7,6 +7,8 @@ import { KarmaLogo } from "../components/karma/Logo";
 import OtpBoxes from "../components/auth/OtpBoxes";
 import { DeviceMobile, ArrowRight, ArrowLeft } from "@phosphor-icons/react";
 import { toast } from "sonner";
+// B11 — the dev OTP is ignored by a production build (lib/devOtp).
+import { devOtpFrom } from "../lib/devOtp";
 
 // KM-66 — the demo takes the whole card, not a corner of it. The default
 // state is the sign-in form; a single professional invitation ("Try
@@ -70,6 +72,22 @@ export default function Login() {
   const [otpChoices, setOtpChoices] = useState(null);
   const [resendIn, setResendIn] = useState(0);
   const [invite, setInvite] = useState(null);
+  /* B09 / B26 (2026-09-29) — an invite link has three states, and this screen
+     used to draw only one of them. `inviteToken` is "this person arrived
+     through a link", which is true before we know anything about it;
+     `inviteLoading` is the second or two while the server is asked, during
+     which the form was live and a fast typist could send an OTP the invite
+     was about to replace; `inviteError` is a link that is expired, spent or
+     wrong, which used to land in the generic error — and the generic error
+     for an unknown number offers "Start a new company with this number". An
+     invited member who waited a week to tap their link was being walked into
+     founding a second company instead of joining the one that invited them. */
+  const inviteToken = useMemo(
+    () => (typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("invite")),
+    []
+  );
+  const [inviteLoading, setInviteLoading] = useState(!!inviteToken);
+  const [inviteError, setInviteError] = useState("");
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -117,10 +135,13 @@ export default function Login() {
         setOtpTenant(start.data.tenant_id || null);
         setOtpSent(true);
         startResendTimer();
-        if (start.data.dev_otp) { setOtpCode(start.data.dev_otp); toast.info(`Dev OTP: ${start.data.dev_otp} (auto-filled)`); }
+        const dev = devOtpFrom(start.data);
+        if (dev) { setOtpCode(dev); toast.info(`Dev OTP: ${dev} (auto-filled)`); }
         else toast.success("We texted a login code to your mobile");
       } catch (err) {
-        setError(formatApiError(err.response?.data?.detail) || "This invite link is invalid or expired");
+        setInviteError(formatApiError(err.response?.data?.detail) || "This invite link is invalid or expired.");
+      } finally {
+        setInviteLoading(false);
       }
     })();
     // Runs once on mount to handle the ?invite= deep-link; deps intentionally empty.
@@ -153,7 +174,8 @@ export default function Login() {
       try {
         const { data } = await api.post(`/auth/invite/${invite.token}/start`);
         startResendTimer();
-        if (data.dev_otp) { setOtpCode(data.dev_otp); toast.info(`Dev OTP: ${data.dev_otp} (auto-filled)`); }
+        const devResend = devOtpFrom(data);
+        if (devResend) { setOtpCode(devResend); toast.info(`Dev OTP: ${devResend} (auto-filled)`); }
         else toast.success(data.detail || "We texted you a new code");
       } catch (err) { setError(formatApiError(err.response?.data?.detail) || "Failed"); }
       finally { setBusy(false); }
@@ -170,9 +192,9 @@ export default function Login() {
       setOtpTenant(data.tenant_id || tenant || null);
       setOtpSent(true);
       startResendTimer();
-      if (data.dev_otp) toast.info(`Dev OTP: ${data.dev_otp} (auto-filled)`);
+      const dev = devOtpFrom(data);
+      if (dev) { toast.info(`Dev OTP: ${dev} (auto-filled)`); setOtpCode(dev); }
       else toast.success("OTP sent to your mobile");
-      if (data.dev_otp) setOtpCode(data.dev_otp);
     } catch (err) { setError(formatApiError(err.response?.data?.detail) || "Failed"); }
     finally { setBusy(false); }
   };
@@ -309,13 +331,33 @@ export default function Login() {
 
           {loginTab === "otp" && (
             <form onSubmit={otpSent ? submitOtp : (e) => requestOtp(e)} className="space-y-4" data-testid="otp-form">
+              {/* B09 — the link is bad: say so, name who to ask, and offer
+                  nothing that starts a different company. */}
+              {inviteError && (
+                <div className="kr-pressed rounded-cardlg p-3" data-testid="invite-error" role="alert">
+                  <p className="text-sm font-medium tracking-tight">This invite link doesn&rsquo;t work any more</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {inviteError} Ask whoever invited you to send a new one — your place in their workspace is still there.
+                  </p>
+                </div>
+              )}
+              {/* B26 — and while we are still asking, the form is not the
+                  answer: the number it would text is the one on the invite. */}
+              {inviteLoading && !inviteError && (
+                <div className="kr-pressed rounded-cardlg p-3" data-testid="invite-loading" role="status">
+                  <p className="text-sm font-medium tracking-tight">Opening your invite…</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">One moment — we&rsquo;re sending a code to the number it was sent to.</p>
+                </div>
+              )}
               {invite && (
                 <div className="kr-pressed rounded-cardlg p-3" data-testid="invite-welcome">
                   <p className="font-medium uppercase tracking-tight text-sm">Welcome, {invite.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">You've been invited to <strong>{invite.company}</strong>. Enter the code we sent to {invite.phone_masked} to sign in — no password needed.</p>
                 </div>
               )}
-              {!otpSent ? (
+              {/* B26 — while the invite is resolving there is nothing useful to
+                  type: the number is the invite's, and it is about to arrive. */}
+              {inviteLoading && !inviteError ? null : !otpSent ? (
                 <>
                   <div>
                     <label className={labelCls}>Mobile number</label>
@@ -345,7 +387,7 @@ export default function Login() {
                       line of small print. Somebody standing at a locked door
                       is told where the open one is, with their number carried
                       across so they do not type it twice. */}
-                  {unknownNumber && (
+                  {unknownNumber && !inviteToken && (
                     <button type="button" data-testid="otp-start-company"
                       onClick={() => navigate(`/signup?phone=${encodeURIComponent(otpPhone)}`)}
                       className="kr-pop flex h-12 w-full items-center justify-center rounded-pill px-4 text-sm font-medium">

@@ -20,15 +20,22 @@ const timeOf = (iso) => {
  * @param {Function}   [onRetry]
  * @param {boolean}    [offline]  true when the device itself is offline
  */
+/* B10 (2026-09-29) — the same strip also says "we could not load this at
+   all". A tile whose fetch failed used to sit on "…" for as long as the app
+   was open, or — worse, on the Workflows tile — settle to a confident 0 once
+   loading ended, which reads as "nothing needs you" when the truth is
+   "nobody asked". `failed` swaps the sentence; the retry is the one this
+   strip already had. */
 export function StaleStamp({
   at,
   onRetry,
   offline = false,
+  failed = false,
   className,
   "data-testid": testId = "stale-stamp",
 }) {
   const t = timeOf(at);
-  if (!t) return null;
+  if (!t && !failed) return null;
   return (
     <div
       role="status"
@@ -43,8 +50,9 @@ export function StaleStamp({
     >
       <CloudSlash size={20} weight="bold" aria-hidden="true" className="shrink-0" />
       <p className="min-w-0 flex-1 leading-snug">
-        {offline ? "You're offline. " : ""}
-        Showing data from {t}.
+        {failed && !t
+          ? (offline ? "You're offline. Some numbers couldn't be loaded." : "Some numbers couldn't be loaded.")
+          : `${offline ? "You're offline. " : ""}Showing data from ${t}.`}
       </p>
       {onRetry && (
         <button

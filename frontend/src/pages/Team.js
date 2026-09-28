@@ -107,7 +107,15 @@ function Field({ label, htmlFor, children }) {
 }
 
 function InviteLinkModal({ info, onClose }) {
-  const link = info ? `${window.location.origin}/login?invite=${info.token}` : "";
+  /* B03 (2026-09-29) — THE SERVER SAYS WHERE THE APP LIVES, because this
+     screen cannot know. Built from window.location.origin, an invite created
+     inside the Android app read "https://localhost/login?invite=…" — the page
+     IS served from https://localhost there — so every link an owner copied or
+     sent on WhatsApp from their phone was dead on arrival. The endpoint
+     returns invite_url now (routers/team.py, off APP_BASE_URL, the same value
+     the verification and reset emails use); the old construction stays as the
+     fallback for a backend that has not been deployed yet. */
+  const link = info ? (info.invite_url || `${window.location.origin}/login?invite=${info.token}`) : "";
   const msg = info ? `You're invited to DecisionOS. Tap to sign in — we'll text you a login code: ${link}` : "";
   const copy = async () => {
     try { await navigator.clipboard.writeText(link); toast.success("Invite link copied"); }
@@ -377,7 +385,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
         if (inviteAfterSave && onInvite && form.phone.replace(/\D/g, "").length >= 10) {
           try {
             const { data } = await api.post(`/users/${initial.id}/invite`);
-            onInvite({ token: data.invite_token, name: data.name, phone_masked: data.phone_masked });
+            onInvite({ token: data.invite_token, invite_url: data.invite_url, name: data.name, phone_masked: data.phone_masked });
           } catch (e) {
             toast.error(formatApiError(e.response?.data?.detail) || "Couldn't create invite link");
           }
@@ -397,7 +405,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
       onSaved();
       if (res?.data?.invite_token && onInvite) {
         const d = form.phone.replace(/\D/g, "");
-        onInvite({ token: res.data.invite_token, name: form.name, phone_masked: d.length >= 4 ? "•••• " + d.slice(-4) : "••••" });
+        onInvite({ token: res.data.invite_token, invite_url: res.data.invite_url, name: form.name, phone_masked: d.length >= 4 ? "•••• " + d.slice(-4) : "••••" });
       }
     } catch (e) {
       const detail = e.response?.data?.detail;
@@ -861,7 +869,7 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
   const getInviteLink = async (u) => {
     try {
       const { data } = await api.post(`/users/${u.id}/invite`);
-      setInvite({ token: data.invite_token, name: data.name, phone_masked: data.phone_masked });
+      setInvite({ token: data.invite_token, invite_url: data.invite_url, name: data.name, phone_masked: data.phone_masked });
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Couldn't create invite link");
     }

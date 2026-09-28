@@ -126,15 +126,20 @@ export default function Login() {
     // Runs once on mount to handle the ?invite= deep-link; deps intentionally empty.
   }, []);
 
+  /* MOBILE-2 — SIGNING IN REPLACES THE SIGN-IN SCREEN. These pushed, so the
+     sign-in page stayed one entry behind the Desk: harmless in a browser,
+     where nobody presses Back after signing in, and wrong in the APK, where
+     Back is the phone's own gesture and the first thing it did from the Desk
+     was show a signed-in founder the sign-in screen again. */
   const doLogin = async (e) => {
     e.preventDefault(); setError(""); setBusy(true);
-    try { await login(form.email, form.password); navigate("/"); }
+    try { await login(form.email, form.password); navigate("/", { replace: true }); }
     catch (err) { setError(formatApiError(err.response?.data?.detail) || "Failed"); }
     finally { setBusy(false); }
   };
   const demoLogin = async (email) => {
     setError(""); setBusy(true);
-    try { await login(email, "demo1234"); navigate("/"); }
+    try { await login(email, "demo1234"); navigate("/", { replace: true }); }
     catch (err) { setError(formatApiError(err.response?.data?.detail)); }
     finally { setBusy(false); }
   };
@@ -177,7 +182,7 @@ export default function Login() {
   const unknownNumber = /not registered|no account is registered/i.test(error || "");
   const submitOtp = async (e) => {
     e.preventDefault(); setError(""); setBusy(true);
-    try { await loginWithOtp(otpPhone, otpCode, otpTenant, invite?.token); navigate("/"); }
+    try { await loginWithOtp(otpPhone, otpCode, otpTenant, invite?.token); navigate("/", { replace: true }); }
     catch (err) { setError(formatApiError(err.response?.data?.detail) || "Failed"); }
     finally { setBusy(false); }
   };

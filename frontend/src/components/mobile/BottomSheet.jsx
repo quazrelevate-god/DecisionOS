@@ -18,6 +18,7 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import { useBackDismiss } from "@/hooks/useBackDismiss";
 
 // ---------------------------------------------------------------------------
 // Scroll lock.
@@ -188,6 +189,16 @@ export function useBodyScrollLock(open) {
  * @param {'auto'|'tall'|'full'} [size]
  * @param {boolean}  [dismissible] false pins the sheet open except via its own
  *                                 actions (used for money-committing flows)
+ * @param {boolean}  [ownsBack]   MOBILE-2 — does Back belong to this sheet?
+ *                                 True for a sheet opened from React state,
+ *                                 which is nearly all of them: it takes one
+ *                                 history entry while it is open so the phone's
+ *                                 Back gesture closes it instead of leaving the
+ *                                 page (hooks/useBackDismiss). FALSE for a
+ *                                 sheet whose open state is already in the URL
+ *                                 — FocusView's is `?focus=` — where the
+ *                                 navigation IS the entry and a second one
+ *                                 would need two presses to get out of.
  */
 export function BottomSheet({
   open,
@@ -197,11 +208,17 @@ export function BottomSheet({
   footer,
   size = "auto",
   dismissible = true,
+  ownsBack = true,
   className,
   children,
   "data-testid": testId = "bottom-sheet",
 }) {
   useBodyScrollLock(open);
+  /* MOBILE-2 — this sheet is built on Radix's primitive directly rather than
+     on ui/dialog, so it never inherited that wrapper's Back handling; in the
+     APK a back gesture over an open sheet left the PAGE. Same one-line fix the
+     wrapper has. */
+  useBackDismiss(ownsBack && open, (next) => { if (!next) onClose?.(); });
 
   const handleOpenChange = (next) => {
     if (!next) onClose?.();

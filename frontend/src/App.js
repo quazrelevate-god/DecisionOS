@@ -57,6 +57,8 @@ import AdminPortal from "./pages/admin/AdminPortal";
 import MobileKitchenSink from "./pages/MobileKitchenSink";
 // MPWA-12a: design lab (§6), development only — see the route guard below.
 import DesignLab from "./pages/DesignLab";
+// MOBILE-2: Android's back gesture, inside the Capacitor app.
+import { useNativeBack } from "./hooks/useNativeBack";
 
 function AccessDenied() {
   const navigate = useNavigate();
@@ -151,6 +153,15 @@ function Home() {
   return <Navigate to="/login" replace />;
 }
 
+/* MOBILE-2 — the Android back gesture, for the whole app rather than one
+   shell (see hooks/useNativeBack). It renders nothing and does nothing in a
+   browser; inside the APK it is what stops Back from closing DecisionOS.
+   It has to sit INSIDE BrowserRouter, because it navigates. */
+function NativeBack() {
+  useNativeBack();
+  return null;
+}
+
 function App() {
   // UI-SCALE — the whole app zooms with the screen (see hooks/useUiScale).
   useUiScale();
@@ -158,6 +169,7 @@ function App() {
     <div className="App">
       <AuthProvider>
         <BrowserRouter>
+          <NativeBack />
           {/* MW-10 fix: ErrorBoundary around the routed page area so a
               single broken component costs one page rather than the
               whole product (MW-08 was the canonical example -- a

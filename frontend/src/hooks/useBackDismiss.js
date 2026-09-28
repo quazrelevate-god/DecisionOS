@@ -23,7 +23,11 @@
 import { useEffect, useRef } from "react";
 import { MOBILE_QUERY } from "./useIsMobile";
 
-const KEY = "dosOverlay";
+/* MOBILE-2 — exported, because the native app's back handler has to be able to
+   tell "an overlay owns this history entry" from "this is the page itself"
+   (lib/native/back.js). It is the same marker, read rather than written. */
+export const OVERLAY_KEY = "dosOverlay";
+const KEY = OVERLAY_KEY;
 
 export function useBackDismiss(open, onOpenChange) {
   const close = useRef(onOpenChange);

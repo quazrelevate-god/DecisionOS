@@ -289,3 +289,90 @@ WKWebView rendering versus Chromium, the `capacitor://` scheme, safe-area insets
 against a physical notch, and keyboard behaviour. The first person with Xcode
 should run `npx cap open ios`, build to a simulator, and add what they find
 here.
+
+---
+
+## MOBILE-2 · The Android back gesture (2026-09-29)
+
+Founder, on the APK: *"the android gestures are not supporting — the android
+gesture directly pulls the app back to home screen."* Swiping back from
+anywhere — a page, a pop-up, mid-review — closed DecisionOS.
+
+### Why it happened
+
+Nothing in the web app was wrong. The back press never reached it.
+`@capacitor/core` does not touch the back press at all: there is no
+`onBackPressed`, no `OnBackPressedCallback` and no `OnBackInvokedCallback`
+anywhere in `BridgeActivity.java` or `Bridge.java` (read at 8.5.2). So the
+system's own default ran, and for an activity with no registered callback that
+default is to finish it. We target SDK 36, where predictive back is the norm,
+which makes the gesture feel like "leave the app" rather than "go back".
+
+### What makes it reach us
+
+`@capacitor/app`, which was not installed. Its `AppPlugin` registers an
+`OnBackPressedCallback` on the activity's dispatcher, and AndroidX wires that
+into the predictive-back system, so it intercepts the gesture on Android 13
+through 16. Read at 8.1.1, it then does one of two things:
+
+* with **no** JS listener, it goes back in the webview's history, and if it
+  cannot, **it does nothing at all** — back would feel dead on the first screen
+  rather than exiting;
+* with a JS listener, it hands us the press and `canGoBack`, and does nothing
+  else. Leaving the app becomes ours to do, through `exitApp()`.
+
+So a listener is not optional once the plugin is installed.
+
+### Why the app needed almost nothing else
+
+Every overlay in this app has been a history entry since the mobile PWA work:
+a dialog, a sheet or a drawer pushes one while it is open
+(`hooks/useBackDismiss`), and the focus views keep their state in the URL
+(`useFocus`). "Close the pop-up, stay on the page" and "go back to the page
+before" are therefore the same instruction — `history.back()` — and the only
+thing missing in the APK was somebody to give it.
+
+The policy is `lib/native/back.js`, a pure function plus a listener:
+
+| where the founder is | what back does |
+|---|---|
+| a pop-up is open (`history.state.dosOverlay`) | closes it, page untouched |
+| anywhere with app history behind it (`history.state.idx > 0`) | the previous page or section |
+| a screen opened by a deep link, nothing behind it | their own home screen |
+| the Desk, nothing behind it | "Press back again to leave DecisionOS", then exits |
+
+Three gaps were closed so the first row is true everywhere:
+`components/mobile/BottomSheet` is built on Radix directly and never inherited
+the wrapper's back handling (it takes an entry now, with `ownsBack={false}` for
+FocusView, whose `?focus=` already is one); the Desk's expanded card had
+Escape but nothing for a phone; and signing in pushed, so back from the Desk
+showed a signed-in founder the sign-in screen — it replaces now.
+
+### Proven on a device, not reasoned about
+
+Android 16 emulator (`nk_pixel`), debug APK on live reload, driven by a real
+left-edge swipe (`adb shell input swipe 2 1200 600 1210`), not a key event:
+
+| walked | result |
+|---|---|
+| Desk → Money, back | Desk, app in the foreground |
+| Finance → "Add expense" pop-up, back | pop-up closed, still on Finance |
+| Desk → "Show all 30", back | card closed, Desk intact |
+| Desk with nothing behind, back | "Press back again to leave DecisionOS", app stays |
+| … and again inside 2s | app exits to the launcher |
+
+On the web side, `verify:dex` is 193/193 at 1440, 390×844 and 360×640, and
+`audit:mobile --only /inbox` reports the same findings as before the change.
+
+> This also corrects the note above: **the Android half does build and run on
+> this Mac.** `JAVA_HOME=/Applications/Android Studio.app/Contents/jbr/Contents/Home`
+> and `ANDROID_HOME=$HOME/Library/Android/sdk`, then `./gradlew assembleDebug`
+> in `frontend/android`. iOS is still unproven — there is no Xcode here.
+
+### Still open
+
+* The exit prompt is a toast in the app's own words. If the founder would
+  rather have Android's own "press back twice" feel, it is one line.
+* Tabs inside a screen — the Desk's Decisions / Approvals / Watch — are not
+  history entries, so back leaves the screen rather than returning to the
+  previous tab. Deliberate for now; say the word and they can take entries too.

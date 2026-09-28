@@ -58,6 +58,7 @@ import { useDeskMetrics } from "./desk/useDeskMetrics";
    keeps a single copy in the document. */
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useServedFromCache } from "../hooks/useServedFromCache";
+import { useBackDismiss } from "../hooks/useBackDismiss";
 import { StaleStamp } from "../components/mobile/StaleStamp";
 // ASK-33 — the well on the left column's floor is Dex's Decide door. It owns
 // the capture hooks and hosts the repurposed InsightWell container itself.
@@ -924,6 +925,10 @@ export default function Desk() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [phoneExpanded]);
+  /* MOBILE-2 — and so does the phone's Back gesture, which is the same
+     instruction from the same hand. A phone has no Escape key; in the APK
+     this layer was the one thing on the Desk that Back walked past. */
+  useBackDismiss(phoneExpanded, (open) => { if (!open) setPhoneExpanded(false); });
   /* PILOT-2 B — a draft is the DECISION's state now (the card carries `draft`
      from the server), so every device shows the same rows in yellow. What is
      subscribed here is only the gap between the founder's tap and the next

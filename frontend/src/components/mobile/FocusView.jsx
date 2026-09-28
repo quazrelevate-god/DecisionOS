@@ -83,6 +83,9 @@ export function FocusView({ threshold = 50000, onDecided, onChanged }) {
 
   return (
     <BottomSheet
+      /* MOBILE-2 — `?focus=` IS this sheet's history entry (useFocus pushes it
+         and close() goes back), so the sheet must not take a second one. */
+      ownsBack={false}
       open={open || unknownType}
       onClose={close}
       size="tall"

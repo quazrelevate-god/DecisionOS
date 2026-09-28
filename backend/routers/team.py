@@ -540,6 +540,10 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
     out = await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0})
     if invite_token:
         out["invite_token"] = invite_token
+        # B03 — the link a new member is sent, built where the public URL is
+        # known. See the note on regenerate_invite below.
+        from routers.auth import _app_base_url
+        out["invite_url"] = f"{_app_base_url()}/login?invite={invite_token}"
     return out
 
 
@@ -561,8 +565,23 @@ async def regenerate_invite(user_id: str, user: dict = Depends(require_perm("tea
             "invite_expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
         }},
     )
+    # B03 (2026-09-29) — AND THE LINK ITSELF, BUILT WHERE THE PUBLIC URL IS KNOWN.
+    #
+    # The Team screen used to assemble it from `window.location.origin`. In a
+    # browser that is right; inside the Capacitor app the page is served from
+    # https://localhost, so every invite an owner copied or sent on WhatsApp
+    # from their phone read `https://localhost/login?invite=...` and was
+    # useless to whoever received it — the one flow whose entire purpose is to
+    # leave the device it was created on.
+    #
+    # The server is the only place that knows where the app actually lives
+    # (APP_BASE_URL, the same value the verification and reset emails have
+    # always used), so it says. The client prefers this and keeps its own
+    # construction as the fallback, which is what the web has always done.
+    from routers.auth import _app_base_url
     return {"invite_token": token, "name": target.get("name"),
-            "phone_masked": _mask_phone(target.get("phone", ""))}
+            "phone_masked": _mask_phone(target.get("phone", "")),
+            "invite_url": f"{_app_base_url()}/login?invite={token}"}
 
 
 async def _refuse_ungrantable(user: dict, perms: list, role: Optional[str], target: Optional[dict] = None) -> None:

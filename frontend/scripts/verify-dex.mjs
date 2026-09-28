@@ -294,8 +294,14 @@ async function run(viewport) {
   check(`${w} E: opening it again shows where it got to`, await atStep(page, 'made', 5000));
   await page.getByTestId('desk-dex-later').click();
   check(`${w} D: Save as draft gives the well back`, await popupGone(page) && (await geometry(page)).ripple === true);
-  check(`${w} D: … and marks the decision a draft`,
-    (await page.evaluate(() => JSON.parse(localStorage.getItem('dos_deferred_decisions') || '[]'))).includes('dec_fixture'));
+  /* 2026-09-27 — ON THE DECISION, NOT IN THIS BROWSER. The mark was a list of
+     ids in localStorage when PILOT-2 B shipped the rename; it is a field on the
+     decision now (POST /decisions/:id/draft, lib/decisionDrafts), so that it
+     reaches the founder's phone too. Asserting the old key here would be
+     asserting last week's design. */
+  check(`${w} D: … and marks the decision a draft, on the decision`,
+    await until(async () => (await page.evaluate(() => (window.__DOS_FIXTURE_CALLS || [])
+      .some((c) => c.method === 'POST' && /\/decisions\/dec_fixture\/draft$/.test(c.url)))), 6000));
   const typed = await openField(page);
   await typed.fill('Ask Priya to book the Tirupur truck for Thursday');
   await typed.press('Enter');

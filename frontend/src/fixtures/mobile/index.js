@@ -81,7 +81,7 @@ export function resolveFixture(name, method, url) {
   if (method && method.toUpperCase() !== "GET") {
     for (const w of set.writes || []) {
       if (typeof w.match === "string" ? w.match === path : w.match.test(path)) {
-        return { hit: true, data: typeof w.data === "function" ? w.data({ path, query }) : w.data };
+        return { hit: true, data: typeof w.data === "function" ? w.data({ path, query, method: method.toUpperCase() }) : w.data };
       }
     }
     return { hit: true, data: { ok: true, fixture: name } };

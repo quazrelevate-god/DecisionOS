@@ -50,6 +50,11 @@ let dexReads = 0;
 // PILOT-2 A — a decision approved in the Dex pop-up comes back approved (the
 // pop-up's foot turns into Done); a new capture starts it pending again.
 let dexApproved = false;
+// PILOT-2 B — "Save as draft" is a call to the server now (POST/DELETE
+// /decisions/:id/draft, lib/decisionDrafts). Unanswered, the fixture's generic
+// {ok:true} echo let a save look identical to a refusal, which is the
+// wrong-verb class of bug MPWA-13 named. So it is answered, and remembered.
+let dexDraft = false;
 /* ASK-33 — which ending the simulated capture reaches. Dev-only (fixtures are
    never in the production bundle): sessionStorage "dos_fixture_capture" set to
    "nothing", "consent" or "failed"; anything else is a ready decision.
@@ -71,7 +76,7 @@ export function buildWrites() {
     // ASK-32 1.6 — a held recording is sent as /voice-notes/{id}/submit and
     // followed by the same id, so that write answers with it too.
     // ASK-33 — every new capture walks the stages again from the start.
-    { match: /^\/voice-notes(\/text|\/[^/]+\/submit)?$/, data: () => { dexReads = 0; dexApproved = false; return { id: "vn_fixture", status: "queued" }; } },
+    { match: /^\/voice-notes(\/text|\/[^/]+\/submit)?$/, data: () => { dexReads = 0; dexApproved = false; dexDraft = false; return { id: "vn_fixture", status: "queued" }; } },
     // ASK-50 — approving answers with what the server's approve does
     // (services/decision_flow.approve_decision_flow): the decision, now
     // approved, with the task ids it made and the counts. The review card reads
@@ -82,6 +87,12 @@ export function buildWrites() {
       task_ids: ["t_approved_1", "t_approved_2"],
       created_on_approval: { task_ids: 2, workflow_ids: 1, meetings: 0, reminders: 0, memory_notes: 0 },
     }) },
+    // PILOT-2 B — the draft flag, set and cleared the way the router does it
+    // (routers/decisions.py), answering with the decision it changed.
+    { match: /^\/decisions\/[^/]+\/draft$/, data: ({ path, method }) => {
+      dexDraft = method !== "DELETE";
+      return { id: path.split("/")[2], status: "pending_approval", draft: dexDraft };
+    } },
     // 2026-09-21's "work these moves leave behind" asks this before approving;
     // unanswered, the fixture server said {} and the review crashed on it.
     { match: /^\/decisions\/[^/]+\/moves$/, data: [] },
@@ -198,6 +209,7 @@ export function buildRoutes(d) {
       dtype: "directive",
       confidence: 0.91,
       status: dexApproved ? "approved" : "pending_approval",
+      draft: dexDraft,
       task_ids: dexTasks.map((t) => t.id),
       // ASK-33 — the ASK-32 shape: who decides, and the proposal nothing is
       // created from until approval.

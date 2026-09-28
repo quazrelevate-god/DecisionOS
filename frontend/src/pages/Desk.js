@@ -766,6 +766,14 @@ export default function Desk() {
      server after 3 s (service-worker.js), and the Desk used to show those
      numbers as if they were live. Now it says when they are from. */
   const cachedAt = useServedFromCache(DESK_DATA);
+  /* B10 (2026-09-29) — three states, three characters. A tile said "…" while
+     it was loading AND for ever after a failed fetch, so a founder on a bad
+     line watched three dots that were never going to become a number. "—"
+     is the app's own word for "we don't know", and it is the honest one here:
+     the number exists, we could not read it. Never a 0 — see the Workflows
+     pill below, which settled to a confident "0 need attention" on a request
+     that never landed. */
+  const shown = (value, isFailed) => (isFailed ? "—" : value == null ? "…" : String(value));
   const [openTaskId, setOpenTaskId] = useState(null);
   const openTask = openTaskId ? (approvalsQ.data || []).find((t) => t.id === openTaskId) : null;
   const usersQ = useQuery({
@@ -1098,8 +1106,9 @@ export default function Desk() {
         "max-lg:h-full"
       )}
     >
-      {cachedAt && (
-        <StaleStamp at={cachedAt} offline={typeof navigator !== "undefined" && navigator.onLine === false}
+      {(cachedAt || m.failed?.any || (workflowsQ.isError && !workflowsQ.data)) && (
+        <StaleStamp at={cachedAt} failed={m.failed?.any || (workflowsQ.isError && !workflowsQ.data)}
+          offline={typeof navigator !== "undefined" && navigator.onLine === false}
           onRetry={() => qc.invalidateQueries()} className="shrink-0" data-testid="desk-stale" />
       )}
       {/* ── LIGHT ZONE ───────────────────────────────────────────────── */}
@@ -1275,15 +1284,15 @@ export default function Desk() {
         >
           {[
             { icon: Timer, label: t("desk.delayed", "Delayed"),
-              value: String(m.counters ? m.counters.delayed : m.work?.overdue ?? "…"),
+              value: shown(m.counters ? m.counters.delayed : m.work?.overdue, m.failed?.summary && m.failed?.tasks),
               urgent: (m.counters?.delayed ?? m.work?.overdue ?? 0) > 0,
               to: "/my-work?filter=overdue", testid: "kpi-delayed-m" },
             ...(seesComplaints ? [{ icon: ChatCircleText, label: t("desk.complaints", "Complaints"),
-              value: String(m.complaints ? m.complaints.value : "…"),
+              value: shown(m.complaints?.value, m.failed?.summary),
               urgent: (m.complaints?.new_7d || 0) > 0,
               to: "/crm", testid: "kpi-complaints-m" }] : []),
             ...(seesMoney ? [{ icon: HandCoins, label: t("desk.overdue", "Overdue"),
-              value: m.cash ? inrCompact(m.cash.overdue) : "…",
+              value: m.cash ? inrCompact(m.cash.overdue) : shown(null, m.failed?.summary),
               urgent: (m.cash?.overdue || 0) > 0,
               to: "/finance?tab=revenue&filter=overdue", testid: "kpi-collect-m" }] : []),
             /* ASK-52 · the fourth pill is the boards, not the ledger. It
@@ -1297,8 +1306,9 @@ export default function Desk() {
                keeps its home on /finance, where this pill used to go.
                RETIRED TESTID: kpi-profit-m (no test referenced it). */
             { icon: FlowArrow, label: "Workflows",
-              value: workflowsQ.isLoading ? "…" : String(wfAttention.needAttention),
-              sub: workflowsQ.isLoading ? null : `/${wfAttention.total}`,
+              value: workflowsQ.isError && !workflowsQ.data ? "—"
+                : workflowsQ.isLoading ? "…" : String(wfAttention.needAttention),
+              sub: workflowsQ.isLoading || (workflowsQ.isError && !workflowsQ.data) ? null : `/${wfAttention.total}`,
               urgent: wfAttention.needAttention > 0,
               to: "/workflows", testid: "kpi-workflows-m" },
           ].map((k) => (
@@ -1338,7 +1348,7 @@ export default function Desk() {
           <StatTile
             icon={Timer}
             label="Delayed"
-            value={String(m.counters ? m.counters.delayed : m.work?.overdue ?? "…")}
+            value={shown(m.counters ? m.counters.delayed : m.work?.overdue, m.failed?.summary && m.failed?.tasks)}
             urgent={(m.counters?.delayed ?? m.work?.overdue ?? 0) > 0}
             alert={(m.counters?.delayed ?? 0) > 0}
             viz={m.work?.deptCounts?.length ? <MiniBars values={m.work.deptCounts} accentIndex={0} width={64} /> : null}
@@ -1350,7 +1360,7 @@ export default function Desk() {
           <StatTile
             icon={ChatCircleText}
             label="Complaints"
-            value={String(m.complaints ? m.complaints.value : "…")}
+            value={shown(m.complaints?.value, m.failed?.summary)}
             urgent={(m.complaints?.new_7d || 0) > 0}
             alert={m.complaints?.new_7d > 0 ? m.complaints.new_7d : false}
             viz={m.complaints ? <CircleDots count={m.complaints.new_7d} /> : null}
@@ -1365,7 +1375,7 @@ export default function Desk() {
             icon={HandCoins}
             alert={(m.cash?.overdue || 0) > 0}
             label="To collect (overdue)"
-            value={m.cash ? inrCompact(m.cash.overdue) : "…"}
+            value={m.cash ? inrCompact(m.cash.overdue) : shown(null, m.failed?.summary)}
             urgent={(m.cash?.overdue || 0) > 0}
             to="/finance?tab=revenue&filter=overdue"
             testid="kpi-collect"
@@ -1386,7 +1396,7 @@ export default function Desk() {
           <StatTile
             icon={Receipt}
             label="Spend, this month"
-            value={m.ledger?.lastMonthSpend != null ? inrCompact(m.ledger.lastMonthSpend) : "…"}
+            value={m.ledger?.lastMonthSpend != null ? inrCompact(m.ledger.lastMonthSpend) : shown(null, m.failed?.ledger)}
             viz={m.ledger?.byMonth?.length > 1
               ? <TinySpark points={m.ledger.byMonth.map((x) => x.amount)} tone="neutral" />
               : null}

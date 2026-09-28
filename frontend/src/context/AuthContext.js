@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import api, { SESSION_LOST_EVENT } from "../lib/api";
 import { setViewerIsOwner } from "../lib/aiConsent";
 import { carryOverLocalDrafts } from "../lib/decisionDrafts";
@@ -50,18 +50,59 @@ export function AuthProvider({ children }) {
     carryOverLocalDrafts().catch(() => { /* tried again on the next load */ });
   }, [user?.id]);
 
+  /* B04 (2026-09-29) — "NO SIGNAL" IS NOT "SIGNED OUT".
+     This swallowed every failure of /auth/me and left `user` null, which the
+     router reads as signed out. On a laptop that is nearly always right: the
+     request either answers or the browser is on a page that cannot work
+     anyway. On a phone it is wrong most of the times it happens — a founder
+     in a shed with one bar, or reopening in a lift, was shown the sign-in
+     screen and asked for an OTP they could not receive, with a perfectly good
+     session sitting in the cookie.
+     So the two are told apart. A 401 (and only a 401) means signed out. A
+     network error, a timeout or a 5xx means we do not know yet: `offline` goes
+     true, nothing is cleared, and the question is asked again when the device
+     says it is back. */
+  const [offline, setOffline] = useState(false);
+  const askMe = useCallback(async () => {
+    try {
+      const { data } = await api.get("/auth/me");
+      setUser(data.user);
+      setTenant(data.tenant);
+      setOffline(false);
+      return true;
+    } catch (e) {
+      /* No `response` at all is axios for "the request never got an answer":
+         DNS, a dropped connection, or our own timeout. A 5xx did answer, but
+         not about this session. */
+      const unanswered = !e?.response || e.response.status >= 500;
+      setOffline(unanswered);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     // Session is restored from the HttpOnly cookie via /auth/me.
-    api
-      .get("/auth/me")
-      .then(({ data }) => {
-        setUser(data.user);
-        setTenant(data.tenant);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    askMe();
     // Runs once on mount to restore the session; deps intentionally empty.
-  }, []);
+  }, [askMe]);
+
+  /* And it retries itself, so the founder never has to know to pull-to-refresh:
+     when the device reports the network is back, ask once more. `online` fires
+     on a real phone the moment a lift doors open. */
+  useEffect(() => {
+    if (!offline || user) return undefined;
+    const retry = () => { askMe(); };
+    window.addEventListener("online", retry);
+    /* The device can also be wrong — Android reports `online` for a captive
+       Wi-Fi that answers nothing — so there is a slow beat as well. */
+    const t = setInterval(retry, 15000);
+    return () => {
+      window.removeEventListener("online", retry);
+      clearInterval(t);
+    };
+  }, [offline, user, askMe]);
 
   /* 2026-09-21 — THE SESSION ENDED UNDER THE OPEN APP (see lib/api.js).
      A 401 from any ordinary route while someone is signed in: ask /auth/me
@@ -193,8 +234,16 @@ export function AuthProvider({ children }) {
     if (typeof caches !== "undefined") {
       try { await caches.delete("decisionos-api"); } catch (e) { /* no cache to clear */ }
     }
+    /* B07 (2026-09-29) — a short leash on the one call that ends the session.
+       This inherits the app's 30s timeout otherwise, and sign-out is the one
+       action nobody should be made to wait on: the caller now awaits this
+       before it navigates, so a dead network would have left a founder
+       looking at Settings for half a minute. Six seconds is generous for a
+       request that writes one row, and if it is not answered the local half
+       has already happened (above) — the cookie is dead on the next reply
+       either way, and the screen goes to sign in. */
     try {
-      await api.post("/auth/logout");
+      await api.post("/auth/logout", undefined, { timeout: 6000 });
     } catch (e) {
       // ignore network errors on logout
     }
@@ -216,8 +265,8 @@ export function AuthProvider({ children }) {
   };
 
   const value = useMemo(
-    () => ({ user, tenant, loading, login, register, logout, refreshTenant, refreshMe, loginWithOtp,
-             switchWorkspace }),
+    () => ({ user, tenant, loading, offline, retryMe: askMe, login, register, logout, refreshTenant,
+             refreshMe, loginWithOtp, switchWorkspace }),
     /* login/register/etc close only over stable refs (api import, setState),
        so omitting them is safe — and REQUIRED for this memo to do anything.
        They are redeclared every render, so listing them would recompute
@@ -226,7 +275,7 @@ export function AuthProvider({ children }) {
        around each, which buys nothing here and puts five more hooks in the
        auth path. */
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [user, tenant, loading]
+    [user, tenant, loading, offline, askMe]
   );
 
   return (

@@ -57,6 +57,8 @@ import AdminPortal from "./pages/admin/AdminPortal";
 import MobileKitchenSink from "./pages/MobileKitchenSink";
 // MPWA-12a: design lab (§6), development only — see the route guard below.
 import DesignLab from "./pages/DesignLab";
+// B04: the screen for "we cannot reach the server", which is not "signed out".
+import { CantReachUs } from "./components/auth/CantReachUs";
 
 function AccessDenied() {
   const navigate = useNavigate();
@@ -76,13 +78,17 @@ function AccessDenied() {
 }
 
 function Protected({ children, perm, perms, ownerOnly }) {
-  const { user, loading } = useAuth();
+  const { user, loading, offline } = useAuth();
   if (loading)
     return (
       <div className="min-h-[calc(100vh/var(--ui-scale,1))] flex items-center justify-center font-mono text-sm uppercase tracking-widest">
         Loading…
       </div>
     );
+  /* B04 — the session could not be ASKED about, which is not the same as
+     being refused. Sending them to sign in here is what asked a founder with
+     no signal for an OTP that could not arrive. */
+  if (!user && offline) return <CantReachUs />;
   if (!user) return <Navigate to="/login" replace />;
   let denied = false;
   if (ownerOnly) denied = user.role !== "owner";
@@ -92,7 +98,8 @@ function Protected({ children, perm, perms, ownerOnly }) {
 }
 
 function Home() {
-  const { user, loading } = useAuth();
+  const { user, loading, offline } = useAuth();
+  if (!loading && !user && offline) return <CantReachUs />;   // B04
   if (loading)
     return (
       <div className="min-h-[calc(100vh/var(--ui-scale,1))] flex items-center justify-center font-mono text-sm uppercase tracking-widest">

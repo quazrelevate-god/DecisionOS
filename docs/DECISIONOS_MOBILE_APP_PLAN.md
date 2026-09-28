@@ -178,6 +178,44 @@ fails with `invalid source release: 21`), Android SDK platform 36 and
 build-tools 36.0.0, with `sdk.dir` in `android/local.properties` (gitignored,
 machine-specific).
 
+## The service worker had to go (native only)
+
+This was flagged as "needs a decision" when the branch started. Running the app
+on an Android 16 emulator turned it into a measured bug, so it is now settled.
+
+`service-worker.js` denylists `/` from the SPA-shell navigation route. That is
+deliberate and correct on the web — since KM-55 the root is the static
+marketing page, and the KM-57 comment in that file describes the founder-
+bouncing incident it was written to fix. But Capacitor loads the app **at** the
+root, so the denylist refused the shell and the offline fallback answered
+instead. In logcat:
+
+```
+Capacitor: Handling local request: https://localhost/offline.html
+```
+
+The app recovered into `/login` afterwards, which is why a casual look would
+have missed it — first paint went through the offline page.
+
+`serviceWorkerRegistration.register()` now returns early when
+`window.Capacitor?.isNativePlatform?.()`. The guard sits with the other early
+returns in that function and keys on a global that does not exist in a browser,
+so the web app is untouched — verified by loading the production build in a
+browser and confirming registration is still attempted there.
+
+Measured on the emulator, before and after:
+
+| | before | after |
+|---|---|---|
+| `offline.html` served | 2 per launch | 0 |
+| `navigator.serviceWorker.controller` | set | null |
+| registrations | 1 | 0 |
+| DevTools targets | 3 (incl. the worker) | 2 |
+| `/api/health` round trip | 4648 ms | 1404 ms |
+
+The speed-up is the point in miniature: inside the app the worker was never
+accelerating anything, only adding a hop.
+
 ## Before the first store build
 
 Two things must be settled. Neither is a code change and neither is done.

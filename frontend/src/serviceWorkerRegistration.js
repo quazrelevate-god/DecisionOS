@@ -77,6 +77,21 @@ export function register({ onUpdate, onSuccess, onOffline } = {}) {
   if (process.env.NODE_ENV !== 'production') return;
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
 
+  // MOBILE-1: never register inside the Capacitor app.
+  //
+  // There is nothing for it to accelerate — the native build serves every
+  // asset from the app bundle already — and it actively breaks the app. The
+  // NavigationRoute below denylists "/" on purpose, because on the web the
+  // root is the static marketing page (see the KM-57 note in
+  // service-worker.js). Capacitor loads the app AT the root, so that denylist
+  // refuses the SPA shell and the offline fallback answers instead: observed
+  // on an Android 16 emulator as `Handling local request:
+  // https://localhost/offline.html` before the app recovered into /login.
+  //
+  // Guarded on window.Capacitor, which does not exist in a browser, so the
+  // web app's behaviour is unchanged.
+  if (window.Capacitor?.isNativePlatform?.()) return;
+
   const publicUrl = new URL(process.env.PUBLIC_URL || '', window.location.href);
   if (publicUrl.origin !== window.location.origin) return;
 

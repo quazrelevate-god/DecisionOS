@@ -7,6 +7,7 @@ API/document source is also written into the Company Brain (memory) so finance i
 queryable alongside decisions.
 """
 import asyncio
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -1753,8 +1754,25 @@ async def _finance_context(tid: str, scope: str) -> dict:
     return ctx
 
 
-async def _generate_analysis(tid: str, scope: str) -> dict:
-    ctx = await _finance_context(tid, scope)
+def _basis_of(ctx: dict) -> str:
+    """A fingerprint of the figures an analysis was written from.
+
+    2026-09-29 — WHY THE FIGURES AND NOT A TIMESTAMP. The obvious cheap check
+    is the /api/pulse one: how many rows, and the newest stamp. It does not
+    work here. NONE of the thirteen finance update sites in this file writes
+    `updated_at` — marking an invoice paid sets `amount_paid` and `status` and
+    nothing else — so a stamp-and-count signature would sail straight past the
+    single change the receivables analysis most needs to notice.
+
+    The wall clock is left out: `today` moves every day on its own and would
+    make every overnight view regenerate for nothing.
+    """
+    payload = {k: v for k, v in (ctx or {}).items() if k != "today"}
+    return hashlib.sha1(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
+
+
+async def _generate_analysis(tid: str, scope: str, ctx: Optional[dict] = None) -> dict:
+    ctx = ctx if ctx is not None else await _finance_context(tid, scope)
     focus = _SCOPE_FOCUS.get(scope, _SCOPE_FOCUS["overview"])
     system = render("ledger.analysis", focus=focus, currency=ctx['currency'], today=ctx['today'])
     data = {}
@@ -1779,6 +1797,9 @@ async def _generate_analysis(tid: str, scope: str) -> dict:
         "headline": (data.get("headline") or "").strip() or "Not enough data yet — add expenses, assets or inventory to unlock insights.",
         "insights": insights[:6],
         "generated_at": now_iso(),
+        # What it was written from, so the next reader can tell whether it
+        # still describes the company's money.
+        "basis": _basis_of(ctx),
     }
     await db.ledger_ai.update_one({"tenant_id": tid, "scope": scope},
                                   {"$set": {**result, "tenant_id": tid}}, upsert=True)
@@ -1787,10 +1808,46 @@ async def _generate_analysis(tid: str, scope: str) -> dict:
 
 @router.get("/ledger/ai/{scope}")
 async def get_ledger_ai(scope: str, user: dict = Depends(require_ledger)):
+    """The analysis, regenerated when the figures behind it have moved.
+
+    2026-09-29, found in a browser walk of Finance on a phone. This handed
+    back whatever was cached, for ever: `db.ledger_ai` was cleared only by a
+    full finance re-sync, never when an invoice, expense or payment was
+    written. So a founder who opened Finance on their first day, saw the empty
+    company analysed as empty, and then raised their first invoice, was shown
+
+        "No income data found — revenue picture is completely blank"
+        "Zero revenue records: ₹0 billed, ₹0 received"
+
+    directly above cards reading Billed ₹13,58,500 · 3 invoices. On the
+    Expenses tab it went further and said "Zero records found: data pipeline
+    may be broken" over a list of three real expenses — telling somebody their
+    books are broken when they are not, on the one page whose whole job is to
+    be trusted about money.
+
+    The generator was never at fault: pressing Refresh produced a good, true
+    analysis. It was only that nothing ever asked it again.
+
+    Cost: one _finance_context per view of the panel, which is a read of the
+    same rows the page is already showing, against an LLM call saved whenever
+    nothing has changed — which is most views.
+    """
     if scope not in SCOPES:
         raise HTTPException(status_code=404, detail="Unknown scope")
-    cached = await db.ledger_ai.find_one({"tenant_id": user["tenant_id"], "scope": scope}, {"_id": 0})
-    return cached or await _generate_analysis(user["tenant_id"], scope)
+    tid = user["tenant_id"]
+    cached = await db.ledger_ai.find_one({"tenant_id": tid, "scope": scope}, {"_id": 0})
+    # NO GRACE WINDOW HERE, and it was tried. Serving anything written in the
+    # last minute without checking collapses a burst of tab-flicks to one
+    # lookup — and reintroduces this very bug on the likeliest path there is:
+    # raise the first invoice, open Finance, read that you have none. The
+    # check costs a read of the rows the page is already showing. Correctness
+    # on that path is worth more than the read.
+    ctx = await _finance_context(tid, scope)
+    # A row written before this shipped carries no basis, so it is rewritten
+    # once and is honest from then on.
+    if cached and cached.get("basis") and cached["basis"] == _basis_of(ctx):
+        return cached
+    return await _generate_analysis(tid, scope, ctx=ctx)
 
 
 @router.post("/ledger/ai/{scope}/refresh")

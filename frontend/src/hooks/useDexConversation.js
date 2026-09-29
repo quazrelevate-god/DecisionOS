@@ -1,3 +1,4 @@
+import { roleLabel } from "../lib/departments";
 import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../lib/api";
 import { captureOutcome, failureReason, isReading, readyLine, OUTCOME_COPY } from "../lib/dexOutcome";
@@ -112,7 +113,7 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
       // decide" is not repeated under it; the rest is the echo it always was.
       const lines = [title];
       const nTasks = (p.tasks || u.tasks || []).length;
-      const names = [...new Set((p.tasks || []).map((t) => t.assignee_name || (t.assignee_role ? `${t.assignee_role} team` : null)).filter(Boolean))];
+      const names = [...new Set((p.tasks || []).map((t) => t.assignee_name || (t.assignee_role ? `${roleLabel(t.assignee_role)} team` : null)).filter(Boolean))];
       if (nTasks && names.length) lines.push(`${nTasks} task${nTasks > 1 ? "s" : ""} for ${names.slice(0, 3).join(", ")}`);
       if ((p.workflows || []).length) {
         lines.push(p.workflows.map((w) => `${w.pipeline_label || "Workflow"}: ${w.title}`).slice(0, 2).join("\n"));

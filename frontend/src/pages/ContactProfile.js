@@ -1,3 +1,4 @@
+import { roleLabel } from "../lib/departments";
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -496,7 +497,7 @@ export default function ContactProfile() {
         <div className="space-y-2">{follow_ups.map((t) => (
           <div key={t.id} className="nm-tile p-3 flex items-center justify-between gap-2">
             <span className="text-sm">{t.title}</span>
-            <div className="flex gap-1.5">{t.assignee_role && <Chip value={t.assignee_role} className="bg-white" />}<Chip value={t.status} /></div>
+            <div className="flex gap-1.5">{t.assignee_role && <Chip value={roleLabel(t.assignee_role)} className="bg-white" />}<Chip value={t.status} /></div>
           </div>
         ))}</div>
       </Section>

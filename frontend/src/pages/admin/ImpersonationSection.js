@@ -1,6 +1,7 @@
 // Support impersonation management (Epic 10 Sprint 2).
 // Lists impersonation sessions (live / expired / revoked) and lets a super-admin
 // end a live session immediately. Starting a session happens from Tenant 360.
+import { roleLabel } from "../../lib/departments";
 import { useState, useEffect, useCallback } from "react";
 import api, { formatApiError } from "../../lib/api";
 import { toast } from "sonner";
@@ -60,7 +61,7 @@ export function ImpersonationSection() {
             <div>
               <div className="text-white text-sm flex items-center gap-2">
                 <Circle size={8} weight="fill" style={{ color: COLORS[s.status] || "#6b6b75" }} />
-                {s.target_name} <span className="text-white/30 text-xs">· {s.target_role}</span>
+                {s.target_name} <span className="text-white/30 text-xs">· {roleLabel(s.target_role)}</span>
                 <span className="text-white/40 text-xs">@ {s.tenant_name}</span>
                 {s.read_only && <span className="font-mono text-[9px] uppercase text-[#d29922] border border-[#d29922]/40 px-1.5 py-0.5">read-only</span>}
               </div>

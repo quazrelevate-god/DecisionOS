@@ -2,6 +2,9 @@
 
 **2026-09-29 · branch `mobile-capacitor`, release build `versionCode 1`**
 
+Apple's half of this is [APP_STORE_READINESS.md](APP_STORE_READINESS.md), and
+it is in much worse shape — read it before promising an iOS date.
+
 Audited against what Play actually rejects for, not against code quality. The
 bug report work is done and the app runs; nothing below is a bug. These are
 the things that stop an upload, or get one taken down after it is live.
@@ -137,7 +140,7 @@ over-disclosure while it is off, which is the safe direction.
 | 2.5 | **Content rating questionnaire** | not started — a business tool rates trivially |
 | 2.6 | **Target audience** — declare 18+, no children | not started |
 | 2.7 | **Store listing** — 512px icon, feature graphic, ≥2 phone screenshots, short + full description | not started |
-| 2.8 | **`versionCode` discipline** — every upload needs a higher one; it is hardcoded `1` in `app/build.gradle` | fine for upload #1, will bite on #2 |
+| 2.8 | ~~**`versionCode` discipline** — hardcoded `1`~~ | ✅ fixed by `104c9aa` — now from `variables.gradle`, `ANDROID_VERSION_CODE` overrides; currently `2` / `1.0.1` |
 | 2.9 | **App access instructions** — credentials for the reviewer | **already solved, see below** |
 
 ### 2.9 is worth calling out, because it is usually the worst one
@@ -194,7 +197,10 @@ Genuinely good, and worth knowing so nobody "fixes" it:
 - `allowBackup="false"` with extraction rules (B08).
 - Cleartext is debug-only; the release build cannot make a plaintext request.
 - Release is signed (v2, `CN=DecisionOS`), 11.1 MB APK / 11.0 MB AAB.
-- Adaptive launcher icons and `app_name` present.
+- Adaptive launcher icons and `app_name` present — **but the icon art is still
+  Capacitor's own logo**, unchanged since the scaffold commit. Play tolerates
+  this far better than Apple does, but it is a listing-quality problem and the
+  fix is shared with iOS. See [APP_STORE_READINESS.md §1.4](APP_STORE_READINESS.md).
 - No financial-services features in the Play sense — the app tracks a
   business's own money, it does not lend, invest or transfer. Expect the
   Console to ask; the answer is no.
@@ -213,11 +219,10 @@ navigates instead, you may see the home screen peek through and snap back.
 Functionally correct, visually odd. Worth one look on a real phone; if it
 looks wrong, it is a one-line manifest change.
 
-**Fonts on a cold, offline first launch.** Urbanist and IBM Plex Mono come from
-Google Fonts at runtime — nothing is bundled — so a never-online first launch
-renders in the system font, and every cold start waits on a third-party
-request. It is also one more entry for the Data Safety form. Bundling them is
-contained and strictly better for a native app.
+**~~Fonts on a cold, offline first launch~~ — DONE 2026-09-29.** Urbanist and
+IBM Plex Mono used to come from Google Fonts at runtime. `3af2856` bundles
+them: the APK now carries 10 `.woff2` files and `index.html` has zero
+references to `fonts.googleapis.com`. The Data Safety entry for it can go.
 
 ---
 

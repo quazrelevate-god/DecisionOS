@@ -70,7 +70,10 @@ and matching the **release** signing certificate of the installed app.
 ([RELEASE_SIGNING.md](RELEASE_SIGNING.md)), and its fingerprint is:
 
 ```
-ANDROID_APP_FINGERPRINT=E4:C5:7E:AD:34:CD:99:64:29:79:62:8D:6C:02:FE:7E:5C:A0:8B:65:C3:30:6D:1B:E5:02:57:B8:75:4A:8F:30
+# 2026-09-29: a SECOND signing key now exists (see RELEASE_SIGNING.md).
+# server.js accepts a comma-separated list; both are here so a build
+# signed on either machine opens links. Drop one once you pick a key.
+ANDROID_APP_FINGERPRINT=E4:C5:7E:AD:34:CD:99:64:29:79:62:8D:6C:02:FE:7E:5C:A0:8B:65:C3:30:6D:1B:E5:02:57:B8:75:4A:8F:30,8C:56:55:CC:67:28:84:95:C7:EE:58:33:46:00:3E:84:77:57:5E:66:74:7F:70:8E:0C:15:9A:F2:C1:8B:92:A3
 ```
 
 Set that on the deploy that serves the web app. With the host below, that is

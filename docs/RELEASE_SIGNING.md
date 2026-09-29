@@ -84,10 +84,37 @@ debug builds are unaffected and release builds produce an unsigned APK exactly
 as they did before, with a warning saying so. A teammate or a CI box with no
 key is no worse off than yesterday — only a build that *can* sign does.
 
-## This key's fingerprint
+## THERE ARE NOW TWO KEYS — pick one before the first upload
+
+**2026-09-29.** A second keystore was generated on a different machine, because
+the original lives on exactly one laptop and was not available where the
+release build was needed. Both are valid; neither has published anything. That
+is fine *only* until the first upload, after which the key used becomes the
+app's upload identity and the other is dead weight.
+
+| Key | Where | SHA-256 |
+|---|---|---|
+| Original | the laptop that made the first release build | `E4:C5:7E:AD:34:CD:99:64:29:79:62:8D:6C:02:FE:7E:5C:A0:8B:65:C3:30:6D:1B:E5:02:57:B8:75:4A:8F:30` |
+| Generated 2026-09-29 | the Mac this branch was built on | `8C:56:55:CC:67:28:84:95:C7:EE:58:33:46:00:3E:84:77:57:5E:66:74:7F:70:8E:0C:15:9A:F2:C1:8B:92:A3` |
+
+**Decide which one survives, put it on both machines, and delete the other.**
+Doing this after the first upload is not possible without Play App Signing.
+
+If you take Play App Signing — and you should — this matters much less: Google
+holds the real key, whichever of these you upload with becomes a replaceable
+*upload* key, and the fingerprint that ends up on phones is Google's, not
+either of these.
+
+## The fingerprint, for deep links
+
+`ANDROID_APP_FINGERPRINT` on the Railway deploy wants the SHA-256 of whichever
+key actually signs the build. [DEEP_LINKS.md](DEEP_LINKS.md) still names the
+original. `frontend/server.js` reads a **comma-separated list**, so during a
+transition you can list both and locally-signed builds from either machine will
+open links:
 
 ```
-E4:C5:7E:AD:34:CD:99:64:29:79:62:8D:6C:02:FE:7E:5C:A0:8B:65:C3:30:6D:1B:E5:02:57:B8:75:4A:8F:30
+E4:C5:7E:AD:34:CD:99:64:29:79:62:8D:6C:02:FE:7E:5C:A0:8B:65:C3:30:6D:1B:E5:02:57:B8:75:4A:8F:30,8C:56:55:CC:67:28:84:95:C7:EE:58:33:46:00:3E:84:77:57:5E:66:74:7F:70:8E:0C:15:9A:F2:C1:8B:92:A3
 ```
 
 This is the SHA-256 of the certificate above, and it is exactly what

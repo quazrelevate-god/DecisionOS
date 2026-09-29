@@ -20,6 +20,8 @@ import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { startNativeBack } from "../lib/native/back";
+// B19 — a link that belongs to DecisionOS lands on the right screen.
+import { startNativeLinks } from "../lib/native/links";
 
 export function useNativeBack() {
   const navigate = useNavigate();
@@ -29,6 +31,18 @@ export function useNativeBack() {
      a sign-in swaps the destination without re-registering the listener doing
      anything odd — the listener is cheap to replace. */
   const home = user ? (hasPerm(user, "inbox") ? "/inbox" : "/my-work") : "/login";
+
+  /* B19 — the same mount point, because it answers the same plugin and has
+     the same one requirement: a router to navigate with. */
+  useEffect(() => {
+    let stop = null;
+    let cancelled = false;
+    startNativeLinks((path) => navigate(path)).then((off) => {
+      if (cancelled) off?.();
+      else stop = off;
+    });
+    return () => { cancelled = true; stop?.(); };
+  }, [navigate]);
 
   useEffect(() => {
     let stop = null;

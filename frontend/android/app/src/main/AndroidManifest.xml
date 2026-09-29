@@ -33,6 +33,32 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!--
+              B19 (2026-09-29) · App Links — an invite, a password reset or an
+              email verification opens DecisionOS rather than Chrome.
+
+              The paths are listed rather than the whole host on purpose: the
+              marketing site, the blog and the PDFs live under the same domain
+              and belong to the browser. lib/native/links.js decides the same
+              thing again on the JS side, because a link can also arrive while
+              the app is already open.
+
+              android:autoVerify asks Android to check
+              https://<host>/.well-known/assetlinks.json for this app's signing
+              certificate. Until that file is served (frontend/server.js reads
+              ANDROID_APP_FINGERPRINT) verification simply fails and links keep
+              opening the browser — no crash, and nothing to undo later.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="${appLinkHost}" android:pathPrefix="/login" />
+                <data android:scheme="https" android:host="${appLinkHost}" android:pathPrefix="/signup" />
+                <data android:scheme="https" android:host="${appLinkHost}" android:pathPrefix="/reset-password" />
+                <data android:scheme="https" android:host="${appLinkHost}" android:pathPrefix="/verify-email" />
+            </intent-filter>
+
         </activity>
 
         <provider

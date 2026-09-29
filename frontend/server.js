@@ -159,6 +159,48 @@ app.get(["/", "/landing", "/landing/"], (req, res) => {
   res.sendFile(HAS_LANDING ? LANDING : path.join(BUILD, "index.html"));
 });
 
+/* B19 (2026-09-29) — THE FILE THAT LETS AN INVITE OPEN THE APP.
+   Android verifies an App Link by fetching this and matching the installed
+   app's signing certificate against the fingerprints here; only then does
+   tapping an invite open DecisionOS instead of Chrome. It has to be served
+   from the same host as the links, over https, as application/json, with no
+   redirect — which is why it is a route rather than a file in public/, where
+   the SPA fallback below would have swallowed it.
+
+   ANDROID_APP_FINGERPRINT is the SHA-256 of the RELEASE signing certificate,
+   colon-separated uppercase hex:
+       keytool -list -v -keystore <release.keystore> -alias <alias>
+   Several may be given, comma-separated, which is what you want while a
+   Play-signed build and a locally-signed one are both in the wild.
+
+   Unset — which it is today, because there is no release keystore yet — this
+   answers 404. That is the honest answer: no fingerprint means no claim, and
+   Android falls back to opening the browser exactly as it does now. Serving a
+   file with the wrong fingerprint would be worse, because it looks configured
+   and silently never verifies. */
+const APP_FINGERPRINTS = (process.env.ANDROID_APP_FINGERPRINT || "")
+  .split(",").map((f) => f.trim()).filter(Boolean);
+const ANDROID_APP_ID = process.env.ANDROID_APP_ID || "com.decisionos.app";
+
+app.get("/.well-known/assetlinks.json", (req, res) => {
+  if (!APP_FINGERPRINTS.length) {
+    res.status(404).json({ error: "assetlinks not configured" });
+    return;
+  }
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.json([
+    {
+      relation: ["delegate_permission/common.handle_all_urls"],
+      target: {
+        namespace: "android_app",
+        package_name: ANDROID_APP_ID,
+        sha256_cert_fingerprints: APP_FINGERPRINTS,
+      },
+    },
+  ]);
+});
+
 /* SPA fallback — the same job `serve -s` was doing. Without it every deep link
    (/inbox, /my-work, /finance) 404s on refresh, because react-router owns
    those paths client-side. */

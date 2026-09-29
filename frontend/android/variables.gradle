@@ -1,4 +1,19 @@
 ext {
+    // B19 (2026-09-29) — the host whose https links open the app (App Links).
+    //
+    // DELIBERATELY A PLACEHOLDER. I could not establish the web app's real
+    // hostname from this repository — the backend's is in the Capacitor
+    // config, the frontend's is only on the deploy — and a guessed host in a
+    // shipped manifest is worse than an obvious blank, because it looks
+    // settled. Set it to the host that serves DecisionOS (today a
+    // *.up.railway.app name, later the real domain) and rebuild.
+    //
+    // Nothing breaks while it says this. Android verifies an App Link by
+    // fetching https://<host>/.well-known/assetlinks.json and matching this
+    // app's signing certificate; an unreachable host simply fails that check
+    // and links keep opening the browser, which is today's behaviour.
+    // docs/DEEP_LINKS.md is the whole procedure, including the fingerprint.
+    appLinkHost = 'set-me.invalid'
     minSdkVersion = 24
     compileSdkVersion = 36
     targetSdkVersion = 36

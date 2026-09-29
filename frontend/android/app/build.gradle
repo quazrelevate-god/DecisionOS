@@ -1,5 +1,25 @@
 apply plugin: 'com.android.application'
 
+/* RELEASE SIGNING (2026-09-29) — read from a file that is NOT in git.
+ *
+ * `assembleRelease` used to emit an UNSIGNED apk, which Android refuses to
+ * install, so there was no way to test a real release build on a phone. The
+ * key and its passwords live in android/keystore.properties and
+ * android/release.keystore, both gitignored: a signing key committed to a
+ * repository is a signing key anyone with the repo can sign as.
+ *
+ * ABSENT IS NOT AN ERROR. A checkout without the file still builds debug, and
+ * still builds release — unsigned, exactly as before — so a teammate or a CI
+ * box that has no key is no worse off than yesterday. Only a build that CAN
+ * sign does. docs/RELEASE_SIGNING.md is how to get the file.
+ */
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+def canSignRelease = keystoreProperties.containsKey('storeFile')
+
 android {
     namespace = "com.decisionos.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -18,10 +38,25 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (canSignRelease) {
+            release {
+                storeFile rootProject.file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (canSignRelease) {
+                signingConfig signingConfigs.release
+            } else {
+                logger.warn('WARNING: android/keystore.properties not found — the release APK will be UNSIGNED and will not install. See docs/RELEASE_SIGNING.md')
+            }
         }
     }
 }

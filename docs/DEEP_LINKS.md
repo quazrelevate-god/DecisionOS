@@ -51,26 +51,29 @@ real domain) and rebuild.
 ### 2. The signing fingerprint
 
 Android verifies the link by fetching `https://<host>/.well-known/assetlinks.json`
-and matching the **release** signing certificate of the installed app. So this
-needs a release keystore, which this project does not have yet — `assembleRelease`
-currently produces an unsigned APK.
+and matching the **release** signing certificate of the installed app.
 
-Once there is one:
+**As of 2026-09-29 this value exists.** There is now a release keystore
+([RELEASE_SIGNING.md](RELEASE_SIGNING.md)), and its fingerprint is:
+
+```
+ANDROID_APP_FINGERPRINT=E4:C5:7E:AD:34:CD:99:64:29:79:62:8D:6C:02:FE:7E:5C:A0:8B:65:C3:30:6D:1B:E5:02:57:B8:75:4A:8F:30
+```
+
+Set that on the deploy that serves the web app. With the host below, that is
+both missing values, and invite links start opening the app.
+
+To read it again from the keystore yourself:
 
 ```bash
-keytool -list -v -keystore release.keystore -alias <alias> | grep SHA256
-```
-
-Then set on the deploy that serves the app:
-
-```
-ANDROID_APP_FINGERPRINT=AB:CD:…:EF
+keytool -list -v -keystore frontend/android/release.keystore -alias decisionos | grep SHA256
 ```
 
 Comma-separate several while a Play-signed build and a locally-signed one are
 both in the wild — **Play App Signing re-signs your upload**, so once the app
 is on Play the fingerprint that matters is Play's, from Play Console → Setup →
-App integrity. Unset, the route answers 404, which is the honest answer: no
+App integrity, and the one above stops applying to installs that came from the
+store. Unset, the route answers 404, which is the honest answer: no
 fingerprint means no claim, and Android keeps opening the browser. A file with
 the *wrong* fingerprint is worse, because it looks configured and silently
 never verifies.

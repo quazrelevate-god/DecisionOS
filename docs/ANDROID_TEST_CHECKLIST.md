@@ -12,21 +12,33 @@ answer too.
 
 ## 0 · Building the APK you'll test
 
+**Updated 2026-09-29: there is now a signed release build, and it is the one
+to test.** A release APK is a different binary from a debug one — no
+`debuggable` flag, no cleartext exemption, assets compressed — so it is the
+only build that tells you what a real user gets.
+
 ```bash
 cd frontend
 npm run cap:sync:prod            # builds against the Railway backend, syncs android/
-cd android && ./gradlew assembleDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+cd android && ./gradlew assembleRelease
+adb install app/build/outputs/apk/release/app-release.apk
 ```
 
-Two things to know before you build:
+Three things to know before you install:
 
-- **`assembleDebug` is signed** — with the debug keystore — so it installs and
-  runs on any phone. That is the build to test behaviour on.
-- **`assembleRelease` is NOT signed yet.** There is no signing config and no
-  keystore in this project, so a release build produces an unsigned APK that
-  will not install. If you want a true release build for the store, we need a
-  keystore first — tell me and I'll wire it up.
+- **Uninstall any existing DecisionOS first.** The debug and release builds are
+  signed with different keys, so installing one over the other fails with
+  `INSTALL_FAILED_UPDATE_INCOMPATIBLE`. `adb uninstall com.decisionos.app`, or
+  long-press the icon and uninstall. This also means **you lose the session**
+  and start from sign-in each time you swap build types.
+- **It talks to the live Railway backend.** `cap:sync:prod` bakes in
+  `https://backend-production-c8640.up.railway.app`. Anything you create in
+  this app is real: real workspace, real invites, real SMS. Plain `cap:sync`
+  points at `localhost:8000`, which on a phone is the phone — never use it for
+  a build you intend to install.
+- **The signing key is in `frontend/android/`** and is gitignored. See
+  [RELEASE_SIGNING.md](RELEASE_SIGNING.md) — it needs backing up off the
+  laptop before this app ever goes to Play.
 
 If gradle can't find a JDK or the SDK:
 

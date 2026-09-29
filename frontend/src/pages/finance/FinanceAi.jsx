@@ -49,10 +49,16 @@ export function AiPanel({ scope, variant = "inline", scopeLabel, facts, positive
   const [answer, setAnswer] = useState("");
   const [asking, setAsking] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  /* 2026-09-29 — `staleTime: Infinity` held the FIRST answer of the session,
+     so even once the server learned to notice that the figures had moved
+     (routers/ledger.get_ledger_ai), this panel would not have asked it again
+     until a reload. A minute is the right order: the server now returns the
+     cached analysis unchanged when nothing has moved, so asking again is one
+     cheap read, not an AI call. */
   const { data, isLoading, isError } = useQuery({
     queryKey: ["ledger-ai", scope],
     queryFn: () => api.get(`/ledger/ai/${scope}`).then((r) => r.data),
-    staleTime: Infinity,
+    staleTime: 60_000,
   });
   const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data), retry: false });
   const members = useMemo(() => usersQ.data || [], [usersQ.data]);

@@ -11,7 +11,8 @@ import { useAuth } from "../context/AuthContext";
 import { KarmaLogo } from "../components/karma/Logo";
 import { Check } from "@phosphor-icons/react";
 import { BasicsFlow } from "./onboarding/BasicsFlow";
-import { startOrResume, saveStep, clearDraft, formFromDraft, hasSavedAnswers, worldFromDraft, progressFromDraft } from "../lib/onboardingDraft";
+import { startOrResume, saveStep, clearDraft, currentDraft, formFromDraft, hasSavedAnswers, worldFromDraft, progressFromDraft } from "../lib/onboardingDraft";
+import { Loader } from "../components/common";
 import { WebsiteIntel } from "./onboarding/WebsiteIntel";
 import { VoiceInterview } from "./onboarding/VoiceInterview";
 import { BuildReveal } from "./onboarding/BuildReveal";
@@ -97,6 +98,9 @@ export default function Signup() {
     : null;
   const [savedBlueprint, setSavedBlueprint] = useState(null);
   const [draftReady, setDraftReady] = useState(false);
+  /* Read once, at mount, and before the resume clears it: it only decides
+     which sentence the waiting card shows. */
+  const hasHeldDraft = useRef(Boolean(currentDraft())).current;
   const [world, setWorld] = useState(null); // { industry, business_model, description, website_summary, products }
   const [sessionId, setSessionId] = useState(null);
   const [languageCode, setLanguageCode] = useState("en-IN");
@@ -227,7 +231,20 @@ export default function Signup() {
         }
       }
       setDraftReady(true);
-    })();
+    })()
+      /* 2026-09-29 — AND THE PAGE OPENS EVEN IF NONE OF THAT WORKED.
+         `draftReady` is what lets the first question draw, and until this it
+         was set on exactly one line: the last statement of an async block with
+         nothing catching it. Anything that threw on the way — a stored draft
+         the restore code did not expect, a helper meeting a field of the wrong
+         shape — left a founder looking at an empty white card with no error,
+         no spinner and no way back, because the draft that caused it is in
+         their localStorage and comes back on every reload. The note above
+         records the last time /signup drew nothing, from a different cause;
+         one line makes that class of failure impossible rather than fixing it
+         once more. Resuming is a convenience. The wizard is the product. */
+      .catch((e) => { console.error("signup: the saved draft could not be restored", e); })
+      .finally(() => setDraftReady(true));
     return undefined;
     // Once, as soon as the session is known.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -354,11 +371,33 @@ export default function Signup() {
 
       {/* Stage */}
       <main className="flex flex-1 items-center px-4 py-8 lg:px-8 lg:py-12">
+        {/* 2026-09-29 — THE WHOLE STAGE WAITS, RATHER THAN THE FIRST PHASE
+            INSIDE IT. `draftReady` used to gate only the basics branch, so
+            while the saved signup was being fetched this rendered
+            <AnimatePresence> around a motion.div keyed "basics" that drew
+            nothing. Then the resume landed on somebody who had got as far as
+            the build, `phase` went to "build", and mode="wait" — which holds
+            the new child back until the old one has finished leaving — never
+            let go of a node that had never appeared. State said build, ready;
+            the screen stayed empty, for ever, on every reload, with the draft
+            that caused it saved in the browser.
+
+            A founder should not meet an exit animation before they have seen
+            anything. Nothing is keyed until we know which phase they are on,
+            and the waiting card lives out here where no key can strand it. */}
+        {!draftReady ? (
+          <div className="mx-auto w-full max-w-xl kr-well px-6 py-16 text-center"
+               data-testid="signup-restoring">
+            <Loader size={28} />
+            <p className="mt-4 text-sm text-muted-foreground">
+              {hasHeldDraft ? "Finding where you left off…" : "One moment…"}
+            </p>
+          </div>
+        ) : (
         <AnimatePresence mode="wait">
           <motion.div key={phase} className="w-full"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
             {phase === "basics" && (
-              draftReady ? (
               <BasicsFlow
                 form={form} setForm={setForm} initialStep={basicsStart} resumed={resumed}
                 identity={identity}
@@ -394,7 +433,6 @@ export default function Signup() {
                   }
                 }}
                 onDone={() => goTo(savedBlueprint ? "build" : world ? "interview" : "website")} />
-            ) : null
             )}
             {phase === "website" && (
               <WebsiteIntel companyName={form.company_name.trim()} onBack={() => goTo("basics")}
@@ -438,6 +476,7 @@ export default function Signup() {
             )}
           </motion.div>
         </AnimatePresence>
+        )}
       </main>
 
       {/* KM-42 — the footer line gets a ground. Measured on the full-bleed

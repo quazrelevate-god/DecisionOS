@@ -108,30 +108,108 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// FUP-46 (2026-08-15): strengthen error parsing for FastAPI 422 detail
-// (an array of {loc, msg, type} entries). Was collapsing all validation
-// errors into a JSON blob when msg wasn't a plain string.
+/* WHAT A FOUNDER READS WHEN THE SERVER SAYS NO.
+ *
+ * FUP-46 (2026-08-15) made this stop collapsing FastAPI's 422 detail — an
+ * array of {loc, msg, type} — into a JSON blob, and printed `loc: msg`
+ * instead. That was right about the shape and wrong about the words, because
+ * `msg` is pydantic talking to a developer. Seen on the signup reveal
+ * (2026-09-29), directly under "Couldn't create your workspace":
+ *
+ *     email: value is not a valid email address: The part after the @-sign
+ *     contains invalid characters: '@'.
+ *
+ * Nobody outside this repository knows what an @-sign rule is, and the one
+ * thing the founder needed — go back and fix the address — is the one thing
+ * it does not say. This is the only formatter the app has: 139 call sites in
+ * 35 files, on every screen that can fail. So the words are written here,
+ * once, from the reader's side.
+ *
+ * TRANSLATED FROM `type`, NOT FROM `msg`. The type is pydantic's stable
+ * machine name for what went wrong; the msg is prose that changes between
+ * versions and carries the internals. An unknown type still gets a sentence
+ * that names the field and tells them to look at it, which is worse than a
+ * bespoke line and far better than the parser's diary.
+ *
+ * A `detail` we wrote ourselves is a STRING and passes through untouched —
+ * every deliberate message in this API is already written for the person
+ * reading it, and this must never paraphrase those.
+ */
+const FIELD_WORDS = {
+  email: "email address",
+  support_email: "email address",
+  phone: "mobile number",
+  phone_token: "mobile number",
+  code: "code",
+  otp: "code",
+  password: "password",
+  company_name: "company name",
+  name: "name",
+  title: "title",
+  amount: "amount",
+  due_date: "date",
+  date: "date",
+  website: "website",
+  industry: "industry",
+  company_size: "team size",
+  currency: "currency",
+};
+
+/** The field a founder would call it, or "" when we have no better word. */
+function fieldWord(loc) {
+  if (!Array.isArray(loc)) return "";
+  const path = loc.filter((p) => !["body", "query", "path", "header"].includes(p));
+  const last = path.filter((p) => typeof p === "string").pop();
+  return (last && FIELD_WORDS[last]) || "";
+}
+
+function sentenceFor(entry) {
+  const type = typeof entry.type === "string" ? entry.type : "";
+  const word = fieldWord(entry.loc);
+  const it = word || "that";
+  if (type === "missing" || type === "value_error.missing") {
+    return word ? `Your ${word} is needed.` : "Something needed was left out.";
+  }
+  if (word === "email address") return "That email address does not look right.";
+  if (word === "mobile number") return "That mobile number does not look right.";
+  if (type.startsWith("string_too_short") || type.startsWith("too_short")) {
+    return `Your ${it} is too short.`;
+  }
+  if (type.startsWith("string_too_long") || type.startsWith("too_long")) {
+    return `Your ${it} is too long.`;
+  }
+  if (type.includes("parsing") || type.includes("_type")) {
+    return word ? `Check the ${word}.` : "One of the answers is in the wrong format.";
+  }
+  if (type.startsWith("greater_than") || type.startsWith("less_than")) {
+    return word ? `That ${word} is out of range.` : "One of the numbers is out of range.";
+  }
+  return word ? `Check the ${word}.` : "One of the answers needs a second look.";
+}
+
 export function formatApiError(detail) {
   if (detail == null) return "Something went wrong. Please try again.";
-  if (typeof detail === "string") return detail;
+  if (typeof detail === "string") return detail;   // ours, already in English
   if (Array.isArray(detail)) {
-    return detail.map((e) => {
-      if (!e || typeof e !== "object") return String(e);
-      const msg = typeof e.msg === "string" ? e.msg : "";
-      // Show which field failed if FastAPI gave us a loc path
-      // (skip the leading 'body' / 'query' / 'path' prefix).
-      const loc = Array.isArray(e.loc)
-        ? e.loc.filter((p) => !["body", "query", "path"].includes(p)).join(".")
-        : "";
-      if (msg && loc) return `${loc}: ${msg}`;
-      return msg || JSON.stringify(e);
-    }).join(" · ");
+    /* One sentence per field, and each field only once: a single bad address
+       can arrive as two entries (the type rule and the format rule) and
+       reading the same correction twice reads like two faults. */
+    const seen = new Set();
+    const out = [];
+    detail.forEach((e) => {
+      if (!e || typeof e !== "object") return;
+      const line = sentenceFor(e);
+      if (seen.has(line)) return;
+      seen.add(line);
+      out.push(line);
+    });
+    return out.join(" ") || "Something went wrong. Please try again.";
   }
   if (detail && typeof detail === "object") {
-    if (typeof detail.msg === "string") return detail.msg;
     if (typeof detail.message === "string") return detail.message;
+    if (typeof detail.msg === "string") return detail.msg;
   }
-  return String(detail);
+  return "Something went wrong. Please try again.";
 }
 
 // ---------------------------------------------------------------------------

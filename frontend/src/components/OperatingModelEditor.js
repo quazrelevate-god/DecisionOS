@@ -6,9 +6,30 @@ import api, { formatApiError } from "../lib/api";
 import { opModel } from "../lib/operatingModel";
 import { toast } from "sonner";
 import { FlowArrow, FloppyDisk, Plus, Trash, ArrowUp, ArrowDown, ShieldCheck, ListChecks, Lightning } from "@phosphor-icons/react";
+import { GlassSelect } from "./karma/GlassSelect";
 
 const inp = "w-full border border-nm-edge/40 rounded-lg px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
 const smInp = "border border-nm-edge/40 rounded-md px-2 py-1.5 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
+/* 2026-09-29 — THIS EDITOR WAS UNUSABLE ON A PHONE, and it is the screen that
+   decides how work moves: pipelines, stages, task templates, approval gates.
+   Measured at 375px, a stage's role picker was cut off by 22px, the evidence
+   tick by 37px and every row's delete button by 122px — and the page does not
+   scroll sideways, so those were not awkward, they were unreachable. The rows
+   were single-line flexes built for a desktop and never given a way to wrap.
+
+   Every row now stacks: the thing you are naming takes a line of its own, and
+   the controls that act on it wrap underneath instead of off the edge.
+
+   The pickers were native <select>, 76 of them, which on a phone opens the
+   OS wheel and everywhere else in this app is a GlassSelect. They are
+   GlassSelect now, wearing the same border as the inputs beside them so the
+   row still reads as one form. `variant` is deliberately not "pill": that is
+   the 48px pill used on page headers and would tower over these fields. */
+const smSel = `${smInp} h-[34px] justify-between text-left`;
+/* A tap target, not a 22px pixel-hunt. Sprint 16's rule, applied to the
+   controls that were hardest to hit precisely because they were half off the
+   screen. */
+const iconBtn = "grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted-foreground hover:text-kr-accent disabled:opacity-30";
 let _uid = 0;
 const uid = () => `k${Date.now()}_${_uid++}`;
 
@@ -295,10 +316,17 @@ export function OperatingModelEditor() {
               <span className="label-mono text-muted-foreground">Stages (in order)</span>
               {p.stages.map((s, si) => (
                 <div key={s._uid} className="border border-nm-edge/60 rounded-md p-2.5 bg-accent/30" data-testid={`op-stage-${pi}-${si}`}>
-                  {/* Stage name row + reorder + delete. Wraps: with the
-                      stage's days on it the row no longer fits a phone. */}
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <input className={`${smInp} min-w-[8rem] flex-1`} placeholder="Stage name" value={s.label} onChange={(e) => setStage(pi, si, { label: e.target.value })} />
+                  {/* The stage's NAME gets the line; the controls that act on
+                      it sit underneath. All six of these used to share one
+                      row, which is how the role picker and the delete ended
+                      up past the right edge of a phone. */}
+                  <div className="flex items-center gap-1.5">
+                    <input className={`${smInp} min-w-0 flex-1`} placeholder="Stage name" value={s.label} onChange={(e) => setStage(pi, si, { label: e.target.value })} />
+                    <button onClick={() => moveStage(pi, si, -1)} disabled={si === 0} title="Move up" aria-label="Move stage up" className={`${iconBtn} hover:text-brand-blue`}><ArrowUp size={14} weight="bold" /></button>
+                    <button onClick={() => moveStage(pi, si, 1)} disabled={si === p.stages.length - 1} title="Move down" aria-label="Move stage down" className={`${iconBtn} hover:text-brand-blue`}><ArrowDown size={14} weight="bold" /></button>
+                    <button onClick={() => delStage(pi, si)} title="Delete stage" aria-label="Delete stage" className={iconBtn}><Trash size={14} weight="bold" /></button>
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                     <label className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground"
                       title="Working days this stage should take. Its work is due that many working days after a card arrives. Blank = 3.">
                       <input data-testid={`op-stage-days-${pi}-${si}`} type="number" min="1" max="60" inputMode="numeric"
@@ -306,15 +334,12 @@ export function OperatingModelEditor() {
                         onChange={(e) => setStage(pi, si, { days: e.target.value.replace(/[^0-9]/g, "").slice(0, 2) })} />
                       days
                     </label>
-                    <select data-testid={`op-stage-role-${pi}-${si}`} className={smInp} value={s.role || ""}
-                      onChange={(e) => setStage(pi, si, { role: e.target.value })}
-                      title="Stage owner: the team whose work this stage is. A voice note about that team's work lands here.">
-                      <option value="">Stage owner (from first task)</option>
-                      {ROLE_OPTS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
-                    </select>
-                    <button onClick={() => moveStage(pi, si, -1)} disabled={si === 0} title="Move up" className="p-1 disabled:opacity-30 hover:text-brand-blue"><ArrowUp size={14} weight="bold" /></button>
-                    <button onClick={() => moveStage(pi, si, 1)} disabled={si === p.stages.length - 1} title="Move down" className="p-1 disabled:opacity-30 hover:text-brand-blue"><ArrowDown size={14} weight="bold" /></button>
-                    <button onClick={() => delStage(pi, si)} title="Delete stage" className="p-1 text-muted-foreground hover:text-kr-accent"><Trash size={14} weight="bold" /></button>
+                    <GlassSelect testid={`op-stage-role-${pi}-${si}`} variant="field" triggerClassName={`${smSel} min-w-[10rem] flex-1`}
+                      value={s.role || ""} onChange={(v) => setStage(pi, si, { role: v })}
+                      placeholder="Stage owner (from first task)"
+                      ariaLabel="Stage owner: the team whose work this stage is"
+                      options={[{ value: "", label: "Stage owner (from first task)" },
+                                ...ROLE_OPTS.map((r) => ({ value: r.key, label: r.label }))]} />
                   </div>
 
                   {/* WE-04: task templates that spawn when this stage starts */}
@@ -328,17 +353,23 @@ export function OperatingModelEditor() {
                     )}
                     <div className="space-y-1.5">
                       {(s.tasks || []).map((t, ti) => (
-                        <div key={t._uid} className="flex items-center gap-1.5" data-testid={`op-stage-task-${pi}-${si}-${ti}`}>
-                          <input className={`${smInp} flex-1`} placeholder="Task title (e.g. Confirm with customer)" value={t.title} onChange={(e) => setStageTask(pi, si, ti, { title: e.target.value })} />
-                          <select className={smInp} value={t.role} onChange={(e) => setStageTask(pi, si, ti, { role: e.target.value })} title="Assign to role">
-                            <option value="">Unassigned</option>
-                            {ROLE_OPTS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
-                          </select>
-                          <label className="flex items-center gap-1 text-[11px] text-muted-foreground whitespace-nowrap" title="Require attached evidence to close">
-                            <input type="checkbox" checked={!!t.evidence_required} onChange={(e) => setStageTask(pi, si, ti, { evidence_required: e.target.checked })} />
-                            evidence
-                          </label>
-                          <button onClick={() => delStageTask(pi, si, ti)} title="Delete task" className="p-1 text-muted-foreground hover:text-kr-accent"><Trash size={12} weight="bold" /></button>
+                        <div key={t._uid} className="space-y-1.5" data-testid={`op-stage-task-${pi}-${si}-${ti}`}>
+                          <div className="flex items-center gap-1.5">
+                            <input className={`${smInp} min-w-0 flex-1`} placeholder="Task title (e.g. Confirm with customer)" value={t.title} onChange={(e) => setStageTask(pi, si, ti, { title: e.target.value })} />
+                            <button onClick={() => delStageTask(pi, si, ti)} title="Delete task" aria-label="Delete task template" className={iconBtn}><Trash size={13} weight="bold" /></button>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 pl-0.5">
+                            <GlassSelect testid={`op-stage-task-role-${pi}-${si}-${ti}`} variant="field"
+                              triggerClassName={`${smSel} min-w-[9rem] flex-1`}
+                              value={t.role || ""} onChange={(v) => setStageTask(pi, si, ti, { role: v })}
+                              placeholder="Unassigned" ariaLabel="Assign this task to a team"
+                              options={[{ value: "", label: "Unassigned" },
+                                        ...ROLE_OPTS.map((r) => ({ value: r.key, label: r.label }))]} />
+                            <label className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground" title="Require attached evidence to close">
+                              <input type="checkbox" className="h-4 w-4" checked={!!t.evidence_required} onChange={(e) => setStageTask(pi, si, ti, { evidence_required: e.target.checked })} />
+                              evidence
+                            </label>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -352,15 +383,15 @@ export function OperatingModelEditor() {
                   <div className="mt-2.5 pl-1 flex items-center flex-wrap gap-1.5">
                     <ShieldCheck size={12} weight="bold" className="text-muted-foreground" />
                     <span className="text-[11px] font-medium text-muted-foreground">Approval to leave this stage</span>
-                    <select data-testid={`op-stage-approval-role-${pi}-${si}`} className={smInp}
-                      value={s.approval?.role || ""}
-                      onChange={(e) => setStageApproval(pi, si, { role: e.target.value })}>
-                      <option value="">None</option>
-                      {ROLE_OPTS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
-                    </select>
+                    <GlassSelect testid={`op-stage-approval-role-${pi}-${si}`} variant="field"
+                      triggerClassName={`${smSel} min-w-[9rem] flex-1`}
+                      value={s.approval?.role || ""} onChange={(v) => setStageApproval(pi, si, { role: v })}
+                      placeholder="None" ariaLabel="Who signs off before a card leaves this stage"
+                      options={[{ value: "", label: "None" },
+                                ...ROLE_OPTS.map((r) => ({ value: r.key, label: r.label }))]} />
                     {s.approval?.role && (
-                      <label className="flex items-center gap-1 text-[11px] text-muted-foreground whitespace-nowrap" title="If off, the gate is recorded but skippable">
-                        <input type="checkbox" checked={s.approval.required !== false}
+                      <label className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground" title="If off, the gate is recorded but skippable">
+                        <input type="checkbox" className="h-4 w-4" checked={s.approval.required !== false}
                           onChange={(e) => setStageApproval(pi, si, { required: e.target.checked })} />
                         required
                       </label>
@@ -394,16 +425,17 @@ export function OperatingModelEditor() {
               </button>
             </div>
 
-            <div className="mt-3 flex items-center gap-2">
-              <ShieldCheck size={14} weight="bold" className="text-muted-foreground" />
-              <span className="label-mono text-muted-foreground">Owner sign-off stage</span>
-              <select data-testid={`op-approval-${pi}`} className={smInp} value={p.approval_stage} onChange={(e) => setPipeline(pi, { approval_stage: e.target.value })}>
-                <option value="">None</option>
-                {p.stages.filter((s) => s.key).map((s) => <option key={s._uid} value={s.key}>{s.label}</option>)}
-              </select>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <ShieldCheck size={14} weight="bold" className="shrink-0 text-muted-foreground" />
+              <span className="label-mono shrink-0 text-muted-foreground">Owner sign-off stage</span>
+              <GlassSelect testid={`op-approval-${pi}`} variant="field" triggerClassName={`${smSel} min-w-[9rem] flex-1`}
+                value={p.approval_stage || ""} onChange={(v) => setPipeline(pi, { approval_stage: v })}
+                placeholder="None" ariaLabel="Stage only the owner can advance a card to"
+                options={[{ value: "", label: "None" },
+                          ...p.stages.filter((s) => s.key).map((s) => ({ value: s.key, label: s.label }))]} />
               <span className="text-[11px] text-muted-foreground">(only the owner can advance to it)</span>
             </div>
-            <div className="mt-2 flex items-center gap-2">
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="label-mono text-muted-foreground">Stuck after</span>
               <input data-testid={`op-stuck-days-${pi}`} type="number" min="1" max="30" inputMode="numeric"
                 className={`${smInp} w-14 text-center`} placeholder="3" value={p.stuck_after_days}

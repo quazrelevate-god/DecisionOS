@@ -879,6 +879,14 @@ export default function CRM() {
   ];
   const scopeLabel = SCOPES.find((s) => s.key === scope)?.label || "";
   const filtering = !!q || !!status;
+  /* 2026-09-29 — WHOSE EMPTINESS IS IT. The empty card spoke for the whole
+     CRM whenever the CURRENT tab happened to be empty, so a workspace with
+     one supplier and no buyers showed "No relationships yet" three
+     centimetres under a chip reading "Suppliers 1" — on a phone, in the same
+     glance. The button underneath had it right all along ("Add your first
+     buyer"); only the heading and the line above it were speaking for
+     everybody. */
+  const anyContacts = SCOPES.some((sc) => sc.count > 0);
   const typeLabels = { customer: L.customer_singular, dealer: PARTNER_LABEL, vendor: L.vendor_singular };
 
   return (
@@ -971,11 +979,17 @@ export default function CRM() {
         <SkeletonGrid count={6} lines={3} />
       ) : contacts.length === 0 ? (
         <div className={`flex flex-col items-center px-6 py-12 text-center ${CARD}`} data-testid="crm-empty">
-          <p className="text-base font-semibold text-slate-900">{filtering ? "No matches" : t("crm.empty_title")}</p>
+          <p className="text-base font-semibold text-slate-900" data-testid="crm-empty-title">
+            {filtering ? "No matches"
+              : anyContacts ? `No ${scopeLabel.toLowerCase()} yet`
+                : t("crm.empty_title")}
+          </p>
           <p className="mt-1 max-w-md text-sm text-slate-500">
             {filtering
               ? `No ${scopeLabel.toLowerCase()} match that search or status.`
-              : canManage ? t("crm.empty_hint_manage") : t("crm.empty_hint")}
+              : anyContacts
+                ? `Your other lists have people in them — this one is empty.`
+                : canManage ? t("crm.empty_hint_manage") : t("crm.empty_hint")}
           </p>
           {filtering ? (
             <button type="button" onClick={() => { setQ(""); setStatus(""); }} data-testid="crm-clear-filters"

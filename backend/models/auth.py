@@ -45,6 +45,10 @@ class RegisterInput(BaseModel):
     # draft (prevents "user typed 7 steps then /register 500'd and lost
     # everything"). Client-provided values still win over draft values.
     draft_id: Optional[str] = None
+    # 2026-09-29: and the token that was issued with it. GET and PATCH on a
+    # draft have required it since FIX-004-A (RBAC-01); this path merged a
+    # draft's saved answers on the id alone, which is the same door.
+    draft_token: Optional[str] = None
     # FIX-004-A (RBAC-02): Turnstile / hCaptcha proof-of-humanity token.
     # Verified server-side against the vendor's siteverify endpoint.
     # Optional in dev (see services/captcha.py); made hard-required in

@@ -154,12 +154,24 @@ async def register(inp: RegisterInput, request: Request, response: Response,
     # FIX-001-D imports — status-aware AI + draft merge/complete
     from services.ai import ai_setup as ai_setup_svc
     from services.auth import onboarding_drafts as drafts_svc
+    from services.auth.draft_tokens import verify_draft_token
 
     # FIX-001-D: if a draft_id was passed, merge saved wizard state
     # underneath the request body. Client-provided values still win.
+    #
+    # 2026-09-29 — two conditions on it, added when the wizard finally started
+    # sending the id:
+    #   · THE TOKEN. Reading or patching a draft has needed it since RBAC-01.
+    #     Merging its answers into a registration is the same read by another
+    #     name, and it was taking a bare id.
+    #   · NOT ALREADY CONSUMED. get_draft's docstring has always claimed it
+    #     filters completed drafts and it never has, so a draft that built a
+    #     company could have been merged into a second one and re-completed.
     draft = None
-    if inp.draft_id:
+    if inp.draft_id and verify_draft_token(inp.draft_id, inp.draft_token):
         draft = await drafts_svc.get_draft(db, inp.draft_id)
+        if draft and draft.get("completed_at"):
+            draft = None
     if draft:
         raw = drafts_svc.merge_draft_into_register_input(draft, inp.model_dump())
         # Re-validate through the model so downstream code sees typed fields

@@ -1,19 +1,22 @@
 ext {
-    // B19 (2026-09-29) — the host whose https links open the app (App Links).
+    // B19 · the host whose https links open the app (App Links).
     //
-    // DELIBERATELY A PLACEHOLDER. I could not establish the web app's real
-    // hostname from this repository — the backend's is in the Capacitor
-    // config, the frontend's is only on the deploy — and a guessed host in a
-    // shipped manifest is worse than an obvious blank, because it looks
-    // settled. Set it to the host that serves DecisionOS (today a
-    // *.up.railway.app name, later the real domain) and rebuild.
+    // Set 2026-09-29, from the founder: www.decisionos.biz, CNAME'd to
+    // 9iqmrlup.up.railway.app and serving. Checked before hard-coding it.
     //
-    // Nothing breaks while it says this. Android verifies an App Link by
-    // fetching https://<host>/.well-known/assetlinks.json and matching this
-    // app's signing certificate; an unreachable host simply fails that check
-    // and links keep opening the browser, which is today's behaviour.
-    // docs/DEEP_LINKS.md is the whole procedure, including the fingerprint.
-    appLinkHost = 'set-me.invalid'
+    // WWW ONLY, AND DELIBERATELY. The apex decisionos.biz has an A record to
+    // 69.46.46.71 and no https listener at all — a request to it does not
+    // complete. Android verifies an App Link by fetching
+    // https://<host>/.well-known/assetlinks.json, and BELOW ANDROID 12 a
+    // single unverifiable host fails verification for EVERY host in the
+    // filter. minSdk here is 24, so claiming the apex today would break the
+    // www links on a large share of real phones to gain nothing.
+    //
+    // Add the apex to this filter only once it resolves over https and serves
+    // the same assetlinks.json — and make sure invite links actually use the
+    // host claimed here (the backend builds them from APP_BASE_URL). See
+    // docs/DEEP_LINKS.md.
+    appLinkHost = 'www.decisionos.biz'
     minSdkVersion = 24
     compileSdkVersion = 36
     targetSdkVersion = 36

@@ -49,7 +49,7 @@ that already existed. **Shipped:**
 | Piece | Where |
 |---|---|
 | In-app | Settings → Account → **Delete your account** |
-| The web URL for the Console | **`https://<host>/delete-account`** — public, works signed out |
+| The web URL for the Console | **`https://www.decisionos.biz/delete-account`** — public, works signed out |
 | The decision | `backend/routers/account.py` |
 | The erasing, shared with the admin route | `backend/services/tenant_wipe.py` |
 
@@ -61,9 +61,9 @@ other people are — handing it over or removing them comes first. One blocked
 workspace stops the whole request, because half-deleting somebody is worse
 than not starting.
 
-**Put `https://<host>/delete-account` in the Console** under Data safety →
-Data deletion, once the host is settled (it is the same host B19 needs —
-[DEEP_LINKS.md](DEEP_LINKS.md)).
+**Put `https://www.decisionos.biz/delete-account` in the Console** under Data
+safety → Data deletion. The host was confirmed on 2026-09-29; the page needs
+the current branch deployed before that URL answers with anything real.
 
 ### 1.3 PostHog ships unconditionally, with session recording configured
 
@@ -215,8 +215,8 @@ contained and strictly better for a native app.
    decides §1.3, the privacy policy and the Data Safety form.
 2. **Decide the analytics posture** (off / events only / consented replay).
 3. **Write the privacy policy** — it can only be written truthfully after 1–2.
-4. ~~Build self-service account deletion~~ — **done**. Give the Console
-   `https://<host>/delete-account` once the host is settled.
+4. ~~Build self-service account deletion~~ — **done**. Deploy, then give the
+   Console `https://www.decisionos.biz/delete-account`.
 5. Back up the keystore; opt into Play App Signing.
 6. Console: Data Safety, content rating, target audience, listing assets, and
    the demo-login instructions under App access.

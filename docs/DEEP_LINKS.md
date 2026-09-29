@@ -1,7 +1,9 @@
 # B19 · Making an invite link open the app
 
-**Status: built, not switched on.** The code is in place on both sides. Two
-values are missing, and neither of them is code.
+**Status: one value left, and it is a deploy setting.** Both sides are in
+place and the host is now real — `www.decisionos.biz`, set 2026-09-29. What
+remains is `ANDROID_APP_FINGERPRINT` on the Railway deploy; the value is in
+this file.
 
 ## What happens today
 
@@ -32,23 +34,34 @@ while the app is already running.
 
 ## The two missing values
 
-### 1. The host
+### 1. ~~The host~~ — set 2026-09-29
 
 `frontend/android/variables.gradle`:
 
 ```groovy
-appLinkHost = 'set-me.invalid'        // ← the host that serves DecisionOS
+appLinkHost = 'www.decisionos.biz'
 ```
 
-It is a placeholder on purpose. The web app's hostname is not in this
-repository — the backend's is in `capacitor.config.ts`, the frontend's exists
-only on the deploy — and a guessed host in a shipped manifest is worse than an
-obvious blank, because it looks settled.
+**www only, deliberately.** Checked on 2026-09-29:
 
-Set it to whatever serves the app (today a `*.up.railway.app` name, later the
-real domain) and rebuild.
+| Host | DNS | https |
+|---|---|---|
+| `www.decisionos.biz` | CNAME → `9iqmrlup.up.railway.app` | 200 |
+| `decisionos.biz` | A → `69.46.46.71`, no CNAME | **no listener — the request never completes** |
 
-### 2. The signing fingerprint
+Android verifies by fetching `https://<host>/.well-known/assetlinks.json`, and
+**below Android 12 one unverifiable host fails verification for every host in
+the filter.** minSdk here is 24, so adding the apex today would break the www
+links on a large share of real phones and gain nothing. Add it to the filter
+once it resolves over https and serves the same file.
+
+**The links have to USE that host.** The backend builds invite, reset and
+verification URLs from `APP_BASE_URL` (falling back to `REACT_APP_BACKEND_URL`,
+then `FRONTEND_ORIGIN` — `routers/auth._app_base_url`). If that says anything
+other than `https://www.decisionos.biz`, the emails point somewhere the filter
+does not claim and nothing opens the app. Check it on the deploy.
+
+### 2. The signing fingerprint — the one thing left
 
 Android verifies the link by fetching `https://<host>/.well-known/assetlinks.json`
 and matching the **release** signing certificate of the installed app.

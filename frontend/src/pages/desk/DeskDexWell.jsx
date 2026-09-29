@@ -36,6 +36,7 @@
 // — and the hooks live HERE rather than in Desk, so a keystroke in the field or
 // a recording tick re-renders this well (and its pop-up) and nothing else.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PaperPlaneRight, Paperclip, X, Check, File as FileGlyph, Keyboard } from "@phosphor-icons/react";
@@ -112,6 +113,33 @@ function AttachmentChip({ file, onRemove, disabled }) {
       </button>
     </li>
   );
+}
+
+/* When the on-screen keyboard opens, the composer floats just above it. This
+   reads the visual viewport in the app's zoomed CSS space (--ui-scale, as
+   DexCapturePopup's useKeyboardSafeBox does) and returns where the floating
+   bar's bottom edge should sit and how much room is left above the keyboard. */
+function useKeyboardInset(active) {
+  const [kb, setKb] = useState({ open: false, bottom: 20, avail: 0 });
+  useEffect(() => {
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!active || !vv) { setKb({ open: false, bottom: 20, avail: 0 }); return undefined; }
+    const read = () => {
+      const k = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
+      const kbReal = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      const next = {
+        open: kbReal > 90,
+        bottom: Math.round(kbReal / k + 20),   // 20px above the keyboard
+        avail: Math.round(vv.height / k),       // visible height, for the grow cap
+      };
+      setKb((p) => (p.open === next.open && p.bottom === next.bottom && p.avail === next.avail ? p : next));
+    };
+    read();
+    vv.addEventListener("resize", read);
+    vv.addEventListener("scroll", read);
+    return () => { vv.removeEventListener("resize", read); vv.removeEventListener("scroll", read); };
+  }, [active]);
+  return kb;
 }
 
 /**
@@ -208,9 +236,17 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
   const [typing, setTyping] = useState(false);
   const fieldOpen = typing || (pillDraft && !!chat.draft);
 
-  /* ASK-33 Phase 5 — THE FIELD GROWS TO TWO LINES, no further (it holds what
-     is TYPED; a long spoken capture is read in the pop-up). Measured from the
-     field's own line height and padding. */
+  /* PILOT — ON A PHONE THE COMPOSER FLOATS ABOVE THE KEYBOARD. When the field
+     is open on a phone, it is lifted out of the (collapsing) well and docked
+     20px above the keyboard, growing with the text up to ~40% of the room the
+     keyboard leaves, then scrolling. Desktop keeps the in-card two-line field. */
+  const floating = phone && fieldOpen;
+  const kb = useKeyboardInset(floating);
+  const roomAbove = kb.avail || (typeof window !== "undefined" ? window.innerHeight : 640);
+  const growCap = Math.max(120, Math.round(roomAbove * 0.4));
+
+  /* ASK-33 Phase 5 — the in-card field grows to two lines, no further. While
+     floating it grows to the text (measured), capped at growCap then scrolls. */
   const fieldRef = useRef(null);
   useLayoutEffect(() => {
     const el = fieldRef.current;
@@ -219,10 +255,10 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
     const line = parseFloat(cs.lineHeight) || 20;
     const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
     el.style.height = "auto";
-    const max = Math.round(line * 2 + pad);
+    const max = floating ? growCap : Math.round(line * 2 + pad);
     el.style.height = `${Math.min(el.scrollHeight, max)}px`;
     el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
-  }, [chat.draft, recording, fieldOpen]);
+  }, [chat.draft, recording, fieldOpen, floating, growCap]);
 
   /* The decision exists once the note is structured, not when it is sent, so
      the Desk's feeds refresh again at the ending — otherwise the Decisions
@@ -622,8 +658,10 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
       {/* THE FIELD IS SUNKEN — .nm-field, the app's own field with its own
           focus ring (ASK-34 items 1 and 2). NOT RENDERED until there is
           something to type (ASK-47); a recording started while it is open
-          draws its wave in it (KM-51), and gives way to step 1 when it stops. */}
-      {fieldOpen ? (
+          draws its wave in it (KM-51), and gives way to step 1 when it stops.
+          On a phone it lifts to the floating bar above the keyboard, so the
+          floor shows the title while typing. */}
+      {(fieldOpen && !floating) ? (
       <div
         data-testid="desk-dex-composer"
         data-mode={recording ? "voice" : "type"}
@@ -739,6 +777,60 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
         outcome={outcome}
         onRetry={onRetry}
       />
+      {/* PILOT — THE FLOATING COMPOSER. On a phone, while the field is open, the
+          text field and its send sit 20px above the keyboard (kb.bottom), out of
+          the collapsing well. Portalled to the body so no ancestor clips or
+          moves it; mounted on fieldOpen (not on the keyboard) so showing/hiding
+          the keyboard never remounts the textarea and drops focus. */}
+      {floating && createPortal(
+        <div
+          data-testid="desk-dex-floating"
+          style={{ position: "fixed", left: 0, right: 0, bottom: kb.bottom, zIndex: 70 }}
+          className="px-3"
+        >
+          <div className="kr-pop mx-auto flex max-w-[34rem] items-end gap-2 rounded-[1.6rem] p-2">
+            <div className="nm-field flex min-w-0 flex-1 items-center overflow-hidden rounded-[1.2rem]">
+              <textarea
+                ref={fieldRef}
+                rows={1}
+                value={chat.draft}
+                disabled={!canCapture}
+                onChange={(e) => { setPillDraft(true); chat.setDraft(e.target.value); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+                }}
+                onBlur={() => {
+                  // Empty and blurred (not to the send button) closes the field,
+                  // as the in-card composer does.
+                  if (chat.draft.trim()) return;
+                  setTimeout(() => {
+                    if (document.activeElement?.getAttribute?.("data-dex-floor") === "1") return;
+                    if (fieldRef.current?.value?.trim()) return;
+                    setTyping(false);
+                  }, 120);
+                }}
+                placeholder="Type a decision…"
+                aria-label="Tell Dex what you decided"
+                style={{ maxHeight: growCap }}
+                className="block min-w-0 flex-1 resize-none bg-transparent px-4 py-3 text-[15px] leading-6 text-foreground placeholder:text-foreground/45 focus:outline-none [scrollbar-width:none]"
+              />
+            </div>
+            <button
+              type="button"
+              data-dex-floor="1"
+              data-testid="desk-dex-floating-send"
+              onClick={send}
+              disabled={!canCapture || chat.busy || dex.sending || !chat.draft.trim()}
+              aria-label="Send to Dex"
+              title="Send to Dex"
+              className={CIRCLE}
+            >
+              <PaperPlaneRight size={17} weight="bold" aria-hidden="true" />
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
     </>
   );
 }

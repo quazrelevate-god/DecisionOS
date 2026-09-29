@@ -31,7 +31,7 @@
 // words, the files and the handlers down. Closing the pop-up therefore cancels
 // nothing: the note keeps being read, the decision still lands in the Desk's
 // Decisions column, and opening it again shows where it got to.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, X, WarningCircle, File as FileGlyph } from "@phosphor-icons/react";
 import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
@@ -212,8 +212,27 @@ export function DexCapturePopup({
     hadWords.current = !!text;
   }, [step, phone, transcribing, text]);
 
+  /* PHONE — THE CARD IS ONLY AS TALL AS THE WORDS. The pop-up floats now (it is
+     not the whole screen), so the transcript field grows with what was said
+     rather than filling a fixed sheet. Measured from its own scrollHeight; the
+     field's max-height then caps it and scrolls, and the card's max-height caps
+     the whole thing. Desktop keeps its fixed multi-line field (flex-1). */
+  useLayoutEffect(() => {
+    if (!phone || step !== "said") return;
+    const el = fieldRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [phone, step, text, transcribing, open]);
+
   const canNext = !transcribing && !busy && (!!text.trim() || files.length > 0);
   const shown = ["sending", ...stages];
+  /* A definite height only for the steps whose content FILLS its box — the
+     forge (reading) and the decision review (made, DecisionPanel's own
+     scroll). The text steps (said/nothing/failed/slow) size to their content. */
+  const phoneFillH = (step === "reading" || step === "made")
+    ? "max-lg:h-[calc(85dvh/var(--ui-scale,1))]"
+    : "";
 
   /* A stray tap outside must not close the pop-up in the middle of reading or
      approving something (KM-28's rule for DecisionDialog). Close, Escape and
@@ -258,12 +277,15 @@ export function DexCapturePopup({
           value={text}
           onChange={(e) => onText?.(e.target.value)}
           readOnly={transcribing}
-          rows={6}
+          rows={phone ? 2 : 6}
           aria-label="What you said"
           data-testid="dex-popup-transcript"
           placeholder={transcribing ? "Transcribing what you said…" : "Nothing came through. Type what you decided, or close this and speak again."}
           className={cn(
-            "nm-field block min-h-[7.5rem] w-full flex-1 resize-none px-4 py-3 text-[15px] leading-6 text-slate-800 focus:outline-none lg:min-h-[10.5rem] lg:text-base lg:leading-7",
+            "nm-field block w-full resize-none px-4 py-3 text-[15px] leading-6 text-slate-800 focus:outline-none lg:text-base lg:leading-7",
+            // Phone: grows to the words (measured), capped so a very long one
+            // scrolls in the field. Desktop: the fixed multi-line field.
+            phone ? "min-h-[3.75rem] max-h-[58dvh] overflow-y-auto" : "min-h-[7.5rem] flex-1 lg:min-h-[10.5rem]",
             transcribing ? "animate-pulse placeholder:text-slate-600" : "placeholder:text-slate-400"
           )}
         />
@@ -401,21 +423,24 @@ export function DexCapturePopup({
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose?.()}>
       <DialogContent
-        /* The same card DecisionDialog is — 70% of the screen from lg, the
-           whole of it on a phone — so step 3, which is the decision's own
-           content, sits in the frame it always has. On a phone the sheet
-           follows the visual viewport (see useKeyboardSafeBox). */
-        className={`${GLASS_SHEET} flex max-h-none flex-col gap-0 overflow-hidden p-0 outline-none [&>button.absolute]:hidden focus:outline-none focus-visible:outline-none focus-visible:ring-0
-                   left-0 top-0 h-full w-full max-w-none translate-x-0 translate-y-0 rounded-none
-                   [padding-top:var(--sa-top)]
-                   lg:left-[50%] lg:top-[50%] lg:h-[calc(70vh/var(--ui-scale,1))] lg:w-[calc(70vw/var(--ui-scale,1))]
-                   lg:min-w-[52rem] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:rounded-[1.75rem]
-                   lg:[padding-top:0]
-                   data-[state=open]:[--tw-enter-translate-x:0] data-[state=open]:[--tw-enter-translate-y:0]
-                   data-[state=closed]:[--tw-exit-translate-x:0] data-[state=closed]:[--tw-exit-translate-y:0]
-                   lg:data-[state=open]:[--tw-enter-translate-x:-50%] lg:data-[state=open]:[--tw-enter-translate-y:-48%]
-                   lg:data-[state=closed]:[--tw-exit-translate-x:-50%] lg:data-[state=closed]:[--tw-exit-translate-y:-48%]`}
-        style={box ? { height: box.h, top: box.top } : undefined}
+        /* PILOT — A FLOATING CARD, NOT THE SCREEN. The base DialogContent is
+           already a centred card (left/top-1/2 -translate-1/2, w-100%-1.5rem,
+           content height capped at the viewport, its own zoom-in). It used to
+           be overridden to full-screen on a phone; now it is left to float and
+           size to its content, so the transcript's card is only as tall as
+           what was said. The forge (reading) and the decision review (made)
+           get a definite height via phoneFillH — their content fills its box.
+           Desktop keeps the 70vw × 70vh frame. On a phone the card re-centres
+           inside the space the keyboard leaves (see useKeyboardSafeBox). */
+        className={cn(
+          GLASS_SHEET,
+          "flex flex-col gap-0 overflow-hidden p-0 outline-none rounded-[1.75rem]",
+          "[&>button.absolute]:hidden focus:outline-none focus-visible:outline-none focus-visible:ring-0",
+          phoneFillH,
+          "lg:h-[calc(70vh/var(--ui-scale,1))] lg:max-h-[calc(70vh/var(--ui-scale,1))]",
+          "lg:w-[calc(70vw/var(--ui-scale,1))] lg:min-w-[52rem] lg:max-w-none lg:rounded-[1.75rem]"
+        )}
+        style={box ? { top: box.top + box.h / 2, maxHeight: box.h - 24 } : undefined}
         onPointerDownOutside={guardOutside}
         onInteractOutside={guardOutside}
         onOpenAutoFocus={focusIn}

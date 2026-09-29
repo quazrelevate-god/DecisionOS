@@ -29,6 +29,7 @@ from routers.brain_context_api import router as brain_context_router
 from routers.brain_router import router as brain_agent_router
 from routers.signup import router as signup_router
 from routers.auth import router as auth_router
+from routers.account import router as account_router  # 2026-09-29: self-service account deletion (Play requirement)
 from routers.tasks import router as tasks_router
 from routers.decisions import router as decisions_router
 from routers.inbox import router as inbox_router
@@ -80,6 +81,7 @@ _DOMAIN_ROUTERS = (
     brain_agent_router,
     signup_router,
     auth_router,
+    account_router,    # deleting your own account — Play's User Data policy
     tasks_router,
     decisions_router,
     inbox_router,

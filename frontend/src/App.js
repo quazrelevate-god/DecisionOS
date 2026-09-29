@@ -14,6 +14,7 @@ import Signup from "./pages/Signup";
 // landed on a route that did not exist.
 import { ForgotPassword, ResetPassword } from "./pages/PasswordReset";
 import VerifyEmail from "./pages/EmailVerify";
+import DeleteAccount from "./pages/DeleteAccount";
 import DecisionReview from "./pages/DecisionReview";
 import { useUiScale } from "./hooks/useUiScale";
 import Workflows from "./pages/Workflows";
@@ -190,6 +191,10 @@ function App() {
             {/* And the URL every welcome email has carried since FIX-003-D,
                 which until now was a 404 (U7-24.10). */}
             <Route path="/verify-email" element={<VerifyEmail />} />
+            {/* PLAY-1 — public on purpose: Play requires a deletion route
+                reachable by somebody who has uninstalled the app. The URL is
+                registered in the Play Console listing, so it must not move. */}
+            <Route path="/delete-account" element={<DeleteAccount />} />
             <Route path="/admin" element={<AdminPortal />} />
             <Route path="/admin/*" element={<AdminPortal />} />
             <Route path="/" element={<Home />} />

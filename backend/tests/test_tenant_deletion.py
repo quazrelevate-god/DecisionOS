@@ -141,29 +141,17 @@ class _FakeObjStore:
 # exercise the deletion logic without going through FastAPI plumbing.
 # ---------------------------------------------------------------------------
 async def _run_delete(fake_db, fake_store, tenant_id):
-    """Mirror of the deletion sequence in admin_delete_tenant."""
-    files_deleted = 0
-    files_failed = 0
-    async for f in fake_db.files.find({"tenant_id": tenant_id}, {"_id": 0, "storage_path": 1}):
-        path = f.get("storage_path")
-        if not path:
-            continue
-        if await fake_store.delete_object(path):
-            files_deleted += 1
-        else:
-            files_failed += 1
-    removed = {}
-    for coll in TENANT_COLLECTIONS:
-        res = await fake_db[coll].delete_many({"tenant_id": tenant_id})
-        if res.deleted_count:
-            removed[coll] = res.deleted_count
-    await fake_db.tenants.delete_one({"id": tenant_id})
-    return {
-        "records_removed": removed,
-        "total_removed": sum(removed.values()),
-        "files_deleted": files_deleted,
-        "files_failed": files_failed,
-    }
+    """Drive the REAL wipe against the fakes.
+
+    This used to be a hand-written copy of the sequence in
+    admin_delete_tenant, with a comment saying it mirrored it "EXACTLY" —
+    which is precisely the drift the class below exists to catch, pointed at
+    this file instead of at the collection list. It caught nothing about the
+    route, because it never ran it. services.tenant_wipe.wipe_tenant takes
+    `database` and `store` so the test can run the shipping code.
+    """
+    from services.tenant_wipe import wipe_tenant
+    return await wipe_tenant(tenant_id, database=fake_db, store=fake_store)
 
 
 # ---------------------------------------------------------------------------

@@ -17,7 +17,18 @@ export async function signIn(page, base, { role = 'owner', timeout = 25000 } = {
   }
   if (!at().startsWith('/login')) return true;
 
+  /* B22 rebuilt the sign-in card and put the demo behind a door: the role
+     cards live in a pane that `demo-open` reveals, where they used to sit on
+     the card itself. Open it only when the role button is not already there,
+     so this keeps working against both layouts. */
   const btn = page.locator(`[data-testid="demo-login-${role}"]`);
+  if (!(await btn.isVisible().catch(() => false))) {
+    const door = page.locator('[data-testid="demo-open"]');
+    if (await door.isVisible().catch(() => false)) {
+      await door.click();
+      await page.waitForTimeout(400);
+    }
+  }
   await btn.waitFor({ timeout: 10000 });
   await btn.click();
   await page

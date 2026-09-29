@@ -188,80 +188,37 @@ async def admin_reactivate_tenant(tenant_id: str, admin: dict = Depends(get_plat
 # `brain_contexts` stays in the list so any lingering pre-rename data
 # on a staging tenant that predates the migration still gets cleaned
 # up on tenant delete.
-TENANT_COLLECTIONS = [
-    # Core workspace records
-    "users", "tasks", "decisions", "workflows", "contacts", "capture_drafts",
-    # Finance / ledger
-    "invoices", "payments", "expenses", "assets", "inventory", "ledger_ai",
-    # HR
-    "leaves", "attendance",
-    # Communication + capture
-    "meetings", "voice_notes", "inbox", "notifications", "ingestions",
-    # Activity + memory
-    "activity", "memory", "complaints", "calendar_events",
-    # Company Brain — DECISION-PROVENANCE store (singular) — added by FIX-001-E
-    "brain_context",
-    # Company Brain — DOCUMENTS catalog — added by FIX-001-E
-    "brain_documents",
-    # /ask query plan cache — renamed FIX-007-A (S4-03) from brain_contexts
-    "brain_query_cache",
-    # Legacy name kept for wipe-list back-compat (pre-rename staging data)
-    "brain_contexts",
-    # Audit / ops
-    "brain_audit", "usage_events", "wa_events", "files",
-]
+# Moved to services/tenant_wipe.py (2026-09-29) so self-service account
+# deletion and this route share ONE wipe list. Re-exported here because
+# admin_compliance.py and tests/test_tenant_deletion.py import it from this
+# module.
+from services.tenant_wipe import TENANT_COLLECTIONS, wipe_tenant  # noqa: E402,F401
 
 
 @router.delete("/tenants/{tenant_id}")
 async def admin_delete_tenant(tenant_id: str, admin: dict = Depends(get_platform_admin)):
     """Permanently delete a workspace and ALL its data. Irreversible.
 
-    FIX-001-E: also deletes uploaded files from object storage (previously
-    the DB rows were wiped but the files lingered in the shared bucket
-    forever — a real DPDP / GDPR "right to erasure" gap).
+    The erasing itself lives in services/tenant_wipe.wipe_tenant, shared with
+    the founder-facing account deletion. This route is authorisation and the
+    audit entry.
     """
-    from services import obj_store  # deferred: avoid circular / test-time import cost
-    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "id": 1, "company_name": 1, "name": 1})
-    if not t:
+    report = await wipe_tenant(tenant_id)
+    if not report.get("found"):
         raise HTTPException(status_code=404, detail="Workspace not found")
-    name = t.get("company_name") or t.get("name") or tenant_id
-
-    # 1. Delete uploaded files from object storage FIRST (before wiping the
-    #    `files` collection, since that's the manifest of what to delete).
-    #    Best-effort per file — a single storage failure cannot block the
-    #    DB wipe (compliance requires the records go regardless).
-    files_deleted = 0
-    files_failed = 0
-    async for f in db.files.find({"tenant_id": tenant_id}, {"_id": 0, "storage_path": 1}):
-        path = f.get("storage_path")
-        if not path:
-            continue
-        if await obj_store.delete_object(path):
-            files_deleted += 1
-        else:
-            files_failed += 1
-
-    # 2. Wipe every tenant-scoped collection.
-    removed = {}
-    for coll in TENANT_COLLECTIONS:
-        res = await db[coll].delete_many({"tenant_id": tenant_id})
-        if res.deleted_count:
-            removed[coll] = res.deleted_count
-
-    # 3. Finally, delete the tenant document itself.
-    await db.tenants.delete_one({"id": tenant_id})
-
-    total = sum(removed.values())
     await log_admin_action(
         admin, "delete_tenant",
-        f"Permanently deleted workspace {name} ({total} records wiped, "
-        f"{files_deleted} files deleted, {files_failed} file failures)",
+        f"Permanently deleted workspace {report['name']} "
+        f"({report['total_removed']} records wiped, "
+        f"{report['files_deleted']} files deleted, {report['files_failed']} file failures)",
         "tenant", tenant_id,
     )
     return {
         "status": "ok", "deleted": True,
-        "records_removed": removed, "total_removed": total,
-        "files_deleted": files_deleted, "files_failed": files_failed,
+        "records_removed": report["records_removed"],
+        "total_removed": report["total_removed"],
+        "files_deleted": report["files_deleted"],
+        "files_failed": report["files_failed"],
     }
 
 

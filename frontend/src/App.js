@@ -15,6 +15,7 @@ import Signup from "./pages/Signup";
 import { ForgotPassword, ResetPassword } from "./pages/PasswordReset";
 import VerifyEmail from "./pages/EmailVerify";
 import DeleteAccount from "./pages/DeleteAccount";
+import Privacy from "./pages/Privacy";
 import DecisionReview from "./pages/DecisionReview";
 import { useUiScale } from "./hooks/useUiScale";
 import Workflows from "./pages/Workflows";
@@ -195,6 +196,10 @@ function App() {
                 reachable by somebody who has uninstalled the app. The URL is
                 registered in the Play Console listing, so it must not move. */}
             <Route path="/delete-account" element={<DeleteAccount />} />
+            {/* PLAY-2 — public: Play requires a privacy-policy URL that a
+                person can read BEFORE installing, and cross-checks it against
+                the Data Safety form. Registered in the Console; do not move. */}
+            <Route path="/privacy" element={<Privacy />} />
             <Route path="/admin" element={<AdminPortal />} />
             <Route path="/admin/*" element={<AdminPortal />} />
             <Route path="/" element={<Home />} />

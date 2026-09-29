@@ -91,14 +91,29 @@ def _days_to_close(t: dict) -> Optional[int]:
     return working_days_between(start, end)
 
 
-def _closed_on_time(t: dict) -> Optional[bool]:
-    """Did it land by its date? None when it never had one — a task nobody
-    dated cannot be late, and counting it either way would be a verdict the
-    data does not support."""
-    due, done = ist_day(t.get("due_date")), ist_day(t.get("completed_at"))
-    if not due or not done:
+def _hit_its_date(t: dict, today) -> Optional[bool]:
+    """Did this task make its date? None when it never had one — a task nobody
+    dated cannot be early or late, and counting it either way would be a
+    verdict the data does not support.
+
+    2026-09-29 — WORK THAT IS STILL OPEN AND ALREADY PAST ITS DATE COUNTS AS
+    LATE. This only looked at FINISHED work, which read as a flattering lie in
+    the browser: the company page showed "Overdue 14" four inches above
+    "Landed on time 100%", and a man with four dated tasks all past their date
+    and nothing finished was told there was nothing to judge. A task that is
+    open on the day after its due date has already failed to land on time.
+    That is not a prediction about the future, it is a fact about today, and
+    leaving it out of the denominator flatters exactly the team that needs
+    telling."""
+    due = ist_day(t.get("due_date"))
+    if not due:
         return None
-    return done <= due
+    done = ist_day(t.get("completed_at"))
+    if done:
+        return done <= due
+    if t.get("status") in ("done", "cancelled"):
+        return None            # finished, but we never learned when
+    return False if (today and due < today) else None
 
 
 def timing_of(tasks: Iterable[dict], now: Optional[str] = None) -> dict:
@@ -109,19 +124,27 @@ def timing_of(tasks: Iterable[dict], now: Optional[str] = None) -> dict:
       * `typical_days`   — the MEDIAN working days to close. Median, not mean:
                            one task left open over a festival week would drag
                            an average into nonsense.
-      * `on_time_rate`   — of the closed tasks that HAD a due date, the share
-                           that landed by it (0-100).
+      * `on_time_rate`   — of the dated work that has had its answer, the
+                           share that was done by its date (0-100). Work still
+                           open past its date is already late and counts as
+                           such; see `_hit_its_date`.
+      * `late_open`      — how many of those are still open and already past
+                           it, so the screen can name them rather than let a
+                           low percentage sit there unexplained.
       * `dated`/`closed` — the denominators, so the screen can say what the
                            percentage is out of instead of asserting it.
       * `waiting_days`   — how long the OLDEST thing still open has been open.
                            The queue's age, which a rate cannot show.
     """
     rows = list(tasks or [])
+    today = ist_day(now or today_ist())
     done = [t for t in rows if t.get("status") == "done" and t.get("completed_at")]
     spans = [d for d in (_days_to_close(t) for t in done) if d is not None]
-    judged = [v for v in (_closed_on_time(t) for t in done) if v is not None]
-
-    today = ist_day(now or today_ist())
+    # Everything with a date that has had its answer: finished work, and open
+    # work whose day has already gone past.
+    judged = [v for v in (_hit_its_date(t, today) for t in rows) if v is not None]
+    late_open = sum(1 for t in rows if t.get("status") not in ("done", "cancelled")
+                    and _hit_its_date(t, today) is False)
     ages = []
     for t in rows:
         if t.get("status") in ("done", "cancelled"):
@@ -135,6 +158,7 @@ def timing_of(tasks: Iterable[dict], now: Optional[str] = None) -> dict:
         "closed": len(done),
         "on_time_rate": round(sum(1 for v in judged if v) * 100 / len(judged)) if judged else None,
         "dated": len(judged),
+        "late_open": late_open,
         "waiting_days": max(ages) if ages else None,
     }
 

@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from core import db, get_current_user, now_iso
 from services.operating_score import (
-    _company_operating_view, _self_operating_view, compute_employee_stats,
+    WINDOWS, _company_operating_view, _self_operating_view, compute_employee_stats,
     _resolve_coach_target, ai_work_coach,
 )
 
@@ -22,6 +22,7 @@ router = APIRouter(prefix="/api")
 @router.get("/operating-score")
 async def operating_score(
     user_id: Optional[str] = None,
+    window: Optional[int] = None,
     user: dict = Depends(get_current_user),
 ):
     """Viewer-aware operating dashboard.
@@ -48,6 +49,11 @@ async def operating_score(
     tid = user["tenant_id"]
     now = datetime.now(timezone.utc).isoformat()
     is_owner = user.get("role") == "owner"
+    # 2026-09-29 — ?window=30 or 90 narrows the FINISHED work to what finished
+    # inside it; open work always counts, however old. Anything else reads as
+    # all time rather than 400ing: a hand-typed or stale URL should show the
+    # page, not an error.
+    window = window if window in WINDOWS else None
 
     # Owner-only view-as: return target's self-view instead of the
     # owner's company view.
@@ -63,7 +69,7 @@ async def operating_score(
         )
         if not target:
             raise HTTPException(status_code=404, detail="Team member not found")
-        payload = await _self_operating_view(tid, target, now)
+        payload = await _self_operating_view(tid, target, now, window)
         payload["view"] = "self"
         payload["view_as"] = {
             "id": target["id"],
@@ -73,14 +79,14 @@ async def operating_score(
         return payload
 
     if is_owner:
-        payload = await _company_operating_view(tid, user, now)
+        payload = await _company_operating_view(tid, user, now, window)
         # Owner is also an IC -- give them their own snapshot so they can
         # see how their personal work stacks up without switching views.
-        payload["my_snapshot"] = await compute_employee_stats(tid, user)
+        payload["my_snapshot"] = await compute_employee_stats(tid, user, window)
         payload["view"] = "owner"
         return payload
 
-    payload = await _self_operating_view(tid, user, now)
+    payload = await _self_operating_view(tid, user, now, window)
     payload["view"] = "self"
     return payload
 

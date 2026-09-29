@@ -38,6 +38,14 @@ async def seed_demo():
         {
             "id": tid,
             "name": "Sharma Textiles Pvt Ltd",
+            # B20 (2026-09-29) — SAY THAT THIS IS THE DEMO.
+            # Anyone can sign in here from the login screen's demo seats, and
+            # once inside there was nothing to tell them: the same Desk, the
+            # same numbers, somebody else's company. People explored it,
+            # closed the app, came back a week later — the cookie is still
+            # good — and read Sharma Textiles' overdue money as their own.
+            # The client draws a banner off this and gives them the way out.
+            "is_demo": True,
             "ai_consent": demo_consent,
             "created_at": now_iso(),
             "industry": "Textile Manufacturing",
@@ -385,6 +393,9 @@ async def fixup_demo_tenant():
         {"id": tid},
         {
             "$set": {
+                # B20 — and mark the demo tenants that were seeded before the
+                # flag existed. This runs on every boot and is idempotent.
+                "is_demo": True,
                 "industry": "Textile Manufacturing",
                 "company_size": "11-50",
                 "region": "India",

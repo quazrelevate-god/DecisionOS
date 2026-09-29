@@ -278,7 +278,19 @@ export default function Login() {
           relocated: the picture is the atmosphere now, and a marketing
           paragraph on the screen you reach by choosing "Sign in" is answering
           a question nobody asked there. */}
-      <main className="flex flex-1 items-center justify-center px-4 py-8 lg:px-8 lg:py-12">
+      {/* B22 (2026-09-29) — THE CARD SAT IN THE MIDDLE OF AN EMPTY SCREEN.
+          `items-center` centres it in the whole column, so on a phone the top
+          45% was picture and nothing else while the fields sat low — exactly
+          where the keyboard comes up. Opening it then shoved the card, and at
+          360x640 the number field and Send OTP were the first things pushed
+          out of the way.
+          The card starts near the top third on a phone (`items-start` with a
+          measured lead) and keeps the centred composition from lg, where
+          there is height to spare and no keyboard to dodge. */}
+      {/* The lead itself lives in index.css (.login-stage__main), which is
+          where this app keeps its values — and it has to answer a question
+          Tailwind cannot ask here: how tall is the screen. */}
+      <main className="login-stage__main flex flex-1 items-start justify-center px-4 pb-8 lg:items-center lg:px-8 lg:pb-12">
         <div className="kr-well w-full max-w-md" data-testid="login-card">
           <div className="kr-well__pane rounded-[1.75rem] p-6 sm:p-8">
           {/* KM-66 — the whole card swaps between two panes: SIGN IN and
@@ -448,12 +460,17 @@ export default function Login() {
               pulse, no bounce. It just sits there. On hover it lifts
               -3px and scales to 1.05, and that is the whole story. The
               resting shadow gives it baseline depth. */}
-          <div className="mt-8 border-t border-white/45 pt-6">
+          {/* B22 — the demo is a side door, not the way in. It kept the same
+              white pill as the primary action and sat under a divider that
+              gave it its own section; it reads as secondary now — the same
+              size, quieter, and without the block of space that made it look
+              like a second front door. */}
+          <div className="mt-6 border-t border-white/45 pt-4">
             <motion.button
               type="button"
               onClick={() => { setError(""); setDemoOpen(true); }}
               data-testid="demo-open"
-              className="relative z-10 flex h-12 w-full items-center justify-between rounded-pill bg-white px-5 text-sm font-medium text-foreground shadow-[0_1px_2px_hsl(230_18%_15%/0.08),0_4px_10px_-6px_hsl(230_18%_15%/0.12)] disabled:opacity-50"
+              className="relative z-10 flex h-12 w-full items-center justify-between rounded-pill bg-white/60 px-5 text-sm font-medium text-foreground/80 ring-1 ring-inset ring-slate-900/[0.06] transition-colors hover:bg-white hover:text-foreground disabled:opacity-50"
               disabled={busy}
               whileHover={{ scale: 1.05, y: -3 }}
               whileTap={{ scale: 1.02 }}

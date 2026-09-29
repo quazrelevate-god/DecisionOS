@@ -3661,6 +3661,27 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
     --sky-art-lg: url("/sky/login-lg.webp");
 }
 
+/* B22 (2026-09-29) — WHERE THE SIGN-IN CARD SITS, AND WHY IT IS NOT CENTRED.
+   It was `items-center` in the column, so on a phone the top 45% was picture
+   and the fields sat low — exactly where the keyboard comes up. Opening the
+   keyboard then shoved the card, and on a 5.7" screen the number field and
+   Send OTP were the first things pushed out of sight, which is the one thing
+   this screen exists to show.
+   The lead is a fraction of the screen on a normal phone and almost nothing on
+   a short one, where every pixel above the card is a pixel the keyboard will
+   want. Divided by --ui-scale like every viewport unit in this app: the shell
+   is CSS-zoomed and `zoom` scales a vh after it resolves (hooks/useUiScale).
+   From lg it is centred again — there is height to spare and no keyboard. */
+.login-stage__main { padding-top: calc(12vh / var(--ui-scale, 1)); }
+
+@media (max-height: 700px) {
+    .login-stage__main { padding-top: 1rem; }
+}
+
+@media (min-width: 1024px) {
+    .login-stage__main { padding-top: 3rem; }
+}
+
 
 /* ═══════════════════════════════════════════════════════════════════════════
    OUTSIDE @layer ON PURPOSE. sonner injects its own stylesheet into <head> at

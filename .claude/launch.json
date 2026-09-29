@@ -2,18 +2,36 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "_comment": "Windows (Yogesh). JSON has no raw backslashes in strings — every one in a path must be doubled, or the whole file fails to parse and NONE of these servers can be started.",
       "name": "frontend",
       "runtimeExecutable": "cmd.exe",
-      "runtimeArgs": ["/c", "set BROWSER=none&& npm --prefix C:\Users\kyogesh\Desktop\Skills\DecisioOS\DecisionOS\frontend run start"],
+      "runtimeArgs": ["/c", "set BROWSER=none&& npm --prefix C:\\Users\\kyogesh\\Desktop\\Skills\\DecisioOS\\DecisionOS\\frontend run start"],
       "port": 3000,
       "url": "http://localhost:3000"
     },
     {
+      "_comment": "Windows (Yogesh).",
       "name": "backend",
-      "runtimeExecutable": "C:\Users\kyogesh\Desktop\Skills\DecisioOS\DecisionOS\backend\.venv\Scripts\python.exe",
-      "runtimeArgs": ["-m", "uvicorn", "server:app", "--app-dir", "C:\Users\kyogesh\Desktop\Skills\DecisioOS\DecisionOS\backend", "--host", "127.0.0.1", "--port", "8001"],
+      "runtimeExecutable": "C:\\Users\\kyogesh\\Desktop\\Skills\\DecisioOS\\DecisionOS\\backend\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "server:app", "--app-dir", "C:\\Users\\kyogesh\\Desktop\\Skills\\DecisioOS\\DecisionOS\\backend", "--host", "127.0.0.1", "--port", "8001"],
       "port": 8001,
       "url": "http://localhost:8001"
+    },
+    {
+      "_comment": "macOS. Reads REACT_APP_BACKEND_URL from frontend/.env.",
+      "name": "mac-frontend",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "BROWSER=none npm --prefix frontend run start"],
+      "port": 3000,
+      "url": "http://localhost:3000"
+    },
+    {
+      "_comment": "macOS. The fixture API (scripts/fixture-server.mjs) — no database, no backend. Start it before mac-frontend to see the app with data in it.",
+      "name": "mac-fixture-api",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "FIXTURE_CORS_ORIGIN=http://localhost:3000 node frontend/scripts/fixture-server.mjs --port 8000"],
+      "port": 8000,
+      "url": "http://localhost:8000"
     }
   ]
 }

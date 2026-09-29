@@ -13,6 +13,7 @@
  * owner's decision to make, with the words in front of them.
  */
 import { roleLabel } from "../lib/departments";
+import { GlassSelect } from "./karma/GlassSelect";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Sparkle, Plus, Trash, CircleNotch } from "@phosphor-icons/react";
@@ -150,18 +151,28 @@ export function StageWorkReview({ model, roleOptions = [], onApplied }) {
                           {r.tasks.length === 0 && (
                             <p className="text-[11px] italic text-muted-foreground">No suggestion for this stage — add your own, or leave it empty.</p>
                           )}
+                          {/* 2026-09-29 — the same shape as the operating model
+                              editor, and for the same reason: this row was
+                              [title][department][drop] on one line, which does
+                              not fit a phone, and this is a step a new owner
+                              does ON their phone. The title takes the line; the
+                              department and the drop wrap under it. The picker
+                              was a native select, which opens the OS wheel. */}
                           {r.tasks.map((t, ti) => (
-                            <div key={ti} className="flex items-center gap-1.5">
-                              <input className={field} value={t.title} placeholder="What needs doing at this stage"
-                                onChange={(e) => setTask(i, ti, { title: e.target.value })}
-                                data-testid={`stage-work-task-${r.pipeline_key}-${r.stage_key}-${ti}`} />
-                              <select className={`${field} !w-auto`} value={t.role} onChange={(e) => setTask(i, ti, { role: e.target.value })}
-                                aria-label="Department">
-                                <option value="">Unassigned</option>
-                                {roleOptions.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-                              </select>
-                              <button type="button" onClick={() => dropTask(i, ti)} title="Drop this"
-                                className="p-1 text-muted-foreground hover:text-kr-accent"><Trash size={14} weight="bold" /></button>
+                            <div key={ti} className="space-y-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <input className={`${field} min-w-0 flex-1`} value={t.title} placeholder="What needs doing at this stage"
+                                  onChange={(e) => setTask(i, ti, { title: e.target.value })}
+                                  data-testid={`stage-work-task-${r.pipeline_key}-${r.stage_key}-${ti}`} />
+                                <button type="button" onClick={() => dropTask(i, ti)} title="Drop this" aria-label="Drop this task"
+                                  className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted-foreground hover:text-kr-accent"><Trash size={14} weight="bold" /></button>
+                              </div>
+                              <GlassSelect variant="field" triggerClassName={`${field} h-[34px] justify-between text-left`}
+                                testid={`stage-work-role-${r.pipeline_key}-${r.stage_key}-${ti}`}
+                                value={t.role || ""} onChange={(v) => setTask(i, ti, { role: v })}
+                                placeholder="Unassigned" ariaLabel="Department"
+                                options={[{ value: "", label: "Unassigned" },
+                                          ...roleOptions.map((o) => ({ value: o.key, label: o.label }))]} />
                             </div>
                           ))}
                           {r.tasks.length < 6 && (

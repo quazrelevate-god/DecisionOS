@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { useSkyFade } from "../hooks/useSkyFade";
 import { usePulse } from "../hooks/usePulse";
-import { hasPerm } from "../lib/perms";
+import { hasPerm, roleLabel } from "../lib/perms";
 import { toast } from "sonner";
 import api, { formatApiError } from "../lib/api";
 import { timeAgo } from "../lib/format";
@@ -199,7 +199,9 @@ function WorkspaceSwitcher() {
           className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-900/[0.06] hover:text-slate-900 disabled:opacity-60">
           <Buildings size={15} className="shrink-0" />
           <span className="min-w-0 flex-1 truncate">{r.tenant_name}</span>
-          <span className="shrink-0 text-[11px] capitalize text-slate-500">{r.role}</span>
+          {/* The role held in ANOTHER company, whose role list this one has
+              never seen — so the humanised key is the best that is honest. */}
+          <span className="shrink-0 text-[11px] text-slate-500">{roleLabel(r.role, null, "")}</span>
         </button>
       ))}
       {canAddCompany && (
@@ -773,7 +775,13 @@ export default function Layout({ children }) {
                 </span>
                 <span className="hidden xl:block min-w-0 text-left leading-tight">
                   <span className="block max-w-[140px] truncate text-sm font-semibold">{user?.name}</span>
-                  <span className="block text-xs capitalize text-muted-foreground">{user?.role || "member"}</span>
+                  {/* 2026-09-29 — was `{user?.role}` under `capitalize`, which
+                      left the underscores in: every non-owner read
+                      "Accounts_&_buyer_payments" under their own name, on
+                      every screen. `capitalize` is gone with it, because the
+                      company's own label is already cased the way the owner
+                      typed it. */}
+                  <span className="block text-xs text-muted-foreground">{roleLabel(user?.role, tenant?.roles, "Member")}</span>
                 </span>
               </button>
             </PopoverTrigger>

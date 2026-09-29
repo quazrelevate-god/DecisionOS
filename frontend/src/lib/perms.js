@@ -80,6 +80,30 @@ export function userPerms(user) {
   return defaultPermsForRole(user.role);
 }
 
+/* HOW A ROLE READS (2026-09-29).
+
+   The header was printing the stored key: a member of Nila Garments saw
+   "Accounts_&_buyer_payments" under their own name on every screen, because
+   `{user.role}` with CSS `capitalize` only touches the first letter of each
+   word and leaves the underscores exactly where they are.
+
+   The company's own words come first — the owner names their roles in
+   Settings, and those labels are what everyone else should read. The
+   humanised key is the fallback for a role the current tenant does not list,
+   which is the normal case in the workspace switcher: the role held in
+   ANOTHER company, whose role list this one has never seen.
+
+   This is the third field to come here after the same bug (humanStage, then
+   TASK_STATUS_LABELS); a stored value on a founder's screen is a bug, not a
+   style, and it belongs in one place. */
+export function roleLabel(role, tenantRoles = null, fallback = "—") {
+  if (!role) return fallback;
+  if (role === "owner") return "Owner";
+  const named = (tenantRoles || []).find((r) => r.key === role);
+  if (named && named.label) return named.label;
+  return String(role).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function hasPerm(user, perm) {
   if (!user) return false;
   if (user.role === "owner") return true;

@@ -43,6 +43,7 @@ import {
 import { GlassSelect } from "../components/karma/GlassSelect";
 import { cn } from "@/lib/utils";
 import { opModel } from "../lib/operatingModel";
+import { roleLabel } from "../lib/perms";
 import { humanStage, taskStatusLabel, priorityLabel } from "../lib/format";
 import {
   isDemoTenant, demoDelta, demoDrivers, demoDrilldowns, demoDex,
@@ -84,11 +85,10 @@ const BAND_COPY = {
   "Needs work": "Key operational areas have challenges. Start with “Do these first”.",
 };
 
-const roleLabelFor = (roles, key) => {
-  if (key === "owner") return "Owner";
-  if (!key) return "—";
-  return roles.find((r) => r.key === key)?.label || key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-};
+/* The same words the header and everywhere else use (lib/perms.roleLabel);
+   this page had its own copy first, and one of them was always going to
+   drift. Argument order kept so the call sites below read unchanged. */
+const roleLabelFor = (roles, key) => roleLabel(key, roles);
 function initialsOf(name) {
   const parts = String(name || "").replace(/[_.-]+/g, " ").trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return "?";

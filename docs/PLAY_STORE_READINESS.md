@@ -7,7 +7,10 @@ bug report work is done and the app runs; nothing below is a bug. These are
 the things that stop an upload, or get one taken down after it is live.
 
 **Verdict: three hard blockers, none of them code you have to invent, plus one
-policy risk that needs a deliberate answer.** Everything else is Console work
+policy risk that needs a deliberate answer.** One of the three — self-service
+account deletion — was built on 2026-09-29 and is struck through below; the
+remaining two are the privacy policy and the PostHog decision, and the second
+decides the first. Everything else is Console work
 and an afternoon.
 
 ---
@@ -25,7 +28,7 @@ It has to be a live, public URL — not a PDF, not behind a login — and it has
 actually describe what DecisionOS collects. It cannot be generic boilerplate,
 because §1.3 below means the real answer is more than most templates cover.
 
-### 1.2 There is no way for a person to delete their own account
+### 1.2 ~~There is no way for a person to delete their own account~~ — DONE 2026-09-29
 
 Play's User Data policy: an app that lets people **create** an account must let
 them **request deletion of that account and its data** from inside the app, and
@@ -40,11 +43,27 @@ The good news is that the destructive half already exists and is audited:
 | Delete a member for good | `backend/routers/team.py` → `DELETE /users/{user_id}/forever` | tenant admin |
 | Consent export | `backend/routers/admin_compliance.py` | platform admin |
 
-So this is not "build deletion". It is "let the person themselves ask, route
-it to the machinery that already exists, and put a form on the web". The real
-design question is what deletion *means* for a founder who **is** the tenant —
-deleting them should probably offer to delete the workspace — versus a member,
-where it should not take the company's decisions with them.
+So this was not "build deletion" — it was routing the request to machinery
+that already existed. **Shipped:**
+
+| Piece | Where |
+|---|---|
+| In-app | Settings → Account → **Delete your account** |
+| The web URL for the Console | **`https://<host>/delete-account`** — public, works signed out |
+| The decision | `backend/routers/account.py` |
+| The erasing, shared with the admin route | `backend/services/tenant_wipe.py` |
+
+Three outcomes, decided per workspace, because a person is a mobile number
+and may sit in several: you **leave** one (your row goes, your number is
+freed, the company keeps its history), the workspace is **deleted** when you
+own it and nobody else is in it, and you are **blocked** when you own it and
+other people are — handing it over or removing them comes first. One blocked
+workspace stops the whole request, because half-deleting somebody is worse
+than not starting.
+
+**Put `https://<host>/delete-account` in the Console** under Data safety →
+Data deletion, once the host is settled (it is the same host B19 needs —
+[DEEP_LINKS.md](DEEP_LINKS.md)).
 
 ### 1.3 PostHog ships unconditionally, with session recording configured
 
@@ -196,8 +215,8 @@ contained and strictly better for a native app.
    decides §1.3, the privacy policy and the Data Safety form.
 2. **Decide the analytics posture** (off / events only / consented replay).
 3. **Write the privacy policy** — it can only be written truthfully after 1–2.
-4. **Build self-service account deletion** — in-app, plus a web form. The
-   backend half exists.
+4. ~~Build self-service account deletion~~ — **done**. Give the Console
+   `https://<host>/delete-account` once the host is settled.
 5. Back up the keystore; opt into Play App Signing.
 6. Console: Data Safety, content rating, target audience, listing assets, and
    the demo-login instructions under App access.

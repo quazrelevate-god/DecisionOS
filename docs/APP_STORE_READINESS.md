@@ -5,6 +5,9 @@
 The sibling of [PLAY_STORE_READINESS.md](PLAY_STORE_READINESS.md), which covers
 Google Play and is in good shape. This one covers Apple, which is **not**.
 
+For the running order rather than the audit — from installing Xcode to
+submitting — see [APP_STORE_PUBLISHING.md](APP_STORE_PUBLISHING.md).
+
 Audited the same way: against what Apple actually rejects for, not against code
 quality. Everything below was read out of `frontend/ios/` and `frontend/src/`
 on the current branch.

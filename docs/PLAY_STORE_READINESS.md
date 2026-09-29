@@ -5,6 +5,9 @@
 Apple's half of this is [APP_STORE_READINESS.md](APP_STORE_READINESS.md), and
 it is in much worse shape — read it before promising an iOS date.
 
+For the running order rather than the audit, see
+[PLAY_STORE_PUBLISHING.md](PLAY_STORE_PUBLISHING.md).
+
 Audited against what Play actually rejects for, not against code quality. The
 bug report work is done and the app runs; nothing below is a bug. These are
 the things that stop an upload, or get one taken down after it is live.

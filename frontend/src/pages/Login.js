@@ -200,7 +200,15 @@ export default function Login() {
   const submitOtp = async (e) => {
     e.preventDefault(); setError(""); setBusy(true);
     try { await loginWithOtp(otpPhone, otpCode, otpTenant, invite?.token); navigate("/"); }
-    catch (err) { setError(formatApiError(err.response?.data?.detail) || "Failed"); }
+    catch (err) {
+      setError(formatApiError(err.response?.data?.detail) || "Failed");
+      /* B18 (2026-09-29) — A REFUSED CODE WAS LEFT IN THE BOXES. The founder
+         then had to clear six of them by hand before they could try the one
+         their phone had just received, on the screen where they are already
+         annoyed. Emptied, with the caret back in the first box. */
+      setOtpCode("");
+      requestAnimationFrame(() => document.querySelector('[data-testid="otp-box-0"]')?.focus());
+    }
     finally { setBusy(false); }
   };
 

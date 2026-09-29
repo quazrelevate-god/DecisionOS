@@ -273,6 +273,29 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
     setShowRefine(true);
   });
 
+  // B17 — how many times the build has been asked for and refused.
+  const [tries, setTries] = useState(0);
+  /* B17 — the way out that does not depend on the interview: the stateless
+     builder, on the founder's own words. Shallower than the interview's
+     blueprint by design — it is a setup they can live with today and change
+     from Settings tomorrow, which beats being stuck. */
+  const generateBasic = async () => {
+    setError(""); setPct(0); setLine(0); setStage("building");
+    try {
+      const { data } = await api.post("/onboarding/os-blueprint", {
+        industry: payload.industry || "General", company_size: payload.company_size,
+        description: payload.description || "",
+      });
+      setBp(data);
+      setWelcome(data.welcome_line || "");
+      onBlueprint?.(data);
+      setPct(100);
+      setTimeout(() => setStage("preview"), 450);
+    } catch (e) {
+      setError(formatApiError(e.response?.data?.detail) || "Couldn't build your OS. Please try again.");
+    }
+  };
+
   const generate = async () => {
     setError(""); setPct(0); setLine(0); setStage("building");
     try {
@@ -662,13 +685,36 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
               </>
             )}
 
+            {/* B17 (2026-09-29) — "Try again" WAS THE ONLY DOOR. If the build
+                kept failing — the AI service down, a phone on one bar — the
+                founder was held on this screen at the end of the whole signup,
+                with one button that had already not worked. The second failure
+                is where that stops being a retry and starts being a trap, so
+                that is where the other way out appears:
+                a basic setup they can change afterwards, which is the
+                stateless builder — the same one "Skip the interview" uses. */}
             {error && (
               <div className="mt-8">
                 <p data-testid="build-error" className="text-sm text-danger-600 font-semibold mb-3">{error}</p>
-                <button onClick={generate} data-testid="build-retry"
+                <button onClick={() => { setTries((n) => n + 1); generate(); }} data-testid="build-retry"
                   className="kr-pop mx-auto flex h-11 items-center rounded-pill bg-kr-ink px-6 text-sm font-medium text-white">
                   Try again
                 </button>
+                {tries >= 1 && (
+                  <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                    {/* No "Back to the interview" here, though the report asked
+                        for one: KM-62 settled that deliberately — VoiceInterview
+                        posts /interview/start on mount, so stepping back into it
+                        mints a NEW session and discards every answer already
+                        given. A way out that quietly destroys their work is not
+                        a way out. */}
+                    <button type="button" data-testid="build-basic"
+                      onClick={() => { setError(""); setTries(0); generateBasic(); }}
+                      className="kr-pop flex h-11 items-center rounded-pill px-5 text-sm font-medium text-foreground">
+                      Start with a basic setup
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </motion.div>

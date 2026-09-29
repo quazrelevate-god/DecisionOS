@@ -50,11 +50,17 @@ export function WebsiteIntel({ companyName, onDone, onBack }) {
     return () => clearInterval(scanTimer.current);
   }, [stage]);
 
+  /* B16 — set when the founder walks away from the scan, so the answer that
+     arrives afterwards is dropped rather than replacing the screen they have
+     moved on to. */
+  const skipped = useRef(false);
   const analyse = async () => {
     if (!url.trim()) return;
+    skipped.current = false;
     setStage("scanning"); setScanLine(0);
     try {
       const { data } = await api.post("/signup/website-intel", { url: url.trim(), company_name: companyName });
+      if (skipped.current) return;
       if (data.fetched) {
         setIntel(data);
         setIndustry(data.industry || "");
@@ -74,9 +80,11 @@ export function WebsiteIntel({ companyName, onDone, onBack }) {
          scanner — it is just that some sites refuse to be read. */
       setFailure(data.reason || "unreadable");
     } catch (e) {
+      if (skipped.current) return;
       console.debug("website-intel scan failed — falling back to manual", e);
       setFailure("unreachable");
     }
+    if (skipped.current) return;
     setStage("manual");
   };
 
@@ -163,6 +171,18 @@ export function WebsiteIntel({ companyName, onDone, onBack }) {
               <motion.p key={scanLine} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
                 className="text-sm text-muted-foreground">{SCAN_LINES[scanLine]}</motion.p>
             </AnimatePresence>
+            {/* B16 (2026-09-29) — A WAY OUT WHILE IT SCANS. Back is deliberately
+                off during the scan and there was nothing else, so a founder
+                whose site is slow — or who is on a train — watched a dial with
+                no way to move on. The scan is a shortcut, never a gate: the
+                manual step asks the same two questions. What comes back after
+                this is pressed is ignored (`skipped`), so a late answer cannot
+                yank the screen out from under them. */}
+            <button type="button" data-testid="signup-website-skip"
+              onClick={() => { skipped.current = true; setFailure(""); setStage("manual"); }}
+              className="kr-pop mx-auto mt-8 flex h-11 items-center rounded-pill px-5 text-sm font-medium text-foreground">
+              Skip — I'll enter it myself
+            </button>
           </motion.div>
         )}
 

@@ -4,6 +4,21 @@
  * the founder's mobile needs the same thing, and a code typed into two
  * different-looking inputs on two screens is one input too many. Paste fills
  * from the box it lands in; Backspace walks back; arrows move.
+ *
+ * B18 (2026-09-29) · THREE THINGS AN ANDROID KEYBOARD DOES DIFFERENTLY.
+ *
+ * 1. THE CODE IS NOT OFFERED. Android reads the SMS and offers the code above
+ *    the keyboard — but only to a field that says it is expecting one.
+ *    `autoComplete="one-time-code"` is that declaration, and nothing here had
+ *    it, so every founder typed a code their phone had already read.
+ * 2. BACKSPACE ON AN EMPTY BOX DID NOTHING. Gboard and Samsung's keyboard
+ *    often report keyCode 229 / "Unidentified" for a composing key rather
+ *    than "Backspace", so the keydown branch never ran. An empty box that is
+ *    cleared reports it through `change` with an empty value — which this
+ *    ignored outright (`if (!d) return`). It walks back from there too now,
+ *    so the founder's thumb does the same thing on every keyboard.
+ * 3. THE BOXES DID NOT SAY WHAT THEY WERE. Six unlabelled inputs read as six
+ *    unrelated fields to a screen reader.
  */
 import { useRef } from "react";
 
@@ -19,7 +34,13 @@ export default function OtpBoxes({ value, onChange, disabled, testid = "otp-boxe
 
   const handleChange = (i) => (e) => {
     const d = e.target.value.replace(/\D/g, "");
-    if (!d) return;
+    /* B18 — an empty value is a DELETION, and on the keyboards that do not
+       send a Backspace keydown it is the only signal we get. */
+    if (!d) {
+      if (digits[i]) setAt(i, "");
+      else if (i > 0) { setAt(i - 1, ""); refs.current[i - 1]?.focus(); }
+      return;
+    }
     if (d.length > 1) {
       // pasted / multi-char: fill from current box
       const chars = d.slice(0, 6 - i).split("");
@@ -50,6 +71,11 @@ export default function OtpBoxes({ value, onChange, disabled, testid = "otp-boxe
           ref={(el) => (refs.current[i] = el)}
           data-testid={`otp-box-${i}`}
           inputMode="numeric"
+          /* B18 — the SMS suggestion appears over the field that declares it.
+             On the first box only: Android fills the whole code from there,
+             and six fields all claiming the code confuses the offer. */
+          autoComplete={i === 0 ? "one-time-code" : "off"}
+          aria-label={`Digit ${i + 1} of 6`}
           maxLength={6}
           autoFocus={i === 0}
           disabled={disabled}

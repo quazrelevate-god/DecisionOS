@@ -97,14 +97,34 @@ function initialsOf(name) {
 }
 
 export default function OperatingScore() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const userIdParam = searchParams.get("user") || null;
+  /* ?window=30|90 lives in the address so a refresh keeps it and the owner can
+     send somebody the same view. Anything else reads as all time — a stale or
+     hand-typed link should show the page, not an error. `replace`, because
+     flicking between periods is reading, not navigating, and nobody wants
+     twenty history entries for it. */
+  const rawWindow = searchParams.get("window") || "all";
+  const windowKey = ["30", "90"].includes(rawWindow) ? rawWindow : "all";
+  const setWindow = (next) => setSearchParams((prev) => {
+    const p = new URLSearchParams(prev);
+    if (next && next !== "all") p.set("window", next); else p.delete("window");
+    return p;
+  }, { replace: true });
 
   const { data, isLoading } = useQuery({
-    queryKey: ["operating-score", userIdParam],
+    queryKey: ["operating-score", userIdParam, windowKey],
     queryFn: () => api
-      .get("/operating-score", { params: userIdParam ? { user_id: userIdParam } : {} })
+      .get("/operating-score", {
+        params: {
+          ...(userIdParam ? { user_id: userIdParam } : {}),
+          ...(windowKey !== "all" ? { window: Number(windowKey) } : {}),
+        },
+      })
       .then((r) => r.data),
+    // The previous period stays on screen while the next one loads, so the
+    // page does not blink back to skeletons on every flick of the picker.
+    placeholderData: (prev) => prev,
   });
 
   // The URL already says which page is coming, so the waiting shape is the
@@ -112,12 +132,38 @@ export default function OperatingScore() {
   if (isLoading || !data) return <OperatingScoreSkeleton person={Boolean(userIdParam)} />;
 
   const isOwnerView = data.view === "owner" || Boolean(data.company);
-  return isOwnerView ? <OwnerView data={data} /> : <SelfView data={data} />;
+  const win = { windowKey, onWindow: setWindow };
+  return isOwnerView ? <OwnerView data={data} {...win} /> : <SelfView data={data} {...win} />;
 }
 
 // ─── page furniture ──────────────────────────────────────────────────────────
 
-function PageHeader({ title, subtitle }) {
+/* 2026-09-29 — THE SCOPE IS A CHOICE NOW. It used to be a statement: the
+   scores counted everything on record, so a period picker would have had
+   nothing to change. That was honest and it answered the wrong question. A
+   workshop that had a bad September carried it for the rest of its life, and
+   an owner asking "are we better than last month?" got the same figure either
+   way — worse, Execution mixed the two clocks, counting completion over all
+   time and the overdue penalty as of right now.
+
+   The rule is one sentence, and the header says it rather than making anyone
+   infer it: a window narrows the FINISHED work to what finished inside it,
+   and everything still open counts however old it is. Open work is never
+   filtered — a task raised in March and still not done is a live problem
+   today, and hiding it behind a 30-day window would flatter exactly the team
+   that needs telling. */
+const WINDOW_OPTIONS = [
+  { value: "all", label: "All time" },
+  { value: "30", label: "Last 30 days" },
+  { value: "90", label: "Last 90 days" },
+];
+const WINDOW_NOTE = {
+  all: "Every task, decision and complaint on record.",
+  30: "Work finished in the last 30 days. Everything still open counts, however old.",
+  90: "Work finished in the last 90 days. Everything still open counts, however old.",
+};
+
+function PageHeader({ title, subtitle, windowKey, onWindow }) {
   return (
     <StickyHeader className="mb-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -125,12 +171,14 @@ function PageHeader({ title, subtitle }) {
           <h1 className="font-display text-3xl sm:text-4xl">{title}</h1>
           {subtitle && <p className="mt-1.5 text-sm text-muted-foreground sm:text-base" data-testid="operating-subtitle">{subtitle}</p>}
         </div>
-        {/* The scope, stated rather than offered: the scores count everything
-            on record, so a period picker would have nothing to change. */}
-        <span data-testid="operating-scope" title="Scores count every task, decision and complaint on record."
-          className={`inline-flex h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-sm font-medium text-slate-700 ${GLASS_PILL}`}>
-          <CalendarBlank size={17} aria-hidden="true" /> All time
-        </span>
+        <div className="flex shrink-0 flex-col items-end gap-1.5" data-testid="operating-scope">
+          <GlassSelect value={windowKey} onChange={onWindow} options={WINDOW_OPTIONS}
+            icon={CalendarBlank} ariaLabel="What these numbers cover" testid="operating-window" />
+          <span className="max-w-[16rem] text-right text-[11px] leading-snug text-slate-500"
+            data-testid="operating-window-note">
+            {WINDOW_NOTE[windowKey]}
+          </span>
+        </div>
       </div>
     </StickyHeader>
   );
@@ -245,20 +293,34 @@ const UNSCORED_WORDS = {
    cannot keep its promise is worse than no control: the card says what the
    category MEASURES instead, which is true and useful, and the formula behind
    it is one tap away under "How is this calculated?". */
-function CategoryCard({ cat, value, reason, onOpen, canDrill = false }) {
+const CAT_CARD_CLS = `group flex min-w-0 flex-col p-4 text-left transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_40px_-18px_hsl(150_15%_20%/0.35)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 motion-reduce:transition-none ${CARD}`;
+
+/* 2026-09-29 — FINANCE OPENS THE FINANCE PAGE (`to`).
+   Yokesh, pushing back on a broader suggestion of mine and rightly: money
+   belongs on the Finance page, not duplicated here. What was left of the
+   point is narrower. Finance carries 25% of the overall score and was the one
+   category you could not click into at all: the other three at least say what
+   they measure, and Finance showed a number, or a dash, and stopped. Every
+   other figure on this page now leads somewhere; this one led nowhere.
+   So it is a link, not a new section — and only for somebody who may see the
+   money, since the Finance page would bounce anyone else. When it is
+   unscored the card keeps saying so ("Nothing to score yet — left out of the
+   total"), because that sentence is the honest part and it is also exactly
+   when an owner should go and raise an invoice. */
+function CategoryCard({ cat, value, reason, onOpen, canDrill = false, to = null }) {
   const has = value != null;
   const opens = has && canDrill;
+  const linkTo = !opens && to ? to : null;
   const why = UNSCORED_WORDS[reason] || UNSCORED_WORDS.no_access;
-  return (
-    <button type="button" onClick={opens ? onOpen : undefined} disabled={!opens} data-testid={`operating-cat-${cat.key}`}
-      data-unscored={has ? undefined : (reason || "no_access")}
-      aria-label={opens ? `${cat.label}: ${value} out of 100 — see breakdown`
-        : has ? `${cat.label}: ${value} out of 100 — ${cat.plain}` : `${cat.label}: ${why}`}
-      className={`group flex min-w-0 flex-col p-4 text-left transition-[transform,box-shadow] duration-200 enabled:hover:-translate-y-0.5 enabled:hover:shadow-[0_18px_40px_-18px_hsl(150_15%_20%/0.35)] disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 motion-reduce:transition-none ${CARD}`}>
+  const label = opens ? `${cat.label}: ${value} out of 100 — see breakdown`
+    : has ? `${cat.label}: ${value} out of 100 — ${cat.plain}${linkTo ? ". Open Finance" : ""}`
+      : `${cat.label}: ${why}${linkTo ? ". Open Finance" : ""}`;
+  const body = (
+    <>
       <span className="flex w-full items-center gap-2 text-[15px] font-medium text-slate-800">
         <cat.icon size={18} aria-hidden="true" className="shrink-0 text-slate-600" />
         <span className="min-w-0 flex-1 truncate">{cat.label}</span>
-        {opens && <CaretRight size={13} weight="bold" aria-hidden="true" className="shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5" />}
+        {(opens || linkTo) && <CaretRight size={13} weight="bold" aria-hidden="true" className="shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5" />}
       </span>
       <span className="mt-3 flex items-baseline gap-1.5">
         <span className="font-display text-4xl leading-none text-slate-900 tabular-nums">{has ? value : "—"}</span>
@@ -269,6 +331,23 @@ function CategoryCard({ cat, value, reason, onOpen, canDrill = false }) {
         {opens ? <>See breakdown <CaretRight size={11} weight="bold" aria-hidden="true" /></>
           : has ? <span className="line-clamp-2">{cat.plain}</span> : why}
       </span>
+    </>
+  );
+  if (linkTo) {
+    return (
+      <Link to={linkTo} data-testid={`operating-cat-${cat.key}`}
+        data-unscored={has ? undefined : (reason || "no_access")}
+        aria-label={label} className={CAT_CARD_CLS}>
+        {body}
+      </Link>
+    );
+  }
+  return (
+    <button type="button" onClick={opens ? onOpen : undefined} disabled={!opens} data-testid={`operating-cat-${cat.key}`}
+      data-unscored={has ? undefined : (reason || "no_access")}
+      aria-label={label}
+      className={`${CAT_CARD_CLS} disabled:translate-y-0 disabled:cursor-default disabled:shadow-none disabled:hover:translate-y-0`}>
+      {body}
     </button>
   );
 }
@@ -321,6 +400,78 @@ function DoTheseFirst({ actions, onDrill, note, sub = "Key actions to improve yo
         </ul>
       ) : (
         <p className="mt-5 text-sm text-slate-500" data-testid="operating-next-moves-empty">Nothing urgent right now — keep the rhythm going.</p>
+      )}
+    </section>
+  );
+}
+
+/* WHERE THE WORK IS PILING UP (2026-09-29).
+
+   Yokesh, walking the page: "it ranks people but never names the bottleneck".
+   The table underneath says Anand is 0 and Priya is 18, which is a verdict on
+   two people, not an answer to the question an owner-led workshop actually
+   asks — which card is jammed, and who is holding it. The clock that knows
+   already existed (services/workflow_timing.card_timing, the same one the
+   Desk and the stuck alert read); nothing had asked it for a ranking.
+
+   Two different complaints are kept apart rather than blurred into one
+   "stuck": OVER means the stage is taking longer than the board allows,
+   IDLE means nobody has touched the card at all. A card can be idle without
+   being over, on a generous stage, and over without being idle, when someone
+   is working on it and it is simply slow — and the fix is different. */
+function Bottlenecks({ cards }) {
+  const jams = cards || [];
+  return (
+    <section className={`mt-5 p-5 sm:p-6 ${CARD}`} data-testid="operating-bottlenecks">
+      <SectionHead icon={Warning} title="Where the work is stuck"
+        sub="Cards sitting longer than their stage allows, worst first." />
+      {jams.length === 0 ? (
+        <p className="py-4 text-sm text-slate-500" data-testid="operating-bottlenecks-empty">
+          Nothing is sitting — every card has moved inside the days its stage allows.
+        </p>
+      ) : (
+        <ul className="mt-4 divide-y divide-slate-900/[0.06] border-t border-slate-900/[0.06]">
+          {jams.map((c) => {
+            /* The two clocks. Whichever ran longer is the headline, because
+               that is the number beside it — the first browser pass showed
+               "4 working days over" next to a 7, which reads as a mistake.
+               The other clock follows in a clause when it has something to
+               add: over and idle are different complaints with different
+               fixes, and an owner wants both. "Nobody is on it" is not a
+               missing name — it is the finding. */
+            const days = (n) => `${n} working day${n === 1 ? "" : "s"}`;
+            const over = `${days(c.over_days)} over the ${c.stage_days} this stage allows`;
+            const why = c.idle_days > c.over_days
+              ? `not moved for ${days(c.idle_days)}` + (c.over_days ? `, and ${over}` : "")
+              : over;
+            const who = c.holders?.length
+              ? c.holders.map((h) => h.name).join(", ")
+              : c.open_tasks > 0 ? "nobody named on it" : "no open work on this stage";
+            return (
+              <li key={c.id}>
+                <Link to={`/workflows?wf=${encodeURIComponent(c.id)}${c.type ? `&wf_type=${encodeURIComponent(c.type)}` : ""}`}
+                  data-testid={`operating-jam-${c.id}`}
+                  className="group flex items-center gap-4 rounded-xl px-1 py-3.5 transition-colors hover:bg-white/60">
+                  <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-slate-700 ${TILE}`}>
+                    <Timer size={18} aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[15px] font-semibold text-slate-900">{c.title}</span>
+                    <span className="mt-0.5 block truncate text-xs text-slate-500">
+                      {c.stage_label} · {why} · with {who}
+                      {c.counterparty ? ` · ${c.counterparty}` : ""}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-baseline gap-1 text-rose-700">
+                    <span className="font-display text-2xl leading-none tabular-nums">{c.waiting_days}</span>
+                    <span className="text-xs">d</span>
+                  </span>
+                  <CaretRight size={14} weight="bold" aria-hidden="true" className="shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5" />
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </section>
   );
@@ -437,7 +588,7 @@ function OwnExecutionCard({ stats, title = "Your own execution", sub = "Your per
 
 // ─── owner view ──────────────────────────────────────────────────────────────
 
-function OwnerView({ data }) {
+function OwnerView({ data, windowKey, onWindow }) {
   const { tenant } = useAuth();
   const demo = isDemoTenant(tenant);
   const { company, stats, my_snapshot: mySnapshot } = data;
@@ -470,6 +621,7 @@ function OwnerView({ data }) {
       <PageHeader
         title="Operating Score"
         subtitle="A snapshot of your team's operational health. Identify gaps, take action, and keep things moving."
+        windowKey={windowKey} onWindow={onWindow}
       />
 
       {!enough ? (
@@ -492,7 +644,8 @@ function OwnerView({ data }) {
             <div className="grid grid-cols-2 gap-3 sm:gap-4" data-testid="operating-categories">
               {CATS.map((c) => (
                 <CategoryCard key={c.key} cat={c} value={company.categories[c.key]} reason={company.unscored?.[c.key]}
-                  canDrill={demo} onOpen={() => setDrillCat(c.key)} />
+                  canDrill={demo} onOpen={() => setDrillCat(c.key)}
+                  to={c.key === "finance" && data.can_finance ? "/finance" : null} />
               ))}
             </div>
             <DoTheseFirst actions={actions} onDrill={setDrillCat} note={demo ? demoDex.explainer : null} className="lg:col-span-2 xl:col-span-1" />
@@ -507,6 +660,8 @@ function OwnerView({ data }) {
               how fast, and whether it lands when it was promised. The same
               three numbers each person's page carries, over the company. */}
           <WorkMovesRow timing={stats.timing} company />
+
+          <Bottlenecks cards={data.bottlenecks} />
         </>
       )}
 
@@ -669,7 +824,7 @@ function TeamTable({ rows, offset, roles, continuation, continued }) {
 
 // ─── self view ───────────────────────────────────────────────────────────────
 
-function SelfView({ data }) {
+function SelfView({ data, windowKey, onWindow }) {
   const { tenant } = useAuth();
   const roles = tenant?.roles || [];
   /* The tenant's own words for a pipeline and its stages — the same ones the
@@ -712,6 +867,7 @@ function SelfView({ data }) {
       <PageHeader
         title={isViewAs ? `${self.name}'s operating view` : `Hi ${firstName} — here's how you're doing`}
         subtitle={isViewAs ? "Their work, what is open and what to do first." : "Your work, what is open and what to do first."}
+        windowKey={windowKey} onWindow={onWindow}
       />
 
       <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)_minmax(0,1.2fr)]">
@@ -747,22 +903,38 @@ function SelfView({ data }) {
       <WorkMovesRow timing={stats.timing} who={isViewAs ? firstName : null}
         approvals={approvals} />
 
-      <div className="mt-5 grid gap-4 md:grid-cols-3">
-        <BreakdownCard icon={ShieldCheck} label="Proof rate" value={`${stats.proof_upload_rate}%`} meter={stats.proof_upload_rate}
-          detail={`${_pctToCount(stats.proof_upload_rate, stats.completed)} of ${stats.completed} done with photo or voice`}
-          hint={stats.proof_upload_rate < 40 && stats.completed >= 3
+      {/* 2026-09-29 — ONLY THE CARDS WITH SOMETHING IN THEM. On the page of
+          somebody who has finished nothing, "Proof rate — 0 of 0 done with
+          photo or voice" and "Plans in use 0/0" took two thirds of the row to
+          say nothing: a proof rate over no finished work is not a low score,
+          it is an undefined one, and a reader cannot tell those apart from a
+          dash. Proof rate appears once there is finished work to carry proof;
+          Plans in use stays while there is enough work for the nudge to mean
+          something, because "hasn't used a Dex plan yet" IS the message. */}
+      <BreakdownRow cards={[
+        stats.completed > 0 && {
+          key: "proof", icon: ShieldCheck, label: "Proof rate",
+          value: `${stats.proof_upload_rate}%`, meter: stats.proof_upload_rate,
+          detail: `${_pctToCount(stats.proof_upload_rate, stats.completed)} of ${stats.completed} done with photo or voice`,
+          hint: stats.proof_upload_rate < 40 && stats.completed >= 3
             ? (isViewAs ? `${firstName} could attach a photo or voice update on the next done task` : "Attach a photo or voice update on your next done task")
-            : null} />
-        <BreakdownCard icon={ClipboardText} label="Plans in use" value={`${stats.plans_completed}/${stats.plans_used}`}
-          meter={stats.plans_used > 0 ? (stats.plans_completed / stats.plans_used) * 100 : null}
-          detail={`${stats.plans_used} accepted plan${stats.plans_used === 1 ? "" : "s"}, ${stats.plans_completed} finished`}
-          hint={stats.plans_used === 0 && stats.actionable >= 3
+            : null,
+        },
+        (stats.plans_used > 0 || stats.actionable >= 3) && {
+          key: "plans", icon: ClipboardText, label: "Plans in use",
+          value: `${stats.plans_completed}/${stats.plans_used}`,
+          meter: stats.plans_used > 0 ? (stats.plans_completed / stats.plans_used) * 100 : null,
+          detail: `${stats.plans_used} accepted plan${stats.plans_used === 1 ? "" : "s"}, ${stats.plans_completed} finished`,
+          hint: stats.plans_used === 0 && stats.actionable >= 3
             ? (isViewAs ? `${firstName} hasn't used a Dex plan yet` : "Ask Dex to plan your next big task")
-            : null} />
-        <BreakdownCard icon={Check} label="Actionable" value={String(stats.actionable)}
-          meter={stats.actionable > 0 ? (stats.completed / stats.actionable) * 100 : null}
-          detail={`${stats.completed} done + ${stats.open} open`} />
-      </div>
+            : null,
+        },
+        {
+          key: "actionable", icon: Check, label: "Actionable", value: String(stats.actionable),
+          meter: stats.actionable > 0 ? (stats.completed / stats.actionable) * 100 : null,
+          detail: `${stats.completed} done + ${stats.open} open`,
+        },
+      ]} />
 
       <section className={`mt-5 p-5 sm:p-6 ${CARD}`}>
         <div className="mb-3 flex items-center justify-between gap-3">
@@ -871,15 +1043,21 @@ function WorkMovesRow({ timing, who, company = false, approvals = null }) {
           detail={t.typical_days != null
             ? `The middle of ${t.closed} finished task${t.closed === 1 ? "" : "s"} — half went quicker, half took longer.`
             : `Nothing finished yet, so there is nothing to time.`} />
-        <BreakdownCard icon={CalendarBlank} label="Landed on time"
+        {/* 2026-09-29 — this counted only FINISHED work, and the browser showed
+            why that was wrong: "Overdue 14" sat four inches above "Landed on
+            time 100%", and a man with four dated tasks all past their date and
+            nothing finished was told there was nothing to judge. Work still
+            open past its date has already missed it. */}
+        <BreakdownCard icon={CalendarBlank} label="Hit their date"
           value={t.on_time_rate != null ? `${t.on_time_rate}%` : "—"}
           meter={t.on_time_rate != null ? t.on_time_rate : null}
           testid="ops-timing-on-time"
           detail={t.on_time_rate != null
-            ? `${onTimeCount} of ${t.dated} finished task${t.dated === 1 ? "" : "s"} that had a date landed by it.`
-            : `No finished task had a due date — work nobody dated cannot be early or late.`}
+            ? `${onTimeCount} of ${t.dated} dated task${t.dated === 1 ? "" : "s"} were done by their date`
+              + (t.late_open ? ` — ${t.late_open} ${t.late_open === 1 ? "is" : "are"} open and already past it.` : ".")
+            : `Nothing dated has come due yet — work nobody dated cannot be early or late.`}
           hint={t.on_time_rate != null && t.on_time_rate < 60
-            ? `More than a third of ${theirs} dated work lands late.` : null} />
+            ? `More than a third of ${theirs} dated work misses its date.` : null} />
         <BreakdownCard icon={ClipboardText} label="Oldest thing waiting"
           value={t.waiting_days != null ? String(t.waiting_days) : "—"}
           testid="ops-timing-waiting"
@@ -899,6 +1077,26 @@ function WorkMovesRow({ timing, who, company = false, approvals = null }) {
         )}
       </div>
     </section>
+  );
+}
+
+/* A row of however many cards there are. Tailwind needs the column class
+   spelled out, so it is picked from a map rather than built from a number —
+   a class assembled at runtime is one the build has never seen and will not
+   ship. Two cards in a three-column grid leave a hole that reads as a card
+   that failed to load, which is the bug this row exists to avoid. */
+const ROW_COLS = { 1: "md:grid-cols-1", 2: "md:grid-cols-2", 3: "md:grid-cols-3" };
+
+function BreakdownRow({ cards }) {
+  const shown = (cards || []).filter(Boolean);
+  if (!shown.length) return null;
+  return (
+    <div className={`mt-5 grid gap-4 ${ROW_COLS[shown.length] || "md:grid-cols-3"}`} data-testid="operating-breakdowns">
+      {shown.map((c) => (
+        <BreakdownCard key={c.key} icon={c.icon} label={c.label} value={c.value}
+          meter={c.meter} detail={c.detail} hint={c.hint} testid={`ops-breakdown-${c.key}`} />
+      ))}
+    </div>
   );
 }
 
@@ -1024,6 +1222,16 @@ function FormulaPanel({ open, panelRef }) {
         <div id="operating-formula-panel" className={`mb-6 space-y-4 p-5 sm:p-6 ${CARD}`} data-testid="operating-formula-panel">
           <p className="text-sm leading-relaxed text-slate-600">
             Overall is a weighted average across the four categories. Categories with no data yet are skipped and the remaining weights renormalize.
+          </p>
+          {/* Said here rather than left for somebody to discover: a payment
+              settles an invoice that may have been raised months earlier, so
+              "collected in the last 30 days" would divide two figures that do
+              not belong to each other. Finance reads all time whatever the
+              window says, and the reader is told. */}
+          <p className="text-sm leading-relaxed text-slate-600">
+            A window narrows the <strong className="font-semibold text-slate-900">finished</strong> work to what finished inside it;
+            everything still open counts however old it is. Finance is the exception — it always reads all time,
+            because a payment often settles an invoice raised long before it.
           </p>
           <div className="grid gap-3 md:grid-cols-2">
             {CATS.map((c) => (

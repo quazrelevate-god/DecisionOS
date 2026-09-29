@@ -5,7 +5,7 @@ employee stats, and the AI work-coach review. Pure compute over db reads +
 one LLM call; depends on core + stdlib + fastapi only, nothing from server.
 """
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import HTTPException
@@ -23,7 +23,7 @@ from routers.ledger import parse_amount as _amt
 # below used `due_date < now` with `now` a UTC timestamp, which made a task due
 # TODAY overdue all day.
 from services.task_timing import approvals_of, timing_of
-from shared.due import is_overdue
+from shared.due import IST, is_overdue
 
 
 # S9 (U8-09.5): shared short-TTL cache for the company operating view. The view
@@ -33,6 +33,49 @@ from shared.due import is_overdue
 # replicas and survives restarts -- the same pattern as the Desk narrative cache.
 # TTL-only invalidation (bump-on-write is a future option if fresher is needed).
 _OPS_CACHE_TTL_SECONDS = 90
+
+# 2026-09-29 — A REPORTING WINDOW, because "all time" answers the wrong
+# question. Every number here counted every task ever, so a workshop that had
+# a bad September carried it for the rest of its life, and an owner asking
+# "are we better than last month?" got the same figure either way. Worse, the
+# two halves of Execution were on different clocks: completion was all-time
+# (9 of 30 ever) while the overdue penalty was right now, so one bad fortnight
+# scored as if it were the company's whole history.
+#
+# THE RULE, and it is one sentence because the screen has to say it: a window
+# narrows the FINISHED work to what finished inside it, and everything still
+# open counts however old it is.
+#
+# Open work is deliberately never filtered. A task raised in March and still
+# not done is a live problem today, not history — and hiding it behind a
+# 30-day window would flatter exactly the team that needs telling, which is
+# the same mistake the on-time rate was making until this morning.
+WINDOWS = {30, 90}
+
+
+def _window_start(days):
+    """The first IST day inside the window, as YYYY-MM-DD. None = all time."""
+    if not days:
+        return None
+    return (datetime.now(timezone.utc).astimezone(IST).date() - timedelta(days=int(days) - 1)).isoformat()
+
+
+def _task_in_window(t: dict, start: Optional[str]) -> bool:
+    """Finished work counts when it finished inside the window; open work
+    always counts. A finished task we never dated (nothing left over from the
+    backfill should be in this state) is kept rather than silently dropped."""
+    if not start or t.get("status") not in ("done", "cancelled"):
+        return True
+    at = t.get("completed_at") or t.get("updated_at")
+    return not at or str(at)[:10] >= start
+
+
+def _decision_in_window(d: dict, start: Optional[str]) -> bool:
+    """Sales reads decisions raised in the window."""
+    if not start:
+        return True
+    at = d.get("created_at")
+    return not at or str(at)[:10] >= start
 
 
 # J8-09 (JOURNEY-1) — ...AND IT IS NO LONGER TTL-ONLY. 90 seconds of staleness
@@ -136,7 +179,7 @@ def _score_employees(tasks, members, now):
     return employees
 
 
-async def _company_operating_view(tid: str, viewer: dict, now: str) -> dict:
+async def _company_operating_view(tid: str, viewer: dict, now: str, window: Optional[int] = None) -> dict:
     """Compute the owner-facing company payload. Extracted so /operating-score
     can dispatch by role (Epic 7 Sprint 1 Phase A -- role split)."""
     can_finance = viewer.get("role") == "owner" or "finance" in user_perms(viewer)
@@ -144,7 +187,7 @@ async def _company_operating_view(tid: str, viewer: dict, now: str) -> dict:
     # S9 (U8-09.5): the view is identical for every viewer sharing the same
     # can_finance flag, so cache on (tenant, can_finance). Best-effort: any cache
     # error falls straight through to a live recompute.
-    cache_key = f"{tid}:{int(can_finance)}"
+    cache_key = f"{tid}:{int(can_finance)}:{window or 'all'}"
     try:
         cached = await db.operating_score_cache.find_one({"_id": cache_key}, {"_id": 0})
         if cached and _cache_fresh(cached.get("computed_at"), now, _OPS_CACHE_TTL_SECONDS) \
@@ -153,8 +196,11 @@ async def _company_operating_view(tid: str, viewer: dict, now: str) -> dict:
     except Exception as e:
         logger.warning(f"operating_score cache read failed: {e}")
 
+    start = _window_start(window)
     tasks = await db.tasks.find({"tenant_id": tid}, {"_id": 0}).to_list(2000)
-    decisions = await db.decisions.find({"tenant_id": tid}, {"_id": 0, "status": 1}).to_list(2000)
+    tasks = [t for t in tasks if _task_in_window(t, start)]
+    decisions = await db.decisions.find({"tenant_id": tid}, {"_id": 0, "status": 1, "created_at": 1}).to_list(2000)
+    decisions = [d for d in decisions if _decision_in_window(d, start)]
     complaints = await db.complaints.find({"tenant_id": tid}, {"_id": 0, "status": 1}).to_list(500)
 
     execution, done, open_tasks, overdue, actionable = _score_execution(tasks, now)
@@ -203,6 +249,17 @@ async def _company_operating_view(tid: str, viewer: dict, now: str) -> dict:
     members = await db.users.find({"tenant_id": tid}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(200)
     employees = _score_employees(tasks, members, now)
 
+    # 2026-09-29 — WHERE the work is piling up, not only who is behind. The
+    # leaderboard is a verdict on people; an owner-led workshop asks which
+    # card is jammed and who is holding it. Never windowed: a card stuck since
+    # March is stuck TODAY, and a period filter would hide the worst of them.
+    try:
+        from services.workflow_timing import bottlenecks
+        jams = await bottlenecks(tid, limit=3)
+    except Exception as e:
+        logger.warning(f"bottlenecks failed for {tid[:8]}...: {e}")
+        jams = []
+
     payload = {
         "company": {"overall": overall if enough_data else None, "categories": categories, "enough_data": enough_data,
                     "unscored": unscored},
@@ -215,7 +272,12 @@ async def _company_operating_view(tid: str, viewer: dict, now: str) -> dict:
                   "timing": timing_of(tasks, now),
                   "outstanding": round(total_billed - total_paid, 2) if can_finance else None},
         "employees": employees,
+        "bottlenecks": jams,
         "can_finance": can_finance,
+        # What the numbers cover, echoed back so the screen states its own
+        # scope rather than the reader assuming one. Finance is deliberately
+        # NOT windowed (see the note beside `unscored`), and says so.
+        "window": {"days": window, "since": start, "finance_windowed": False},
     }
     try:
         await db.operating_score_cache.update_one(
@@ -228,7 +290,7 @@ async def _company_operating_view(tid: str, viewer: dict, now: str) -> dict:
     return payload
 
 
-async def _self_operating_view(tid: str, viewer: dict, now: str) -> dict:
+async def _self_operating_view(tid: str, viewer: dict, now: str, window: Optional[int] = None) -> dict:
     """Compute a personal, contributor-facing operating view for any
     non-owner team member (Epic 7 Sprint 1 Phase A -- founder ask 2026-08-17:
     'if the team person login and go the ops it have to show the individuals
@@ -243,7 +305,7 @@ async def _self_operating_view(tid: str, viewer: dict, now: str) -> dict:
     """
     uid = viewer["id"]
     urole = viewer.get("role") or ""
-    stats = await compute_employee_stats(tid, viewer)
+    stats = await compute_employee_stats(tid, viewer, window)
     # 2026-09-29 — WHAT THIS PERSON'S SIGNATURE COSTS. Work waiting on an
     # approval is not the approver's own task, so it lands in nobody's Open
     # and nobody's Overdue: a manager who takes three days over every sign-off
@@ -318,15 +380,17 @@ async def _self_operating_view(tid: str, viewer: dict, now: str) -> dict:
         "my_open_work": my_open,
         "my_active_workflows": my_workflows,
         "peer_context": peer_context,
+        "window": {"days": window, "since": _window_start(window), "finance_windowed": False},
     }
 
 
-async def compute_employee_stats(tenant_id: str, target: dict) -> dict:
+async def compute_employee_stats(tenant_id: str, target: dict, window: Optional[int] = None) -> dict:
     uid, role = target["id"], target.get("role")
     now = datetime.now(timezone.utc).isoformat()
     tasks = await db.tasks.find(
         {"tenant_id": tenant_id, "$or": [{"assignee_id": uid}, {"assignee_id": None, "assignee_role": role}]},
         {"_id": 0}).to_list(3000)
+    tasks = [t for t in tasks if _task_in_window(t, _window_start(window))]
     done = [t for t in tasks if t.get("status") == "done"]
     open_tasks = [t for t in tasks if _is_open_task(t)]
     overdue = [t for t in open_tasks if is_overdue(t.get("due_date"), now)]

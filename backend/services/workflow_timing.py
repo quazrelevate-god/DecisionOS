@@ -46,6 +46,12 @@ _CLOSED = ("done", "cancelled")
 
 
 # ─────────────────────────────── pure helpers ──────────────────────────────
+def humanise(key: str) -> str:
+    """A stage key as words, for a pipeline the operating model has no label
+    for (a card from an older model, or one renamed since)."""
+    return str(key or "").replace("_", " ").strip().capitalize()
+
+
 def stage_obj(pipeline: Optional[dict], key: str) -> dict:
     for s in (pipeline or {}).get("stages") or []:
         if isinstance(s, dict) and s.get("key") == key:
@@ -241,6 +247,88 @@ async def warn_stuck_workflows(tenant_id: str, now: Optional[datetime] = None) -
                                       {"$set": {"stuck_notified_for": timing["idle_since"]}})
         flagged += 1
     return flagged
+
+
+# ─────────────────────────────── where it is jammed ───────────────────────
+
+async def bottlenecks(tenant_id: str, limit: int = 3, today=None) -> list:
+    """The cards work is piling up behind, worst first.
+
+    2026-09-29, from Yokesh's browser walk of the Ops page: "it ranks people
+    but never names the bottleneck". The leaderboard said Anand was 0 and
+    Priya 18, which is a verdict on two people and not an answer to the
+    question an owner-led workshop actually asks — WHERE IS THE WORK STUCK.
+    The clock that knows already exists (card_timing, the same one the Desk
+    and the stuck alert read); nothing had asked it for a ranking.
+
+    A card is a bottleneck when it is past the days its stage allows, or when
+    it has not moved for the board's stuck days. Both are reported, because
+    they are different complaints: OVER means the stage is taking longer than
+    it is meant to, IDLE means nobody has touched it at all — a card can be
+    idle without being over (a generous stage), and over without being idle
+    (somebody is working on it, it is just slow).
+
+    `holders` are the people with open work at that stage. An EMPTY holders
+    list is not a gap in the data — it is the finding: the card is late and
+    nobody is on it.
+    """
+    from services.ai.generators import tenant_operating_model
+
+    today = today or today_ist()
+    om = await tenant_operating_model(tenant_id)
+    pipes = {p.get("key"): p for p in (om.get("pipelines") or [])}
+    cards = await db.workflows.find(
+        {"tenant_id": tenant_id},
+        {"_id": 0, "id": 1, "title": 1, "type": 1, "stage": 1, "stages": 1, "history": 1,
+         "stage_events": 1, "created_at": 1, "target_date": 1, "counterparty": 1}).to_list(500)
+    # A card parked on its last stage is finished, not stuck.
+    active = [w for w in cards if w.get("stages") and w.get("stage") in w["stages"]
+              and w["stage"] != w["stages"][-1]]
+    if not active:
+        return []
+
+    tasks = await db.tasks.find(
+        {"tenant_id": tenant_id, "workflow_id": {"$in": [w["id"] for w in active]}},
+        {"_id": 0, "workflow_id": 1, "stage_key": 1, "status": 1, "updated_at": 1,
+         "assignee_id": 1, "assignee_role": 1}).to_list(5000)
+
+    names = {}
+    ids = {t.get("assignee_id") for t in tasks if t.get("assignee_id")}
+    if ids:
+        async for u in db.users.find({"tenant_id": tenant_id, "id": {"$in": list(ids)}},
+                                     {"_id": 0, "id": 1, "name": 1}):
+            names[u["id"]] = u.get("name")
+
+    out = []
+    for w in active:
+        at_stage = [t for t in tasks if t.get("workflow_id") == w["id"] and t.get("stage_key") == w["stage"]]
+        last_task = max((t.get("updated_at") for t in at_stage if t.get("updated_at")), default=None)
+        pipe = pipes.get(w.get("type"))
+        timing = card_timing(w, pipe, today, last_task)
+        over, idle = timing["stage_late_days"], (timing["idle_days"] if timing["stuck"] else 0)
+        if not over and not idle:
+            continue
+        open_at_stage = [t for t in at_stage if t.get("status") not in _CLOSED]
+        holders, seen = [], set()
+        for t in open_at_stage:
+            uid = t.get("assignee_id")
+            if uid and uid not in seen:
+                seen.add(uid)
+                holders.append({"id": uid, "name": names.get(uid) or "Someone"})
+        out.append({
+            "id": w["id"], "title": w.get("title"), "type": w.get("type"),
+            "stage": w.get("stage"),
+            "stage_label": stage_obj(pipe, w["stage"]).get("label") or humanise(w["stage"]),
+            "over_days": over, "idle_days": idle,
+            "waiting_days": max(over, idle),
+            "stage_days": timing["stage_days"],
+            "open_tasks": len(open_at_stage),
+            "holders": holders,
+            "counterparty": w.get("counterparty") or None,
+        })
+
+    out.sort(key=lambda c: (c["waiting_days"], c["over_days"]), reverse=True)
+    return out[:max(1, limit)]
 
 
 # ─────────────────────────────── one-time backfill ─────────────────────────

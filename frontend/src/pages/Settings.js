@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import api from "../lib/api";
+import api, { formatApiError } from "../lib/api";
 import { hasPerm, PERMISSIONS } from "../lib/perms";
 import { PageHeader } from "../components/common";
 import { CompanyDetails } from "../components/CompanyDetails";
@@ -689,6 +689,131 @@ function SignOutCard() {
   );
 }
 
+
+/* PLAY-1 (2026-09-29) · Deleting your own account.
+ *
+ * Google Play's User Data policy requires that an app which creates accounts
+ * lets people delete them — in the app, and from a public web page that needs
+ * no install (/delete-account). Until now erasure was admin-only, so the only
+ * way out of DecisionOS was to ask somebody with more power than you.
+ *
+ * The plan is FETCHED, never assumed. A person is a mobile number and may sit
+ * in several workspaces with a different answer in each — leave one, delete
+ * another, blocked on a third — and the only honest way to show that is to ask
+ * the server what would happen. Nothing is fetched until the button is
+ * pressed: everybody else pays nothing for a card they will never open.
+ *
+ * Not styled as chrome-level danger (DS-1: red means money or a deadline at
+ * risk). It borrows Team's "Erase for good" treatment, which is the same act
+ * performed on somebody else.
+ */
+function DeleteAccountCard() {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+  const [plan, setPlan] = useState(null);
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const look = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.get("/account/deletion");
+      setPlan(data);
+      setOpen(true);
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail) || "Couldn't check your account.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doIt = async () => {
+    setBusy(true);
+    try {
+      await api.post("/account/delete", { confirm: typed.trim() });
+      /* The session is already dead server-side; this clears the client so no
+         screen tries to render against a user who no longer exists. */
+      try { await logout(); } catch (e) { /* already gone */ }
+      navigate("/login", { replace: true });
+      toast.success("Your account is gone. Thank you for trying DecisionOS.");
+    } catch (e) {
+      const d = e?.response?.data?.detail;
+      toast.error(typeof d === "object" && d?.message ? d.message
+        : formatApiError(d) || "Couldn't delete the account.");
+      setBusy(false);
+    }
+  };
+
+  const blocked = (plan?.blocked || []).length > 0;
+  const phrase = plan?.confirm_phrase || "DELETE";
+
+  return (
+    <div className="kr-bento p-5 sm:p-6" data-testid="settings-delete-account">
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold">Delete your account</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Permanent. We&rsquo;ll show you exactly what goes before anything happens.
+          </p>
+        </div>
+        {!open && (
+          <button type="button" onClick={look} disabled={busy}
+            data-testid="delete-account-start"
+            className="shrink-0 rounded-pill px-4 py-2.5 text-sm font-medium text-kr-accent hover:bg-kr-accent/10 disabled:opacity-50">
+            {busy ? "Checking…" : "Delete my account"}
+          </button>
+        )}
+      </div>
+
+      {open && plan && (
+        <div className="mt-5 border-t border-slate-900/[0.06] pt-5" data-testid="delete-account-plan">
+          <ul className="space-y-3">
+            {(plan.workspaces || []).map((w) => (
+              <li key={w.tenant_id} className="text-sm">
+                <span className="font-medium text-foreground">{w.tenant_name || "Your workspace"}</span>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {w.outcome === "workspace_deleted"
+                    && "You're the only one here, so the whole workspace and everything in it is deleted — every record and every uploaded file."}
+                  {w.outcome === "you_leave"
+                    && "You leave and your account here goes, freeing your mobile number. The work you did stays in the company's history."}
+                  {w.outcome === "blocked" && w.reason}
+                </p>
+              </li>
+            ))}
+          </ul>
+
+          {blocked ? (
+            <div className="mt-5 flex justify-end">
+              <button type="button" onClick={() => { setOpen(false); setTyped(""); }}
+                className={PILL}>Close</button>
+            </div>
+          ) : (
+            <>
+              <label htmlFor="delete-confirm" className="mt-5 block text-xs text-muted-foreground">
+                Type <span className="font-mono font-semibold text-foreground">{phrase}</span> to confirm. This cannot be undone.
+              </label>
+              <input id="delete-confirm" value={typed} onChange={(e) => setTyped(e.target.value)}
+                data-testid="delete-account-confirm" autoComplete="off" autoCapitalize="characters"
+                className={`${FIELD} mt-2`} placeholder={phrase} />
+              <div className="mt-4 flex justify-end gap-2">
+                <button type="button" onClick={() => { setOpen(false); setTyped(""); }}
+                  disabled={busy} className={PILL}>Keep my account</button>
+                <button type="button" onClick={doIt}
+                  disabled={busy || typed.trim() !== phrase}
+                  data-testid="delete-account-confirm-button"
+                  className="rounded-pill bg-kr-accent px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40">
+                  {busy ? "Deleting…" : "Delete for good"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Settings() {
   // MPWA-11 (§8): rebuilt below lg as a row-list; desktop untouched. WE-04's
   // 8-cards-to-4-tabs restructure replaced this component wholesale, so the
@@ -756,6 +881,7 @@ export default function Settings() {
               out of the phone's More panel into Settings, but only the owner
               view rendered it, so on a phone a teammate could not sign out. */}
           <div className="mt-6"><SignOutCard /></div>
+          <div className="mt-6"><DeleteAccountCard /></div>
         </div>
       </div>
     );
@@ -849,6 +975,7 @@ export default function Settings() {
             <SecurityCard />
             <DelegationCard />
             <SignOutCard />
+            <DeleteAccountCard />
           </>
         )}
 

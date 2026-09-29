@@ -1,12 +1,13 @@
 {
-  "count": 357,
-  "sha": "ad6e0fadf3da341363f5f881e9099130175e2dbb9b9b90d40a4de6ab59ca351f",
+  "count": 360,
+  "sha": "118ac3d672d918b3a673a168b5ac2976f92faa84493214a01e690f3a0821c2ad",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
     "BaseHTTPMiddleware"
   ],
   "routes": [
+    "DELETE /api/account",
     "DELETE /api/admin/announcements/{aid}",
     "DELETE /api/admin/tenants/{tenant_id}",
     "DELETE /api/assets/{aid}",
@@ -32,6 +33,7 @@
     "DELETE /api/users/{user_id}/forever",
     "DELETE /api/workflows/{workflow_id}",
     "GET /api/",
+    "GET /api/account/deletion",
     "GET /api/admin/2fa/status",
     "GET /api/admin/admins",
     "GET /api/admin/ai-keys",
@@ -204,6 +206,7 @@
     "PATCH /api/users/{user_id}",
     "PATCH /api/workflows/{workflow_id}",
     "PATCH /api/workflows/{workflow_id}/advance",
+    "POST /api/account/delete",
     "POST /api/admin/2fa/confirm",
     "POST /api/admin/2fa/disable",
     "POST /api/admin/2fa/enroll",

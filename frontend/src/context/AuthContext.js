@@ -3,6 +3,8 @@ import api, { SESSION_LOST_EVENT } from "../lib/api";
 import { setViewerIsOwner } from "../lib/aiConsent";
 import { carryOverLocalDrafts } from "../lib/decisionDrafts";
 import { clearAllDrafts } from "../lib/drafts";
+/* B04 follow-up — which sentence CantReachUs is allowed to say. */
+import { rememberSessionHere, forgetSessionHere } from "../lib/sessionSeen";
 
 /* JOURNEY-1 J12 — what this browser keeps under a person's id (their My Work
    filters, mywork-prefs-<tenant>-<user>) goes when they sign out. */
@@ -88,6 +90,14 @@ export function AuthProvider({ children }) {
     // Runs once on mount to restore the session; deps intentionally empty.
   }, [askMe]);
 
+  /* B04 follow-up — one place, because there are four ways a user arrives
+     (cold start, sign in, register, accept an invite) and only two ways they
+     leave, and every one of them ends here. Deliberately NOT cleared when
+     `offline` goes true: not knowing is the whole reason the flag exists. */
+  useEffect(() => {
+    if (user) rememberSessionHere();
+  }, [user]);
+
   /* And it retries itself, so the founder never has to know to pull-to-refresh:
      when the device reports the network is back, ask once more. `online` fires
      on a real phone the moment a lift doors open. */
@@ -122,6 +132,7 @@ export function AuthProvider({ children }) {
         if (e?.response?.status === 401) {
           setUser(null);
           setTenant(null);
+          forgetSessionHere();          // settled: the session is gone
           toast.info("You were signed out. Sign in again to carry on.", { id: "session-lost" });
         }
       } finally {
@@ -249,6 +260,7 @@ export function AuthProvider({ children }) {
     }
     setUser(null);
     setTenant(null);
+    forgetSessionHere();
   };
 
   const refreshTenant = async () => {

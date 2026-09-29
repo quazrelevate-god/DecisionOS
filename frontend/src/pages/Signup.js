@@ -11,7 +11,7 @@ import { useAuth } from "../context/AuthContext";
 import { KarmaLogo } from "../components/karma/Logo";
 import { Check } from "@phosphor-icons/react";
 import { BasicsFlow } from "./onboarding/BasicsFlow";
-import { startOrResume, saveStep, clearDraft, formFromDraft, hasSavedAnswers } from "../lib/onboardingDraft";
+import { startOrResume, saveStep, clearDraft, formFromDraft, hasSavedAnswers, worldFromDraft, progressFromDraft } from "../lib/onboardingDraft";
 import { WebsiteIntel } from "./onboarding/WebsiteIntel";
 import { VoiceInterview } from "./onboarding/VoiceInterview";
 import { BuildReveal } from "./onboarding/BuildReveal";
@@ -102,6 +102,25 @@ export default function Signup() {
   const [languageCode, setLanguageCode] = useState("en-IN");
   const phaseIdx = PHASES.findIndex((p) => p.key === phase);
 
+  /* B05 (2026-09-29) — MOVING ON IS SAVED, not just arriving at the end.
+     The draft kept the typed answers and the finished blueprint and nothing
+     between them, so the website scan's findings and the interview's session
+     lived only here, in React state. A founder who was called away on question
+     four came back to "What's your company called?", scanned their site a
+     second time, and — because the scan's answer was the thing that had been
+     lost — registered a company whose industry said "General".
+     `goTo` is the only way the wizard changes phase now, and it writes what
+     the next phase will need before it draws it. Best effort by design: a
+     draft that cannot be saved must never block the founder in front of it. */
+  const goTo = (next, extra = {}) => {
+    setPhase(next);
+    const world_ = extra.world !== undefined ? extra.world : world;
+    const sid = extra.sessionId !== undefined ? extra.sessionId : sessionId;
+    const lang = extra.languageCode !== undefined ? extra.languageCode : languageCode;
+    if (world_) saveStep("world", world_);
+    saveStep("progress", { phase: next, session_id: sid || "", language_code: lang || "" });
+  };
+
   const interviewProfile = world && {
     company_name: form.company_name, founder_name: form.name, team_size: form.team_size,
     industry: world.industry, business_model: world.business_model,
@@ -176,6 +195,36 @@ export default function Signup() {
         const firstGap = order.find((k) => !String(saved[k] || "").trim());
         setBasicsStart(firstGap || order[0]);
         setResumed(true);
+
+        /* B05 — AND COME BACK TO WHERE THEY WERE, not to the first question.
+           The website scan is the slow, expensive step and it is the one the
+           old draft threw away; restoring it means a founder who was
+           interrupted does not sit through it twice, and does not register
+           with industry "General" because the scan's answer had gone.
+
+           WHAT IS AND IS NOT RESUMED. Basics with a gap in them still wins —
+           an unanswered question is the thing to go back for. Otherwise we
+           reopen at the furthest phase we can honestly serve:
+             · the blueprint was built  -> straight to it (as before)
+             · the interview finished   -> the build, with its session
+             · the scan finished        -> the interview, scan intact
+           A HALF-FINISHED INTERVIEW resumes at the interview's start, not at
+           question four: VoiceInterview mints a session on mount and the
+           server has no "give me this session's current question". Those
+           answers are on the server and not lost — reaching them needs the
+           backend ask in docs/ONBOARDING_RESUME_ASK.md. */
+        const savedWorld = worldFromDraft(stepData);
+        const prog = progressFromDraft(stepData);
+        if (savedWorld) setWorld(savedWorld);
+        if (prog.sessionId) setSessionId(prog.sessionId);
+        if (prog.languageCode) setLanguageCode(prog.languageCode);
+        if (!firstGap) {
+          const resumeAt = (stepData.os_blueprint) ? "build"
+            : prog.phase === "build" && prog.sessionId ? "build"
+            : savedWorld ? "interview"
+            : "";
+          if (resumeAt) setPhase(resumeAt);
+        }
       }
       setDraftReady(true);
     })();
@@ -344,11 +393,12 @@ export default function Signup() {
                     });
                   }
                 }}
-                onDone={() => setPhase(savedBlueprint ? "build" : "website")} />
+                onDone={() => goTo(savedBlueprint ? "build" : world ? "interview" : "website")} />
             ) : null
             )}
             {phase === "website" && (
-              <WebsiteIntel companyName={form.company_name.trim()} onBack={() => setPhase("basics")} onDone={(w) => { setWorld(w); setPhase("interview"); }} />
+              <WebsiteIntel companyName={form.company_name.trim()} onBack={() => goTo("basics")}
+                onDone={(w) => { setWorld(w); goTo("interview", { world: w }); }} />
             )}
             {phase === "interview" && (
               <VoiceInterview
@@ -360,9 +410,9 @@ export default function Signup() {
                    answer already given. The reveal has its own way to change
                    things — "Missing something? Tell Dex" edits the draft in
                    place, which is the safe version of the same intent. */
-                onBack={() => setPhase("website")}
-                onComplete={(sid, lang) => { setSessionId(sid); setLanguageCode(lang || "en-IN"); setPhase("build"); }}
-                onSkip={(sid, lang) => { setSessionId(sid); setLanguageCode(lang || "en-IN"); setPhase("build"); }}
+                onBack={() => goTo("website")}
+                onComplete={(sid, lang) => { setSessionId(sid); setLanguageCode(lang || "en-IN"); goTo("build", { sessionId: sid, languageCode: lang || "en-IN" }); }}
+                onSkip={(sid, lang) => { setSessionId(sid); setLanguageCode(lang || "en-IN"); goTo("build", { sessionId: sid, languageCode: lang || "en-IN" }); }}
               />
             )}
             {phase === "build" && (

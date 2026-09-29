@@ -204,8 +204,19 @@ export default function Login() {
   const unknownNumber = /not registered|no account is registered/i.test(error || "");
   const submitOtp = async (e) => {
     e.preventDefault(); setError(""); setBusy(true);
+    /* MOBILE-2 keeps `replace`: the sign-in screen must not sit behind the
+       Desk, where the phone's Back gesture would show it to somebody who has
+       just signed in. B18 adds the clearing of a refused code. */
     try { await loginWithOtp(otpPhone, otpCode, otpTenant, invite?.token); navigate("/", { replace: true }); }
-    catch (err) { setError(formatApiError(err.response?.data?.detail) || "Failed"); }
+    catch (err) {
+      setError(formatApiError(err.response?.data?.detail) || "Failed");
+      /* B18 (2026-09-29) — A REFUSED CODE WAS LEFT IN THE BOXES. The founder
+         then had to clear six of them by hand before they could try the one
+         their phone had just received, on the screen where they are already
+         annoyed. Emptied, with the caret back in the first box. */
+      setOtpCode("");
+      requestAnimationFrame(() => document.querySelector('[data-testid="otp-box-0"]')?.focus());
+    }
     finally { setBusy(false); }
   };
 
@@ -314,8 +325,10 @@ export default function Login() {
 
           {loginTab === "password" && (
             <form onSubmit={doLogin} className="space-y-4">
-              <input data-testid="login-email-input" type="email" className={inputCls} placeholder="Email" value={form.email} onChange={set("email")} required />
-              <input data-testid="login-password-input" type="password" className={inputCls} placeholder="Password" value={form.password} onChange={set("password")} required />
+              <input data-testid="login-email-input" type="email" autoComplete="email" inputMode="email"
+                autoCapitalize="none" autoCorrect="off" className={inputCls} placeholder="Email" value={form.email} onChange={set("email")} required />
+              <input data-testid="login-password-input" type="password" autoComplete="current-password"
+                className={inputCls} placeholder="Password" value={form.password} onChange={set("password")} required />
               {error && <p data-testid="auth-error" className="text-sm text-danger-600 font-semibold">{error}</p>}
               <button type="submit" disabled={busy} data-testid="auth-submit-button" className="kr-lift flex h-12 w-full items-center justify-center rounded-pill bg-kr-ink text-sm font-medium text-white disabled:opacity-50">{busy ? "…" : "Sign in"}</button>
               {/* 2026-09-17 — where a person looks for it: under the password
@@ -361,7 +374,10 @@ export default function Login() {
                 <>
                   <div>
                     <label className={labelCls}>Mobile number</label>
-                    <input data-testid="otp-phone-input" type="tel" className={`${inputCls} mt-1`} placeholder="Registered mobile number" value={otpPhone}
+                    {/* B29 — the phone's own keypad, and the number it already
+                        knows about itself. */}
+                    <input data-testid="otp-phone-input" type="tel" autoComplete="tel" inputMode="tel"
+                      className={`${inputCls} mt-1`} placeholder="Registered mobile number" value={otpPhone}
                       onChange={(e) => { setOtpPhone(e.target.value); setOtpChoices(null); setOtpTenant(null); }} required />
                   </div>
                   {otpChoices && (

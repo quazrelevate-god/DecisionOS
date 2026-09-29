@@ -273,6 +273,29 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
     setShowRefine(true);
   });
 
+  // B17 — how many times the build has been asked for and refused.
+  const [tries, setTries] = useState(0);
+  /* B17 — the way out that does not depend on the interview: the stateless
+     builder, on the founder's own words. Shallower than the interview's
+     blueprint by design — it is a setup they can live with today and change
+     from Settings tomorrow, which beats being stuck. */
+  const generateBasic = async () => {
+    setError(""); setPct(0); setLine(0); setStage("building");
+    try {
+      const { data } = await api.post("/onboarding/os-blueprint", {
+        industry: payload.industry || "General", company_size: payload.company_size,
+        description: payload.description || "",
+      });
+      setBp(data);
+      setWelcome(data.welcome_line || "");
+      onBlueprint?.(data);
+      setPct(100);
+      setTimeout(() => setStage("preview"), 450);
+    } catch (e) {
+      setError(formatApiError(e.response?.data?.detail) || "Couldn't build your OS. Please try again.");
+    }
+  };
+
   const generate = async () => {
     setError(""); setPct(0); setLine(0); setStage("building");
     try {
@@ -312,20 +335,46 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
      having the editor disappear from under a returning answer was the same
      disorientation in miniature — and the founder is often adding two things
      in a row. */
+  /* B06 (2026-09-29) — APPLY USED TO DO NOTHING FOR HALF THE FOUNDERS.
+     The guard read `!sessionId` and returned, silently: no spinner, no toast,
+     no change. Everybody who took "Skip the interview — build from what you
+     have" has no session, so for them this was an enabled button wired to
+     nothing, on the screen where they are being asked to trust what Dex built.
+
+     There are two ways to rebuild and the screen already knows both — it is
+     the same fork `generate` uses above. With a session, the refinement is
+     stored on it and the interview blueprint re-runs. Without one, the
+     stateless builder takes the founder's own description with the additions
+     appended, which is exactly what it was given the first time plus what
+     they have just asked for. `extras` accumulates, so a second addition does
+     not quietly drop the first. */
+  const [extras, setExtras] = useState([]);
   const submitRefinement = async () => {
     const text = refineText.trim();
-    if (!text || refining || !sessionId) return;
+    if (!text || refining) return;
     setRefining(true); setError("");
     try {
-      const { data } = await api.post("/signup/interview/refine", {
-        session_id: sessionId, refinement: text, language_code: languageCode || "en-IN",
-      });
+      let data;
+      if (sessionId) {
+        ({ data } = await api.post("/signup/interview/refine", {
+          session_id: sessionId, refinement: text, language_code: languageCode || "en-IN",
+        }));
+      } else {
+        const all = [...extras, text];
+        const described = [payload.description, `The founder also asked for: ${all.join("; ")}`]
+          .filter(Boolean).join("\n\n");
+        ({ data } = await api.post("/onboarding/os-blueprint", {
+          industry: payload.industry, company_size: payload.company_size, description: described,
+        }));
+        setExtras(all);
+      }
       setBp(data);
       setWelcome(data.welcome_line || welcome);
+      onBlueprint?.(data);
       setRefineText(""); refineRefText.current = "";
       toast.success("Dex rewired your OS with your addition.");
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Couldn't apply your refinement — try again");
+      toast.error(formatApiError(e.response?.data?.detail) || "Couldn't apply your addition — try again");
     } finally {
       setRefining(false);
     }
@@ -636,13 +685,36 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
               </>
             )}
 
+            {/* B17 (2026-09-29) — "Try again" WAS THE ONLY DOOR. If the build
+                kept failing — the AI service down, a phone on one bar — the
+                founder was held on this screen at the end of the whole signup,
+                with one button that had already not worked. The second failure
+                is where that stops being a retry and starts being a trap, so
+                that is where the other way out appears:
+                a basic setup they can change afterwards, which is the
+                stateless builder — the same one "Skip the interview" uses. */}
             {error && (
               <div className="mt-8">
                 <p data-testid="build-error" className="text-sm text-danger-600 font-semibold mb-3">{error}</p>
-                <button onClick={generate} data-testid="build-retry"
+                <button onClick={() => { setTries((n) => n + 1); generate(); }} data-testid="build-retry"
                   className="kr-pop mx-auto flex h-11 items-center rounded-pill bg-kr-ink px-6 text-sm font-medium text-white">
                   Try again
                 </button>
+                {tries >= 1 && (
+                  <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                    {/* No "Back to the interview" here, though the report asked
+                        for one: KM-62 settled that deliberately — VoiceInterview
+                        posts /interview/start on mount, so stepping back into it
+                        mints a NEW session and discards every answer already
+                        given. A way out that quietly destroys their work is not
+                        a way out. */}
+                    <button type="button" data-testid="build-basic"
+                      onClick={() => { setError(""); setTries(0); generateBasic(); }}
+                      className="kr-pop flex h-11 items-center rounded-pill px-5 text-sm font-medium text-foreground">
+                      Start with a basic setup
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </motion.div>

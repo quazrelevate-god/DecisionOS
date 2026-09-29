@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, ArrowLeft } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -18,6 +18,19 @@ import { devOtpFrom } from "../../lib/devOtp";
 // obvious), and every button is .kr-pop.
 const SIZES = ["1-10", "11-50", "51-200", "201-500", "500+"];
 const first = (name) => (name || "").trim().split(/\s+/)[0] || "";
+
+/* B29 (2026-09-29) — WHAT EACH ANSWER IS, told to the phone.
+   Without these the keyboard came up as a plain QWERTY for a mobile number,
+   autofill never offered the name or address the phone already holds, and an
+   email got a capital letter on its first character from Android's default
+   sentence casing — which a founder then had to notice and undo. */
+const AUTOFILL = {
+  phone:         { autoComplete: "tel", inputMode: "tel" },
+  name:          { autoComplete: "name", autoCapitalize: "words" },
+  company_name:  { autoComplete: "organization", autoCapitalize: "words" },
+  email:         { autoComplete: "email", inputMode: "email", autoCapitalize: "none", autoCorrect: "off" },
+  support_email: { autoComplete: "email", inputMode: "email", autoCapitalize: "none", autoCorrect: "off" },
+};
 
 const STEPS = [
   /* 2026-09-19 — required, a real Indian mobile, and confirmed by a texted
@@ -39,7 +52,10 @@ const STEPS = [
      the number is shown until the code confirms it, so a stranger's number
      still tells the typist nothing. */
   {
-    key: "phone", eyebrow: "Mobile sign-in", type: "tel", placeholder: "+91 98765 43210",
+    /* B28 — "Mobile sign-in" read as a heading for a screen that signs you
+       in, on the screen where somebody is signing UP. It is a label for the
+       thing being asked for. */
+    key: "phone", eyebrow: "Your mobile", type: "tel", placeholder: "+91 98765 43210",
     q: () => "Let's start with your mobile number.",
     sub: () => "This is how you sign in — we'll text a code to confirm it's yours.",
     validate: (v) => (normIndianMobile(v) ? "" : "Enter a 10-digit Indian mobile number"),
@@ -378,8 +394,13 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
           in, with no idea why. Say it once, on the step they land on. */}
       {resumed && step.key === initialStep && (
         <p data-testid="signup-resumed-note" className="mb-5 text-sm text-muted-foreground">
+          {/* B24 (2026-09-29) — "Just your password again" on a flow that has
+              no password step. Signing up has been a mobile and a texted code
+              since 2026-09-20; the sentence was left behind by that change and
+              told a returning founder to look for something that is not on
+              the screen. */}
           Welcome back{first(form.name) ? `, ${first(form.name)}` : ""} — we kept your answers.
-          {identityKnown ? " Carry on where you left off." : " Just your password again, and you're on."}
+          {" Carry on where you left off."}
         </p>
       )}
       <AnimatePresence mode="wait">
@@ -500,6 +521,13 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
                 ref={inputRef}
                 data-testid={`signup-input-${step.key}`}
                 type={step.type}
+                /* B29 — what each answer IS, so the phone offers what it
+                   already knows and raises the right keyboard. A name is
+                   capitalised per word; an address or a URL never is. */
+                autoComplete={AUTOFILL[step.key]?.autoComplete}
+                inputMode={AUTOFILL[step.key]?.inputMode}
+                autoCapitalize={AUTOFILL[step.key]?.autoCapitalize}
+                autoCorrect={AUTOFILL[step.key]?.autoCorrect}
                 placeholder={step.placeholder}
                 value={value}
                 onChange={(e) => setVal(e.target.value)}
@@ -555,6 +583,25 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
           className="kr-pop mt-8 flex h-9 items-center gap-1.5 rounded-pill px-4 text-xs font-medium text-muted-foreground">
           <ArrowLeft size={14} weight="bold" /> Back
         </button>
+      )}
+      {/* B12 (2026-09-29) — ON A PHONE THERE WAS NO WAY BACK TO SIGN IN. The
+          header's Sign in is `hidden lg:flex`, so somebody who tapped Register
+          by mistake — or came back a week later and forgot they already had a
+          workspace — had to use the system Back button to escape a screen
+          asking for their mobile number.
+          It goes UNDER the first question, not into the header: a link beside
+          the wordmark on the way IN is exactly what the founder had removed
+          from the sign-in screen, for the same reason. This sits after the
+          decision rather than over it, and only on the first step — past that
+          they are answering, not choosing. */}
+      {idx === 0 && (
+        <p className="mt-8 text-sm text-muted-foreground lg:hidden">
+          Already have an account?{" "}
+          <Link to="/login" data-testid="signup-basics-signin"
+            className="font-semibold text-foreground underline-offset-2 hover:underline">
+            Sign in
+          </Link>
+        </p>
       )}
       </div>
     </div>

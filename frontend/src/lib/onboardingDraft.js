@@ -119,5 +119,39 @@ export function formFromDraft(stepData) {
 /** True when there is enough saved to be worth offering a resume. */
 export function hasSavedAnswers(stepData) {
   const about = (stepData && stepData.about) || {};
-  return Boolean(about.company_name || about.name || about.email);
+  /* B25 (2026-09-29) — a confirmed mobile counts. Somebody who answered the
+     number and the code and then closed the app had "saved answers" by any
+     human reckoning, and this said no: the resume was not offered, the draft
+     was left behind, and the next visit texted them a second code for a number
+     they had already proved. */
+  return Boolean(about.company_name || about.name || about.email
+    || about.phone_verified_norm || about.phone_token);
+}
+
+/* B05 (2026-09-29) — WHAT THE SCAN FOUND, AND HOW FAR THEY GOT.
+   Both used to live only in React state, so killing the app anywhere after the
+   first screen threw away the website scan (the slowest, most expensive step
+   in the whole wizard) and the interview along with it. */
+
+/** What the website step established, as the interview and the build read it. */
+export function worldFromDraft(stepData) {
+  const w = (stepData && stepData.world) || null;
+  if (!w || !(w.industry || w.description || w.website_summary)) return null;
+  return {
+    industry: w.industry || "",
+    business_model: w.business_model || "",
+    description: w.description || "",
+    website_summary: w.website_summary || "",
+    products: Array.isArray(w.products) ? w.products : [],
+  };
+}
+
+/** How far the founder got: the phase, and the interview it belongs to. */
+export function progressFromDraft(stepData) {
+  const p = (stepData && stepData.progress) || {};
+  return {
+    phase: p.phase || "",
+    sessionId: p.session_id || "",
+    languageCode: p.language_code || "",
+  };
 }

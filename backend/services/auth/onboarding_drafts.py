@@ -38,7 +38,21 @@ from datetime import datetime, timezone
 from typing import Optional
 
 
-VALID_STEP_KEYS = {"about", "scale", "software", "team", "os_blueprint", "data_uploads"}
+# B05 (2026-09-29) — "world" and "progress" join the list.
+#
+# The draft kept the founder's typed answers and the finished blueprint, and
+# nothing in between. So everything the WEBSITE SCAN worked out — the industry,
+# the business model, the description, the products — and everything the
+# INTERVIEW was in the middle of lived only in the browser's memory. Kill the
+# app on question four and all of it went; the wizard reopened at "What's your
+# company called?", scanned the site again, and a resumed signup even
+# registered the company as industry "General", because the scan's answer was
+# the thing that had been lost.
+#
+#   world     what the scan (or the founder) established about the business
+#   progress  how far they got: the phase, the interview session, its language
+VALID_STEP_KEYS = {"about", "scale", "software", "team", "os_blueprint",
+                   "data_uploads", "world", "progress"}
 
 
 def _now_iso() -> str:

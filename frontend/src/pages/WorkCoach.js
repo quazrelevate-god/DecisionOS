@@ -74,12 +74,18 @@ export default function WorkCoach() {
         <Stat label="Completed Tasks" value={stats.completed} accent="text-green-600" />
         <Stat label="Open" value={stats.open} />
         <Stat label="Overdue" value={stats.overdue} accent={stats.overdue > 0 ? "text-danger-600" : ""} />
-        <Stat label="Completion" value={stats.completion_rate} suffix="%" />
+        {/* B15 (2026-09-29) — a brand-new workspace has completed nothing, so
+            the rate is null and this printed a bare "%". A unit with no number
+            in front of it is not a statistic; "—" is the app's own word for
+            "nothing to say yet". */}
+        <Stat label="Completion"
+          value={stats.completion_rate == null ? "—" : stats.completion_rate}
+          suffix={stats.completion_rate == null ? "" : "%"} />
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
         <div className="card-brutal p-4 flex items-center gap-3">
           <SealCheck size={22} weight="bold" className="text-brand-blue" />
-          <div><p className="label-mono text-muted-foreground">Proof uploads</p><p className="font-heading text-xl font-black">{stats.proof_upload_rate}%</p></div>
+          <div><p className="label-mono text-muted-foreground">Proof uploads</p><p className="font-heading text-xl font-black">{stats.proof_upload_rate == null ? "—" : `${stats.proof_upload_rate}%`}</p></div>
         </div>
         <div className="card-brutal p-4 flex items-center gap-3">
           <Target size={22} weight="bold" className="text-brand-600" />

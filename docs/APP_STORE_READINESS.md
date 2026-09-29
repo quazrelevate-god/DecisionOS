@@ -109,6 +109,21 @@ not in the app. Four insertions into `project.pbxproj` (file reference, build
 file, group, resources phase); the file still parses and the build file is
 present in the resources phase.
 
+### 1.5 ~~`CFBundleIconName` is missing~~ — FIXED 2026-09-29
+
+Found while pre-flighting the archive. An app that supplies its icon from an
+asset catalog — which this one does — must also name that catalog entry in
+`Info.plist`. Without it App Store Connect refuses the upload:
+
+> Missing Info.plist value. A value for the Info.plist key `CFBundleIconName`
+> is missing.
+
+`ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon` was already set in the build
+settings, so only the plist half was absent. Both now say `AppIcon`.
+
+This is the kind of thing that only surfaces at upload, which is the most
+expensive moment to find it.
+
 ### 1.4 ~~The app icon is still Capacitor's logo~~ — FIXED 2026-09-29, both platforms
 
 `ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png` is the blue
@@ -263,3 +278,94 @@ Longest-lead first, because the calendar matters more than the effort here.
 
 Steps 1 and 2 are the ones with calendar risk. 3–5 are an afternoon. Ship
 Android first — it is close, and it is not waiting on Apple.
+
+---
+
+## 7 · Producing the `.ipa`
+
+**This cannot be done on the machine this branch was built on** — no Xcode, no
+signing identity (`security find-identity` reports zero), no provisioning
+profile. All three are needed, and two of them require a paid Apple Developer
+account. What follows is the path on a Mac that has them.
+
+Everything in §1 and §2 is already done, so this should build first time.
+
+### Before you open Xcode
+
+**Install the JS dependencies.** `CapApp-SPM/Package.swift` depends on
+`@capacitor/app` by a *relative path* into `node_modules`. A fresh clone
+without `npm install` fails Swift package resolution with an error that does
+not mention npm, and it is a confusing five minutes.
+
+```bash
+cd frontend
+npm install
+npm run cap:sync:prod     # NOT cap:sync
+```
+
+`cap:sync:prod` is not optional, for the same reason it is not optional on
+Android: plain `cap:sync` reads `frontend/.env`, which says
+`http://localhost:8000`, and on a phone localhost is the phone. Every API call
+would fail, and a release build has no cleartext exemption to even try.
+
+### In Xcode
+
+```bash
+cd frontend && npx cap open ios
+```
+
+1. Select the **App** target → **Signing & Capabilities**.
+2. Set **Team** to your Apple Developer team. This is the only setting still
+   unset — `DEVELOPMENT_TEAM` is deliberately not committed, because it is
+   account-specific.
+3. Leave **Automatically manage signing** on. Xcode will create the App ID for
+   `com.decisionos.app` and the provisioning profile.
+4. Choose **Any iOS Device (arm64)** as the destination — an archive cannot be
+   made against a simulator.
+5. **Product → Archive.**
+6. In the Organizer that opens: **Distribute App**.
+
+### Which distribution to pick
+
+You asked for internal testing on a developer-account phone. There are two
+ways, and they are not the same thing:
+
+| | What it is | Review? | Who can install |
+|---|---|---|---|
+| **TestFlight internal** | upload to App Store Connect, add up to 100 internal testers | **no review** | anyone on your App Store Connect team |
+| **Development install** | Xcode installs straight onto a cabled device | none | that one registered device |
+
+**Take TestFlight.** It is the same binary, the same signing and the same
+upload pipeline you will use to submit, so it proves the whole path rather than
+just the app. Choose **App Store Connect → Upload**, then enable TestFlight
+internal testing in App Store Connect. Builds appear after processing, usually
+5–15 minutes.
+
+Use the development install only for a quick look before you have App Store
+Connect set up.
+
+### What will be checked on upload, and already passes
+
+Xcode validates before it transmits. The keys it fails on are all present and
+were verified on 2026-09-29: `CFBundleIdentifier`, `CFBundleShortVersionString`,
+`CFBundleVersion`, `CFBundleIconName`, `ITSAppUsesNonExemptEncryption`, the
+three usage descriptions, and `PrivacyInfo.xcprivacy` in Copy Bundle Resources.
+
+`ITSAppUsesNonExemptEncryption = false` means it will not stop to ask the export
+question.
+
+### After the first upload
+
+Bump **both** numbers for every subsequent upload — App Store Connect rejects a
+duplicate `CFBundleVersion` for the same version string. They live in the build
+settings as `MARKETING_VERSION` (1.0.1) and `CURRENT_PROJECT_VERSION` (2), and
+are currently matched by hand to Android's `variables.gradle`. Keep them in
+step.
+
+### Then, and only then, App Store Connect
+
+Screenshots (6.7" and 6.5" iPhone are the required sizes), description,
+keywords, support URL, the privacy nutrition label, age rating, and — most
+importantly for this app — the **App Review Information** notes carrying the
+tap-by-tap for "Try DecisionOS on a live workspace", because a reviewer cannot
+receive an Indian OTP. §4 covers why that one matters more than it looks.

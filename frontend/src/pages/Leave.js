@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { roleLabel } from "../lib/departments";
 import { hasPerm } from "../lib/perms";
 import { PageHeader, StickyHeader, EmptyState } from "../components/common";
 import { timeAgo } from "../lib/format";
@@ -76,7 +77,7 @@ export function RequestLeaveDialog({ onDone, triggerClassName }) {
      approvals for exactly the days of the leave, switched on when the leave
      is approved and off again by its own last date — nobody has to remember
      to hand it back. Only shown to somebody who has approvals to hand over. */
-  const { user } = useAuth();
+  const { user, tenant } = useAuth();
   const iApprove = user?.role === "owner"
     || ["approvals", "decisions_approve", "leave_approve"].some((p) => hasPerm(user, p));
   const membersQ = useQuery({
@@ -161,7 +162,7 @@ export function RequestLeaveDialog({ onDone, triggerClassName }) {
                 value={form.delegate_user_id} onChange={(v) => setForm({ ...form, delegate_user_id: v })}
                 options={[
                   { value: "", label: covers.length ? "Nobody — they wait for me" : "Nobody else to ask" },
-                  ...covers.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` })),
+                  ...covers.map((m) => ({ value: m.id, label: `${m.name} · ${roleLabel(m.role, tenant?.roles)}` })),
                 ]}
                 triggerClassName={`${inp} mt-1`} />
               <p className="mt-1.5 text-xs text-muted-foreground">
@@ -472,7 +473,7 @@ export function ApproverConfig({ roleOptions, members }) {
               value={map[r.key] || ""} onChange={(v) => setMap({ ...map, [r.key]: v })}
               options={[
                 { value: "", label: "Owner (default)" },
-                ...nonOwner.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` })),
+                ...nonOwner.map((m) => ({ value: m.id, label: `${m.name} · ${roleLabel(m.role, roleOptions)}` })),
                 ...members.filter((m) => m.role === "owner").map((m) => ({ value: m.id, label: `${m.name} · owner` })),
               ]} />
           </div>

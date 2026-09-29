@@ -12,6 +12,7 @@
  * company's staff start being assigned work automatically. That is the
  * owner's decision to make, with the words in front of them.
  */
+import { roleLabel } from "../lib/departments";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Sparkle, Plus, Trash, CircleNotch } from "@phosphor-icons/react";
@@ -142,7 +143,7 @@ export function StageWorkReview({ model, roleOptions = [], onApplied }) {
                         <input type="checkbox" checked={r.keep} onChange={(e) => setRow(i, { keep: e.target.checked })}
                           data-testid={`stage-work-keep-${r.pipeline_key}-${r.stage_key}`} className="h-4 w-4 accent-neutral-900" />
                         {r.stage_label}
-                        {r.role && <span className="text-[11px] font-normal text-muted-foreground">· {r.role}</span>}
+                        {r.role && <span className="text-[11px] font-normal text-muted-foreground">· {roleLabel(r.role)}</span>}
                       </label>
                       {r.keep && (
                         <div className="mt-2 space-y-1.5 pl-6">

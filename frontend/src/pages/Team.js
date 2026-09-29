@@ -37,6 +37,7 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { RequestLeaveDialog, STATUS_META, typeLabel } from "./Leave";
 // B11 — the dev OTP is ignored by a production build (lib/devOtp).
 import { devOtpFrom } from "../lib/devOtp";
+import { roleLabel } from "../lib/departments";
 
 const SHEET = `gap-5 rounded-[1.75rem] p-6 sm:rounded-[1.75rem] [&>button.absolute]:hidden ${GLASS_SHEET}`;
 /* 2026-09-16, founder: the profile pop-up is frosted glass like the Team tree's
@@ -71,9 +72,8 @@ const PERM_OFF = "bg-white/45 font-medium text-slate-600 ring-1 ring-inset ring-
 const NM_ICON_BTN = `grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-700 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 active:shadow-[inset_3px_3px_7px_hsl(226_18%_76%),inset_-3px_-3px_7px_hsl(0_0%_100%/0.95)] ${NM_RAISED}`;
 const COLLAPSE_KEY = "team.folded-branches";
 
-const humanize = (key) => String(key).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-const roleNameFor = (roles, key) =>
-  key === "owner" ? "Owner" : roles.find((r) => r.key === key)?.label || (key ? humanize(key) : "Unassigned");
+/* One implementation, in lib/departments (2026-09-29). */
+const roleNameFor = (roles, key) => roleLabel(key, roles, "Unassigned");
 const statusOf = (u) => MEMBER_STATUS[u.invite_status] || MEMBER_STATUS.active;
 // Search reads a member's name, email, job title, phone, team and status.
 const memberMatches = (u, q, roles) =>
@@ -178,7 +178,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
     follow_role: true,
   });
   const [form, setForm] = useState(blankForm);
-  const roleName = (key) => roleOptions.find((r) => r.key === key)?.label || key;
+  const roleName = (key) => roleLabel(key, roleOptions);
   // 2026-09-19 — an email is a sign-in only for someone with a password (an
   // owner). For a member who signs in by mobile it is contact detail, so
   // whoever manages the team may add, fix or clear it; the server holds the

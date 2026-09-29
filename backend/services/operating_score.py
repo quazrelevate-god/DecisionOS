@@ -22,6 +22,7 @@ from routers.ledger import parse_amount as _amt
 # PILOT-1 D: one rule for "late" (shared/due.py), the screens' own. Every count
 # below used `due_date < now` with `now` a UTC timestamp, which made a task due
 # TODAY overdue all day.
+from services.task_timing import approvals_of, timing_of
 from shared.due import is_overdue
 
 
@@ -125,8 +126,12 @@ def _score_employees(tasks, members, now):
         m_action = m_done + len(m_open)
         m_comp = (m_done / m_action) if m_action else 0
         m_score = _clamp100(m_comp * 100 - (m_overdue / len(m_open) if m_open else 0) * 40) if m_action else None
+        # 2026-09-29 — HOW LONG, beside how much. Two people with five done
+        # each read identically until the table can say one closes in two
+        # working days and the other in nine.
         employees.append({"id": mbr["id"], "name": mbr["name"], "role": mbr["role"],
-                          "score": m_score, "done": m_done, "open": len(m_open), "overdue": m_overdue})
+                          "score": m_score, "done": m_done, "open": len(m_open), "overdue": m_overdue,
+                          "timing": timing_of(mine, now)})
     employees.sort(key=lambda e: (e["score"] if e["score"] is not None else -1), reverse=True)
     return employees
 
@@ -203,6 +208,11 @@ async def _company_operating_view(tid: str, viewer: dict, now: str) -> dict:
                     "unscored": unscored},
         "stats": {"done": done, "open": len(open_tasks), "overdue": overdue,
                   "total_decisions": total_dec, "approved": approved, "open_complaints": open_complaints,
+                  # How the WHOLE company's work moves, on the same footing as
+                  # each person's (2026-09-29): typical days to close, the
+                  # share that landed by its date, and the age of the oldest
+                  # thing still waiting.
+                  "timing": timing_of(tasks, now),
                   "outstanding": round(total_billed - total_paid, 2) if can_finance else None},
         "employees": employees,
         "can_finance": can_finance,
@@ -234,6 +244,18 @@ async def _self_operating_view(tid: str, viewer: dict, now: str) -> dict:
     uid = viewer["id"]
     urole = viewer.get("role") or ""
     stats = await compute_employee_stats(tid, viewer)
+    # 2026-09-29 — WHAT THIS PERSON'S SIGNATURE COSTS. Work waiting on an
+    # approval is not the approver's own task, so it lands in nobody's Open
+    # and nobody's Overdue: a manager who takes three days over every sign-off
+    # holds up the whole workshop and scores perfectly. Read over the tasks
+    # they approve, which is a different set from the tasks they DO.
+    approvals = approvals_of(
+        await db.tasks.find(
+            {"tenant_id": tid, "approver_id": uid},
+            {"_id": 0, "approver_id": 1, "approval_status": 1,
+             "approval_requested_at": 1, "approved_at": 1},
+        ).to_list(2000),
+        uid, now)
 
     # Top 5 open tasks by due date -- the surface a contributor actually acts on.
     my_open = await db.tasks.find(
@@ -292,6 +314,7 @@ async def _self_operating_view(tid: str, viewer: dict, now: str) -> dict:
     return {
         "self": {"id": uid, "name": viewer.get("name"), "role": urole},
         "stats": stats,
+        "approvals": approvals,
         "my_open_work": my_open,
         "my_active_workflows": my_workflows,
         "peer_context": peer_context,
@@ -320,6 +343,10 @@ async def compute_employee_stats(tenant_id: str, target: dict) -> dict:
     voices = sum(len([a for a in (t.get("attachments") or []) if a.get("kind") == "voice"]) for t in tasks)
     return {
         "completed": len(done),
+        # How long this person's work takes and whether it lands by its date
+        # (services/task_timing). Kept under its own key rather than spread
+        # into these counts: everything here is a tally, and those are not.
+        "timing": timing_of(tasks, now),
         "open": len(open_tasks),
         "overdue": len(overdue),
         "actionable": actionable,

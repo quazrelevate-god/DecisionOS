@@ -82,6 +82,16 @@ async def _followup_scheduler_loop():
                 await _maybe_run_retention_sweep()
             except Exception as e:
                 logger.warning(f"[followup-scheduler] retention sweep failed: {e}")
+            # 2026-09-29 — write the day's score down, so that in a month the
+            # Ops page has a real past to draw a trend from instead of the
+            # invented one it has always refused. Leader-locked and once per
+            # IST day per company; never on a user's request, because scoring
+            # a company takes about a second.
+            try:
+                from services.score_history import record_all
+                await record_all(db)
+            except Exception as e:
+                logger.warning(f"[followup-scheduler] score history failed: {e}")
         except Exception as e:
             # Never let a lock or DB error stop the loop — next tick retries.
             logger.exception(f"[followup-scheduler] tick error: {e}")

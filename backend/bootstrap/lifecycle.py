@@ -98,6 +98,16 @@ async def _bootstrap():
             )
         except Exception as e:
             logger.warning(f"audit_log indexes: {e}")
+
+        # 2026-09-29 — the day's score reading, one row per company per day.
+        # The trend line will read it back newest-first for a window of days.
+        try:
+            await db.operating_score_history.create_index(
+                [("tenant_id", 1), ("day", -1)],
+                name="score_history_tenant_day",
+            )
+        except Exception as e:
+            logger.warning(f"operating_score_history index: {e}")
         # FIX-004-B (RBAC-13): memberships collection indexes.
         # Compound unique on (user_id, tenant_id) — one membership per
         # (person, workspace). Query indexes for the two hot paths:
@@ -463,6 +473,36 @@ async def _bootstrap():
                 logger.info("Migration applied: date_stage_work_v1")
         except Exception as e:
             logger.exception(f"date_stage_work migration: {e}")
+
+        # 2026-09-29 — work that finished before the finish was recorded.
+        # Every close is in the Journal (activity, kind "task_done"), so this
+        # is recovery rather than a guess; a task with no event falls back to
+        # updated_at and is marked as inferred.
+        try:
+            from services.task_timing import backfill_completed_at
+            _ca = await _apply_migration(
+                db, "task_completed_at_v1", backfill_completed_at,
+                description="Finished tasks get completed_at, dated from the activity log",
+            )
+            if _ca == "applied":
+                logger.info("Migration applied: task_completed_at_v1")
+        except Exception as e:
+            logger.exception(f"task_completed_at migration: {e}")
+
+        # 2026-09-29 — and when the approver was ASKED. Recoverable only for
+        # approval BEFORE work starts, where the request is the task's own
+        # creation; sign-off-before-closing has no record of the moment and is
+        # left unmeasured rather than dated from something that looks close.
+        try:
+            from services.task_timing import backfill_approval_requested_at
+            _ar = await _apply_migration(
+                db, "task_approval_requested_at_v1", backfill_approval_requested_at,
+                description="Pre-work approvals get approval_requested_at from when the task was raised",
+            )
+            if _ar == "applied":
+                logger.info("Migration applied: task_approval_requested_at_v1")
+        except Exception as e:
+            logger.exception(f"task_approval_requested_at migration: {e}")
 
         # ASK-32 2.1 (2026-09-15): waiting decisions captured before routing
         # existed get the approver the routing rule picks now (capturer ->

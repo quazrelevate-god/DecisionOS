@@ -36,6 +36,8 @@ import { ProfileDialog } from "./ProfileDialog";
 import AnnouncementBanner from "./AnnouncementBanner";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { WelcomeOverlay } from "./WelcomeOverlay";
+// B20 — the demo workspace says it is one.
+import { DemoWorkspaceBanner } from "./DemoWorkspaceBanner";
 // 2026-09-19 — members sign in by mobile; owners also have email + password.
 import OwnerCredentialsGate from "./auth/OwnerCredentialsGate";
 import WelcomeMemberCard from "./auth/WelcomeMemberCard";
@@ -642,6 +644,9 @@ export default function Layout({ children }) {
           pseudo-element because ::before is the drifting gradient and ::after
           is the Dex sky, and artwork must not drift. */}
       <div className="app-sky__art" aria-hidden="true" />
+      {/* B20 — above everything, on every screen, for as long as they are in
+          the demo. It renders nothing in a real workspace. */}
+      <DemoWorkspaceBanner />
       <WelcomeOverlay />
       {/* An owner who came in by mobile adds an email and password first;
           a member's first screen asks them to check their details. */}

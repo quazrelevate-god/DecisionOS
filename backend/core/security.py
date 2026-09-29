@@ -15,7 +15,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from database import db
 from config import (
-    CSRF_COOKIE_NAME, AUTH_COOKIE_NAME, AUTH_COOKIE_MAX_AGE, ADMIN_COOKIE_NAME,
+    CSRF_COOKIE_NAME, CSRF_HEADER_NAME, AUTH_COOKIE_NAME, AUTH_COOKIE_MAX_AGE, ADMIN_COOKIE_NAME,
     AUTH_RETURN_TOKEN, JWT_SECRET, JWT_ALGORITHM, PLATFORM_ADMIN_JWT_SECRET,
     COOKIE_SECURE,
 )
@@ -50,6 +50,17 @@ def set_csrf_cookie(response: Response, token: str = None) -> str:
         key=CSRF_COOKIE_NAME, value=tok, max_age=AUTH_COOKIE_MAX_AGE,
         httponly=False, secure=COOKIE_SECURE, samesite="none", path="/",
     )
+    # B27 (2026-09-29) — AND IN A HEADER, FOR THE CLIENTS THAT CANNOT READ A
+    # COOKIE. The docstring above already anticipated this ("future native
+    # clients that never see cookies"); the Android app is that client. Its
+    # page is served from https://localhost and the cookie belongs to the
+    # backend's own domain, so document.cookie is empty there however many
+    # cookies the platform jar is faithfully sending. The token is not a
+    # secret from our own page — the cookie is deliberately not HttpOnly — so
+    # handing it back on the response that mints it costs nothing and is the
+    # whole of what the app was missing. Set HERE rather than at each login
+    # path, because every one of them comes through this function.
+    response.headers[CSRF_HEADER_NAME] = tok
     return tok
 
 

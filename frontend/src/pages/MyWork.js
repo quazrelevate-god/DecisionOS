@@ -3921,6 +3921,10 @@ export default function MyWork({ only = null }) {
   const scoring = aiOn && prioritiesQ.isFetching && !prioritiesQ.data;
 
   const all = tasksQ.data || [];
+  /* B23 — nothing has ever been here, as opposed to nothing is here today.
+     Read off the whole list rather than the filtered view, and only once the
+     list has actually arrived. */
+  const neverAnyTasks = !tasksQ.isLoading && Array.isArray(tasksQ.data) && tasksQ.data.length === 0;
   const countFor = (key) => {
     if (key === "completed") return all.filter(isTerminal).length;
     if (key === "all") return all.filter((t) => !isTerminal(t)).length;
@@ -4857,19 +4861,28 @@ export default function MyWork({ only = null }) {
           {!tasksQ.isLoading && list.length === 0 && !(filtersActive && all.length > 0) && (
             <EmptyState
               testid="mywork-empty"
+              /* B23 (2026-09-29) — "Nothing here" is what you say to somebody
+                 who cleared their list, and it was also what a founder saw on
+                 their first morning, when nothing had ever been here. The two
+                 need different sentences: one is an achievement, the other is
+                 a question about how to start. `neverAnyTasks` is the whole
+                 list being empty rather than this filtered view of it. */
               title={asked
                 ? (showingCompleted ? "Nothing you asked for is finished yet" : "Nothing you've asked for is open")
                 : team
                 ? (showingCompleted ? "Your team hasn't finished anything yet" : "Your team has nothing open")
+                : neverAnyTasks ? "No tasks yet"
                 : (showingCompleted ? t("mywork.empty_completed_title") : t("mywork.empty_title"))}
               hint={asked
                 ? "Tasks you create for other people show up here, with their live status."
                 : team
                 ? "Work given to the people who report to you shows up here, with its live status."
+                : neverAnyTasks
+                ? "Tasks arrive here when a decision is approved on the Desk — or add one yourself with New task above."
                 : (tab === "all" ? t("mywork.empty_all_hint") : t("mywork.empty_cat_hint"))}
               ctaLabel={showingCompleted || asked || team ? null : "+ Open Decision Desk"}
               ctaTo={showingCompleted || asked || team ? null : "/inbox"}
-              secondary={showingCompleted || asked || team ? null : "Tasks appear here once decisions are approved"}
+              secondary={showingCompleted || asked || team || neverAnyTasks ? null : "Tasks appear here once decisions are approved"}
             />
           )}
           {/* U7-05.3: bulk-action bar. Sticky at top of the list so it

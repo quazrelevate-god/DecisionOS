@@ -94,16 +94,45 @@ class TestCorsAllowList:
 # ===========================================================================
 class _FakeResponse:
     """Just enough Response shape to record what set_cookie / delete_cookie
-    was called with. set_cookie kwargs are surfaced for assertions."""
+    was called with. set_cookie kwargs are surfaced for assertions.
+
+    B27 (2026-09-29): `headers` too. set_csrf_cookie writes the token into a
+    response header as well as the cookie, for the clients that cannot read a
+    cookie — the Android app's page is served from https://localhost while the
+    cookie belongs to the backend's domain, so document.cookie is empty there
+    however faithfully the platform jar sends it."""
     def __init__(self):
         self.cookies_set = []      # list of (name, value, kwargs)
         self.cookies_deleted = []  # list of (name, kwargs)
+        self.headers = {}
 
     def set_cookie(self, key, value, **kwargs):
         self.cookies_set.append((key, value, kwargs))
 
     def delete_cookie(self, key, **kwargs):
         self.cookies_deleted.append((key, kwargs))
+
+
+class TestCsrfTokenReachesAClientWithoutCookies:
+    """B27 — the half the native app needs."""
+
+    def test_set_csrf_cookie_also_returns_the_token_in_a_header(self):
+        import core
+        r = _FakeResponse()
+        tok = core.set_csrf_cookie(r)
+        assert r.headers.get("X-CSRF-Token") == tok, (
+            "the token must come back in a header: a webview served from "
+            "another origin cannot read the cookie"
+        )
+
+    def test_the_header_matches_the_cookie_exactly(self):
+        import core
+        r = _FakeResponse()
+        core.set_auth_cookie(r, "auth.jwt.value")
+        cookie = next(c for c in r.cookies_set if c[0] == "dos_csrf")[1]
+        assert r.headers.get("X-CSRF-Token") == cookie, (
+            "a double-submit that submits two different values is not a check"
+        )
 
 
 class TestCsrfCookieMint:

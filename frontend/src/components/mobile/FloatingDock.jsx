@@ -289,13 +289,23 @@ export function FloatingDock({
                   ? t("dex.decidePlaceholder", "Tell Dex what you decided…")
                   : t("dex.askPlaceholder", "Ask Dex anything…")}
               aria-label={dexChannel === "decide" ? "Tell Dex what you decided" : "Ask Dex anything"}
+              /* B32 (2026-09-29) — IT DID NOT LOOK LIKE A FIELD. Transparent on
+                 the dock's near-black pill with a 40%-white hint, it read as a
+                 thin line somebody had left there: the placeholder was below
+                 the contrast at which small type is legible on that ground, and
+                 there was no edge to say where typing would go. It has a faint
+                 well of its own now and a hint you can actually read, and it
+                 brightens on focus. Still inside the dock's material — this is
+                 a field in a bar, not a box dropped on top of one. */
               className={cn(
-                "min-w-0 flex-1 bg-transparent px-3 text-sm text-white focus:outline-none",
+                "min-w-0 flex-1 rounded-pill bg-white/[0.07] px-3 py-1.5 text-sm text-white",
+                "ring-1 ring-inset ring-white/10 transition-colors",
+                "focus:bg-white/[0.12] focus:outline-none focus:ring-white/25",
                 /* A status the founder is waiting on should not wear the same
                    grey as a hint they are meant to type over. */
                 dexTranscribing
-                  ? "animate-pulse placeholder:text-white/75"
-                  : "placeholder:text-white/40"
+                  ? "animate-pulse placeholder:text-white/80"
+                  : "placeholder:text-white/60"
               )}
             />
           ) : (

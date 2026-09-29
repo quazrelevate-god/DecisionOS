@@ -201,12 +201,45 @@ app.get("/.well-known/assetlinks.json", (req, res) => {
   ]);
 });
 
+/* PLAY-2 (2026-09-29) — THE ANALYTICS KEY IS A RUNTIME VALUE, NOT A BUILD ONE.
+ *
+ * public/index.html carries the placeholder %REACT_APP_POSTHOG_KEY%, which
+ * Create React App substitutes at BUILD time. That works locally and does not
+ * work here: Railway does not put service variables into this build. The
+ * proof is in the shipped bundle — REACT_APP_BACKEND_URL is set on the
+ * service and is absent from the JavaScript too. Production has never
+ * depended on it (api.js falls back to a relative /api, which this server
+ * proxies — DEPLOY-3), so nothing was broken by it and nobody noticed.
+ *
+ * So the substitution happens HERE instead, where env vars demonstrably do
+ * arrive: ANDROID_APP_FINGERPRINT above is read the same way and took effect
+ * on a restart. That also makes the off switch better than it was — unset the
+ * variable and restart, with no rebuild — which is what you want from
+ * something whose whole job is to stop third-party analytics.
+ *
+ * Read once at boot. index.html is a few KB and changes only on deploy.
+ */
+const POSTHOG_KEY = (process.env.POSTHOG_KEY || process.env.REACT_APP_POSTHOG_KEY || "").trim();
+const INDEX_HTML = (() => {
+  try {
+    const raw = require("fs").readFileSync(path.join(BUILD, "index.html"), "utf8");
+    /* No key -> the placeholder stays exactly as it is, and the guard in the
+       page refuses to init on a value starting with "%". Absent means off. */
+    if (!POSTHOG_KEY) return raw;
+    return raw.split("%REACT_APP_POSTHOG_KEY%").join(POSTHOG_KEY);
+  } catch (e) {
+    return null;                      // no build yet; sendFile will 404 honestly
+  }
+})();
+console.log(`[server] analytics ${POSTHOG_KEY ? "on (pageviews only)" : "off — no POSTHOG_KEY"}`);
+
 /* SPA fallback — the same job `serve -s` was doing. Without it every deep link
    (/inbox, /my-work, /finance) 404s on refresh, because react-router owns
    those paths client-side. */
 app.get("*", (req, res) => {
   res.setHeader("Cache-Control", "no-cache, must-revalidate");
-  res.sendFile(path.join(BUILD, "index.html"));
+  if (INDEX_HTML === null) return res.sendFile(path.join(BUILD, "index.html"));
+  res.type("html").send(INDEX_HTML);
 });
 
 app.listen(PORT, "0.0.0.0", () => console.log(`[server] listening on ${PORT}`));

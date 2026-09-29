@@ -62,6 +62,17 @@
       ],
       "port": 8000,
       "url": "http://localhost:8000"
+    },
+    {
+      "_comment": "macOS. The PRODUCTION web server (frontend/server.js) against the built frontend/build \u2014 the same process Railway runs. Use it to check things that only exist in production: the /.well-known/assetlinks.json route, the SPA fallback, and the runtime PostHog key substitution. Needs `npm run build` first.",
+      "name": "mac-web-prod",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd frontend && PORT=3200 POSTHOG_KEY=phc_runtime_probe ANDROID_APP_FINGERPRINT=AA:BB:CC node server.js"
+      ],
+      "port": 3200,
+      "url": "http://localhost:3200"
     }
   ]
 }

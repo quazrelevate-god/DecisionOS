@@ -249,6 +249,17 @@ async def _company_operating_view(tid: str, viewer: dict, now: str, window: Opti
     members = await db.users.find({"tenant_id": tid}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(200)
     employees = _score_employees(tasks, members, now)
 
+    # 2026-09-29 — WHERE the work is piling up, not only who is behind. The
+    # leaderboard is a verdict on people; an owner-led workshop asks which
+    # card is jammed and who is holding it. Never windowed: a card stuck since
+    # March is stuck TODAY, and a period filter would hide the worst of them.
+    try:
+        from services.workflow_timing import bottlenecks
+        jams = await bottlenecks(tid, limit=3)
+    except Exception as e:
+        logger.warning(f"bottlenecks failed for {tid[:8]}...: {e}")
+        jams = []
+
     payload = {
         "company": {"overall": overall if enough_data else None, "categories": categories, "enough_data": enough_data,
                     "unscored": unscored},
@@ -261,6 +272,7 @@ async def _company_operating_view(tid: str, viewer: dict, now: str, window: Opti
                   "timing": timing_of(tasks, now),
                   "outstanding": round(total_billed - total_paid, 2) if can_finance else None},
         "employees": employees,
+        "bottlenecks": jams,
         "can_finance": can_finance,
         # What the numbers cover, echoed back so the screen states its own
         # scope rather than the reader assuming one. Finance is deliberately

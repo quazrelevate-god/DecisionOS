@@ -374,6 +374,78 @@ function DoTheseFirst({ actions, onDrill, note, sub = "Key actions to improve yo
   );
 }
 
+/* WHERE THE WORK IS PILING UP (2026-09-29).
+
+   Yokesh, walking the page: "it ranks people but never names the bottleneck".
+   The table underneath says Anand is 0 and Priya is 18, which is a verdict on
+   two people, not an answer to the question an owner-led workshop actually
+   asks — which card is jammed, and who is holding it. The clock that knows
+   already existed (services/workflow_timing.card_timing, the same one the
+   Desk and the stuck alert read); nothing had asked it for a ranking.
+
+   Two different complaints are kept apart rather than blurred into one
+   "stuck": OVER means the stage is taking longer than the board allows,
+   IDLE means nobody has touched the card at all. A card can be idle without
+   being over, on a generous stage, and over without being idle, when someone
+   is working on it and it is simply slow — and the fix is different. */
+function Bottlenecks({ cards }) {
+  const jams = cards || [];
+  return (
+    <section className={`mt-5 p-5 sm:p-6 ${CARD}`} data-testid="operating-bottlenecks">
+      <SectionHead icon={Warning} title="Where the work is stuck"
+        sub="Cards sitting longer than their stage allows, worst first." />
+      {jams.length === 0 ? (
+        <p className="py-4 text-sm text-slate-500" data-testid="operating-bottlenecks-empty">
+          Nothing is sitting — every card has moved inside the days its stage allows.
+        </p>
+      ) : (
+        <ul className="mt-4 divide-y divide-slate-900/[0.06] border-t border-slate-900/[0.06]">
+          {jams.map((c) => {
+            /* The two clocks. Whichever ran longer is the headline, because
+               that is the number beside it — the first browser pass showed
+               "4 working days over" next to a 7, which reads as a mistake.
+               The other clock follows in a clause when it has something to
+               add: over and idle are different complaints with different
+               fixes, and an owner wants both. "Nobody is on it" is not a
+               missing name — it is the finding. */
+            const days = (n) => `${n} working day${n === 1 ? "" : "s"}`;
+            const over = `${days(c.over_days)} over the ${c.stage_days} this stage allows`;
+            const why = c.idle_days > c.over_days
+              ? `not moved for ${days(c.idle_days)}` + (c.over_days ? `, and ${over}` : "")
+              : over;
+            const who = c.holders?.length
+              ? c.holders.map((h) => h.name).join(", ")
+              : c.open_tasks > 0 ? "nobody named on it" : "no open work on this stage";
+            return (
+              <li key={c.id}>
+                <Link to={`/workflows?wf=${encodeURIComponent(c.id)}${c.type ? `&wf_type=${encodeURIComponent(c.type)}` : ""}`}
+                  data-testid={`operating-jam-${c.id}`}
+                  className="group flex items-center gap-4 rounded-xl px-1 py-3.5 transition-colors hover:bg-white/60">
+                  <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-slate-700 ${TILE}`}>
+                    <Timer size={18} aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[15px] font-semibold text-slate-900">{c.title}</span>
+                    <span className="mt-0.5 block truncate text-xs text-slate-500">
+                      {c.stage_label} · {why} · with {who}
+                      {c.counterparty ? ` · ${c.counterparty}` : ""}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-baseline gap-1 text-rose-700">
+                    <span className="font-display text-2xl leading-none tabular-nums">{c.waiting_days}</span>
+                    <span className="text-xs">d</span>
+                  </span>
+                  <CaretRight size={14} weight="bold" aria-hidden="true" className="shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5" />
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function SectionHead({ icon: Icon, title, sub }) {
   return (
     <div className="flex items-start gap-3">
@@ -556,6 +628,8 @@ function OwnerView({ data, windowKey, onWindow }) {
               how fast, and whether it lands when it was promised. The same
               three numbers each person's page carries, over the company. */}
           <WorkMovesRow timing={stats.timing} company />
+
+          <Bottlenecks cards={data.bottlenecks} />
         </>
       )}
 
@@ -797,22 +871,38 @@ function SelfView({ data, windowKey, onWindow }) {
       <WorkMovesRow timing={stats.timing} who={isViewAs ? firstName : null}
         approvals={approvals} />
 
-      <div className="mt-5 grid gap-4 md:grid-cols-3">
-        <BreakdownCard icon={ShieldCheck} label="Proof rate" value={`${stats.proof_upload_rate}%`} meter={stats.proof_upload_rate}
-          detail={`${_pctToCount(stats.proof_upload_rate, stats.completed)} of ${stats.completed} done with photo or voice`}
-          hint={stats.proof_upload_rate < 40 && stats.completed >= 3
+      {/* 2026-09-29 — ONLY THE CARDS WITH SOMETHING IN THEM. On the page of
+          somebody who has finished nothing, "Proof rate — 0 of 0 done with
+          photo or voice" and "Plans in use 0/0" took two thirds of the row to
+          say nothing: a proof rate over no finished work is not a low score,
+          it is an undefined one, and a reader cannot tell those apart from a
+          dash. Proof rate appears once there is finished work to carry proof;
+          Plans in use stays while there is enough work for the nudge to mean
+          something, because "hasn't used a Dex plan yet" IS the message. */}
+      <BreakdownRow cards={[
+        stats.completed > 0 && {
+          key: "proof", icon: ShieldCheck, label: "Proof rate",
+          value: `${stats.proof_upload_rate}%`, meter: stats.proof_upload_rate,
+          detail: `${_pctToCount(stats.proof_upload_rate, stats.completed)} of ${stats.completed} done with photo or voice`,
+          hint: stats.proof_upload_rate < 40 && stats.completed >= 3
             ? (isViewAs ? `${firstName} could attach a photo or voice update on the next done task` : "Attach a photo or voice update on your next done task")
-            : null} />
-        <BreakdownCard icon={ClipboardText} label="Plans in use" value={`${stats.plans_completed}/${stats.plans_used}`}
-          meter={stats.plans_used > 0 ? (stats.plans_completed / stats.plans_used) * 100 : null}
-          detail={`${stats.plans_used} accepted plan${stats.plans_used === 1 ? "" : "s"}, ${stats.plans_completed} finished`}
-          hint={stats.plans_used === 0 && stats.actionable >= 3
+            : null,
+        },
+        (stats.plans_used > 0 || stats.actionable >= 3) && {
+          key: "plans", icon: ClipboardText, label: "Plans in use",
+          value: `${stats.plans_completed}/${stats.plans_used}`,
+          meter: stats.plans_used > 0 ? (stats.plans_completed / stats.plans_used) * 100 : null,
+          detail: `${stats.plans_used} accepted plan${stats.plans_used === 1 ? "" : "s"}, ${stats.plans_completed} finished`,
+          hint: stats.plans_used === 0 && stats.actionable >= 3
             ? (isViewAs ? `${firstName} hasn't used a Dex plan yet` : "Ask Dex to plan your next big task")
-            : null} />
-        <BreakdownCard icon={Check} label="Actionable" value={String(stats.actionable)}
-          meter={stats.actionable > 0 ? (stats.completed / stats.actionable) * 100 : null}
-          detail={`${stats.completed} done + ${stats.open} open`} />
-      </div>
+            : null,
+        },
+        {
+          key: "actionable", icon: Check, label: "Actionable", value: String(stats.actionable),
+          meter: stats.actionable > 0 ? (stats.completed / stats.actionable) * 100 : null,
+          detail: `${stats.completed} done + ${stats.open} open`,
+        },
+      ]} />
 
       <section className={`mt-5 p-5 sm:p-6 ${CARD}`}>
         <div className="mb-3 flex items-center justify-between gap-3">
@@ -955,6 +1045,26 @@ function WorkMovesRow({ timing, who, company = false, approvals = null }) {
         )}
       </div>
     </section>
+  );
+}
+
+/* A row of however many cards there are. Tailwind needs the column class
+   spelled out, so it is picked from a map rather than built from a number —
+   a class assembled at runtime is one the build has never seen and will not
+   ship. Two cards in a three-column grid leave a hole that reads as a card
+   that failed to load, which is the bug this row exists to avoid. */
+const ROW_COLS = { 1: "md:grid-cols-1", 2: "md:grid-cols-2", 3: "md:grid-cols-3" };
+
+function BreakdownRow({ cards }) {
+  const shown = (cards || []).filter(Boolean);
+  if (!shown.length) return null;
+  return (
+    <div className={`mt-5 grid gap-4 ${ROW_COLS[shown.length] || "md:grid-cols-3"}`} data-testid="operating-breakdowns">
+      {shown.map((c) => (
+        <BreakdownCard key={c.key} icon={c.icon} label={c.label} value={c.value}
+          meter={c.meter} detail={c.detail} hint={c.hint} testid={`ops-breakdown-${c.key}`} />
+      ))}
+    </div>
   );
 }
 

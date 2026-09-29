@@ -4,7 +4,7 @@ import {
   Microphone, Sparkle, Stop, PaperPlaneRight, SpeakerHigh, SpeakerSlash, Waveform, CaretDown, CaretLeft, Check, Translate,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
-import api from "../../lib/api";
+import api, { formatApiError } from "../../lib/api";
 import { DexWave } from "../../components/mobile/DexWave";
 import { fetchTTS, useAnswerRecorder, useSynthLevels, SPOKEN_LANGS, langLabel } from "./voice";
 // ASK-36 5 — the app's one loading animation.
@@ -258,7 +258,7 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack }) {
       setAnswer(""); answerRef.current = "";
       await presentQuestion(data);
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Something slipped — try again");
+      toast.error(formatApiError(e.response?.data?.detail) || "Something slipped — try again");   // B31
     } finally { setThinking(false); }
   };
 
@@ -279,7 +279,7 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack }) {
       await presentQuestion({ question: data.question, why: "", index: data.index, max: data.max });
       inputRef.current?.focus();
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Couldn't go back");
+      toast.error(formatApiError(e.response?.data?.detail) || "Couldn't go back");   // B31
     } finally { setThinking(false); }
   };
 
@@ -376,7 +376,18 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack }) {
           value={answer}
           disabled={starting || thinking}
           onChange={(e) => { setAnswer(e.target.value); answerRef.current = e.target.value; }}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+          /* B31 (2026-09-29) — ENTER SENDS ONLY WHERE ENTER MEANS SEND. On a
+             touch keyboard the same key is the founder's only way to start a
+             new line, and an interview answer is a paragraph about how their
+             business runs — so a return key halfway through sent half an
+             answer. On a phone it inserts a newline and the Answer button is
+             the way to send; a hardware keyboard keeps the shortcut. */
+          onKeyDown={(e) => {
+            if (e.key !== "Enter" || e.shiftKey) return;
+            if (window.matchMedia?.("(pointer: coarse)")?.matches) return;   // a thumb, not a keyboard
+            e.preventDefault();
+            send();
+          }}
           placeholder={recorder.recording ? "Listening… tap Stop when done — your answer sends itself" : "Tap the mic and speak, or type your answer…"}
           className="w-full resize-none bg-transparent text-base placeholder:text-foreground/30 focus:outline-none"
         />

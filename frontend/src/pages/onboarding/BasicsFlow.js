@@ -19,6 +19,19 @@ import { devOtpFrom } from "../../lib/devOtp";
 const SIZES = ["1-10", "11-50", "51-200", "201-500", "500+"];
 const first = (name) => (name || "").trim().split(/\s+/)[0] || "";
 
+/* B29 (2026-09-29) — WHAT EACH ANSWER IS, told to the phone.
+   Without these the keyboard came up as a plain QWERTY for a mobile number,
+   autofill never offered the name or address the phone already holds, and an
+   email got a capital letter on its first character from Android's default
+   sentence casing — which a founder then had to notice and undo. */
+const AUTOFILL = {
+  phone:         { autoComplete: "tel", inputMode: "tel" },
+  name:          { autoComplete: "name", autoCapitalize: "words" },
+  company_name:  { autoComplete: "organization", autoCapitalize: "words" },
+  email:         { autoComplete: "email", inputMode: "email", autoCapitalize: "none", autoCorrect: "off" },
+  support_email: { autoComplete: "email", inputMode: "email", autoCapitalize: "none", autoCorrect: "off" },
+};
+
 const STEPS = [
   /* 2026-09-19 — required, a real Indian mobile, and confirmed by a texted
      code before we move on. It is how the founder signs in on the mobile app
@@ -381,8 +394,13 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
           in, with no idea why. Say it once, on the step they land on. */}
       {resumed && step.key === initialStep && (
         <p data-testid="signup-resumed-note" className="mb-5 text-sm text-muted-foreground">
+          {/* B24 (2026-09-29) — "Just your password again" on a flow that has
+              no password step. Signing up has been a mobile and a texted code
+              since 2026-09-20; the sentence was left behind by that change and
+              told a returning founder to look for something that is not on
+              the screen. */}
           Welcome back{first(form.name) ? `, ${first(form.name)}` : ""} — we kept your answers.
-          {identityKnown ? " Carry on where you left off." : " Just your password again, and you're on."}
+          {" Carry on where you left off."}
         </p>
       )}
       <AnimatePresence mode="wait">
@@ -503,6 +521,13 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
                 ref={inputRef}
                 data-testid={`signup-input-${step.key}`}
                 type={step.type}
+                /* B29 — what each answer IS, so the phone offers what it
+                   already knows and raises the right keyboard. A name is
+                   capitalised per word; an address or a URL never is. */
+                autoComplete={AUTOFILL[step.key]?.autoComplete}
+                inputMode={AUTOFILL[step.key]?.inputMode}
+                autoCapitalize={AUTOFILL[step.key]?.autoCapitalize}
+                autoCorrect={AUTOFILL[step.key]?.autoCorrect}
                 placeholder={step.placeholder}
                 value={value}
                 onChange={(e) => setVal(e.target.value)}

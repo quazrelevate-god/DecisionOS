@@ -128,6 +128,14 @@ export function WebsiteIntel({ companyName, onDone, onBack }) {
               <input
                 autoFocus
                 data-testid="signup-website-input"
+                /* B29 — a web address is never capitalised and never
+                   autocorrected, and the phone has a keyboard with a dot and a
+                   slash on it for exactly this. */
+                type="url"
+                inputMode="url"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck="false"
                 placeholder="yourcompany.com"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}

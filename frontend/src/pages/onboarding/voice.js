@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import api from "../../lib/api";
+import api, { formatApiError } from "../../lib/api";
 import { toast } from "sonner";
 
 // Sarvam bulbul:v3 voices for the assistant. Kept in sync with backend SUPPORTED_TTS_LANGS.
@@ -99,7 +99,7 @@ export function useAnswerRecorder(onResult) {
           if (text) onResult({ text, language_code });
           else toast("Didn't catch that — try again or type your answer");
         } catch (e) {
-          toast.error(e.response?.data?.detail || "Couldn't transcribe — type your answer instead");
+          toast.error(formatApiError(e.response?.data?.detail) || "Couldn't transcribe — type your answer instead");   // B31
         } finally {
           setTranscribing(false);
         }

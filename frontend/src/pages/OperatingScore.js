@@ -293,20 +293,34 @@ const UNSCORED_WORDS = {
    cannot keep its promise is worse than no control: the card says what the
    category MEASURES instead, which is true and useful, and the formula behind
    it is one tap away under "How is this calculated?". */
-function CategoryCard({ cat, value, reason, onOpen, canDrill = false }) {
+const CAT_CARD_CLS = `group flex min-w-0 flex-col p-4 text-left transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_40px_-18px_hsl(150_15%_20%/0.35)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 motion-reduce:transition-none ${CARD}`;
+
+/* 2026-09-29 — FINANCE OPENS THE FINANCE PAGE (`to`).
+   Yokesh, pushing back on a broader suggestion of mine and rightly: money
+   belongs on the Finance page, not duplicated here. What was left of the
+   point is narrower. Finance carries 25% of the overall score and was the one
+   category you could not click into at all: the other three at least say what
+   they measure, and Finance showed a number, or a dash, and stopped. Every
+   other figure on this page now leads somewhere; this one led nowhere.
+   So it is a link, not a new section — and only for somebody who may see the
+   money, since the Finance page would bounce anyone else. When it is
+   unscored the card keeps saying so ("Nothing to score yet — left out of the
+   total"), because that sentence is the honest part and it is also exactly
+   when an owner should go and raise an invoice. */
+function CategoryCard({ cat, value, reason, onOpen, canDrill = false, to = null }) {
   const has = value != null;
   const opens = has && canDrill;
+  const linkTo = !opens && to ? to : null;
   const why = UNSCORED_WORDS[reason] || UNSCORED_WORDS.no_access;
-  return (
-    <button type="button" onClick={opens ? onOpen : undefined} disabled={!opens} data-testid={`operating-cat-${cat.key}`}
-      data-unscored={has ? undefined : (reason || "no_access")}
-      aria-label={opens ? `${cat.label}: ${value} out of 100 — see breakdown`
-        : has ? `${cat.label}: ${value} out of 100 — ${cat.plain}` : `${cat.label}: ${why}`}
-      className={`group flex min-w-0 flex-col p-4 text-left transition-[transform,box-shadow] duration-200 enabled:hover:-translate-y-0.5 enabled:hover:shadow-[0_18px_40px_-18px_hsl(150_15%_20%/0.35)] disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 motion-reduce:transition-none ${CARD}`}>
+  const label = opens ? `${cat.label}: ${value} out of 100 — see breakdown`
+    : has ? `${cat.label}: ${value} out of 100 — ${cat.plain}${linkTo ? ". Open Finance" : ""}`
+      : `${cat.label}: ${why}${linkTo ? ". Open Finance" : ""}`;
+  const body = (
+    <>
       <span className="flex w-full items-center gap-2 text-[15px] font-medium text-slate-800">
         <cat.icon size={18} aria-hidden="true" className="shrink-0 text-slate-600" />
         <span className="min-w-0 flex-1 truncate">{cat.label}</span>
-        {opens && <CaretRight size={13} weight="bold" aria-hidden="true" className="shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5" />}
+        {(opens || linkTo) && <CaretRight size={13} weight="bold" aria-hidden="true" className="shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5" />}
       </span>
       <span className="mt-3 flex items-baseline gap-1.5">
         <span className="font-display text-4xl leading-none text-slate-900 tabular-nums">{has ? value : "—"}</span>
@@ -317,6 +331,23 @@ function CategoryCard({ cat, value, reason, onOpen, canDrill = false }) {
         {opens ? <>See breakdown <CaretRight size={11} weight="bold" aria-hidden="true" /></>
           : has ? <span className="line-clamp-2">{cat.plain}</span> : why}
       </span>
+    </>
+  );
+  if (linkTo) {
+    return (
+      <Link to={linkTo} data-testid={`operating-cat-${cat.key}`}
+        data-unscored={has ? undefined : (reason || "no_access")}
+        aria-label={label} className={CAT_CARD_CLS}>
+        {body}
+      </Link>
+    );
+  }
+  return (
+    <button type="button" onClick={opens ? onOpen : undefined} disabled={!opens} data-testid={`operating-cat-${cat.key}`}
+      data-unscored={has ? undefined : (reason || "no_access")}
+      aria-label={label}
+      className={`${CAT_CARD_CLS} disabled:translate-y-0 disabled:cursor-default disabled:shadow-none disabled:hover:translate-y-0`}>
+      {body}
     </button>
   );
 }
@@ -613,7 +644,8 @@ function OwnerView({ data, windowKey, onWindow }) {
             <div className="grid grid-cols-2 gap-3 sm:gap-4" data-testid="operating-categories">
               {CATS.map((c) => (
                 <CategoryCard key={c.key} cat={c} value={company.categories[c.key]} reason={company.unscored?.[c.key]}
-                  canDrill={demo} onOpen={() => setDrillCat(c.key)} />
+                  canDrill={demo} onOpen={() => setDrillCat(c.key)}
+                  to={c.key === "finance" && data.can_finance ? "/finance" : null} />
               ))}
             </div>
             <DoTheseFirst actions={actions} onDrill={setDrillCat} note={demo ? demoDex.explainer : null} className="lg:col-span-2 xl:col-span-1" />

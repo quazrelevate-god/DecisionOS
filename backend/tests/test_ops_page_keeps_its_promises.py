@@ -52,11 +52,32 @@ def test_the_weight_sliders_are_gone_from_the_page_and_the_module():
 def test_a_breakdown_is_offered_only_where_one_exists():
     """canDrill, not `has`. The dialog's 'nothing to show' branch is now
     unreachable from a real company's cards."""
-    assert "function CategoryCard({ cat, value, reason, onOpen, canDrill = false })" in OPS
+    assert "function CategoryCard({ cat, value, reason, onOpen, canDrill = false, to = null })" in OPS
     assert "const opens = has && canDrill;" in OPS
     assert "canDrill={demo}" in OPS, "only the demo tenant has the items"
     # What a card says instead is true: what the category measures.
     assert "{cat.plain}" in OPS
+
+
+def test_finance_opens_the_finance_page():
+    """2026-09-29. Finance carries 25% of the overall score and was the one
+    category you could not click into at all: the other three at least say
+    what they measure, and Finance showed a number, or a dash, and stopped.
+    Every other figure on this page leads somewhere now.
+
+    A LINK, NOT A NEW SECTION. Yokesh pushed back on a broader suggestion of
+    mine — money belongs on the Finance page, not duplicated on this one —
+    and he was right; what was left of the point is this one affordance.
+    Only for somebody who may see the money, because /finance would bounce
+    anyone else, and the unscored card keeps saying so, which is the honest
+    part and also exactly when an owner should go and raise an invoice."""
+    assert 'to={c.key === "finance" && data.can_finance ? "/finance" : null}' in OPS
+    assert "const linkTo = !opens && to ? to : null;" in OPS
+    assert "{(opens || linkTo) &&" in OPS, "and it is signposted as clickable"
+    assert '. Open Finance' in OPS, "the screen reader is told where it goes"
+    # The drill still wins where there is one: a demo tenant's Finance card
+    # opens its breakdown rather than navigating away.
+    assert "!opens && to" in OPS
 
 
 def test_the_first_instruction_on_the_page_goes_somewhere():

@@ -158,3 +158,33 @@ def test_every_stored_status_has_a_word(stored, shown):
     block = FORMAT[FORMAT.index("export const TASK_STATUS_LABELS"):]
     block = block[:block.index("};")]
     assert f'{stored}: "{shown}"' in block
+
+
+# ───────────── a page the reader may not open says so ──────────────────────
+def test_a_refused_page_says_no_instead_of_loading_for_ever():
+    """2026-09-29, found signed in as Anand — a member with finance and
+    approvals but not the owner. Following a link to a colleague's Ops left
+    the LOADING SKELETON ON SCREEN FOR EVER, aria-busy="true", so a screen
+    reader went on announcing that the page was still loading. `isLoading`
+    was false and `data` undefined, and the skeleton branch caught the second
+    half; nothing said no, it just never said anything."""
+    assert "function OperatingScoreProblem({ error, person })" in OPS
+    assert "if (error && !data) return <OperatingScoreProblem" in OPS
+    i_err, i_skel = OPS.index("if (error && !data)"), OPS.index("if (isLoading || !data)")
+    assert i_err < i_skel, "an error is not a slow load, so it is checked first"
+
+
+def test_each_refusal_is_its_own_sentence():
+    """"Something went wrong" would be true of all three and useful for
+    none."""
+    assert "That page isn't yours to open" in OPS
+    assert "Only the owner can open a colleague's operating page" in OPS
+    assert "That person isn't in this company" in OPS
+    assert "They may have left, or the link may be out of date." in OPS
+    assert 'data-testid="operating-problem-back"' in OPS, "and a way back to your own"
+
+
+def test_a_no_is_not_asked_three_more_times():
+    """react-query retries by default; no number of retries turns a 403 into
+    a 200, and the wait only delayed the page saying so."""
+    assert "retry: (n, e) => ![401, 403, 404].includes(e?.response?.status) && n < 2" in OPS

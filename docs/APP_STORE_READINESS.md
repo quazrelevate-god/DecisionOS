@@ -30,6 +30,19 @@ Read §1 before planning any App Store date.
 
 ## 0 · Nothing on iOS has ever been built
 
+> **Updated 2026-09-30.** The machine has changed since this was written, and
+> two of the three things below are no longer true. **Xcode 26.6 is installed**
+> (licence accepted, first-launch complete) and **iOS 26.5 simulators exist**
+> (iPhone 17 Pro, 17 Pro Max, 17e, 17, Air). **CocoaPods is irrelevant** — this
+> project is Swift Package Manager: there is no Podfile, there is
+> `App/CapApp-SPM/Package.swift`, and its relative path into `node_modules`
+> resolves.
+>
+> **It still has not compiled**, for a new reason, and that reason is now the
+> blocker — see §7.1. The paragraph below stands as written on the day, and
+> everything it says about iOS findings being *assumed* rather than verified is
+> unchanged and still the most important thing here.
+
 There is no Xcode on the machine this branch has been developed on — Command
 Line Tools only, zero simulators, no CocoaPods. So:
 
@@ -286,12 +299,60 @@ Android first — it is close, and it is not waiting on Apple.
 
 ## 7 · Producing the `.ipa`
 
-**This cannot be done on the machine this branch was built on** — no Xcode, no
-signing identity (`security find-identity` reports zero), no provisioning
-profile. All three are needed, and two of them require a paid Apple Developer
-account. What follows is the path on a Mac that has them.
+**Still cannot be done here, but the reasons have changed** (2026-09-30).
+Xcode is now installed and the simulators exist; what blocks it is §7.1 below
+plus the signing situation, which is this:
 
-Everything in §1 and §2 is already done, so this should build first time.
+    security find-identity -v -p codesigning
+      1) ... "Apple Development: csaicsai300@gmail.com (6J27BB7MA9)"
+         1 valid identities found
+
+    ~/Library/MobileDevice/Provisioning Profiles/   →   0 profiles
+
+An **Apple Development** certificate signs a build for a registered device or
+a simulator. It **cannot** produce a distributable `.ipa`: that needs an
+*Apple Distribution* certificate and an App Store provisioning profile, and
+both require a **paid** Apple Developer Program membership. A free Apple ID
+gets exactly what is above. So §6 item 1 — enrolment — is still the gate, and
+no amount of building locally gets past it.
+
+### 7.1 · Swift package resolution hangs on this machine
+
+`xcodebuild` never gets as far as compiling. It stops, indefinitely, at:
+
+    Fetching from https://github.com/ionic-team/capacitor-swift-pm.git
+    Creating working copy of package 'capacitor-swift-pm'
+    Checking out 8.5.2 of package 'capacitor-swift-pm'
+
+and stays there. Reproduced on `build` and on `-resolvePackageDependencies`
+alone, so it is resolution, not compilation.
+
+What was ruled out on 2026-09-30, so the next person does not repeat it:
+
+| Suspected | Test | Result |
+|---|---|---|
+| Network / GitHub reachability | `git ls-remote` that repo | instant, fine |
+| The tag itself | `git clone --branch 8.5.2` by hand | **works, instantly** |
+| Corrupt SwiftPM cache | deleted `~/Library/Caches/org.swift.swiftpm` (694 MB), retried | same hang |
+| Stale derived data / workspace state | fresh `-derivedDataPath` and `-clonedSourcePackagesDirPath` | same hang |
+| Two xcodebuilds contending for the lock | killed all, single process | same hang |
+| Git credential helper / global config | `git config --global --list` | empty, no helper |
+| Command sandbox blocking a write | re-ran with the sandbox off | same hang |
+| Xcode licence / first-run not done | `-checkFirstLaunchStatus`, licence record | both fine (26.6) |
+
+So: git can fetch and check out that exact tag in a second, and xcodebuild
+cannot. That points at Xcode's own SPM layer rather than the project, the
+network or the repo. **Do not start by re-cleaning caches — that was tried.**
+
+Worth trying next, roughly in order of cost: open `App.xcodeproj` in Xcode.app
+once and let the GUI resolve packages (a first GUI run may complete something
+the CLI is waiting on); check Console.app for a blocked process while it
+hangs; `sudo xcode-select --install` / verify the Xcode install; or as a
+fallback pin the dependency to a local checkout in `CapApp-SPM/Package.swift`
+so no fetch is needed at all.
+
+Everything in §1 and §2 is already done, so once resolution completes this
+should build.
 
 ### Before you open Xcode
 

@@ -79,6 +79,19 @@ ANDROID_APP_FINGERPRINT=E4:C5:7E:AD:34:CD:99:64:29:79:62:8D:6C:02:FE:7E:5C:A0:8B
 Set that on the deploy that serves the web app. With the host below, that is
 both missing values, and invite links start opening the app.
 
+> **Checked live on 2026-09-30 and NOT yet done.**
+> `https://www.decisionos.biz/.well-known/assetlinks.json` currently serves
+> **one** fingerprint — `E4:C5:…:8F:30`, the original key. The second key's
+> `8C:56:…:92:A3` is not there, so **an APK or AAB signed on the other Mac
+> will not verify App Links**: tapping an invite opens Chrome, silently, with
+> nothing in the app to explain it. Paste the full comma-separated value above
+> into `ANDROID_APP_FINGERPRINT` on the Railway **frontend** service. It is
+> read at runtime, so a restart is enough — no rebuild.
+>
+> This is only a stopgap. The real fix is still to choose one key, put it on
+> both machines, delete the other, and cut this back to a single fingerprint —
+> see [RELEASE_SIGNING.md](RELEASE_SIGNING.md).
+
 To read it again from the keystore yourself:
 
 ```bash

@@ -6,27 +6,32 @@ Audited against what Play actually rejects for, not against code quality. The
 bug report work is done and the app runs; nothing below is a bug. These are
 the things that stop an upload, or get one taken down after it is live.
 
-**Verdict: three hard blockers, none of them code you have to invent, plus one
-policy risk that needs a deliberate answer.** One of the three — self-service
-account deletion — was built on 2026-09-29 and is struck through below; the
-remaining two are the privacy policy and the PostHog decision, and the second
-decides the first. Everything else is Console work
+**Verdict as first written: three hard blockers plus one policy risk.**
+**All three were closed on 2026-09-29** and are struck through below —
+self-service account deletion, the privacy policy, and the analytics decision.
+What is left is Console work (§2), the minimum-functionality argument (§3),
+and three small settings named at the end. Everything else is Console work
 and an afternoon.
 
 ---
 
 ## 1 · Hard blockers — you cannot ship without these
 
-### 1.1 There is no privacy policy
+### 1.1 ~~There is no privacy policy~~ — DONE 2026-09-29
 
-Not in the app, not on the site, not anywhere in this repository. Play makes
-the privacy-policy URL a **required field** on every submission, and the Data
-Safety form cross-checks against it. This is the single thing most likely to
-stop the first upload dead.
+**`https://www.decisionos.biz/privacy`** — live, public, no account needed.
+Written from the code rather than a template: the AI providers come from
+`backend/config.py`, object storage from `integrations/storage.py`, OTP from
+`services/otp.py`, analytics and fonts from `public/index.html`.
+[PRIVACY.md](PRIVACY.md) holds the same inventory in the shape the Data Safety
+questionnaire asks for, so the two cannot drift.
 
-It has to be a live, public URL — not a PDF, not behind a login — and it has to
-actually describe what DecisionOS collects. It cannot be generic boilerplate,
-because §1.3 below means the real answer is more than most templates cover.
+Linked from the sign-in footer, which is the one screen somebody sees before
+they have an account.
+
+**One thing left: `support@decisionos.biz` must deliver.** The policy points
+there and DPDP requires a working grievance contact. It is the `CONTACT`
+constant in `frontend/src/pages/Privacy.js` if it should be another address.
 
 ### 1.2 ~~There is no way for a person to delete their own account~~ — DONE 2026-09-29
 
@@ -65,7 +70,7 @@ than not starting.
 safety → Data deletion. The host was confirmed on 2026-09-29; the page needs
 the current branch deployed before that URL answers with anything real.
 
-### 1.3 PostHog ships unconditionally, with session recording configured
+### 1.3 ~~PostHog ships unconditionally, with session recording configured~~ — DECIDED 2026-09-29
 
 `frontend/public/index.html` initialises PostHog inline, before the app mounts,
 on every launch:
@@ -104,13 +109,20 @@ independent of anything Google thinks. The consent scaffolding exists
 (`/tenant/ai-consent`, `admin_compliance.py`); analytics was simply never put
 behind it.
 
-Pick one, deliberately:
+**Decided: keep pageviews, kill replay and autocapture.**
 
-- **Turn it off for the app build** — cleanest for the pilot, one condition in
-  `index.html`. You lose mobile analytics.
-- **Keep events, kill replay** — declare "app interactions", no screen content.
-- **Keep replay** — then it needs consent before init, masking of every money
-  and name field, and a privacy policy that says so plainly.
+| | Now | Why |
+|---|---|---|
+| Session replay | **off in code** (`disable_session_recording`) | It was only ever switched on by a PostHog *project* setting, so whether this app recorded screens depended on a dashboard nobody here can see. Setting it in the app settles it, and a toggle flipped later cannot undo it. |
+| Autocapture | **off** | It records the text of what you click — "Approve ₹2,40,000 to Sharma Textiles". Content, not behaviour. |
+| Pageviews | **kept** | What a pilot needs; carries no business content. |
+| The key | **`REACT_APP_POSTHOG_KEY`** | A real off switch — no key, no init, no request. Verified both ways against a real build. |
+
+**Analytics is currently OFF in production**, because that variable is not set
+on Railway. Setting it turns analytics back on under the rules above; leaving
+it unset means no analytics at all, which is a valid choice but should be a
+chosen one. The policy page describes analytics as it behaves *with* the key —
+over-disclosure while it is off, which is the safe direction.
 
 ---
 
@@ -211,10 +223,13 @@ contained and strictly better for a native app.
 
 ## 6 · The order I would do it in
 
-1. **Look at whether PostHog session replay is actually on.** One click, and it
-   decides §1.3, the privacy policy and the Data Safety form.
-2. **Decide the analytics posture** (off / events only / consented replay).
-3. **Write the privacy policy** — it can only be written truthfully after 1–2.
+1. ~~Look at whether PostHog session replay is on~~ — moot. Replay is now off
+   in the app, so the project setting cannot turn it back on.
+2. ~~Decide the analytics posture~~ — **done**: pageviews yes, replay and
+   autocapture no. Set `REACT_APP_POSTHOG_KEY` on the Railway *frontend*
+   service to switch analytics back on; leave it unset for none.
+3. ~~Write the privacy policy~~ — **done**, at `/privacy`. Make
+   `support@decisionos.biz` deliver.
 4. ~~Build self-service account deletion~~ — **done**. Deploy, then give the
    Console `https://www.decisionos.biz/delete-account`.
 5. Back up the keystore; opt into Play App Signing.

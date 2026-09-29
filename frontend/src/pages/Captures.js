@@ -5,6 +5,7 @@
 // white glass cards, tinted status chips that say what they mean, our own
 // dropdowns for every choice, ink for Approve. Flows and data-testids are
 // unchanged.
+import { roleLabel } from "../lib/departments";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -181,7 +182,7 @@ function CaptureCard({ c, user, onChange }) {
   const pct = c.confidence != null ? Math.round(c.confidence * 100) : null;
   const why = [
     `Read as “${(c.classification || "other").replace(/_/g, " ")}”`,
-    c.reviewer_perm === "finance" ? "money item → routed to Finance" : c.reviewer_role ? `routed to the ${c.reviewer_role} team` : null,
+    c.reviewer_perm === "finance" ? "money item → routed to Finance" : c.reviewer_role ? `routed to the ${roleLabel(c.reviewer_role)} team` : null,
     c.priority ? `${c.priority} priority` : null,
     c.needs_owner ? "needs owner sign-off" : null,
     pct != null ? (pct >= 80 ? `high AI confidence (${pct}%)` : pct >= 50 ? `medium confidence (${pct}%) — worth a check` : `low confidence (${pct}%) — please verify`) : null,
@@ -197,7 +198,7 @@ function CaptureCard({ c, user, onChange }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <Tag>{String(c.classification || "other").replace(/_/g, " ")}</Tag>
-            <Tag className="normal-case">review: {c.reviewer_role}</Tag>
+            <Tag className="normal-case">review: {roleLabel(c.reviewer_role)}</Tag>
             <Tag tone={c.priority === "high" ? "bad" : "quiet"}>{c.priority}</Tag>
             {c.needs_owner && (
               <Tag tone="bad" className="normal-case" data-testid={`capture-escalated-${c.id}`}>
@@ -217,7 +218,7 @@ function CaptureCard({ c, user, onChange }) {
             title={c.sender_name ? `${c.sender_name}${c.wa_from ? " · " + c.wa_from : ""} · ${fullTime(c.created_at)}` : fullTime(c.created_at)}>
             <WhatsappLogo size={13} aria-hidden="true" />
             {c.sender_name
-              ? <span data-testid={`capture-sender-${c.id}`}>{c.sender_name}{c.sender_role ? ` (${c.sender_role})` : ""}</span>
+              ? <span data-testid={`capture-sender-${c.id}`}>{c.sender_name}{c.sender_role ? ` (${roleLabel(c.sender_role)})` : ""}</span>
               : (c.wa_from || "whatsapp")}
             {" · "}{timeAgo(c.created_at)}
           </p>

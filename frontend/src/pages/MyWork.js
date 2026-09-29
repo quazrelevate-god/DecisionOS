@@ -1620,7 +1620,7 @@ function cardPeople(t, members, roleOptions) {
     .map((id) => person(id, coNames[id]));
   if (t.assignee_id) return [person(t.assignee_id, t.assignee_name || "Assignee"), ...co];
   if (t.assignee_role) {
-    const label = roleOptions.find((r) => r.key === t.assignee_role)?.label || t.assignee_role;
+    const label = roleLabel(t.assignee_role, roleOptions);
     return [{ id: `role:${t.assignee_role}`, kind: "team", name: `${label} team` }, ...co];
   }
   return co;

@@ -1,3 +1,4 @@
+import { roleLabel } from "../lib/departments";
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
@@ -133,7 +134,9 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
   const personId = form.assign.startsWith("u:") ? form.assign.slice(2) : "";
   const teamKey = form.assign.startsWith("r:") ? form.assign.slice(2) : "";
   const dueDate = form.due_preset === "pick" ? form.due_date : presetDate(form.due_preset);
-  const roleLabel = (key) => roleOptions.find((r) => r.key === key)?.label || key;
+  /* 2026-09-29 — this was a seventh copy of the same idea, and being a
+     `const` it SHADOWED the shared one for this whole component. Gone;
+     the calls below pass the role list to lib/departments.roleLabel. */
   // ASK-28 TK-08 (plan 5.5 / 6.3) — only the teams and people this person may
   // give work to; the server refuses the rest.
   const teams = roleOptions.filter((r) => r.key !== "owner" && canAssignTeam(user, r.key));
@@ -201,9 +204,9 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
       }
       // ASK-28 TK-06 — a team task says where it went, instead of a silent pick.
       if (teamKey && task?.auto_assigned && task?.assignee_name) {
-        toast.success(`Task created. Assigned to ${task.assignee_name}: fewest open tasks in ${roleLabel(teamKey)}.`);
+        toast.success(`Task created. Assigned to ${task.assignee_name}: fewest open tasks in ${roleLabel(teamKey, roleOptions)}.`);
       } else if (teamKey && !task?.assignee_id) {
-        toast.success(`Task created for the ${roleLabel(teamKey)} team. Nobody in it can take it yet.`);
+        toast.success(`Task created for the ${roleLabel(teamKey, roleOptions)} team. Nobody in it can take it yet.`);
       } else {
         toast.success("Task created");
       }
@@ -410,7 +413,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                   { value: "", label: "Nobody yet" },
                   { label: "People", options: assignable.map((m) => ({
                     value: `u:${m.id}`,
-                    label: m.id === user?.id ? `Me · ${m.name}` : `${m.name} · ${roleLabel(m.role)}`,
+                    label: m.id === user?.id ? `Me · ${m.name}` : `${m.name} · ${roleLabel(m.role, roleOptions)}`,
                   })) },
                   ...(teams.length > 0
                     ? [{ label: "A team (least busy person)", options: teams.map((r) => ({ value: `r:${r.key}`, label: `${r.label} team` })) }]
@@ -420,7 +423,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
           </div>
           {teamKey && (
             <p className="-mt-2 text-xs text-muted-foreground" data-testid="task-team-hint">
-              Goes to whoever in {roleLabel(teamKey)} has the least open work.
+              Goes to whoever in {roleLabel(teamKey, roleOptions)} has the least open work.
             </p>
           )}
 
@@ -564,7 +567,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                       <GlassSelect id="task-helper-add" testid="task-co-assignee-select" variant="field" triggerClassName={`${inp} mt-1.5`}
                         value="" placeholder="+ Add a helper"
                         onChange={(id) => id && setForm({ ...form, co_assignee_ids: [...form.co_assignee_ids, id] })}
-                        options={helperChoices.map((m) => ({ value: m.id, label: `${m.name} · ${roleLabel(m.role)}` }))} />
+                        options={helperChoices.map((m) => ({ value: m.id, label: `${m.name} · ${roleLabel(m.role, roleOptions)}` }))} />
                       <p className="mt-1 text-xs text-muted-foreground">Helpers see the task in My Tasks and get its updates.</p>
                     </>
                   ) : (
@@ -608,7 +611,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                       value={form.approver_id} onChange={(v) => setForm({ ...form, approver_id: v })}
                       options={[
                         { value: "", label: defaultApproverLabel },
-                        ...approvers.map((m) => ({ value: m.id, label: `${m.name} · ${roleLabel(m.role)}` })),
+                        ...approvers.map((m) => ({ value: m.id, label: `${m.name} · ${roleLabel(m.role, roleOptions)}` })),
                       ]} />
                   </div>
                 )}
@@ -751,7 +754,7 @@ export function TaskBoard() {
           </button>
         ) : (
           <span data-testid="lane-badge" className="px-4 py-2 text-sm font-medium border border-border bg-primary text-primary-foreground">
-            {user?.role} lane
+            {roleLabel(user?.role, tenant?.roles)} lane
           </span>
         )}
         <NewTaskDialog onCreated={invalidate} roleOptions={roleOptions} members={members} />
@@ -781,7 +784,7 @@ export function TaskBoard() {
                           <User size={11} weight="bold" /> {t.assignee_name}
                         </span>
                       ) : t.assignee_role ? (
-                        <Chip value={t.assignee_role} className="bg-white" data-testid={`task-assignee-${t.id}`} />
+                        <Chip value={roleLabel(t.assignee_role, tenant?.roles)} className="bg-white" data-testid={`task-assignee-${t.id}`} />
                       ) : (
                         <span className="text-xs text-muted-foreground italic">Unassigned</span>
                       )}
@@ -798,7 +801,7 @@ export function TaskBoard() {
                       onChange={(e) => reassign(t, e.target.value)}
                       className="mt-3 w-full border border-border px-2 py-1.5 text-xs font-mono bg-white focus:outline-none focus:shadow-sm">
                       <option value="">Reassign to…</option>
-                      {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
+                      {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {roleLabel(m.role, roleOptions)}</option>)}
                     </select>
                     {NEXT[t.status] && (
                       <button onClick={() => move(t)} data-testid={`advance-task-${t.id}`}

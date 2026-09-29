@@ -16,6 +16,9 @@ implementations of "name this role":
     Team.roleName
     Team.roleNameFor  (+ its own `humanize`)
     OperatingScore.roleLabelFor
+    Tasks.NewTaskDialog's own     a `const` inside the component, so it
+                                  SHADOWED the shared one for the whole of
+                                  the New Task form
 
 Six copies is how a screen ends up printing `sales_&_order_management`: not
 because anyone chose to, but because the copy within reach did not have the
@@ -130,3 +133,58 @@ def test_a_person_with_no_role_is_not_called_none():
     assert 'roleLabel(user?.role, tenant?.roles, "Member")' in src("components/Layout.js")
     assert '"Unassigned"' in src("pages/Team.js")
     assert 'roleLabel(r.role, null, "")' in src("components/Layout.js")
+
+
+# ───────────── the rest of the application (2026-09-29, mobile pass) ───────
+@pytest.mark.parametrize("rel,raw", [
+    # the WhatsApp capture card, in the Finance inbox
+    ("pages/Captures.js", "review: {c.reviewer_role}"),
+    ("pages/Captures.js", "` (${c.sender_role})`"),
+    ("pages/Captures.js", "`routed to the ${c.reviewer_role} team`"),
+    # a contact's open work
+    ("pages/ContactProfile.js", "<Chip value={t.assignee_role}"),
+    # what Dex reads back about a decision it just captured
+    ("hooks/useDexConversation.js", "`${t.assignee_role} team`"),
+    # the platform admin's impersonation list
+    ("pages/admin/ImpersonationSection.js", "· {s.target_role}</span>"),
+    # and the one inside MyWork that had the logic but not the helper
+    ("pages/MyWork.js", "roleOptions.find((r) => r.key === t.assignee_role)?.label"),
+])
+def test_the_last_of_the_stored_keys_are_gone(rel, raw):
+    assert raw not in src(rel), f"{rel} still prints the key"
+
+
+def test_the_copy_that_shadowed_the_shared_one_is_gone():
+    """Tasks.js had `const roleLabel = (key) => ...` INSIDE NewTaskDialog, so
+    for that whole component — the live New Task form — the import resolved to
+    the local copy instead. A seventh implementation, and an invisible one."""
+    t = src("pages/Tasks.js")
+    assert "const roleLabel = (key) =>" not in t
+    assert 'import { roleLabel } from "../lib/departments";' in t
+    # every call in the file now hands over a role list or takes the fallback
+    for call in ("roleLabel(teamKey, roleOptions)", "roleLabel(m.role, roleOptions)",
+                 "roleLabel(user?.role, tenant?.roles)"):
+        assert call in t, call
+
+
+def test_a_component_without_a_role_list_takes_the_fallback_rather_than_throwing():
+    """CaptureCard and ContactProfile's Table are plain components with no
+    tenant in scope; reaching for `tenant?.roles` there would have been a
+    ReferenceError, not a label."""
+    assert "roleLabel(c.reviewer_role)" in src("pages/Captures.js")
+    assert "roleLabel(t.assignee_role)" in src("pages/ContactProfile.js")
+
+
+def test_the_phone_shows_no_role_of_its_own():
+    """Asked directly: is this done on mobile too. The mobile shell has no
+    role text of its own — the avatar line that carried it is desktop-only
+    (`hidden xl:block`) — so what a phone shows is the same pickers, Team
+    list and Ops page as the desktop, all of which read the shared function.
+    Asserted so that a mobile header gaining a role line does not quietly
+    reintroduce the key."""
+    from pathlib import Path
+    mobile = Path(__file__).resolve().parents[2] / "frontend" / "src" / "components" / "mobile"
+    for f in mobile.rglob("*.jsx"):
+        text = f.read_text(encoding="utf-8")
+        for bad in ("{user.role}", "{user?.role}", "${user.role}", "${m.role}", "{m.role}"):
+            assert bad not in text, f"{f.name} renders a role key"

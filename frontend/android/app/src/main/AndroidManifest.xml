@@ -1,8 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      B08 (2026-09-29) · allowBackup was true, which is Android's default and
+      the wrong one here. It lets the app's private data — the WebView's cookie
+      and storage, which is where the session lives — be pulled off the device
+      by `adb backup` or carried to another phone by Google's own transfer.
+      This is a business's ledger, its people and its decisions; it should not
+      travel except through a sign-in. Nothing in the app depends on backup:
+      everything is on the server and a reinstall signs in again.
+    -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"

@@ -82,12 +82,13 @@
     "verify:pwa": "npm run build && node scripts/verify-pwa.mjs",
     "shots": "node scripts/shots.mjs",
     "fixture-api": "node scripts/fixture-server.mjs --port 8000",
-    "cap:sync": "npm run build && npx cap sync",
+    "cap:sync": "GENERATE_SOURCEMAP=false npm run build && npm run cap:prune && npx cap sync",
     "cap:dev": "node scripts/cap-dev.mjs",
     "cap:ios": "npx cap open ios",
     "cap:android": "npx cap open android",
     "build:prod": "REACT_APP_BACKEND_URL=https://backend-production-c8640.up.railway.app craco build",
-    "cap:sync:prod": "npm run build:prod && npx cap sync"
+    "cap:sync:prod": "GENERATE_SOURCEMAP=false npm run build:prod && npm run cap:prune && npx cap sync",
+    "cap:prune": "node scripts/prune-native-assets.mjs"
   },
   "browserslist": {
     "production": [

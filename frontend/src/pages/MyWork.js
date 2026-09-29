@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import api from "../lib/api";
 import { timeAgo, fullTime, TASK_STATUS_LABELS } from "../lib/format";
+import { roleLabel } from "../lib/departments";
 import { PageHeader, Chip, EmptyState, SkeletonCard, StickyHeader } from "../components/common";
 import { useAuth } from "../context/AuthContext";
 import { userPerms } from "../lib/perms";
@@ -320,7 +321,7 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel, no
             testid={`update-member-${taskId}`}
             options={[
               { value: "", label: handoffPeople.length ? "Hand off to a team member" : "Nobody you can hand this to" },
-              ...handoffPeople.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` })),
+              ...handoffPeople.map((m) => ({ value: m.id, label: `${m.name} · ${roleLabel(m.role, roleOptions)}` })),
             ]} />
           <GlassSelect value={toRole} onChange={setToRole} disabled={!!toId} ariaLabel="Or hand off to a whole team"
             testid={`update-team-${taskId}`}
@@ -1637,7 +1638,7 @@ function AssigneesEditor({ t, members, roleOptions, canEdit, onPatched }) {
   const [busy, setBusy] = useState(false);
   // ASK-28 TK-06 — the rest of who is on a task, in words: who asked for it,
   // who approves it and when, and how a team task found its doer.
-  const teamLabel = (key) => roleOptions.find((r) => r.key === key)?.label || key;
+  const teamLabel = (key) => roleLabel(key, roleOptions);
   const people = cardPeople(t, members, roleOptions);
   const co = (t.co_assignee_ids || []).filter((id) => id && id !== t.assignee_id);
   // ASK-28 TK-08 — only people this person may give work to.
@@ -1702,7 +1703,7 @@ function AssigneesEditor({ t, members, roleOptions, canEdit, onPatched }) {
             onChange={(id) => {
               if (id) save([...co, id], `Added ${members.find((m) => m.id === id)?.name || "a member"}`);
             }}
-            options={addable.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` }))} />
+            options={addable.map((m) => ({ value: m.id, label: `${m.name} · ${roleLabel(m.role, roleOptions)}` }))} />
         )}
       </div>
       {(t.auto_assigned?.role && t.assignee_id) || t.created_by_name || t.decision_id || t.approval_required ? (
@@ -1818,7 +1819,7 @@ function WaitingOn({ t, members = [], onPatched, readOnly = false }) {
       <p className={DRAWER_LABEL}>Waiting on</p>
       <GlassSelect value={who} onChange={(v) => { setWho(v); if (v) setName(""); }} ariaLabel="A colleague"
         testid={`task-waiting-person-${t.id}`}
-        options={[{ value: "", label: "A colleague" }, ...people.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` }))]} />
+        options={[{ value: "", label: "A colleague" }, ...people.map((m) => ({ value: m.id, label: `${m.name} · ${roleLabel(m.role)}` }))]} />
       <input value={name} maxLength={80} data-testid={`task-waiting-name-${t.id}`} aria-label="Or type a name"
         onChange={(e) => { setName(e.target.value); if (e.target.value) setWho(""); }}
         placeholder="Or type a name, e.g. Kumar Fabrics (supplier)"
@@ -4993,7 +4994,7 @@ export default function MyWork({ only = null }) {
                     ariaLabel="Reassign to a team member" testid="bulk-reassign-member"
                     options={[
                       { value: "", label: "Choose a person" },
-                      ...members.filter((m) => canAssignPerson(user, m)).map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` })),
+                      ...members.filter((m) => canAssignPerson(user, m)).map((m) => ({ value: m.id, label: `${m.name} · ${roleLabel(m.role, roleOptions)}` })),
                     ]} />
                 </div>
                 <div>

@@ -1,6 +1,7 @@
 // Tenant 360 & cross-tenant search (Epic 10 Sprint 1).
 // Self-contained admin section: search workspaces/users, drill into a consolidated
 // per-workspace view (plan, members, AI spend, counts, activity, health).
+import { roleLabel } from "../../lib/departments";
 import { useState, useCallback } from "react";
 import api, { formatApiError } from "../../lib/api";
 import { toast } from "sonner";
@@ -120,7 +121,7 @@ export function Tenant360Section() {
               {results.users.map((u) => (
                 <button key={u.id} onClick={() => u.tenant_id && openTenant(u.tenant_id)}
                   className="w-full text-left border border-white/10 bg-[#141418] px-3 py-2 hover:border-[#e5484d]/50 transition-colors">
-                  <div className="text-white text-sm">{u.name} <span className="text-white/30 text-xs">· {u.role}</span></div>
+                  <div className="text-white text-sm">{u.name} <span className="text-white/30 text-xs">· {roleLabel(u.role)}</span></div>
                   <div className="font-mono text-[10px] text-white/40">{u.email || u.phone || "—"} · {u.tenant_name}</div>
                 </button>
               ))}
@@ -193,7 +194,7 @@ export function Tenant360Section() {
               <div className="border border-white/10 divide-y divide-white/5">
                 {sel.members.map((m) => (
                   <div key={m.id} className="flex items-center justify-between px-3 py-2 bg-[#141418]">
-                    <div className="text-white text-sm">{m.name} <span className="text-white/30 text-xs">· {m.role}</span></div>
+                    <div className="text-white text-sm">{m.name} <span className="text-white/30 text-xs">· {roleLabel(m.role)}</span></div>
                     {m.suspended
                       ? <span className="font-mono text-[10px] text-[#e5484d]">suspended</span>
                       : <span className="font-mono text-[10px] text-[#3fb950]">active</span>}

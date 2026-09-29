@@ -1,3 +1,4 @@
+import { roleLabel } from "../lib/departments";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -114,7 +115,7 @@ function ContactDialog({ trigger, initial, onSaved, users, defaultType }) {
           </div>
           <select data-testid="contact-assigned-select" className={inp} value={form.assigned_id} onChange={set("assigned_id")}>
             <option value="">Assign owner…</option>
-            {(users || []).map((u) => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
+            {(users || []).map((u) => <option key={u.id} value={u.id}>{u.name} ({roleLabel(u.role)})</option>)}
           </select>
           <textarea className={inp} rows={2} placeholder="Notes" value={form.notes} onChange={set("notes")} />
         </div>

@@ -191,29 +191,8 @@ def test_a_no_is_not_asked_three_more_times():
 
 
 # ───────────── the role reads the same everywhere ──────────────────────────
-def test_a_role_has_one_set_of_words_and_the_header_uses_them():
-    """2026-09-29, from the access walk. The header printed the stored key:
-    every non-owner read "Accounts_&_buyer_payments" under their own name, on
-    every screen, because `{user.role}` under CSS `capitalize` only touches
-    the first letter of each word and leaves the underscores where they are.
-
-    The company's own words come first — the owner names their roles in
-    Settings — with the humanised key as the fallback for a role this tenant
-    does not list. Third field to come here after the same bug (humanStage,
-    then TASK_STATUS_LABELS), so it lives in one place now and the Ops page
-    reads that one rather than the copy it grew itself."""
-    perms = (FE / "lib" / "perms.js").read_text(encoding="utf-8")
-    assert "export function roleLabel(role, tenantRoles = null, fallback" in perms
-    assert 'if (role === "owner") return "Owner";' in perms
-
-    layout = (FE / "components" / "Layout.js").read_text(encoding="utf-8")
-    assert 'import { hasPerm, roleLabel } from "../lib/perms";' in layout
-    assert 'roleLabel(user?.role, tenant?.roles, "Member")' in layout
-    assert 'capitalize text-muted-foreground">{user?.role' not in layout, "the raw key is gone"
-    # The workspace switcher shows the role held in ANOTHER company, whose
-    # role list this tenant has never seen — humanised key, honestly.
-    assert 'roleLabel(r.role, null, "")' in layout
-    assert 'capitalize text-slate-500">{r.role}' not in layout
-
-    assert "const roleLabelFor = (roles, key) => roleLabel(key, roles);" in OPS, \
-        "one implementation, not two that drift"
+# The header fix this file first carried grew into a sweep of the whole app
+# the same day: six implementations of "name this role" turned out to be why
+# the key kept leaking onto screens. It lives in lib/departments now, and
+# tests/test_a_role_reads_the_same_everywhere.py holds the assertions —
+# including the one that used to be here, pointed at the new home.

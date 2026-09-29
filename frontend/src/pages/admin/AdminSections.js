@@ -1,3 +1,4 @@
+import { roleLabel } from "../../lib/departments";
 import { useState, useEffect, useCallback } from "react";
 import api, { formatApiError } from "../../lib/api";
 import { toast } from "sonner";
@@ -502,7 +503,7 @@ export function UsersSection() {
                 <td className="p-3 text-white font-semibold">{u.name || "—"}</td>
                 <td className="p-3 text-white/60">{u.email || "—"}</td>
                 <td className="p-3 text-white/50">{u.tenant_name}</td>
-                <td className="p-3 uppercase text-white/50">{u.role}</td>
+                <td className="p-3 text-white/50">{roleLabel(u.role)}</td>
                 <td className="p-3">
                   {u.suspended
                     ? <span className="text-[#e5484d]">suspended</span>

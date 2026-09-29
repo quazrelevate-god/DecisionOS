@@ -43,7 +43,7 @@ import {
 import { GlassSelect } from "../components/karma/GlassSelect";
 import { cn } from "@/lib/utils";
 import { opModel } from "../lib/operatingModel";
-import { roleLabel } from "../lib/perms";
+import { roleLabel } from "../lib/departments";
 import { humanStage, taskStatusLabel, priorityLabel } from "../lib/format";
 import {
   isDemoTenant, demoDelta, demoDrivers, demoDrilldowns, demoDex,
@@ -1018,7 +1018,7 @@ function SelfView({ data, windowKey, onWindow }) {
           {peer && peer.my_rank_in_role && peer.role_ranked_size >= 2 && (
             <p className={`flex items-center gap-2.5 text-sm text-white/80 ${activeWfs.length ? "mt-6" : ""}`} data-testid="operating-self-peer">
               <Trophy size={16} weight="bold" aria-hidden="true" className="shrink-0 text-white/60" />
-              <span>Among the <strong className="font-semibold text-white">{peer.role}</strong> peers, ranked{" "}
+              <span>Among the <strong className="font-semibold text-white">{roleLabelFor(roles, peer.role)}</strong> peers, ranked{" "}
                 <strong className="font-semibold text-white">{peer.my_rank_in_role}</strong> of {peer.role_ranked_size}.</span>
             </p>
           )}

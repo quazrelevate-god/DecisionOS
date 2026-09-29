@@ -8,7 +8,8 @@
    which the reference's italic tile-labels want anyway.
    Inter, Instrument Serif and Chivo (zero call sites) retire. IBM Plex Mono
    stays: money columns and code need tabular figures we can trust. */
-@import url('https://fonts.googleapis.com/css2?family=Urbanist:ital,wght@0,100..900;1,100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+/* PLAY-3 (2026-09-29) — bundled, not fetched. See fonts.css for why. */
+@import './fonts.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

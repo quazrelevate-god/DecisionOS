@@ -2851,15 +2851,25 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       )}
       <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} noteOnly={noteOnly} />
 
-      {/* ASK-28 — Delete sits under "Log update or hand off", full width like
-          it, and asks first in the drawer's own glass. ASK-29: the same
-          gradient pill as the navy one, in maroon with white type. */}
+      {/* ASK-28 — Delete sits under "Log update or hand off" and asks first in
+          the drawer's own glass. ASK-29 gave it the maroon gradient pill.
+          B14 (2026-09-29) — AND THAT MADE IT THE LOUDEST THING IN THE DRAWER.
+          A full-width maroon pill outranked Complete, which is a black pill in
+          the sticky bar below: the destructive action read as the primary one,
+          at the bottom of a drawer somebody is scrolling with their thumb. It
+          keeps the maroon word and the trash, and gives up the fill and the
+          full width — a quiet control that still says what it does, and still
+          asks before it does it. Same testid, same confirmation. */}
       {canDelete && (
         <>
           <button type="button" onClick={() => setConfirmDelete(true)}
             data-testid={`drawer-delete-task-${t.id}`}
-            className={`-mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-pill text-[15px] font-medium ${MAROON_PILL}`}>
-            <Trash size={17} weight="bold" aria-hidden="true" /> Delete task
+            /* Slate, not red: DS-1 keeps `danger` for money or a deadline at
+               risk, which is the same rule that keeps Settings' Sign out
+               neutral. The trash says what it is and the confirmation — which
+               has the red — is where the alarm belongs. */
+            className="mx-auto -mt-2 flex h-11 w-fit items-center justify-center gap-2 rounded-pill px-4 text-sm font-medium text-slate-600 transition-colors hover:bg-white/70 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline">
+            <Trash size={16} weight="bold" aria-hidden="true" /> Delete task
           </button>
           <AlertDialog open={confirmDelete} onOpenChange={(o) => { if (!deleting) setConfirmDelete(o); }}>
             <AlertDialogContent data-testid={`drawer-delete-dialog-${t.id}`}

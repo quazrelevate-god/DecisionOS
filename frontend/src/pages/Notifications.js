@@ -103,10 +103,15 @@ export default function Notifications() {
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                  {/* B21 (2026-09-29) — "Read" on a row that is unread reads
+                      as a STATUS, not a button: the one word describes both
+                      what this is and the opposite of what it is. It says what
+                      pressing it does. */}
                   {!n.read && (
                     <button type="button" onClick={(e) => { e.stopPropagation(); markRead(n.id); }} data-testid={`read-${n.id}`}
+                      aria-label={`Mark "${n.title || "this notification"}" as read`}
                       className={`h-9 rounded-pill px-3 text-xs font-medium text-slate-700 transition-colors hover:bg-white ${GLASS_PILL}`}>
-                      Read
+                      Mark read
                     </button>
                   )}
                   {clickable && <CaretRight size={16} weight="bold" aria-hidden="true" className="text-slate-400" />}

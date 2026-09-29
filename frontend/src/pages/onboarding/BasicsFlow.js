@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, ArrowLeft } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -39,7 +39,10 @@ const STEPS = [
      the number is shown until the code confirms it, so a stranger's number
      still tells the typist nothing. */
   {
-    key: "phone", eyebrow: "Mobile sign-in", type: "tel", placeholder: "+91 98765 43210",
+    /* B28 — "Mobile sign-in" read as a heading for a screen that signs you
+       in, on the screen where somebody is signing UP. It is a label for the
+       thing being asked for. */
+    key: "phone", eyebrow: "Your mobile", type: "tel", placeholder: "+91 98765 43210",
     q: () => "Let's start with your mobile number.",
     sub: () => "This is how you sign in — we'll text a code to confirm it's yours.",
     validate: (v) => (normIndianMobile(v) ? "" : "Enter a 10-digit Indian mobile number"),
@@ -555,6 +558,25 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
           className="kr-pop mt-8 flex h-9 items-center gap-1.5 rounded-pill px-4 text-xs font-medium text-muted-foreground">
           <ArrowLeft size={14} weight="bold" /> Back
         </button>
+      )}
+      {/* B12 (2026-09-29) — ON A PHONE THERE WAS NO WAY BACK TO SIGN IN. The
+          header's Sign in is `hidden lg:flex`, so somebody who tapped Register
+          by mistake — or came back a week later and forgot they already had a
+          workspace — had to use the system Back button to escape a screen
+          asking for their mobile number.
+          It goes UNDER the first question, not into the header: a link beside
+          the wordmark on the way IN is exactly what the founder had removed
+          from the sign-in screen, for the same reason. This sits after the
+          decision rather than over it, and only on the first step — past that
+          they are answering, not choosing. */}
+      {idx === 0 && (
+        <p className="mt-8 text-sm text-muted-foreground lg:hidden">
+          Already have an account?{" "}
+          <Link to="/login" data-testid="signup-basics-signin"
+            className="font-semibold text-foreground underline-offset-2 hover:underline">
+            Sign in
+          </Link>
+        </p>
       )}
       </div>
     </div>

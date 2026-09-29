@@ -1,15 +1,25 @@
 const SYMBOLS = { INR: "₹", USD: "$", EUR: "€", GBP: "£", AED: "AED ", SGD: "S$", AUD: "A$", CAD: "C$" };
 
-// NOTE (§5.3): this groups digits in the *runtime* locale, so it renders
-// ₹480,000 rather than ₹4,80,000 for an Indian MSME. Deliberately left alone
-// on this branch — it is shared with desktop, where §1/§9.2 require a
-// pixel-identical render, and changing it would move every money figure on
-// every desktop screen. Mobile screens migrate to `inr()` below as each page
-// slice lands; the desktop fix wants its own PR with a blast-radius note.
+/* B13 (2026-09-29) — RUPEES GROUP IN LAKHS, WHEREVER THE PHONE IS FROM.
+   This used the RUNTIME locale, so the same figure read ₹4,80,000 on a phone
+   set to English (India) and ₹480,000 on one set to English (US) — and the
+   Desk and Finance disagreed with each other on the same screen, because the
+   Desk had already moved to `inr()` below. For a business whose books are
+   kept in lakhs and crores, the second grouping is not a preference, it is
+   the wrong number shape.
+   The old note here said this was left alone because desktop wanted a
+   pixel-identical render and the change would move every money figure on
+   every desktop screen. It does, and that is the point: they move to the
+   grouping the rest of the app already uses.
+   Only INR is pinned. A tenant billing in dollars still gets the reader's own
+   convention, which for those currencies is the right one. */
 export function money(amount, currency = "INR") {
   if (amount == null || amount === "") return "";
   const sym = SYMBOLS[currency] || `${currency} `;
-  return sym + Number(amount).toLocaleString();
+  const grouped = currency === "INR"
+    ? new Intl.NumberFormat("en-IN").format(Number(amount))
+    : Number(amount).toLocaleString();
+  return sym + grouped;
 }
 
 /**

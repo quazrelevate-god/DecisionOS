@@ -1035,7 +1035,10 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Escape" && query) { e.preventDefault(); setQuery(""); } }}
-              placeholder="Search members, teams or roles…"
+              /* B21 — clipped to "Search membe" at 412px, so the one thing
+                 the placeholder had to do, it could not. The label keeps the
+                 full sentence for anyone listening to it. */
+              placeholder="Search team"
               aria-label="Search members, teams or roles"
               data-testid="team-search"
               className="h-full w-full min-w-0 rounded-pill bg-transparent pl-11 pr-16 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 [&::-webkit-search-cancel-button]:hidden"

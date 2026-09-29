@@ -38,9 +38,16 @@ export const TONE_CHIP = {
   amber: "bg-amber-50 text-amber-700 ring-amber-100",
 };
 
+/* B13 — `undefined` here meant the READER's locale, so Finance printed
+   ₹6,486,000 on a phone set to English (US) while the Desk, which formats
+   through lib/format's inr(), printed ₹64,86,000 for the same money. Rupees
+   are pinned to en-IN; every other currency keeps the reader's convention,
+   which for those is the right one. */
 export const fmt = (cur) => (n) => {
+  const currency = cur || "INR";
   try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency: cur || "INR", maximumFractionDigits: 0 }).format(n || 0);
+    return new Intl.NumberFormat(currency === "INR" ? "en-IN" : undefined,
+      { style: "currency", currency, maximumFractionDigits: 0 }).format(n || 0);
   } catch {
     return `${cur || ""} ${Math.round(n || 0).toLocaleString()}`;
   }

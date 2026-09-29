@@ -312,20 +312,46 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
      having the editor disappear from under a returning answer was the same
      disorientation in miniature — and the founder is often adding two things
      in a row. */
+  /* B06 (2026-09-29) — APPLY USED TO DO NOTHING FOR HALF THE FOUNDERS.
+     The guard read `!sessionId` and returned, silently: no spinner, no toast,
+     no change. Everybody who took "Skip the interview — build from what you
+     have" has no session, so for them this was an enabled button wired to
+     nothing, on the screen where they are being asked to trust what Dex built.
+
+     There are two ways to rebuild and the screen already knows both — it is
+     the same fork `generate` uses above. With a session, the refinement is
+     stored on it and the interview blueprint re-runs. Without one, the
+     stateless builder takes the founder's own description with the additions
+     appended, which is exactly what it was given the first time plus what
+     they have just asked for. `extras` accumulates, so a second addition does
+     not quietly drop the first. */
+  const [extras, setExtras] = useState([]);
   const submitRefinement = async () => {
     const text = refineText.trim();
-    if (!text || refining || !sessionId) return;
+    if (!text || refining) return;
     setRefining(true); setError("");
     try {
-      const { data } = await api.post("/signup/interview/refine", {
-        session_id: sessionId, refinement: text, language_code: languageCode || "en-IN",
-      });
+      let data;
+      if (sessionId) {
+        ({ data } = await api.post("/signup/interview/refine", {
+          session_id: sessionId, refinement: text, language_code: languageCode || "en-IN",
+        }));
+      } else {
+        const all = [...extras, text];
+        const described = [payload.description, `The founder also asked for: ${all.join("; ")}`]
+          .filter(Boolean).join("\n\n");
+        ({ data } = await api.post("/onboarding/os-blueprint", {
+          industry: payload.industry, company_size: payload.company_size, description: described,
+        }));
+        setExtras(all);
+      }
       setBp(data);
       setWelcome(data.welcome_line || welcome);
+      onBlueprint?.(data);
       setRefineText(""); refineRefText.current = "";
       toast.success("Dex rewired your OS with your addition.");
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Couldn't apply your refinement — try again");
+      toast.error(formatApiError(e.response?.data?.detail) || "Couldn't apply your addition — try again");
     } finally {
       setRefining(false);
     }

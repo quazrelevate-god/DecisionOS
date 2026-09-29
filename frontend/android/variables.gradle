@@ -17,6 +17,22 @@ ext {
     // host claimed here (the backend builds them from APP_BASE_URL). See
     // docs/DEEP_LINKS.md.
     appLinkHost = 'www.decisionos.biz'
+    // PLAY-3 (2026-09-29) — the version, in ONE place.
+    //
+    // It lived in app/build.gradle as a hardcoded `versionCode 1`. Play
+    // rejects any upload whose versionCode is not HIGHER than the last one it
+    // accepted, so the second upload fails with a message about the first —
+    // and the number sits in a file nobody opens between releases. Here it is
+    // next to the SDK levels, which is where somebody preparing a build looks.
+    //
+    // BUMP versionCode ON EVERY UPLOAD TO PLAY, including a re-upload of the
+    // same code to the same track. It is an integer and it only goes up;
+    // versionName is the human one and can say whatever you like.
+    //
+    // The env overrides let CI stamp a build without editing a tracked file:
+    //   ANDROID_VERSION_CODE=7 ANDROID_VERSION_NAME=1.1 ./gradlew bundleRelease
+    appVersionCode = (System.getenv("ANDROID_VERSION_CODE") ?: "2") as Integer
+    appVersionName = System.getenv("ANDROID_VERSION_NAME") ?: "1.0.1"
     minSdkVersion = 24
     compileSdkVersion = 36
     targetSdkVersion = 36

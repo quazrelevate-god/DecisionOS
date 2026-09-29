@@ -27,8 +27,8 @@ android {
         applicationId "com.decisionos.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode rootProject.ext.appVersionCode
+        versionName rootProject.ext.appVersionName
         // B19 — the manifest reads this; see variables.gradle.
         manifestPlaceholders = [appLinkHost: rootProject.ext.appLinkHost]
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"

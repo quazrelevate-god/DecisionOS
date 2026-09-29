@@ -49,6 +49,66 @@ export ANDROID_HOME="$HOME/Library/Android/sdk"
 
 ---
 
+## 0.5 · ROUND 2 — what changed since the first APK you had
+
+**Build `versionCode 2` / `versionName 1.0.1`.** Everything in §1 onwards is
+still the original bug-report list and still stands; this is the shorter list
+of what is NEW since then. Each line says what to do and what a pass looks
+like, so "it didn't do that" is a useful answer.
+
+- [ ] **An invite link opens the app, not Chrome.** THE BIG ONE — it has never
+  worked before. Send yourself an invite from Team on a phone that has the app
+  installed, and tap the link from WhatsApp or SMS. **Pass:** DecisionOS opens
+  on the sign-in screen with the invite on it. **Fail:** Chrome opens.
+  If it fails, first check the link itself reads
+  `https://www.decisionos.biz/login?invite=...` — if it is missing `https://`
+  or says localhost, that is the backend's `APP_BASE_URL`, not the app.
+
+- [ ] **The invite link is the right address at all.** Team → add a member →
+  look at the link BEFORE sending. Pass: it starts
+  `https://www.decisionos.biz/`. This is worth a look even if you do not
+  complete the invite.
+
+- [ ] **First launch with no signal says the right thing.** Turn on aeroplane
+  mode, force-stop, open the app. **Pass:** "Can't reach DecisionOS — this
+  phone can't get through to us right now", and the text is in the DecisionOS
+  typeface, not the phone's default. **Fail:** it claims "You're still signed
+  in" when you have never signed in on that device, or the letters look like
+  ordinary Android text (that means the bundled fonts did not load).
+
+- [ ] **It comes back on its own.** From that screen, turn the network back on
+  and wait. Pass: it moves to sign-in or your Desk without you touching it.
+
+- [ ] **Delete your own account.** Settings → Account → **Delete your
+  account**. Press it and READ the screen, then press *Keep my account*.
+  Pass: it lists each workspace and says what would happen to it. If you own a
+  workspace with other people in it, it must REFUSE and tell you to hand it
+  over first. Only go through with it on a throwaway account.
+
+- [ ] **The web way out works too.** Open `www.decisionos.biz/delete-account`
+  in a browser while signed out. Pass: it explains and offers sign-in. This is
+  the URL Play is given, so it has to work for somebody who has uninstalled.
+
+- [ ] **The privacy policy is reachable without an account.** Tap *Privacy* at
+  the bottom of the sign-in screen, and check `www.decisionos.biz/privacy`
+  in a browser.
+
+- [ ] **Nothing is recording your screen.** Nothing to see — the check is that
+  analytics now sends page views only, no session replay and no capture of
+  button text. Flagged here so it is on the record, not because you can watch
+  it happen.
+
+- [ ] **Sanity: the app still signs in and loads.** Sign in with your number,
+  open the Desk, open Money. Pass: no blank screens. Three teammates' work
+  landed in this build alongside mine, so this is the "did anything collide"
+  check.
+
+**Note.** Installing this over an older DecisionOS will fail with
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE` if that one was a debug build — different
+signing keys. Uninstall first, which also means you start from sign-in.
+
+---
+
 ## 1 · THE ONE I MOST NEED YOU TO CHECK — the microphone (B02)
 
 This is the P0 I fixed but could not watch work. The permission is declared and

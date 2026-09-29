@@ -4,6 +4,14 @@
 <dict>
   <key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>DecisionOS uses the microphone so you can speak a decision, note or instruction to Dex instead of typing it. Audio is sent for transcription and is not recorded or stored by the app.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>DecisionOS uses the camera so you can photograph a bill, receipt or document and have its details read out for you instead of typing them in.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>DecisionOS needs access to your photos so you can attach a bill, receipt or document that is already on your phone to a decision or expense.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
@@ -49,13 +57,11 @@
 	<string>Main</string>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
-		<string>armv7</string>
+		<string>arm64</string>
 	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>

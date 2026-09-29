@@ -502,6 +502,11 @@ function OwnerView({ data }) {
             <TeamHealthCard stats={stats} />
             {mySnapshot && <OwnExecutionCard stats={mySnapshot} />}
           </div>
+
+          {/* 2026-09-29 — the counts above say how MUCH is moving; these say
+              how fast, and whether it lands when it was promised. The same
+              three numbers each person's page carries, over the company. */}
+          <WorkMovesRow timing={stats.timing} company />
         </>
       )}
 
@@ -613,7 +618,7 @@ function TeamTable({ rows, offset, roles, continuation, continued }) {
       <div aria-hidden="true"
         className={cn(`gap-3 border-b border-white/[0.06] px-4 py-2.5 text-xs text-white/55 ${TEAM_COLS}`, continuation ? "hidden xl:grid" : "grid")}>
         <span>#</span><span>Member</span><span className="hidden lg:block">Department</span>
-        <span className="text-right lg:text-left">Score</span><span className="hidden lg:block">Activity (tasks | open | overdue)</span>
+        <span className="text-right lg:text-left">Score</span><span className="hidden lg:block">Activity (done | open | overdue | typical)</span>
       </div>
       <ul>
         {rows.map((e, i) => (
@@ -629,6 +634,9 @@ function TeamTable({ rows, offset, roles, continuation, continued }) {
                   <span className="block truncate font-medium">{e.name}</span>
                   <span className="block text-[11px] leading-snug text-white/50 lg:hidden">
                     {roleLabelFor(roles, e.role)} · {e.done} done · {e.open} open{e.overdue > 0 ? ` · ${e.overdue} overdue` : ""}
+                    {e.timing?.typical_days != null
+                      ? (e.timing.typical_days === 0 ? " · closes same day" : ` · ~${e.timing.typical_days}d to close`)
+                      : ""}
                   </span>
                 </span>
               </span>
@@ -640,6 +648,16 @@ function TeamTable({ rows, offset, roles, continuation, continued }) {
               <span className="hidden truncate text-xs text-white/65 lg:block">
                 {e.done} done <span className="mx-1 text-white/25">|</span> {e.open} open <span className="mx-1 text-white/25">|</span>{" "}
                 <span className={e.overdue > 0 ? "text-rose-300" : ""}>{e.overdue} overdue</span>
+                {/* How long, beside how much — the reason two people with the
+                    same counts are not the same (2026-09-29). */}
+                {e.timing?.typical_days != null && (
+                  <>
+                    <span className="mx-1 text-white/25">|</span>
+                    <span className="text-white/50">
+                      {e.timing.typical_days === 0 ? "same day" : `~${e.timing.typical_days}d`}
+                    </span>
+                  </>
+                )}
               </span>
             </Link>
           </li>
@@ -670,7 +688,7 @@ function SelfView({ data }) {
   const stageLabel = (type, stage) => wfWords[type]?.stages?.[stage] || humanStage(stage);
   const {
     self, stats, my_open_work: openWork = [], my_active_workflows: activeWfs = [],
-    peer_context: peer, view_as: viewAs,
+    peer_context: peer, view_as: viewAs, approvals,
   } = data;
   const score = selfScore(stats);
   const hasActivity = stats.actionable > 0;
@@ -719,6 +737,15 @@ function SelfView({ data }) {
         <DoTheseFirst actions={actions} onDrill={() => {}} className="lg:col-span-2 xl:col-span-1"
           sub={isViewAs ? `Key actions to improve ${firstName}'s operating score.` : "Key actions to improve your operating score."} />
       </div>
+
+      {/* 2026-09-29 — HOW LONG, beside how much. "5 done" reads the same
+          whether it took two working days or nine, and somebody who finishes
+          everything a week late looked perfect, because Overdue only ever
+          counted work still OPEN. Both numbers are None rather than a
+          flattering zero when there is nothing to measure (services/
+          task_timing), and the cards say why instead of showing a dash. */}
+      <WorkMovesRow timing={stats.timing} who={isViewAs ? firstName : null}
+        approvals={approvals} />
 
       <div className="mt-5 grid gap-4 md:grid-cols-3">
         <BreakdownCard icon={ShieldCheck} label="Proof rate" value={`${stats.proof_upload_rate}%`} meter={stats.proof_upload_rate}
@@ -816,9 +843,68 @@ function SelfView({ data }) {
   );
 }
 
-function BreakdownCard({ icon: Icon, label, value, detail, hint, meter }) {
+/* Time to close, landing on the date, and the age of the queue. Counted in
+   WORKING days (Sunday off) — the same calendar the stage deadlines and the
+   stuck alerts count in, so "three days" means one thing across the product. */
+function WorkMovesRow({ timing, who, company = false, approvals = null }) {
+  const t = timing || {};
+  /* An approver's queue is invisible in every other number on this page: work
+     waiting on a signature is not the approver's own task, so it sits in
+     nobody's Open and nobody's Overdue. Only shown to somebody who actually
+     signs things off — for everyone else it is a card of dashes. */
+  const a = approvals && (approvals.waiting > 0 || approvals.answered > 0) ? approvals : null;
+  const theirs = company ? "the company's" : who ? `${who}'s` : "your";
+  const them = company ? "the team" : who || "you";
+  const onTimeCount = t.on_time_rate != null && t.dated ? Math.round((t.on_time_rate * t.dated) / 100) : null;
   return (
-    <div className={`p-5 ${CARD}`}>
+    <section className="mt-5" data-testid="operating-work-moves">
+      <SectionHead icon={Timer}
+        title={company ? "How the work moves" : who ? "How their work moves" : "How your work moves"}
+        sub="Counted in working days — Sunday off, the same calendar the deadlines use." />
+      <div className={`mt-4 grid gap-4 md:grid-cols-3 ${a ? "xl:grid-cols-4" : ""}`}>
+        {/* Zero working days is a real and common answer in a workshop — raised
+            in the morning, done by evening — and a bare "0" reads like a
+            failure to measure rather than the best possible result. */}
+        <BreakdownCard icon={Timer} label="Typical days to close"
+          value={t.typical_days === 0 ? "Same day" : t.typical_days != null ? String(t.typical_days) : "—"}
+          testid="ops-timing-typical"
+          detail={t.typical_days != null
+            ? `The middle of ${t.closed} finished task${t.closed === 1 ? "" : "s"} — half went quicker, half took longer.`
+            : `Nothing finished yet, so there is nothing to time.`} />
+        <BreakdownCard icon={CalendarBlank} label="Landed on time"
+          value={t.on_time_rate != null ? `${t.on_time_rate}%` : "—"}
+          meter={t.on_time_rate != null ? t.on_time_rate : null}
+          testid="ops-timing-on-time"
+          detail={t.on_time_rate != null
+            ? `${onTimeCount} of ${t.dated} finished task${t.dated === 1 ? "" : "s"} that had a date landed by it.`
+            : `No finished task had a due date — work nobody dated cannot be early or late.`}
+          hint={t.on_time_rate != null && t.on_time_rate < 60
+            ? `More than a third of ${theirs} dated work lands late.` : null} />
+        <BreakdownCard icon={ClipboardText} label="Oldest thing waiting"
+          value={t.waiting_days != null ? String(t.waiting_days) : "—"}
+          testid="ops-timing-waiting"
+          detail={t.waiting_days != null
+            ? `Working days the longest-open task has been with ${them}.`
+            : `Nothing open — a good place to be.`} />
+        {a && (
+          <BreakdownCard icon={ShieldCheck} label="Sign-offs waiting"
+            value={String(a.waiting)}
+            testid="ops-timing-approvals"
+            detail={a.typical_days != null
+              ? `${who || "You"} answer${who ? "s" : ""} a request in about ${a.typical_days === 0
+                  ? "the same day" : `${a.typical_days} working day${a.typical_days === 1 ? "" : "s"}`}, over ${a.answered} so far.`
+              : `Nothing answered yet to measure a turnaround from.`}
+            hint={a.oldest_days > 2
+              ? `The oldest has been waiting ${a.oldest_days} working days.` : null} />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function BreakdownCard({ icon: Icon, label, value, detail, hint, meter, testid }) {
+  return (
+    <div className={`p-5 ${CARD}`} data-testid={testid}>
       <div className="flex items-start justify-between gap-3">
         <span className={`grid h-10 w-10 place-items-center rounded-full text-slate-700 ${TILE}`}><Icon size={18} aria-hidden="true" /></span>
         <span className="font-display text-3xl leading-none text-slate-900 tabular-nums">{value}</span>

@@ -76,7 +76,9 @@ from services.tasks import (
     can_assign_team,
     can_see_all_tasks,
     can_note_task,
+    approval_stamp,
     clean_co_assignees,
+    completion_stamp,
     completion_updates,
     edit_refusal,
     escalation_manager_id,
@@ -644,6 +646,8 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
         "task_type": task_type, "op_category": inp.op_category or None,
         "expected_output": inp.expected_output or None, "approval_required": needs_approval,
         "approval_status": "pending" if lock_now else None, "approval_stage": stage,
+        # Asked for at the moment it was raised (2026-09-29, services/tasks).
+        "approval_requested_at": now_iso() if lock_now else None,
         "approver_id": approver_id, "progress": progress, "created_by": user["id"],
         "evidence_required": bool(inp.evidence_required),
         # FUP-50: carry finance metadata forward so the FUP-50 auto-
@@ -861,6 +865,10 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
         else:
             updates["last_action"] = "Updated"
         updates["updated_at"] = now_iso()
+        # WHEN it finished, and when a sign-off was asked for — neither was
+        # recorded before (2026-09-29, services/tasks).
+        updates.update(completion_stamp(t, updates, updates["updated_at"]))
+        updates.update(approval_stamp(t, updates, updates["updated_at"]))
         await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$set": updates})  # FIX-001-C
         if updates.get("assignee_id") and updates["assignee_id"] != user["id"]:
             await push_notification(user["tenant_id"], [updates["assignee_id"]], 1,
@@ -1042,6 +1050,7 @@ async def _spawn_next_occurrence(user: dict, t: dict) -> Optional[str]:
         "id": nid, "tenant_id": t["tenant_id"],
         "status": "blocked" if lock_now else "todo",
         "approval_status": "pending" if lock_now else None,
+        "approval_requested_at": now_iso() if lock_now else None,
         "progress": 0, "due_date": nxt, "decision_id": None,
         "workflow_id": None, "stage_key": None,
         "source": "recurring", "recurrence": {**rec, "series_id": series},
@@ -1216,10 +1225,13 @@ async def approve_task(task_id: str, user: dict = Depends(get_current_user)):
         set_doc = {"status": "todo" if t.get("status") == "blocked" else t.get("status")}
         said = "Approved — work can start"
         notify_msg = f"Approved: you can start '{t['title']}'"
+    _closed_at = now_iso()
     await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$set": {  # FIX-001-C
         **set_doc, "approval_status": "approved",
-        "approved_by": user["id"], "approved_at": now_iso(),
-        "updated_at": now_iso(), "last_action": said,
+        "approved_by": user["id"], "approved_at": _closed_at,
+        "updated_at": _closed_at, "last_action": said,
+        # The approver's sign-off IS the completion for a close-stage task.
+        **completion_stamp(t, set_doc, _closed_at),
     }})
     to_notify = [i for i in assignee_ids_of(t) if i != user["id"]]
     if to_notify:  # ASK-26: everyone on the task hears it
@@ -1577,7 +1589,10 @@ async def respond_to_handoff(task_id: str, inp: RespondInput, user: dict = Depen
     if parent_id:
         await db.tasks.update_one(tenant_filter(parent_id, tenant_id), {"$push": {"updates": entry}})  # FIX-001-C
     # Resolve this follow-up.
-    await db.tasks.update_one(tenant_filter(task_id, tenant_id), {"$set": {"status": "done", "resolved_at": now_iso()}})  # FIX-001-C
+    _resolved_at = now_iso()
+    await db.tasks.update_one(tenant_filter(task_id, tenant_id), {"$set": {  # FIX-001-C
+        "status": "done", "resolved_at": _resolved_at,
+        **completion_stamp(t, {"status": "done"}, _resolved_at)}})
 
     ptitle = (parent or {}).get("title", "your task")
     if raised_by:

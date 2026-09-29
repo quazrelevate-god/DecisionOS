@@ -485,6 +485,50 @@ def completion_updates(t: dict, can_approve: bool) -> dict:
     return {"status": "review", "approval_status": "pending"}
 
 
+def completion_stamp(t: dict, updates: dict, now: str) -> dict:
+    """WHEN a task finished, written at the moment it does.
+
+    2026-09-29 — a task carried `created_at` and `updated_at` and nothing else.
+    `updated_at` moves on any edit, so "how long did this take" could only be
+    guessed: a task finished on Monday and renamed on Friday looked like five
+    days of work. Every question worth asking about how a workshop actually
+    runs — how long work sits with someone, whether it landed by its date,
+    where the queue builds up — starts from this one field.
+
+    Called with the updates about to be written. Returns what to add:
+      * crossing INTO done stamps the time;
+      * leaving done again (a reopen) clears it, so a reopened task is not
+        counted as finished, and the stamp is written afresh when it closes
+        for real;
+      * anything else adds nothing, so an ordinary edit leaves it alone.
+    """
+    was, now_status = t.get("status"), updates.get("status")
+    if now_status == "done" and was != "done":
+        return {"completed_at": now}
+    if was == "done" and now_status and now_status != "done":
+        return {"completed_at": None}
+    return {}
+
+
+def approval_stamp(t: dict, updates: dict, now: str) -> dict:
+    """WHEN somebody was asked to sign this off.
+
+    2026-09-29 — the task recorded `approved_at` but never the moment the
+    request was MADE, so "how long does this approver take" could not be asked
+    at all, and a queue nobody is clearing looked exactly like a queue with
+    nothing in it. This is the other half of `approved_at`.
+
+    Written when approval_status crosses into "pending", cleared when the
+    request goes away (withdrawn on a reopen, or answered).
+    """
+    was, becomes = t.get("approval_status"), updates.get("approval_status")
+    if becomes == "pending" and was != "pending":
+        return {"approval_requested_at": now}
+    if was == "pending" and "approval_status" in updates and becomes != "pending":
+        return {}          # answered: approved_at / the reopen tells the rest
+    return {}
+
+
 def reopen_updates(t: dict, new_status: str) -> dict:
     """Moving a close-stage task back into work withdraws a pending sign-off
     request, and a reopened signed-off task needs signing off again. A

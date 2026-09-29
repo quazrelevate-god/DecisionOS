@@ -12,6 +12,7 @@ import { DexWave } from "../../components/mobile/DexWave";
 import { CountUp } from "../../components/karma";
 // ASK-36 5 — the app's one loading animation.
 import { Loader } from "../../components/common";
+import { currentDraft } from "../../lib/onboardingDraft";
 
 // What Dex is "doing" while the real AI build runs (30-60s). Loops until done.
 const WAIT_LINES = [
@@ -227,12 +228,24 @@ function PillSection({ label, items, tint, testid, startAt, stagger, still, newK
 // refine it, then registers the workspace and reveals it. Dex keeps the wait alive.
 export function BuildReveal({ sessionId, languageCode, payload, register, onEnter,
                               savedBlueprint = null, onBlueprint, onFixPhone, onChangeEmail }) {
-  const [pct, setPct] = useState(0);
+  /* 2026-09-29 — A RESUMED SIGNUP OPENS ON ITS OS. IT DOES NOT TRAVEL TO IT.
+     These four all used to start at the fresh-build values and be corrected a
+     moment later by the mount effect, which meant that a founder coming back
+     to a blueprint they had already built rendered stage "building" once and
+     then moved to "preview" in the same tick, before the forge had ever
+     appeared. The AnimatePresence around the stages is mode="wait": it holds
+     the next stage back until the last one has finished leaving, and a node
+     that never arrived never leaves. The screen stopped on "Dex is building"
+     at 0%, for ever, with no request in flight. The note on the bloom below
+     records the same deadlock reached by another road, on the way IN to the
+     app; this is the way back. Where the answer is already known, it is the
+     first thing rendered. */
+  const [pct, setPct] = useState(savedBlueprint ? 100 : 0);
   const [line, setLine] = useState(0);
   // stage: 'building' → 'preview' (refine) → 'registering' → the app
-  const [stage, setStage] = useState("building");
-  const [bp, setBp] = useState(null);        // current blueprint (may be regenerated)
-  const [welcome, setWelcome] = useState("");
+  const [stage, setStage] = useState(savedBlueprint ? "preview" : "building");
+  const [bp, setBp] = useState(savedBlueprint || null);   // may be regenerated
+  const [welcome, setWelcome] = useState(savedBlueprint?.welcome_line || "");
   const [error, setError] = useState("");
   // The email turned out to be taken: the way forward is signing in, not retrying.
   const [takenEmail, setTakenEmail] = useState(false);
@@ -407,7 +420,22 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
         console.debug("email re-check did not answer — register decides", e);
       }
       const products = (bp.products || payload.products || []).filter((p) => (p.name || "").trim());
+      /* 2026-09-29 — NAME THE DRAFT, SO REGISTER CAN CLOSE IT. Found walking
+         signup in the browser: the workspace was created and the draft it came
+         from still read completed_at: null. FIX-001-D gave /register a
+         draft_id for two reasons — merge the saved answers back when a retried
+         call arrives half-empty, and mark the draft consumed so it cannot be
+         used twice — and the wizard has never sent one, so BOTH have been dead
+         since the day they shipped. The visible cost is a signup this browser
+         has already spent: clearDraft() on the way in is the only thing
+         stopping "Welcome back, we kept your answers" from reopening a company
+         that exists, and walking that through builds a second one.
+         The token goes with it: GET and PATCH have required it since RBAC-01,
+         and merging someone else's answers on a bare id would be the same hole
+         in a third place. */
+      const heldDraft = currentDraft();
       await register({
+        ...(heldDraft ? { draft_id: heldDraft.id, draft_token: heldDraft.token } : {}),
         company_name: payload.company_name, name: payload.name,
         /* 2026-09-20 — no password is set here by anyone: the confirmed mobile
            below is the sign-in. A second company sends no address either (the
@@ -504,10 +532,9 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
     // straight back to their OS. Rebuilding it would cost another AI call and
     // could hand them a different answer than the one they left.
     if (savedBlueprint) {
-      setBp(savedBlueprint);
-      setWelcome(savedBlueprint.welcome_line || "");
-      setPct(100);
-      setStage("preview");
+      /* Already the opening state (see the note on the declarations). Kept as
+         a branch so the one thing that matters here stays plain: a resumed
+         build asks the model for nothing. */
       return;
     }
     generate();

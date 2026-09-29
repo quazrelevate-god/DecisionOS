@@ -77,7 +77,14 @@ async def create_draft(db, email: Optional[str] = None) -> dict:
 
 
 async def get_draft(db, draft_id: str) -> Optional[dict]:
-    """Fetch a draft by id. Returns None if not found or already completed."""
+    """Fetch a draft by id, completed or not. Returns None if there is no
+    such draft.
+
+    2026-09-29 — this said "or already completed" for a year and never did it.
+    Both callers look at `completed_at` themselves (the resume endpoint hands
+    it to the client, /register refuses a consumed draft), so the behaviour is
+    what stays and the sentence is what changes: a function that silently
+    disagrees with its own docstring is how the /register hole survived."""
     doc = await db.onboarding_drafts.find_one({"id": draft_id}, {"_id": 0})
     return doc
 

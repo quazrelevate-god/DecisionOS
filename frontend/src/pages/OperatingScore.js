@@ -43,6 +43,7 @@ import {
 import { GlassSelect } from "../components/karma/GlassSelect";
 import { cn } from "@/lib/utils";
 import { opModel } from "../lib/operatingModel";
+import { roleLabel } from "../lib/perms";
 import { humanStage, taskStatusLabel, priorityLabel } from "../lib/format";
 import {
   isDemoTenant, demoDelta, demoDrivers, demoDrilldowns, demoDex,
@@ -84,11 +85,10 @@ const BAND_COPY = {
   "Needs work": "Key operational areas have challenges. Start with “Do these first”.",
 };
 
-const roleLabelFor = (roles, key) => {
-  if (key === "owner") return "Owner";
-  if (!key) return "—";
-  return roles.find((r) => r.key === key)?.label || key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-};
+/* The same words the header and everywhere else use (lib/perms.roleLabel);
+   this page had its own copy first, and one of them was always going to
+   drift. Argument order kept so the call sites below read unchanged. */
+const roleLabelFor = (roles, key) => roleLabel(key, roles);
 function initialsOf(name) {
   const parts = String(name || "").replace(/[_.-]+/g, " ").trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return "?";
@@ -112,7 +112,7 @@ export default function OperatingScore() {
     return p;
   }, { replace: true });
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["operating-score", userIdParam, windowKey],
     queryFn: () => api
       .get("/operating-score", {
@@ -125,7 +125,20 @@ export default function OperatingScore() {
     // The previous period stays on screen while the next one loads, so the
     // page does not blink back to skeletons on every flick of the picker.
     placeholderData: (prev) => prev,
+    /* An answer of "no" is an ANSWER. Asking three more times cannot change a
+       403, and the retries only delayed the page saying so. */
+    retry: (n, e) => ![401, 403, 404].includes(e?.response?.status) && n < 2,
   });
+
+  /* 2026-09-29 — A REFUSED PAGE SAYS SO. Found signed in as Anand, a member
+     with finance and approvals but not the owner: following a link to a
+     colleague's Ops left the LOADING SKELETON ON SCREEN FOR EVER, with
+     aria-busy="true", so a screen reader went on announcing that the page was
+     still loading. `isLoading` was false and `data` undefined, and the
+     skeleton branch caught the second half. Nothing said no; it just never
+     said anything. Checked before the skeleton, because an error is not a
+     slow load. */
+  if (error && !data) return <OperatingScoreProblem error={error} person={Boolean(userIdParam)} />;
 
   // The URL already says which page is coming, so the waiting shape is the
   // right one and nothing rearranges under the eye when it lands (2026-09-29).
@@ -1344,6 +1357,44 @@ function ChecklistItem({ done, label, hint, actionLabel, actionTo, icon: Icon = 
           <Icon size={13} weight="bold" aria-hidden="true" /> {actionLabel}
         </Link>
       )}
+    </div>
+  );
+}
+
+/* What went wrong, in the reader's terms, with the way back. Each case is a
+   different sentence because "something went wrong" would be true of all
+   three and useful for none. */
+function OperatingScoreProblem({ error, person }) {
+  const status = error?.response?.status;
+  const refused = status === 403;
+  const missing = status === 404;
+  const title = refused ? "That page isn't yours to open"
+    : missing ? "That person isn't in this company"
+      : "The operating score didn't load";
+  const line = refused
+    ? "Only the owner can open a colleague's operating page. Yours is right here."
+    : missing
+      ? "They may have left, or the link may be out of date."
+      : "Something went wrong on the way. Your own page should still open.";
+  return (
+    <div data-testid="operating-problem" data-status={status || "error"}>
+      <section className={`p-6 sm:p-8 ${CARD}`}>
+        <div className="flex items-start gap-4">
+          <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-slate-700 ${TILE}`}>
+            <WarningCircle size={22} aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <h1 className="font-display text-2xl text-slate-900 sm:text-3xl">{title}</h1>
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-600">{line}</p>
+            {person && (
+              <Link to="/operating-score" data-testid="operating-problem-back"
+                className={`mt-5 inline-flex h-11 items-center gap-2 rounded-pill px-5 text-sm font-medium ${INK_PILL}`}>
+                <ArrowLeft size={14} weight="bold" aria-hidden="true" /> Go to my operating page
+              </Link>
+            )}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

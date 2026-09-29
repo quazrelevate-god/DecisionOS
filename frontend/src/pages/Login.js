@@ -596,6 +596,14 @@ export default function Login() {
               needed to read. */}
           Workflow as an engine · Decision Desk · Dex
         </p>
+        {/* PLAY-2 — the policy has to be reachable BEFORE anyone signs up, and
+            this is the only screen everybody sees first. A plain link, not a
+            banner: nothing here is asking for consent. */}
+        <p className="mt-2 text-center text-xs text-muted-foreground">
+          <Link to="/privacy" className="underline underline-offset-2 hover:text-foreground" data-testid="login-privacy-link">
+            Privacy
+          </Link>
+        </p>
       </footer>
     </div>
   );

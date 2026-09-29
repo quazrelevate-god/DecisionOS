@@ -97,14 +97,53 @@
                     }),
                     (e.__SV = 1));
             })(document, window.posthog || []);
-            posthog.init("phc_xAvL2Iq4tFmANRE7kzbKwaSqp1HJjN7x48s3vr0CMjs", {
-                api_host: "https://us.i.posthog.com",
-                person_profiles: "identified_only", // or 'always' to create profiles for anonymous users as well,
-                session_recording: {
-                    recordCrossOriginIframes: true,
-                    capturePerformance: false,
-                },
-            });
+            /* PLAY-2 (2026-09-29) — WHAT ANALYTICS IS ALLOWED TO SEE.
+             *
+             * This used to init with a session_recording block and nothing
+             * else said. On a product whose screens ARE somebody's decisions,
+             * supplier names, staff names and money, screen replay is not
+             * "usage analytics", and declaring it as such on Play's Data
+             * Safety form would be a false declaration — which is a removable
+             * offence, quite apart from being untrue.
+             *
+             * The decision, and it is deliberate rather than cautious:
+             *
+             *   session replay  OFF, here in code. It was configured but only
+             *                   switched on by a PostHog PROJECT setting, so
+             *                   whether it recorded depended on a dashboard
+             *                   nobody in this repo can see. disable_session_
+             *                   recording settles it from the app's side, and
+             *                   a toggle flipped later cannot undo that.
+             *
+             *   autocapture     OFF. It records the TEXT of whatever you
+             *                   click, which here is "Approve ₹2,40,000 to
+             *                   Sharma Textiles" — the content, not the
+             *                   action. Events worth having are worth naming
+             *                   explicitly with posthog.capture.
+             *
+             *   pageviews       KEPT. Which screens get used is the question a
+             *                   pilot actually needs answered, and it carries
+             *                   no business content.
+             *
+             * KEY COMES FROM THE ENVIRONMENT so analytics can be switched off
+             * without a code change, and so a build can ship with none. No key,
+             * no init, no request — the guard below is why this is a real off
+             * switch rather than a preference.
+             *
+             * Still to declare on Data Safety: this sends an IP and a device
+             * identifier to PostHog in the US. docs/PRIVACY.md says so plainly
+             * and the privacy policy page repeats it.
+             */
+            var __dosPhKey = "%REACT_APP_POSTHOG_KEY%";
+            if (__dosPhKey && __dosPhKey.indexOf("%") !== 0) {
+                posthog.init(__dosPhKey, {
+                    api_host: "https://us.i.posthog.com",
+                    person_profiles: "identified_only",
+                    disable_session_recording: true,
+                    autocapture: false,
+                    capture_pageview: true,
+                });
+            }
         </script>
     </body>
 </html>

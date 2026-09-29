@@ -754,7 +754,10 @@ function DeleteAccountCard() {
         <div className="min-w-0">
           <h3 className="text-base font-semibold">Delete your account</h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            Permanent. We&rsquo;ll show you exactly what goes before anything happens.
+            Permanent. We&rsquo;ll show you exactly what goes before anything happens.{" "}
+            <a href="/privacy" className="underline underline-offset-2 hover:text-foreground">
+              What we hold
+            </a>.
           </p>
         </div>
         {!open && (

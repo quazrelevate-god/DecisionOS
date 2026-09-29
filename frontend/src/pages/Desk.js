@@ -324,6 +324,42 @@ function DeskHeading({ tone, title, count, note, className = "" }) {
  * over a hairline of its own.
  * @param {Array<{id, title, meta, amount?, onOpen}>} rows
  */
+/* B23 (2026-09-29) · THE FIRST THING A NEW WORKSPACE SEES.
+   "No decisions waiting on you" is true on day one and useless on day one:
+   it describes an absence to somebody who has never made one, on the screen
+   the product opens to. A founder who has just signed up and has nothing at
+   all gets the two ways to put something there instead — and the first one is
+   typed, because the mic needs a permission they may not have given yet and
+   "speak to it" is not an instruction everybody wants to follow in a factory.
+   Only when the workspace is genuinely empty: no decisions and no tasks at
+   all. As soon as either exists this is an ordinary quiet line again, because
+   then the absence IS the news. */
+function FirstSteps() {
+  return (
+    <div className="py-1 text-left" data-testid="desk-first-steps">
+      <p className="text-[15px] font-medium text-neutral-200">Nothing here yet — start with one decision</p>
+      <p className="mt-1 text-xs leading-relaxed text-neutral-500">
+        Anything you have already decided will do. Dex turns it into the tasks, the people and the dates.
+      </p>
+      <ol className="mt-3 space-y-2">
+        <li className="flex items-start gap-2.5">
+          <span aria-hidden="true" className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-white/10 text-[11px] font-semibold text-neutral-300">1</span>
+          <p className="min-w-0 text-xs leading-relaxed text-neutral-400">
+            Type it into the Dex box — &ldquo;Tell Suresh to ship the indigo lot before Friday&rdquo;. The microphone is there if you would rather say it.
+          </p>
+        </li>
+        <li className="flex items-start gap-2.5">
+          <span aria-hidden="true" className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-white/10 text-[11px] font-semibold text-neutral-300">2</span>
+          <p className="min-w-0 text-xs leading-relaxed text-neutral-400">
+            Read what Dex made, change anything, and approve it. The work appears in{" "}
+            <Link to="/my-work" className="font-medium text-neutral-200 underline underline-offset-2">My Work</Link>.
+          </p>
+        </li>
+      </ol>
+    </div>
+  );
+}
+
 function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix = "", cta, onCta, scroll = false, testid, className = "" }) {
   /* ASK-25 — AS MANY ROWS AS THE CARD HOLDS, measured, not typed. On desktop
      the card's height is whatever the viewport leaves under the hero, so a
@@ -405,7 +441,7 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
             </div>
           )}
           {!loading && rows.length === 0 && (
-            <p className="py-3 text-sm text-neutral-500" data-testid={`${testid}-empty`}>{empty}</p>
+            <div className="py-3 text-sm text-neutral-500" data-testid={`${testid}-empty`}>{empty}</div>
           )}
           {!loading && shown.map((r, i) => (
             <DeskRow key={r.id} r={r} first={i === 0} testid={testid} />
@@ -570,7 +606,7 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
               /* ASK-49 — centred in the three rows' space it is standing in
                  for, so an empty tab reads as a card with nothing on it rather
                  than a card with one short line and a hole under it. */
-              <p className="m-auto py-3 text-center text-sm text-neutral-500" data-testid={`${testid}-empty`}>{empty}</p>
+              <div className="m-auto py-3 text-center text-sm text-neutral-500" data-testid={`${testid}-empty`}>{empty}</div>
             )}
             {!loading && shown.map((r, i) => (
               <DeskRow key={r.id} r={r} first={i === 0} testid={`desk-${tab}`} />
@@ -976,6 +1012,12 @@ export default function Desk() {
     tabOption("approvals", t("desk.approvals", "Approvals"), approvalsQ.data ? approvals.length : 0, "flag"),
     tabOption("watch", t("desk.watch", "Watch"), watchCount, "today"),
   ];
+  /* B23 — a workspace where nothing has happened at all: no decision waiting,
+     and not one task in the place. Not the same as "you are on top of things",
+     which is what the plain line says and what it should keep saying the
+     moment either exists. */
+  const brandNew = !decisionsLoading && decisionCards.length === 0
+    && Array.isArray(m.tasks) && m.tasks.length === 0;
   const decisionRows = decisionCards.map((c) => ({
     id: c.id,
     title: c.title,
@@ -1525,7 +1567,9 @@ export default function Desk() {
           scrolls={pop?.at === "full"}
           onToggleExpanded={() => setPhoneExpanded((v) => !v)}
           loading={phoneTab === "decisions" ? decisionsLoading : phoneTab === "approvals" ? !m.tasks : false}
-          empty={phoneTab === "decisions" ? SECTIONS[0].empty : "Nothing waiting for your sign-off"}
+          empty={phoneTab === "decisions"
+            ? (brandNew ? <FirstSteps /> : SECTIONS[0].empty)   // B23
+            : "Nothing waiting for your sign-off"}
           rows={phoneTab === "decisions" ? decisionRows : phoneTab === "approvals" ? approvalRows : []}
         >
           {/* Watch is three feeds, not a list of rows: they keep the cards they
@@ -1589,7 +1633,7 @@ export default function Desk() {
                not the order (ASK-25 open question 1). */
             note="newest first"
             loading={decisionsLoading}
-            empty={SECTIONS[0].empty}
+            empty={brandNew ? <FirstSteps /> : SECTIONS[0].empty}
             rows={decisionRows}
             moreSuffix=" waiting"
             cta={topDecision ? "Review" : null}

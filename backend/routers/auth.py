@@ -1089,9 +1089,24 @@ async def logout(request: Request, response: Response):
 
 
 @router.get("/me")
-async def me(user: dict = Depends(get_current_user)):
+async def me(request: Request, response: Response, user: dict = Depends(get_current_user)):
     # Deferred so this router doesn't import server.py at module load.
     from services.ai.generators import ai_generate_finance_categories, ai_generate_lexicon, backfill_operating_model
+
+    # B27 (2026-09-29) — HAND THE CSRF TOKEN TO A CLIENT THAT CANNOT READ THE
+    # COOKIE. Every login path mints one through core.security.set_csrf_cookie,
+    # which now echoes it in a header — but a native app that is already signed
+    # in never goes through a login again: it cold-starts, asks this, and would
+    # have no token until the session expired. So this answers with the one the
+    # request already carried, and mints a fresh pair if there is none. Browsers
+    # ignore it and keep reading the cookie.
+    from config import CSRF_COOKIE_NAME, CSRF_HEADER_NAME
+    from core.security import set_csrf_cookie
+    existing = request.cookies.get(CSRF_COOKIE_NAME)
+    if existing:
+        response.headers[CSRF_HEADER_NAME] = existing
+    else:
+        set_csrf_cookie(response)
 
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
     if tenant and not tenant.get("lexicon"):

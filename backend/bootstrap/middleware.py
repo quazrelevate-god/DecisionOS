@@ -29,7 +29,11 @@ def register_middleware(app) -> None:
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
         allow_headers=["*"],
-        expose_headers=[],
+        # B27 — a cross-origin client has to be ALLOWED to read this one, or
+        # the token we just handed it is invisible. Same-origin deployments
+        # (the node proxy) and the native app ignore this; a browser talking
+        # straight to the backend does not.
+        expose_headers=["X-CSRF-Token"],
         max_age=600,
     )
     logger.info(f"CORS allow-list ({len(CORS_ORIGINS)} origins): {CORS_ORIGINS}")

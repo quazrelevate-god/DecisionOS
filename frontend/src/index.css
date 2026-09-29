@@ -655,9 +655,18 @@
    already measured, so a full tab does not move by a pixel — every other tab
    is brought UP to it. Everything inside lays out within it: rows, the empty
    line (centred in it), the skeleton, and Watch's three cards. */
+/* B32 (2026-09-29) — AND IT IS BUILT IN rem, SO IT SURVIVES A BIG SYSTEM FONT.
+   These were literal px: a row was 44 + 8 whatever the text inside it was. A
+   row's real height is its two lines of type, and Android's font-size setting
+   scales those — so at the largest setting three rows needed more than the box
+   they were given, and the third row ran underneath the "Show all" line. The
+   numbers are the same at the default size (2.75rem is 44px, 0.25rem is 4px),
+   so nothing moves for anybody who has not changed the setting; past that the
+   box grows with the type it is holding. The hairlines stay in px because a
+   hairline is a hairline. */
 :root {
-    --desk-phone-row: calc(44px + 2 * 4px);
-    --desk-phone-body: calc(3 * var(--desk-phone-row) + 2px + 4px + 44px);
+    --desk-phone-row: calc(2.75rem + 2 * 0.25rem);
+    --desk-phone-body: calc(3 * var(--desk-phone-row) + 2px + 4px + 2.75rem);
 }
 
 /* Mobile PWA (2026-09-14) — the dock, the Dex button, their pickers, the

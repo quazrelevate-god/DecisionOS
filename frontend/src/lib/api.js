@@ -45,14 +45,39 @@ const CSRF_COOKIE = "dos_csrf";
 const CSRF_HEADER = "X-CSRF-Token";
 const SAFE_VERBS = ["get", "head", "options"];
 
+/* B27 (2026-09-29) — THE TOKEN THE NATIVE APP COULD NEVER READ.
+   The double-submit above depends on document.cookie, and inside the Android
+   app it is always empty: the page is served from https://localhost and the
+   cookie belongs to the backend's own domain, so the platform jar sends it
+   faithfully on every request while JS cannot see a thing. Harmless only
+   because enforcement is off — the day it is switched on, every POST from the
+   app (signing in included) would be refused, and nobody would connect the
+   two.
+   So the server now also hands the token back in a response header
+   (core/security.set_csrf_cookie, and /auth/me for a session that is already
+   signed in). This keeps the last one seen, in memory: it is per app run,
+   never written to storage, and the cookie still wins wherever it is
+   readable, so a browser behaves exactly as it did. */
+let csrfFromHeader = "";
+
 function csrfToken() {
   try {
     const hit = document.cookie.split("; ").find((c) => c.startsWith(`${CSRF_COOKIE}=`));
-    return hit ? decodeURIComponent(hit.slice(CSRF_COOKIE.length + 1)) : "";
+    if (hit) return decodeURIComponent(hit.slice(CSRF_COOKIE.length + 1));
   } catch (e) {
-    return "";   // no document (tests, SSR): the request simply goes without it
+    /* no document (tests, SSR), or a webview with nothing readable */
   }
+  return csrfFromHeader;
 }
+
+api.interceptors.response.use(
+  (res) => { const t = res?.headers?.[CSRF_HEADER.toLowerCase()]; if (t) csrfFromHeader = t; return res; },
+  (err) => {
+    const t = err?.response?.headers?.[CSRF_HEADER.toLowerCase()];
+    if (t) csrfFromHeader = t;
+    return Promise.reject(err);
+  }
+);
 
 api.interceptors.request.use((config) => {
   const method = (config.method || "get").toLowerCase();

@@ -198,7 +198,7 @@ export default function Login() {
      registered in the selected workspace". Matched on the words they share. */
   const unknownNumber = /not registered|no account is registered/i.test(error || "");
   const submitOtp = async (e) => {
-    e.preventDefault(); setError(""); setBusy(true);
+    e?.preventDefault?.(); setError(""); setBusy(true);
     try { await loginWithOtp(otpPhone, otpCode, otpTenant, invite?.token); navigate("/"); }
     catch (err) {
       setError(formatApiError(err.response?.data?.detail) || "Failed");
@@ -429,13 +429,32 @@ export default function Login() {
                       <DeviceMobile size={16} weight="bold" className="shrink-0 text-foreground/70" />
                       <span className="text-sm font-mono truncate">Code sent to <strong>{invite?.phone_masked || maskPhone(otpPhone)}</strong></span>
                     </div>
-                    <button type="button" onClick={() => { setOtpSent(false); setOtpCode(""); setError(""); setResendIn(0); setOtpTenant(null); setOtpChoices(null); }} data-testid="otp-change-number"
-                      className="text-xs font-semibold uppercase text-foreground/70 underline-offset-2 hover:text-foreground hover:underline whitespace-nowrap ml-2 shrink-0">Change</button>
+                    {/* B30 — not on an invite. The number belongs to the
+                        invitation, Resend texts THAT number whatever is typed
+                        here, and letting somebody edit it offered a change the
+                        screen could not honour. */}
+                    {!inviteToken && (
+                      <button type="button" onClick={() => { setOtpSent(false); setOtpCode(""); setError(""); setResendIn(0); setOtpTenant(null); setOtpChoices(null); }} data-testid="otp-change-number"
+                        className="text-xs font-semibold uppercase text-foreground/70 underline-offset-2 hover:text-foreground hover:underline whitespace-nowrap ml-2 shrink-0">Change</button>
+                    )}
                   </div>
                   <div>
                     <label className={labelCls}>Enter 6-digit code</label>
                     <div className="mt-2">
-                      <OtpBoxes value={otpCode} onChange={setOtpCode} disabled={busy} />
+                      {/* B30 (2026-09-29) — SIX DIGITS IS THE ANSWER, on both
+                          screens. Signing up submitted the moment the sixth
+                          digit landed and signing in made you press a button,
+                          so the same six taps behaved differently depending on
+                          which door you came through. It submits here too —
+                          and the button stays, because an autofilled code
+                          arrives all at once and somebody who paused mid-code
+                          still needs it. */}
+                      <OtpBoxes value={otpCode} disabled={busy}
+                        onChange={(v) => {
+                          setOtpCode(v);
+                          if (error) setError("");
+                          if (v.length === 6 && !busy) submitOtp();
+                        }} />
                     </div>
                   </div>
                   {error && <p data-testid="auth-error" className="text-sm text-danger-600 font-semibold">{error}</p>}

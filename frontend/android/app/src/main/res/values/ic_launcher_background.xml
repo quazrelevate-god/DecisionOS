@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#FF3C2A</color>
+    <!-- 2026-09-30 — the adaptive icon's background layer.
+         Was #FF3C2A, a red left over from the Capacitor scaffold, which sat
+         behind black-and-gold artwork and showed as a red ring on every
+         round-masked launcher. #090908 is the artwork's own ground (see
+         public/brand/appicon/README.txt), so the mask edge disappears.
+         A colour rather than the pack's background PNG on purpose: that
+         image is a flat fill of this exact value, so shipping it would be
+         five more files saying one thing. -->
+    <color name="ic_launcher_background">#090908</color>
 </resources>

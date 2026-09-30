@@ -48,6 +48,14 @@ const DROP = [
   "DecisionOS_User_Guide.pdf",
   "landing",   // the marketing site; the app opens at the SPA
   "manual",    // screenshots for the written manual
+  // 2026-09-30 — the app ICON SOURCE pack. public/brand/appicon holds the
+  // 1024px masters, the per-density mipmaps, Contents.json and a README:
+  // build-time inputs that were copied into the launcher and the asset
+  // catalogue once, and are never fetched at runtime. Riding along, they put
+  // 976 KB of the app's own icon inside the app — the whole of a 1 MB jump in
+  // the APK. brand/decisionos-logo.png is NOT dropped: Wordmark.jsx loads it
+  // at runtime.
+  "brand/appicon",
 ];
 
 const size = (p) => {

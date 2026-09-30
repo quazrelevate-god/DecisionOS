@@ -53,12 +53,12 @@
       "url": "http://localhost:8000"
     },
     {
-      "_comment": "macOS. The REAL backend against whatever DB_NAME in backend/.env points at (a throwaway database, not founder-os-58). Messaging keys are blanked on the command line so no test can text a real person \u2014 backend/.env has a live APM_SMS_API_KEY in it.",
+      "_comment": "macOS. The REAL backend, PINNED to the throwaway database. DB_NAME is set on the command line and NOT read from backend/.env, because that file is the founder's and points at the live database whenever it has been restored \u2014 starting a test backend must never depend on which way that file happens to be pointing. Messaging keys are blanked for the same reason: backend/.env carries a live APM_SMS_API_KEY, and no test may text a real person.",
       "name": "mac-backend",
       "runtimeExecutable": "sh",
       "runtimeArgs": [
         "-c",
-        "cd backend && APM_SMS_API_KEY= APM_OTP_ENDPOINT= TWILIO_ACCOUNT_SID= TWILIO_AUTH_TOKEN= TWILIO_FROM_NUMBER= WHATSAPP_API_KEY= WA_TENANT_ID= DEV_OTP_IN_RESPONSE=1 .venv/bin/python -m uvicorn server:app --host 127.0.0.1 --port 8000"
+        "cd backend && DB_NAME=decisionos-e2e-round1 APM_SMS_API_KEY= APM_OTP_ENDPOINT= TWILIO_ACCOUNT_SID= TWILIO_AUTH_TOKEN= TWILIO_FROM_NUMBER= WHATSAPP_API_KEY= WA_TENANT_ID= DEV_OTP_IN_RESPONSE=1 .venv/bin/python -m uvicorn server:app --host 127.0.0.1 --port 8000"
       ],
       "port": 8000,
       "url": "http://localhost:8000"

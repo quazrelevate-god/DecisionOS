@@ -100,13 +100,23 @@ const atStep = (page, s, t = 25000) => until(async () => (await stepOf(page)) ==
 const popupGone = (page, t = 4000) => until(async () => (await popup(page).count()) === 0, t);
 const toasts = (page, text) => page.locator('[data-sonner-toast]').filter({ hasText: text });
 
-/* The field is behind a door (ASK-47): the keyboard circle opens it. */
+/* The field is behind a door (ASK-47): the keyboard circle opens it.
+ *
+ * TWO PLACES IT CAN LAND (2026-09-30). On a phone the composer now lifts out
+ * of the collapsing well and is PORTALLED TO THE BODY as a floating bar above
+ * the keyboard — `desk-dex-floating` — while the desktop one stays inside the
+ * well as `desk-dex-composer`. `floating = phone && fieldOpen`, so at 390 and
+ * 360 the in-well testid never appears at all and this helper sat waiting for
+ * it until it threw, taking all 193 checks with it. Look for either. */
+const composerIn = (page) =>
+  page.locator('[data-testid="desk-dex-composer"], [data-testid="desk-dex-floating"]');
+
 async function openField(page) {
-  if ((await page.getByTestId('desk-dex-composer').count()) === 0) {
+  if ((await composerIn(page).count()) === 0) {
     await page.getByTestId('desk-dex-keyboard').click();
-    await page.getByTestId('desk-dex-composer').waitFor({ timeout: 4000 });
+    await composerIn(page).first().waitFor({ timeout: 4000 });
   }
-  return page.getByTestId('desk-dex-composer').locator('textarea');
+  return composerIn(page).first().locator('textarea');
 }
 async function typeAndSend(page, words) {
   const input = await openField(page);

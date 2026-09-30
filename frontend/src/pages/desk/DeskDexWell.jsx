@@ -359,7 +359,23 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
        the first retires that poll: the decision would still land in the
        Decisions column, but a FAILURE would have nowhere to land (plan 5.2).
        Refused in the founder's words, and released the moment the first ends. */
-    if (stillReading()) { toast(OUTCOME_COPY.stillReading); return; }
+    if (stillReading()) {
+      toast(OUTCOME_COPY.stillReading);
+      /* 2026-09-30 — AND PUT THE FIELD AWAY ON THE REFUSAL TOO. This returned
+         before the setTyping(false) below, which was harmless while the
+         composer lived inside the well. Now that a phone floats it over a
+         fixed inset-0 scrim, a refusal left the whole Desk blurred behind an
+         open field: the toast says "Dex is still reading your last one", and
+         the status pill it is pointing you back to could not be tapped,
+         because the scrim was over it. The draft is kept — the same thing
+         tapping the scrim does — so the words go again the moment the first
+         capture lands.
+         The mic path at the other stillReading() guard has the same shape;
+         left alone here because recording-while-open is KM-51's business. */
+      setTyping(false);
+      setPillDraft(false);
+      return;
+    }
     endingRef.current = null;
     awaitingReplyRef.current = true;
     setSentText(c.draft.trim() || c.pendingFiles.map((f) => f.name).join(", "));

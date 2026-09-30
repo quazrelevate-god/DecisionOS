@@ -22,6 +22,8 @@ import { hasPerm } from "../lib/perms";
 import { startNativeBack } from "../lib/native/back";
 // B19 — a link that belongs to DecisionOS lands on the right screen.
 import { startNativeLinks } from "../lib/native/links";
+// IOS-3 — tapping a field stops zooming the screen.
+import { lockZoomInApp } from "../lib/native/viewport";
 
 export function useNativeBack() {
   const navigate = useNavigate();
@@ -31,6 +33,10 @@ export function useNativeBack() {
      a sign-in swaps the destination without re-registering the listener doing
      anything odd — the listener is cheap to replace. */
   const home = user ? (hasPerm(user, "inbox") ? "/inbox" : "/my-work") : "/login";
+
+  /* IOS-3 — once, as early as the app has a DOM. Nothing to tear down: it
+     rewrites one meta tag, and a browser never reaches it. */
+  useEffect(() => { lockZoomInApp(); }, []);
 
   /* B19 — the same mount point, because it answers the same plugin and has
      the same one requirement: a router to navigate with. */

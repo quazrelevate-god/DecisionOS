@@ -1093,7 +1093,14 @@ export default function Desk() {
            that turns out to be. On 6" and up that is a square; on a 5.4" it is
            a letterbox with a smaller mic in it, and nothing scrolls either
            way. */
-        ? "min-h-0 flex-1 flex flex-col"
+        /* PILOT — FIXED, so the well never stretches into freed space. flex-1
+           made it eat all the leftover height (which differs by device), so it
+           ballooned on a tall emulator when the demo banner closed. Now it is a
+           fixed ~17rem card with the mic back at its usual size — the same on
+           every phone, shrinking only on the very shortest. Nothing grows into
+           the freed space; the top-aligned stack just slides up when the demo
+           banner closes. */
+        ? "min-h-[13rem] h-[17rem] flex flex-col"
         : "order-4 min-h-[128px] max-lg:flex max-lg:flex-col lg:order-none lg:min-h-0 lg:flex-1"
     )}
     testid="desk-insight"
@@ -1150,7 +1157,14 @@ export default function Desk() {
         /* ASK-47 — always h-full below lg. The page used to grow when the
            list opened; the list pops over it now, so the page is one screen in
            every state and there is nothing left that can make it scroll. */
-        "max-lg:h-full"
+        "max-lg:h-full",
+        /* PILOT — spread the leftover height as gaps BETWEEN the components
+           rather than one gap at the foot. The greeting stays at the top, the
+           card sits back near the dock, and the space between (greeting → KPIs
+           → well → card) grows evenly. It is self-scaling: a tall phone gets
+           roomy gaps, a short one collapses back to the base gap, so the layout
+           reads right on any size. */
+        "max-lg:justify-between"
       )}
     >
       {(cachedAt || m.failed?.any || (workflowsQ.isError && !workflowsQ.data)) && (
@@ -1555,7 +1569,9 @@ export default function Desk() {
         className={cn(
           "kr-desk-board grid gap-5 lg:-mx-3 lg:-mb-2 lg:min-h-0 lg:flex-1 lg:gap-0 lg:grid-rows-[minmax(0,1fr)]",
           showDecisions && "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]",
-          // Popped, the card is a column: tab strip on top, list filling the rest.
+          /* PILOT — the card stays its minimal content height on a phone (it does
+             NOT grow to fill). The stack is top-aligned, so closing the demo
+             banner just slides everything up rather than stretching anything. */
           pop && "max-lg:grid-rows-[minmax(0,1fr)]"
         )}
       >

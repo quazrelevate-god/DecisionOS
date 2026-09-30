@@ -783,6 +783,15 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
           moves it; mounted on fieldOpen (not on the keyboard) so showing/hiding
           the keyboard never remounts the textarea and drops focus. */}
       {floating && createPortal(
+        <>
+        {/* The Desk blurs out behind the floating field so nothing shows
+            through it. Tapping it puts the field away (the draft is kept). */}
+        <div
+          data-testid="desk-dex-floating-scrim"
+          onClick={() => { setTyping(false); setPillDraft(false); }}
+          className="fixed inset-0 bg-slate-900/25 backdrop-blur-md"
+          style={{ zIndex: 60 }}
+        />
         <div
           data-testid="desk-dex-floating"
           style={{ position: "fixed", left: 0, right: 0, bottom: kb.bottom, zIndex: 70 }}
@@ -828,7 +837,8 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
               <PaperPlaneRight size={17} weight="bold" aria-hidden="true" />
             </button>
           </div>
-        </div>,
+        </div>
+        </>,
         document.body
       )}
     </>

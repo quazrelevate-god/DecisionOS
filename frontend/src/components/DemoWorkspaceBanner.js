@@ -21,13 +21,25 @@
  * demo tenant gets the flag on the next boot (bootstrap/seed.py). A real
  * workspace never has it, and this renders nothing.
  */
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Eye } from "@phosphor-icons/react";
 import { useAuth } from "../context/AuthContext";
 
 export function DemoWorkspaceBanner() {
   const { tenant, logout } = useAuth();
-  if (!tenant?.is_demo) return null;
+  // B20.1 — the eye hides the banner for THIS session (per tenant). It comes
+  // back on a fresh launch on purpose: the point is you never permanently
+  // forget you are looking at demo data, not your own.
+  const hideKey = `demo-banner-hidden:${tenant?.id || tenant?.name || "demo"}`;
+  const [hidden, setHidden] = useState(() => {
+    try { return sessionStorage.getItem(hideKey) === "1"; } catch { return false; }
+  });
+  if (!tenant?.is_demo || hidden) return null;
+  const dismiss = () => {
+    setHidden(true);
+    try { sessionStorage.setItem(hideKey, "1"); } catch { /* private mode */ }
+  };
   return (
     <div
       data-testid="demo-banner"
@@ -35,7 +47,16 @@ export function DemoWorkspaceBanner() {
       className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-neutral-900 px-4 py-2 text-center text-[13px] leading-snug text-white [padding-top:calc(0.5rem+var(--sa-top))] lg:[padding-top:0.5rem]"
     >
       <span className="inline-flex items-center gap-1.5">
-        <Eye size={14} weight="bold" aria-hidden="true" className="shrink-0" />
+        <button
+          type="button"
+          onClick={dismiss}
+          data-testid="demo-banner-dismiss"
+          aria-label="Hide this notice"
+          title="Hide"
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-white/85 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+        >
+          <Eye size={14} weight="bold" aria-hidden="true" />
+        </button>
         You&rsquo;re exploring the demo workspace{tenant?.name ? `, ${tenant.name}` : ""} — none of this is your data.
       </span>
       <span className="inline-flex items-center gap-3">

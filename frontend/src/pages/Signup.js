@@ -286,7 +286,16 @@ export default function Signup() {
           progress rail nobody can read is chrome, not orientation; the step
           number and its caption inside the card already say where you are.
           Desktop is untouched — it has the width the rail was designed for. */}
-      <header className="px-4 pt-4 lg:px-8 lg:pt-6">
+      {/* IOS-1 (2026-09-30) — the top inset, found on the first iOS run.
+          Capacitor sets contentInset: 'never' and the page ships
+          viewport-fit=cover, so on iOS the webview draws UNDER the status
+          bar. With a flat pt-4 the wordmark sat 16px from the physical top
+          — behind the Dynamic Island on a 17 Pro, behind the notch on a 13
+          mini — and simply was not there. Android has no such inset, which
+          is why it looked right for weeks.
+          Same shape the app shell already uses (Layout.js:941). --sa-top is
+          0 in a browser, so desktop and web are unchanged. */}
+      <header className="px-4 pt-[calc(var(--sa-top)+1rem)] lg:px-8 lg:pt-6">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-center gap-4 rounded-pill px-4 py-2.5 lg:kr-frost lg:justify-between lg:px-6">
           <Link to="/" className="flex shrink-0 items-center gap-2.5" data-testid="signup-logo">
             <KarmaLogo size="md" />

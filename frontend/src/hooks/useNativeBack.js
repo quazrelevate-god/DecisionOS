@@ -24,6 +24,8 @@ import { startNativeBack } from "../lib/native/back";
 import { startNativeLinks } from "../lib/native/links";
 // IOS-3 — tapping a field stops zooming the screen.
 import { lockZoomInApp } from "../lib/native/viewport";
+// IOS-4 — an edge swipe closes an open sheet, which WKWebView will not do.
+import { startOverlaySwipeBack } from "../lib/native/swipeBack";
 
 export function useNativeBack() {
   const navigate = useNavigate();
@@ -37,6 +39,10 @@ export function useNativeBack() {
   /* IOS-3 — once, as early as the app has a DOM. Nothing to tear down: it
      rewrites one meta tag, and a browser never reaches it. */
   useEffect(() => { lockZoomInApp(); }, []);
+
+  /* IOS-4 — iOS only, and only while an overlay holds the top history entry;
+     everywhere else the native gesture keeps the touch. */
+  useEffect(() => startOverlaySwipeBack(), []);
 
   /* B19 — the same mount point, because it answers the same plugin and has
      the same one requirement: a router to navigate with. */

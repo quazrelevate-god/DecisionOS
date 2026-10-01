@@ -63,7 +63,7 @@ for (const [w, h] of WIDTHS) {
   check('the Desk has no Ask circle', (await page.locator('[data-testid="dex-fab"]').count()) === 0);
 
   // ── the slider ────────────────────────────────────────────────────────────
-  const track = await page.locator('[data-testid="dex-slider"] .nm-field').boundingBox();
+  const track = await page.locator('[data-testid="dex-slider"] .kr-slider-well').boundingBox();
   const rest = await page.locator('[data-testid="dex-slider-handle"]').boundingBox();
   const cy = rest.y + rest.height / 2;
   check('the handle rests at the centre',
@@ -123,6 +123,30 @@ for (const [w, h] of WIDTHS) {
   await page.waitForTimeout(400);
   check('tapping away puts the composer away',
     (await page.locator('[data-testid="desk-dex-floating-scrim"]').count()) === 0);
+
+  /* THE DOOR STANDS ASIDE FOR THE POP-UP — reported from the founder's iPhone
+     and the reason this check exists: they spoke, pressed stop, and the blurred
+     mic screen simply stayed while step 1, the reading and the review all ran
+     BEHIND it, unreachable. The pop-up is a dialog at z-50 and the door is
+     9500, so it was underneath; and the door has no job once the words exist.
+     Typed words take exactly the same path as spoken ones, which is why this
+     can be asserted here without a microphone. */
+  await page.getByTestId('desk-dex-keyboard').click();
+  const composer = page.locator('[data-testid="desk-dex-floating"], [data-testid="desk-dex-composer"]').first();
+  await composer.waitFor({ timeout: 5000 });
+  await composer.locator('textarea').fill('Tell Suresh to ship the indigo lot before Friday');
+  await composer.locator('textarea').press('Enter');
+  await page.locator('[data-testid="dex-popup"]').waitFor({ timeout: 10000 }).catch(() => {});
+  check('sending hands over to the pop-up', (await page.locator('[data-testid="dex-popup"]').count()) === 1);
+  check('…and the door stands aside rather than burying it',
+    (await page.locator('[data-testid="dex-decide-overlay"]').count()) === 0);
+  await page.locator('[data-testid="dex-popup-close"]').click().catch(() => {});
+  await page.waitForTimeout(600);
+  check('closing the pop-up leaves you on the Desk, not in the door',
+    (await page.locator('[data-testid="dex-slider"]').count()) === 1
+    && (await page.locator('[data-testid="dex-decide-overlay"]').count()) === 0);
+
+  await drag(track.x + track.width - 2);   // open it again, so "back" has a door to close
   await page.goBack();
   await page.waitForTimeout(700);
   check('back closes the door', (await page.locator('[data-testid="dex-decide-overlay"]').count()) === 0);

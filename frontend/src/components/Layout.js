@@ -1068,7 +1068,9 @@ export default function Layout({ children }) {
       <FloatingDock
         /* With no circle beside it the bar centres itself (index.css,
            .app-dock-right-wide). Everywhere else the anchoring is untouched. */
-        wide={deskHasSlider}
+        /* …and the dock gives the width back when the circle returns, or the
+           two would overlap on the one screen that has both. */
+        wide={deskHasSlider && !dexOpen}
         user={user}
         onMore={() => setAllAppsOpen(true)}
         moreOpen={allAppsOpen}
@@ -1117,8 +1119,18 @@ export default function Layout({ children }) {
           same Ask sheet, so the circle would be a second door to one room.
           It is removed from this page only — `deskHasSlider` is false on My
           Work, Finance, CRM and the rest, where the circle is exactly as it
-          was. With the flag off it is everywhere again, Desk included. */}
-      {!deskHasSlider && (
+          was. With the flag off it is everywhere again, Desk included.
+
+          …BUT IT COMES BACK THE MOMENT THE SHEET IS OPEN, and missing that is
+          what broke Ask when it was opened from the slider. This circle has TWO
+          jobs: shut, it is the door into Ask; open, it IS the composer's
+          mic/send button, because KM-26 made the dock and this circle the Ask
+          sheet's composer rather than drawing a second bar over them. The
+          slider replaced the first job only. Removing the circle outright took
+          the send button with it, so Ask opened on the Desk as a bar with
+          nowhere to press — and only on the Desk, which is exactly the shape
+          of the report. `dexOpen` is the whole fix. */}
+      {(!deskHasSlider || dexOpen) && (
       <DexFab
         /* ASK-33 Phase 4 — closed, the FAB opens Dex in ASK: one tap, no
            picker, no scrim (KM-54's two doors collapsed; see DexFab.jsx). Open,

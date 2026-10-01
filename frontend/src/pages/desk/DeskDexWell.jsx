@@ -39,13 +39,14 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PaperPlaneRight, Paperclip, X, Check, File as FileGlyph, Keyboard } from "@phosphor-icons/react";
+import { PaperPlaneRight, Paperclip, X, Check, File as FileGlyph, Keyboard, Microphone, Stop } from "@phosphor-icons/react";
 import { useAuth } from "../../context/AuthContext";
 import { captureOutcome, failureReason, isReading, OUTCOME_COPY } from "../../lib/dexOutcome";
 import { toastDexOutcome } from "../../lib/dexOutcomeToast";
 import { hasPerm } from "../../lib/perms";
 import { cn } from "../../lib/utils";
 import { useDexCapture } from "../../hooks/useDexCapture";
+import { enableProximity, disableProximity } from "../../lib/native/proximity";
 import { useDexConversation } from "../../hooks/useDexConversation";
 import { InsightWell } from "../../components/karma";
 // ASK-47 — the ripple the founder signed off in the lab, now the mic.
@@ -164,7 +165,7 @@ function useKeyboardInset(active) {
  * code reached by both, so the door cannot drift from the well it replaces.
  */
 export function DeskDexWell({ className, testid, phone = false, onReview, onLater,
-                              surface = "well", open = false, onClose }) {
+                              surface = "well", open = false, onClose, onMeter }) {
   const { user } = useAuth();
   // The gate every Dex capture surface uses (DexFab, DexCaptureBar).
   const canCapture = user?.role === "owner" || hasPerm(user, "voice_capture");
@@ -585,6 +586,55 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
 
   const rippleDisabled = !canCapture || (!recording && (dex.sending || chat.busy));
 
+  /* THE DOOR STANDS ASIDE THE MOMENT THE CAPTURE HAS SOMEWHERE ELSE TO GO.
+     Reported from the iPhone: stop speaking and the blurred mic screen just
+     sat there while step 1, the reading and the review all ran BEHIND it, with
+     no way through. Two faults in one. The pop-up is a Radix dialog at z-50
+     and the door is 9500, so it was underneath; and even stacked correctly the
+     door has no job once the words exist — it is the recording surface, not
+     the review.
+     This is an effect rather than a line inside onMic on purpose: every path
+     into the pop-up (stopping the mic, sending typed words, pressing the
+     status pill, opening a kept capture) goes through `popupOpen`, so one rule
+     here cannot be forgotten in a fifth place later. */
+  useEffect(() => {
+    if (surface === "overlay" && open && popupOpen) onClose?.();
+  }, [surface, open, popupOpen, onClose]);
+
+  /* DEX-SLIDER Part 4 — THE PHONE AT YOUR EAR. Monitoring runs for exactly one
+     state: this is the decision door, it is open, and it is recording. Every
+     other combination is off, which is why the condition is written as one
+     expression rather than as an enable here and a disable in four places — a
+     phone left with a dark screen because a path was missed is the worst thing
+     this feature can do, and a missed path is the only way it happens.
+     The cleanup runs on unmount, on the door closing, on recording stopping
+     and on a failed capture, because all four change this expression. */
+  const atEar = surface === "overlay" && open && recording;
+  useEffect(() => {
+    if (!atEar) return undefined;
+    let live = true;
+    enableProximity().then((on) => { if (!live && on) disableProximity(); });
+    return () => { live = false; disableProximity(); };
+  }, [atEar]);
+
+  /* …AND THE SCREEN COMES BACK IF THE APP GOES AWAY. Backgrounding does not
+     unmount this, so the effect above would hold monitoring while the founder
+     is in another app. Recording itself is left alone: the brief asks for
+     nothing to stop on its own, and it does not. */
+  useEffect(() => {
+    if (!atEar || typeof document === "undefined") return undefined;
+    const onHide = () => { if (document.hidden) disableProximity(); else enableProximity(); };
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
+  }, [atEar]);
+
+  /* The Desk's slider draws its ripple off THIS capture's meter — the one the
+     page already owns. A second useDexCapture would be a second MediaRecorder
+     on the same microphone, so the reader is handed up instead. It is a ref
+     reader and stable, so the slider can call it every frame and nothing above
+     it re-renders. */
+  useEffect(() => { onMeter?.(readLevel); }, [onMeter, readLevel]);
+
   /* The top of the pane: what is going to be sent, what was kept, and — once
      the pop-up has been closed on a capture — where that capture got to. */
   const attachments = chat.pendingFiles.length > 0 ? (
@@ -627,11 +677,55 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
   const top = (capturePill || keptDraft || attachments)
     ? <div className="relative z-10">{capturePill}{keptDraft}{attachments}</div>
     : null;
+  /* THE DOOR SPLITS `top` IN TWO, along the line of what each piece is about.
+     The attached files belong to the door: you press its paperclip, so the
+     chips have to appear where you are looking. The "still reading / ready"
+     pill and the kept-capture note are about the DESK — they outlive the door,
+     which shuts itself the moment the pop-up takes over — so they stay on the
+     page, where closing the door can never hide unsent words. */
+  const doorTop = attachments
+    ? <div className="relative z-10">{attachments}</div> : null;
+  const deskTop = (capturePill || keptDraft)
+    ? <div className="relative z-10">{capturePill}{keptDraft}</div> : null;
 
-  /* THE RIPPLE IS THE INVITATION, on both surfaces. It runs off the capture the
-     page already owns — useDexCapture's meter through `readLevel` — rather than
-     opening a second stream onto the same microphone. At rest it breathes;
-     while it is listening it answers the room. */
+  /* THE DOOR HAS NO RIPPLE. Reported from the iPhone: over a blurred, dimmed
+     Desk the waves read as smeared artefacts rather than as an invitation —
+     the effect needs an opaque surface behind it to be legible, and the door
+     deliberately has none. So the door gets the mic and nothing else, and the
+     ripple moves to the one place on the phone that DOES have a solid surface
+     for it: inside the slider's own well (DexSlider), where it loops subtly
+     and answers the room through this same meter.
+
+     It keeps `desk-dex-ripple` and `voice-ripple-mic`. Those name the capture's
+     target, not the animation, and every suite and every habit presses them. */
+  const doorMic = (
+    <div className="grid min-h-0 flex-1 place-items-center" data-testid="desk-dex-ripple">
+      <button
+        type="button"
+        data-testid="voice-ripple-mic"
+        aria-pressed={recording}
+        aria-label={micLabel}
+        disabled={rippleDisabled}
+        onClick={onMic}
+        className={cn(
+          "kr-pop grid place-items-center rounded-full transition-transform duration-200",
+          "h-[7.5rem] w-[7.5rem] disabled:opacity-40",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
+          recording && "scale-105"
+        )}
+      >
+        {recording
+          ? <Stop size={40} weight="fill" aria-hidden="true" className="text-destructive" />
+          : <Microphone size={44} weight="regular" aria-hidden="true" className="text-foreground" />}
+      </button>
+    </div>
+  );
+
+  /* THE RIPPLE IS THE INVITATION in the WELL — the flag-off Desk and desktop,
+     both of which are opaque. It runs off the capture the page already owns —
+     useDexCapture's meter through `readLevel` — rather than opening a second
+     stream onto the same microphone. At rest it breathes; while it is
+     listening it answers the room. */
   const body = phone ? (
     <div className="grid min-h-0 flex-1 place-items-center" data-testid="desk-dex-ripple">
       <VoiceRipple
@@ -831,10 +925,12 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
               <X size={18} weight="bold" aria-hidden="true" />
             </button>
           </div>
-          {/* The kept capture, where the well puts it. */}
-          {top ? <div className="mt-2 shrink-0">{top}</div> : null}
-          {/* The mic, and nothing else. */}
-          <div className="grid min-h-0 flex-1 place-items-center">{body}</div>
+          {/* What you attached, where you attached it. */}
+          {doorTop ? <div className="mt-2 shrink-0">{doorTop}</div> : null}
+          {/* The mic, and nothing else — no ripple, and no kept-capture note
+              either: that note is PAGE state, not door state, so it stays on
+              the Desk where it can still be seen when the door is shut. */}
+          <div className="grid min-h-0 flex-1 place-items-center">{doorMic}</div>
           {/* Attach left, keyboard right — the well's own floor, spread. */}
           <div className="flex shrink-0 items-center justify-between gap-3">{floor}</div>
         </div>
@@ -843,8 +939,18 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
     )
     : null;
 
+  /* WHAT THE DESK KEEPS WHILE THE DOOR IS SHUT. `top` is the kept-capture note
+     and the "Dex is still reading / ready" pill — both of them statements about
+     the page, not about the recording screen. Rendering them only inside the
+     door would mean that closing it (which now happens by itself the moment the
+     pop-up takes over) silently hid the one affordance that offers unsent words
+     back. So on the overlay surface they render inline on the Desk instead, and
+     the door carries the mic alone. */
   return (
     <>
+      {surface === "overlay" && deskTop
+        ? <div className={cn("order-3 shrink-0 px-1 lg:hidden", className)} data-testid={testid}>{deskTop}</div>
+        : null}
       {surface === "overlay" ? overlay : (
       <InsightWell
         compact

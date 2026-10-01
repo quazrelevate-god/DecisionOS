@@ -1,6 +1,6 @@
 /* DEX-SLIDER Part 2 · the Desk's Dex control on a phone.
  *
- * A track with a handle at the centre and a target at each end. Drag LEFT to
+ * A well with a handle at the centre and a target at each end. Drag LEFT to
  * Ask, RIGHT to the decision door. It is the iPhone's own slide-to-answer
  * grammar, which is the argument for it: these founders already know that a
  * deliberate drag commits and a half-hearted one does not.
@@ -10,24 +10,42 @@
  * a capture is somebody's decision reaching their team, and a swipe that half
  * lands must never start one. You can stop, hold, and drag back.
  *
+ * REDRAWN AFTER THE FOUNDER SAW IT ON AN IPHONE (2026-10-01), to their own
+ * rearrangement:
+ *   · It sits in the app's concave Dex-well surface (.kr-slider-well) rather
+ *     than on a flat field, so the handle reads as running IN a channel.
+ *   · It is taller, because the handle has to be easy to hit. 3.5rem of handle
+ *     is 44 real pixels once --ui-scale's 0.8 is applied; the 2.75rem it was
+ *     measured 35, and only cleared the touch floor on paper (offsetHeight is
+ *     CSS pixels — the same unit-family trap that put the stop in the wrong
+ *     place, see `travel`).
+ *   · THE ICON SAYS WHERE YOU ARE GOING. At rest it is the sparkle, which is
+ *     Dex's own mark throughout the app; carried left it becomes the chat
+ *     bubble that Ask wears, carried right the waveform that recording wears.
+ *     The two chevrons it replaces said "this slides" and nothing else, which
+ *     the handle's position already says.
+ *   · The ripple moved in here off the decision door, where over a blurred
+ *     Desk it read as smearing. Rings, not waves — a different motion from the
+ *     one it replaces — born at the handle, dying at the wall, clipped by the
+ *     pill so nothing escapes the control, and answering the mic meter while a
+ *     capture is recording.
+ *
  * WHY IT DOES NOT FIGHT THE SYSTEM BACK GESTURE. iOS and Android both own the
  * screen edges, and this app now has an iOS edge-swipe back (df5dc98) and an
  * edge swipe that closes sheets (e2ad0e5). Those fire on a touch that STARTS
  * within a few points of the edge. This handle starts at the CENTRE of the
  * track and the track is inset from the page gutter, so a drag begins in the
  * middle of the screen and the system never claims it — the finger may end
- * near an edge, which is not what either gesture reads. It still wants
- * confirming on a real iPhone, because that is the only place the real
- * recogniser runs.
+ * near an edge, which is not what either gesture reads.
  *
  * NO TAP TO ACTIVATE — the swipe is the control, deliberately. But NM-4 says
  * every interactive thing is reachable without one, so the handle is a real
  * button with a name, it keeps the app's focus ring, and Left/Right arrows
- * commit to either end for assistive technology and external keyboards. That costs no
- * visible chrome and makes the control operable without a drag.
+ * commit to either end for assistive technology and external keyboards.
  */
 import * as React from "react";
 import { useTranslation } from "react-i18next";
+import { Sparkle, ChatCircleDots, Waveform } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 /* How far from an end counts as "arrived". Not zero: a finger that has taken
@@ -49,14 +67,16 @@ async function tick(style) {
 }
 
 /**
- * @param {Function} onAsk     reached and released at the LEFT end
- * @param {Function} onDecide  reached and released at the RIGHT end
+ * @param {Function} onAsk      reached and released at the LEFT end
+ * @param {Function} onDecide   reached and released at the RIGHT end
+ * @param {Function} [readLevel] 0..1 mic loudness, read per frame, never state
  * @param {boolean}  [disabled]
  */
-export function DexSlider({ onAsk, onDecide, disabled = false, className }) {
+export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false, className }) {
   const { t } = useTranslation();
   const trackRef = React.useRef(null);
   const handleRef = React.useRef(null);
+  const ringsRef = React.useRef(null);
   const [dx, setDx] = React.useState(0);        // handle offset from centre, px
   const [dragging, setDragging] = React.useState(false);
   const reachedRef = React.useRef(null);        // which end we last ticked for
@@ -86,6 +106,35 @@ export function DexSlider({ onAsk, onDecide, disabled = false, className }) {
   }, [travel]);
 
   const settle = React.useCallback(() => { setDx(0); reachedRef.current = null; }, []);
+
+  /* THE RINGS ANSWER THE ROOM, without re-rendering anything. The mic meter is
+     a ref reader handed down from the capture that owns the microphone
+     (DeskDexWell), so this writes a CSS variable per frame and React never
+     hears about it — the same reason KM-60 took the meter off React state.
+     Idle is a floor, not zero: the loop has to keep breathing when nothing is
+     being said, which is what the founder asked for on the Desk.
+     `--dsr-reach` is measured so the last ring dies at the wall rather than at
+     an invented multiplier: the pill is far wider than it is tall, so reach is
+     computed off the WIDTH and the pill's own overflow clips the rest. */
+  React.useEffect(() => {
+    const el = ringsRef.current;
+    if (!el) return undefined;
+    let raf = 0, gain = 0.55;
+    const frame = () => {
+      const tr = trackRef.current;
+      if (tr) {
+        const w = tr.getBoundingClientRect().width;
+        el.style.setProperty("--dsr-reach", String(Math.max(4, Math.round((w / 48) * 10) / 10)));
+      }
+      const lvl = readLevel ? Math.max(0, Math.min(1, readLevel() || 0)) : 0;
+      /* Ease toward the target so a spike in the meter does not strobe. */
+      gain += ((0.55 + lvl * 1.15) - gain) * 0.14;
+      el.style.setProperty("--dsr-gain", gain.toFixed(3));
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, [readLevel]);
 
   const onPointerDown = (e) => {
     if (disabled) return;
@@ -130,13 +179,20 @@ export function DexSlider({ onAsk, onDecide, disabled = false, className }) {
   const at = end(dx);
   const pct = (() => { const m = travel(); return m ? Math.min(1, Math.abs(dx) / m) : 0; })();
 
+  /* WHICH WAY ARE YOU GOING. The icon turns the moment the handle leaves the
+     middle, not only at the stop — half a drag should already tell you which
+     room you are opening, so that a drag begun by accident can be read and
+     abandoned before it commits. */
+  const heading = dx < -2 ? "ask" : dx > 2 ? "decide" : null;
+  const Glyph = heading === "ask" ? ChatCircleDots : heading === "decide" ? Waveform : Sparkle;
+
   const Label = ({ side, children }) => (
     <span
       aria-hidden="true"
       className={cn(
-        "pointer-events-none select-none text-[13px] font-medium transition-opacity duration-150",
+        "pointer-events-none select-none text-[15px] font-medium transition-opacity duration-150",
         at === side ? "text-foreground opacity-100" : "text-foreground/45",
-        side === "ask" ? "pl-4" : "pr-4"
+        side === "ask" ? "pl-6" : "pr-6"
       )}
     >{children}</span>
   );
@@ -145,11 +201,21 @@ export function DexSlider({ onAsk, onDecide, disabled = false, className }) {
     <div className={cn("flex w-full items-center", className)} data-testid="dex-slider">
       <div
         ref={trackRef}
-        /* The sunken recipe the app's own fields are cut from, so the track
-           reads as a channel the handle sits IN rather than a bar beside it. */
-        className="nm-field relative flex h-[3.25rem] w-full items-center justify-between rounded-pill"
+        className="kr-slider-well relative flex h-[var(--desk-slider-track)] w-full items-center justify-between overflow-hidden"
         data-at={at || undefined}
       >
+        {/* The ripple, under everything and reachable by nothing. */}
+        <span
+          ref={ringsRef}
+          aria-hidden="true"
+          className="kr-slider-ripple pointer-events-none absolute top-1/2 h-0 w-0"
+          style={{ left: `calc(50% + ${dx}px)` }}
+        >
+          <i style={{ animationDelay: "0s" }} />
+          <i style={{ animationDelay: "1.13s" }} />
+          <i style={{ animationDelay: "2.26s" }} />
+        </span>
+
         <Label side="ask">{t("desk.slider.ask", "Ask")}</Label>
         <Label side="decide">{t("desk.slider.decide", "Decide")}</Label>
 
@@ -159,9 +225,9 @@ export function DexSlider({ onAsk, onDecide, disabled = false, className }) {
         <span
           aria-hidden="true"
           className={cn(
-            "pointer-events-none absolute inset-y-1 w-24 rounded-pill transition-opacity duration-150",
+            "pointer-events-none absolute inset-y-1.5 w-28 rounded-pill transition-opacity duration-150",
             at ? "opacity-100" : "opacity-0",
-            at === "ask" ? "left-1" : "right-1"
+            at === "ask" ? "left-1.5" : "right-1.5"
           )}
           style={{ background: "color-mix(in oklab, var(--brand-600) 14%, transparent)" }}
         />
@@ -178,7 +244,7 @@ export function DexSlider({ onAsk, onDecide, disabled = false, className }) {
           onPointerCancel={() => { setDragging(false); settle(); }}
           onKeyDown={onKeyDown}
           className={cn(
-            "kr-pop absolute left-1/2 grid h-11 w-11 place-items-center rounded-full",
+            "kr-pop absolute left-1/2 grid h-14 w-14 place-items-center rounded-full",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
             "disabled:opacity-50 touch-none"
           )}
@@ -187,16 +253,12 @@ export function DexSlider({ onAsk, onDecide, disabled = false, className }) {
             transition: dragging ? "none" : "transform 220ms cubic-bezier(.22,1,.36,1)",
           }}
         >
-          {/* Two chevrons, because the control goes both ways and an arrow one
-              way would say it does not. They fade on the side being left. */}
-          <span aria-hidden="true" className="flex items-center gap-[3px] text-foreground/70">
-            <svg width="7" height="12" viewBox="0 0 7 12" fill="none" style={{ opacity: dx > 0 ? 0.25 : 1 }}>
-              <path d="M6 1 1 6l5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <svg width="7" height="12" viewBox="0 0 7 12" fill="none" style={{ opacity: dx < 0 ? 0.25 : 1 }}>
-              <path d="m1 1 5 5-5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </span>
+          <Glyph
+            size={24}
+            weight={heading ? "regular" : "fill"}
+            aria-hidden="true"
+            className="text-foreground/80"
+          />
         </button>
 
         {/* What a screen reader hears while the handle moves. */}

@@ -8,6 +8,7 @@
     "@capacitor/core": "^8.5.2",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/ios": "^8.5.2",
+    "@capgo/capacitor-proximity": "^8.1.11",
     "@hookform/resolvers": "5.0.1",
     "@phosphor-icons/react": "^2.1.10",
     "@radix-ui/react-accordion": "1.2.8",

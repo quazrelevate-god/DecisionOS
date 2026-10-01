@@ -680,7 +680,17 @@
        ripple that wanted a square; the slider holds a 56px handle on a track
        with a word at each end, and 7rem is that plus its own padding with the
        labels on their own line. The leftover goes to the KPI tiles. */
-    --desk-slider-h: 7rem;
+    /* DEX-SLIDER — the slider's own two heights, after the founder saw it on
+       an iPhone. The track was 3.25rem inside a 7rem slot, so the slot's own
+       padding drew a 33px gap above the slider and 34px below it that read as
+       uneven spacing rather than as a control. The slot hugs the track now and
+       the seam between blocks is the page's, once, for every block.
+       The track is taller because the founder asked for a control that is
+       easy to hit: 4.75rem of track carrying a 3.5rem handle is 44 REAL pixels
+       of handle once --ui-scale's 0.8 has been applied, where the old 2.75rem
+       handle was 35 and only cleared the floor on paper. */
+    --desk-slider-track: 4.75rem;
+    --desk-slider-h: var(--desk-slider-track);
     /* The floor under those tiles: their own resting content height. 6rem,
        not the 4.8125 first written here — that was the measured 77px read off
        a rect, and rects are VISUAL pixels while a rem is a CSS pixel, which
@@ -3368,6 +3378,61 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
     .kr-well {
         position: relative;
         border-radius: var(--radius-tile);
+    }
+
+    /* DEX-SLIDER — THE SLIDER SITS IN A WELL, not on a field. The founder's
+       rearrangement puts the control inside the app's own concave surface, and
+       this is .kr-well__pane's recipe verbatim — the same 7px/14px inset pair,
+       dark from the top-left and light from the bottom-right — cut as a pill
+       and given the sunk phone wash so the handle reads as sitting IN a channel
+       rather than on a bar. Nothing new is invented; the well already knew how
+       to look pressed. */
+    .kr-slider-well {
+        position: relative;
+        border-radius: 9999px;
+        border: 0;
+        background: linear-gradient(160deg,
+            hsl(0 0% 100% / .34),
+            hsl(0 0% 100% / .20));
+        backdrop-filter: blur(22px) saturate(1.6);
+        -webkit-backdrop-filter: blur(22px) saturate(1.6);
+        box-shadow:
+            inset 7px 7px 14px hsl(230 22% 34% / .20),
+            inset -7px -7px 14px hsl(0 0% 100% / .62);
+    }
+
+    /* THE RIPPLE LIVES HERE NOW. It was on the decision door, where it sat over
+       a blurred Desk and read as smearing; the founder asked for it inside the
+       slider instead — subtle, looping, untouchable, starting at the handle and
+       dying at the container's own wall. Rings rather than the well's waves, so
+       it is a different motion from the one it replaces and so that `overflow:
+       hidden` on the pill is the whole containment story: nothing can escape
+       the control. `--dsr-gain` is written from the live mic meter, so the loop
+       answers the room while a capture is recording and merely breathes
+       otherwise. */
+    .kr-slider-ripple > i {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 3rem;
+        height: 3rem;
+        margin: -1.5rem 0 0 -1.5rem;
+        border-radius: 9999px;
+        /* VERY subtle, which is the whole brief for it. The first cut used a
+           .85 white hairline at .5 alpha and washed the pill in bright bands —
+           it read as a defect, not as a pulse. A .55 white at a sixth of that
+           alpha is visible as movement and invisible as a shape. */
+        border: 1px solid hsl(0 0% 100% / .55);
+        opacity: 0;
+        animation: kr-slider-ring 4.2s linear infinite;
+    }
+    @keyframes kr-slider-ring {
+        0%   { transform: scale(.42); opacity: 0; }
+        18%  { opacity: calc(.085 * var(--dsr-gain, 1)); }
+        100% { transform: scale(var(--dsr-reach, 7)); opacity: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .kr-slider-ripple > i { animation: none; opacity: 0; }
     }
 
     .kr-well__pane {

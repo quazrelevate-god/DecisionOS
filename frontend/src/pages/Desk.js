@@ -24,7 +24,7 @@
 //
 // Deep-link contract preserved: /inbox?decision=<id> redirects to the
 // decision page (KM-28).
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
@@ -818,6 +818,16 @@ export default function Desk() {
      entry on history while the door is open, and both gestures pop that. One
      behaviour, described once. */
   const [decideOpen, setDecideOpen] = useState(false);
+  /* DEX-SLIDER — THE SLIDER'S RIPPLE BORROWS THE CAPTURE'S METER. The door
+     (DeskDexWell, mounted below) owns the microphone; a second useDexCapture
+     here would be a second MediaRecorder on the same device. So the door hands
+     its reader up and the slider calls it per animation frame. Both halves are
+     stable so neither the door nor the slider re-renders for this, and the
+     reader is a ref read — KM-60's rule that the meter never touches state
+     above the component that owns it still holds. */
+  const dexMeterRef = useRef(null);
+  const onDexMeter = useCallback((fn) => { dexMeterRef.current = fn; }, []);
+  const dexMeter = useCallback(() => (dexMeterRef.current ? dexMeterRef.current() : 0), []);
   useBackDismiss(decideOpen, (v) => setDecideOpen(!!v));
   /* JOURNEY-1 J13 — on a slow line the phone's saved copy stands in for the
      server after 3 s (service-worker.js), and the Desk used to show those
@@ -1218,7 +1228,17 @@ export default function Desk() {
              next), the hero takes the leftover and the tile row grows inside
              it, floored at its own resting height so the shortest phones never
              crush it. lg is untouched. */
-          DEX_SLIDER && "order-1 flex-1 min-h-0 lg:order-none lg:flex-none")}>
+          /* …AND THAT WAS WRONG, on a real iPhone (2026-10-01). `flex-1` on the
+             hero meant the hero ate every spare pixel, and since the tiles are
+             capped the space had nowhere to go but into a 199px void between
+             the tiles and the black card — measured at 390x844. The founder saw
+             it immediately and rearranged the screen by hand.
+             The slack belongs to the BOARD: it is a list, it is the one block
+             that can use height, and giving it the leftover makes all three
+             seams the page's single gap instead of one 199px hole and two
+             33px ones. The hero is now exactly as tall as the greeting, the
+             score and the tiles need. */
+          DEX_SLIDER && "order-1 shrink-0 lg:order-none")}>
         {/* LEFT column — greeting, the score row, the well on the floor.
             KR-14.2 · MOBILE — display:contents so its children flow into
             the outer column and the KPI strip can slot between them. */}
@@ -1243,7 +1263,7 @@ export default function Desk() {
                 lands inside the two lines rather than in an ellipsis. Two lines
                 at 22 is 56px against the score's 60, so it still cannot make
                 this row taller than the score does. */}
-            <h1 className="min-w-0 font-display text-xl leading-tight lg:text-[34px] lg:font-light lg:leading-[1.15]" data-testid="desk-brief-greeting">
+            <h1 className="min-w-0 font-display text-[1.65rem] leading-[1.15] lg:text-[34px] lg:font-light lg:leading-[1.15]" data-testid="desk-brief-greeting">
               {gi === -1
                 ? <span className="block truncate">{greeting || " "}</span>
                 : <>
@@ -1293,10 +1313,10 @@ export default function Desk() {
               aria-label="Operating score — open the score page"
               className="flex shrink-0 items-center gap-3 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 lg:hidden">
               <div className="flex items-baseline">
-                <span className="font-display text-6xl leading-none">{scoreReady ? shownScore : "—"}</span>
+                <span className="font-display text-[4.5rem] leading-none">{scoreReady ? shownScore : "—"}</span>
                 {scoreReady && <span className="ml-1 text-sm text-muted-foreground">/100</span>}
               </div>
-              <ArcGauge value={scoreReady ? shownScore : null} size={110} className="w-24 shrink-0 text-foreground" />
+              <ArcGauge value={scoreReady ? shownScore : null} size={132} className="w-28 shrink-0 text-foreground" />
             </Link>
           </div>
 
@@ -1548,15 +1568,31 @@ export default function Desk() {
           card is the last thing above the dock. Only the ORDER changes: the
           well still takes whatever height is left over (flex-1) and the card
           is still the fixed three rows it has been since ASK-46. */}
+      {isMobile && DEX_SLIDER && (
+        <DeskDexWell
+          surface="overlay"
+          open={decideOpen}
+          onClose={() => setDecideOpen(false)}
+          phone
+          onMeter={onDexMeter}
+          onReview={(id) => setOpenDecisionId(id)}
+          onLater={(id) => saveAsDraft(id).then((ok) => { qc.invalidateQueries({ queryKey: ["desk"] }); return ok; })}
+        />
+      )}
       {/* DEX-SLIDER Part 2 — the slider takes the control's slot on a phone.
           The well is NOT deleted: it is the other branch of the flag and
           renders exactly as it always has when DEX_SLIDER is off. */}
       {isMobile && (DEX_SLIDER ? (
-        <div className="order-3 flex h-[var(--desk-slider-h)] shrink-0 items-center px-1 lg:order-none"
+        /* mb-2 — THE FOURTH SEAM. The other three are the column's own gap; the dock
+             is `fixed` and so is not in this column at all, which left the
+             slider sitting 2px off it while every other seam was 9. The margin
+             comes out of the board's share, so nothing else moves. */
+          <div className="order-4 mb-1 flex shrink-0 items-center px-1 lg:order-none"
              data-testid="desk-insight">
           <DexSlider
             onAsk={() => doors?.openAsk?.()}
             onDecide={() => setDecideOpen(true)}
+            readLevel={dexMeter}
           />
         </div>
       ) : dexWell)}
@@ -1565,16 +1601,6 @@ export default function Desk() {
           handover, same one-at-a-time guard. Mounted whenever the slider is,
           so the capture machinery and a kept draft survive the door being
           shut, exactly as they survive leaving the well. */}
-      {isMobile && DEX_SLIDER && (
-        <DeskDexWell
-          surface="overlay"
-          open={decideOpen}
-          onClose={() => setDecideOpen(false)}
-          phone
-          onReview={(id) => setOpenDecisionId(id)}
-          onLater={(id) => saveAsDraft(id).then((ok) => { qc.invalidateQueries({ queryKey: ["desk"] }); return ok; })}
-        />
-      )}
 
       {/* ASK-47 — NOTHING ELSE MOVES. The card goes `position: fixed` when it
           pops, which takes it out of the page's column; this holds its place at
@@ -1648,7 +1674,10 @@ export default function Desk() {
              phone: the card sits directly on the slider, the slider directly
              on the dock. Order only — the card is the same card, the same
              three rows, the same pop. lg keeps its own order entirely. */
-          DEX_SLIDER && "order-2 shrink-0 lg:order-none",
+          /* DEX-SLIDER (2026-10-01) — the board takes the slack now. See the
+             hero's note: it used to be `shrink-0` while the hero grew, which
+             is what opened the void above it. */
+          DEX_SLIDER && "order-2 min-h-0 flex-1 lg:order-none lg:flex-none",
           showDecisions && "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]",
           /* PILOT — the card stays its minimal content height on a phone (it does
              NOT grow to fill). The stack is top-aligned, so closing the demo

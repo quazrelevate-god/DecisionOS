@@ -1164,6 +1164,14 @@ export default function Desk() {
       data-cached={cachedAt ? "true" : undefined}
       className={cn(
         "flex flex-col gap-3 lg:gap-6 lg:min-h-0 lg:flex-1",
+        /* DEX-SLIDER Part 1 (capped) — WHERE THE SLACK GOES, and it is the
+           brief that decides, not taste. The card sits DIRECTLY on the slider
+           and the slider directly on the dock, so no gap is allowed between
+           those three. Capping the tiles means the space has to land
+           somewhere, and the only seam left is between the tiles and the card.
+           Spreading it evenly (justify-between) was tried and rejected: it put
+           ~105px between the card and the slider, which is exactly the
+           adjacency the brief forbids. */
         /* ASK-42 A — h-full, not a copy of the shell's arithmetic. This was
            `100svh - env(safe-area-inset-top) - 1.5rem`: the viewport, less what
            the shell puts above <main>, guessed from here. It was right until
@@ -1370,7 +1378,12 @@ export default function Desk() {
                between the two rows rather than all of it to the first. The
                floor is the row's own resting height, measured at 390x844, so a
                360x640 phone shows the tiles exactly as it does today. */
-            DEX_SLIDER && "flex-1 auto-rows-fr min-h-[var(--desk-kpi-floor)]")}
+            /* A HEIGHT, not a stretch. Capped-but-flexible pooled the whole
+               leftover inside the hero and left 200px of nothing between the
+               tiles and the card — worse than the stretch it fixed. The row is
+               the cap, floored so the shortest phones shrink it rather than
+               overflow, and the slack goes to the page to spread. */
+            DEX_SLIDER && "h-[var(--desk-kpi-cap)] min-h-[var(--desk-kpi-floor)] auto-rows-fr")}
          
           data-testid="desk-kpi-strip"
         >

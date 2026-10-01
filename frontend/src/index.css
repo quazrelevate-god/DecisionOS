@@ -681,11 +681,21 @@
        with a word at each end, and 7rem is that plus its own padding with the
        labels on their own line. The leftover goes to the KPI tiles. */
     --desk-slider-h: 7rem;
-    /* The floor under those tiles: their own resting content height, measured
-       at 390x844 (77px for the 2x2 row). They may grow into whatever the
-       slider gives back, but never below this, or the shortest phones crush
-       them. */
-    --desk-kpi-floor: 4.8125rem;
+    /* The floor under those tiles: their own resting content height. 6rem,
+       not the 4.8125 first written here — that was the measured 77px read off
+       a rect, and rects are VISUAL pixels while a rem is a CSS pixel, which
+       the phone's own zoom: 0.8 separates by 1.25. The floor was a quarter
+       short and never binding. 96 CSS px is the real resting height. */
+    --desk-kpi-floor: 6rem;
+    /* And the ceiling, the founder's call after seeing it uncapped. Left to
+       fill, the row took 228px at 390x844 — not the 128 the slider gave back,
+       because the hero also swallowed gaps that used to sit between it and the
+       well — and each tile became a 150px box with its label and numeral at
+       the foot of a lot of nothing. 9rem is half as much again as resting:
+       enough that the tiles read as having grown, not enough to look stretched.
+       What is left over stays as breathing room between the tiles and the
+       card, which is where a gap belongs if there is going to be one. */
+    --desk-kpi-cap: 9rem;
     --desk-phone-row: calc(2.75rem + 2 * 0.25rem);
     --desk-phone-body: calc(3 * var(--desk-phone-row) + 2px + 4px + 2.75rem);
 }

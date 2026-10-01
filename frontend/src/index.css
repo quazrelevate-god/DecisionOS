@@ -686,10 +686,13 @@
        uneven spacing rather than as a control. The slot hugs the track now and
        the seam between blocks is the page's, once, for every block.
        The track is taller because the founder asked for a control that is
-       easy to hit: 4.75rem of track carrying a 3.5rem handle is 44 REAL pixels
-       of handle once --ui-scale's 0.8 has been applied, where the old 2.75rem
-       handle was 35 and only cleared the floor on paper. */
-    --desk-slider-track: 4.75rem;
+       easy to hit, and then asked for more again once they had it on the
+       phone: 6rem of track carrying a 3.5rem handle is 44 REAL pixels of
+       handle once --ui-scale's 0.8 has been applied, where the old 2.75rem
+       handle was 35 and only cleared the floor on paper. The extra height is
+       also what gives the ripple somewhere to happen — a 52px channel had no
+       room for a wave to be read in. */
+    --desk-slider-track: 6rem;
     --desk-slider-h: var(--desk-slider-track);
     /* The floor under those tiles: their own resting content height. 6rem,
        not the 4.8125 first written here — that was the measured 77px read off
@@ -3401,39 +3404,11 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
             inset -7px -7px 14px hsl(0 0% 100% / .62);
     }
 
-    /* THE RIPPLE LIVES HERE NOW. It was on the decision door, where it sat over
-       a blurred Desk and read as smearing; the founder asked for it inside the
-       slider instead — subtle, looping, untouchable, starting at the handle and
-       dying at the container's own wall. Rings rather than the well's waves, so
-       it is a different motion from the one it replaces and so that `overflow:
-       hidden` on the pill is the whole containment story: nothing can escape
-       the control. `--dsr-gain` is written from the live mic meter, so the loop
-       answers the room while a capture is recording and merely breathes
-       otherwise. */
-    .kr-slider-ripple > i {
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        width: 3rem;
-        height: 3rem;
-        margin: -1.5rem 0 0 -1.5rem;
-        border-radius: 9999px;
-        /* VERY subtle, which is the whole brief for it. The first cut used a
-           .85 white hairline at .5 alpha and washed the pill in bright bands —
-           it read as a defect, not as a pulse. A .55 white at a sixth of that
-           alpha is visible as movement and invisible as a shape. */
-        border: 1px solid hsl(0 0% 100% / .55);
-        opacity: 0;
-        animation: kr-slider-ring 4.2s linear infinite;
-    }
-    @keyframes kr-slider-ring {
-        0%   { transform: scale(.42); opacity: 0; }
-        18%  { opacity: calc(.085 * var(--dsr-gain, 1)); }
-        100% { transform: scale(var(--dsr-reach, 7)); opacity: 0; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-        .kr-slider-ripple > i { animation: none; opacity: 0; }
-    }
+    /* THE SLIDER'S RIPPLE IS VoiceRipple NOW, not CSS. The first cut here was
+       three expanding rings on a keyframe; the founder could not see them at
+       all, and handed over the lab's own config instead — so the control runs
+       the app's real wave material, decoratively, and this recipe is gone
+       rather than left behind to rot. See components/karma/DexSlider.jsx. */
 
     .kr-well__pane {
         position: relative;

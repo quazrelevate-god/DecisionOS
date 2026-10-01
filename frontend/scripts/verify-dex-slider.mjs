@@ -52,7 +52,7 @@ for (const [w, h] of WIDTHS) {
 
   // ── the Desk's order, and that it still fits ───────────────────────────────
   const box = async (t) => (await page.locator(`[data-testid="${t}"]`).boundingBox());
-  const [kpi, board, dex] = [await box('desk-kpi-strip'), await box('desk-board'), await box('desk-insight')];
+  const [kpi, board, dex] = [await box('desk-kpi-grid'), await box('desk-board'), await box('desk-insight')];
   check('tiles, then the card, then the control', kpi.y < board.y && board.y < dex.y);
   check('the card sits directly on the control', dex.y - (board.y + board.height) <= 16,
     `${Math.round(dex.y - (board.y + board.height))}px`);

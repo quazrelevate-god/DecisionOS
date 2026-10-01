@@ -46,12 +46,23 @@
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { Sparkle, ChatCircleDots, Waveform } from "@phosphor-icons/react";
+import { VoiceRipple } from "./VoiceRipple";
 import { cn } from "@/lib/utils";
 
 /* How far from an end counts as "arrived". Not zero: a finger that has taken
    the handle to within a few pixels of the stop has made its intention plain,
    and demanding the last three would make the control feel broken. */
 const END_SLOP = 6;
+
+/* THE FOUNDER'S OWN NUMBERS, dialled in the lab and handed over verbatim
+   (2026-10-01). My first cut of this was a CSS ring animation, which they could
+   not see at all — so the slider runs the app's real ripple material instead,
+   decoratively: the same canvas the Dex well uses, clipped to the pill, with no
+   control of its own. */
+const SLIDER_RIPPLE = {
+  gain: 0.95, thickness: 3, softness: 2.5, water: 1,
+  elastic: 0, speed: 0.9, density: 0.65,
+};
 
 /* The haptic tick. Capacitor only — the browser PWA has no vibration API worth
    using on iOS and must not throw reaching for one. Resolved lazily so the web
@@ -76,7 +87,6 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
   const { t } = useTranslation();
   const trackRef = React.useRef(null);
   const handleRef = React.useRef(null);
-  const ringsRef = React.useRef(null);
   const [dx, setDx] = React.useState(0);        // handle offset from centre, px
   const [dragging, setDragging] = React.useState(false);
   const reachedRef = React.useRef(null);        // which end we last ticked for
@@ -107,34 +117,29 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
 
   const settle = React.useCallback(() => { setDx(0); reachedRef.current = null; }, []);
 
-  /* THE RINGS ANSWER THE ROOM, without re-rendering anything. The mic meter is
-     a ref reader handed down from the capture that owns the microphone
-     (DeskDexWell), so this writes a CSS variable per frame and React never
-     hears about it — the same reason KM-60 took the meter off React state.
-     Idle is a floor, not zero: the loop has to keep breathing when nothing is
-     being said, which is what the founder asked for on the Desk.
-     `--dsr-reach` is measured so the last ring dies at the wall rather than at
-     an invented multiplier: the pill is far wider than it is tall, so reach is
-     computed off the WIDTH and the pill's own overflow clips the rest. */
+  /* WHERE THE WAVES ARE BORN, in the track's own CSS pixels — which is NOT the
+     unit `dx` is in. `dx` comes from clientX and is therefore visual pixels,
+     and this app runs at zoom .8, so the two families differ by 1.25x (the same
+     trap that put the stop in the wrong place; see `travel`). The ripple's
+     stage is the track element, so its coordinates are the element's own box:
+     offsetWidth, and dx converted back out of visual space. */
+  const [stage, setStage] = React.useState(null);
   React.useEffect(() => {
-    const el = ringsRef.current;
-    if (!el) return undefined;
-    let raf = 0, gain = 0.55;
-    const frame = () => {
-      const tr = trackRef.current;
-      if (tr) {
-        const w = tr.getBoundingClientRect().width;
-        el.style.setProperty("--dsr-reach", String(Math.max(4, Math.round((w / 48) * 10) / 10)));
-      }
-      const lvl = readLevel ? Math.max(0, Math.min(1, readLevel() || 0)) : 0;
-      /* Ease toward the target so a spike in the meter does not strobe. */
-      gain += ((0.55 + lvl * 1.15) - gain) * 0.14;
-      el.style.setProperty("--dsr-gain", gain.toFixed(3));
-      raf = requestAnimationFrame(frame);
+    const tr = trackRef.current;
+    if (!tr || typeof ResizeObserver === "undefined") return undefined;
+    const fit = () => {
+      const next = { w: tr.offsetWidth, h: tr.offsetHeight, hub: handleRef.current?.offsetWidth || 56 };
+      setStage((c) => (c && c.w === next.w && c.h === next.h && c.hub === next.hub ? c : next));
     };
-    raf = requestAnimationFrame(frame);
-    return () => cancelAnimationFrame(raf);
-  }, [readLevel]);
+    const ro = new ResizeObserver(fit);
+    ro.observe(tr);
+    fit();
+    return () => ro.disconnect();
+  }, []);
+  const uiScale = (() => {
+    if (typeof window === "undefined") return 1;
+    return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
+  })();
 
   const onPointerDown = (e) => {
     if (disabled) return;
@@ -204,17 +209,23 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
         className="kr-slider-well relative flex h-[var(--desk-slider-track)] w-full items-center justify-between overflow-hidden"
         data-at={at || undefined}
       >
-        {/* The ripple, under everything and reachable by nothing. */}
-        <span
-          ref={ringsRef}
-          aria-hidden="true"
-          className="kr-slider-ripple pointer-events-none absolute top-1/2 h-0 w-0"
-          style={{ left: `calc(50% + ${dx}px)` }}
-        >
-          <i style={{ animationDelay: "0s" }} />
-          <i style={{ animationDelay: "1.13s" }} />
-          <i style={{ animationDelay: "2.26s" }} />
-        </span>
+        {/* The ripple, under everything and reachable by nothing: VoiceRipple's
+            inward mode already wraps itself in `pointer-events-none absolute
+            inset-0 overflow-hidden rounded-[inherit]`, so the pill is the wall
+            and nothing can be drawn past it. It breathes at rest and answers
+            the microphone through the capture's own meter while one is running. */}
+        {stage && (
+          <VoiceRipple
+            mode="in"
+            decorative
+            config={SLIDER_RIPPLE}
+            hubPx={stage.hub}
+            hubAt={{ x: stage.w / 2 + dx / uiScale, y: stage.h / 2 }}
+            idle={0.16}
+            readLevel={readLevel}
+            listening={false}
+          />
+        )}
 
         <Label side="ask">{t("desk.slider.ask", "Ask")}</Label>
         <Label side="decide">{t("desk.slider.decide", "Decide")}</Label>

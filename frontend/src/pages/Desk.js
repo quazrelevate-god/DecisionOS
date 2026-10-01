@@ -108,6 +108,15 @@ const POP_SEAM = 10;
    here, which is worth saying rather than leaving a constant that suggests it
    did.
 const DOCK_SEAM = 4; */
+
+/* THE PHONE'S SCALE FOR THE DESK TILES, in one place.
+   The desktop tiles are used verbatim on the phone now (one grid, one set of
+   behaviours, one set of routes); all that changes is how much air they carry.
+   `cn` is tailwind-merge, so these simply win over the tile's own p-4 and
+   min-h — no !important, no fork of the component, and `lg:` is untouched so
+   desktop keeps every pixel it had. max-lg: only — this app allows xs and lg
+   breakpoints inside .app-shell and nothing between. */
+const PHONE_TILE = "max-lg:min-h-0 max-lg:p-2.5 max-lg:rounded-[1.1rem]";
 /* ASK-35 1.4 — the inner card's material, lifted from the recipe the desktop
    top nav shelf is cut from (INK_PILL / .kr-navplate::before) so the two stay
    the same black. Only the fill and the lit top edge: INK_PILL's drop shadow
@@ -1388,84 +1397,21 @@ export default function Desk() {
           {!isMobile && dexWell}
         </div>
 
-        {/* KR-14.20 · MOBILE — the KPIs are four rounded rectangles in a
-            2×2 grid. Each card: label on the LEFT, icon + numeral aligned
-            to the RIGHT. Score-mix and Spend are dropped per the founder;
-            the four kept are Delayed, Complaints, Overdue and — ASK-52 —
-            Workflows, which took Net profit's place. */}
-        {/* ASK-35 2.3 — the pane grows over this now, so it fades with the
-            greeting above it. Anything it covers fades; anything it does not,
-            does not. */}
-        <div
-          className={cn("order-3 grid grid-cols-2 gap-2 lg:hidden",
-            /* DEX-SLIDER Part 1 — the tiles absorb what the slider gave back.
-               `flex-1` is wrong here (this is a grid child of a flex column, so
-               it takes the hero's leftover) and `auto-rows-fr` splits it evenly
-               between the two rows rather than all of it to the first. The
-               floor is the row's own resting height, measured at 390x844, so a
-               360x640 phone shows the tiles exactly as it does today. */
-            /* A HEIGHT, not a stretch. Capped-but-flexible pooled the whole
-               leftover inside the hero and left 200px of nothing between the
-               tiles and the card — worse than the stretch it fixed. The row is
-               the cap, floored so the shortest phones shrink it rather than
-               overflow, and the slack goes to the page to spread. */
-            DEX_SLIDER && "h-[var(--desk-kpi-cap)] min-h-[var(--desk-kpi-floor)] auto-rows-fr")}
-         
-          data-testid="desk-kpi-strip"
-        >
-          {[
-            { icon: Timer, label: t("desk.delayed", "Delayed"),
-              value: shown(m.counters ? m.counters.delayed : m.work?.overdue, m.failed?.summary && m.failed?.tasks),
-              urgent: (m.counters?.delayed ?? m.work?.overdue ?? 0) > 0,
-              to: "/my-work?filter=overdue", testid: "kpi-delayed-m" },
-            ...(seesComplaints ? [{ icon: ChatCircleText, label: t("desk.complaints", "Complaints"),
-              value: shown(m.complaints?.value, m.failed?.summary),
-              urgent: (m.complaints?.new_7d || 0) > 0,
-              to: "/crm", testid: "kpi-complaints-m" }] : []),
-            ...(seesMoney ? [{ icon: HandCoins, label: t("desk.overdue", "Overdue"),
-              value: m.cash ? inrCompact(m.cash.overdue) : shown(null, m.failed?.summary),
-              urgent: (m.cash?.overdue || 0) > 0,
-              to: "/finance?tab=revenue&filter=overdue", testid: "kpi-collect-m" }] : []),
-            /* ASK-52 · the fourth pill is the boards, not the ledger. It
-               carries the desktop card's headline number and nothing else
-               the card carries: how many cards need attention, out of how
-               many are running — the same workflowAttention() the tile
-               reads, so the phone and the desktop cannot disagree. The
-               you/stuck/late split, the Next up card and its move stay on
-               the desktop: a pill has no room for them, and no room for a
-               button inside something that is itself a link. Net profit
-               keeps its home on /finance, where this pill used to go.
-               RETIRED TESTID: kpi-profit-m (no test referenced it). */
-            { icon: FlowArrow, label: "Workflows",
-              value: workflowsQ.isError && !workflowsQ.data ? "—"
-                : workflowsQ.isLoading ? "…" : String(wfAttention.needAttention),
-              sub: workflowsQ.isLoading || (workflowsQ.isError && !workflowsQ.data) ? null : `/${wfAttention.total}`,
-              urgent: wfAttention.needAttention > 0,
-              to: "/workflows", testid: "kpi-workflows-m" },
-          ].map((k) => (
-            /* ASK-42 A — p-2.5 below lg (p-3 from lg up): 4px off each tile is
-               8px off the strip, and the strip is two rows deep. */
-            <Link key={k.testid} to={k.to} data-testid={k.testid}
-              className="flex min-w-0 items-center justify-between gap-2 rounded-[1.1rem] bg-white/75 p-2 lg:p-3 ring-1 ring-inset ring-white/80 shadow-[0_8px_22px_-14px_hsl(150_15%_20%/0.3)] backdrop-blur-xl">
-              <p className="min-w-0 truncate text-xs font-medium text-foreground/80">{k.label}</p>
-              <span className="flex shrink-0 items-center gap-1.5">
-                <k.icon size={13} weight="regular" aria-hidden="true" className="text-muted-foreground" />
-                {/* The number, and — where a pill has one — the total it
-                    is out of, in the desktop tile's own shape. */}
-                <span className="inline-flex items-baseline">
-                  <span className={`font-display text-base leading-none tabular-nums ${k.urgent ? "text-kr-accent" : ""}`}>
-                    {k.value}
-                  </span>
-                  {k.sub && (
-                    <span className="ml-0.5 text-[11px] font-medium leading-none tabular-nums text-muted-foreground">
-                      {k.sub}
-                    </span>
-                  )}
-                </span>
-              </span>
-            </Link>
-          ))}
-        </div>
+        {/* KR-14.20 / ASK-42 / ASK-52 — THE FOUR PHONE PILLS ARE GONE
+            (2026-10-01). They were a 2x2 of label-left / number-right
+            rectangles: a reduction of the desktop tiles rather than the tiles
+            themselves, so the two could and did drift — the pills carried no
+            icon chip, no alert dot, no sparkline, no Workflows "next up" and a
+            different set of five. The founder asked for the desktop grid
+            itself on the phone, scaled to fit, with the same behaviour and the
+            same routing. That is what is below: ONE grid for both, which is
+            also the only way they cannot disagree again.
+            RETIRED TESTIDS: kpi-delayed-m, kpi-complaints-m, kpi-collect-m,
+            kpi-workflows-m and desk-kpi-strip. Nothing in any suite referenced
+            the four pills; desk-kpi-strip was measured by verify:slider and is
+            re-homed to desk-kpi-grid in this same commit. The desktop testids
+            (kpi-delayed, kpi-complaints, kpi-collect, kpi-workflows, kpi-spend)
+            now answer on both. */}
 
         {/* RIGHT — the 3×2 grid. Six honest tiles; Score mix is the glass one.
             KR-8.6 · 3 columns from lg, 12px gutters, auto-rows-fr so the two
@@ -1475,7 +1421,24 @@ export default function Desk() {
             step down); the tiles follow, they are not sized on their own. */}
         {/* ASK-52 — still three columns and two rows; the second row is the
             two-wide Workflows card plus one tile. */}
-        <div className="order-3 hidden min-w-0 grid-cols-2 gap-3 lg:order-none lg:grid lg:auto-rows-fr lg:grid-cols-3" data-testid="desk-kpi-grid">
+        <div className={cn(
+          /* ONE GRID, BOTH SIZES. Three columns on a phone as well as on
+             desktop — which sounds wrong until you remember --ui-scale: the
+             app runs at zoom .8, so a 390px phone is a 487px CSS viewport and
+             a third of it is ~154px. StatTile's own notes size its phone
+             layout for 133.5px, so these columns are wider than the ones it
+             was already built for. The arrangement is the desktop's unchanged:
+             the three tiles that can raise an alert dot on the top row, and
+             Workflows two-wide beside the quiet money number below. */
+          "order-3 grid min-w-0 grid-cols-3 gap-2",
+          /* auto-rows-fr IS DESKTOP'S, deliberately. There the grid's floor has
+             to land on the well's floor, so equal rows are the point. On the
+             phone equal rows are the problem: StatTile pushes its numeral down
+             with mt-auto, so a stretched row puts the label at the top, the
+             number at the bottom and a hole between them — 143px tall tiles
+             full of nothing, which is the complaint this grid was brought in to
+             answer. Content-sized rows here; the slack belongs to the card. */
+          "lg:order-none lg:auto-rows-fr lg:gap-3")} data-testid="desk-kpi-grid">
           <StatTile
             icon={Timer}
             label="Delayed"
@@ -1486,6 +1449,7 @@ export default function Desk() {
             to="/my-work?filter=overdue"
             countUp
             testid="kpi-delayed"
+            className={PHONE_TILE}
           />
           {seesComplaints && (
           <StatTile
@@ -1499,6 +1463,7 @@ export default function Desk() {
             to="/crm"
             countUp
             testid="kpi-complaints"
+            className={PHONE_TILE}
           />
           )}
           {seesMoney && (
@@ -1510,6 +1475,7 @@ export default function Desk() {
             urgent={(m.cash?.overdue || 0) > 0}
             to="/finance?tab=revenue&filter=overdue"
             testid="kpi-collect"
+            className={PHONE_TILE}
           />
           )}
           {/* ASK-52 — THE WORKFLOWS CARD, TWO CELLS WIDE, where Weakest and Net
@@ -1521,7 +1487,7 @@ export default function Desk() {
           <WorkflowsTile
             attention={wfAttention}
             loading={workflowsQ.isLoading}
-            className="lg:col-span-2"
+            className={cn("col-span-2", PHONE_TILE)}
           />
           {seesMoney && (
           <StatTile
@@ -1533,6 +1499,7 @@ export default function Desk() {
               : null}
             to="/finance"
             testid="kpi-spend"
+            className={PHONE_TILE}
           />
           )}
         </div>

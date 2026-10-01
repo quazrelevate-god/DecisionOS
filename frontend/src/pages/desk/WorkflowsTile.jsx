@@ -101,7 +101,13 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
        its own padding only where the card is at its narrowest. */
     <div
       data-testid={testid}
-      className={cn("kr-stat nm-tile grid min-h-[170px] grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] gap-5 p-5", className)}
+      className={cn(
+        /* max-lg: — the phone runs this same tile, scaled (Desk's PHONE_TILE).
+           The 20px gutter and the 170px floor are desktop's; on a 487px CSS
+           viewport two columns plus a 20px trough leaves too little for the
+           "next up" title, so the trough halves and the floor comes off. */
+        "kr-stat nm-tile grid grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] gap-5 p-5",
+        "max-lg:gap-2.5 lg:min-h-[170px]", className)}
     >
       {/* LEFT — the count, and what it is made of. The chip wears the dot
           whenever something needs attention (Delayed and To collect's rule). */}

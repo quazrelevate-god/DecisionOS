@@ -586,19 +586,26 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
 
   const rippleDisabled = !canCapture || (!recording && (dex.sending || chat.busy));
 
-  /* THE DOOR STANDS ASIDE THE MOMENT THE CAPTURE HAS SOMEWHERE ELSE TO GO.
-     Reported from the iPhone: stop speaking and the blurred mic screen just
-     sat there while step 1, the reading and the review all ran BEHIND it, with
-     no way through. Two faults in one. The pop-up is a Radix dialog at z-50
-     and the door is 9500, so it was underneath; and even stacked correctly the
-     door has no job once the words exist — it is the recording surface, not
-     the review.
-     This is an effect rather than a line inside onMic on purpose: every path
-     into the pop-up (stopping the mic, sending typed words, pressing the
-     status pill, opening a kept capture) goes through `popupOpen`, so one rule
-     here cannot be forgotten in a fifth place later. */
+  /* THE DOOR STANDS ASIDE THE MOMENT THE CAPTURE HAS SOMEWHERE ELSE TO GO —
+     and it does it by NOT DRAWING, not by closing.
+     First cut closed it: `popupOpen` became true, an effect called onClose, and
+     Desk flipped the state useBackDismiss owns. That worked in Chromium — a
+     probe watched the pop-up sit there at step 1 for eight seconds with the
+     door gone — and failed on the founder's iPhone, where stopping the mic
+     made everything vanish and the words came back ten seconds later as a kept
+     draft, meaning the pop-up had been dismissed as it mounted. Closing the
+     door runs useBackDismiss's teardown, which calls history.back(); doing that
+     in the same tick as a Radix dialog mounting is a race, and WKWebView loses
+     it. I could not reproduce it to prove the mechanism, so the fix removes the
+     race rather than arguing with it.
+     So while the pop-up is up the door simply renders nothing — no state
+     change, no history, nothing to race — and the door is only truly closed
+     once the pop-up is gone, in a tick where no dialog is mounting. */
+  const handedOver = useRef(false);
   useEffect(() => {
-    if (surface === "overlay" && open && popupOpen) onClose?.();
+    if (surface !== "overlay") return;
+    if (open && popupOpen) { handedOver.current = true; return; }
+    if (!popupOpen && handedOver.current) { handedOver.current = false; onClose?.(); }
   }, [surface, open, popupOpen, onClose]);
 
   /* DEX-SLIDER Part 4 — THE PHONE AT YOUR EAR. Monitoring runs for exactly one
@@ -901,7 +908,7 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
    * as in the well. A screen that is already listening the moment it appears
    * startles people.
    */
-  const overlay = surface === "overlay" && open && typeof document !== "undefined"
+  const overlay = surface === "overlay" && open && !popupOpen && typeof document !== "undefined"
     ? createPortal(
       <div
         data-testid="dex-decide-overlay"
@@ -949,7 +956,7 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
   return (
     <>
       {surface === "overlay" && deskTop
-        ? <div className={cn("order-3 shrink-0 px-1 lg:hidden", className)} data-testid={testid}>{deskTop}</div>
+        ? <div className={cn("relative z-20 order-3 shrink-0 px-1 lg:hidden", className)} data-testid={testid}>{deskTop}</div>
         : null}
       {surface === "overlay" ? overlay : (
       <InsightWell

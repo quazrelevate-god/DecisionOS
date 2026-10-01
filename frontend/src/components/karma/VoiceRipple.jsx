@@ -168,6 +168,14 @@ export function VoiceRipple({
   mode = "out",
   hubPx = 64,
   hubAt = null,
+  /* DECORATIVE — the surface without the control. The slider on the phone's
+     Desk wants this material looping inside its well, but it already HAS a
+     handle, and a second `voice-ripple-mic` in the document would be a second
+     answer to every locator that presses the real one. So the hub's button is
+     not rendered at all here: no testid, no aria, nothing focusable, nothing
+     to press. The swell stays, because that is the surface rising, not a
+     button. Only meaningful with mode="in"; `onPress` is ignored. */
+  decorative = false,
 }) {
   const inward = mode === "in";
   const external = typeof readLevel === "function";
@@ -637,6 +645,7 @@ export function VoiceRipple({
               "radial-gradient(circle at 50% 50%, hsl(0 0% 100% / .40) 0%, hsl(0 0% 100% / .18) 52%, hsl(0 0% 100% / 0) 76%)",
           }}
         />
+        {!decorative && (
         <button
           type="button"
           onClick={onPress || (() => (live ? stop() : start()))}
@@ -689,6 +698,7 @@ export function VoiceRipple({
             <path d="M12 17.5V21" />
           </svg>
         </button>
+        )}
       </div>
 
       {!external && !inward && (

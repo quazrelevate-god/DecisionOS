@@ -89,7 +89,8 @@
     "cap:android": "npx cap open android",
     "build:prod": "REACT_APP_BACKEND_URL=https://backend-production-c8640.up.railway.app craco build",
     "cap:sync:prod": "GENERATE_SOURCEMAP=false npm run build:prod && npm run cap:prune && npx cap sync",
-    "cap:prune": "node scripts/prune-native-assets.mjs"
+    "cap:prune": "node scripts/prune-native-assets.mjs",
+    "verify:slider": "node scripts/verify-dex-slider.mjs"
   },
   "browserslist": {
     "production": [

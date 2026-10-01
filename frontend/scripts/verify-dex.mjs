@@ -42,6 +42,16 @@
  */
 import { chromium } from 'playwright';
 import { signIn } from './lib/auth.mjs';
+/* DEX-SLIDER Part 5 — on a phone the well's testids moved BEHIND A DOOR.
+ *
+ * Nothing here was deleted and nothing was renamed: the ripple, the keyboard,
+ * the attach circle, the kept-capture note and the status are the same nodes,
+ * rendered on the overlay surface instead of in the well (DeskDexWell
+ * `surface`). So every check below still means what it meant — the suite just
+ * has to open the door first, the way a person now does. Desktop never has a
+ * door, and with the flag off the phone has none either; `door` is that
+ * difference and the only one. */
+import { DEX_SLIDER } from '../src/lib/flags.js';
 
 const BASE = process.env.AUDIT_BASE || 'http://localhost:3000';
 const READY = /^Decision ready for Sunita Rao · 2 tasks, 1 workflow$/;
@@ -82,10 +92,34 @@ async function open(viewport) {
   return { ctx, page, errors, signedIn };
 }
 
+/* Is Dex behind the slider's door on this viewport? */
+const behindDoor = (page) => DEX_SLIDER && page.viewportSize().width < 1024;
+
+/** The box the well's own checks measure: the well, or the door it moved into. */
+const wellOf = (page) => page.getByTestId(behindDoor(page) ? 'dex-decide-overlay' : 'desk-insight');
+
+/** Open the door the way a person does — the full drag right, released at the
+ *  stop. Short of the stop nothing happens by design, so this cannot be a
+ *  gentle nudge. No-op when there is no door. */
+async function openDoor(page) {
+  if (!behindDoor(page)) return;
+  if (await page.getByTestId('dex-decide-overlay').count()) return;
+  const track = await page.locator('[data-testid="dex-slider"] .nm-field').boundingBox();
+  const h = await page.locator('[data-testid="dex-slider-handle"]').boundingBox();
+  const cy = h.y + h.height / 2;
+  await page.mouse.move(h.x + h.width / 2, cy);
+  await page.mouse.down();
+  await page.mouse.move(track.x + track.width - 2, cy, { steps: 16 });
+  await page.mouse.up();
+  await page.getByTestId('dex-decide-overlay').waitFor({ timeout: 8000 });
+  await page.waitForTimeout(400);
+}
+
 async function gotoDesk(page) {
   await page.goto(`${BASE}/inbox?fixture=busy`, { waitUntil: 'domcontentloaded' });
-  await page.getByTestId('desk-insight').waitFor({ timeout: 20000 });
+  await page.getByTestId(behindDoor(page) ? 'dex-slider' : 'desk-insight').waitFor({ timeout: 20000 });
   await page.waitForTimeout(1200);
+  await openDoor(page);
 }
 
 const setEnding = (page, v) => page.evaluate((x) => {
@@ -137,9 +171,9 @@ async function typeAndSend(page, words) {
 
 /* The well's box, in CSS px. PILOT-2 A — the well is the door and nothing
    else, so the assertion across every step is that nothing about it moves. */
-const geometry = (page) => page.evaluate(() => {
+const geometry = (page) => page.evaluate((sel) => {
   const T = (s) => { const e = document.querySelector(s); return e ? Math.round(e.getBoundingClientRect().top) : null; };
-  const well = document.querySelector('[data-testid="desk-insight"]');
+  const well = document.querySelector(sel);
   const box = well.getBoundingClientRect();
   return {
     wellTop: Math.round(box.top), wellHeight: Math.round(box.height),
@@ -147,8 +181,25 @@ const geometry = (page) => page.evaluate(() => {
     floorTop: T('[data-testid="desk-dex-keyboard"]'),
     ripple: !!document.querySelector('[data-testid="desk-dex-ripple"]'),
   };
-});
+}, behindDoor(page) ? '[data-testid="dex-decide-overlay"]' : '[data-testid="desk-insight"]');
 const sameBox = (a, b) => a.wellTop === b.wellTop && a.wellHeight === b.wellHeight && a.floorTop === b.floorTop;
+
+/* MEASURE IT WHEN IT HAS STOPPED MOVING. The well animates back as a pop-up
+   closes, and reading its box the instant the pop-up node leaves the DOM caught
+   it mid-transition: "the same box it has been throughout" and "unmoved" failed
+   roughly one run in three, only at 1440, only straight after a close, and
+   never for a reason that existed in the product. Two identical reads in a row
+   is the honest wait — a fixed sleep would just be a longer guess. */
+const restingBox = async (page) => {
+  let last = await geometry(page);
+  for (let i = 0; i < 25; i += 1) {
+    await page.waitForTimeout(100);
+    const now = await geometry(page);
+    if (sameBox(now, last)) return now;
+    last = now;
+  }
+  return last;
+};
 
 /** MPWA-01 §5.1 / ASK-43 — every control in `testid` is a 44px target in the
  *  app's own pixels, and is whole, on the glass and uncovered (the point in its
@@ -180,7 +231,7 @@ async function run(viewport) {
   const { ctx, page, errors, signedIn } = await open(viewport);
   check(`${w}: signed in`, signedIn);
   const mic = page.getByTestId('voice-ripple-mic');
-  const rest = await geometry(page);
+  const rest = await restingBox(page);
   check(`${w}: the well opens on the ripple, not a form`, rest.ripple === true);
 
   // ----------------------------------------------- A · SPOKEN, READY, APPROVED
@@ -242,7 +293,7 @@ async function run(viewport) {
   check(`${w} A: … and the foot becomes Done`, await until(async () => (await page.getByTestId('decision-panel-done').count()) === 1, 8000));
   await page.getByTestId('decision-panel-done').click({ timeout: 5000 }).catch(() => page.getByTestId('dex-popup-close').click());
   check(`${w} D: Done gives the well back to the ripple`, await popupGone(page) && (await geometry(page)).ripple === true);
-  check(`${w} D: … the same box it has been throughout`, sameBox(await geometry(page), rest));
+  check(`${w} D: … the same box it has been throughout`, sameBox(await restingBox(page), rest));
   await gotoDesk(page);
 
   // ---------------------------------------------------- B · NOTHING TO DECIDE
@@ -259,7 +310,7 @@ async function run(viewport) {
   check(`${w} B: its control is in reach`, await onGlass(page, 'dex-popup-gotit', viewport));
   await page.getByTestId('dex-popup-gotit').click();
   check(`${w} D: "Got it" gives the well back`, await popupGone(page) && (await geometry(page)).ripple === true);
-  check(`${w} D: … unmoved`, sameBox(await geometry(page), rest));
+  check(`${w} D: … unmoved`, sameBox(await restingBox(page), rest));
 
   // ------------------------------------------- C · FAILED, with a file attached
   await setEnding(page, 'consent');
@@ -268,7 +319,7 @@ async function run(viewport) {
     page.getByTestId('desk-dex-attach').click(),
   ]);
   await chooser.setFiles({ name: 'indigo-po.png', mimeType: 'image/png', buffer: PNG });
-  const chips = page.getByTestId('desk-insight').locator('ul[aria-label="Attached files"] li');
+  const chips = wellOf(page).locator('ul[aria-label="Attached files"] li');
   await chips.first().waitFor({ timeout: 8000 }).catch(() => {});
   check(`${w} C: the file is attached in the well`, (await chips.count()) === 1);
   await typeAndSend(page, 'Tell Suresh to ship the indigo lot before Friday');
@@ -346,8 +397,12 @@ async function run(viewport) {
   check(`${w} G: … and offers them back, not in its pill`,
     (await page.getByTestId('dex-well-draft-open').count()) === 1 && (await page.getByTestId('desk-dex-composer').count()) === 0);
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.getByTestId('desk-insight').waitFor({ timeout: 20000 });
+  await page.getByTestId(behindDoor(page) ? 'dex-slider' : 'desk-insight').waitFor({ timeout: 20000 });
   await page.waitForTimeout(1200);
+  /* A reload closes the door — it is screen state, not a URL. The words are
+     kept on the server side of this, which is the whole claim; reopening the
+     door is how you go and look. */
+  await openDoor(page);
   check(`${w} G: they survive a reload`, /Kept from before/.test(await note.textContent().catch(() => '')));
   await page.getByTestId('dex-well-draft-open').click();
   check(`${w} G: Open brings step 1 back with them`,
@@ -357,10 +412,32 @@ async function run(viewport) {
 
   // ------------------------------------------------- F · the sheet is Ask-only
   if (phone) {
-    await page.getByTestId('dex-fab').click();
+    /* ONE TAP, OR ONE DRAG. The Ask circle was the Desk's way into the sheet;
+       with the slider it is the track's left end, and the circle is gone from
+       this page on purpose (it is still beside the dock everywhere else —
+       verify:nav measures it there). What is being asserted is unchanged: the
+       way in from the Desk opens the ASK sheet, and no decide path did. */
+    if (DEX_SLIDER) {
+      check(`${w} F: the Desk has no Ask circle while the slider is there`,
+        (await page.getByTestId('dex-fab').count()) === 0);
+      if (await page.getByTestId('dex-decide-overlay').count()) {
+        await page.getByTestId('dex-decide-close').click();
+        await page.waitForTimeout(500);
+      }
+      const track = await page.locator('[data-testid="dex-slider"] .nm-field').boundingBox();
+      const h = await page.locator('[data-testid="dex-slider-handle"]').boundingBox();
+      const cy = h.y + h.height / 2;
+      await page.mouse.move(h.x + h.width / 2, cy);
+      await page.mouse.down();
+      await page.mouse.move(track.x + 2, cy, { steps: 16 });
+      await page.mouse.up();
+    } else {
+      await page.getByTestId('dex-fab').click();
+    }
     await sheet(page).waitFor({ timeout: 8000 }).catch(() => {});
     await page.waitForTimeout(700);
-    check(`${w} F: the FAB still opens the sheet in one tap`, (await sheet(page).count()) === 1);
+    check(DEX_SLIDER ? `${w} F: the slider's left end still opens the sheet` : `${w} F: the FAB still opens the sheet in one tap`,
+      (await sheet(page).count()) === 1);
     check(`${w} F: … and it is ASK`, /\bAsk\b/i.test(await sheet(page).innerText().catch(() => '')),
       clip(await sheet(page).innerText().catch(() => ''), 60));
     await page.getByTestId('dex-chat-close').click();

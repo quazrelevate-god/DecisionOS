@@ -1571,7 +1571,6 @@ export default function Desk() {
           open={decideOpen}
           onClose={() => setDecideOpen(false)}
           phone
-          testid="desk-insight-overlay"
           onReview={(id) => setOpenDecisionId(id)}
           onLater={(id) => saveAsDraft(id).then((ok) => { qc.invalidateQueries({ queryKey: ["desk"] }); return ok; })}
         />

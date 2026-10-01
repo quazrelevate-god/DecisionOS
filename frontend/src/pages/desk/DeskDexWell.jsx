@@ -255,6 +255,17 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
      keyboard leaves, then scrolling. Desktop keeps the in-card two-line field. */
   const floating = phone && fieldOpen;
   const kb = useKeyboardInset(floating);
+  /* DEX-SLIDER Part 5 — the composer has to clear whatever it was opened from.
+     The door shipped in Part 3 with this wrong. On the Desk the composer floats
+     over the page at 60/70; opened from the full-screen door, which is itself at
+     9500, those same numbers put it BEHIND the door's own backdrop, so pressing
+     the keyboard looked like it did nothing — the field was there, under a blur.
+     Only verify:slider found it, because the check that existed counted the
+     composer in the DOM rather than asking whether you could see it.
+     Both pairs keep the two relationships that matter: the scrim 10 under the
+     bar, and both of them UNDER THE DOCK (10000), which is how it already
+     behaves on the Desk and not something the door should change. */
+  const composerZ = surface === "overlay" ? 9560 : 60;
   const roomAbove = kb.avail || (typeof window !== "undefined" ? window.innerHeight : 640);
   const growCap = Math.max(120, Math.round(roomAbove * 0.4));
 
@@ -883,11 +894,11 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
           data-testid="desk-dex-floating-scrim"
           onClick={() => { setTyping(false); setPillDraft(false); }}
           className="fixed inset-0 bg-slate-900/25 backdrop-blur-md"
-          style={{ zIndex: 60 }}
+          style={{ zIndex: composerZ }}
         />
         <div
           data-testid="desk-dex-floating"
-          style={{ position: "fixed", left: 0, right: 0, bottom: kb.bottom, zIndex: 70 }}
+          style={{ position: "fixed", left: 0, right: 0, bottom: kb.bottom, zIndex: composerZ + 10 }}
           className="px-3"
         >
           <div className="kr-pop mx-auto flex max-w-[34rem] items-end gap-2 rounded-[1.6rem] p-2">

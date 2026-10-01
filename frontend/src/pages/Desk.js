@@ -751,15 +751,18 @@ export default function Desk() {
   // E2-66: deep-link from a decision-focused nudge notification.
   const [searchParams] = useSearchParams();
   const focusDecisionId = searchParams.get("decision");
-  /* ?kpi=wide — A PROPOSAL, NOT THE PRODUCT (2026-10-01). The founder saw the
-     Desk on their own iPhone 13 mini: "Spend, this month" was a tall, almost
-     empty tile whose own label had truncated to "Spend, this…", and Workflows
-     was carrying a stacked pair of buttons in two thirds of a row. Their
-     proposal is to drop Spend and give Workflows the whole second row at the
-     top row's height. This renders that, side by side with what ships, in
-     /design-lab at three device sizes — so the decision is made by looking
-     rather than by me guessing. Nothing reads this parameter in the app. */
-  const kpiWide = searchParams.get("kpi") === "wide";
+  /* THE PHONE'S KPI GRID, approved 2026-10-02 and no longer a proposal.
+     The founder saw the Desk on their own iPhone 13 mini: "Spend, this month"
+     was a tall, almost empty tile whose own label had truncated to "Spend,
+     this…", and Workflows was carrying a stacked pair of buttons in two thirds
+     of a row. Dropping Spend frees a column; Workflows takes it and comes down
+     to the top row's height, with its two moves as a tick and an arrow.
+     Judged in /design-lab at three device sizes before it shipped — the lab's
+     comparison still renders both, and ?kpi=wide is kept so "what ships" and
+     "what was proposed" can still be put side by side there.
+     DESKTOP IS UNTOUCHED: it has the width for five tiles and the room for the
+     tall card, and neither of the founder's complaints exists there. */
+  const kpiWide = isMobile || searchParams.get("kpi") === "wide";
   // KM-28 — ?decision=<id> redirects to the page rather than raising the
   // modal behind the Desk, so a notification and a tap land in the same place.
   // ?decision=<id> (notifications, pasted links) opens the same popup over

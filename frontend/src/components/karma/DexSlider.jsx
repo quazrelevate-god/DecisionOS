@@ -45,7 +45,7 @@
  */
 import * as React from "react";
 import { useTranslation } from "react-i18next";
-import { Aperture, ChatCircle, PaperPlaneTilt, Waveform } from "@phosphor-icons/react";
+import { ChatCircle, PaperPlaneTilt, Waveform } from "@phosphor-icons/react";
 import { DexWave } from "../mobile/DexWave";
 import { VoiceRipple } from "./VoiceRipple";
 import { cn } from "@/lib/utils";
@@ -239,8 +239,14 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
      that answer the handle's own circle: an aperture at rest, the chat bubble
      carried left, the waveform carried right. Outline weight throughout so the
      glyph is a drawing on the surface rather than a second shape stuck to it. */
+  /* NOTHING IN IT AT REST. The founder's call: the knob is a plain button until
+     it is doing something. A glyph sitting in the dish all the time was
+     decoration — the handle's POSITION already says what the control is, and an
+     icon that never changes says nothing a second time. It appears the moment
+     the handle leaves the middle, which is also the moment it has something to
+     say: which room you are opening, or that this is now a send. */
   const Glyph = capturing ? PaperPlaneTilt
-    : heading === "ask" ? ChatCircle : heading === "decide" ? Waveform : Aperture;
+    : heading === "ask" ? ChatCircle : heading === "decide" ? Waveform : null;
 
   /* THE WORDS GET OUT OF THE WAY. The handle now travels to the wall, so it
      arrives exactly where the labels are printed; they fade on approach rather
@@ -374,7 +380,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
             transition: dragging ? "none" : "transform 220ms cubic-bezier(.22,1,.36,1)",
           }}
         >
-          <Glyph size={34} weight="regular" aria-hidden="true" className="text-foreground/75" />
+          {Glyph ? <Glyph size={34} weight="regular" aria-hidden="true" className="text-foreground/75" /> : null}
         </button>
 
         {/* What a screen reader hears while the handle moves. */}

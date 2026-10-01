@@ -3455,9 +3455,13 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         position: relative;
         isolation: isolate;
         background: linear-gradient(145deg, hsl(0 0% 100%), hsl(220 14% 92%));
-        box-shadow:
-            6px 6px 13px hsl(230 22% 34% / .20),
-            -6px -6px 12px hsl(0 0% 100% / .95);
+        /* NO OUTER SHADOW. The neumorphic pair puts a dark glow at the
+           bottom-right and a white one at the top-left, and on this control the
+           founder's call is that both go: inside the knob the dish still reads
+           as pressed, but the disc itself sits flat on the track rather than
+           hovering over it with a halo. The track is already a channel; a
+           shadow was a second answer to "this sits in something". */
+        box-shadow: none;
     }
     .kr-slider-knob::after {
         content: "";

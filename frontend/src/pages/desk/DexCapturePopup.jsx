@@ -319,7 +319,13 @@ export function DexCapturePopup({
             data-testid="dex-popup-attach"
             aria-label="Attach a file"
             title="Attach a file"
-            className={cn(glassBtn, "grid h-11 w-11 shrink-0 place-items-center rounded-full p-0 lg:mr-auto")}
+            /* h-14 / lg:h-12 — the same heights glassBtn and inkBtn carry, so
+               the three sit on one line. It was h-11, which is 44px against
+               their 56 and read as a smaller button that had been dropped in
+               rather than one of the row. Square, not stretched: `flex-1` is
+               what makes Discard and Next share the width, and a paperclip has
+               no business taking a third of the row. */
+            className={cn(glassBtn, "w-14 flex-none p-0 lg:mr-auto lg:w-12")}
           >
             <Paperclip size={18} weight="bold" aria-hidden="true" />
           </button>

@@ -39,7 +39,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PaperPlaneRight, Paperclip, X, Check, File as FileGlyph, Keyboard, Microphone, Stop } from "@phosphor-icons/react";
+import { PaperPlaneRight, Paperclip, X, Check, File as FileGlyph, Keyboard, Microphone } from "@phosphor-icons/react";
 import { useAuth } from "../../context/AuthContext";
 import { captureOutcome, failureReason, isReading, OUTCOME_COPY } from "../../lib/dexOutcome";
 import { toastDexOutcome } from "../../lib/dexOutcomeToast";
@@ -609,6 +609,50 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
      So while the pop-up is up the door simply renders nothing — no state
      change, no history, nothing to race — and the door is only truly closed
      once the pop-up is gone, in a tick where no dialog is mounting. */
+  /* THE DOOR OPENS LISTENING (2026-10-01, founder).
+     It deliberately did not, and the note said why: "a screen that is already
+     listening the moment it appears startles people." The founder has used it
+     and disagrees — reaching the decision screen already costs a full drag, and
+     having to find the mic afterwards makes that drag feel like it did nothing.
+     So the drag IS the press.
+     It starts only from a clean slate: nothing already recording, nothing being
+     transcribed or sent, no kept words waiting to be read back, and the capture
+     gate open. Each of those would otherwise have opened the pop-up or shown a
+     refusal instead, and starting a recording over them is the bug this guard
+     exists to prevent (ASK-33.1). onMic is reused rather than reimplemented so
+     there is still one description of what pressing the mic means. */
+  const armedRef = useRef(false);
+  useEffect(() => {
+    if (surface !== "overlay") return;
+    if (!open) { armedRef.current = false; return; }
+    if (armedRef.current) return;
+    armedRef.current = true;
+    if (!canCapture || recording || dex.sending || chat.busy || chat.draft.trim()) return;
+    const t = setTimeout(() => onMic(), 260);   // after the door has drawn
+    return () => clearTimeout(t);
+    /* [surface, open] AND NOTHING ELSE, deliberately. Written without a
+       dependency list first, which meant it re-ran on every render — and since
+       this well re-renders constantly while a capture is live, each run's
+       cleanup cancelled the pending start before the 260ms was up. The door
+       opened silent and the check caught it. The guards above read the state as
+       it is at the moment the door opens, which is exactly when the decision
+       needs taking. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [surface, open]);
+
+  /* CLOSING THE DOOR STOPS THE MIC. It never had to before, because recording
+     only ever began with a deliberate press and whoever pressed it would press
+     it again. Now the door starts listening by itself, so X or the back gesture
+     could leave a microphone running behind a screen that is gone — which is
+     the worst thing an auto-start can do.
+     Stopping is not discarding, which is this component's rule throughout
+     (ASK-33): the words finish transcribing and land as a kept draft that the
+     Desk offers back. Nothing is sent, and nothing is lost. */
+  useEffect(() => {
+    if (surface !== "overlay") return;
+    if (!open && recording) dex.stopRecording();
+  }, [surface, open, recording, dex]);
+
   const handedOver = useRef(false);
   useEffect(() => {
     if (surface !== "overlay") return;
@@ -642,6 +686,27 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
     document.addEventListener("visibilitychange", onHide);
     return () => document.removeEventListener("visibilitychange", onHide);
   }, [atEar]);
+
+  /* The door's rings read the same meter, per frame, through a CSS variable —
+     never React state. KM-60's rule: a meter write that goes through React
+     re-renders this well, its pop-up and everything above it ~18 times a
+     second, and the only thing that needs to know is one element's style. */
+  const waveRef = useRef(null);
+  useEffect(() => {
+    if (!recording) return undefined;
+    let raf = 0, gain = 0.5;
+    const tick = () => {
+      const el = waveRef.current;
+      if (el) {
+        const lvl = Math.max(0, Math.min(1, readLevel() || 0));
+        gain += ((0.45 + lvl * 1.3) - gain) * 0.16;   // eased, so a spike cannot strobe
+        el.style.setProperty("--mw-gain", gain.toFixed(3));
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [recording, readLevel]);
 
   /* The Desk's slider draws its ripple off THIS capture's meter — the one the
      page already owns. A second useDexCapture would be a second MediaRecorder
@@ -714,7 +779,21 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
      It keeps `desk-dex-ripple` and `voice-ripple-mic`. Those name the capture's
      target, not the animation, and every suite and every habit presses them. */
   const doorMic = (
-    <div className="grid min-h-0 flex-1 place-items-center" data-testid="desk-dex-ripple">
+    <div className="relative grid min-h-0 flex-1 place-items-center" data-testid="desk-dex-ripple">
+      {/* THE VOICE, AS CIRCLES. Plain expanding rings on the dimmed Desk, sized
+          to run off the screen rather than stop politely short of it, and no
+          neumorphic ridge anywhere near them — that recipe needs an opaque
+          surface to be read against and this one is deliberately a blur. They
+          exist only while the mic is live, and their reach answers the meter,
+          so a loud sentence pushes further than a quiet one. */}
+      {recording && (
+        <span ref={waveRef} aria-hidden="true" className="kr-mic-waves">
+          <i style={{ animationDelay: "0s" }} />
+          <i style={{ animationDelay: "0.7s" }} />
+          <i style={{ animationDelay: "1.4s" }} />
+          <i style={{ animationDelay: "2.1s" }} />
+        </span>
+      )}
       <button
         type="button"
         data-testid="voice-ripple-mic"
@@ -723,15 +802,24 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
         disabled={rippleDisabled}
         onClick={onMic}
         className={cn(
-          "kr-pop grid place-items-center rounded-full transition-transform duration-200",
+          "relative grid place-items-center rounded-full transition-transform duration-200",
           "h-[7.5rem] w-[7.5rem] disabled:opacity-40",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
-          recording && "scale-105"
+          /* PRESSED, NOT A RED SQUARE. A filled stop glyph in the alert colour
+             read as a warning on a screen where nothing is wrong — and in this
+             app the alert colour means money or a deadline at risk. The button
+             is the same microphone throughout; listening, it is held down. The
+             state is still announced properly through aria-pressed, which is
+             what a screen reader reads, not the glyph. */
+          recording ? "kr-pressed scale-[0.97]" : "kr-pop"
         )}
       >
-        {recording
-          ? <Stop size={40} weight="fill" aria-hidden="true" className="text-destructive" />
-          : <Microphone size={44} weight="regular" aria-hidden="true" className="text-foreground" />}
+        <Microphone
+          size={44}
+          weight={recording ? "fill" : "regular"}
+          aria-hidden="true"
+          className={recording ? "text-foreground/90" : "text-foreground"}
+        />
       </button>
     </div>
   );
@@ -880,13 +968,25 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
         data-intent={fieldOpen && chat.draft.trim() ? "send" : "type"}
         onClick={() => {
           if (fieldOpen && chat.draft.trim()) { send(); return; }
+          /* "I'd rather type" WHILE THE DOOR IS LISTENING. The door now opens
+             recording, so without this the typing fallback is unreachable on
+             the one screen that needs it — the button is disabled for the whole
+             life of the recording. Pressing it stops, and what you said arrives
+             in the pop-up's first step as editable text. That is the typing
+             surface, and it arrives with a head start instead of empty. */
+          if (recording) { onMic(); return; }
           if (kept) { openSaid(); return; }
           setTyping(true);
           requestAnimationFrame(() => fieldRef.current?.focus());
         }}
-        disabled={!canCapture || chat.busy || recording}
-        aria-label={fieldOpen && chat.draft.trim() ? "Send to Dex" : "Type instead"}
-        title={fieldOpen && chat.draft.trim() ? "Send to Dex" : "Type instead"}
+        /* The well keeps its old rule — it does not start on its own, so a live
+           recording there means the founder pressed the mic and the keyboard
+           has nothing to offer. The door does start on its own, so it must. */
+        disabled={!canCapture || chat.busy || (recording && surface !== "overlay")}
+        aria-label={fieldOpen && chat.draft.trim() ? "Send to Dex"
+          : recording ? "Stop and type instead" : "Type instead"}
+        title={fieldOpen && chat.draft.trim() ? "Send to Dex"
+          : recording ? "Stop and type instead" : "Type instead"}
         className={CIRCLE}
       >
         {fieldOpen && chat.draft.trim()

@@ -249,6 +249,11 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
         {stage && (
           <VoiceRipple
             mode="in"
+            /* Out of the handle, not into it. The well's own ripple runs inward
+               because the well is a dish the sound arrives at; here the hub is
+               a handle sitting in a channel, and a wave collapsing onto it read
+               as the control being drained rather than speaking. */
+            from="center"
             decorative
             config={SLIDER_RIPPLE}
             hubPx={stage.hub}

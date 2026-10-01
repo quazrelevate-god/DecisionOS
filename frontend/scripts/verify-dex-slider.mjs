@@ -11,6 +11,18 @@ import { chromium } from 'playwright';
 import { signIn } from './lib/auth.mjs';
 import { DEX_SLIDER } from '../src/lib/flags.js';
 
+/* Poll until a condition holds. verify-dex has its own; this file had no need
+   of one until the door started listening by itself, which is a state that
+   arrives a frame or two after the drag rather than with it. */
+const until = async (fn, timeout = 8000, step = 150) => {
+  const end = Date.now() + timeout;
+  for (;;) {
+    if (await fn().catch(() => false)) return true;
+    if (Date.now() > end) return false;
+    await new Promise((r) => setTimeout(r, step));
+  }
+};
+
 const BASE = process.env.AUDIT_BASE || 'http://localhost:3000';
 const WIDTHS = [[390, 844], [360, 640]];
 
@@ -20,10 +32,15 @@ const check = (n, ok, got) => {
   ok ? pass++ : fail++;
 };
 
-const browser = await chromium.launch();
+/* A fake microphone, because the door starts listening by itself now and a
+   getUserMedia that is never answered is indistinguishable from a door that
+   does not listen — which is the check right below. */
+const browser = await chromium.launch({
+  args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
+});
 
 if (!DEX_SLIDER) {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, permissions: ['microphone'] });
   const page = await ctx.newPage();
   await signIn(page, BASE);
   await page.goto(`${BASE}/inbox?fixture=busy`, { waitUntil: 'domcontentloaded' });
@@ -40,7 +57,7 @@ if (!DEX_SLIDER) {
 }
 
 for (const [w, h] of WIDTHS) {
-  const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: true, hasTouch: true });
+  const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: true, hasTouch: true, permissions: ['microphone'] });
   const page = await ctx.newPage();
   const errs = [];
   page.on('pageerror', (e) => errs.push(e.message.split('\n')[0]));
@@ -147,38 +164,68 @@ for (const [w, h] of WIDTHS) {
   const padTop = await page.locator('[data-testid="dex-decide-overlay"] > div:nth-child(2)')
     .evaluate((el) => getComputedStyle(el).paddingTop);
   check('the X sits below the safe-area inset', padTop === '12px', `${padTop} with no notch`);
-  check('nothing is recording on open',
-    !(await page.locator('[data-testid="dex-decide-overlay"]').innerText()).toLowerCase().includes('recording'));
-  await page.locator('[data-testid="dex-decide-overlay"] [data-testid="desk-dex-keyboard"]').click();
-  await page.waitForTimeout(600);
-  check('the keyboard opens a composer',
-    (await page.locator('[data-testid="desk-dex-floating"], [data-testid="desk-dex-composer"]').count()) >= 1);
-  /* Put it away before anything else is tried. The floating composer brings a
-     fixed inset-0 scrim with it, and a scrim left up swallows the next drag —
-     which is how this suite first "proved" that a left swipe did not open Ask. */
-  await page.locator('[data-testid="desk-dex-floating-scrim"]').click({ position: { x: 5, y: 5 } }).catch(() => {});
+  /* THE DOOR OPENS LISTENING — reversed on 2026-10-01 at the founder's word.
+     It used to assert the opposite, and the component's own note explained why
+     (a screen that is already listening startles people). They have used it and
+     disagree: reaching this screen already costs a full deliberate drag, and
+     having to hunt for the mic afterwards makes that drag feel like it did
+     nothing. The drag is the press. Asserted on aria-pressed, which is the same
+     thing a screen reader is told, rather than on any glyph. */
+  check('the door opens listening',
+    await until(async () => (await page.locator('[data-testid="voice-ripple-mic"]').getAttribute('aria-pressed')) === 'true', 6000));
+  check('…and the mic is held down, not swapped for a stop square',
+    (await page.locator('[data-testid="dex-decide-overlay"] [data-testid="voice-ripple-mic"] svg').count()) === 1);
+  /* Put it back where the rest of this section expects to find it: stopped,
+     the words thrown away, the door open again. Waits are on STATE, not on a
+     stopwatch — stopping hands over to the pop-up, which shuts the door, and
+     each of those takes as long as it takes. */
+  await page.locator('[data-testid="voice-ripple-mic"]').click();
+  await page.locator('[data-testid="dex-popup"]').waitFor({ timeout: 8000 });
+  await page.locator('[data-testid="dex-popup-discard"]').click();
+  await page.locator('[data-testid="dex-popup"]').waitFor({ state: 'detached', timeout: 8000 });
+  await page.locator('[data-testid="dex-slider"]').waitFor({ timeout: 8000 });
   await page.waitForTimeout(400);
-  check('tapping away puts the composer away',
-    (await page.locator('[data-testid="desk-dex-floating-scrim"]').count()) === 0);
+  await drag(track.x + track.width - 2);
+  await page.locator('[data-testid="dex-decide-overlay"]').waitFor({ timeout: 8000 });
+  await page.waitForTimeout(500);
+  /* THE TYPING FALLBACK, on a door that is already listening. The brief calls
+     this a backup path that is rarely used and must work; the auto-start made
+     the button disabled for the whole life of the recording, which would have
+     meant it did not. It is enabled on this surface now, and it stops and hands
+     the words over as editable text rather than opening an empty field — which
+     is the better answer anyway: you type from what you already said. */
+  const kb = page.locator('[data-testid="dex-decide-overlay"] [data-testid="desk-dex-keyboard"]');
+  check('the keyboard is reachable while the door listens', await kb.isEnabled());
+  await kb.click();
+  await page.locator('[data-testid="dex-popup"]').waitFor({ timeout: 8000 });
+  check('…and it stops and offers what you said, editable',
+    (await page.locator('[data-testid="dex-popup"]').getAttribute('data-step')) === 'said'
+    && (await page.locator('[data-testid="dex-popup-transcript"]').count()) === 1);
+  await page.locator('[data-testid="dex-popup-discard"]').click();
+  await page.locator('[data-testid="dex-popup"]').waitFor({ state: 'detached', timeout: 8000 });
+  await page.locator('[data-testid="dex-slider"]').waitFor({ timeout: 8000 });
+  await page.waitForTimeout(400);
+  await drag(track.x + track.width - 2);
+  await page.locator('[data-testid="dex-decide-overlay"]').waitFor({ timeout: 8000 });
+  await page.waitForTimeout(400);
 
   /* THE DOOR STANDS ASIDE FOR THE POP-UP — reported from the founder's iPhone
      and the reason this check exists: they spoke, pressed stop, and the blurred
      mic screen simply stayed while step 1, the reading and the review all ran
      BEHIND it, unreachable. The pop-up is a dialog at z-50 and the door is
      9500, so it was underneath; and the door has no job once the words exist.
-     Typed words take exactly the same path as spoken ones, which is why this
-     can be asserted here without a microphone. */
-  await page.getByTestId('desk-dex-keyboard').click();
-  const composer = page.locator('[data-testid="desk-dex-floating"], [data-testid="desk-dex-composer"]').first();
-  await composer.waitFor({ timeout: 5000 });
-  await composer.locator('textarea').fill('Tell Suresh to ship the indigo lot before Friday');
-  await composer.locator('textarea').press('Enter');
+     Asserted on the SPOKEN path now, which is the path the founder was on when
+     they reported it: the door is already listening, so stopping is the whole
+     gesture. It used to type instead, because the door did not record on open
+     and a fake microphone was more machinery than the check needed. */
+  await page.locator('[data-testid="voice-ripple-mic"]').click();
   await page.locator('[data-testid="dex-popup"]').waitFor({ timeout: 10000 }).catch(() => {});
   check('sending hands over to the pop-up', (await page.locator('[data-testid="dex-popup"]').count()) === 1);
   check('…and the door stands aside rather than burying it',
     (await page.locator('[data-testid="dex-decide-overlay"]').count()) === 0);
-  await page.locator('[data-testid="dex-popup-close"]').click().catch(() => {});
-  await page.waitForTimeout(600);
+  await page.locator('[data-testid="dex-popup-discard"]').click()
+    .catch(() => page.locator('[data-testid="dex-popup-close"]').click().catch(() => {}));
+  await page.waitForTimeout(800);
   check('closing the pop-up leaves you on the Desk, not in the door',
     (await page.locator('[data-testid="dex-slider"]').count()) === 1
     && (await page.locator('[data-testid="dex-decide-overlay"]').count()) === 0);

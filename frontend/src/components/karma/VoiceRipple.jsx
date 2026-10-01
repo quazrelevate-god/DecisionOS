@@ -168,6 +168,15 @@ export function VoiceRipple({
   mode = "out",
   hubPx = 64,
   hubAt = null,
+  /* WHICH WAY THE WAVES GO, in mode="in" only.
+     "wall"   (default) born at the container's inner wall, travelling in to the
+              mic — the Dex well's own behaviour since 2026-09-21, where the
+              well IS the dish and the sound is arriving at the microphone.
+     "center" born at the mic and travelling out to the wall. The founder's call
+              for the slider: there the hub is a handle sitting in a channel,
+              not a dish, and a wave collapsing onto it reads as something being
+              sucked in rather than as the control speaking. */
+  from = "wall",
   /* DECORATIVE — the surface without the control. The slider on the phone's
      Desk wants this material looping inside its well, but it already HAS a
      handle, and a second `voice-ripple-mic` in the document would be a second
@@ -193,6 +202,10 @@ export function VoiceRipple({
   const audioRef = useRef(null);   // { ctx, stream, analyser, data }
   const rafRef = useRef(0);
   const lastRingRef = useRef(0);
+  /* Read inside the animation frame, so a direction change takes effect without
+     tearing down the canvas — the same reason every other setting is a ref. */
+  const fromRef = useRef(from);
+  fromRef.current = from;
   const cfgRef = useRef({ ...RIPPLE_DEFAULTS, simulate, live: false });
   cfgRef.current = {
     ...RIPPLE_DEFAULTS, ...config, simulate,
@@ -408,6 +421,7 @@ export function VoiceRipple({
        its fullest while it is still near the wall, and thins away as it closes
        in — gone before it reaches the mic, so the centre never receives a hard
        ring. The same ridge, the same blur, the same founder's settings. */
+    const fromCenter = fromRef.current === "center";
     const inwardFrame = (now) => {
       const { softness, thickness, water, speed, density, hubPx: hp, hubAt: at } = cfgRef.current;
       const level = read(now);
@@ -462,14 +476,18 @@ export function VoiceRipple({
         const ring = rings[i];
         const age = (now - ring.born) / ((LIFE_MS / Math.max(0.2, speed)) * (1.25 - 0.45 * ring.push));
         if (age >= 1) { rings.splice(i, 1); continue; }
-        // Away from the wall briskly, easing as it closes on the mic.
-        const e = 1 - Math.pow(1 - age, 1.7);
-        const born = Math.min(1, age / 0.16);            // no wave pops out of a wall
-        const fade = Math.pow(1 - e, 1.5);                // …and none arrives at the mic
+        /* `e` is "how far along the journey", and radiusAt reads e=0 as the wall
+           and e=1 as the mic — so reversing the direction is reversing e, not
+           re-deriving the geometry. Out of the centre it leaves briskly and
+           eases as it nears the wall, which is the same curve the other way up. */
+        const e = fromCenter ? Math.pow(1 - age, 1.7) : 1 - Math.pow(1 - age, 1.7);
+        const born = Math.min(1, age / 0.16);            // nothing pops into being
+        // …and nothing arrives hard: at the mic going in, at the wall coming out.
+        const fade = fromCenter ? Math.pow(e, 0.8) : Math.pow(1 - e, 1.5);
         const alpha = ring.push * born * fade;
-        const relief = ring.push * born * (1 - e);
+        const relief = ring.push * born * (fromCenter ? e : 1 - e);
         // Irregular in its middle life, calm at the wall and as it rounds up.
-        const amp = water * 0.07 * ring.push * Math.sin(Math.PI * Math.min(1, e * 1.05));
+        const amp = water * 0.07 * ring.push * Math.sin(Math.PI * Math.min(1, (fromCenter ? 1 - e : e) * 1.05));
         drawWave(cx, cy, end * 3, alpha, Math.max(0, relief), null, 0, 0, thickness, softness,
           radiusAt(e, amp, seedShape(ring, age), ring.spin * age));
       }
@@ -560,7 +578,7 @@ export function VoiceRipple({
       ro.disconnect();
       window.removeEventListener("resize", refit);
     };
-  }, [size, still, inward]);
+  }, [size, still, inward, from]);
 
   /* The hub's swell follows the level without a re-render: the loop writes a
      CSS variable and the halo reads it.

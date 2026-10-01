@@ -162,7 +162,34 @@ async function openField(page) {
        the field and keeps the words (9959478). Clear them when the suite
        wants a fresh field; a person would press the same Discard. */
     await page.getByTestId('desk-dex-keyboard').click();
+    /* WHERE TYPING HAPPENS NOW, ON THE DOOR. The door opens listening
+       (2026-10-01), so the keyboard's job there is "stop and let me type
+       instead" — it hands over to the pop-up's first step, whose transcript
+       field is a real editable textarea and is empty when nothing was said.
+       The floating composer is simply not reachable from this surface any
+       more: reaching it would need the door open and NOT recording, and the
+       door no longer has that state. The well is unchanged. */
+    if (behindDoor(page)) {
+      /* WHICHEVER ONE ARRIVES, because which one it is depends on whether the
+         door was listening. It usually is — it opens that way — and then the
+         keyboard means "stop and let me type", which lands in the pop-up's
+         transcript. But when Dex is still reading the last note the door does
+         NOT auto-start (the one-at-a-time guard, ASK-33.1), and then the
+         keyboard means what it always meant and opens the composer. Waiting for
+         one specific answer makes this suite assert a guard it does not mean to. */
+      const got = await until(async () =>
+        (await page.getByTestId('dex-popup-transcript').count()) > 0
+        || (await composerIn(page).count()) > 0, 8000);
+      if (!got) throw new Error('the keyboard opened neither the transcript nor the composer');
+      if (await page.getByTestId('dex-popup-transcript').count()) {
+        return page.getByTestId('dex-popup-transcript');
+      }
+      return composerIn(page).first().locator('textarea');
+    }
     await composerIn(page).first().waitFor({ timeout: 4000 });
+  }
+  if (behindDoor(page) && (await page.getByTestId('dex-popup-transcript').count())) {
+    return page.getByTestId('dex-popup-transcript');
   }
   return composerIn(page).first().locator('textarea');
 }
@@ -179,13 +206,26 @@ async function toDesk(page) {
     await page.waitForTimeout(450);
   }
 }
+/* START A RECORDING, whichever surface this is.
+   The decision door now starts listening the moment it opens (founder, 2026-10-01),
+   so a press there would STOP the recording it was meant to start. The well does
+   not, so it still needs the press. Wait to see which happened rather than
+   branching on the flag: aria-pressed is the component's own answer. */
 async function micPress(page) {
   await openDoor(page);
-  await page.getByTestId('voice-ripple-mic').click();
+  const mic = page.getByTestId('voice-ripple-mic');
+  const started = await until(async () => (await mic.getAttribute('aria-pressed')) === 'true', 2500);
+  if (!started) await mic.click();
 }
 async function typeAndSend(page, words) {
   const input = await openField(page);
   await input.fill(words);
+  /* Enter sends from the composer; the pop-up's first step sends with Next,
+     which is the button beside the field the words are already in. */
+  if (behindDoor(page) && (await page.getByTestId('dex-popup-transcript').count())) {
+    await page.getByTestId('dex-popup-next').click();
+    return;
+  }
   await input.press('Enter');
 }
 
@@ -242,6 +282,16 @@ const restingBox = async (page) => {
      Probed at 1440 directly: the well is 387/97 both before the pop-up opens
      and after, so the product does not move and this is purely when the suite
      chooses to look. */
+  /* WAIT FOR THE DATA, THEN FOR THE PIXELS. Settling alone was not enough: the
+     Desk lays out with the query layer still in flight and HOLDS that layout
+     long enough to look settled, so three stable reads could still land on a
+     loading page. The Workflows tile's count is the honest signal that the
+     Desk's data has arrived — it renders "…" until it has — and the hero's
+     height depends on that tile. After it, settle as before. */
+  await until(async () => {
+    const t = await page.getByTestId('kpi-workflows-count').textContent().catch(() => null);
+    return !!t && t.trim() !== '…';
+  }, 15000);
   let last = await geometry(page);
   let stable = 0;
   for (let i = 0; i < 40; i += 1) {
@@ -356,7 +406,9 @@ async function run(viewport) {
   // ---------------------------------------------------- B · NOTHING TO DECIDE
   await setEnding(page, 'nothing');
   await typeAndSend(page, 'How much profit did we make this month?');
-  check(`${w} B: a typed capture skips step 1`, await atStep(page, 'reading', 4000));
+  check(behindDoor(page)
+    ? `${w} B: a typed capture is typed IN step 1 and sent from it`
+    : `${w} B: a typed capture skips step 1`, await atStep(page, 'reading', 4000));
   check(`${w} B: NOTHING TO DECIDE is the pop-up's last step`, await atStep(page, 'nothing'));
   const nothing = page.getByTestId('dex-outcome-nothing');
   const nothingText = clip(await nothing.textContent().catch(() => ''), 200);
@@ -436,9 +488,10 @@ async function run(viewport) {
   check(`${w} D: … and marks the decision a draft, on the decision`,
     await until(async () => (await page.evaluate(() => (window.__DOS_FIXTURE_CALLS || [])
       .some((c) => c.method === 'POST' && /\/decisions\/dec_fixture\/draft$/.test(c.url)))), 6000));
-  const typed = await openField(page);
-  await typed.fill('Ask Priya to book the Tirupur truck for Thursday');
-  await typed.press('Enter');
+  /* typeAndSend, not a hand-rolled fill-and-Enter: Enter sends from the
+     composer but the pop-up's first step sends with Next, and this is the one
+     place that still spelled it out itself. */
+  await typeAndSend(page, 'Ask Priya to book the Tirupur truck for Thursday');
   check(`${w} E: and the next send goes through once it has`, await atStep(page, 'reading', 8000));
   check(`${w} F: no decide path opened the sheet, all run long`, (await sheet(page).count()) === 0);
   await atStep(page, 'made');

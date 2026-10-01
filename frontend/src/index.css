@@ -3408,6 +3408,43 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         box-shadow: none;
     }
 
+    /* THE DECISION DOOR'S VOICE RINGS. Deliberately NOT the neumorphic wave:
+       that recipe draws a light ridge and a dark one, which needs an opaque
+       surface to be read against, and this screen is a blur over the Desk by
+       design — the founder's own report was that it looked smeared. A plain
+       circle, a hairline, expanding past the edge of the screen.
+       `--mw-gain` is written per frame from the live microphone meter, so the
+       reach and the brightness both answer the room; at rest it still breathes,
+       because a recording screen that looks frozen looks broken. */
+    .kr-mic-waves {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 0;
+        height: 0;
+        pointer-events: none;
+    }
+    .kr-mic-waves > i {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 7.5rem;
+        height: 7.5rem;
+        margin: -3.75rem 0 0 -3.75rem;
+        border-radius: 9999px;
+        border: 1.5px solid hsl(0 0% 100% / .9);
+        opacity: 0;
+        animation: kr-mic-ring 2.8s cubic-bezier(.22, 1, .36, 1) infinite;
+    }
+    @keyframes kr-mic-ring {
+        0%   { transform: scale(1);   opacity: 0; }
+        12%  { opacity: calc(.42 * var(--mw-gain, 1)); }
+        100% { transform: scale(calc(3.2 + 2.6 * var(--mw-gain, 1))); opacity: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .kr-mic-waves > i { animation: none; opacity: 0; }
+    }
+
     .kr-slider-well {
         position: relative;
         border-radius: 9999px;

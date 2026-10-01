@@ -3390,21 +3390,22 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
        and given the sunk phone wash so the handle reads as sitting IN a channel
        rather than on a bar. Nothing new is invented; the well already knew how
        to look pressed. */
-    /* THE DESK'S FIVE TILES CARRY NO HAIRLINE. .nm-tile ends in
+    /* THE DESK'S FIVE TILES ARE FLAT. .nm-tile ends in
        `border border-nm-edge/40`, which on the Desk drew a grey rule round
        every tile — the founder's note, and they are right: the tiles already
-       separate themselves by sitting raised off the page, so the border was a
-       second, weaker answer to a question already answered. It is replaced by
-       the raised half of the app's own neumorphic pair (the well's inset
-       recipe, turned outward), so the tile reads as lifted rather than as
-       outlined. Scoped to this class rather than cut from .nm-tile, which some
-       180 call sites across /my-work, /crm, /team and /finance rely on and
-       which I have no way to look at from here. */
+       separate themselves from the page, so the border was a second, weaker
+       answer to a question already answered. My first cut swapped it for the
+       raised half of the app's neumorphic pair; the founder's call on seeing
+       that was flat — no hairline AND no shadow. So the tile is its fill, its
+       radius and nothing else, and it reads against the page by being lighter
+       than it. `box-shadow: none` rather than simply omitting one, because
+       .kr-stat (WorkflowsTile) brings its own and this has to beat it.
+       Scoped to this class rather than cut from .nm-tile, which some 180 call
+       sites across /my-work, /crm, /team and /finance rely on and which I have
+       no way to look at from here. */
     .kr-kpi-tile {
         border: 0;
-        box-shadow:
-            7px 7px 16px hsl(230 22% 34% / .11),
-            -7px -7px 14px hsl(0 0% 100% / .90);
+        box-shadow: none;
     }
 
     .kr-slider-well {

@@ -18,7 +18,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, FlowArrow } from "@phosphor-icons/react";
+import { ArrowRight, ArrowUpRight, Check, FlowArrow, SpinnerGap } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import api from "../../lib/api";
 import { BigNumeral } from "../../components/karma";
@@ -44,6 +44,24 @@ const PARTS = [
 const ACTION_PILL =
   "flex h-10 max-lg:h-[3.5rem] w-full shrink-0 items-center justify-center gap-1.5 rounded-pill px-2.5 lg:px-4 "
   + "text-center text-[13px] font-medium leading-tight "
+  + "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline";
+
+/* THE WIDE ARRANGEMENT'S TWO MOVES ARE CIRCLES, not pills — the founder's
+   call, and the arithmetic is on their side. Two pills were taking 220 CSS px
+   of a 255px column, which is why "PO #221 — Cotton yarn (2 tonnes)" was
+   arriving as "PO #221 — C…": the card's name, the one thing you actually read,
+   was losing its room to two labels you can infer from a tick and an arrow.
+   Two 3.5rem circles take 120px and give the title back a hundred.
+
+   THE VISIBLE LABEL GOES, THE ACCESSIBLE ONE DOES NOT. accessibility.md is
+   explicit that an icon-only control still needs a name for a screen reader, so
+   each carries the exact words the pill carried — "Approve", "Open Workflows" —
+   as aria-label and as the hover title. A tick for the move and an arrow out
+   for the boards are the two most conventional glyphs there are; this is not
+   the place to be inventive. 3.5rem is 44.8 real pixels once --ui-scale's 0.8
+   lands, which is the platform's target. */
+const ICON_MOVE =
+  "grid h-14 w-14 shrink-0 place-items-center rounded-full "
   + "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline";
 
 const REASON_CHIP = {
@@ -126,7 +144,7 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
     return (
       <div
         data-testid={testid}
-        className={cn("kr-stat nm-tile grid grid-cols-[minmax(0,1fr)_1px_minmax(0,1.25fr)] items-center gap-3 p-3", className)}
+        className={cn("kr-stat nm-tile grid grid-cols-[minmax(0,0.85fr)_1px_minmax(0,1.6fr)] items-center gap-3 p-3", className)}
       >
         <div className="flex min-w-0 items-center gap-2.5">
           <IconChip icon={FlowArrow} alert={needAttention > 0} />
@@ -161,47 +179,79 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
               <div className="ds-skeleton h-8 w-4/5 rounded-control" />
             </div>
           ) : quiet ? (
-            <p className="flex items-center gap-2 text-sm font-medium text-emerald-700" data-testid={`${testid}-quiet`}>
-              <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-              All moving{advancedToday > 0 ? ` · ${advancedToday} advanced today` : ""}
-            </p>
-          ) : nextUp ? (
-            <div className="flex min-w-0 items-center gap-2">
-              <p className="min-w-0 flex-[2] truncate text-sm font-medium text-foreground"
-                 title={nextUp.title} data-testid={`${testid}-next-title`}>
-                {nextUp.title}
+            <div className="flex min-w-0 items-center justify-between gap-2.5">
+              <p className="flex min-w-0 items-center gap-2 text-sm font-medium text-emerald-700" data-testid={`${testid}-quiet`}>
+                <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                <span className="min-w-0 truncate">All moving{advancedToday > 0 ? ` · ${advancedToday} advanced today` : ""}</span>
               </p>
-              {/* The reason gives way before the card's name does: which card is
-                  waiting is the thing you read first, and the chip repeats what
-                  the Approve label already implies. */}
-              <span className={cn(CHIP, "min-w-0 shrink truncate", REASON_CHIP[nextUp.reason] || REASON_CHIP.you)}
-                    title={nextUp.reasonLabel} data-testid={`${testid}-next-reason`}>
-                {nextUp.reasonLabel}
-              </span>
+              <Link
+                to="/workflows"
+                data-testid={`${testid}-open`}
+                title="Open Workflows"
+                aria-label="Open Workflows"
+                className={cn(ICON_MOVE, "bg-[hsl(var(--kr-action-bg,var(--kr-ink)))] text-[hsl(var(--kr-action-fg,0_0%_100%))]")}
+              >
+                <ArrowUpRight size={22} weight="bold" aria-hidden="true" />
+              </Link>
+            </div>
+          ) : nextUp ? (
+            /* The title gets the room the two pills were holding, and gets to
+               use two lines of it — this is the name of the thing waiting on
+               the founder, and an ellipsis in the middle of it is the whole
+               reason this arrangement is being tried. */
+            <div className="flex min-w-0 items-center gap-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="line-clamp-2 text-sm font-medium leading-snug text-foreground"
+                   title={nextUp.title} data-testid={`${testid}-next-title`}>
+                  {nextUp.title}
+                </p>
+                <span className={cn(CHIP, "mt-1 inline-flex max-w-full truncate", REASON_CHIP[nextUp.reason] || REASON_CHIP.you)}
+                      title={nextUp.reasonLabel} data-testid={`${testid}-next-reason`}>
+                  {nextUp.reasonLabel}
+                </span>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {nextUp.actionLabel && (
+                  <button
+                    type="button"
+                    data-testid={`${testid}-next-action`}
+                    disabled={busy || move.isPending}
+                    onClick={() => { setBusy(true); move.mutate(); }}
+                    title={nextUp.actionLabel}
+                    aria-label={nextUp.actionLabel}
+                    className={cn(ICON_MOVE, "kr-pop text-foreground disabled:opacity-50")}
+                  >
+                    {move.isPending
+                      ? <SpinnerGap size={20} weight="bold" aria-hidden="true" className="animate-spin" />
+                      : <Check size={22} weight="bold" aria-hidden="true" />}
+                  </button>
+                )}
+                <Link
+                  to="/workflows"
+                  data-testid={`${testid}-open`}
+                  title="Open Workflows"
+                  aria-label="Open Workflows"
+                  className={cn(ICON_MOVE, "bg-[hsl(var(--kr-action-bg,var(--kr-ink)))] text-[hsl(var(--kr-action-fg,0_0%_100%))]")}
+                >
+                  <ArrowUpRight size={22} weight="bold" aria-hidden="true" />
+                </Link>
+              </div>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">Nothing waiting on a move.</p>
-          )}
-          {/* SIDE BY SIDE, so each takes a share rather than the whole row.
-              ACTION_PILL carries w-full for the stacked arrangement; here both
-              would be full width and the second simply ran off the card's right
-              edge (measured). flex-1 + min-w-0 is the pair's share, and
-              tailwind-merge lets w-auto win over the recipe's w-full. */}
-          <div className="flex items-center gap-2">
-            {!loading && !quiet && nextUp?.actionLabel && (
-              <button
-                type="button"
-                data-testid={`${testid}-next-action`}
-                disabled={busy || move.isPending}
-                onClick={() => { setBusy(true); move.mutate(); }}
-                title={nextUp.actionLabel}
-                className={cn(ACTION_PILL, "w-auto min-w-0 flex-1 kr-pop text-foreground disabled:opacity-50")}
+            /* Nothing waiting: the boards are still one tap away, on their own. */
+            <div className="flex min-w-0 items-center justify-between gap-2.5">
+              <p className="min-w-0 text-sm text-muted-foreground">Nothing waiting on a move.</p>
+              <Link
+                to="/workflows"
+                data-testid={`${testid}-open`}
+                title="Open Workflows"
+                aria-label="Open Workflows"
+                className={cn(ICON_MOVE, "bg-[hsl(var(--kr-action-bg,var(--kr-ink)))] text-[hsl(var(--kr-action-fg,0_0%_100%))]")}
               >
-                {move.isPending ? "Moving…" : nextUp.actionLabel}
-              </button>
-            )}
-            <span className="flex min-w-0 flex-1">{openBoards}</span>
-          </div>
+                <ArrowUpRight size={22} weight="bold" aria-hidden="true" />
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     );

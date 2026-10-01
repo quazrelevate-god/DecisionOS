@@ -813,6 +813,12 @@ export default function Desk() {
   const qc = useQueryClient();
   // DEX-SLIDER Part 2 — Ask lives in Layout; the slider reaches it from here.
   const doors = useDexDoors();
+  /* DEX-SLIDER Part 3 — the slider's right end. useBackDismiss is what makes
+     the Android back button and the iOS edge swipe close it: it puts a marker
+     entry on history while the door is open, and both gestures pop that. One
+     behaviour, described once. */
+  const [decideOpen, setDecideOpen] = useState(false);
+  useBackDismiss(decideOpen, (v) => setDecideOpen(!!v));
   /* JOURNEY-1 J13 — on a slow line the phone's saved copy stands in for the
      server after 3 s (service-worker.js), and the Desk used to show those
      numbers as if they were live. Now it says when they are from. */
@@ -1550,13 +1556,26 @@ export default function Desk() {
              data-testid="desk-insight">
           <DexSlider
             onAsk={() => doors?.openAsk?.()}
-            /* Part 3 builds the full-screen decision door this end opens.
-               Until that commit lands this end is deliberately inert rather
-               than wired to something it is about to replace. */
-            onDecide={() => {}}
+            onDecide={() => setDecideOpen(true)}
           />
         </div>
       ) : dexWell)}
+      {/* DEX-SLIDER Part 3 — the door the right end opens. The SAME component
+          the well is, in its overlay surface: same capture hook, same pop-up
+          handover, same one-at-a-time guard. Mounted whenever the slider is,
+          so the capture machinery and a kept draft survive the door being
+          shut, exactly as they survive leaving the well. */}
+      {isMobile && DEX_SLIDER && (
+        <DeskDexWell
+          surface="overlay"
+          open={decideOpen}
+          onClose={() => setDecideOpen(false)}
+          phone
+          testid="desk-insight-overlay"
+          onReview={(id) => setOpenDecisionId(id)}
+          onLater={(id) => saveAsDraft(id).then((ok) => { qc.invalidateQueries({ queryKey: ["desk"] }); return ok; })}
+        />
+      )}
 
       {/* ASK-47 — NOTHING ELSE MOVES. The card goes `position: fixed` when it
           pops, which takes it out of the page's column; this holds its place at

@@ -151,7 +151,20 @@ function useKeyboardInset(active) {
  *                              in the Desk's DecisionDialog (a late toast for an
  *                              older one)
  */
-export function DeskDexWell({ className, testid, phone = false, onReview, onLater }) {
+/* DEX-SLIDER Part 3 — `surface` is the only thing the slider's door changes.
+ *
+ * "well"    the box on the Desk, exactly as it has always been.
+ * "overlay" the full screen the slider's right end opens: the same mic, the
+ *           same ripple, the same attach and keyboard, the same kept draft —
+ *           and the same handover to DexCapturePopup at the same moment.
+ *
+ * It is a presentation, deliberately, not a second implementation. Everything
+ * below this line — the capture hook, the conversation, the one-at-a-time
+ * guard, the refusal, the draft that survives a reload, the pop-up — is shared
+ * code reached by both, so the door cannot drift from the well it replaces.
+ */
+export function DeskDexWell({ className, testid, phone = false, onReview, onLater,
+                              surface = "well", open = false, onClose }) {
   const { user } = useAuth();
   // The gate every Dex capture surface uses (DexFab, DexCaptureBar).
   const canCapture = user?.role === "owner" || hasPerm(user, "voice_capture");
@@ -536,15 +549,20 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
   // gave it, whatever phone that turns out to be.
   const wellRef = useRef(null);
   const [rippleSize, setRippleSize] = useState(220);
+  const overlayRef = useRef(null);
   useEffect(() => {
     if (!phone) return undefined;
-    const el = wellRef.current;
+    const el = surface === "overlay" ? overlayRef.current : wellRef.current;
     if (!el || typeof ResizeObserver === "undefined") return undefined;
     const fit = () => {
       const room = Math.min(el.offsetWidth - 40, el.offsetHeight - 128);
       setRippleSize((s) => {
-        // Never bigger than 300, never smaller than a 44px hub can live in.
-        const next = Math.max(88, Math.min(300, Math.round(room)));
+        /* The well caps at 300 because that is all its box can hold. The
+           overlay has the screen, and the brief asks for the ripple to run out
+           across the whole of it — so the cap is the room itself, with the same
+           88px floor so a 44px hub always has somewhere to live. */
+        const ceiling = surface === "overlay" ? Math.max(88, Math.round(room)) : 300;
+        const next = Math.max(88, Math.min(ceiling, Math.round(room)));
         return Math.abs(next - s) > 2 ? next : s;
       });
     };
@@ -552,7 +570,7 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
     ro.observe(el);
     fit();
     return () => ro.disconnect();
-  }, [phone]);
+  }, [phone, surface, open]);
 
   const rippleDisabled = !canCapture || (!recording && (dex.sending || chat.busy));
 
@@ -757,8 +775,66 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
     : phase === "ended" ? (ENDING_STEP[outcome?.kind] || "slow")
     : "said";
 
+  /* DEX-SLIDER Part 3 · THE FULL-SCREEN DOOR.
+   *
+   * Everything behind it is blurred and dimmed — no part of the Desk reads
+   * through sharply. The mic is the centre and the ripple runs out from it
+   * across the screen; nothing else is in the middle, no stage text and no
+   * card, because the one thing being asked for here is a sentence spoken out
+   * loud.
+   *
+   * Attach sits bottom left and the keyboard bottom right — the SAME two
+   * controls the well's floor carries, the same handlers and the same testids,
+   * because they are literally the same `floor`. The keyboard is a backup path
+   * and does not need to be prominent; it only needs to work.
+   *
+   * `top` is the well's own top row, so a kept capture appears here exactly as
+   * it does in the well, with the same Discard. The slider shows nothing about
+   * drafts, by design — this screen is where they live.
+   *
+   * RECORDING DOES NOT START ON OPEN. onMic is the only thing that starts it,
+   * as in the well. A screen that is already listening the moment it appears
+   * startles people.
+   */
+  const overlay = surface === "overlay" && open && typeof document !== "undefined"
+    ? createPortal(
+      <div
+        data-testid="dex-decide-overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Record a decision"
+        className="fixed inset-0 z-[9500] lg:hidden"
+      >
+        {/* The Desk behind: dimmed AND blurred, so nothing of it reads. */}
+        <div aria-hidden="true" className="absolute inset-0 bg-kr-ink/30 backdrop-blur-2xl" />
+        <div ref={overlayRef} className="relative flex h-full flex-col px-4"
+             style={{ paddingTop: "calc(var(--sa-top) + 0.75rem)", paddingBottom: "calc(var(--sa-bottom) + 1.25rem)" }}>
+          <div className="flex items-start justify-end">
+            <button
+              type="button"
+              data-testid="dex-decide-close"
+              onClick={() => onClose?.()}
+              aria-label="Close"
+              className={cn(CIRCLE, "shrink-0")}
+            >
+              <X size={18} weight="bold" aria-hidden="true" />
+            </button>
+          </div>
+          {/* The kept capture, where the well puts it. */}
+          {top ? <div className="mt-2 shrink-0">{top}</div> : null}
+          {/* The mic, and nothing else. */}
+          <div className="grid min-h-0 flex-1 place-items-center">{body}</div>
+          {/* Attach left, keyboard right — the well's own floor, spread. */}
+          <div className="flex shrink-0 items-center justify-between gap-3">{floor}</div>
+        </div>
+      </div>,
+      document.body
+    )
+    : null;
+
   return (
     <>
+      {surface === "overlay" ? overlay : (
       <InsightWell
         compact
         label={null}
@@ -772,6 +848,7 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
            `kr-well--sunk` below lg: a dimmer wash and a deeper press. */
         paneClassName={cn("max-lg:flex-1 max-lg:p-3", phone && "kr-well--sunk")}
       />
+      )}
       <DexCapturePopup
         open={popupOpen && phase !== "idle"}
         onClose={closePopup}

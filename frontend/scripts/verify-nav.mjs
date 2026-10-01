@@ -81,8 +81,29 @@ for (const d of dockItems) {
 const pill = await page.locator('[data-testid="floating-dock"] > div').boundingBox();
 const vh = page.viewportSize().height;
 const vw = page.viewportSize().width;
-check('dock floats off the bottom edge', vh - (pill.y + pill.height) >= 12,
+/* THE RULE, NOT A NUMBER (2026-10-02). This was `>= 12`, which was really the
+   old 1rem lift wearing a threshold. The founder measured 47pt of dead space
+   under the bar on an iPhone 13 mini — 34 of mandatory home-indicator inset and
+   13 the app was adding on top — and the lift went to 0. What has to be true is
+   not a pixel count: the bar is detached from the edge wherever there is no
+   indicator, and it clears the indicator entirely wherever there is one. Both
+   are asserted, the second by simulating the inset the way index.css derives
+   it, because no browser reports one. */
+check('dock floats off the bottom edge', vh - (pill.y + pill.height) > 0,
   `${Math.round(vh - (pill.y + pill.height))}px gap`);
+{
+  const k = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement)
+    .getPropertyValue('--ui-scale')) || 1);
+  await page.evaluate((s) => document.documentElement.style
+    .setProperty('--sa-bottom', `calc(34px / ${s})`), k);
+  await page.waitForTimeout(250);
+  const lifted = await page.locator('[data-testid="floating-dock"] > div').boundingBox();
+  const gap = vh - (lifted.y + lifted.height);
+  check('…and clears the home indicator, without sitting on it',
+    gap >= 34 && gap < 44, `${Math.round(gap)}pt above the edge, indicator is 34`);
+  await page.evaluate(() => document.documentElement.style.removeProperty('--sa-bottom'));
+  await page.waitForTimeout(250);
+}
 check('dock floats off the left edge', pill.x >= 12, `${Math.round(pill.x)}px`);
 /* ASK-41 — 72, not 64. The founder's highlight "covers the icon, which is not a
    standard way to do it": it fills the whole slot, text and all, as a squircle,

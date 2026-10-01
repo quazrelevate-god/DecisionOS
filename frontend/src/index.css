@@ -547,8 +547,37 @@
     button.dock-item { min-height: 3.25rem; min-width: var(--dock-item-min, 3.25rem); }
 }
 
-/* The dock in MPWA-03 floats this far above the home indicator. */
-.bottom-safe-4 { bottom: calc(1rem + var(--sa-bottom)); }
+/* HOW FAR THE DOCK FLOATS ABOVE THE HOME INDICATOR, as one number, because
+   three things are tied to it: the bar, the Dex circle beside it (which derives
+   its own offset from this so the pair stays centred), and the undo snackbar
+   that has to clear both.
+
+   1rem -> 0. On an iPhone 13 mini the gap under the bar measured 47pt: 34 of
+   mandatory home-indicator inset, and 13 the app was adding on top of it. The
+   founder could see it from across the room, and they are right — a floating
+   bar should clear the indicator and stop there, not clear it twice.
+   34pt IS THE FLOOR for a bar like this one. Below it the pill starts covering
+   the strip the system owns for swipe-up-to-home, which is both a gesture
+   conflict and the one placement rule Apple is unambiguous about. A native tab
+   bar looks closer to the edge because its BACKGROUND runs to the edge while
+   its content sits above the indicator; a w-fit floating pill has no
+   background down there to run. */
+:root {
+    --dock-lift: 0rem;
+    --dock-floor: 0.5rem;
+    /* THE ONE EXPRESSION, resolved once. Everything that has to clear the dock
+       reads this variable instead of rebuilding the max() — partly so the lift
+       is a single number to turn, and partly because postcss-calc will not
+       parse a max() nested inside a calc() and fails the production build on
+       it. An opaque var() inside calc() it passes through happily. */
+    --dock-bottom: max(0.5rem, calc(var(--dock-lift) + var(--sa-bottom)));
+}
+/* max(), because --sa-bottom is 0 wherever there is no home indicator — an
+   older iPhone with a home button, Android without gesture navigation, and the
+   browser PWA. With the lift at 0 that put the bar flush against the bottom
+   edge with nothing under it at all. The indicator IS the breathing room where
+   there is one; --dock-floor is the breathing room where there is not. */
+.bottom-safe-4 { bottom: var(--dock-bottom); }
 
 /* ---------------------------------------------------------------------------
    MPWA-14 — the centred app shell (Instagram-style column).

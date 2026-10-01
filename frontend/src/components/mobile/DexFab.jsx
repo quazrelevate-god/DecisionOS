@@ -131,12 +131,21 @@ export function DexFab({ onOpen, recording = false, seconds = 0, onStop, intent 
            the bar is 4.5rem tall against this button's 4rem, so its centre sat
            4px below the bar's and the founder could see it. The offset is the
            bar's height less this one's, halved, added to the same expression
-           `.bottom-safe-4` carries, so the pair stays centred if either height
-           ever moves. Under 360px the button drops to 3.75rem and the gap
+           `.bottom-safe-4` carries — now through --dock-lift, so moving the
+           bar down moves this with it and the pair stays centred if either
+           height ever moves. Under 360px the button drops to 3.75rem and the gap
            becomes 6px, which is why the number is derived and not typed. */
         "lg:hidden fixed app-fab-right z-[10000]",
-        "bottom-[calc(1rem+var(--sa-bottom)+((4.5rem-4rem)/2))]",
-        "max-[359px]:bottom-[calc(1rem+var(--sa-bottom)+((4.5rem-3.75rem)/2))]",
+        /* MARGIN, NOT calc(). The offset wants to be
+           `calc(var(--dock-bottom) + ((4.5rem - 4rem) / 2))`, but --dock-bottom
+           carries a max() and postcss-calc inlines the variable, then fails the
+           production build parsing a max() inside a calc(). On a fixed element
+           `bottom` places the MARGIN edge, so a bottom margin lifts the box by
+           exactly the same amount with no arithmetic for it to choke on. The
+           number is still derived from the two heights, not typed blind:
+           (4.5rem - 4rem) / 2 = 0.25rem, and 0.375rem under 360px where the
+           button drops to 3.75rem. */
+        "bottom-[var(--dock-bottom)] mb-1 max-[359px]:mb-[0.375rem]",
         "grid place-items-center rounded-[var(--radius-card)] shadow-brutal-lg transition-colors",
         // No double-tap-to-zoom wait on this button — it is a control, and the
         // delay is time the browser spends deciding whether the tap was a

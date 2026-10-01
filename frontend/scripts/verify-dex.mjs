@@ -113,6 +113,17 @@ const composerIn = (page) =>
 
 async function openField(page) {
   if ((await composerIn(page).count()) === 0) {
+    /* A KEPT CAPTURE OWNS THE DOOR. `kept` is draft text with the field
+       closed, and the door then offers those words back in the pop-up rather
+       than opening an empty field — DeskDexWell: `if (kept) { openSaid() }`.
+       That is the state after a REFUSED send, because the refusal now closes
+       the field and keeps the words (9959478). Clear them when the suite
+       wants a fresh field; a person would press the same Discard. */
+    const discard = page.getByTestId('dex-well-draft-discard');
+    if (await discard.count()) {
+      await discard.click();
+      await page.waitForTimeout(300);
+    }
     await page.getByTestId('desk-dex-keyboard').click();
     await composerIn(page).first().waitFor({ timeout: 4000 });
   }

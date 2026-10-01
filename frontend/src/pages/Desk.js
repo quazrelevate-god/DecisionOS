@@ -751,6 +751,15 @@ export default function Desk() {
   // E2-66: deep-link from a decision-focused nudge notification.
   const [searchParams] = useSearchParams();
   const focusDecisionId = searchParams.get("decision");
+  /* ?kpi=wide — A PROPOSAL, NOT THE PRODUCT (2026-10-01). The founder saw the
+     Desk on their own iPhone 13 mini: "Spend, this month" was a tall, almost
+     empty tile whose own label had truncated to "Spend, this…", and Workflows
+     was carrying a stacked pair of buttons in two thirds of a row. Their
+     proposal is to drop Spend and give Workflows the whole second row at the
+     top row's height. This renders that, side by side with what ships, in
+     /design-lab at three device sizes — so the decision is made by looking
+     rather than by me guessing. Nothing reads this parameter in the app. */
+  const kpiWide = searchParams.get("kpi") === "wide";
   // KM-28 — ?decision=<id> redirects to the page rather than raising the
   // modal behind the Desk, so a notification and a tap land in the same place.
   // ?decision=<id> (notifications, pasted links) opens the same popup over
@@ -1434,6 +1443,13 @@ export default function Desk() {
              the three tiles that can raise an alert dot on the top row, and
              Workflows two-wide beside the quiet money number below. */
           "order-3 grid min-w-0 grid-cols-3 gap-2",
+          /* No forced height. The first cut pinned the grid to 14rem with
+             auto-rows-fr so the second row could not be taller than the first —
+             and the card simply overflowed and vanished behind the black card,
+             because the TALL arrangement does not fit in half of that. It is a
+             different arrangement now (WorkflowsTile `wide`), short by
+             construction, so the honest thing is to let it be its own height
+             and MEASURE how close the two rows come. The lab prints both. */
           /* auto-rows-fr IS DESKTOP'S, deliberately. There the grid's floor has
              to land on the well's floor, so equal rows are the point. On the
              phone equal rows are the problem: StatTile pushes its numeral down
@@ -1490,9 +1506,10 @@ export default function Desk() {
           <WorkflowsTile
             attention={wfAttention}
             loading={workflowsQ.isLoading}
-            className={cn("col-span-2", PHONE_TILE)}
+            wide={kpiWide}
+            className={cn(kpiWide ? "col-span-3 lg:col-span-2" : "col-span-2", PHONE_TILE)}
           />
-          {seesMoney && (
+          {seesMoney && !kpiWide && (
           <StatTile
             icon={Receipt}
             label="Spend, this month"

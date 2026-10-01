@@ -233,12 +233,23 @@ const sameBox = (a, b) => !!a && !!b && a.wellTop === b.wellTop && a.wellHeight 
    never for a reason that existed in the product. Two identical reads in a row
    is the honest wait — a fixed sleep would just be a longer guess. */
 const restingBox = async (page) => {
+  /* THREE reads at 200ms, not two at 100. The two-read rule caught a plateau:
+     the Desk lays out once with the query layer still loading, holds that for
+     a moment, and only then — when the Workflows tile fills — does the hero
+     shrink and the well drop into its real place. The baseline was being taken
+     during that plateau, so "the well has not moved" compared a loading layout
+     against a loaded one and failed with a 91px delta, about one run in four.
+     Probed at 1440 directly: the well is 387/97 both before the pop-up opens
+     and after, so the product does not move and this is purely when the suite
+     chooses to look. */
   let last = await geometry(page);
-  for (let i = 0; i < 25; i += 1) {
-    await page.waitForTimeout(100);
+  let stable = 0;
+  for (let i = 0; i < 40; i += 1) {
+    await page.waitForTimeout(200);
     const now = await geometry(page);
-    if (sameBox(now, last)) return now;
+    stable = sameBox(now, last) ? stable + 1 : 0;
     last = now;
+    if (stable >= 2) return now;
   }
   return last;
 };

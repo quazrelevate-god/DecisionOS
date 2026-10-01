@@ -493,6 +493,115 @@ function VoiceRippleLab() {
   );
 }
 
+/* THE DESK ACROSS DEVICES (2026-10-01).
+ *
+ * The rest of this page renders one size, 390x844, because that was the phone
+ * the mobile work was specified against. The founder has now looked at the Desk
+ * on a real iPhone 13 mini and found the KPI grid cramped — "Complaints"
+ * truncated to "Complaint", "Spend, this month" to "Spend, this…" — and has a
+ * proposal for it. Whether that proposal is right depends on how much width the
+ * phone actually has, which differs by 50 points across the range they ship to.
+ * So: the shipping grid and the proposal, side by side, at three real sizes.
+ *
+ * These are logical points, which is what CSS sees — not the marketing inch.
+ */
+const DEVICES = [
+  { id: "iphone-13", name: "iPhone 13 / 14", inches: "6.1″", w: 390, h: 844 },
+  { id: "iphone-16-pro", name: "iPhone 16 Pro", inches: "6.3″", w: 402, h: 874 },
+  { id: "iphone-16-pro-max", name: "iPhone 16 Pro Max", inches: "6.9″", w: 440, h: 956 },
+];
+
+const KPI_VARIANTS = [
+  { id: "ships", label: "What ships now", q: "" },
+  { id: "wide", label: "Proposal · no Spend, Workflows full width", q: "&kpi=wide" },
+];
+
+/** One device, one variant, measured where it matters: does the label fit. */
+function DeskFrame({ device, variant, fixture }) {
+  const ref = useRef(null);
+  const [m, setM] = useState(null);
+  const read = () => {
+    try {
+      const doc = ref.current?.contentDocument;
+      if (!doc) return;
+      const grid = doc.querySelector('[data-testid="desk-kpi-grid"]');
+      const board = doc.querySelector('[data-testid="desk-board"]');
+      const slider = doc.querySelector('[data-testid="dex-slider"]');
+      if (!grid) return;
+      const gb = grid.getBoundingClientRect();
+      /* A label that has been cut off is the complaint this is here to settle,
+         so it is measured rather than eyeballed: scrollWidth past clientWidth
+         is the browser telling us the text did not fit. */
+      const clipped = [...grid.querySelectorAll("p,span")]
+        .filter((e) => !e.children.length && e.textContent.trim())
+        .filter((e) => e.scrollWidth > e.clientWidth + 1)
+        .map((e) => e.textContent.trim().slice(0, 22));
+      setM({
+        gridH: Math.round(gb.height),
+        boardH: board ? Math.round(board.getBoundingClientRect().height) : 0,
+        sliderTop: slider ? Math.round(slider.getBoundingClientRect().top) : 0,
+        clipped: [...new Set(clipped)],
+      });
+    } catch (e) { /* same-origin only; nothing to report if it is not ready */ }
+  };
+  useEffect(() => { const t = setInterval(read, 1200); return () => clearInterval(t); });
+  return (
+    <figure className="m-0 shrink-0">
+      <figcaption className="mb-1.5">
+        <span className="text-sm font-semibold">{device.name}</span>{" "}
+        <span className="text-xs text-muted-foreground">{device.inches} · {device.w}×{device.h}pt</span>
+        {m && (
+          <span className="mt-0.5 block text-[length:var(--text-label)] leading-4 text-muted-foreground">
+            grid {m.gridH}px · card {m.boardH}px
+            {m.clipped.length
+              ? <span className="text-danger-700"> · cut off: {m.clipped.join(", ")}</span>
+              : <span className="text-success-700"> · nothing cut off</span>}
+          </span>
+        )}
+      </figcaption>
+      <iframe
+        ref={ref}
+        title={`${device.id} ${variant.id}`}
+        src={`/inbox?fixture=${fixture}${variant.q}`}
+        onLoad={read}
+        className="nm-raised"
+        style={{ width: device.w, height: device.h, border: 0 }}
+      />
+    </figure>
+  );
+}
+
+function DeskAcrossDevices() {
+  const [fixture, setFixture] = useState(FIXTURE_NAMES[0]);
+  return (
+    <section className="mb-10" data-testid="lab-desk-devices">
+      <h2 className="font-heading text-lg font-semibold">The Desk, across devices</h2>
+      <p className="mb-3 mt-1 max-w-[70ch] text-sm text-muted-foreground">
+        The home screen at three real iPhone sizes, in what ships and in the proposal that drops
+        “Spend, this month” and gives Workflows the whole second row at the top row’s height.
+        Sizes are logical points, which is what CSS sees. “Cut off” is measured from the live DOM —
+        a label whose scrollWidth passes its clientWidth did not fit.
+      </p>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {FIXTURE_NAMES.map((f) => (
+          <button key={f} type="button" onClick={() => setFixture(f)}
+            className={`nm-btn rounded-pill px-3 py-1.5 text-sm ${fixture === f ? "ring-2 ring-primary" : ""}`}>
+            {FIXTURE_LABEL[f]}
+          </button>
+        ))}
+      </div>
+      {KPI_VARIANTS.map((v) => (
+        <div key={v.id} className="mb-6">
+          <p className="mb-2 text-sm font-semibold">{v.label}</p>
+          <div className="flex gap-5 overflow-x-auto pb-2">
+            {DEVICES.map((d) => <DeskFrame key={d.id} device={d} variant={v} fixture={fixture} />)}
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 export default function DesignLab() {
   const [screen, setScreen] = useState(SCREENS[0].path);
   const [states, setStates] = useState(FIXTURE_NAMES);
@@ -502,6 +611,7 @@ export default function DesignLab() {
 
   return (
     <div className="min-h-[calc(100vh/var(--ui-scale,1))] bg-background p-6" data-testid="design-lab">
+      {/* placed first: it is the question actually open right now */}
       <header className="mb-5">
         <h1 className="font-heading text-2xl font-bold tracking-tight">Design lab</h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -532,6 +642,8 @@ export default function DesignLab() {
           . The choice sticks for the tab.
         </p>
       </header>
+
+      <DeskAcrossDevices />
 
       <VoiceRippleLab />
 

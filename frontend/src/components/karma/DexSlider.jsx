@@ -88,6 +88,16 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
   const trackRef = React.useRef(null);
   const handleRef = React.useRef(null);
   const [dx, setDx] = React.useState(0);        // handle offset from centre, px
+  const lastDxRef = React.useRef(0);           // the same, readable in the same tick
+  /* `dragging` IS A REF FIRST AND STATE SECOND, and that is not a micro-
+     optimisation. onPointerMove opens with `if (!dragging) return`, and state
+     set in onPointerDown is not visible to a move that arrives in the same
+     tick — so a FAST FLICK (down, move, up before React re-renders) was
+     silently dropped and the control did nothing. Found by driving the real
+     slider in a browser rather than by a test, which is the only way a race
+     this shape shows up. The ref is the truth the handlers read; the state
+     exists only so the handle's CSS transition can be switched off mid-drag. */
+  const draggingRef = React.useRef(false);
   const [dragging, setDragging] = React.useState(false);
   const reachedRef = React.useRef(null);        // which end we last ticked for
 
@@ -115,7 +125,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
     return null;
   }, [travel]);
 
-  const settle = React.useCallback(() => { setDx(0); reachedRef.current = null; }, []);
+  const settle = React.useCallback(() => { lastDxRef.current = 0; setDx(0); reachedRef.current = null; }, []);
 
   /* WHERE THE WAVES ARE BORN, in the track's own CSS pixels — which is NOT the
      unit `dx` is in. `dx` comes from clientX and is therefore visual pixels,
@@ -144,12 +154,13 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
   const onPointerDown = (e) => {
     if (disabled) return;
     handleRef.current?.setPointerCapture?.(e.pointerId);
+    draggingRef.current = true;
     setDragging(true);
     reachedRef.current = null;
   };
 
   const onPointerMove = (e) => {
-    if (!dragging || disabled) return;
+    if (!draggingRef.current || disabled) return;
     const tr = trackRef.current;
     if (!tr) return;
     const r = tr.getBoundingClientRect();
@@ -159,6 +170,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
        finger or lags it. */
     const raw = e.clientX - (r.left + r.width / 2);
     const next = Math.max(-max, Math.min(max, raw));
+    lastDxRef.current = next;          // onPointerUp reads this, not `dx`
     setDx(next);
     const at = end(next);
     if (at && reachedRef.current !== at) { reachedRef.current = at; tick("arrive"); }
@@ -166,9 +178,10 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
   };
 
   const onPointerUp = () => {
-    if (!dragging) return;
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
     setDragging(false);
-    const at = end(dx);
+    const at = end(lastDxRef.current);
     settle();
     if (!at) return;                       // short of the end: nothing happened
     tick("fire");
@@ -195,8 +208,14 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
     <span
       aria-hidden="true"
       className={cn(
+        /* /70, not /45. Measured on the rendered control: foreground at 45%
+           over the well's own wash lands at 2.99:1 for a 12pt label, against
+           the 4.5:1 that accessibility.md › Contrast requires up to 17pt. At
+           70% it measures 5.6:1. The two ends still read as quieter than the
+           one the handle has arrived at, which is the only thing the lower
+           alpha was buying. */
         "pointer-events-none select-none text-[15px] font-medium transition-opacity duration-150",
-        at === side ? "text-foreground opacity-100" : "text-foreground/45",
+        at === side ? "text-foreground opacity-100" : "text-foreground/70",
         side === "ask" ? "pl-6" : "pr-6"
       )}
     >{children}</span>
@@ -252,7 +271,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          onPointerCancel={() => { setDragging(false); settle(); }}
+          onPointerCancel={() => { draggingRef.current = false; setDragging(false); settle(); }}
           onKeyDown={onKeyDown}
           className={cn(
             "kr-pop absolute left-1/2 grid h-14 w-14 place-items-center rounded-full",

@@ -154,7 +154,7 @@ function AttachedChip({ file, onRemove, disabled }) {
     return () => URL.revokeObjectURL(url);
   }, [isImage, file.file]);
   return (
-    <li className="flex h-8 max-w-[11rem] items-center gap-1.5 rounded-pill bg-white/15 pl-1 pr-0.5 text-[11px] text-white/85">
+    <li className="flex h-8 max-w-[11rem] items-center gap-1.5 rounded-pill bg-white/15 pl-1 pr-0.5 text-[14px] text-white/85">
       {src
         ? <img src={src} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />
         : (
@@ -300,7 +300,7 @@ function Bubble({ m, index }) {
                 key={i}
                 type="button"
                 onClick={() => m.onAsk?.(q)}
-                className="rounded-pill bg-white/10 px-2.5 py-1 text-left text-[11px] text-white/75 hover:bg-white/20"
+                className="rounded-pill bg-white/10 px-2.5 py-1 text-left text-[14px] text-white/75 hover:bg-white/20"
               >
                 {q}
               </button>
@@ -308,7 +308,7 @@ function Bubble({ m, index }) {
           </div>
         )}
         {m.missing?.length > 0 && (
-          <p className="mt-2 text-[11px] text-white/45">
+          <p className="mt-2 text-[14px] text-white/45">
             Missing: {m.missing.slice(0, 3).join(" · ")}
           </p>
         )}
@@ -361,6 +361,19 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
     setStages((s) => (s.includes(stage) ? s : [...s, stage]));
   }, [stage]);
   React.useEffect(() => { if (!reading) setStages([]); }, [reading]);
+
+  /* ESCAPE CLOSES IT. modality.md › Best practices: a modal view needs an
+     obvious way out, and on every Apple platform Escape is one of them. This
+     sheet is a motion.div rather than a Radix dialog, so it never had the
+     handler every other overlay in the app gets for free — pressed, nothing
+     happened at all. It matters on an iPad with a keyboard and on the web
+     build, and it costs four lines. */
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); onClose?.(); } };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
   // Read at render: the forge is not drawn at all under prefers-reduced-motion,
   // and the stage text stands alone.
   const reduceMotion = typeof window !== "undefined"
@@ -401,12 +414,15 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
           {/* Tapping the dimmed page behind closes — the standard way out of a
               sheet, kept because the X is at the top and thumbs are at the
               bottom. */}
-          <button
-            type="button"
-            aria-label="Close Dex"
+          {/* aria-hidden, not just tabIndex -1. VoiceOver still announced this
+              as a 390x844 "Close Dex" button sitting over the whole screen —
+              the first and largest thing in the rotor for a sheet whose real
+              controls are the X and the composer. Tapping the dimmed page still
+              closes; the X carries the accessible name. */}
+          <div
+            aria-hidden="true"
             onClick={onClose}
             className="absolute inset-0 h-full w-full cursor-default"
-            tabIndex={-1}
           />
 
           <div className="relative flex min-h-0 flex-1 flex-col pt-safe">
@@ -421,7 +437,7 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
               <span className="flex items-center gap-2 text-sm font-semibold text-white drop-shadow">
                 <Sparkle size={14} weight="fill" className="text-[hsl(var(--kr-gold))]" /> Dex
                 {channel && (
-                  <span className="rounded-pill bg-white/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/85">
+                  <span className="rounded-pill bg-white/15 px-2 py-0.5 text-[14px] font-semibold uppercase tracking-[0.08em] text-white/85">
                     {channel === "decide" ? "Decide" : "Ask"}
                   </span>
                 )}
@@ -431,7 +447,10 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                 onClick={onClose}
                 data-testid="dex-chat-close"
                 aria-label="Close"
-                className="kr-pop grid h-10 w-10 place-items-center rounded-full"
+                /* h-14: 40 CSS px is 32 REAL px once --ui-scale's 0.8 lands,
+                   against accessibility.md's 44x44 pt default for iOS. This
+                   sheet has room, so it takes the default. */
+                className="kr-pop grid h-14 w-14 place-items-center rounded-full"
               >
                 <X size={18} weight="bold" />
               </button>
@@ -459,7 +478,9 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                       ? "Say or type the decision."
                       : "Ask about anything in your workspace."}
                   </p>
-                  <p className="mt-1 text-xs text-white/45">
+                  {/* 14px and /70: 12px is 9.6pt after --ui-scale, under the
+                      11pt floor, and /45 on this material was not readable. */}
+                  <p className="mt-1 text-sm text-white/70">
                     {channel === "decide"
                       ? "Dex lines up the tasks for approval. Nothing is created until it's approved."
                       : "Dex answers from your data. Nothing is created."}
@@ -576,7 +597,7 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                 aria-label={plusOpen ? "Hide options" : "More ways to talk to Dex"}
                 aria-expanded={plusOpen}
                 onClick={() => setPlusOpen((v) => !v)}
-                className="app-plus-on-fab kr-frost grid h-11 w-11 place-items-center rounded-full"
+                className="app-plus-on-fab kr-frost grid h-14 w-14 place-items-center rounded-full"
               >
                 <motion.span animate={{ rotate: plusOpen ? 45 : 0 }} transition={SPRING} className="grid place-items-center">
                   <Plus size={19} weight="bold" />

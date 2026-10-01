@@ -82,7 +82,7 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
     <Link
       to="/workflows"
       data-testid={`${testid}-open`}
-      className="flex min-h-10 w-full items-center justify-center gap-1.5 rounded-pill bg-[hsl(var(--kr-action-bg,var(--kr-ink)))] px-4 py-2 text-[13px] font-medium leading-tight text-[hsl(var(--kr-action-fg,0_0%_100%))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
+      className="flex min-h-10 max-lg:min-h-14 w-full items-center justify-center gap-1.5 rounded-pill bg-[hsl(var(--kr-action-bg,var(--kr-ink)))] px-4 py-2 text-[13px] font-medium leading-tight text-[hsl(var(--kr-action-fg,0_0%_100%))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
     >
       Open Workflows
       <ArrowRight size={14} weight="bold" aria-hidden="true" className="kr-arrow shrink-0 transition-transform duration-200" />
@@ -205,7 +205,7 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
               disabled={busy || move.isPending}
               onClick={() => { setBusy(true); move.mutate(); }}
               title={nextUp.actionLabel}
-              className="kr-pop flex min-h-10 w-full items-center justify-center gap-1.5 rounded-pill px-4 py-2 text-center text-[13px] font-medium leading-tight text-foreground [text-wrap:balance] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline disabled:opacity-50"
+              className="kr-pop flex min-h-10 max-lg:min-h-14 w-full items-center justify-center gap-1.5 rounded-pill px-4 py-2 text-center text-[13px] font-medium leading-tight text-foreground [text-wrap:balance] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline disabled:opacity-50"
             >
               {move.isPending ? "Moving…" : nextUp.actionLabel}
             </button>

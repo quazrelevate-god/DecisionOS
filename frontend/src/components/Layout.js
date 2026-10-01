@@ -964,7 +964,12 @@ export default function Layout({ children }) {
                 to="/notifications"
                 data-testid="desk-topbar-bell"
                 aria-label={bellCount > 0 ? `Notifications, ${bellCount} need you` : "Notifications"}
-                className="relative -my-1.5 -mr-2 grid h-11 w-11 place-items-center rounded-full text-foreground/60 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
+                /* h-14 below lg: 44 CSS px is 35 REAL px under --ui-scale's 0.8, and the
+                   bell is the only control in the top bar — there is nothing
+                   beside it to crowd. accessibility.md › Offer sufficiently
+                   sized controls. Desktop keeps 44 CSS, which is already 44pt
+                   there. */
+                className="relative -my-1.5 -mr-2 grid h-11 w-11 max-lg:h-14 max-lg:w-14 place-items-center rounded-full text-foreground/60 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
               >
                 <Bell size={18} weight="regular" aria-hidden="true" />
                 {bellCount > 0 && (

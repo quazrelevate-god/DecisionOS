@@ -291,7 +291,10 @@ function DeskRow({ r, first, testid }) {
         <p title={r.title}
           className={`truncate text-[15px] font-medium leading-5 tracking-[-0.006em] lg:whitespace-normal lg:line-clamp-2 ${r.deferred ? "text-white" : "text-neutral-300"}`}>{r.title}</p>
         {(r.meta || r.deferred) && (
-          <p title={r.meta || undefined} className="truncate text-xs leading-4 text-neutral-500">
+          /* text-sm + neutral-400, measured: the supporting line was 12px
+             (9.6pt after --ui-scale) at 3.87:1 on the board's own ink, against
+             an 11pt floor and a 4.5:1 requirement. 14px is 11.2pt. */
+          <p title={r.meta || undefined} className="truncate text-sm leading-5 text-neutral-400">
             {r.deferred && <span className="font-medium text-neutral-300">Draft</span>}
             {r.deferred && r.meta ? " · " : ""}
             {r.meta}
@@ -302,7 +305,7 @@ function DeskRow({ r, first, testid }) {
           cross that used to sit between them are gone; the row is the link and
           the window it opens is where a decision is taken. */}
       <span className="flex shrink-0 items-center gap-2.5">
-        {r.amount && <span className="font-mono text-[13px] leading-5 text-neutral-400">{r.amount}</span>}
+        {r.amount && <span className="font-mono text-sm leading-5 text-neutral-300">{r.amount}</span>}
         <OpenButton onClick={(e) => { e.stopPropagation(); r.onOpen(); }} label={`Open: ${r.title}`} />
       </span>
     </div>
@@ -659,7 +662,7 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
             data-testid="desk-phone-more"
             onClick={onToggleExpanded}
             aria-expanded={showAll}
-            className="mt-1 flex h-11 w-full shrink-0 items-center justify-center gap-1 text-[13px] font-medium text-white/70 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-0"
+            className="mt-1 flex h-11 max-lg:h-14 w-full shrink-0 items-center justify-center gap-1 text-[13px] max-lg:text-sm font-medium text-white/70 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-0"
           >
             {showAll ? t("desk.show_fewer", "Show fewer") : t("desk.show_all", { count: rows.length, defaultValue: `Show all ${rows.length}` })}
             <CaretDown size={12} weight="bold" aria-hidden="true" className={showAll ? "rotate-180" : ""} />
@@ -1037,7 +1040,7 @@ export default function Desk() {
       <span className="inline-flex items-center justify-center gap-1.5">
         {label}
         {n > 0 && (phoneTab === key ? (
-          <span className="grid h-5 min-w-[1.25rem] place-items-center rounded-full bg-white/25 px-1 text-[11px] font-semibold tabular-nums text-white">
+          <span className="grid h-5 max-lg:h-6 min-w-[1.25rem] place-items-center rounded-full bg-white/25 px-1 text-[11px] max-lg:text-[14px] font-semibold tabular-nums text-white">
             {n}
           </span>
         ) : (

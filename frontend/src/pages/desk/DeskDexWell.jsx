@@ -76,6 +76,14 @@ const STATUS_LINE = {
    lg, as the old Chase-it pill and Brain circle were; below lg the app's own
    touch rule (index.css, --control-h-sm) lifts every button to 44px (MPWA-01
    §5.1). */
+/* DOOR_CIRCLE — the same circle, at the platform's default target.
+   accessibility.md › Offer sufficiently sized controls puts iOS at 44x44 pt
+   default, 28x28 pt minimum. CIRCLE is h-10 = 40 CSS px, and --ui-scale's 0.8
+   makes that 32 REAL pixels: over the minimum, well under the default, on a
+   full screen that has nothing else competing for the room. 3.5rem lands at
+   44.8. Only the door takes it; the well's floor is a packed row and changing
+   it there is a separate decision with its own layout to re-measure. */
+const DOOR_CIRCLE = "h-14 w-14";
 const CIRCLE =
   "kr-pop relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60 disabled:opacity-40";
 
@@ -773,8 +781,18 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
      every size (2026-09-21). */
   const floorTitle = (
     <div className="pointer-events-none min-w-0 flex-1 px-2 text-center">
-      <span className="block text-xs font-semibold tracking-wide text-foreground/75">Dex</span>
-      <span className="mt-0.5 block truncate text-[13px] leading-snug text-foreground/70">
+      {/* max-lg: 14px / 15px, not 12 / 13. accessibility.md › Use recommended
+         defaults puts the iOS minimum at 11 pt; --ui-scale's 0.8 turned 12px
+         into 9.6pt and 13px into 10.4pt, both under it. These land at 11.2
+         and 12.
+         BELOW lg ONLY, and that qualifier is the whole point: this floor is
+         SHARED with the desktop well, where --ui-scale is 1 and 12px is
+         already 12pt. Bumping it unscoped made the well's floor taller, which
+         made the hero taller, which took 91px off the well — caught by
+         verify:dex's "the well has not moved" at 1440, flag off. Desktop is
+         not in this audit's scope and does not move. */}
+      <span className="block text-xs font-semibold tracking-wide text-foreground/75 max-lg:text-sm">Dex</span>
+      <span className="mt-0.5 block truncate text-[13px] leading-snug text-foreground/70 max-lg:text-[15px]">
         {!canCapture ? "Ask an owner to turn on capture."
           : transcribing ? "Transcribing what you said…"
           : "Tell Dex what you decided."}
@@ -927,7 +945,7 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
               data-testid="dex-decide-close"
               onClick={() => onClose?.()}
               aria-label="Close"
-              className={cn(CIRCLE, "shrink-0")}
+              className={cn(CIRCLE, DOOR_CIRCLE, "shrink-0")}
             >
               <X size={18} weight="bold" aria-hidden="true" />
             </button>
@@ -938,8 +956,12 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
               either: that note is PAGE state, not door state, so it stays on
               the Desk where it can still be seen when the door is shut. */}
           <div className="grid min-h-0 flex-1 place-items-center">{doorMic}</div>
-          {/* Attach left, keyboard right — the well's own floor, spread. */}
-          <div className="flex shrink-0 items-center justify-between gap-3">{floor}</div>
+          {/* Attach left, keyboard right — the well's own floor, spread, with
+              both circles grown to the platform's 44pt default (see
+              DOOR_CIRCLE). The CSS reaches the two buttons rather than
+              threading a prop through `floor`, which the well shares. */}
+          <div className={cn("flex shrink-0 items-center justify-between gap-3",
+            "[&>button]:h-14 [&>button]:w-14")}>{floor}</div>
         </div>
       </div>,
       document.body

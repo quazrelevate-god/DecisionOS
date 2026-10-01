@@ -35,6 +35,17 @@ const PARTS = [
   { key: "late", label: "late", bar: "bg-kr-accent", dot: "bg-kr-accent" },
 ];
 
+/* THE TWO MOVES ARE ONE PAIR, so they are one recipe. They were written
+   separately and drifted: Approve measured 45 real px against Open Workflows'
+   39, which reads as a mistake rather than as a hierarchy. One fixed height for
+   both — equal, and no taller than the platform's 44pt target once --ui-scale's
+   0.8 lands — with the padding tightened so the pill hugs its label instead of
+   sprawling, and the label itself kept on one line with room either side. */
+const ACTION_PILL =
+  "flex h-10 max-lg:h-[3.5rem] w-full shrink-0 items-center justify-center gap-1.5 rounded-pill px-2.5 lg:px-4 "
+  + "text-center text-[13px] font-medium leading-tight "
+  + "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline";
+
 const REASON_CHIP = {
   stuck: "bg-amber-50 text-amber-800 ring-amber-100",
   late: "bg-rose-50 text-rose-700 ring-rose-100",
@@ -82,10 +93,15 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
     <Link
       to="/workflows"
       data-testid={`${testid}-open`}
-      className="flex min-h-10 max-lg:min-h-14 w-full items-center justify-center gap-1.5 rounded-pill bg-[hsl(var(--kr-action-bg,var(--kr-ink)))] px-4 py-2 text-[13px] font-medium leading-tight text-[hsl(var(--kr-action-fg,0_0%_100%))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
+      className={cn(ACTION_PILL,
+        "bg-[hsl(var(--kr-action-bg,var(--kr-ink)))] text-[hsl(var(--kr-action-fg,0_0%_100%))]")}
     >
-      Open Workflows
-      <ArrowRight size={14} weight="bold" aria-hidden="true" className="kr-arrow shrink-0 transition-transform duration-200" />
+      {/* The arrow is desktop's. In a 130px column it was the 14px that pushed
+          "Open Workflows" onto a second line while Approve sat on one — the
+          label is the affordance here, and a pill that wraps reads as cramped
+          however equal its height is. */}
+      <span className="whitespace-nowrap">Open Workflows</span>
+      <ArrowRight size={14} weight="bold" aria-hidden="true" className="kr-arrow hidden shrink-0 transition-transform duration-200 lg:block" />
     </Link>
   );
 
@@ -171,9 +187,17 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
           <>
             {/* The eyebrow and the reason share a line, so the card's name,
                 its stage and the move each keep a line of their own. */}
-            <div className="flex min-w-0 items-center justify-between gap-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Next up</p>
-              <span className={cn(CHIP, "shrink-0", REASON_CHIP[nextUp.reason] || REASON_CHIP.you)} data-testid={`${testid}-next-reason`}>
+            {/* THE CHIP WRAPS UNDER THE EYEBROW WHEN THE COLUMN IS NARROW.
+                `shrink-0` beside a `justify-between` eyebrow is fine at the
+                desktop width this was written for; on the phone the column is
+                103px and "Needs your sign-off" ran 28px PAST the tile's own
+                edge (measured, sparse fixture). flex-wrap lets it drop to its
+                own line, and min-w-0 + truncate means even a longer reason can
+                only ever use the width it has. */}
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1">
+              <p className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Next up</p>
+              <span className={cn(CHIP, "min-w-0 max-w-full truncate", REASON_CHIP[nextUp.reason] || REASON_CHIP.you)}
+                    title={nextUp.reasonLabel} data-testid={`${testid}-next-reason`}>
                 {nextUp.reasonLabel}
               </span>
             </div>
@@ -205,7 +229,7 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
               disabled={busy || move.isPending}
               onClick={() => { setBusy(true); move.mutate(); }}
               title={nextUp.actionLabel}
-              className="kr-pop flex min-h-10 max-lg:min-h-14 w-full items-center justify-center gap-1.5 rounded-pill px-4 py-2 text-center text-[13px] font-medium leading-tight text-foreground [text-wrap:balance] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline disabled:opacity-50"
+              className={cn(ACTION_PILL, "kr-pop text-foreground disabled:opacity-50")}
             >
               {move.isPending ? "Moving…" : nextUp.actionLabel}
             </button>

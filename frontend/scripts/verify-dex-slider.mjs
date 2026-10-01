@@ -76,6 +76,15 @@ for (const [w, h] of WIDTHS) {
     rest.x > 24 && (w - (rest.x + rest.width)) > 24,
     `${Math.round(rest.x)}px / ${Math.round(w - (rest.x + rest.width))}px`);
 
+  /* 2026-10-01, the founder's own review of the control on a phone. Three
+     claims that can only be checked mid-drag, which is why they live here and
+     not in a screenshot: the handle fills the well, it travels to the wall,
+     and the words get out of its way on the approach. */
+  const handleBox = await page.locator('[data-testid="dex-slider-handle"]').boundingBox();
+  check('the handle fills the well, bar a hair',
+    (track.height - handleBox.height) / 2 <= 6 && (track.height - handleBox.height) / 2 >= 2,
+    `${Math.round((track.height - handleBox.height) / 2)}px above and below`);
+
   const drag = async (toX, release = true) => {
     await page.mouse.move(rest.x + rest.width / 2, cy);
     await page.mouse.down();
@@ -93,6 +102,34 @@ for (const [w, h] of WIDTHS) {
     Math.abs((await page.locator('[data-testid="dex-slider-handle"]').boundingBox()).x - rest.x) <= 3);
   check('and nothing opened',
     (await page.locator('[data-testid="dex-chat"], [data-testid="dex-decide-overlay"]').count()) === 0);
+
+  // ── it goes all the way, and the words step aside ────────────────────────
+  const labelOpacity = () => page.evaluate(() =>
+    [...document.querySelectorAll('[data-testid="dex-slider"] span[aria-hidden="true"]')]
+      .filter((e) => /^(Ask|Decide)$/.test(e.textContent.trim()))
+      .map((e) => Number(getComputedStyle(e).opacity)));
+
+  const rest0 = await labelOpacity();
+  check('at rest the ends are named, legibly', rest0.length === 2 && rest0.every((o) => o > 0.9));
+
+  await drag(track.x + track.width / 2 + 40, false);     // part way, held
+  const mid = await labelOpacity();
+  await page.mouse.move(track.x + track.width - 2, cy, { steps: 8 });
+  /* Let the last of the eight moves actually render. Without this the box is
+     read somewhere around the sixth step and the handle looks ~29px short of a
+     wall it does reach — a measurement artefact, not the control. */
+  await page.waitForTimeout(200);
+  const far = await labelOpacity();
+  const atEnd = await page.locator('[data-testid="dex-slider-handle"]').boundingBox();
+  check('the words fade progressively on the approach',
+    mid.every((o) => o < 0.95) && far.every((o) => o < mid[0]),
+    `${rest0[0].toFixed(2)} -> ${mid[0].toFixed(2)} -> ${far[0].toFixed(2)}`);
+  check('…and are gone by the time it commits', far.every((o) => o <= 0.05));
+  check('the handle reaches the wall, with nothing held back',
+    Math.abs((atEnd.x + atEnd.width) - (track.x + track.width)) <= 1,
+    `${Math.round((track.x + track.width) - (atEnd.x + atEnd.width))}px short`);
+  await page.mouse.up();
+  await page.waitForTimeout(600);
 
   // ── right: the decision door ──────────────────────────────────────────────
   await drag(track.x + track.width - 2);

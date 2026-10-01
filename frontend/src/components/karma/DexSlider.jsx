@@ -45,7 +45,7 @@
  */
 import * as React from "react";
 import { useTranslation } from "react-i18next";
-import { Sparkle, ChatCircleDots, Waveform } from "@phosphor-icons/react";
+import { Aperture, ChatCircle, Waveform } from "@phosphor-icons/react";
 import { VoiceRipple } from "./VoiceRipple";
 import { cn } from "@/lib/utils";
 
@@ -114,7 +114,11 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
        the stop sits 1.25x further away than the track is wide and the handle
        tops out at 89% of a target it can never reach — measured, before this
        line was what it is. Both sides of the comparison come from rects now. */
-    return Math.max(0, (tr.getBoundingClientRect().width - h.getBoundingClientRect().width) / 2 - 4);
+    /* NO INSET. There used to be a 4px tuck at each end, which left the handle
+       stopping just short of the wall and reading as a control that had not
+       quite finished its travel. The founder asked for the extreme edge, so
+       the only thing between the handle and the wall is the handle. */
+    return Math.max(0, (tr.getBoundingClientRect().width - h.getBoundingClientRect().width) / 2);
   }, []);
 
   const end = React.useCallback((x) => {
@@ -202,21 +206,30 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
      room you are opening, so that a drag begun by accident can be read and
      abandoned before it commits. */
   const heading = dx < -2 ? "ask" : dx > 2 ? "decide" : null;
-  const Glyph = heading === "ask" ? ChatCircleDots : heading === "decide" ? Waveform : Sparkle;
+  /* HOLLOW, AND ROUND. The filled sparkle read as a sticker on a white disc at
+     this size — the founder's word was "not nice". These are all outline forms
+     that answer the handle's own circle: an aperture at rest, the chat bubble
+     carried left, the waveform carried right. Outline weight throughout so the
+     glyph is a drawing on the surface rather than a second shape stuck to it. */
+  const Glyph = heading === "ask" ? ChatCircle : heading === "decide" ? Waveform : Aperture;
 
+  /* THE WORDS GET OUT OF THE WAY. The handle now travels to the wall, so it
+     arrives exactly where the labels are printed; they fade on approach rather
+     than being covered. It is also the right feeling — the chrome that told you
+     what the control does has done its job by the time you are committing.
+     Driven off `pct` (0..1 of the travel) so it is continuous with the finger
+     and reverses on the way back, with no transition fighting the drag. */
   const Label = ({ side, children }) => (
     <span
       aria-hidden="true"
+      style={{ opacity: Math.max(0, 1 - pct * 1.25) }}
       className={cn(
         /* /70, not /45. Measured on the rendered control: foreground at 45%
            over the well's own wash lands at 2.99:1 for a 12pt label, against
            the 4.5:1 that accessibility.md › Contrast requires up to 17pt. At
-           70% it measures 5.6:1. The two ends still read as quieter than the
-           one the handle has arrived at, which is the only thing the lower
-           alpha was buying. */
-        "pointer-events-none select-none text-[15px] font-medium transition-opacity duration-150",
-        at === side ? "text-foreground opacity-100" : "text-foreground/70",
-        side === "ask" ? "pl-6" : "pr-6"
+           70% it measures 6.78:1. */
+        "pointer-events-none select-none text-[15px] font-medium text-foreground/70",
+        side === "ask" ? "pl-7" : "pr-7"
       )}
     >{children}</span>
   );
@@ -255,9 +268,9 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
         <span
           aria-hidden="true"
           className={cn(
-            "pointer-events-none absolute inset-y-1.5 w-28 rounded-pill transition-opacity duration-150",
+            "pointer-events-none absolute inset-y-0 w-32 rounded-pill transition-opacity duration-150",
             at ? "opacity-100" : "opacity-0",
-            at === "ask" ? "left-1.5" : "right-1.5"
+            at === "ask" ? "left-0" : "right-0"
           )}
           style={{ background: "color-mix(in oklab, var(--brand-600) 14%, transparent)" }}
         />
@@ -274,21 +287,31 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
           onPointerCancel={() => { draggingRef.current = false; setDragging(false); settle(); }}
           onKeyDown={onKeyDown}
           className={cn(
-            "kr-pop absolute left-1/2 grid h-14 w-14 place-items-center rounded-full",
+            /* THE HANDLE IS THE CONTROL, so it is the size of the control.
+               h-14 left 40px of empty channel above and below it and read as a
+               small knob rattling around in a big groove. 5.375rem in a 6rem
+               track leaves 5px top and bottom — enough to see that it sits IN
+               something, and no more. */
+            "kr-pop absolute left-1/2 grid h-[5.375rem] w-[5.375rem] place-items-center rounded-full",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
             "disabled:opacity-50 touch-none"
           )}
           style={{
-            transform: `translateX(calc(-50% + ${dx}px))`,
+            /* dx / uiScale, and the division is the whole bug. `dx` comes from
+               clientX, so it is VISUAL pixels; `translateX` is applied inside
+               the app's own `zoom: .8`, so it is read as CSS pixels. Writing
+               dx straight in moved the handle 80% of the distance the logic had
+               already committed to — the control reported itself at the end
+               (pct 100, the labels fully faded, the haptic fired) while the
+               handle visibly sat 29px short of the wall. Caught by asserting
+               the handle's own rect against the track's, which is the only
+               check that could have caught it: every internal number was
+               already self-consistent and wrong together. */
+            transform: `translateX(calc(-50% + ${dx / (uiScale || 1)}px))`,
             transition: dragging ? "none" : "transform 220ms cubic-bezier(.22,1,.36,1)",
           }}
         >
-          <Glyph
-            size={24}
-            weight={heading ? "regular" : "fill"}
-            aria-hidden="true"
-            className="text-foreground/80"
-          />
+          <Glyph size={34} weight="regular" aria-hidden="true" className="text-foreground/75" />
         </button>
 
         {/* What a screen reader hears while the handle moves. */}

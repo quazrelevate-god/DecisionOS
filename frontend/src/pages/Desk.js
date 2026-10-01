@@ -116,7 +116,7 @@ const DOCK_SEAM = 4; */
    min-h — no !important, no fork of the component, and `lg:` is untouched so
    desktop keeps every pixel it had. max-lg: only — this app allows xs and lg
    breakpoints inside .app-shell and nothing between. */
-const PHONE_TILE = "max-lg:min-h-0 max-lg:p-2.5 max-lg:rounded-[1.1rem]";
+const PHONE_TILE = "kr-kpi-tile max-lg:min-h-0 max-lg:p-2.5 max-lg:rounded-[1.1rem]";
 /* ASK-35 1.4 — the inner card's material, lifted from the recipe the desktop
    top nav shelf is cut from (INK_PILL / .kr-navplate::before) so the two stay
    the same black. Only the fill and the lit top edge: INK_PILL's drop shadow

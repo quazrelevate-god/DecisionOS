@@ -160,8 +160,7 @@ function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
 export function FloatingDock({
   user, onMore, moreOpen = false,
   dexActive = false, dexLevels = [], dexLevelsRef, dexMode = "voice", dexWaveState = "idle",
-  dexDraft = "", onDexDraft, onDexSubmit, dexTranscribing = false, dexChannel = null,
-}) {
+  dexDraft = "", onDexDraft, onDexSubmit, dexTranscribing = false, dexChannel = null, wide }) {
   const { t } = useTranslation();
   const location = useLocation();
   const slots = React.useMemo(() => dockSlots(user, t), [user, t]);
@@ -200,7 +199,12 @@ export function FloatingDock({
       // MPWA-14: `app-dock-left` anchors to the centred shell's left edge, so on
       // a wide display the pill hugs the column instead of the viewport corner.
       // On a phone the offset collapses to the original 1rem.
-      className="lg:hidden fixed app-dock-left app-dock-right z-[10000] bottom-safe-4"
+      /* DEX-SLIDER Part 1 — `wide` is for the one page with no Ask circle
+         beside the bar (the Desk, once the slider owns Ask). It swaps the
+         right anchor for the left one's expression so the pill centres.
+         Everywhere else this prop is absent and nothing moves. */
+      className={cn("lg:hidden fixed app-dock-left z-[10000] bottom-safe-4",
+        wide ? "app-dock-right-wide" : "app-dock-right")}
       data-testid="floating-dock"
       data-mobile-chrome=""
       aria-label={t("nav.primary", "Primary")}

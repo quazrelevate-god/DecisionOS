@@ -63,6 +63,8 @@ import { StaleStamp } from "../components/mobile/StaleStamp";
 // ASK-33 — the well on the left column's floor is Dex's Decide door. It owns
 // the capture hooks and hosts the repurposed InsightWell container itself.
 import { DeskDexWell } from "./desk/DeskDexWell";
+// DEX-SLIDER Part 1 — the phone Desk's new order sits behind this.
+import { DEX_SLIDER } from "../lib/flags";
 // 2026-09-14, founder — the Task approvals column opens My Work's task
 // drawer HERE, on the Desk, instead of sending the founder to My Work.
 import { TaskCard } from "./MyWork";
@@ -95,7 +97,15 @@ const POP_SEAM = 10;
    bar floats on a 16px inset below it, so the gap the eye sees is never this
    number alone; on a 6.1" screen the other four pixels are the difference
    between three rows that fit and three rows that make the page scroll. */
-const DOCK_SEAM = 4;
+/* DEX-SLIDER Part 1 — DEAD, and kept so the next person does not go looking
+   for the measurement it implies. Nothing reads it: the card's resting height
+   is --desk-phone-body, which is three rows, their separators and the show-all
+   slot and has no dock term in it at all; and the POP measurement takes the
+   dock's live top off getBoundingClientRect, so it stays correct now the card
+   sits above the slider instead of above the bar. The reorder needed no change
+   here, which is worth saying rather than leaving a constant that suggests it
+   did.
+const DOCK_SEAM = 4; */
 /* ASK-35 1.4 — the inner card's material, lifted from the recipe the desktop
    top nav shelf is cut from (INK_PILL / .kr-navplate::before) so the two stay
    the same black. Only the fill and the lit top edge: INK_PILL's drop shadow
@@ -1100,7 +1110,13 @@ export default function Desk() {
            every phone, shrinking only on the very shortest. Nothing grows into
            the freed space; the top-aligned stack just slides up when the demo
            banner closes. */
-        ? "min-h-[13rem] h-[17rem] flex flex-col"
+        /* DEX-SLIDER Part 1 — ON the flag the Dex control is the slider's
+           height and sits BELOW the card, next to the dock; OFF it is the
+           17rem well in its old place. The old string is kept verbatim as the
+           second branch — this is the whole way back. */
+        ? (DEX_SLIDER
+            ? "order-3 h-[var(--desk-slider-h)] shrink-0 flex flex-col lg:order-none"
+            : "min-h-[13rem] h-[17rem] flex flex-col")
         : "order-4 min-h-[128px] max-lg:flex max-lg:flex-col lg:order-none lg:min-h-0 lg:flex-1"
     )}
     testid="desk-insight"
@@ -1180,7 +1196,14 @@ export default function Desk() {
           the well, so eight pixels each is 24 handed to the sheet — and on a
           6.1" screen with a 47px notch inset and a 34px home indicator, 24px is
           what a row of the list costs. Desktop is untouched. */}
-      <div className="kr-hero flex flex-col gap-3 lg:grid lg:shrink-0 lg:grid-cols-[minmax(0,29fr)_minmax(0,45fr)] lg:gap-20">
+      <div className={cn("kr-hero flex flex-col gap-3 lg:grid lg:shrink-0 lg:grid-cols-[minmax(0,29fr)_minmax(0,45fr)] lg:gap-20",
+          /* DEX-SLIDER Part 1 — THE TILES TAKE THE SLACK. The slider gives back
+             about 150px that the 17rem well was holding. Rather than type a new
+             tile height (which would be right on one phone and wrong on the
+             next), the hero takes the leftover and the tile row grows inside
+             it, floored at its own resting height so the shortest phones never
+             crush it. lg is untouched. */
+          DEX_SLIDER && "order-1 flex-1 min-h-0 lg:order-none lg:flex-none")}>
         {/* LEFT column — greeting, the score row, the well on the floor.
             KR-14.2 · MOBILE — display:contents so its children flow into
             the outer column and the KPI strip can slot between them. */}
@@ -1339,7 +1362,14 @@ export default function Desk() {
             greeting above it. Anything it covers fades; anything it does not,
             does not. */}
         <div
-          className="order-3 grid grid-cols-2 gap-2 lg:hidden"
+          className={cn("order-3 grid grid-cols-2 gap-2 lg:hidden",
+            /* DEX-SLIDER Part 1 — the tiles absorb what the slider gave back.
+               `flex-1` is wrong here (this is a grid child of a flex column, so
+               it takes the hero's leftover) and `auto-rows-fr` splits it evenly
+               between the two rows rather than all of it to the first. The
+               floor is the row's own resting height, measured at 390x844, so a
+               360x640 phone shows the tiles exactly as it does today. */
+            DEX_SLIDER && "flex-1 auto-rows-fr min-h-[var(--desk-kpi-floor)]")}
          
           data-testid="desk-kpi-strip"
         >
@@ -1568,6 +1598,11 @@ export default function Desk() {
         } : undefined}
         className={cn(
           "kr-desk-board grid gap-5 lg:-mx-3 lg:-mb-2 lg:min-h-0 lg:flex-1 lg:gap-0 lg:grid-rows-[minmax(0,1fr)]",
+          /* DEX-SLIDER Part 1 — the card and the Dex control swap places on a
+             phone: the card sits directly on the slider, the slider directly
+             on the dock. Order only — the card is the same card, the same
+             three rows, the same pop. lg keeps its own order entirely. */
+          DEX_SLIDER && "order-2 shrink-0 lg:order-none",
           showDecisions && "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]",
           /* PILOT — the card stays its minimal content height on a phone (it does
              NOT grow to fill). The stack is top-aligned, so closing the demo

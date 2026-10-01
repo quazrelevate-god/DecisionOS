@@ -584,6 +584,15 @@
     .app-dock-right {
         right: max(calc(1rem + 4.75rem), calc(var(--app-shell-gap) + 1rem + 4.75rem));
     }
+    /* DEX-SLIDER Part 1 — the dock with NO Ask circle beside it. On the Desk
+       the circle has gone (the slider's left end is Ask now), so the 4.75rem
+       the bar was holding back for it is dead space and the pill sits off
+       centre. This is the same expression as .app-dock-left, so the two edges
+       match and the bar centres itself. Every other phone page keeps
+       .app-dock-right and keeps the circle. */
+    .app-dock-right-wide {
+        right: max(1rem, calc(var(--app-shell-gap) + 1rem));
+    }
     .app-fab-right {
         right: max(1rem, calc(var(--app-shell-gap) + 1rem));
     }
@@ -666,6 +675,17 @@
    box grows with the type it is holding. The hairlines stay in px because a
    hairline is a hairline. */
 :root {
+    /* DEX-SLIDER Part 1 — the Dex control's height on a phone once it is a
+       slider rather than a well. The well was a fixed 17rem because it held a
+       ripple that wanted a square; the slider holds a 56px handle on a track
+       with a word at each end, and 7rem is that plus its own padding with the
+       labels on their own line. The leftover goes to the KPI tiles. */
+    --desk-slider-h: 7rem;
+    /* The floor under those tiles: their own resting content height, measured
+       at 390x844 (77px for the 2x2 row). They may grow into whatever the
+       slider gives back, but never below this, or the shortest phones crush
+       them. */
+    --desk-kpi-floor: 4.8125rem;
     --desk-phone-row: calc(2.75rem + 2 * 0.25rem);
     --desk-phone-body: calc(3 * var(--desk-phone-row) + 2px + 4px + 2.75rem);
 }

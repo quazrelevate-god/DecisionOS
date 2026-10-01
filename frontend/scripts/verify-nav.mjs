@@ -9,6 +9,11 @@
 import { chromium } from 'playwright';
 import { signIn } from './lib/auth.mjs';
 
+/* DEX-SLIDER — the suite asserts whichever contract the flag is on, because
+   both paths stay alive and both have to keep passing. flags.js is plain ESM
+   with no JSX and no CSS, so it imports straight into node. */
+import { DEX_SLIDER } from '../src/lib/flags.js';
+
 const BASE = process.env.AUDIT_BASE || 'http://localhost:3000';
 const results = [];
 const check = (name, pass, detail = '') => {
@@ -85,6 +90,26 @@ check('dock floats off the left edge', pill.x >= 12, `${Math.round(pill.x)}px`);
 const pillOwn = await own(page.locator('[data-testid="floating-dock"] > div'));
 check('dock is 72px tall', pillOwn.h === 72, `${pillOwn.h}px`);
 
+/* DEX-SLIDER Part 1 — THE CIRCLE IS NOT ON THE DESK ANY MORE. The slider's
+   left end is Ask there, so a second door to the same room was one too many.
+   It is unchanged on every other phone page, so its geometry is measured on
+   one of those, and the Desk gets its own two checks below. */
+const pillRightGap = vw - (pill.x + pill.width);
+if (DEX_SLIDER) {
+  check('the Desk has no Ask circle', (await page.locator('[data-testid="dex-fab"]').count()) === 0);
+  /* With no circle beside it the bar takes the width back, symmetrically. */
+  check('the Desk dock is centred', Math.abs(pillRightGap - pill.x) <= 2,
+    `${Math.round(pill.x)}px left vs ${Math.round(pillRightGap)}px right`);
+  /* Measure the circle where it still lives. */
+  await page.goto(`${BASE}/my-work`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-testid="dex-fab"]', { timeout: 10000 });
+  await page.waitForTimeout(400);
+} else {
+  check('the Desk keeps its Ask circle', (await page.locator('[data-testid="dex-fab"]').count()) === 1);
+  check('the Desk dock holds the circle its clearance', pillRightGap > pill.x,
+    `${Math.round(pill.x)}px left vs ${Math.round(pillRightGap)}px right`);
+}
+
 // Dex FAB — separate circle, bottom-right, same baseline, 12px+ from the pill
 const fab = await page.locator('[data-testid="dex-fab"]').boundingBox();
 const fabOwn = await own(page.locator('[data-testid="dex-fab"]'));
@@ -96,10 +121,17 @@ check('Dex FAB is bottom-right', vw - (fab.x + fab.width) <= 20 && fab.x > vw / 
 const K = await toOwn(page);
 const centreGap = ((fab.y + fab.height / 2) - (pill.y + pill.height / 2)) * K;
 check('Dex FAB is centred on the dock', Math.abs(centreGap) <= 2, `${centreGap.toFixed(1)}px off`);
-check('Dex FAB clears the pill by >= 12px', (fab.x - (pill.x + pill.width)) * K >= 12,
-  `${((fab.x - (pill.x + pill.width)) * K).toFixed(1)}px`);
+const pillHere = await page.locator('[data-testid="floating-dock"] > div').boundingBox();
+check('Dex FAB clears the pill by >= 12px', (fab.x - (pillHere.x + pillHere.width)) * K >= 12,
+  `${((fab.x - (pillHere.x + pillHere.width)) * K).toFixed(1)}px`);
 check('Dex FAB is labelled "Dex" for screen readers',
   (await page.locator('[data-testid="dex-fab"]').getAttribute('aria-label')) === 'Dex');
+
+/* Back to the Desk: everything below is about the active slot, and the active
+   slot is the page you are on. */
+await page.goto(`${BASE}/inbox`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('[data-testid="floating-dock"]', { timeout: 10000 });
+await page.waitForTimeout(400);
 
 // active state uses three cues: fill weight + colour + label
 const active = page.locator('[data-testid="dock-desk"]');
@@ -308,7 +340,9 @@ check('the Desk slot is the active one after the redirect',
 // (scripts/verify-dex.mjs covers that side).
 const dexBadge = async () =>
   (await page.locator('[data-testid="dex-chat"] span.rounded-pill').first().innerText().catch(() => '')).trim().toLowerCase();
-await page.goto(`${BASE}/inbox`, { waitUntil: 'domcontentloaded' });
+/* DEX-SLIDER Part 1 — driven from the page that still has the circle. What it
+   opens is unchanged; only where it is pressed from moved. */
+await page.goto(`${BASE}/${DEX_SLIDER ? 'my-work' : 'inbox'}`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('[data-testid="dex-fab"]', { timeout: 8000 });
 await page.waitForTimeout(300);
 await page.locator('[data-testid="dex-fab"]').click();

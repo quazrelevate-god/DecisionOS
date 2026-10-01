@@ -45,6 +45,8 @@ import WelcomeMemberCard from "./auth/WelcomeMemberCard";
 // MPWA-03: mobile navigation is the floating dock + All Apps panel. The
 // edge-to-edge tab bar and the hamburger drawer are both gone below lg.
 import { FloatingDock } from "./mobile/FloatingDock";
+// DEX-SLIDER Part 1 — the Desk trades its Ask circle for the slider's left end.
+import { DEX_SLIDER } from "../lib/flags";
 import { AllAppsPanel } from "./mobile/AllAppsPanel";
 import { DexFab } from "./mobile/DexFab";
 import { DexChat } from "./mobile/DexChat";
@@ -269,6 +271,12 @@ export default function Layout({ children }) {
   // branch are gone, and index.js clears any saved "dark". This class now
   // belongs to the Dex room alone.
   const dexRoute = location.pathname.startsWith("/brain") || location.pathname.startsWith("/dex");
+  /* DEX-SLIDER Part 1 — the Desk, and only the Desk. The slider's left end IS
+     Ask there, so a second way in beside the bar is one too many; every other
+     phone page keeps the circle, because asking about the page you are on is
+     the whole point of it. /inbox is the Desk's route (App.js); "/" and "/app"
+     resolve to it or to /my-work, so they are not it. */
+  const deskHasSlider = DEX_SLIDER && location.pathname.startsWith("/inbox");
   const wantDark = dexRoute;
   const lastDark = useRef(null);
   useEffect(() => {
@@ -1047,6 +1055,9 @@ export default function Layout({ children }) {
           which is what `pb-dock` on main pays for), plus Dex as a separate
           64px circle on the same baseline. Desktop keeps its sidebar. */}
       <FloatingDock
+        /* With no circle beside it the bar centres itself (index.css,
+           .app-dock-right-wide). Everywhere else the anchoring is untouched. */
+        wide={deskHasSlider}
         user={user}
         onMore={() => setAllAppsOpen(true)}
         moreOpen={allAppsOpen}
@@ -1091,6 +1102,12 @@ export default function Layout({ children }) {
           sheet was only a receipt; DexChat is a transcript you can ask into,
           type into and attach to, so there is something worth opening. Voice
           still starts one tap in, from the mic inside it. */}
+      {/* DEX-SLIDER Part 1 — NOT ON THE DESK. The slider's left end opens the
+          same Ask sheet, so the circle would be a second door to one room.
+          It is removed from this page only — `deskHasSlider` is false on My
+          Work, Finance, CRM and the rest, where the circle is exactly as it
+          was. With the flag off it is everywhere again, Desk included. */}
+      {!deskHasSlider && (
       <DexFab
         /* ASK-33 Phase 4 — closed, the FAB opens Dex in ASK: one tap, no
            picker, no scrim (KM-54's two doors collapsed; see DexFab.jsx). Open,
@@ -1105,6 +1122,7 @@ export default function Layout({ children }) {
         onStop={() => dex.stopRecording()}
         intent={dexOpen ? chat.fabIntent : "sparkle"}
       />
+      )}
       <AllAppsPanel
         open={allAppsOpen}
         onClose={() => setAllAppsOpen(false)}

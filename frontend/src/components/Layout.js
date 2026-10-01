@@ -51,6 +51,8 @@ import { AllAppsPanel } from "./mobile/AllAppsPanel";
 import { DexFab } from "./mobile/DexFab";
 import { DexChat } from "./mobile/DexChat";
 import { HeaderSlotContext } from "./mobile/HeaderSlot";
+// DEX-SLIDER Part 2 — the Desk's slider opens Ask, which lives up here.
+import { DexDoorsContext } from "./mobile/DexDoors";
 import { useDexConversation } from "../hooks/useDexConversation";
 import { isReading } from "../lib/dexOutcome";
 import { toastDexOutcome } from "../lib/dexOutcomeToast";
@@ -277,6 +279,14 @@ export default function Layout({ children }) {
      the whole point of it. /inbox is the Desk's route (App.js); "/" and "/app"
      resolve to it or to /my-work, so they are not it. */
   const deskHasSlider = DEX_SLIDER && location.pathname.startsWith("/inbox");
+
+  /* The doors handed down to the page. Ask is exactly what the circle opened —
+     same sheet, same channel, same conversation — so the slider is a second
+     way to the same room and not a second room. Memoised so a page that reads
+     it does not re-render on every tick of Layout's own state. */
+  const dexDoors = useMemo(() => ({
+    openAsk: () => { setDexChannel("ask"); setDexOpen(true); },
+  }), []);
   const wantDark = dexRoute;
   const lastDark = useRef(null);
   useEffect(() => {
@@ -644,6 +654,7 @@ export default function Layout({ children }) {
      with the theme instead of snapping — see .app-sky::before. */
   return (
     <HeaderSlotContext.Provider value={isMobileShell ? headerSlot : null}>
+    <DexDoorsContext.Provider value={isMobileShell ? dexDoors : null}>
     {/* ASK-43 — the phone's shell divides by the scale too. Viewport units are
         not divided by CSS zoom, so at 0.8 a bare 100dvh paints at 80% of the
         screen and the app stops short of the bottom; the desktop half of this
@@ -1168,6 +1179,7 @@ export default function Layout({ children }) {
         </div>
       </BottomSheet>
     </div>
+    </DexDoorsContext.Provider>
     </HeaderSlotContext.Provider>
   );
 }

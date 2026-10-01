@@ -65,6 +65,8 @@ import { StaleStamp } from "../components/mobile/StaleStamp";
 import { DeskDexWell } from "./desk/DeskDexWell";
 // DEX-SLIDER Part 1 — the phone Desk's new order sits behind this.
 import { DEX_SLIDER } from "../lib/flags";
+import { DexSlider } from "../components/karma/DexSlider";
+import { useDexDoors } from "../components/mobile/DexDoors";
 // 2026-09-14, founder — the Task approvals column opens My Work's task
 // drawer HERE, on the Desk, instead of sending the founder to My Work.
 import { TaskCard } from "./MyWork";
@@ -809,6 +811,8 @@ export default function Desk() {
      feed and the task list the KPI tiles read, so the row leaves the column
      the moment it is signed off. */
   const qc = useQueryClient();
+  // DEX-SLIDER Part 2 — Ask lives in Layout; the slider reaches it from here.
+  const doors = useDexDoors();
   /* JOURNEY-1 J13 — on a slow line the phone's saved copy stands in for the
      server after 3 s (service-worker.js), and the Desk used to show those
      numbers as if they were live. Now it says when they are from. */
@@ -1110,13 +1114,10 @@ export default function Desk() {
            every phone, shrinking only on the very shortest. Nothing grows into
            the freed space; the top-aligned stack just slides up when the demo
            banner closes. */
-        /* DEX-SLIDER Part 1 — ON the flag the Dex control is the slider's
-           height and sits BELOW the card, next to the dock; OFF it is the
-           17rem well in its old place. The old string is kept verbatim as the
-           second branch — this is the whole way back. */
-        ? (DEX_SLIDER
-            ? "order-3 h-[var(--desk-slider-h)] shrink-0 flex flex-col lg:order-none"
-            : "min-h-[13rem] h-[17rem] flex flex-col")
+        /* DEX-SLIDER — untouched. With the flag ON the slider takes this
+           slot and the well is not rendered at all; with it OFF this is the
+           17rem well exactly where it has always been. */
+        ? "min-h-[13rem] h-[17rem] flex flex-col"
         : "order-4 min-h-[128px] max-lg:flex max-lg:flex-col lg:order-none lg:min-h-0 lg:flex-1"
     )}
     testid="desk-insight"
@@ -1528,7 +1529,21 @@ export default function Desk() {
           card is the last thing above the dock. Only the ORDER changes: the
           well still takes whatever height is left over (flex-1) and the card
           is still the fixed three rows it has been since ASK-46. */}
-      {isMobile && dexWell}
+      {/* DEX-SLIDER Part 2 — the slider takes the control's slot on a phone.
+          The well is NOT deleted: it is the other branch of the flag and
+          renders exactly as it always has when DEX_SLIDER is off. */}
+      {isMobile && (DEX_SLIDER ? (
+        <div className="order-3 flex h-[var(--desk-slider-h)] shrink-0 items-center px-1 lg:order-none"
+             data-testid="desk-insight">
+          <DexSlider
+            onAsk={() => doors?.openAsk?.()}
+            /* Part 3 builds the full-screen decision door this end opens.
+               Until that commit lands this end is deliberately inert rather
+               than wired to something it is about to replace. */
+            onDecide={() => {}}
+          />
+        </div>
+      ) : dexWell)}
 
       {/* ASK-47 — NOTHING ELSE MOVES. The card goes `position: fixed` when it
           pops, which takes it out of the page's column; this holds its place at

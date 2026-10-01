@@ -148,92 +148,68 @@ for (const [w, h] of WIDTHS) {
   await page.mouse.up();
   await page.waitForTimeout(600);
 
-  // ── right: the decision door ──────────────────────────────────────────────
+  /* ── right: THE TRACK IS THE RECORDING SURFACE ───────────────────────────
+     The full-screen door is gone (2026-10-02). It was the Desk blurred behind
+     a centred mic with attach and a keyboard in the corners; the founder's
+     redesign repurposes the slider itself, which is the same move the dock
+     already makes for Ask — the bar you already have becomes Dex rather than a
+     second one being drawn over it (KM-26). So there is no overlay to assert,
+     no screen to measure and nothing to dismiss: the handle parks at the stop,
+     the track draws DexWave, and pressing the handle stops and sends.
+     RETIRED HERE: dex-decide-overlay, dex-decide-close, and the door's copies
+     of desk-dex-ripple / desk-dex-attach / desk-dex-keyboard. The well still
+     carries all of those and verify:dex measures them there. */
   await drag(track.x + track.width - 2);
-  check('a full drag right opens the door', (await page.locator('[data-testid="dex-decide-overlay"]').count()) === 1);
-  const ov = await box('dex-decide-overlay');
-  check('it is the whole screen', ov.width >= w - 1 && ov.height >= h - 1);
-  const inOverlay = (t) => page.locator(`[data-testid="dex-decide-overlay"] [data-testid="${t}"]`).count();
-  check('the mic and its ripple are the centre', (await inOverlay('desk-dex-ripple')) === 1);
-  check('attach kept its testid', (await inOverlay('desk-dex-attach')) === 1);
-  check('the keyboard kept its testid', (await inOverlay('desk-dex-keyboard')) === 1);
-  check('there is an X to cancel', (await page.locator('[data-testid="dex-decide-close"]').count()) === 1);
-  /* env(safe-area-inset-top) is 0 in a browser, so a pixel threshold would only
-     ever measure the base padding. What is checkable here is that the inset is
-     in the expression at all; the notch itself needs a device. */
-  const padTop = await page.locator('[data-testid="dex-decide-overlay"] > div:nth-child(2)')
-    .evaluate((el) => getComputedStyle(el).paddingTop);
-  check('the X sits below the safe-area inset', padTop === '12px', `${padTop} with no notch`);
-  /* THE DOOR OPENS LISTENING — reversed on 2026-10-01 at the founder's word.
-     It used to assert the opposite, and the component's own note explained why
-     (a screen that is already listening startles people). They have used it and
-     disagree: reaching this screen already costs a full deliberate drag, and
-     having to hunt for the mic afterwards makes that drag feel like it did
-     nothing. The drag is the press. Asserted on aria-pressed, which is the same
-     thing a screen reader is told, rather than on any glyph. */
-  check('the door opens listening',
-    await until(async () => (await page.locator('[data-testid="voice-ripple-mic"]').getAttribute('aria-pressed')) === 'true', 6000));
-  check('…and the mic is held down, not swapped for a stop square',
-    (await page.locator('[data-testid="dex-decide-overlay"] [data-testid="voice-ripple-mic"] svg').count()) === 1);
-  /* Put it back where the rest of this section expects to find it: stopped,
-     the words thrown away, the door open again. Waits are on STATE, not on a
-     stopwatch — stopping hands over to the pop-up, which shuts the door, and
-     each of those takes as long as it takes. */
-  await page.locator('[data-testid="voice-ripple-mic"]').click();
-  await page.locator('[data-testid="dex-popup"]').waitFor({ timeout: 8000 });
+  check('a full drag right starts a capture, with no screen over the Desk',
+    (await page.locator('[data-testid="dex-decide-overlay"]').count()) === 0
+    && await until(async () =>
+      (await page.locator('[data-testid="dex-slider-handle"]').getAttribute('aria-label') || '')
+        .toLowerCase().includes('stop'), 6000));
+  check('it is listening without a second press',
+    await until(async () => (await page.locator('[data-testid="dex-slider"] canvas, [data-testid="dex-slider"] svg path').count()) > 0, 4000));
+
+  const parked = await page.locator('[data-testid="dex-slider-handle"]').boundingBox();
+  check('the handle is parked at the stop, not loose on the track',
+    Math.abs((parked.x + parked.width) - (track.x + track.width)) <= 1,
+    `${Math.round((track.x + track.width) - (parked.x + parked.width))}px from the wall`);
+  /* The VISIBLE ends, not the text content: the track also carries an sr-only
+     live region that says what the control is doing, and that is supposed to
+     speak louder while recording, not go quiet. */
+  const visibleEnds = () => page.evaluate(() =>
+    [...document.querySelectorAll('[data-testid="dex-slider"] span[aria-hidden="true"]')]
+      .filter((e) => /^(Ask|Decide)$/.test(e.textContent.trim())).length);
+  check('the ends are no longer offered while it records', (await visibleEnds()) === 0);
+
+  /* Dragging is OFF, not merely ignored: a stray finger must not be able to
+     scrub a live recording back to the middle. */
+  await page.mouse.move(parked.x + parked.width / 2, cy);
+  await page.mouse.down();
+  await page.mouse.move(track.x + track.width / 2, cy, { steps: 10 });
+  await page.mouse.up();
+  await page.waitForTimeout(400);
+  const stillParked = await page.locator('[data-testid="dex-slider-handle"]').boundingBox();
+  check('a drag cannot move the handle while it is recording',
+    Math.abs(stillParked.x - parked.x) <= 1);
+
+  await page.locator('[data-testid="dex-slider-handle"]').click();
+  await page.locator('[data-testid="dex-popup"]').waitFor({ timeout: 12000 });
+  check('pressing the handle stops and hands over to the pop-up',
+    (await page.locator('[data-testid="dex-popup"]').getAttribute('data-step')) === 'said');
+  check('attach is offered WITH the words, not before them',
+    (await page.locator('[data-testid="dex-popup-attach"]').count()) === 1);
+  check('…and the recording surface carries no paperclip of its own',
+    (await page.locator('[data-testid="dex-slider"] [data-testid="desk-dex-attach"]').count()) === 0);
+  check('the transcript is editable, which is where typing happens now',
+    (await page.locator('[data-testid="dex-popup-transcript"]').count()) === 1);
+
   await page.locator('[data-testid="dex-popup-discard"]').click();
   await page.locator('[data-testid="dex-popup"]').waitFor({ state: 'detached', timeout: 8000 });
-  await page.locator('[data-testid="dex-slider"]').waitFor({ timeout: 8000 });
-  await page.waitForTimeout(400);
-  await drag(track.x + track.width - 2);
-  await page.locator('[data-testid="dex-decide-overlay"]').waitFor({ timeout: 8000 });
-  await page.waitForTimeout(500);
-  /* THE TYPING FALLBACK, on a door that is already listening. The brief calls
-     this a backup path that is rarely used and must work; the auto-start made
-     the button disabled for the whole life of the recording, which would have
-     meant it did not. It is enabled on this surface now, and it stops and hands
-     the words over as editable text rather than opening an empty field — which
-     is the better answer anyway: you type from what you already said. */
-  const kb = page.locator('[data-testid="dex-decide-overlay"] [data-testid="desk-dex-keyboard"]');
-  check('the keyboard is reachable while the door listens', await kb.isEnabled());
-  await kb.click();
-  await page.locator('[data-testid="dex-popup"]').waitFor({ timeout: 8000 });
-  check('…and it stops and offers what you said, editable',
-    (await page.locator('[data-testid="dex-popup"]').getAttribute('data-step')) === 'said'
-    && (await page.locator('[data-testid="dex-popup-transcript"]').count()) === 1);
-  await page.locator('[data-testid="dex-popup-discard"]').click();
-  await page.locator('[data-testid="dex-popup"]').waitFor({ state: 'detached', timeout: 8000 });
-  await page.locator('[data-testid="dex-slider"]').waitFor({ timeout: 8000 });
-  await page.waitForTimeout(400);
-  await drag(track.x + track.width - 2);
-  await page.locator('[data-testid="dex-decide-overlay"]').waitFor({ timeout: 8000 });
-  await page.waitForTimeout(400);
-
-  /* THE DOOR STANDS ASIDE FOR THE POP-UP — reported from the founder's iPhone
-     and the reason this check exists: they spoke, pressed stop, and the blurred
-     mic screen simply stayed while step 1, the reading and the review all ran
-     BEHIND it, unreachable. The pop-up is a dialog at z-50 and the door is
-     9500, so it was underneath; and the door has no job once the words exist.
-     Asserted on the SPOKEN path now, which is the path the founder was on when
-     they reported it: the door is already listening, so stopping is the whole
-     gesture. It used to type instead, because the door did not record on open
-     and a fake microphone was more machinery than the check needed. */
-  await page.locator('[data-testid="voice-ripple-mic"]').click();
-  await page.locator('[data-testid="dex-popup"]').waitFor({ timeout: 10000 }).catch(() => {});
-  check('sending hands over to the pop-up', (await page.locator('[data-testid="dex-popup"]').count()) === 1);
-  check('…and the door stands aside rather than burying it',
-    (await page.locator('[data-testid="dex-decide-overlay"]').count()) === 0);
-  await page.locator('[data-testid="dex-popup-discard"]').click()
-    .catch(() => page.locator('[data-testid="dex-popup-close"]').click().catch(() => {}));
-  await page.waitForTimeout(800);
-  check('closing the pop-up leaves you on the Desk, not in the door',
-    (await page.locator('[data-testid="dex-slider"]').count()) === 1
-    && (await page.locator('[data-testid="dex-decide-overlay"]').count()) === 0);
-
-  await drag(track.x + track.width - 2);   // open it again, so "back" has a door to close
-  await page.goBack();
   await page.waitForTimeout(700);
-  check('back closes the door', (await page.locator('[data-testid="dex-decide-overlay"]').count()) === 0);
+  const settled = await page.locator('[data-testid="dex-slider-handle"]').boundingBox();
+  check('the handle returns to the middle once the capture is done',
+    Math.abs((settled.x + settled.width / 2) - (track.x + track.width / 2)) <= 3,
+    `${Math.round((settled.x + settled.width / 2) - (track.x + track.width / 2))}px off centre`);
+  check('and the ends are named again', (await visibleEnds()) === 2);
 
   // ── left: Ask, unchanged ──────────────────────────────────────────────────
   await drag(track.x + 2);

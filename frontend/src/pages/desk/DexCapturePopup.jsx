@@ -33,7 +33,7 @@
 // Decisions column, and opening it again shows where it got to.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, X, WarningCircle, File as FileGlyph } from "@phosphor-icons/react";
+import { Check, File as FileGlyph, Paperclip, WarningCircle, X } from "@phosphor-icons/react";
 import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "../../components/ui/dialog";
 import { DecisionPanel } from "../../components/DecisionDialog";
@@ -175,6 +175,7 @@ const FOOT = "shrink-0 border-t border-slate-900/[0.06] px-5 pt-3 pb-[calc(0.75r
 export function DexCapturePopup({
   open, onClose, phone = false, step = "said",
   text = "", onText, transcribing = false, files = [], onRemoveFile, busy = false, onNext, onDiscard,
+  onAttach, attaching = false,
   sentText = "", stages = [],
   decisionId = null, userId, onSaveDraft,
   outcome = null, onRetry,
@@ -303,6 +304,26 @@ export function DexCapturePopup({
     );
     foot = (
       <div className={cn(FOOT, "flex gap-2.5 lg:justify-end")}>
+        {/* ATTACH, HERE AND NOT BEFORE. On the phone the recording surface used
+            to carry a paperclip, which meant picking a file before you had said
+            what it was for. The founder's call is that a file belongs to a
+            decision you have already made — so it is offered beside the words,
+            at the one moment you can see what you are attaching it to. It is
+            only rendered where a caller supplies the handler, so the desktop
+            well (whose own floor still has one) is unchanged. */}
+        {onAttach && (
+          <button
+            type="button"
+            onClick={onAttach}
+            disabled={busy || attaching}
+            data-testid="dex-popup-attach"
+            aria-label="Attach a file"
+            title="Attach a file"
+            className={cn(glassBtn, "grid h-11 w-11 shrink-0 place-items-center rounded-full p-0 lg:mr-auto")}
+          >
+            <Paperclip size={18} weight="bold" aria-hidden="true" />
+          </button>
+        )}
         <button type="button" onClick={onDiscard} data-testid="dex-popup-discard" className={glassBtn}>Discard</button>
         <button type="button" onClick={onNext} disabled={!canNext} data-testid="dex-popup-next" className={inkBtn}>
           {busy ? "Sending…" : "Next"}

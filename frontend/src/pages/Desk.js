@@ -846,9 +846,26 @@ export default function Desk() {
      stable so neither the door nor the slider re-renders for this, and the
      reader is a ref read — KM-60's rule that the meter never touches state
      above the component that owns it still holds. */
+  /* DEX-SLIDER (2026-10-02) — THE SLIDER IS THE RECORDING SURFACE. DeskDexWell
+     still owns the microphone, the conversation, the one-at-a-time guard and
+     the pop-up; it just does not draw any more. It publishes that state here
+     and the slider draws it. `recording` has to be React state because the
+     track's contents change with it; the loudness does not, and stays a ref
+     reader so the meter never re-renders anything (KM-60). */
+  const dexStopRef = useRef(null);
+  const [dexLive, setDexLive] = useState({ recording: false, capturing: false, levelsRef: null });
   const dexMeterRef = useRef(null);
-  const onDexMeter = useCallback((fn) => { dexMeterRef.current = fn; }, []);
+  const onDexMeter = useCallback((c) => {
+    dexMeterRef.current = c.readLevel;
+    dexStopRef.current = c.stop;
+    setDexLive((prev) => (
+      prev.recording === c.recording && prev.capturing === c.capturing && prev.levelsRef === c.levelsRef
+        ? prev
+        : { recording: c.recording, capturing: c.capturing, levelsRef: c.levelsRef }
+    ));
+  }, []);
   const dexMeter = useCallback(() => (dexMeterRef.current ? dexMeterRef.current() : 0), []);
+  const dexStop = useCallback(() => dexStopRef.current?.(), []);
   useBackDismiss(decideOpen, (v) => setDecideOpen(!!v));
   /* JOURNEY-1 J13 — on a slow line the phone's saved copy stands in for the
      server after 3 s (service-worker.js), and the Desk used to show those
@@ -1478,7 +1495,12 @@ export default function Desk() {
             urgent={(m.complaints?.new_7d || 0) > 0}
             alert={m.complaints?.new_7d > 0 ? m.complaints.new_7d : false}
             viz={m.complaints ? <CircleDots count={m.complaints.new_7d} /> : null}
-            meaning={m.complaints?.new_7d > 0 ? `${m.complaints.new_7d} new this week` : undefined}
+            /* NO "n new this week". It was the only `meaning` line in the grid,
+               and StatTile prints that under the numeral — so this one tile's
+               number sat a line higher than the other four and the row read as
+               misaligned. The alert dot on its chip already says there is
+               something new; the count belongs on /crm, where you can act on
+               it. Only this tile changes. */
             to="/crm"
             countUp
             testid="kpi-complaints"
@@ -1580,6 +1602,10 @@ export default function Desk() {
             onAsk={() => doors?.openAsk?.()}
             onDecide={() => setDecideOpen(true)}
             readLevel={dexMeter}
+            capturing={dexLive.capturing}
+            recording={dexLive.recording}
+            levelsRef={dexLive.levelsRef}
+            onStop={dexStop}
           />
         </div>
       ) : dexWell)}

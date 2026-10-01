@@ -3445,6 +3445,33 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         .kr-mic-waves > i { animation: none; opacity: 0; }
     }
 
+    /* THE SLIDER'S KNOB, to the founder's own button.png: a raised disc with a
+       dish pressed into its face. Both halves of the app's neumorphic pair in
+       one control — lit from the top-left and shadowed from the bottom-right on
+       the outside, and the reverse on the inside, which is what makes the
+       centre read as sunk rather than merely darker. The glyph sits in the
+       dish, which is why it needs the stacking context. */
+    .kr-slider-knob {
+        position: relative;
+        isolation: isolate;
+        background: linear-gradient(145deg, hsl(0 0% 100%), hsl(220 14% 92%));
+        box-shadow:
+            6px 6px 13px hsl(230 22% 34% / .20),
+            -6px -6px 12px hsl(0 0% 100% / .95);
+    }
+    .kr-slider-knob::after {
+        content: "";
+        position: absolute;
+        inset: 17%;
+        border-radius: 9999px;
+        background: linear-gradient(145deg, hsl(220 14% 91%), hsl(0 0% 100%));
+        box-shadow:
+            inset 4px 4px 9px hsl(230 22% 34% / .17),
+            inset -4px -4px 8px hsl(0 0% 100% / .92);
+        z-index: -1;
+    }
+    .kr-slider-knob:active { transform-origin: center; }
+
     .kr-slider-well {
         position: relative;
         border-radius: 9999px;

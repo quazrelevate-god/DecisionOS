@@ -96,14 +96,24 @@ async function open(viewport) {
 const behindDoor = (page) => DEX_SLIDER && page.viewportSize().width < 1024;
 
 /** The box the well's own checks measure: the well, or the door it moved into. */
-const wellOf = (page) => page.getByTestId(behindDoor(page) ? 'dex-decide-overlay' : 'desk-insight');
+/** The control that stops a recording: the well's mic, or — on the slider —
+ *  the handle, which parks at the stop and becomes the send. */
+const stopControl = (page) => page.getByTestId(behindDoor(page) ? 'dex-slider-handle' : 'voice-ripple-mic');
 
-/** Open the door the way a person does — the full drag right, released at the
+/** Start a capture the way a person does: the full drag right, released at the
  *  stop. Short of the stop nothing happens by design, so this cannot be a
- *  gentle nudge. No-op when there is no door. */
+ *  gentle nudge.
+ *
+ *  THE DOOR IS GONE (2026-10-02). There is no full screen any more — the
+ *  slider's own track becomes the recording surface, the handle parks at the
+ *  stop and turns into a send, and the whole capture happens in the control.
+ *  So "open the door" is now "put the track into capture", and the thing to
+ *  wait for is the handle's own label changing. No-op off the slider. */
 async function openDoor(page) {
   if (!behindDoor(page)) return;
-  if (await page.getByTestId('dex-decide-overlay').count()) return;
+  const capturing = async () => ((await page.locator('[data-testid="dex-slider-handle"]')
+    .getAttribute('aria-label')) || '').toLowerCase().includes('stop');
+  if (await capturing()) return;
   const track = await page.locator('[data-testid="dex-slider"] .kr-slider-well').boundingBox();
   const h = await page.locator('[data-testid="dex-slider-handle"]').boundingBox();
   const cy = h.y + h.height / 2;
@@ -111,8 +121,8 @@ async function openDoor(page) {
   await page.mouse.down();
   await page.mouse.move(track.x + track.width - 2, cy, { steps: 16 });
   await page.mouse.up();
-  await page.getByTestId('dex-decide-overlay').waitFor({ timeout: 8000 });
-  await page.waitForTimeout(400);
+  await until(capturing, 8000);
+  await page.waitForTimeout(300);
 }
 
 async function gotoDesk(page) {
@@ -145,78 +155,74 @@ const toasts = (page, text) => page.locator('[data-sonner-toast]').filter({ hasT
 const composerIn = (page) =>
   page.locator('[data-testid="desk-dex-composer"], [data-testid="desk-dex-floating"]');
 
+/** A field to type a capture into, on whichever surface this is.
+ *
+ *  THE WELL still works the way it always did: press the keyboard and a
+ *  composer opens in the well's floor.
+ *
+ *  THE SLIDER has no keyboard — the track is the recording surface and it
+ *  carries exactly one control, the handle. Typing a decision there is: start a
+ *  capture, stop it straight away, and type into the pop-up's transcript, which
+ *  is empty when nothing was said. So "a field" on that surface IS the pop-up's
+ *  transcript, and if one is already open this hands that back rather than
+ *  starting a second capture underneath it.
+ */
 async function openField(page) {
-  if ((await composerIn(page).count()) === 0) {
-    /* The kept-capture note is on the DESK now, not inside the door — it is a
-       statement about the page, and the door shuts itself. So it has to be
-       dealt with before the door goes up, or it would be under the backdrop. */
-    {
-      const d = page.getByTestId('dex-well-draft-discard');
-      if (await d.count()) { await d.click(); await page.waitForTimeout(300); }
-    }
-    await openDoor(page);
-    /* A KEPT CAPTURE OWNS THE DOOR. `kept` is draft text with the field
-       closed, and the door then offers those words back in the pop-up rather
-       than opening an empty field — DeskDexWell: `if (kept) { openSaid() }`.
-       That is the state after a REFUSED send, because the refusal now closes
-       the field and keeps the words (9959478). Clear them when the suite
-       wants a fresh field; a person would press the same Discard. */
-    await page.getByTestId('desk-dex-keyboard').click();
-    /* WHERE TYPING HAPPENS NOW, ON THE DOOR. The door opens listening
-       (2026-10-01), so the keyboard's job there is "stop and let me type
-       instead" — it hands over to the pop-up's first step, whose transcript
-       field is a real editable textarea and is empty when nothing was said.
-       The floating composer is simply not reachable from this surface any
-       more: reaching it would need the door open and NOT recording, and the
-       door no longer has that state. The well is unchanged. */
-    if (behindDoor(page)) {
-      /* WHICHEVER ONE ARRIVES, because which one it is depends on whether the
-         door was listening. It usually is — it opens that way — and then the
-         keyboard means "stop and let me type", which lands in the pop-up's
-         transcript. But when Dex is still reading the last note the door does
-         NOT auto-start (the one-at-a-time guard, ASK-33.1), and then the
-         keyboard means what it always meant and opens the composer. Waiting for
-         one specific answer makes this suite assert a guard it does not mean to. */
-      const got = await until(async () =>
-        (await page.getByTestId('dex-popup-transcript').count()) > 0
-        || (await composerIn(page).count()) > 0, 8000);
-      if (!got) throw new Error('the keyboard opened neither the transcript nor the composer');
-      if (await page.getByTestId('dex-popup-transcript').count()) {
-        return page.getByTestId('dex-popup-transcript');
-      }
-      return composerIn(page).first().locator('textarea');
-    }
-    await composerIn(page).first().waitFor({ timeout: 4000 });
+  /* ALREADY SOMEWHERE TO TYPE? Hand it back. This has to come first: section C
+     attaches a file from the pop-up and then types, and starting a fresh
+     capture under an open pop-up means clicking a handle that is behind it. */
+  if (await page.getByTestId('dex-popup-transcript').count()) {
+    return page.getByTestId('dex-popup-transcript');
   }
-  if (behindDoor(page) && (await page.getByTestId('dex-popup-transcript').count())) {
+  if (await composerIn(page).count()) return composerIn(page).first().locator('textarea');
+
+  /* A KEPT CAPTURE OWNS THE NEXT PRESS: `kept` is draft text with no field
+     open, and the surface then offers those words back in the pop-up rather
+     than opening an empty one. That is the state after a REFUSED send
+     (9959478). Clear them when the suite wants a fresh field; a person would
+     press the same Discard. It lives on the DESK now, so it is dealt with
+     before anything covers it. */
+  {
+    const d = page.getByTestId('dex-well-draft-discard');
+    if (await d.count()) { await d.click(); await page.waitForTimeout(300); }
+  }
+
+  if (!behindDoor(page)) {
+    await page.getByTestId('desk-dex-keyboard').click();
+    await composerIn(page).first().waitFor({ timeout: 4000 });
+    return composerIn(page).first().locator('textarea');
+  }
+
+  await openDoor(page);
+  await stopControl(page).click();
+  /* WHICHEVER ARRIVES. Normally the drag starts a capture and stopping lands in
+     the pop-up's transcript. But when Dex is still reading the last note the
+     capture is refused outright (ASK-33.1) and the handle goes home, so there
+     is nothing to stop and nothing opens — waiting only for the transcript
+     would make this suite assert a guard it does not mean to test here. */
+  await until(async () =>
+    (await page.getByTestId('dex-popup-transcript').count()) > 0
+    || (await composerIn(page).count()) > 0, 8000);
+  if (await page.getByTestId('dex-popup-transcript').count()) {
     return page.getByTestId('dex-popup-transcript');
   }
   return composerIn(page).first().locator('textarea');
 }
-/* THE DOOR SHUTS ITSELF NOW (2026-10-01). Stopping the mic hands the words to
-   DexCapturePopup and the recording screen stands aside, so a second capture
-   starts from the Desk and has to open the door again — exactly as a person
-   does. Every capture in this file goes through one of these two. */
-/* Back out to the Desk. The status pill and the kept-capture note live there
-   now, so anything that presses one has to not be standing behind the door —
-   which is exactly what a person does: X, then press the pill. */
-async function toDesk(page) {
-  if (await page.getByTestId('dex-decide-overlay').count()) {
-    await page.getByTestId('dex-decide-close').click();
-    await page.waitForTimeout(450);
-  }
-}
-/* START A RECORDING, whichever surface this is.
-   The decision door now starts listening the moment it opens (founder, 2026-10-01),
-   so a press there would STOP the recording it was meant to start. The well does
-   not, so it still needs the press. Wait to see which happened rather than
-   branching on the flag: aria-pressed is the component's own answer. */
+
+/** Start a recording, whichever surface this is. The slider starts one with
+ *  the drag itself; the well needs the mic pressed. */
 async function micPress(page) {
   await openDoor(page);
-  const mic = page.getByTestId('voice-ripple-mic');
-  const started = await until(async () => (await mic.getAttribute('aria-pressed')) === 'true', 2500);
-  if (!started) await mic.click();
+  if (behindDoor(page)) return;        // the drag itself started it
+  await page.getByTestId('voice-ripple-mic').click();
 }
+
+/** Be on the Desk. Nothing to step out of any more — the capture happens in
+ *  the track and the Desk was never covered — but the places that mean "be on
+ *  the Desk now" still say so, and this reads as a deliberate retirement
+ *  rather than as something forgotten. */
+async function toDesk(page) {}
+
 async function typeAndSend(page, words) {
   const input = await openField(page);
   await input.fill(words);
@@ -242,7 +248,7 @@ const geometry = (page) => page.evaluate((sel) => {
     floorTop: T('[data-testid="desk-dex-keyboard"]'),
     ripple: !!document.querySelector('[data-testid="desk-dex-ripple"]'),
   };
-}, behindDoor(page) ? '[data-testid="dex-decide-overlay"]' : '[data-testid="desk-insight"]');
+}, '[data-testid="desk-insight"]');   // the well's own box; the slider has wayOut
 /* WHAT "GIVES THE WELL BACK" MEANS ON EACH SURFACE.
    In the well it is literal: the pop-up goes and the ripple is in the box it
    was always in, unmoved. Behind the door it cannot be, because the door shuts
@@ -256,7 +262,8 @@ async function wayOut(page, rest) {
     return { back: g?.ripple === true, same: sameBox(g, rest) };
   }
   const slider = page.getByTestId('dex-slider');
-  const back = (await slider.count()) === 1 && (await page.getByTestId('dex-decide-overlay').count()) === 0;
+  const label = (await page.locator('[data-testid="dex-slider-handle"]').getAttribute('aria-label')) || '';
+  const back = (await slider.count()) === 1 && !label.toLowerCase().includes('stop');
   const handle = await page.locator('[data-testid="dex-slider-handle"]').boundingBox().catch(() => null);
   const track = await page.locator('[data-testid="dex-slider"] .kr-slider-well').boundingBox().catch(() => null);
   const centred = !!handle && !!track
@@ -335,16 +342,24 @@ async function run(viewport) {
   check(`${w}: signed in`, signedIn);
   const mic = page.getByTestId('voice-ripple-mic');
   const rest = behindDoor(page) ? null : await restingBox(page);
-  check(`${w}: the well opens on the ripple, not a form`,
-    behindDoor(page) ? (await page.getByTestId('desk-dex-ripple').count()) === 1 : rest.ripple === true);
+  /* On the slider there is no well to open and no ripple to open it on: the
+     Desk rests with a slider at its centre and nothing is capturing. That is
+     the same claim — the Desk does not greet you with a form. */
+  check(`${w}: the Desk rests on the control, not a form`,
+    behindDoor(page)
+      ? (await page.getByTestId('dex-slider').count()) === 1
+        && (await page.getByTestId('desk-dex-composer').count()) === 0
+      : rest.ripple === true);
 
   // ----------------------------------------------- A · SPOKEN, READY, APPROVED
   await setEnding(page, null);
   await setSaid(page, LONG);
   await micPress(page);
   await page.waitForTimeout(1500);
-  check(`${w} A: the ripple records`, (await mic.getAttribute('aria-pressed')) === 'true');
-  await mic.click();
+  check(`${w} A: the ripple records`, behindDoor(page)
+    ? ((await page.locator('[data-testid="dex-slider-handle"]').getAttribute('aria-label')) || '').toLowerCase().includes('stop')
+    : (await mic.getAttribute('aria-pressed')) === 'true');
+  await stopControl(page).click();
   check(`${w} A: stopping opens the pop-up on step 1`, await atStep(page, 'said', 4000));
   const field = page.getByTestId('dex-popup-transcript');
   await until(async () => (await field.inputValue()).length > 100, 20000);
@@ -424,11 +439,24 @@ async function run(viewport) {
 
   // ------------------------------------------- C · FAILED, with a file attached
   await setEnding(page, 'consent');
-  await openDoor(page);
-  const [chooser] = await Promise.all([
-    page.waitForEvent('filechooser', { timeout: 5000 }),
-    page.getByTestId('desk-dex-attach').click(),
-  ]);
+  /* ATTACH MOVED INTO THE POP-UP on the slider (2026-10-02): you attach to a
+     decision after you have said it, not before. So the file is chosen from the
+     words, which means getting to step 1 first. The well is unchanged. */
+  let chooser;
+  if (behindDoor(page)) {
+    await openDoor(page);
+    await stopControl(page).click();
+    await page.getByTestId('dex-popup-attach').waitFor({ timeout: 10000 });
+    [chooser] = await Promise.all([
+      page.waitForEvent('filechooser', { timeout: 5000 }),
+      page.getByTestId('dex-popup-attach').click(),
+    ]);
+  } else {
+    [chooser] = await Promise.all([
+      page.waitForEvent('filechooser', { timeout: 5000 }),
+      page.getByTestId('desk-dex-attach').click(),
+    ]);
+  }
   await chooser.setFiles({ name: 'indigo-po.png', mimeType: 'image/png', buffer: PNG });
   /* The chips follow the paperclip: in the well on desktop, in the door on a
      phone, because that is the surface whose floor you pressed. */
@@ -468,8 +496,15 @@ async function run(viewport) {
   check(`${w} E: the pop-up closes while Dex reads`, await popupGone(page));
   check(`${w} E: … and the well says it is still reading`,
     (await page.getByTestId('dex-well-status').getAttribute('data-status').catch(() => null)) === 'reading');
-  await typeAndSend(page, 'Ask Priya to book the Tirupur truck for Thursday');
-  await page.waitForTimeout(800);
+  /* THE SECOND CAPTURE IS A DRAG on the slider, because that is what starting
+     one is there — there is no field to type into until a capture exists. The
+     refusal has to be the same either way: plain words, and nothing opened. */
+  if (behindDoor(page)) {
+    await openDoor(page);
+  } else {
+    await typeAndSend(page, 'Ask Priya to book the Tirupur truck for Thursday');
+  }
+  await page.waitForTimeout(1200);
   check(`${w} E: a second capture meanwhile is refused in plain words`,
     (await toasts(page, 'Dex is still reading your last one').count()) >= 1 && (await popup(page).count()) === 0);
   check(`${w} E: the first still reaches its ending`,
@@ -502,7 +537,7 @@ async function run(viewport) {
   await setSaid(page, LONG);
   await micPress(page);
   await page.waitForTimeout(1200);
-  await mic.click();
+  await stopControl(page).click();
   await atStep(page, 'said', 4000);
   await until(async () => (await field.inputValue()).length > 100, 20000);
   await page.getByTestId('dex-popup-close').click();
@@ -536,10 +571,8 @@ async function run(viewport) {
     if (DEX_SLIDER) {
       check(`${w} F: the Desk has no Ask circle while the slider is there`,
         (await page.getByTestId('dex-fab').count()) === 0);
-      if (await page.getByTestId('dex-decide-overlay').count()) {
-        await page.getByTestId('dex-decide-close').click();
-        await page.waitForTimeout(500);
-      }
+      /* Nothing to dismiss before the left drag any more — the capture lives in
+         the track, and the track is where this drag starts. */
       const track = await page.locator('[data-testid="dex-slider"] .kr-slider-well').boundingBox();
       const h = await page.locator('[data-testid="dex-slider-handle"]').boundingBox();
       const cy = h.y + h.height / 2;

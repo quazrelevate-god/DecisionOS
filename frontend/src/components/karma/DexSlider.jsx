@@ -45,7 +45,8 @@
  */
 import * as React from "react";
 import { useTranslation } from "react-i18next";
-import { Aperture, ChatCircle, Waveform } from "@phosphor-icons/react";
+import { Aperture, ChatCircle, PaperPlaneTilt, Waveform } from "@phosphor-icons/react";
+import { DexWave } from "../mobile/DexWave";
 import { VoiceRipple } from "./VoiceRipple";
 import { cn } from "@/lib/utils";
 
@@ -83,7 +84,19 @@ async function tick(style) {
  * @param {Function} [readLevel] 0..1 mic loudness, read per frame, never state
  * @param {boolean}  [disabled]
  */
-export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false, className }) {
+/**
+ * @param {Function} onAsk      reached and released at the LEFT end
+ * @param {Function} onDecide   reached and released at the RIGHT end
+ * @param {boolean}  [capturing] the right end is open: this track IS the
+ *                   recording surface, the handle is parked at it, and pressing
+ *                   the handle is the way to stop
+ * @param {boolean}  [recording] the microphone is live right now
+ * @param {Function} [onStop]   the parked handle was pressed
+ * @param {object}   [levelsRef] the capture's rolling loudness window, for DexWave
+ */
+export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false,
+                            recording = false, onStop, levelsRef = null,
+                            disabled = false, className }) {
   const { t } = useTranslation();
   const trackRef = React.useRef(null);
   const handleRef = React.useRef(null);
@@ -155,8 +168,23 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
     return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
   })();
 
+  /* PARKED. While the right end is open the handle is not a handle: it sits at
+     the stop and it is a send button. Dragging is off rather than merely
+     ignored, so a stray finger cannot scrub a live recording. */
+  React.useEffect(() => {
+    if (!capturing) return;
+    draggingRef.current = false;
+    setDragging(false);
+    const park = () => { const m = travel(); lastDxRef.current = m; setDx(m); };
+    park();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(park) : null;
+    if (ro && trackRef.current) ro.observe(trackRef.current);
+    return () => ro?.disconnect();
+  }, [capturing, travel]);
+  React.useEffect(() => { if (!capturing) settle(); }, [capturing, settle]);
+
   const onPointerDown = (e) => {
-    if (disabled) return;
+    if (disabled || capturing) return;
     handleRef.current?.setPointerCapture?.(e.pointerId);
     draggingRef.current = true;
     setDragging(true);
@@ -164,7 +192,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
   };
 
   const onPointerMove = (e) => {
-    if (!draggingRef.current || disabled) return;
+    if (!draggingRef.current || disabled || capturing) return;
     const tr = trackRef.current;
     if (!tr) return;
     const r = tr.getBoundingClientRect();
@@ -193,7 +221,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
   };
 
   const onKeyDown = (e) => {
-    if (disabled) return;
+    if (disabled || capturing) return;
     if (e.key === "ArrowLeft") { e.preventDefault(); tick("fire"); onAsk?.(); }
     if (e.key === "ArrowRight") { e.preventDefault(); tick("fire"); onDecide?.(); }
   };
@@ -205,13 +233,14 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
      middle, not only at the stop — half a drag should already tell you which
      room you are opening, so that a drag begun by accident can be read and
      abandoned before it commits. */
-  const heading = dx < -2 ? "ask" : dx > 2 ? "decide" : null;
+  const heading = capturing ? null : dx < -2 ? "ask" : dx > 2 ? "decide" : null;
   /* HOLLOW, AND ROUND. The filled sparkle read as a sticker on a white disc at
      this size — the founder's word was "not nice". These are all outline forms
      that answer the handle's own circle: an aperture at rest, the chat bubble
      carried left, the waveform carried right. Outline weight throughout so the
      glyph is a drawing on the surface rather than a second shape stuck to it. */
-  const Glyph = heading === "ask" ? ChatCircle : heading === "decide" ? Waveform : Aperture;
+  const Glyph = capturing ? PaperPlaneTilt
+    : heading === "ask" ? ChatCircle : heading === "decide" ? Waveform : Aperture;
 
   /* THE WORDS GET OUT OF THE WAY. The handle now travels to the wall, so it
      arrives exactly where the labels are printed; they fade on approach rather
@@ -264,8 +293,30 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
           />
         )}
 
-        <Label side="ask">{t("desk.slider.ask", "Ask")}</Label>
-        <Label side="decide">{t("desk.slider.decide", "Decide")}</Label>
+        {capturing ? (
+          /* THE SAME WAVE THE DOCK DRAWS WHEN DEX IS LISTENING (DexWave), not a
+             second animation that would drift from it — the founder's whole
+             point. `tone="ink"` because that one lives on the dark dock and this
+             well is light. It reads the capture's own rolling levels, so it
+             answers the room without this component holding any audio itself.
+             The track is the surface now: there is no blurred screen, no second
+             mic, and nothing to dismiss. */
+          <div className="pointer-events-none absolute inset-0 flex items-center pl-6 pr-28" aria-hidden="true">
+            <DexWave
+              state={recording ? "listening" : "thinking"}
+              levelsRef={levelsRef}
+              levels={levelsRef?.current}
+              live={recording}
+              tone="ink"
+              className="h-full w-full"
+            />
+          </div>
+        ) : (
+          <>
+            <Label side="ask">{t("desk.slider.ask", "Ask")}</Label>
+            <Label side="decide">{t("desk.slider.decide", "Decide")}</Label>
+          </>
+        )}
 
         {/* The end the handle is heading for lights, in the page's own brand
             hue at a low alpha — an existing token, no new ramp, and never the
@@ -274,6 +325,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
           aria-hidden="true"
           className={cn(
             "pointer-events-none absolute inset-y-0 w-32 rounded-pill transition-opacity duration-150",
+            capturing && "hidden",
             at ? "opacity-100" : "opacity-0",
             at === "ask" ? "left-0" : "right-0"
           )}
@@ -285,19 +337,25 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
           type="button"
           data-testid="dex-slider-handle"
           disabled={disabled}
-          aria-label={t("desk.slider.handle", "Slide left to ask Dex, right to record a decision")}
+          aria-label={capturing
+            ? t("desk.slider.send", "Stop recording and send to Dex")
+            : t("desk.slider.handle", "Slide left to ask Dex, right to record a decision")}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={() => { draggingRef.current = false; setDragging(false); settle(); }}
           onKeyDown={onKeyDown}
+          onClick={capturing ? () => onStop?.() : undefined}
           className={cn(
             /* THE HANDLE IS THE CONTROL, so it is the size of the control.
                h-14 left 40px of empty channel above and below it and read as a
                small knob rattling around in a big groove. 5.375rem in a 6rem
                track leaves 5px top and bottom — enough to see that it sits IN
                something, and no more. */
-            "kr-pop absolute left-1/2 grid h-[5.375rem] w-[5.375rem] place-items-center rounded-full",
+            /* kr-slider-knob — the founder's own button.png: a raised disc with
+               a dish pressed into its face, rather than the flat kr-pop lozenge
+               it was. The glyph sits in the dish. */
+            "kr-slider-knob absolute left-1/2 grid h-[5.375rem] w-[5.375rem] place-items-center rounded-full",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
             "disabled:opacity-50 touch-none"
           )}
@@ -321,9 +379,12 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, disabled = false,
 
         {/* What a screen reader hears while the handle moves. */}
         <span className="sr-only" aria-live="polite">
-          {at === "ask" ? t("desk.slider.atAsk", "Release to ask Dex")
+          {capturing ? (recording
+            ? t("desk.slider.listening", "Listening. Press to stop and send.")
+            : t("desk.slider.reading", "Dex is reading what you said."))
+            : at === "ask" ? t("desk.slider.atAsk", "Release to ask Dex")
             : at === "decide" ? t("desk.slider.atDecide", "Release to record a decision")
-            : ""}
+              : ""}
         </span>
       </div>
       {/* pct is read by the suite to prove the handle follows the finger. */}

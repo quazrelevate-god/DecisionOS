@@ -239,7 +239,19 @@ function OpenButton({ onClick, label }) {
    `data-row` is what both containers measure a row's height with; the testid
    pattern is the caller's, so desk-decisions-row-<id> means the same element in
    either one. */
-function DeskRow({ r, first, testid }) {
+/* `roomy` — the sheet proposal. There the card is the height of the sheet
+   rather than the height of three rows, so the rows share that height instead
+   of sitting at the top of it with black underneath. The row grows, and its
+   type grows with it: a 56px row carrying 15px text reads as a short row that
+   has been stretched, not as a bigger row.
+   AND IT HAS A CEILING. Sharing the height is only sane while there are three
+   rows to share it. With two on a 440pt phone each row took 170 real pixels and
+   the title floated in the middle of a cavern — measured, sparse fixture. The
+   cap is 6.5rem, which is above what three rows ask for at 390 (so the full
+   case is untouched) and well under what two ask for. What the cap refuses goes
+   back to the sheet as black, which is the honest answer: there is less to show,
+   and a row the size of a card does not change that. */
+function DeskRow({ r, first, testid, roomy = false }) {
   return (
     <div
       data-row=""
@@ -264,7 +276,7 @@ function DeskRow({ r, first, testid }) {
          holding them; six of those pixels are here, three times over. Desktop
          keeps its 7 — it has the room and the columns are read at arm's
          length. */
-      className={`flex cursor-pointer items-center justify-between gap-3 max-lg:py-1 py-[7px] ${first ? "" : "border-t border-white/[.14]"} ${
+      className={`flex cursor-pointer items-center justify-between gap-3 ${roomy ? "min-h-0 flex-1 max-h-[6.5rem] py-2" : "max-lg:py-1 py-[7px]"} ${first ? "" : "border-t border-white/[.14]"} ${
         /* ASK-42 E — THE MARK IS LOUDER. It was a 2px bar and a 5% white wash,
            which on near-black is a shade of the same black: the founder could
            see it only once they knew where to look. It is the SAME grammar,
@@ -289,12 +301,12 @@ function DeskRow({ r, first, testid }) {
             "Show all" by design (ASK-42), and a row that can double in height
             is a different card. Both carry the full title as a tooltip. */}
         <p title={r.title}
-          className={`truncate text-[15px] font-medium leading-5 tracking-[-0.006em] lg:whitespace-normal lg:line-clamp-2 ${r.deferred ? "text-white" : "text-neutral-300"}`}>{r.title}</p>
+          className={`truncate ${roomy ? "text-[17px] leading-6" : "text-[15px] leading-5"} font-medium tracking-[-0.006em] lg:whitespace-normal lg:line-clamp-2 lg:text-[15px] lg:leading-5 ${r.deferred ? "text-white" : "text-neutral-300"}`}>{r.title}</p>
         {(r.meta || r.deferred) && (
           /* text-sm + neutral-400, measured: the supporting line was 12px
              (9.6pt after --ui-scale) at 3.87:1 on the board's own ink, against
              an 11pt floor and a 4.5:1 requirement. 14px is 11.2pt. */
-          <p title={r.meta || undefined} className="truncate text-sm leading-5 text-neutral-400">
+          <p title={r.meta || undefined} className={`truncate text-neutral-400 ${roomy ? "text-[15px] leading-6 lg:text-sm lg:leading-5" : "text-sm leading-5"}`}>
             {r.deferred && <span className="font-medium text-neutral-300">Draft</span>}
             {r.deferred && r.meta ? " · " : ""}
             {r.meta}
@@ -305,7 +317,7 @@ function DeskRow({ r, first, testid }) {
           cross that used to sit between them are gone; the row is the link and
           the window it opens is where a decision is taken. */}
       <span className="flex shrink-0 items-center gap-2.5">
-        {r.amount && <span className="font-mono text-sm leading-5 text-neutral-300">{r.amount}</span>}
+        {r.amount && <span className={`font-mono text-neutral-300 ${roomy ? "text-[15px] leading-6 lg:text-sm lg:leading-5" : "text-sm leading-5"}`}>{r.amount}</span>}
         <OpenButton onClick={(e) => { e.stopPropagation(); r.onOpen(); }} label={`Open: ${r.title}`} />
       </span>
     </div>
@@ -530,7 +542,7 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
    only moment the content's real height can be read. Tied together, the
    measurement read the height of three rows and the card grew to exactly the
    size it already was. */
-function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, open, scrolls, onToggleExpanded, children }) {
+function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, open, scrolls, onToggleExpanded, roomy = false, children }) {
   const { t } = useTranslation();
   const showAll = open;
 
@@ -614,8 +626,14 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
           a fixed height would have clipped to three rows again. */}
       <div
         className={cn(PHONE_CARD_INK, "mt-1.5 min-h-0 rounded-tile p-2.5",
-          scrolls ? "flex flex-1 flex-col" : !open && "flex flex-col")}
-        style={!open ? { height: "calc(var(--desk-phone-body) + 1.25rem)" } : undefined}
+          scrolls ? "flex flex-1 flex-col" : !open && "flex flex-col",
+          roomy && !open && "flex-1")}
+        /* ROOMY RELEASES THE FIXED HEIGHT. --desk-phone-body pins the body to
+           three rows and the show-all slot, which is exactly right when the
+           card hugs its content and the slack below is the sheet's black. In
+           the sheet proposal the slack is the thing being removed: the card
+           takes the sheet's height and the rows share it. */
+        style={!open && !roomy ? { height: "calc(var(--desk-phone-body) + 1.25rem)" } : undefined}
         data-testid={`${testid}-card`}
       >
         <div className={scrolls ? "kr-scroll-quiet min-h-0 flex-1 overflow-y-auto" : !open ? "flex min-h-0 flex-1 flex-col" : undefined}>
@@ -634,7 +652,7 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
               <div className="m-auto py-3 text-center text-sm text-neutral-500" data-testid={`${testid}-empty`}>{empty}</div>
             )}
             {!loading && shown.map((r, i) => (
-              <DeskRow key={r.id} r={r} first={i === 0} testid={`desk-${tab}`} />
+              <DeskRow key={r.id} r={r} first={i === 0} roomy={roomy} testid={`desk-${tab}`} />
             ))}
           </>
         )}
@@ -763,6 +781,15 @@ export default function Desk() {
      DESKTOP IS UNTOUCHED: it has the width for five tiles and the room for the
      tall card, and neither of the founder's complaints exists there. */
   const kpiWide = isMobile || searchParams.get("kpi") === "wide";
+  /* ?desk=sheet — A PROPOSAL, rendered only in /design-lab (2026-10-02).
+     Today the phone's Desk is three stacked blocks: the black sheet, then the
+     slider, then the dock. The founder wants two: the sheet becomes the
+     primary container and runs all the way down to the dock, with the slider
+     sitting ON it rather than beside it.
+     What does NOT change is the gradient card inside — it keeps its own width
+     and its own content height, the three rows and the "Show all". The sheet
+     grows around it; the card is untouched. Nothing in the app reads this. */
+  const deskSheet = searchParams.get("desk") === "sheet";
   // KM-28 — ?decision=<id> redirects to the page rather than raising the
   // modal behind the Desk, so a notification and a tap land in the same place.
   // ?decision=<id> (notifications, pasted links) opens the same popup over
@@ -1594,7 +1621,7 @@ export default function Desk() {
       {/* DEX-SLIDER Part 2 — the slider takes the control's slot on a phone.
           The well is NOT deleted: it is the other branch of the flag and
           renders exactly as it always has when DEX_SLIDER is off. */}
-      {isMobile && (DEX_SLIDER ? (
+      {isMobile && !deskSheet && (DEX_SLIDER ? (
         /* mb-2 — THE FOURTH SEAM. The other three are the column's own gap; the dock
              is `fixed` and so is not in this column at all, which left the
              slider sitting 2px off it while every other seam was 9. The margin
@@ -1694,6 +1721,18 @@ export default function Desk() {
              hero's note: it used to be `shrink-0` while the hero grew, which
              is what opened the void above it. */
           DEX_SLIDER && "order-2 min-h-0 flex-1 lg:order-none lg:flex-none",
+          /* The sheet proposal: a flex column rather than a grid below lg, so
+             the card can sit at the top at its own height and the control at
+             the floor, and `mb-1` is the seam the slider used to carry — the
+             sheet now runs to the dock.
+             THE BOTTOM CORNERS FOLLOW THE SLIDER, which is the thing now
+             sitting in them. Nested rounded shapes only look right when the
+             outer radius is the inner one PLUS the gap between them — 48px of
+             pill on the slider, 8px of side padding, which is 3.5rem. The top
+             corners are untouched: nothing has changed up there, and a sheet
+             with two different radii top and bottom is correct here because
+             the two ends are doing different jobs. */
+          deskSheet && "max-lg:mb-1 max-lg:flex max-lg:flex-col max-lg:rounded-b-[3.5rem]",
           showDecisions && "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]",
           /* PILOT — the card stays its minimal content height on a phone (it does
              NOT grow to fill). The stack is top-aligned, so closing the demo
@@ -1706,6 +1745,7 @@ export default function Desk() {
         {isMobile && (
         <PhoneTabCard
           tone={phoneTab === "decisions" ? "needs" : phoneTab === "approvals" ? "flag" : "today"}
+          roomy={deskSheet}
           testid="desk-phone-card"
           tabs={phoneTabs}
           tab={phoneTab}
@@ -1766,6 +1806,36 @@ export default function Desk() {
             </div>
           ) : null}
         </PhoneTabCard>
+        )}
+
+        {/* THE CONTROL, ON THE SHEET. `mt-auto` is what puts it at the sheet's
+            floor rather than directly under the card: the board is a flex
+            column in this variant, the card keeps its content height at the
+            top, and the slack between them belongs to the sheet. */}
+        {isMobile && DEX_SLIDER && deskSheet && (
+          /* mb-2 — EVEN, not merely bigger. The control sat on the sheet's own
+             floor with about 10 real pixels under it; mb-5 fixed that and
+             overshot, giving 26 below against 16 above. The board's own padding
+             is 0.75rem (9.6 real) below lg, so mb-2 adds 6.4 and the two seams
+             meet at 16. Measured, both sides. */
+          <div className="mt-auto mb-2 flex shrink-0 items-center px-1" data-testid="desk-insight">
+            <DexSlider
+              /* ON INK. Measured in the first render of this proposal: the
+                 light well's glass over the black sheet samples to rgb(22,22,24)
+                 and the ends, which are near-black foreground ink, came out at
+                 1.05:1 — invisible. A layout cannot be judged through a control
+                 you cannot read, so the slider gets the dark-surface treatment
+                 the dock already has. */
+              tone="ink"
+              onAsk={() => doors?.openAsk?.()}
+              onDecide={() => setDecideOpen(true)}
+              readLevel={dexMeter}
+              capturing={dexLive.capturing}
+              recording={dexLive.recording}
+              levelsRef={dexLive.levelsRef}
+              onStop={dexStop}
+            />
+          </div>
         )}
 
         {!isMobile && showDecisions && (

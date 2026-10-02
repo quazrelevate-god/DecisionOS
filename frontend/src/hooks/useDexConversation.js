@@ -48,6 +48,9 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
   // ASK-32 1.6 — files attached to the next decision, and the held recording
   // the draft came from (its words are reviewed here, then sent on as ONE note).
   const [pendingFiles, setPendingFiles] = useState([]);
+  /* A COUNT, not a boolean: two files can be going up at once and a boolean
+     would be cleared by whichever finished first. */
+  const [attaching, setAttaching] = useState(0);
   const heldNoteRef = useRef(null);
   // ASK-33 Phase 3 — what the last decide-channel send carried, for Retry.
   const lastSentRef = useRef(null);
@@ -255,8 +258,25 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
      backend can already answer; the sheet was simply posting to the endpoint
      that files things away rather than the one that reads them. No backend
      change: this is two existing endpoints wired the right way round. */
+  /* THE FILE IS IN THE ROW BEFORE IT IS ON THE SERVER (2026-10-02, founder).
+     Uploading used to be invisible until it finished and then the chip simply
+     appeared — and because `attach` raises `busy`, the transcript meanwhile
+     said "Thinking…", which is a lie: Dex is not thinking about anything, a
+     file is going up a wire. The founder's call is the ordinary one every app
+     makes — show the thing you are waiting for, blank and pulsing.
+     So a placeholder goes in immediately, carrying the File itself (which is
+     local, so its preview is available long before the upload is), and is
+     replaced in place when the id comes back. `uploading` is what the chip
+     reads to draw the pulse; `attaching` is what the transcript reads to keep
+     quiet. The placeholder is removed on failure, so a chip never outlives the
+     upload it stood for. */
   const attach = useCallback(async (file, label = "File") => {
     if (!file) return;
+    const tempId = `up_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    setPendingFiles((p) => [...p, {
+      id: tempId, name: file.name, type: file.type || "", file, uploading: true,
+    }]);
+    setAttaching((n) => n + 1);
     setBusy(true);
     try {
       const fd = new FormData();
@@ -274,13 +294,20 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
       const id = data?.id || data?.file?.id;
       if (id) {
         /* ASK-33 — the entry also keeps the File and its type, so the Desk
-           well can draw a preview chip. DexChat reads the name and the type. */
-        setPendingFiles((p) => [...p, { id, name: file.name, type: file.type || "", file }]);
+           well can draw a preview chip. DexChat reads the name and the type.
+           Replaced IN PLACE, so the chip the founder is already looking at
+           becomes the real one rather than flickering away and back. */
+        setPendingFiles((p) => p.map((f) => (f.id === tempId
+          ? { id, name: file.name, type: file.type || "", file }
+          : f)));
+      } else {
+        setPendingFiles((p) => p.filter((f) => f.id !== tempId));
       }
       // An upload that came back without an id attached nothing, whatever it
       // said; the caller must not treat it as done.
       return id ? { ok: true, id } : { ok: false, message: "That upload didn't go through." };
     } catch (err) {
+      setPendingFiles((p) => p.filter((f) => f.id !== tempId));
       const detail = err.response?.data?.detail;
       const message = typeof detail === "string" && detail ? detail : "That upload didn't go through.";
       // A failure DOES belong in the transcript when there is one — it is the
@@ -289,6 +316,7 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
       push({ role: "dex", text: message });
       return { ok: false, message };
     } finally {
+      setAttaching((n) => Math.max(0, n - 1));
       setBusy(false);
     }
   }, [channel, push]);
@@ -416,7 +444,7 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
     dex?.startRecording?.();
   }, [ask, draft, dex, mode]);
 
-  return { log, busy, mode, setMode, draft, setDraft, draftKept, setDraftFromVoice, ask, attach, removeFile, retry, adopt, canRetry, submit, fabIntent, pendingFiles };
+  return { log, busy, mode, setMode, draft, setDraft, draftKept, setDraftFromVoice, ask, attach, removeFile, retry, adopt, canRetry, submit, fabIntent, pendingFiles, attaching: attaching > 0 };
 }
 
 export default useDexConversation;

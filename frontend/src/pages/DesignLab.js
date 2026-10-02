@@ -513,7 +513,12 @@ const DEVICES = [
 
 const KPI_VARIANTS = [
   { id: "ships", label: "What ships now", q: "" },
-  { id: "wide", label: "Proposal · no Spend, Workflows full width", q: "&kpi=wide" },
+  { id: "wide", label: "Reference · the KPI proposal, now shipped (kept for comparison)", q: "&kpi=wide" },
+  /* 2026-10-02 — the Desk as two blocks instead of three: the black sheet
+     becomes the primary container, runs to the dock, and carries the Ask/Decide
+     control on it. The gradient card inside keeps its own width and its own
+     content height — it is the sheet that grows, not the card. */
+  { id: "sheet", label: "Proposal · the sheet runs to the dock, with the control on it", q: "&desk=sheet" },
 ];
 
 /** One device, one variant, measured where it matters: does the label fit. */

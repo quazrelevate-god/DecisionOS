@@ -153,22 +153,34 @@ function AttachedChip({ file, onRemove, disabled }) {
     setSrc(url);
     return () => URL.revokeObjectURL(url);
   }, [isImage, file.file]);
+  /* SQUARE, AND BIG ENOUGH TO BE A PREVIEW. It was a 24px circle, which is a
+     bullet, not a preview of a photograph of a delivery note — and a circle
+     crops the corners off the one thing it is meant to show. 40px square with
+     the control radius.
+     WHILE IT UPLOADS it is blank and pulsing, the ordinary thing every app
+     does. The founder's objection was to the transcript saying "Thinking…"
+     over an upload, which is not what is happening; this is what is happening,
+     drawn where it happens. */
+  const uploading = !!file.uploading;
   return (
-    <li className="flex h-8 max-w-[11rem] items-center gap-1.5 rounded-pill bg-white/15 pl-1 pr-0.5 text-[14px] text-white/85">
-      {src
-        ? <img src={src} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />
+    <li className="flex h-12 max-w-[13rem] items-center gap-2 rounded-[1.1rem] bg-white/15 p-1 pr-1 text-[14px] text-white/85">
+      {uploading
+        ? <span className="ds-skeleton h-10 w-10 shrink-0 rounded-control" aria-hidden="true" />
+        : src
+        ? <img src={src} alt="" className="h-10 w-10 shrink-0 rounded-control object-cover" />
         : (
-          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white/10">
-            <Paperclip size={11} weight="bold" aria-hidden="true" />
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-control bg-white/10">
+            <Paperclip size={14} weight="bold" aria-hidden="true" />
           </span>
         )}
-      <span className="min-w-0 truncate" title={file.name}>{file.name}</span>
+      <span className={cn("min-w-0 truncate", uploading && "text-white/55")}
+            title={file.name}>{uploading ? "Uploading…" : file.name}</span>
       {/* 24px drawn; the app's touch rule gives the button 44px below lg and
           the row's own height keeps it from colliding with the chip beside it. */}
       <button
         type="button"
         onClick={onRemove}
-        disabled={disabled}
+        disabled={disabled || uploading}
         aria-label={`Remove ${file.name}`}
         className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-white/60 hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-40"
       >
@@ -323,7 +335,7 @@ function Bubble({ m, index }) {
  * @param {object}   dex     the shared useDexCapture instance from Layout
  */
 export function DexChat({ open, onClose, dex, chat, channel }) {
-  const { log, busy, mode, setMode, ask, attach, removeFile, retry, canRetry, pendingFiles = [] } = chat;
+  const { log, busy, mode, setMode, ask, attach, removeFile, retry, canRetry, pendingFiles = [], attaching = false } = chat;
   const navigate = useNavigate();
   /* ASK-33 Phase 4 — Review opens the decision the way the phone already opens
      one: /inbox?decision=<id>, which the Desk raises in DecisionDialog, as it
@@ -508,7 +520,12 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                   index={i}
                 />
               ))}
-              {busy && <Bubble m={{ role: "dex", text: "Thinking…", pending: true }} index={log.length} />}
+              {/* NOT WHILE A FILE IS GOING UP. `attach` raises the same `busy`
+                  that a question does, so the transcript used to answer an
+                  upload with "Thinking…" — Dex is not thinking about anything
+                  yet, and the founder is watching the wrong thing. The chip
+                  above says what is actually happening. */}
+              {busy && !attaching && <Bubble m={{ role: "dex", text: "Thinking…", pending: true }} index={log.length} />}
               <div ref={endRef} />
             </div>
             </PresenceContext.Provider>

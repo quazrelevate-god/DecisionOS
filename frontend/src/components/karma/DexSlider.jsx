@@ -96,7 +96,15 @@ async function tick(style) {
  */
 export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false,
                             recording = false, onStop, levelsRef = null,
+                            /* "light" — the control sits on the page's own pale
+                               ground, which is everywhere it ships today.
+                               "ink"   — it sits on the black sheet. The well
+                               inverts (dark glass, light inset) and the ends go
+                               white, because near-black ink on that sheet
+                               measured 1.05:1. */
+                            tone = "light",
                             disabled = false, className }) {
+  const onInk = tone === "ink";
   const { t } = useTranslation();
   const trackRef = React.useRef(null);
   const handleRef = React.useRef(null);
@@ -263,7 +271,8 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
            over the well's own wash lands at 2.99:1 for a 12pt label, against
            the 4.5:1 that accessibility.md › Contrast requires up to 17pt. At
            70% it measures 6.78:1. */
-        "pointer-events-none select-none text-[15px] font-medium text-foreground/70",
+        "pointer-events-none select-none text-[15px] font-medium",
+        onInk ? "text-white/75" : "text-foreground/70",
         side === "ask" ? "pl-7" : "pr-7"
       )}
     >{children}</span>
@@ -273,7 +282,8 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
     <div className={cn("flex w-full items-center", className)} data-testid="dex-slider">
       <div
         ref={trackRef}
-        className="kr-slider-well relative flex h-[var(--desk-slider-track)] w-full items-center justify-between overflow-hidden"
+        className={cn("kr-slider-well relative flex h-[var(--desk-slider-track)] w-full items-center justify-between overflow-hidden",
+          onInk && "kr-slider-well--ink")}
         data-at={at || undefined}
       >
         {/* The ripple, under everything and reachable by nothing: VoiceRipple's
@@ -313,7 +323,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
               levelsRef={levelsRef}
               levels={levelsRef?.current}
               live={recording}
-              tone="ink"
+              tone={onInk ? "onDark" : "ink"}
               className="h-full w-full"
             />
           </div>

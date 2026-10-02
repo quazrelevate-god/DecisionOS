@@ -3519,6 +3519,30 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
             inset -7px -7px 14px hsl(0 0% 100% / .62);
     }
 
+    /* THE SAME CHANNEL, CUT INTO INK — and it has to come AFTER the rule above,
+       because the two are equally specific and the later one wins. Written
+       before it the first time, which is why the pill stayed grey however the
+       colours were tuned.
+       The first cut of this lifted a white wash over the black, which read as a
+       mid-grey pill LYING ON the sheet rather than a channel cut INTO it — the
+       founder's words, and they were right: a lighter fill is the opposite of
+       pressed. So the ground is the sheet's own ink, the same hsl, and the pair
+       of inset shadows is the one .kr-desk-board already uses to look pressed
+       in black: 10px/22px of full black from the top-left, an 8px/18px 14%
+       white catch from the bottom-right. The well IS the sheet, with a groove
+       in it, and nothing is added on top — which is why no fill shows.
+       The blur goes with it: the board is opaque, so there is nothing behind
+       this to see through and a backdrop-filter could only pull in light that
+       is not there. */
+    .kr-slider-well--ink {
+        background: hsl(240 4% 9%);
+        box-shadow:
+            inset 10px 10px 22px hsl(0 0% 0% / 1),
+            inset -8px -8px 18px hsl(0 0% 100% / .14);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
     /* THE SLIDER'S RIPPLE IS VoiceRipple NOW, not CSS. The first cut here was
        three expanding rings on a keyframe; the founder could not see them at
        all, and handed over the lab's own config instead — so the control runs

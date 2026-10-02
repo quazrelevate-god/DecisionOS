@@ -223,11 +223,15 @@ const FRAMEWORK_PHRASES = {
   "conflict": "Somebody else changed this first. Reload and try again.",
 };
 
+/** Our sentence for one of HTTP's reason phrases, or "" when it is not one. */
+function humanPhrase(detail) {
+  return FRAMEWORK_PHRASES[String(detail).trim().toLowerCase().replace(/\.$/, "")] || "";
+}
+
 export function formatApiError(detail) {
   if (detail == null) return "Something went wrong. Please try again.";
   if (typeof detail === "string") {
-    const framework = FRAMEWORK_PHRASES[detail.trim().toLowerCase().replace(/\.$/, "")];
-    return framework || detail;                    // ours, already in English
+    return humanPhrase(detail) || detail;          // ours, already in English
   }
   if (Array.isArray(detail)) {
     /* One sentence per field, and each field only once: a single bad address
@@ -337,6 +341,29 @@ export const SESSION_LOST_EVENT = "dos:session-lost";
 api.interceptors.response.use(
   (r) => r,
   (err) => {
+    /* 2026-10-02 — THE TRANSLATION HAPPENS HERE, NOT AT THE CALL SITE.
+     *
+     * formatApiError turns HTTP's reason phrases into sentences, and 141
+     * places use it. A census found 88 MORE that read e.response.data.detail
+     * and show it raw, so approving a decision against a 500 still put the
+     * words "Internal Server Error" on screen — the exact fault that fix was
+     * for, surviving in a third of the app.
+     *
+     * Rewriting the detail once, here, reaches every one of them and every
+     * one written tomorrow: by the time any call site sees it, the framework's
+     * phrase is already a sentence. Only WHOLE matches are replaced, so our
+     * own messages are untouched, and nothing in the app branches on these
+     * strings (lib/aiConsent looks for its own code, which is not one).
+     * A dict detail -- our {code, message} shape -- is left alone entirely.
+     */
+    try {
+      const d = err?.response?.data;
+      if (d && typeof d.detail === "string") {
+        const said = humanPhrase(d.detail);
+        if (said) d.detail = said;
+      }
+    } catch (e) { /* never let tidying the words swallow the error itself */ }
+
     if (err?.response?.status === 401) {
       const url = String(err?.config?.url || "");
       if (!AUTH_PATHS.some((p) => url.includes(p))) {

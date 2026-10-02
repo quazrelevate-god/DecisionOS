@@ -14,6 +14,8 @@ import re  # noqa: F401  (used by _apm_send_and_fetch_otp)
 import hashlib
 import secrets
 import logging  # noqa: F401  (used for provider warnings)
+
+logger = logging.getLogger("decisionos")
 from datetime import datetime, timezone, timedelta
 
 import httpx  # noqa: F401  (APM gateway calls)
@@ -66,7 +68,7 @@ async def _apm_send_and_fetch_otp(norm_phone: str):
             if m:
                 return m.group(0)
             logging.error(f"APM OTP: no 6-digit code in response: {(r.text or '')[:300]}")
-            raise HTTPException(status_code=502, detail="SMS provider returned an unexpected response")
+            raise HTTPException(status_code=502, detail="We couldn't send the code just now. Try again in a moment.")
     except HTTPException:
         raise
     except Exception as e:
@@ -139,7 +141,8 @@ async def _issue_otp(norm: str, display_phone: str, tenant_id: str, enforce_cool
         # resolves a concrete tenant_id before calling us. A missing
         # tenant here is a code bug, not user input, so surface it
         # loudly instead of silently writing an untethered OTP.
-        raise HTTPException(status_code=500, detail="Internal error: OTP issued without tenant scope")
+        logger.error("[otp] refusing to issue an OTP with no tenant scope -- every caller resolves one before calling _issue_otp; this is a code bug")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
     key = {"phone": norm, "tenant_id": tenant_id}
     if enforce_cooldown:
         existing = await db.otp_codes.find_one(key, {"_id": 0})

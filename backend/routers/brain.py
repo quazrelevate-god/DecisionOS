@@ -1027,4 +1027,4 @@ async def export(inp: ExportRequest, user: dict = Depends(require_perm("brain_ex
         return StreamingResponse(bio, media_type="application/pdf",
                                  headers={"Content-Disposition": "attachment; filename=company-brain.pdf"})
 
-    raise HTTPException(status_code=400, detail="Unsupported format")
+    raise HTTPException(status_code=400, detail="That format isn't available. Choose PDF or CSV.")

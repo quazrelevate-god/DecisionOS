@@ -118,8 +118,34 @@ def test_the_500_sentence_says_what_to_do_and_blames_nobody():
 
 def test_a_phrase_is_matched_whole_so_our_own_words_survive():
     """A sentence of ours that merely CONTAINS "not found" is still ours."""
-    assert "FRAMEWORK_PHRASES[detail.trim().toLowerCase()" in API
-    assert ".includes(" not in API[API.index("FRAMEWORK_PHRASES = {"):API.index("export function formatApiError")]
+    assert "function humanPhrase(detail)" in API
+    assert "FRAMEWORK_PHRASES[String(detail).trim().toLowerCase()" in API
+    body = API[API.index("function humanPhrase(detail)"):API.index("export function formatApiError")]
+    assert ".includes(" not in body
+
+
+# ───────── 2b. and it reaches the 88 places that never asked ──────────────
+def test_the_detail_is_translated_once_in_the_interceptor():
+    """A census found 141 call sites using formatApiError and 88 MORE reading
+    e.response.data.detail raw — so approving a decision against a 500 still
+    put "Internal Server Error" on screen, the exact fault that fix was for,
+    surviving in a third of the app. Rewriting the detail in the interceptor
+    reaches every one of them, and every one written tomorrow."""
+    at = API.index("humanPhrase(d.detail)")
+    block = API[at - 900:at + 300]
+    assert 'typeof d.detail === "string"' in block, "a dict detail is our own shape; leave it"
+    assert "try {" in block, "tidying the words must never swallow the error"
+    # it lives in the interceptor that owns the session signal, not a new one
+    assert API.count("api.interceptors.response.use") == 3, "a fourth would be a second place to look"
+
+
+def test_the_interceptor_runs_before_the_session_check():
+    """Order matters only for readability here, but the 401 handler and the
+    rewrite must both still run — neither returns early."""
+    at = API.index("humanPhrase(d.detail)")
+    after = API[at:at + 1500]
+    assert "SESSION_LOST_EVENT" in after, "the 401 signal still follows it"
+    assert "return Promise.reject(err);" in after, "and the error is still rejected"
 
 
 # ───────── 3. nothing asks through the browser any more ────────────────────
@@ -202,3 +228,45 @@ def test_closing_a_task_still_takes_it_out_of_the_address():
 def test_the_banner_it_unblocks_is_still_there():
     assert 'data-testid="access-restricted-banner"' in MYWORK
     assert "task_missing" in MYWORK
+
+
+# ───────── 6. what the server itself says ──────────────────────────────────
+BE = Path(__file__).resolve().parents[1]
+BILLING = (BE / "routers" / "billing.py").read_text(encoding="utf-8")
+OTP = (BE / "services" / "otp.py").read_text(encoding="utf-8")
+
+
+def test_the_upgrade_button_stops_naming_our_environment_variables():
+    """A census of 545 server-side raises found this one, and it is the worst
+    of them: /billing/checkout is owner-facing, so an SME founder pressing
+    Upgrade before billing was switched on was told to set
+    BILLING_LANDING_URL and RAZORPAY_KEY_ID."""
+    assert "RAZORPAY_KEY_ID env vars" not in BILLING
+    assert "BILLING_LANDING_URL +" not in BILLING
+    assert "Nothing has been charged" in BILLING, "say the thing they are afraid of"
+
+
+def test_the_plan_refusal_names_plans_rather_than_a_field():
+    assert "Invalid plan_key" not in BILLING
+    assert "Choose Starter, Business or Enterprise." in BILLING
+
+
+def test_a_code_bug_is_shouted_in_the_log_and_not_at_the_founder():
+    """The comment above it asks to surface it loudly, and it should be —
+    loudly in the log. On screen, mid sign-in, "Internal error: OTP issued
+    without tenant scope" is a sentence about our code, not their phone."""
+    assert "Internal error: OTP issued without tenant scope" not in OTP
+    assert "this is a code bug" in OTP and "logger.error" in OTP
+    assert 'logger = logging.getLogger("decisionos")' in OTP, "or the log line NameErrors"
+
+
+def test_a_failed_text_message_says_what_to_do():
+    assert "SMS provider returned an unexpected response" not in OTP
+    assert "We couldn't send the code just now." in OTP
+
+
+def test_a_bare_not_found_is_carried_by_the_phrase_map():
+    """147 of the 545 raises are 404s and many say exactly "Not found", which
+    the interceptor now turns into a sentence. This records WHY those were
+    left alone at source rather than rewritten one by one."""
+    assert '"not found": "We couldn' in API and "find that" in API

@@ -123,7 +123,26 @@ def with_test_db():
 
         async def _main():
             from pymongo import AsyncMongoClient
-            client = AsyncMongoClient(url, serverSelectionTimeoutMS=8000)
+            # 2026-10-02 - WHY 30s AND NOT 8. The test database is remote
+            # (a Railway proxy), so every one of these ~400 running tests pays
+            # a real network connect. Measured from this machine: 1.3s when the
+            # path is warm, consistently, across fresh processes -- and one
+            # measured transient of 8.16 SECONDS. The budget was 8000ms, so a
+            # hiccup of that size did not slow a test down, it failed it, with
+            # a pymongo ServerSelectionTimeoutError that looked like a bug in
+            # whatever test happened to be running. That is the whole of the
+            # "load flake" that has been re-run by hand for three sessions.
+            # Server selection RETRIES throughout the window, so a wider budget
+            # costs nothing on the happy path (still 1.3s) and rides out the
+            # hiccup instead of turning it into a red suite.
+            client = AsyncMongoClient(
+                url,
+                serverSelectionTimeoutMS=30000,
+                # A scenario talks to one database from one coroutine; the
+                # default ceiling of 100 sockets per client is pressure on the
+                # remote for nothing.
+                maxPoolSize=8,
+            )
             db = client[name]
             try:
                 return await async_fn(db)

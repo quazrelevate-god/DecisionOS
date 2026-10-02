@@ -71,7 +71,7 @@ def _drop_db(db_name: str) -> None:
         raise RuntimeError(f"refusing to drop non-test database {db_name!r}")
     try:
         from pymongo import MongoClient
-        cli = MongoClient(_mongo_url(), serverSelectionTimeoutMS=8000)
+        cli = MongoClient(_mongo_url(), serverSelectionTimeoutMS=30000)
         cli.drop_database(db_name)
         cli.close()
     except Exception as exc:  # teardown must never mask the test result
@@ -146,7 +146,7 @@ def _wait_ready(base: str, proc: subprocess.Popen, seed_timeout: float, log_path
     #    attempts. Try again in 15 min."), which then locks out the real tests.
     #    Poll the isolated DB directly instead: zero HTTP, zero login attempts.
     from pymongo import MongoClient
-    cli = MongoClient(_mongo_url(), serverSelectionTimeoutMS=8000)
+    cli = MongoClient(_mongo_url(), serverSelectionTimeoutMS=30000)
     try:
         tdb = cli[db_name]
         while time.time() < deadline:

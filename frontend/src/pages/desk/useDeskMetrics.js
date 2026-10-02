@@ -9,10 +9,22 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import api from "../../lib/api";
+import { useAuth } from "../../context/AuthContext";
+import { hasPerm } from "../../lib/perms";
 
 const ymd = (d) => d.toISOString().slice(0, 10);
 
 export function useDeskMetrics() {
+  /* 2026-10-02 — DON'T ASK FOR WHAT YOU ARE NOT ALLOWED TO HAVE. Found walking
+     the app as a sales member: every Desk load fired GET /ledger/summary and
+     took a 403 back. The money tile was correctly hidden either way, so
+     nothing looked wrong on screen -- it was a guaranteed-to-fail request on
+     the busiest page in the product, once per member per load, landing in the
+     logs and in any monitoring as a permission error that nobody caused.
+     Ledger.js already gates its own copy of this query the same way. */
+  const { user } = useAuth();
+  const canLedger = user?.role === "owner" || hasPerm(user, "finance");
+
   const opsQ = useQuery({
     queryKey: ["operating-score", null],
     queryFn: () => api.get("/operating-score").then((r) => r.data),
@@ -31,6 +43,7 @@ export function useDeskMetrics() {
   const ledgerQ = useQuery({
     queryKey: ["ledger-summary"],
     queryFn: () => api.get("/ledger/summary").then((r) => r.data),
+    enabled: canLedger,
   });
 
   // Work buckets, client-side off /tasks — created/due dates are reliable

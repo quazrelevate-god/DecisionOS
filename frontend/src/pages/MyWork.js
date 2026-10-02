@@ -3664,12 +3664,16 @@ export default function MyWork({ only = null }) {
      the mobile band bar can sit in the fixed header while the columns render
      in the body; desktop shows all three columns and ignores it. */
   const [band, setBand] = useState("high");
+  /* Whether the person has picked a band themselves. Until they have, the
+     band is ours to choose well; after, it is theirs and we leave it. */
+  const bandChosen = useRef(false);
+  const pickBand = (key) => { bandChosen.current = true; setBand(key); };
   // Dismissing AI priority resets the band. It no longer clears Status: that
   // was so the list could never stay filtered by a control no longer on
   // screen, and since ASK-24 Status is always on screen — the desktop row and
   // the phone's filter sheet both carry it.
   useEffect(() => {
-    if (!aiPriority) setBand("high");
+    if (!aiPriority) { bandChosen.current = false; setBand("high"); }
   }, [aiPriority]);
   // MW-19 / ASK-24 — "Completed" is a Status now. A tab of "completed" can
   // only arrive from saved prefs written before that; move it across once.
@@ -3973,6 +3977,24 @@ export default function MyWork({ only = null }) {
   if (aiOn && !showingCompleted) {
     list = [...list].sort((a, b) => (scoreMap[b.id]?.priority_score || 0) - (scoreMap[a.id]?.priority_score || 0));
   }
+
+  /* 2026-10-02 — OPEN ON A BAND THAT HAS WORK IN IT.
+     Below lg only the selected band's column is on screen, and the band
+     started at "high" whatever the list held. Found walking the app: My Work
+     read "Nothing here" at 620px while the chips directly above it said
+     "Medium 3" — three open tasks, assigned to the person reading, one tap
+     away in a column they could not see. The counts were right and the list
+     was right; the choice of which column to show was wrong.
+     Only until they choose for themselves: a deliberate tap on an empty band
+     is an answer ("nothing is high"), and bouncing them out of it would be
+     the page arguing with them. */
+  const bandCounts = BANDS.map((b) => [b.key, list.filter((tk) => TIER_OF(tk) === b.key).length]);
+  const bandHasWork = Object.fromEntries(bandCounts);
+  const firstBandWithWork = (bandCounts.find(([, n]) => n > 0) || [])[0];
+  useEffect(() => {
+    if (!aiOn || bandChosen.current) return;
+    if (!bandHasWork[band] && firstBandWithWork) setBand(firstBandWithWork);
+  }, [aiOn, band, firstBandWithWork, bandHasWork]);
 
   // KR-14.6 · MOBILE HEADER — reference-driven layout for MyWork on phones:
   //   Row 1 (segment views only): h1 title left, [+ New Task] and the
@@ -4760,7 +4782,7 @@ export default function MyWork({ only = null }) {
                   {BANDS.map((b) => {
                     const n = list.filter((tk) => TIER_OF(tk) === b.key).length;
                     return (
-                      <button key={b.key} type="button" onClick={() => setBand(b.key)}
+                      <button key={b.key} type="button" onClick={() => pickBand(b.key)}
                         aria-pressed={band === b.key} data-testid={`priority-band-${b.key}`}
                         className={`kr-seg-compact flex h-9 flex-1 items-center justify-center gap-1.5 rounded-pill px-2 text-[12px] ${
                           band === b.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>

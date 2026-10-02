@@ -4,6 +4,10 @@ import { Link } from "react-router-dom";
 import { cn } from "../lib/utils";
 import { INK_PILL } from "./karma/glass";
 import { useHeaderSlot } from "./mobile/HeaderSlot";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
+  AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
+} from "./ui/alert-dialog";
 
 /**
  * KM-1 (2026-08-27) — this component accepted `eyebrow` and `title` and rendered
@@ -207,6 +211,98 @@ export function EmptyState({ title, hint, ctaLabel, onCta, ctaTo, secondary, tes
         </div>
       )}
     </div>
+  );
+}
+
+
+/* ASKING BEFORE SOMETHING IRREVERSIBLE, IN THE APP. (2026-10-02.)
+ *
+ * window.confirm is an OS dialog: on a phone it is a system sheet wearing none
+ * of this product's clothes, and inside the Capacitor WebView it is worse than
+ * ugly. ASK-2 and FUP-49 both record the real fault -- some browsers and embed
+ * contexts return false from it with NO VISIBLE UI, so the button looks dead
+ * and the founder presses it again. Workflows and My Work were fixed one at a
+ * time; this is that fix, as a component, so the rest are a two-line change.
+ *
+ * `danger` paints the action red. `busyLabel` holds the button while the call
+ * is in flight, because the dialog must not close on a request that can fail.
+ * The confirm button says what it DOES ("Erase Priya"), never "OK" -- a
+ * destructive action should be readable with the question out of view.
+ */
+export function ConfirmAction({
+  open, onOpenChange, title, description, confirmLabel, busyLabel,
+  cancelLabel = "Cancel", onConfirm, busy = false, danger = true, testid,
+}) {
+  return (
+    <AlertDialog open={open} onOpenChange={(v) => { if (!v && !busy) onOpenChange(false); }}>
+      <AlertDialogContent data-testid={testid || "confirm-action"}>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={busy}>{cancelLabel}</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => { e.preventDefault(); onConfirm(); }}
+            disabled={busy}
+            data-testid={testid ? `${testid}-go` : "confirm-action-go"}
+            className={danger ? "bg-danger-600 text-white hover:bg-danger-600/90" : undefined}>
+            {busy ? (busyLabel || "Working…") : confirmLabel}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+
+/* A LIST THAT COULD NOT LOAD MUST NOT READ AS A LIST WITH NOTHING IN IT.
+ * (2026-10-02, found by failing one endpoint in the browser.)
+ *
+ * With /api/contacts answering 500 and everything else healthy, CRM rendered
+ * "Buyers 0 · Partners 0 · Suppliers 0" and said nothing else. The company has
+ * contacts. That is worse than an ugly error: it is a confident wrong answer,
+ * on the page whose whole subject is who you sell to.
+ *
+ * It happens because a page reads `data || []` and a failed query and an empty
+ * one both arrive as nothing. The app's one no-signal screen does not catch it
+ * either -- that fires when /auth/me itself fails, so a PARTIAL outage, which
+ * is the common kind, walks straight past it.
+ *
+ * So: ask `isError` before `length === 0`, and render this instead of the empty
+ * state. It names what did not arrive, says plainly that the absence is not an
+ * answer, and offers the retry react-query already knows how to do.
+ *
+ * `what` is the thing in the founder's words -- "your contacts", "this month's
+ * spend" -- never an endpoint.
+ */
+export function LoadFailed({ what, onRetry, testid, className = "" }) {
+  return (
+    <div data-testid={testid || "load-failed"} className={cn("py-16 px-6 text-center", className)}>
+      <p className="text-base font-medium">Couldn't load {what}</p>
+      <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-muted-foreground">
+        This is a problem on our side, not an empty list — what you have is still there.
+      </p>
+      {onRetry && (
+        <button type="button" onClick={onRetry}
+          data-testid={testid ? `${testid}-retry` : "load-failed-retry"}
+          className={`mt-6 inline-flex h-11 items-center gap-2 rounded-pill px-5 text-sm font-medium ${INK_PILL}`}>
+          Try again
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* The same fact in one line, for a tile or a strip that has no room for the
+ * block above -- a KPI card, a count chip. A dash reads as zero; this does
+ * not. */
+export function LoadFailedInline({ what = "this", testid }) {
+  return (
+    <span data-testid={testid || "load-failed-inline"} className="text-sm text-muted-foreground"
+          title={`Couldn't load ${what}`}>
+      unavailable
+    </span>
   );
 }
 

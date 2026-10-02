@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "_comment": "Windows (Yogesh). JSON has no raw backslashes in strings \u2014 every one in a path must be doubled, or the whole file fails to parse and NONE of these servers can be started.",
+      "_comment": "Windows (Yogesh). JSON has no raw backslashes in strings — every one in a path must be doubled, or the whole file fails to parse and NONE of these servers can be started.",
       "name": "frontend",
       "runtimeExecutable": "cmd.exe",
       "runtimeArgs": [
@@ -31,6 +31,17 @@
       "url": "http://localhost:8001"
     },
     {
+      "_comment": "Windows (Yogesh). The REAL backend, PINNED to the throwaway database -- the twin of mac-backend, which Windows never had. DB_NAME is set on the command line and NOT read from backend/.env, because that file is the founder's and points at live data whenever it has been restored. Messaging keys are blanked for the same reason: backend/.env carries a live APM_SMS_API_KEY and no browser check may text a real person. DEV_OTP_IN_RESPONSE returns the code instead of sending it.",
+      "name": "win-backend-scratch",
+      "runtimeExecutable": "cmd.exe",
+      "runtimeArgs": [
+        "/c",
+        "set DB_NAME=dos_engine_0921c&& set DEV_OTP_IN_RESPONSE=1&& set APM_SMS_API_KEY=&& set APM_OTP_ENDPOINT=&& set TWILIO_ACCOUNT_SID=&& set TWILIO_AUTH_TOKEN=&& set TWILIO_FROM_NUMBER=&& set WHATSAPP_TOKEN=&& set WHATSAPP_PHONE_ID=&& set WHATSAPP_API_KEY=&& set WA_TENANT_ID=&& set SMTP_HOST=&& set RATE_LIMITS=off&& C:\\\\Users\\\\kyogesh\\\\Desktop\\\\Skills\\\\DecisioOS\\\\DecisionOS\\\\backend\\\\.venv\\\\Scripts\\\\python.exe -m uvicorn server:app --app-dir C:\\\\Users\\\\kyogesh\\\\Desktop\\\\Skills\\\\DecisioOS\\\\DecisionOS\\\\backend --host 127.0.0.1 --port 8001 --log-level warning"
+      ],
+      "port": 8001,
+      "url": "http://localhost:8001"
+    },
+    {
       "_comment": "macOS. Reads REACT_APP_BACKEND_URL from frontend/.env.",
       "name": "mac-frontend",
       "runtimeExecutable": "sh",
@@ -42,7 +53,7 @@
       "url": "http://localhost:3000"
     },
     {
-      "_comment": "macOS. The fixture API (scripts/fixture-server.mjs) \u2014 no database, no backend. Start it before mac-frontend to see the app with data in it.",
+      "_comment": "macOS. The fixture API (scripts/fixture-server.mjs) — no database, no backend. Start it before mac-frontend to see the app with data in it.",
       "name": "mac-fixture-api",
       "runtimeExecutable": "sh",
       "runtimeArgs": [
@@ -53,7 +64,7 @@
       "url": "http://localhost:8000"
     },
     {
-      "_comment": "macOS. The REAL backend, PINNED to the throwaway database. DB_NAME is set on the command line and NOT read from backend/.env, because that file is the founder's and points at the live database whenever it has been restored \u2014 starting a test backend must never depend on which way that file happens to be pointing. Messaging keys are blanked for the same reason: backend/.env carries a live APM_SMS_API_KEY, and no test may text a real person.",
+      "_comment": "macOS. The REAL backend, PINNED to the throwaway database. DB_NAME is set on the command line and NOT read from backend/.env, because that file is the founder's and points at the live database whenever it has been restored — starting a test backend must never depend on which way that file happens to be pointing. Messaging keys are blanked for the same reason: backend/.env carries a live APM_SMS_API_KEY, and no test may text a real person.",
       "name": "mac-backend",
       "runtimeExecutable": "sh",
       "runtimeArgs": [
@@ -64,7 +75,7 @@
       "url": "http://localhost:8000"
     },
     {
-      "_comment": "macOS. The PRODUCTION web server (frontend/server.js) against the built frontend/build \u2014 the same process Railway runs. Use it to check things that only exist in production: the /.well-known/assetlinks.json route, the SPA fallback, and the runtime PostHog key substitution. Needs `npm run build` first.",
+      "_comment": "macOS. The PRODUCTION web server (frontend/server.js) against the built frontend/build — the same process Railway runs. Use it to check things that only exist in production: the /.well-known/assetlinks.json route, the SPA fallback, and the runtime PostHog key substitution. Needs `npm run build` first.",
       "name": "mac-web-prod",
       "runtimeExecutable": "sh",
       "runtimeArgs": [

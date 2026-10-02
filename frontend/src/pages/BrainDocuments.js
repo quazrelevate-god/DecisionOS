@@ -4,8 +4,8 @@ import {
   Upload, MagnifyingGlass, File, Trash, PencilSimple, DownloadSimple, Lock,
   X,
 } from "@phosphor-icons/react";
-import api from "../lib/api";
-import { EmptyState, Loader } from "../components/common";
+import api, { formatApiError } from "../lib/api";
+import { EmptyState, Loader, ConfirmAction } from "../components/common";
 import { useAuth } from "../context/AuthContext";
 
 const KINDS = [
@@ -205,17 +205,23 @@ export function DocumentsPanel() {
     searchTimer.current = setTimeout(() => load(v, kind), 250);
   };
 
-  const remove = async (doc) => {
-    if (deleting) return;
-    const ok = window.confirm(`Delete "${doc.title}"? Employees will no longer be able to find or open this document.`);
-    if (!ok) return;
+  /* 2026-10-02 — ASKED IN THE APP, NOT BY THE BROWSER. This was
+     window.confirm, which some embed contexts (the Capacitor WebView among
+     them) answer false with nothing drawn, so Delete looked broken. Same fault
+     ASK-2 fixed on Workflows and FUP-49 on My Work. */
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const remove = (doc) => { if (!deleting) setPendingDelete(doc); };
+  const confirmRemove = async () => {
+    const doc = pendingDelete;
+    if (!doc || deleting) return;
     setDeleting(doc.id);
     try {
       await api.delete(`/brain/documents/${doc.id}`);
       setDocs((prev) => prev.filter((d) => d.id !== doc.id));
       toast.success("Removed from Company Brain");
+      setPendingDelete(null);
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Couldn't delete");
+      toast.error(formatApiError(e.response?.data?.detail) || "Couldn't delete");
     } finally {
       setDeleting(null);
     }
@@ -321,6 +327,20 @@ export function DocumentsPanel() {
       )}
 
       {showUpload && <UploadDialog onClose={() => setShowUpload(false)} onUploaded={(d) => setDocs((prev) => [d, ...prev])} />}
+
+      <ConfirmAction
+        open={!!pendingDelete}
+        onOpenChange={() => setPendingDelete(null)}
+        title="Remove this from the Company Brain?"
+        description={pendingDelete
+          ? `Nobody will be able to find or open “${pendingDelete.title}” again, and Dex will stop answering from it. This can't be undone.`
+          : ""}
+        confirmLabel="Remove it"
+        busyLabel="Removing…"
+        cancelLabel="Keep it"
+        busy={!!deleting}
+        onConfirm={confirmRemove}
+        testid="brain-delete-confirm" />
     </div>
   );
 }

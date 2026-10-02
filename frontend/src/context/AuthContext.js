@@ -23,6 +23,21 @@ function forgetPersonOnDevice(person) {
 import { toast } from "sonner";
 import { setAppLanguage } from "../i18n";
 
+/* The page somebody was on when their session ended, handed to the sign-in
+   screen so it can put them back. Read once and cleared: a stale value would
+   send a later, deliberate sign-in somewhere they did not ask for. */
+export const RETURN_TO_KEY = "dos_return_to";
+
+export function takeReturnTo() {
+  try {
+    const v = sessionStorage.getItem(RETURN_TO_KEY);
+    if (v) sessionStorage.removeItem(RETURN_TO_KEY);
+    return v || null;
+  } catch (e) {
+    return null;
+  }
+}
+
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
@@ -133,6 +148,18 @@ export function AuthProvider({ children }) {
           setUser(null);
           setTenant(null);
           forgetSessionHere();          // settled: the session is gone
+          /* 2026-10-02 — AND REMEMBER WHERE THEY WERE. The toast below already
+             explains what happened; what it could not do was give the page
+             back. Signing in again landed everybody on the Desk, so a founder
+             pulled out of Finance mid-reconciliation had to find their way
+             back to it. sessionStorage, not local: this belongs to the tab
+             that was thrown out, and must not follow them to another one. */
+          try {
+            const here = window.location.pathname + window.location.search;
+            if (here && here !== "/" && !here.startsWith("/login")) {
+              sessionStorage.setItem(RETURN_TO_KEY, here);
+            }
+          } catch (e) { /* private window: they land on the Desk, as before */ }
           toast.info("You were signed out. Sign in again to carry on.", { id: "session-lost" });
         }
       } finally {
@@ -170,6 +197,7 @@ export function AuthProvider({ children }) {
     return data;
   };
 
+  /* Where the session was lost, for the sign-in page to return them to. */
   const register = async (payload) => {
     const { data } = await api.post("/auth/register", payload);
     persist(data);

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { useAuth } from "../context/AuthContext";
+import { useAuth, takeReturnTo } from "../context/AuthContext";
 import api, { formatApiError } from "../lib/api";
 import { KarmaLogo } from "../components/karma/Logo";
 import OtpBoxes from "../components/auth/OtpBoxes";
@@ -154,13 +154,13 @@ export default function Login() {
      was show a signed-in founder the sign-in screen again. */
   const doLogin = async (e) => {
     e.preventDefault(); setError(""); setBusy(true);
-    try { await login(form.email, form.password); navigate("/", { replace: true }); }
+    try { await login(form.email, form.password); navigate(takeReturnTo() || "/", { replace: true }); }
     catch (err) { setError(formatApiError(err.response?.data?.detail) || "Failed"); }
     finally { setBusy(false); }
   };
   const demoLogin = async (email) => {
     setError(""); setBusy(true);
-    try { await login(email, "demo1234"); navigate("/", { replace: true }); }
+    try { await login(email, "demo1234"); navigate(takeReturnTo() || "/", { replace: true }); }
     catch (err) { setError(formatApiError(err.response?.data?.detail)); }
     finally { setBusy(false); }
   };
@@ -208,7 +208,7 @@ export default function Login() {
        Desk, where the phone's Back gesture would show it to somebody who has
        just signed in. B18 adds the clearing of a refused code. */
     e?.preventDefault?.(); setError(""); setBusy(true);
-    try { await loginWithOtp(otpPhone, otpCode, otpTenant, invite?.token); navigate("/", { replace: true }); }
+    try { await loginWithOtp(otpPhone, otpCode, otpTenant, invite?.token); navigate(takeReturnTo() || "/", { replace: true }); }
     catch (err) {
       setError(formatApiError(err.response?.data?.detail) || "Failed");
       /* B18 (2026-09-29) — A REFUSED CODE WAS LEFT IN THE BOXES. The founder

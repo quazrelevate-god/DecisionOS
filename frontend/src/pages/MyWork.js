@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import api from "../lib/api";
 import { timeAgo, fullTime, TASK_STATUS_LABELS } from "../lib/format";
 import { roleLabel } from "../lib/departments";
-import { PageHeader, Chip, EmptyState, SkeletonCard, StickyHeader } from "../components/common";
+import { PageHeader, Chip, EmptyState, LoadFailed, SkeletonCard, StickyHeader } from "../components/common";
 import { useAuth } from "../context/AuthContext";
 import { userPerms } from "../lib/perms";
 import { canAssignPerson, canAssignTeam, canSeeAllTasks, taskEditRights } from "../lib/taskAccess";
@@ -3801,9 +3801,22 @@ export default function MyWork({ only = null }) {
   useEffect(() => { if (focusTaskId) setOpenId(focusTaskId); }, [focusTaskId]);
   // ...and closing it takes the link out of the address, so a refresh doesn't
   // reopen a task the reader has already put away.
+  /* 2026-10-02 — TWO GUARDS, AND THEY ARE WHY ASK-28's BANNER WAS NEVER SEEN.
+     This ran on mount, in the same commit as the effect above: `openId` was
+     still null while setOpenId was in flight, so the very first pass decided
+     the task had been "closed" and stripped ?task= from the address. With the
+     id gone, `focusTaskId` went empty, `focusDenied` could never become true,
+     and the "This task no longer exists" banner below — written, translated,
+     dismissible — was unreachable code. Following a link to a deleted task
+     dropped you on the list with no word about it.
+     `hadOpen` makes closing mean closing: the address is only tidied after
+     the task has actually been open once. And a denied or missing task keeps
+     its id, because that id is what the banner is about. */
+  const hadOpen = useRef(false);
+  useEffect(() => { if (openId) hadOpen.current = true; }, [openId]);
   useEffect(() => {
-    if (!openId && focusTaskId) setFilterParams({ task: "", focus: "" });
-  }, [openId]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!openId && focusTaskId && hadOpen.current && !focusDenied) setFilterParams({ task: "", focus: "" });
+  }, [openId, focusDenied]); // eslint-disable-line react-hooks/exhaustive-deps
   // The chosen view lives in ?view=, so Back and Forward move between views:
   // when the address changes, the page follows it. The first render has
   // already read it.
@@ -3859,7 +3872,13 @@ export default function MyWork({ only = null }) {
   const focusDrawer = (shownIds, listReady) => (
     focusTaskId && focusQ.data && listReady && openId === focusTaskId && !shownIds.includes(focusTaskId) ? (
       <div hidden data-testid="focus-task-standalone">
-        <TaskCard t={focusQ.data} open onToggleOpen={() => setOpenId(null)} highlight
+        <TaskCard t={focusQ.data} open
+          /* Closing the task a link opened also takes it out of the address,
+             so a refresh does not reopen what the reader just put away. This
+             lives on the close itself rather than in an effect watching
+             `openId`, which is what used to strip the id on MOUNT and make
+             the "no longer exists" banner unreachable. */
+          onToggleOpen={() => { setOpenId(null); setFilterParams({ task: "", focus: "" }); }} highlight
           onChange={() => { refresh(); qc.invalidateQueries({ queryKey: ["task", focusTaskId] }); }}
           members={members} roleOptions={roleOptions} />
       </div>
@@ -4845,12 +4864,20 @@ export default function MyWork({ only = null }) {
               ))}
             </div>
           )}
+          {/* 2026-10-02 — AND BEFORE EITHER EMPTY STATE, ASK WHETHER THE LIST
+              ARRIVED. Both of them below are sentences about a founder's work
+              ("Nothing here", "No tasks yet"), and a failed fetch reached them
+              as an empty array, so a broken call told somebody with fourteen
+              open tasks that they had none. */}
+          {tasksQ.isError && !tasksQ.data && (
+            <LoadFailed what="your tasks" onRetry={() => tasksQ.refetch()} testid="mywork-load-failed" />
+          )}
           {/* E2-13: empty state with a CTA. Sends the founder to Desk
               (where decisions become tasks) rather than a dead screen. */}
           {/* ASK-24 — the filters emptied the list, not the workspace: say
               so, and offer the way back, instead of "tasks appear once
               decisions are approved". */}
-          {!tasksQ.isLoading && list.length === 0 && filtersActive && all.length > 0 && (
+          {!tasksQ.isLoading && !tasksQ.isError && list.length === 0 && filtersActive && all.length > 0 && (
             <EmptyState
               testid="mywork-empty-filtered"
               title="No tasks match these filters"
@@ -4859,7 +4886,7 @@ export default function MyWork({ only = null }) {
               onCta={clearFilters}
             />
           )}
-          {!tasksQ.isLoading && list.length === 0 && !(filtersActive && all.length > 0) && (
+          {!tasksQ.isLoading && !tasksQ.isError && list.length === 0 && !(filtersActive && all.length > 0) && (
             <EmptyState
               testid="mywork-empty"
               /* B23 (2026-09-29) — "Nothing here" is what you say to somebody

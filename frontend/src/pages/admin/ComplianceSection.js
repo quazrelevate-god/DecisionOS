@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from "react";
 import api, { formatApiError } from "../../lib/api";
 import { toast } from "sonner";
+import { ConfirmAction } from "../../components/common";
 import {
   Spinner, ArrowClockwise, MagnifyingGlass, DownloadSimple, Scales,
   Warning, Trash, Broom,
@@ -88,8 +89,16 @@ export function ComplianceSection() {
     } catch (e) { toast.error(formatApiError(e)); } finally { setBusy(""); }
   };
 
+  /* 2026-10-02 — these two were guarded by window.confirm, an OS dialog that
+     some embed contexts answer FALSE with nothing drawn. For a wipe that is
+     the safe direction to fail, but the operator sees no question at all and
+     assumes the click missed -- so the most dangerous button in the product
+     was also the one most likely to look dead, and be pressed again. Asked in
+     the app now, like everywhere else. */
+  const [pending, setPending] = useState(null);   // "delete" | "sweep" | null
+
   const deleteWithExport = async () => {
-    if (!window.confirm(`EXPORT then PERMANENTLY DELETE "${sel.name}"?\n\nA full JSON export downloads first, then every record is wiped. This cannot be undone.`)) return;
+    setPending(null);
     setBusy("delete");
     try {
       const r = await api.post(`/admin/tenants/${sel.id}/delete-with-export`);
@@ -100,7 +109,8 @@ export function ComplianceSection() {
   };
 
   const runSweep = async (live) => {
-    if (live && !window.confirm("Run a LIVE retention purge across all tenants with a policy? Expired transient rows will be permanently deleted.")) return;
+    if (live && pending !== "sweep") { setPending("sweep"); return; }
+    setPending(null);
     setBusy("sweep");
     try {
       const r = await api.post(`/admin/retention/run?dry_run=${live ? "false" : "true"}`);
@@ -153,7 +163,7 @@ export function ComplianceSection() {
               </div>
               <div className="mt-3 pt-3 border-t border-white/10">
                 <div className="font-mono text-[10px] uppercase tracking-widest text-[#e5484d]/70 mb-2 flex items-center gap-1"><Warning size={12} weight="fill" /> Right to erasure</div>
-                <button disabled={busy} onClick={deleteWithExport} className={BTN + " border-[#e5484d]/50 text-[#e5484d] hover:bg-[#e5484d]/10"}>{busy === "delete" ? <Spinner size={13} className="animate-spin" /> : <Trash size={13} />} Export &amp; delete workspace</button>
+                <button disabled={busy} onClick={() => setPending("delete")} className={BTN + " border-[#e5484d]/50 text-[#e5484d] hover:bg-[#e5484d]/10"}>{busy === "delete" ? <Spinner size={13} className="animate-spin" /> : <Trash size={13} />} Export &amp; delete workspace</button>
                 <div className="font-mono text-[9px] text-white/30 mt-1.5">Downloads a full erasure receipt, then permanently wipes every record.</div>
               </div>
             </div>
@@ -214,6 +224,30 @@ export function ComplianceSection() {
           )}
         </div>
       </div>
+      <ConfirmAction
+        open={pending === "delete"}
+        onOpenChange={() => setPending(null)}
+        title={sel ? `Export, then permanently delete “${sel.name}”?` : ""}
+        description="A full JSON export downloads first, then every record of this workspace is wiped. This cannot be undone."
+        confirmLabel="Export and delete"
+        busyLabel="Deleting…"
+        cancelLabel="Keep the workspace"
+        busy={busy === "delete"}
+        onConfirm={deleteWithExport}
+        testid="admin-delete-tenant-confirm" />
+
+      <ConfirmAction
+        open={pending === "sweep"}
+        onOpenChange={() => setPending(null)}
+        title="Run a live retention purge?"
+        description="Every tenant with a policy is swept and expired transient rows are permanently deleted. Run the dry run first if you have not."
+        confirmLabel="Purge for real"
+        busyLabel="Purging…"
+        cancelLabel="Not now"
+        busy={busy === "sweep"}
+        onConfirm={() => runSweep(true)}
+        testid="admin-retention-purge-confirm" />
+
     </div>
   );
 }

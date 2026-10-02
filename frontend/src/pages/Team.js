@@ -20,7 +20,7 @@ import {
 } from "@phosphor-icons/react";
 import { PersonAvatar } from "../components/karma/PersonAvatar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
-import { StickyHeader } from "../components/common";
+import { StickyHeader, ConfirmAction } from "../components/common";
 import {
   CHIP, QUIET_CHIP, DRAWER_CARD, DRAWER_FIELD, DRAWER_LABEL, DRAWER_TRACK,
   GLASS_ICON_BTN, GLASS_PILL, GLASS_SHEET, INK_PILL,
@@ -849,6 +849,11 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
   /* J14-12 — bring back / erase. One place, so both say what happened and both
      leave the page telling the truth, including the seat count. */
   const [teamBusy, setTeamBusy] = useState(false);
+  /* 2026-10-02 — erasing somebody is asked IN THE APP. It was window.confirm,
+     an OS dialog that some embed contexts answer false with nothing drawn, so
+     the most irreversible button in the product was also the one most likely
+     to look dead. */
+  const [pendingErase, setPendingErase] = useState(null);
   const runTeam = async (request, done) => {
     if (teamBusy) return;
     setTeamBusy(true);
@@ -1150,12 +1155,7 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
                 </button>
                 {isOwner && (
                   <button type="button" data-testid={`erase-${u.id}`} disabled={teamBusy}
-                    onClick={() => {
-                      // Erasing is the one that cannot be undone, so it is asked
-                      // for in the words of what it actually does.
-                      if (!window.confirm(`Erase ${u.name} for good? Their work stays in the company's history, but the account goes and the mobile number ${u.phone} can be used by somebody else. This cannot be undone.`)) return;
-                      runTeam(() => api.delete(`/users/${u.id}/forever`), `${u.name} erased — ${u.phone} is free again`);
-                    }}
+                    onClick={() => setPendingErase(u)}
                     className="rounded-pill px-3 py-2 text-xs font-medium text-kr-accent hover:bg-kr-accent/10">
                     Erase for good
                   </button>
@@ -1165,6 +1165,27 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
           </ul>
         </section>
       )}
+
+      {/* Erasing is the one that cannot be undone, so it is asked for in the
+          words of what it actually does -- and the button says the deed, so it
+          reads correctly even with the question scrolled out of view. */}
+      <ConfirmAction
+        open={!!pendingErase}
+        onOpenChange={() => setPendingErase(null)}
+        title={pendingErase ? `Erase ${pendingErase.name} for good?` : ""}
+        description={pendingErase
+          ? `Their work stays in the company's history, but the account goes and ${pendingErase.phone} can be used by somebody else. This cannot be undone.`
+          : ""}
+        confirmLabel={pendingErase ? `Erase ${String(pendingErase.name || "").split(" ")[0]}` : "Erase"}
+        busyLabel="Erasing…"
+        cancelLabel="Keep the account"
+        busy={teamBusy}
+        onConfirm={() => {
+          const u = pendingErase;
+          setPendingErase(null);
+          runTeam(() => api.delete(`/users/${u.id}/forever`), `${u.name} erased — ${u.phone} is free again`);
+        }}
+        testid="team-erase-confirm" />
 
       <MemberProfileDialog
         u={profileUser}

@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from "react";
 import api, { formatApiError } from "../../lib/api";
 import { toast } from "sonner";
+import { ConfirmAction } from "../../components/common";
 import { Spinner, ArrowClockwise, Plus, Trash, PaperPlaneRight } from "@phosphor-icons/react";
 
 const CARD = "border border-white/10 bg-[#141418] p-4";
@@ -30,9 +31,18 @@ export function AnnouncementsSection() {
     catch (err) { toast.error(formatApiError(err)); }
   };
   const toggle = async (a) => { try { await api.patch(`/admin/announcements/${a.id}`, { active: !a.active }); load(); } catch (e) { toast.error(formatApiError(e)); } };
-  const del = async (id) => { if (!window.confirm("Delete this announcement?")) return; try { await api.delete(`/admin/announcements/${id}`); load(); } catch (e) { toast.error(formatApiError(e)); } };
+  /* 2026-10-02 — both of these asked through window.confirm, which some embed
+     contexts answer false with nothing drawn: the operator saw no question and
+     no result. The second one sends REAL EMAIL to real owners, so a question
+     that can fail to appear is not a question. */
+  const [pendingDel, setPendingDel] = useState(null);
+  const [pendingEmail, setPendingEmail] = useState(null);
+  const del = async (id) => {
+    setPendingDel(null);
+    try { await api.delete(`/admin/announcements/${id}`); load(); } catch (e) { toast.error(formatApiError(e)); }
+  };
   const email = async (a) => {
-    if (!window.confirm(`Email "${a.title}" to targeted owners? This sends real email.`)) return;
+    setPendingEmail(null);
     try { const r = await api.post(`/admin/announcements/${a.id}/email`); toast.success(`Emailed ${r.data.sent}/${r.data.targets} owners`); }
     catch (e) { toast.error(formatApiError(e)); }
   };
@@ -70,13 +80,34 @@ export function AnnouncementsSection() {
             </div>
             <div className="flex items-center gap-2">
               <button onClick={() => toggle(a)} className={BTN + (a.active ? " border-[#d29922]/50 text-[#d29922]" : " border-[#3fb950]/50 text-[#3fb950]")}>{a.active ? "Disable" : "Enable"}</button>
-              <button onClick={() => email(a)} title="Email to targeted owners" className={BTN + " border-white/15 text-white/60 hover:text-white"}><PaperPlaneRight size={13} /></button>
-              <button onClick={() => del(a.id)} className={BTN + " border-[#e5484d]/50 text-[#e5484d] hover:bg-[#e5484d]/10"}><Trash size={13} /></button>
+              <button onClick={() => setPendingEmail(a)} title="Email to targeted owners" className={BTN + " border-white/15 text-white/60 hover:text-white"}><PaperPlaneRight size={13} /></button>
+              <button onClick={() => setPendingDel(a)} className={BTN + " border-[#e5484d]/50 text-[#e5484d] hover:bg-[#e5484d]/10"}><Trash size={13} /></button>
             </div>
           </div>
         ))}
         {rows.length === 0 && <div className="font-mono text-xs text-white/30 py-6 text-center">No announcements.</div>}
       </div>
+      <ConfirmAction
+        open={!!pendingDel}
+        onOpenChange={() => setPendingDel(null)}
+        title="Delete this announcement?"
+        description={pendingDel ? `“${pendingDel.title}” comes off every workspace it is showing on. This can't be undone.` : ""}
+        confirmLabel="Delete it"
+        cancelLabel="Keep it"
+        onConfirm={() => del(pendingDel.id)}
+        testid="admin-announcement-delete-confirm" />
+
+      <ConfirmAction
+        open={!!pendingEmail}
+        onOpenChange={() => setPendingEmail(null)}
+        title="Send this as real email?"
+        description={pendingEmail ? `“${pendingEmail.title}” goes to every targeted owner's inbox. Email cannot be unsent.` : ""}
+        confirmLabel="Send the email"
+        cancelLabel="Not now"
+        danger={false}
+        onConfirm={() => email(pendingEmail)}
+        testid="admin-announcement-email-confirm" />
+
     </div>
   );
 }

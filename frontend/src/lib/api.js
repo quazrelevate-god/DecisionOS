@@ -187,9 +187,48 @@ function sentenceFor(entry) {
   return word ? `Check the ${word}.` : "One of the answers needs a second look.";
 }
 
+/* THE SERVER'S OWN VOCABULARY, WHICH IS NOT OURS. (2026-10-02.)
+ *
+ * Saving company details against a 500 put a toast on screen whose entire
+ * text was
+ *
+ *     Internal Server Error
+ *
+ * Right mechanism, wrong words: no what-failed, no was-anything-saved, no
+ * what-now. It arrives because an unhandled exception leaves FastAPI to answer
+ * `{"detail": "Internal Server Error"}` and a string detail is passed straight
+ * through -- correct for the sentences we wrote, wrong for the one phrase we
+ * did not. Every 5xx in the app read like this.
+ *
+ * Matched WHOLE and case-insensitively, never as a substring: these are HTTP's
+ * reason phrases verbatim, and no message we would write is exactly one of
+ * them. A sentence of ours that merely CONTAINS "not found" is still ours.
+ */
+const FRAMEWORK_PHRASES = {
+  "internal server error": "Something broke on our side. Nothing you did caused it — try again in a moment.",
+  "bad gateway": "We couldn't reach our own server. Try again in a moment.",
+  "service unavailable": "DecisionOS is briefly unavailable. Try again in a moment.",
+  "gateway timeout": "Our server took too long to answer. Try again in a moment.",
+  "request timeout": "That took too long to answer. Try again.",
+  "not found": "We couldn't find that — it may have been deleted.",
+  "unauthorized": "Your session has ended. Sign in and we'll bring you back.",
+  "not authenticated": "Your session has ended. Sign in and we'll bring you back.",
+  "forbidden": "You don't have access to that. Ask the owner if you need it.",
+  "not enough permissions": "You don't have access to that. Ask the owner if you need it.",
+  "method not allowed": "Something broke on our side. Nothing you did caused it — try again in a moment.",
+  "unprocessable entity": "Some of what was sent didn't look right. Check the form and try again.",
+  "too many requests": "That was a lot at once. Wait a moment and try again.",
+  "payload too large": "That file is too big to send.",
+  "request entity too large": "That file is too big to send.",
+  "conflict": "Somebody else changed this first. Reload and try again.",
+};
+
 export function formatApiError(detail) {
   if (detail == null) return "Something went wrong. Please try again.";
-  if (typeof detail === "string") return detail;   // ours, already in English
+  if (typeof detail === "string") {
+    const framework = FRAMEWORK_PHRASES[detail.trim().toLowerCase().replace(/\.$/, "")];
+    return framework || detail;                    // ours, already in English
+  }
   if (Array.isArray(detail)) {
     /* One sentence per field, and each field only once: a single bad address
        can arrive as two entries (the type rule and the format rule) and

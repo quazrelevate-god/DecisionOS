@@ -2,6 +2,7 @@ import { roleLabel } from "../../lib/departments";
 import { useState, useEffect, useCallback } from "react";
 import api, { formatApiError } from "../../lib/api";
 import { toast } from "sonner";
+import { ConfirmAction } from "../../components/common";
 import {
   Buildings, Users, Brain, CheckSquare, Lightning, ArrowsClockwise,
   PencilSimple, Prohibit, ArrowClockwise, ShieldCheck, Spinner, Circle,
@@ -664,8 +665,12 @@ export function MaintenanceSection() {
     return () => clearInterval(t);
   }, [job?.status, load]);
 
+  /* 2026-10-02 — asked in the app. window.confirm is answered false with
+     nothing drawn in some embed contexts, and this one rewrites ledgers
+     across every workspace on the platform. */
+  const [pendingReclass, setPendingReclass] = useState(false);
   const start = async () => {
-    if (!window.confirm("Re-run AI classification on EVERY workspace's purchase bills and move mis-booked ones into the correct ledger (Expense / Asset / Inventory)? This updates live data.")) return;
+    setPendingReclass(false);
     setBusy(true);
     try {
       const { data } = await api.post("/admin/reclassify-purchases");
@@ -689,7 +694,7 @@ export function MaintenanceSection() {
         AI still can't judge are flagged for manual review. Safe to run more than once.
       </p>
 
-      <button data-testid="admin-reclassify-start" onClick={start} disabled={busy || running}
+      <button data-testid="admin-reclassify-start" onClick={() => setPendingReclass(true)} disabled={busy || running}
         className={BTN + " border-[#e5484d] text-[#e5484d] hover:bg-[#e5484d] hover:text-white disabled:opacity-40 flex items-center gap-2"}>
         {running ? <Spinner size={14} className="animate-spin" /> : <ArrowClockwise size={14} weight="bold" />}
         {running ? "Running…" : busy ? "Starting…" : "Re-classify all purchases"}
@@ -731,6 +736,18 @@ export function MaintenanceSection() {
           {job.started_by && <p className="font-mono text-[10px] text-white/30 mt-3">Started by {job.started_by}</p>}
         </div>
       )}
-    </div>
+    
+      <ConfirmAction
+        open={pendingReclass}
+        onOpenChange={() => setPendingReclass(false)}
+        title="Re-classify purchase bills on every workspace?"
+        description="Every workspace's purchase bills are read again by the AI and any that were mis-booked move between Expense, Asset and Inventory. This changes live customer data."
+        confirmLabel="Re-classify everything"
+        busyLabel="Starting…"
+        cancelLabel="Not now"
+        busy={busy}
+        onConfirm={start}
+        testid="admin-reclassify-confirm" />
+      </div>
   );
 }

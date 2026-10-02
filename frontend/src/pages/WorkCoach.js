@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams, Link } from "react-router-dom";
 import api from "../lib/api";
+import { useAuth } from "../context/AuthContext";
+import { roleLabel } from "../lib/departments";
 import { PageHeader } from "../components/common";
 import { toast } from "sonner";
 import {
@@ -20,6 +22,7 @@ export default function WorkCoach() {
   const [params] = useSearchParams();
   const userId = params.get("user");
   const qc = useQueryClient();
+  const { tenant } = useAuth();
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["work-coach", userId],
@@ -62,7 +65,7 @@ export default function WorkCoach() {
 
   return (
     <div>
-      <PageHeader eyebrow={`${target.name} · ${target.role}`} title="AI Work Coach">
+      <PageHeader eyebrow={`${target.name} · ${roleLabel(target.role, tenant?.roles, "Member")}`} title="AI Work Coach">
         <button onClick={() => refresh.mutate()} disabled={refresh.isPending} data-testid="coach-refresh-btn"
           className="flex items-center gap-2 border border-border px-4 py-2 text-sm font-medium bg-caution-50 transition-all disabled:opacity-50">
           <Sparkle size={16} weight="bold" /> {refresh.isPending ? "Analyzing…" : s ? "Refresh" : "Generate coaching"}

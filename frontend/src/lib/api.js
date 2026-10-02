@@ -1,4 +1,5 @@
 import axios from "axios";
+import { toast } from "sonner";
 import { showAiConsentToast, aiConsentMessage } from "./aiConsent";
 
 /* DEPLOY-3 — an EMPTY backend url is now the correct production value, and
@@ -228,8 +229,74 @@ function humanPhrase(detail) {
   return FRAMEWORK_PHRASES[String(detail).trim().toLowerCase().replace(/\.$/, "")] || "";
 }
 
+/* NO ANSWER AT ALL. (2026-10-03.)
+ *
+ * Everything above is about what the server SAID. When the phone has no
+ * signal, or the server never replies inside our timeout, it says nothing:
+ * axios rejects with no `response`, the call site reads
+ * `e.response?.data?.detail`, finds undefined, and the founder got either
+ * "Something went wrong. Please try again." or the call site's own two words
+ * -- creating a task offline put "Create failed" on screen and nothing else.
+ * No cause, and no answer to the question that matters: did it save?
+ *
+ * The interceptor below writes down that the last request went unanswered,
+ * and what kind of silence it was. Two readers:
+ *   - formatApiError(undefined) says the connection sentence instead of the
+ *     shrug, and
+ *   - toast.error (wrapped further down) hangs it under whatever title the
+ *     call site chose, so "Create failed" arrives with its reason.
+ * A request that times out may have landed, so that wording does NOT promise
+ * nothing was saved; a request that never left plainly did not. */
+const SILENCE_FRESH_MS = 2000;
+let _silence = { at: 0, write: false, slow: false, open: false };
+
+function silenceWords({ write, slow }) {
+  if (slow) {
+    return write
+      ? "DecisionOS took too long to answer, so this may or may not have saved. Check before you try again."
+      : "DecisionOS took too long to answer. Try again in a moment.";
+  }
+  return write
+    ? "We couldn't reach DecisionOS, so nothing was saved. Check your connection and try again."
+    : "We couldn't reach DecisionOS. Check your connection and try again.";
+}
+
+/** The sentence for the request that just went unanswered, or "" when the last
+ *  thing we heard was an answer. `sticky` reads it until the next answer
+ *  arrives, for a screen that stays up (LoadFailed); without it the note is
+ *  only good for a moment, for the toast that follows the failure. */
+export function connectionTrouble({ sticky = false } = {}) {
+  const fresh = Date.now() - _silence.at < SILENCE_FRESH_MS;
+  if (_silence.open && (sticky || fresh)) return silenceWords(_silence);
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return silenceWords({ write: false, slow: false });
+  }
+  return "";
+}
+
+/* And the toast. There are a few hundred `toast.error(...)` calls, each with
+   its own title ("Create failed", "Couldn't save the leave request"), and the
+   title is worth keeping -- it says WHAT failed. What none of them can say is
+   why, because they were handed nothing. So the reason goes underneath, as
+   the toast's description, only while the silence is fresh, and never over a
+   description the call site wrote itself. aiConsent wraps toast.error too;
+   this wraps whatever is there, so the two compose. */
+(function explainTheSilence() {
+  try {
+    if (typeof toast?.error !== "function") return;
+    const plain = toast.error.bind(toast);
+    toast.error = (msg, opts) => {
+      const why = connectionTrouble();
+      if (why && typeof msg === "string" && !msg.includes(why) && !opts?.description) {
+        return plain(msg, { ...(opts || {}), description: why });
+      }
+      return plain(msg, opts);
+    };
+  } catch (e) { /* a frozen toast object: the titles still show, as before */ }
+})();
+
 export function formatApiError(detail) {
-  if (detail == null) return "Something went wrong. Please try again.";
+  if (detail == null) return connectionTrouble() || "Something went wrong. Please try again.";
   if (typeof detail === "string") {
     return humanPhrase(detail) || detail;          // ours, already in English
   }
@@ -339,8 +406,22 @@ const AUTH_PATHS = ["/auth/", "/signup/"];
 export const SESSION_LOST_EVENT = "dos:session-lost";
 
 api.interceptors.response.use(
-  (r) => r,
+  (r) => { _silence.open = false; return r; },
   (err) => {
+    /* NO ANSWER AT ALL (see connectionTrouble). Any answer, even a refusal,
+       proves the line works and clears the note; a cancel is ours, not the
+       network's, and says nothing either way. */
+    if (err?.response) {
+      _silence.open = false;
+    } else if (err?.code !== "ERR_CANCELED") {
+      const method = String(err?.config?.method || "get").toLowerCase();
+      _silence = {
+        at: Date.now(),
+        write: method !== "get" && method !== "head",
+        slow: err?.code === "ECONNABORTED" || err?.code === "ETIMEDOUT",
+        open: true,
+      };
+    }
     /* 2026-10-02 — THE TRANSLATION HAPPENS HERE, NOT AT THE CALL SITE.
      *
      * formatApiError turns HTTP's reason phrases into sentences, and 141

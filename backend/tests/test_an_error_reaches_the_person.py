@@ -120,7 +120,10 @@ def test_a_phrase_is_matched_whole_so_our_own_words_survive():
     """A sentence of ours that merely CONTAINS "not found" is still ours."""
     assert "function humanPhrase(detail)" in API
     assert "FRAMEWORK_PHRASES[String(detail).trim().toLowerCase()" in API
-    body = API[API.index("function humanPhrase(detail)"):API.index("export function formatApiError")]
+    # humanPhrase's own body: it ends at its closing brace. (The span used to
+    # run to formatApiError, which now has the no-answer code in between.)
+    start = API.index("function humanPhrase(detail)")
+    body = API[start:API.index("\n}\n", start)]
     assert ".includes(" not in body
 
 

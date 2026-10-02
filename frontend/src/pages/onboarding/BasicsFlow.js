@@ -8,6 +8,8 @@ import { normIndianMobile, displayIndianMobile } from "../../lib/phone";
 import OtpBoxes from "../../components/auth/OtpBoxes";
 // ASK-36 5 — the app's one loading animation.
 import { Loader } from "../../components/common";
+// A role held in ANOTHER company: no label list for it here, so the key read as words.
+import { roleWords } from "../../lib/departments";
 // B11 — the dev OTP is ignored by a production build (lib/devOtp).
 import { devOtpFrom } from "../../lib/devOtp";
 
@@ -433,7 +435,7 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
                   <span className="min-w-0">
                     <span className="block truncate text-base font-semibold">{w.tenant_name}</span>
                     <span className="text-xs text-muted-foreground">
-                      {w.role === "owner" ? "You own this one" : `You're in this one as ${w.role}`}
+                      {w.role === "owner" ? "You own this one" : `You're in this one as ${roleWords(w.role)}`}
                     </span>
                   </span>
                   <button type="button" onClick={() => openExisting(w.tenant_id)}

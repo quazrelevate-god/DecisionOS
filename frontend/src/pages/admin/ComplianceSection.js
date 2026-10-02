@@ -24,7 +24,11 @@ function downloadJSON(obj, name) {
     a.href = url; a.download = name;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
-  } catch (e) { toast.error("Download failed: " + e.message); }
+  } catch (e) {
+    // The export arrived; it is the browser that could not hand it over as a file.
+    console.error("compliance: building the download failed", e);
+    toast.error("Couldn't save the file. The export was fetched — try again, or use another browser.");
+  }
 }
 
 export function ComplianceSection() {

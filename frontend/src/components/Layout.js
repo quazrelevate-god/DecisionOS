@@ -39,6 +39,8 @@ import { LanguageSwitcher } from "./LanguageSwitcher";
 import { WelcomeOverlay } from "./WelcomeOverlay";
 // B20 — the demo workspace says it is one.
 import { DemoWorkspaceBanner } from "./DemoWorkspaceBanner";
+// 2026-10-03 — losing the connection mid-use says so before a save fails.
+import { ConnectionNotice } from "./ConnectionNotice";
 // 2026-09-19 — members sign in by mobile; owners also have email + password.
 import OwnerCredentialsGate from "./auth/OwnerCredentialsGate";
 import WelcomeMemberCard from "./auth/WelcomeMemberCard";
@@ -654,6 +656,7 @@ export default function Layout({ children }) {
       {/* B20 — above everything, on every screen, for as long as they are in
           the demo. It renders nothing in a real workspace. */}
       <DemoWorkspaceBanner />
+      <ConnectionNotice />
       <WelcomeOverlay />
       {/* An owner who came in by mobile adds an email and password first;
           a member's first screen asks them to check their details. */}

@@ -3782,7 +3782,12 @@ export default function MyWork({ only = null }) {
   useEffect(() => {
     if (!openId) { wasMine.current = null; return; }
     if (openTaskGone) {
-      toast.info(t("mywork.task_removed_live", "This task was removed while you had it open."));
+      /* Only if it WAS open: wasMine is set once the task has loaded. A link
+         to a task that was already gone never loaded it, and the banner below
+         says that one -- the toast on top claimed something untrue twice. */
+      if (wasMine.current !== null) {
+        toast.info(t("mywork.task_removed_live", "This task was removed while you had it open."));
+      }
       setOpenId(null);
       wasMine.current = null;
       return;

@@ -28,6 +28,23 @@ import { setAppLanguage } from "../i18n";
    send a later, deliberate sign-in somewhere they did not ask for. */
 export const RETURN_TO_KEY = "dos_return_to";
 
+/* 2026-10-03 — AND THE PAGE SOMEBODY ARRIVED AT SIGNED OUT.
+   The note above was only written when a session ended under the open app.
+   Tapping a link from an email or a WhatsApp reminder while signed out --
+   /decisions/<id>, /finance?tab=inbox -- went to sign-in with nothing written
+   down, so the founder signed in and landed on the Desk, the link spent.
+   Written only on a load that has not had anyone signed in: once someone
+   was, a missing user means they signed out on purpose (or the session ended,
+   which writes its own note), and bringing a deliberate sign-out back to
+   where it left is the stale value the note above warns about. */
+let hadUserThisLoad = false;
+export function rememberArrival(path) {
+  if (hadUserThisLoad || !path || path === "/" || path.startsWith("/app")) return;
+  try {
+    if (!sessionStorage.getItem(RETURN_TO_KEY)) sessionStorage.setItem(RETURN_TO_KEY, path);
+  } catch (e) { /* private window: they land on the Desk, as before */ }
+}
+
 export function takeReturnTo() {
   try {
     const v = sessionStorage.getItem(RETURN_TO_KEY);
@@ -110,7 +127,7 @@ export function AuthProvider({ children }) {
      leave, and every one of them ends here. Deliberately NOT cleared when
      `offline` goes true: not knowing is the whole reason the flag exists. */
   useEffect(() => {
-    if (user) rememberSessionHere();
+    if (user) { rememberSessionHere(); hadUserThisLoad = true; }
   }, [user]);
 
   /* And it retries itself, so the founder never has to know to pull-to-refresh:

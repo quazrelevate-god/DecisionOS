@@ -2,6 +2,7 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { cn } from "../lib/utils";
+import { connectionTrouble } from "../lib/api";
 import { INK_PILL } from "./karma/glass";
 import { useHeaderSlot } from "./mobile/HeaderSlot";
 import {
@@ -277,11 +278,19 @@ export function ConfirmAction({
  * spend" -- never an endpoint.
  */
 export function LoadFailed({ what, onRetry, testid, className = "" }) {
+  /* "A problem on our side" is untrue when the phone has no signal, and the
+     founder then waits for us to fix something only they can. Sticky: this
+     screen stays up after the failure, and the note holds until any answer
+     arrives -- which is also when react-query refetches it away. */
+  const unreached = !!connectionTrouble({ sticky: true });
   return (
     <div data-testid={testid || "load-failed"} className={cn("py-16 px-6 text-center", className)}>
       <p className="text-base font-medium">Couldn't load {what}</p>
-      <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-muted-foreground">
-        This is a problem on our side, not an empty list — what you have is still there.
+      <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-muted-foreground"
+         data-testid={testid ? `${testid}-why` : "load-failed-why"}>
+        {unreached
+          ? "We couldn't reach DecisionOS — check your connection. What you have is still there, and this loads again when you're back."
+          : "This is a problem on our side, not an empty list — what you have is still there."}
       </p>
       {onRetry && (
         <button type="button" onClick={onRetry}

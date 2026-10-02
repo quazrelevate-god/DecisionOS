@@ -54,7 +54,7 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import api from "../lib/api";
+import api, { formatApiError } from "../lib/api";
 import { timeAgo } from "../lib/format";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
@@ -249,7 +249,7 @@ export function DecisionPanel({
   const ownCloseRef = useRef(null);
   const closeRef = closeRefProp || ownCloseRef;
 
-  const { data: d, isError } = useQuery({
+  const { data: d, isError, error: loadError, refetch: reloadDecision } = useQuery({
     queryKey: ["decision", decisionId],
     queryFn: () => api.get(`/decisions/${decisionId}`).then((r) => r.data),
     enabled: !!decisionId && open,
@@ -663,17 +663,35 @@ export function DecisionPanel({
   ) : null;
 
   if (isError) {
+    /* 2026-10-03 — every failure used to read "Access restricted": a decision
+       that had been deleted, a 500, no signal. An owner opening a stale link
+       was told they lacked access to their own company. The server already
+       says which it is (routers/decisions: 404 vs 403); this listens. */
+    const status = loadError?.response?.status;
+    const [failTitle, failBody, failTestid] = status === 403
+      ? ["Access restricted", "You don't have access to this decision.", "decision-access-restricted"]
+      : status === 404
+        ? ["This decision isn't here", "It may have been deleted. Everything else is still on your Desk.", "decision-not-found"]
+        : ["Couldn't open this decision", formatApiError(loadError?.response?.data?.detail), "decision-load-failed"];
+    const retry = status !== 403 && status !== 404 && (
+      <button type="button" onClick={() => reloadDecision()} data-testid="decision-load-retry"
+        className={`mt-4 inline-flex h-11 items-center rounded-pill px-5 text-sm font-medium ${INK_PILL}`}>
+        Try again
+      </button>
+    );
     return embedded ? (
-      <div className="p-6" data-testid="decision-access-restricted">
-        <p className="text-lg font-semibold text-slate-900">Access restricted</p>
-        <p className="text-sm text-slate-600">You don't have access to this decision.</p>
+      <div className="p-6" data-testid={failTestid}>
+        <p className="text-lg font-semibold text-slate-900">{failTitle}</p>
+        <p className="text-sm text-slate-600">{failBody}</p>
+        {retry}
       </div>
     ) : (
-      <div className="p-6" data-testid="decision-access-restricted">
+      <div className="p-6" data-testid={failTestid}>
         <DialogHeader className="text-left">
-          <DialogTitle className="text-lg font-semibold text-slate-900">Access restricted</DialogTitle>
-          <DialogDescription className="text-sm text-slate-600">You don't have access to this decision.</DialogDescription>
+          <DialogTitle className="text-lg font-semibold text-slate-900">{failTitle}</DialogTitle>
+          <DialogDescription className="text-sm text-slate-600">{failBody}</DialogDescription>
         </DialogHeader>
+        {retry}
         <DialogPrimitiveClose data-testid="decision-close" aria-label="Close" className={`${GLASS_ICON_BTN} absolute right-5 top-5`}>
           <X size={16} weight="bold" aria-hidden="true" />
         </DialogPrimitiveClose>

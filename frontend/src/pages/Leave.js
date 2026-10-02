@@ -5,7 +5,7 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { roleLabel } from "../lib/departments";
 import { hasPerm } from "../lib/perms";
-import { PageHeader, StickyHeader, EmptyState } from "../components/common";
+import { PageHeader, StickyHeader, EmptyState, LoadFailed } from "../components/common";
 import { timeAgo } from "../lib/format";
 import { GlassSelect } from "../components/karma/GlassSelect";
 import { GlassDateField } from "../components/karma/GlassDateField";
@@ -568,6 +568,12 @@ export default function Leave() {
 
       {mineQ.isLoading && !mineQ.data ? (
         <p className="text-sm text-muted-foreground">Loading your leave…</p>
+      ) : mineQ.isError && !mineQ.data ? (
+        /* 2026-10-02 — a failed load used to sit on "Loading your leave…" for
+           ever: react-query had stopped, the sentence had not, so the page
+           promised something that was never coming. Worse than an empty list,
+           because waiting feels like progress. */
+        <LoadFailed what="your leave" onRetry={() => mineQ.refetch()} testid="leave-load-failed" />
       ) : mine.length === 0 ? (
         <EmptyState title="No leave requests yet"
           hint="Use Mark Leave to plan time off, or Report Absence Today if you can't come in." />

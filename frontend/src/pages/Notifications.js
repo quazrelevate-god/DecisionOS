@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import api from "../lib/api";
-import { PageHeader, Chip, EmptyState } from "../components/common";
+import api, { formatApiError } from "../lib/api";
+import { toast } from "sonner";
+import { PageHeader, Chip, EmptyState, LoadFailed } from "../components/common";
 import { timeAgo, fullTime } from "../lib/format";
 import { notifMeta, notifLink } from "../lib/notif";
 import { BellRinging, Check, UserCircle, CaretRight } from "@phosphor-icons/react";
@@ -17,8 +18,17 @@ import { GLASS_PILL } from "../components/karma/glass";
 export default function Notifications() {
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const { data } = useQuery({ queryKey: ["notifications"], queryFn: () => api.get("/notifications").then((r) => r.data), refetchInterval: 20000 });
+  const { data, isError, refetch } = useQuery({ queryKey: ["notifications"], queryFn: () => api.get("/notifications").then((r) => r.data), refetchInterval: 20000 });
 
+  /* markRead THROWS on purpose: `open` below swallows it deliberately, because
+     failing to mark something read must not stop the person getting to the
+     thing it is about. The BUTTONS are the other case -- there, marking read
+     is the entire intent -- so they use the wrappers underneath, which say so
+     when it does not happen.
+     2026-10-02: both buttons used to call these bare. A failure changed
+     nothing on screen and said nothing, leaving a dot that would not clear and
+     an unhandled rejection in the console. A control that cannot report its
+     own failure is the same fault as the Ops capture box. */
   const markRead = async (id) => {
     await api.post(`/notifications/${id}/read`);
     qc.invalidateQueries({ queryKey: ["notifications"] });
@@ -26,6 +36,15 @@ export default function Notifications() {
   const markAll = async () => {
     await api.post("/notifications/read-all");
     qc.invalidateQueries({ queryKey: ["notifications"] });
+  };
+
+  const markReadSaid = async (id) => {
+    try { await markRead(id); }
+    catch (e) { toast.error(formatApiError(e.response?.data?.detail) || "Couldn't mark that read — try again."); }
+  };
+  const markAllSaid = async () => {
+    try { await markAll(); }
+    catch (e) { toast.error(formatApiError(e.response?.data?.detail) || "Couldn't mark them all read — try again."); }
   };
 
   const open = async (n) => {
@@ -52,15 +71,23 @@ export default function Notifications() {
     <div>
       <PageHeader eyebrow="Work updates, approvals & reminders" title="Notifications">
         {(data?.unread || 0) > 0 && (
-          <button type="button" onClick={markAll} data-testid="mark-all-read"
+          <button type="button" onClick={markAllSaid} data-testid="mark-all-read"
             className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-slate-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
             <Check size={16} weight="bold" aria-hidden="true" /> Mark all read
           </button>
         )}
       </PageHeader>
 
+      {/* 2026-10-02 — and before that, whether the list arrived at all.
+          "You're all caught up." is a congratulation. Said to somebody whose
+          notifications simply failed to load, it is the app telling them there
+          is nothing waiting when there may be an approval that is. */}
+      {isError && !data && (
+        <LoadFailed what="your notifications" onRetry={() => refetch()} testid="notifications-load-failed" />
+      )}
+
       {/* MPWA-12i: completing E2-13's sweep — this list surface never got its CTA. */}
-      {items.length === 0 && (
+      {!isError && items.length === 0 && (
         <EmptyState
           title="You're all caught up."
           hint="Work assignments, approvals and updates appear here."
@@ -108,7 +135,7 @@ export default function Notifications() {
                       what this is and the opposite of what it is. It says what
                       pressing it does. */}
                   {!n.read && (
-                    <button type="button" onClick={(e) => { e.stopPropagation(); markRead(n.id); }} data-testid={`read-${n.id}`}
+                    <button type="button" onClick={(e) => { e.stopPropagation(); markReadSaid(n.id); }} data-testid={`read-${n.id}`}
                       aria-label={`Mark "${n.title || "this notification"}" as read`}
                       className={`h-9 rounded-pill px-3 text-xs font-medium text-slate-700 transition-colors hover:bg-white ${GLASS_PILL}`}>
                       Mark read

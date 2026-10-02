@@ -25,7 +25,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import api from "../lib/api";
 import { useIsMobile } from "../hooks/useIsMobile";
-import { PageHeader, Chip, EmptyState } from "../components/common";
+import { PageHeader, Chip, EmptyState, LoadFailed } from "../components/common";
 import { ymd, addDays, startOfWeek, DOW, dayTitle } from "../lib/dates";
 import {
   Dialog,
@@ -191,7 +191,7 @@ export default function Journal() {
   const [view, setView] = useState("timeline");
   const [selected, setSelected] = useState(() => ymd(new Date()));
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["journal", term],
     queryFn: () => api.get(`/journal?q=${encodeURIComponent(term)}`).then((r) => r.data),
   });
@@ -386,6 +386,11 @@ export default function Journal() {
         <div className="space-y-3" aria-hidden="true">
           {[0, 1, 2].map((i) => <div key={i} className="ds-skeleton h-24 rounded-cardlg" />)}
         </div>
+      ) : isError && !data ? (
+        /* 2026-10-02 — "Nothing logged yet" is a sentence about a founder's
+           own record of their decisions. Said to somebody whose diary simply
+           failed to load, it is the page telling them their history is gone. */
+        <LoadFailed what="your journal" onRetry={() => refetch()} testid="journal-load-failed" />
       ) : !hasContent ? (
         <EmptyState
           title="Nothing logged yet."

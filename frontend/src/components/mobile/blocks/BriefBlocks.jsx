@@ -19,6 +19,7 @@ import { Grid } from "./Grid";
 // this module in an import cycle.
 import { BottomSheet } from "../BottomSheet";
 import { EmptyState } from "../EmptyState";
+import { LoadFailed } from "../../common";
 import { ListSkeleton } from "../Skeleton";
 
 const MAX_FIRES = 3; // §5.2: "The fires — max 3"
@@ -122,7 +123,7 @@ export function NumbersGrid({ counters = {}, amounts = {}, completedLabel, onOpe
  */
 export function NumbersDetailSheet({ detail, period, onClose }) {
   const navigate = useNavigate();
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["brief-details", detail?.key, period],
     queryFn: () => api.get(`/brief/details?key=${detail.key}&period=${period}`).then((r) => r.data),
     enabled: !!detail?.key,
@@ -151,7 +152,14 @@ export function NumbersDetailSheet({ detail, period, onClose }) {
       data-testid="brief-detail-sheet"
     >
       {isLoading && <ListSkeleton rows={3} />}
-      {!isLoading && items.length === 0 && (
+      {/* 2026-10-02 — the founder tapped a NUMBER on their brief to see what
+          is behind it. "Nothing here right now" to somebody whose list failed
+          to load contradicts the figure they just tapped, on the same screen,
+          seconds apart. */}
+      {!isLoading && isError && !data && (
+        <LoadFailed what="what's behind that number" onRetry={() => refetch()} testid="brief-detail-load-failed" />
+      )}
+      {!isLoading && !isError && items.length === 0 && (
         <EmptyState
           icon={CheckCircle}
           title="Nothing here right now."

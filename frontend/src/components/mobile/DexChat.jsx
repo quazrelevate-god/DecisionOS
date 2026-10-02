@@ -190,17 +190,62 @@ function AttachedChip({ file, onRemove, disabled }) {
   );
 }
 
+/** A file that went out with a message: a thumbnail above the bubble, on the
+ *  bubble's own side, opening full size when pressed. */
+function SentFile({ file, onOpen }) {
+  const isImage = !!file.file && (file.type || "").startsWith("image/");
+  const [src, setSrc] = React.useState(null);
+  React.useEffect(() => {
+    if (!isImage || !file.file) return undefined;
+    const url = URL.createObjectURL(file.file);
+    setSrc(url);
+    return () => URL.revokeObjectURL(url);
+  }, [isImage, file.file]);
+  const body = src
+    ? <img src={src} alt={file.name} className="h-full w-full object-cover" />
+    : (
+      <span className="grid h-full w-full place-items-center bg-white/10 px-2 text-center text-[11px] text-white/80">
+        <Paperclip size={16} weight="bold" aria-hidden="true" />
+      </span>
+    );
+  if (!src) {
+    return <span className="h-20 w-20 overflow-hidden rounded-[1.1rem] ring-1 ring-white/20" title={file.name}>{body}</span>;
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(src, file.name)}
+      data-testid="dex-sent-file"
+      aria-label={`Open ${file.name}`}
+      className="h-20 w-20 overflow-hidden rounded-[1.1rem] ring-1 ring-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+    >
+      {body}
+    </button>
+  );
+}
+
 /** One turn in the transcript. */
-function Bubble({ m, index }) {
+function Bubble({ m, index, onOpenFile }) {
   const mine = m.role === "user";
+  const files = m.files || [];
   return (
     <motion.div
       layout
       initial={{ opacity: 0, y: 14, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ ...SPRING, delay: Math.min(index * 0.02, 0.1) }}
-      className={cn("flex w-full", mine ? "justify-end" : "justify-start")}
+      className={cn("flex w-full flex-col gap-1.5", mine ? "items-end" : "items-start")}
     >
+      {/* ABOVE THE MESSAGE, ON ITS SIDE. The file was part of the question, so
+          it stays with the question — it used to disappear the moment the
+          message went, leaving Dex answering about something that was no longer
+          on screen. Right-aligned to the bubble's own edge, which is what makes
+          the two read as one turn rather than as two. */}
+      {files.length > 0 && (
+        <div className={cn("flex max-w-[85%] flex-wrap gap-1.5", mine ? "justify-end" : "justify-start")}>
+          {files.map((f) => <SentFile key={f.id} file={f} onOpen={onOpenFile} />)}
+        </div>
+      )}
       <div
         className={cn(
           "max-w-[85%] rounded-3xl px-4 py-3 text-sm leading-relaxed",
@@ -335,7 +380,13 @@ function Bubble({ m, index }) {
  * @param {object}   dex     the shared useDexCapture instance from Layout
  */
 export function DexChat({ open, onClose, dex, chat, channel }) {
-  const { log, busy, mode, setMode, ask, attach, removeFile, retry, canRetry, pendingFiles = [], attaching = false } = chat;
+  const { log, busy, mode, setMode, ask, attach, removeFile, retry, canRetry, pendingFiles = [], attaching = false, clear } = chat;
+  /* A SENT IMAGE OPENS FULL SIZE. An 80px thumbnail is enough to recognise a
+     photograph of a delivery note and not enough to read one. Local object URL,
+     so there is no fetch and nothing to fail. */
+  const [lightbox, setLightbox] = React.useState(null);
+  const openFile = React.useCallback((src, name) => setLightbox({ src, name }), []);
+  React.useEffect(() => { if (!open) setLightbox(null); }, [open]);
   const navigate = useNavigate();
   /* ASK-33 Phase 4 — Review opens the decision the way the phone already opens
      one: /inbox?decision=<id>, which the Desk raises in DecisionDialog, as it
@@ -437,6 +488,30 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
             className="absolute inset-0 h-full w-full cursor-default"
           />
 
+          {lightbox && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={lightbox.name}
+              data-testid="dex-lightbox"
+              onClick={() => setLightbox(null)}
+              className="absolute inset-0 z-20 grid place-items-center bg-black/80 p-4 backdrop-blur-md"
+            >
+              <img src={lightbox.src} alt={lightbox.name}
+                   className="max-h-full max-w-full rounded-[1.25rem] object-contain" />
+              <button
+                type="button"
+                aria-label="Close image"
+                data-testid="dex-lightbox-close"
+                onClick={(e) => { e.stopPropagation(); setLightbox(null); }}
+                className="kr-pop absolute right-4 grid h-14 w-14 place-items-center rounded-full"
+                style={{ top: "calc(var(--sa-top) + 0.75rem)" }}
+              >
+                <X size={18} weight="bold" />
+              </button>
+            </div>
+          )}
+
           <div className="relative flex min-h-0 flex-1 flex-col pt-safe">
             <div className="flex items-center justify-between px-4 py-3">
               {/* KM-54 — the header states WHICH Dex. The two doors have
@@ -454,6 +529,23 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                   </span>
                 )}
               </span>
+              <div className="flex items-center gap-2">
+              {/* CLEAR, LEFT OF THE CLOSE. The transcript used to survive until
+                  the app was force-quit, which is not a way out of anything.
+                  A pill rather than a circle because it carries a word, and the
+                  same height as the X beside it so the two read as one pair.
+                  Only offered when there is something to clear. */}
+              {log.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => clear?.()}
+                  data-testid="dex-chat-clear"
+                  aria-label="Clear this conversation"
+                  className="kr-pop grid h-14 place-items-center rounded-pill px-5 text-sm font-medium"
+                >
+                  Clear
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onClose}
@@ -466,6 +558,7 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
               >
                 <X size={18} weight="bold" />
               </button>
+              </div>
             </div>
 
             {/* Transcript. Bottom-anchored so the newest turn sits just above
@@ -483,25 +576,26 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                 screen changes. */}
             <PresenceContext.Provider value={null}>
             <div className="flex min-h-0 flex-1 flex-col justify-end gap-2.5 overflow-y-auto px-4 pb-3">
-              {log.length === 0 && (
+              {/* NO EMPTY-STATE COPY IN ASK. The founder's call: "Ask about
+                  anything in your workspace / Dex answers from your data.
+                  Nothing is created." is a thing you read once and then read
+                  again every single time you open the sheet. The header already
+                  says ASK, and the composer says what to do with it. Decide
+                  keeps its line, because what that door does to a decision
+                  (lines up tasks, creates nothing until approved) is a promise
+                  worth repeating. */}
+              {log.length === 0 && channel === "decide" && (
                 <div className="pb-6 text-center">
-                  <p className="text-sm text-white/70 drop-shadow">
-                    {channel === "decide"
-                      ? "Say or type the decision."
-                      : "Ask about anything in your workspace."}
-                  </p>
-                  {/* 14px and /70: 12px is 9.6pt after --ui-scale, under the
-                      11pt floor, and /45 on this material was not readable. */}
+                  <p className="text-sm text-white/70 drop-shadow">Say or type the decision.</p>
                   <p className="mt-1 text-sm text-white/70">
-                    {channel === "decide"
-                      ? "Dex lines up the tasks for approval. Nothing is created until it's approved."
-                      : "Dex answers from your data. Nothing is created."}
+                    Dex lines up the tasks for approval. Nothing is created until it&rsquo;s approved.
                   </p>
                 </div>
               )}
               {log.map((m, i) => (
                 <Bubble
                   key={m.id}
+                  onOpenFile={openFile}
                   m={{
                     ...m,
                     /* Only the LAST reading turn is live: an older one from a
@@ -525,7 +619,7 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                   upload with "Thinking…" — Dex is not thinking about anything
                   yet, and the founder is watching the wrong thing. The chip
                   above says what is actually happening. */}
-              {busy && !attaching && <Bubble m={{ role: "dex", text: "Thinking…", pending: true }} index={log.length} />}
+              {busy && !attaching && <Bubble onOpenFile={openFile} m={{ role: "dex", text: "Thinking…", pending: true }} index={log.length} />}
               <div ref={endRef} />
             </div>
             </PresenceContext.Provider>

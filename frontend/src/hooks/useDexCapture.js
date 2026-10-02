@@ -471,7 +471,20 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
     const mr = mediaRef.current;
     // `!== "inactive"` rather than `=== "recording"`: a paused recorder still
     // has to be stopped, and a stop on an inactive one is what used to throw.
-    if (mr && mr.state !== "inactive") { try { mr.stop(); } catch { /* already stopped */ } }
+    if (mr && mr.state !== "inactive") {
+      try { mr.stop(); } catch { /* already stopped */ }
+      /* SENDING STARTS AT THE STOP, not when the recorder's onstop finally
+         runs. Reported from the phone: press stop in Ask, the sheet says
+         "Transcribing" — and a recording starts again by itself.
+         `recording` goes false on this line, but `sending` was only raised
+         later inside `mr.onstop`, which is a task or two away. Everything that
+         decides what the button does next reads those two flags, so in that
+         window the app looks idle: useDexConversation's `submit` falls past
+         `if (dex.sending) return` and calls startRecording, and the founder is
+         taping over the thing they just said. The window is the bug; this
+         closes it. onstop and its error paths already own clearing it. */
+      setSending(true);
+    }
     setRecording(false);
     clearInterval(timerRef.current);
     stopMeter();

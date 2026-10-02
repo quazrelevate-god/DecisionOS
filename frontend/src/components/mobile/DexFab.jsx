@@ -108,10 +108,18 @@ export function DexFab({ onOpen, recording = false, seconds = 0, onStop, intent 
       onPointerDown={recording ? (e) => {
         e.preventDefault();
         stoppedRef.current = true;
-        setTimeout(() => { stoppedRef.current = false; }, 600);
+        setTimeout(() => { stoppedRef.current = false; }, 450);
         onStop?.();
       } : undefined}
-      onPointerUp={() => { if (stoppedRef.current) setTimeout(() => { stoppedRef.current = false; }, 0); }}
+      /* NO ZERO-DELAY CLEAR ON POINTERUP. It was a second belt for the case
+         where no click ever arrives, and it became the hole: on a real phone
+         the click after touchend can land in a LATER task than a 0ms timer, so
+         the flag was already cleared by the time the click it existed to
+         swallow arrived. That click then ran onOpen -> submit, found the app
+         momentarily neither recording nor sending, and started a new recording
+         — which is exactly what the founder saw. The click handler clears the
+         flag itself when it consumes it, and the timer below covers a pointerup
+         that lands somewhere else, so nothing is lost by removing this. */
       onClick={(e) => {
         // The click that follows the pointerdown we already acted on.
         if (stoppedRef.current) { stoppedRef.current = false; e.preventDefault(); return; }

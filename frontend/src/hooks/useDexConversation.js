@@ -89,6 +89,20 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
     lastChannelRef.current = channel;
   }, [channel, setDraft]);
 
+  /* CLEAR THE CONVERSATION. The transcript was only ever emptied by switching
+     doors (above), which meant Ask reopened with yesterday's answers still in
+     it and the only way out was force-quitting the app — the founder's report.
+     Everything a conversation IS goes: the turns, the thread the backend keeps
+     it on (ctxId), the draft and anything staged but unsent. The capture itself
+     is not touched; stopping one is the mic's business, not this button's. */
+  const clear = useCallback(() => {
+    setLog([]);
+    setCtxId(null);
+    setDraft("");
+    setPendingFiles([]);
+    heldNoteRef.current = null;
+  }, [setDraft]);
+
   /* A finished capture becomes a turn in the transcript. Keyed on note + outcome
      so a poll updating the same note in place cannot stack duplicates.
      ASK-32 Phase 1: the reply says what Dex UNDERSTOOD and that it is waiting
@@ -181,7 +195,16 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
       push({ role: "dex", text: OUTCOME_COPY.stillReading });
       return { ok: false, blocked: true, text, files: pendingFiles, file_ids: pendingFiles.map((f) => f.id) };
     }
-    push({ role: "user", text: text || pendingFiles.map((f) => f.name).join(", ") });
+    /* THE FILES GO INTO THE TURN, not just into the request. The chips used to
+       vanish on send and the only evidence a file had been part of the question
+       was Dex answering about it — the founder could see the backend had read
+       something they could no longer see. The entries carry the local File, so
+       the preview is drawn from memory and needs no round trip. */
+    push({
+      role: "user",
+      text: text || pendingFiles.map((f) => f.name).join(", "),
+      files: pendingFiles.map((f) => ({ id: f.id, name: f.name, type: f.type, file: f.file })),
+    });
     setDraft("");
     setBusy(true);
     const files = channel === "decide" ? pendingFiles : [];
@@ -444,7 +467,7 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
     dex?.startRecording?.();
   }, [ask, draft, dex, mode]);
 
-  return { log, busy, mode, setMode, draft, setDraft, draftKept, setDraftFromVoice, ask, attach, removeFile, retry, adopt, canRetry, submit, fabIntent, pendingFiles, attaching: attaching > 0 };
+  return { log, busy, mode, setMode, draft, setDraft, draftKept, setDraftFromVoice, ask, attach, removeFile, retry, adopt, canRetry, submit, fabIntent, pendingFiles, attaching: attaching > 0, clear };
 }
 
 export default useDexConversation;

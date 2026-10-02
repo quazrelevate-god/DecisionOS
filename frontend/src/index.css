@@ -643,14 +643,23 @@
        stay paired at every width the shell can take — not only on a phone,
        where it happens to collapse to zero. */
     .app-plus-on-fab {
-        margin-right: max(0.625rem, calc(var(--app-shell-gap) + 0.625rem));
+        /* DERIVED, NOT TYPED. The plus has to sit on the FAB's centre line, and
+           the two are different sizes — 3.5rem against the FAB's 4rem — so the
+           plus's inset is the FAB's plus half the difference:
+             1rem (.app-fab-right) + (4rem - 3.5rem) / 2 = 1.25rem
+           …less the 1rem of px-4 its own row already carries, which leaves
+           0.25rem. It was 0.625rem, and the plus sat 5 real pixels left of the
+           FAB — measured, not guessed, and visible once you look for it. */
+        margin-right: max(0.25rem, calc(var(--app-shell-gap) + 0.25rem));
     }
 }
 
 /* Under 360px the FAB shrinks to 3.75rem, so its centre moves 2px inward. */
 @media (max-width: 359px) {
+    /* Under 360 the FAB is 3.75rem, so the half-difference is 0.125rem and the
+       inset works out at 1rem + 0.125 - 1 = 0.125rem. */
     .app-plus-on-fab {
-        margin-right: max(0.5rem, calc(var(--app-shell-gap) + 0.5rem));
+        margin-right: max(0.125rem, calc(var(--app-shell-gap) + 0.125rem));
     }
 }
 @media (min-width: 481px) and (max-width: 1023.98px) {

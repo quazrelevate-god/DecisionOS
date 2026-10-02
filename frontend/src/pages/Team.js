@@ -408,8 +408,12 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
         onInvite({ token: res.data.invite_token, invite_url: res.data.invite_url, name: form.name, phone_masked: d.length >= 4 ? "•••• " + d.slice(-4) : "••••" });
       }
     } catch (e) {
+      /* `detail` is now always a sentence (lib/api flattens our {code,message}
+         shape so no call site can hand React an object); the object it came
+         from is on detail_full, which is what the seat wall is built from. */
       const detail = e.response?.data?.detail;
-      if (detail?.code === "seat_limit_reached") setSeatWall(detail);
+      const full = e.response?.data?.detail_full;
+      if (full?.code === "seat_limit_reached") setSeatWall(full);
       else toast.error(formatApiError(detail) || "Failed");
     } finally {
       setBusy(false);

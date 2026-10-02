@@ -176,8 +176,12 @@ function WorkspaceSwitcher() {
     setBusy(tenantId);
     try {
       await switchWorkspace(tenantId);
-      // A different workspace is a different everything — start it clean
-      // rather than reconciling every cached query in place.
+      /* A different workspace is a different everything — start it clean
+         rather than reconciling every cached query in place.
+         2026-10-02 — AND THIS ONE STAYS A FULL LOAD, deliberately. lib/navigate
+         exists now and the consent toast uses it, but a router navigation here
+         would keep every cached query from the company being left behind: the
+         reload IS the feature. */
       window.location.href = "/";
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Couldn't open that company");

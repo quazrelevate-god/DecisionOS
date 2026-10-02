@@ -1,5 +1,5 @@
 import axios from "axios";
-import { showAiConsentToast } from "./aiConsent";
+import { showAiConsentToast, aiConsentMessage } from "./aiConsent";
 
 /* DEPLOY-3 — an EMPTY backend url is now the correct production value, and
    the `|| ""` is what makes it usable. The app is served by a node process
@@ -361,6 +361,28 @@ api.interceptors.response.use(
       if (d && typeof d.detail === "string") {
         const said = humanPhrase(d.detail);
         if (said) d.detail = said;
+      } else if (d && d.detail && typeof d.detail === "object" && !Array.isArray(d.detail)) {
+        /* 2026-10-02 — AND A STRUCTURED REFUSAL IS FLATTENED TO ITS SENTENCE.
+         *
+         * 17 of the server's raises use our {code, message} shape -- the seat
+         * limit, the AI budget, the consent gate. formatApiError reads
+         * `.message` from those, but the 88 call sites that pass the detail
+         * straight to toast.error handed React an OBJECT, and React does not
+         * render objects: "Objects are not valid as a React child (found:
+         * object with keys {code, message, seat_limit})", thrown during the
+         * commit. In dev that is an uncaught error; in production it unmounts
+         * the tree. Forced in the browser on the decision-approve path: the
+         * founder saw NOTHING and the app was left broken.
+         *
+         * So `detail` becomes the sentence, and the object it came from stays
+         * on `detail_full` for the four places that branch on `code` -- the
+         * seat wall, the consent check, and signup's two phone/email cases.
+         */
+        const full = d.detail;
+        d.detail_full = full;
+        d.detail = typeof full.message === "string" && full.message
+          ? full.message
+          : "Something went wrong. Please try again.";
       }
     } catch (e) { /* never let tidying the words swallow the error itself */ }
 
@@ -375,6 +397,11 @@ api.interceptors.response.use(
          lib/aiConsent (the same helper the capture and extraction paths use),
          so a refusal reads the same wherever it lands, and an owner is offered
          the switch while everyone else is told who can throw it. */
+      /* 2026-10-02 — and hand the call site the SAME sentence, so the guard in
+         lib/aiConsent can recognise the duplicate it is about to fire and drop
+         it. Without this the two routes say the same thing in two wordings and
+         neither can tell they are the same fact. */
+      try { err.response.data.detail = aiConsentMessage(); } catch (e) { /* no body */ }
       showAiConsentToast();
     }
     return Promise.reject(err);

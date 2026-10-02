@@ -143,7 +143,7 @@ def test_the_interceptor_runs_before_the_session_check():
     """Order matters only for readability here, but the 401 handler and the
     rewrite must both still run — neither returns early."""
     at = API.index("humanPhrase(d.detail)")
-    after = API[at:at + 1500]
+    after = API[at:at + 3000]
     assert "SESSION_LOST_EVENT" in after, "the 401 signal still follows it"
     assert "return Promise.reject(err);" in after, "and the error is still rejected"
 
@@ -270,3 +270,165 @@ def test_a_bare_not_found_is_carried_by_the_phrase_map():
     the interceptor now turns into a sentence. This records WHY those were
     left alone at source rather than rewritten one by one."""
     assert '"not found": "We couldn' in API and "find that" in API
+
+
+# ───────── 7. the structured refusals (402 / 410 / 415 / 451) ─────────────
+AICONSENT = (FE / "lib" / "aiConsent.js").read_text(encoding="utf-8")
+TEAM = (FE / "pages" / "Team.js").read_text(encoding="utf-8")
+REVEAL = (FE / "pages" / "onboarding" / "BuildReveal.js").read_text(encoding="utf-8")
+
+
+def test_a_structured_refusal_is_flattened_to_its_sentence():
+    """17 server raises use our {code, message} shape -- the seat limit, the
+    AI budget, the consent gate. formatApiError reads `.message`, but the 88
+    call sites that pass the detail straight to toast.error handed React an
+    OBJECT, and React does not render objects. Forced in the browser on the
+    decision-approve path: "Objects are not valid as a React child (found:
+    object with keys {code, message, seat_limit})", thrown during the commit.
+    The founder saw nothing and the tree was left broken."""
+    at = API.index("d.detail_full = full")
+    block = API[at - 2000:at + 400]
+    assert 'typeof d.detail === "object"' in block
+    assert "!Array.isArray(d.detail)" in block, "a 422 list is not our shape"
+    assert "full.message" in block
+    assert "Something went wrong" in block, "a shape with no message still says something"
+
+
+def test_the_object_it_came_from_is_kept_for_the_four_that_need_it():
+    assert "detail_full" in API
+    assert "detail_full" in TEAM and "detail_full" in REVEAL and "detail_full" in AICONSENT
+
+
+def test_the_seat_wall_is_still_built_from_the_object():
+    """402 seat_limit_reached drives a wall with counts on it, not a toast."""
+    assert 'full?.code === "seat_limit_reached"' in TEAM
+    assert "setSeatWall(full)" in TEAM
+
+
+def test_signups_phone_and_email_branches_still_read_their_code():
+    assert 'const code = e.response?.data?.detail_full?.code;' in REVEAL
+    assert 'code === "phone_unverified"' in REVEAL
+    assert 'code === "email_registered"' in REVEAL
+
+
+def test_the_consent_check_looks_at_the_kept_object_first():
+    assert "x.response?.data?.detail_full?.code === AI_CONSENT_CODE" in AICONSENT
+    # and the older shapes still answer, for errors we never passed through
+    assert 'detail.code === AI_CONSENT_CODE' in AICONSENT
+    assert "x.response?.status === 451" in AICONSENT
+
+
+def test_the_invite_and_media_refusals_were_already_written_for_a_person():
+    """410 and 415 needed no change -- recorded so the next census does not
+    re-open them."""
+    otp = (Path(__file__).resolve().parents[1] / "routers" / "auth_otp.py").read_text(encoding="utf-8")
+    ledger = (Path(__file__).resolve().parents[1] / "routers" / "ledger.py").read_text(encoding="utf-8")
+    assert "This invite link has expired — ask your admin to resend" in otp
+    assert "Only image or PDF bills are supported" in ledger
+
+
+# ───────── 8. one refusal, one toast, and a door that opens ───────────────
+SETTINGS = (FE / "pages" / "Settings.js").read_text(encoding="utf-8")
+
+
+def test_a_consent_refusal_says_itself_once():
+    """Seen in the browser: a 451 produced TWO toasts -- the rich one with the
+    way out, and a plain copy from whichever of the 88 call sites made the
+    request. One fact, twice, and only one of them carried the button."""
+    assert "guardTheDuplicate" in AICONSENT
+    assert "msg === aiConsentMessage()" in AICONSENT
+    assert "Date.now() - _shownAt < QUIET_MS" in AICONSENT
+
+
+def test_the_rich_toast_does_not_swallow_itself():
+    """The first version showed NOTHING: showAiConsentToast sets _shownAt and
+    then calls toast.error, so it met its own guard. It uses the unwrapped
+    reference for exactly that reason."""
+    assert "_rawToastError" in AICONSENT
+    assert "(_rawToastError || toast.error)(aiConsentMessage()" in AICONSENT
+
+
+def test_only_that_one_sentence_is_ever_dropped():
+    """A different error in the same second must still be shown -- verified in
+    the browser with a 500 inside the quiet window."""
+    at = AICONSENT.index("toast.error = (msg, opts)")
+    body = AICONSENT[at:at + 320]
+    assert 'typeof msg === "string"' in body
+    assert "return plain(msg, opts);" in body, "everything else goes straight through"
+
+
+def test_both_routes_hand_over_the_same_sentence():
+    """Without this the two say the same thing in two wordings, and neither
+    can tell they are the same fact."""
+    assert "err.response.data.detail = aiConsentMessage();" in API
+    assert "showAiConsentToast, aiConsentMessage" in API, "imported at the top"
+
+
+def test_the_way_out_points_at_something_that_exists():
+    """The button is only worth having if it lands on the switch."""
+    assert 'AI_CONSENT_HREF = "/settings?tab=business#ai-consent"' in AICONSENT
+    assert 'id="ai-consent"' in SETTINGS, "the anchor it jumps to"
+    assert "scroll-mt-24" in SETTINGS, "or the header covers the card it jumped to"
+    assert 'tab === "business"' in SETTINGS, "and the card lives on that tab"
+
+
+# ───────── 9. going somewhere without restarting the app ──────────────────
+NAV = (FE / "lib" / "navigate.js").read_text(encoding="utf-8")
+NATIVEBACK = (FE / "hooks" / "useNativeBack.js").read_text(encoding="utf-8")
+LAYOUT = (FE / "components" / "Layout.js").read_text(encoding="utf-8")
+
+
+def test_the_toast_action_no_longer_restarts_the_application():
+    """`window.location.href` is a full document load: the bundle parsed
+    again, every cache dropped, the session re-fetched. A blink in a browser;
+    in the installed PWA and the Capacitor shell it is the app restarting in
+    front of somebody who pressed a button on a toast."""
+    assert "window.location.href = AI_CONSENT_HREF" not in AICONSENT
+    assert "onClick: () => goTo(AI_CONSENT_HREF)" in AICONSENT
+
+
+def test_it_is_the_mechanism_the_app_already_had():
+    """lib/native/links takes a go(path) and useNativeBack supplies navigate,
+    because it is mounted at the root inside the Router. This is that, named —
+    a second way to navigate would have been the worse outcome."""
+    assert "export function setAppNavigate(" in NAV and "export function goTo(" in NAV
+    assert "setAppNavigate(navigate)" in NATIVEBACK
+    assert "return () => setAppNavigate(null);" in NATIVEBACK, "and let go on unmount"
+
+
+def test_it_still_works_with_no_router_listening():
+    """Before React mounts, in a test, or if the bridge is ever left
+    unregistered. The caller must never have to ask which happened."""
+    at = NAV.index("export function goTo(")
+    body = NAV[at:at + 420]
+    assert "if (!_navigate)" in body and "window.location.assign(path)" in body
+
+
+def test_the_hash_is_scrolled_to_by_us_now():
+    """The browser only jumps to an anchor on a real document load, which is
+    exactly what we stopped doing — and the target is not on screen yet: the
+    page has to mount, its tab has to switch, its data has to arrive."""
+    assert "scrollToWhenReady" in NAV
+    assert "requestAnimationFrame" in NAV, "looked for over a budget, not once"
+    assert "LOOK_FOR_MS" in NAV
+
+
+def test_the_workspace_switch_keeps_its_full_load_on_purpose():
+    """The one remaining reload is the feature: a different workspace is a
+    different everything, and a router navigation would keep every cached
+    query from the company being left behind."""
+    assert 'window.location.href = "/";' in LAYOUT
+    assert "AND THIS ONE STAYS A FULL LOAD, deliberately" in LAYOUT
+
+
+def test_no_other_code_navigates_by_reloading():
+    """So the next one is a choice somebody made, not a habit."""
+    import re
+    hits = []
+    for f in FE.rglob("*.js"):
+        if "node_modules" in str(f):
+            continue
+        for n, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+            if re.search(r"window\.location\.href\s*=", line) and not line.strip().startswith(("*", "//")):
+                hits.append(f"{f.name}:{n}")
+    assert hits == ["Layout.js:181"] or all("Layout.js" in h for h in hits), hits

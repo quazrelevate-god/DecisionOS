@@ -119,7 +119,7 @@ export function PartyPicker({ kind = "vendor", name = "", linkedId = "", onChang
   const linked = !!linkedId;
 
   return (
-    <Popover open={open && (rows.length > 0 || partiesQ.isSuccess)} onOpenChange={setOpen}>
+    <Popover open={open && (rows.length > 0 || partiesQ.isSuccess || partiesQ.isError)} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
         <div ref={anchorRef} className={cn("relative min-w-0", className)}>
           <input
@@ -162,7 +162,21 @@ export function PartyPicker({ kind = "vendor", name = "", linkedId = "", onChang
       >
         <ul id={listId} role="listbox" aria-label={`${noun || "Contact"}s in CRM`} data-testid={testid ? `${testid}-list` : undefined}
           className="max-h-64 overflow-y-auto">
-          {shown.length === 0 && !offerNew && (
+          {/* 2026-10-03 — WHEN THE LOOKUP FAILED, SAY SO BEFORE OFFERING TO
+              CREATE ONE. With /ledger/parties answering 500 this picker showed
+              no matches and a cheerful "Add 'E' as a supplier" -- while Erode
+              Yarn Mills sat in the CRM, unmatched because the list had never
+              arrived. The founder is mid-expense, so they take the offer, and
+              the company now has two suppliers with one name and a ledger
+              split across them. An empty-looking picker is not a safe default
+              when its answer is what you are about to write down. */}
+          {partiesQ.isError && !partiesQ.data && (
+            <li className="px-3 py-2.5 text-sm text-slate-600" data-testid={testid ? `${testid}-load-failed` : undefined}>
+              Couldn&rsquo;t load your {word}s just now, so this list is empty — it is not.
+              Check the name before adding a new one.
+            </li>
+          )}
+          {shown.length === 0 && !offerNew && !partiesQ.isError && (
             <li className="px-3 py-2.5 text-sm text-slate-500">
               {partiesQ.isLoading ? "Loading…" : `No ${word}s in CRM yet — type a name`}
             </li>

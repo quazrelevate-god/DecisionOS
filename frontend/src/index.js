@@ -24,12 +24,40 @@ serviceWorkerRegistration.bumpSessionCount();
    — out of signal, back in signal, look at the screen.
    The steady drip while a screen is OPEN is hooks/usePulse.js, which asks one
    question for the whole app rather than one per list. */
+/* 2026-10-03 — HOW LONG A SCREEN IS ALLOWED TO SAY NOTHING.
+ *
+ * react-query's default is three retries with exponential backoff, and with
+ * nothing set here that is what every list in the app had. Measured in the
+ * browser against a failing endpoint: FOUR attempts, 1.0s / 2.1s / 4.1s
+ * apart, and the honest "couldn't load this" did not appear for 7.67
+ * SECONDS. For most of that the page is neither loading nor failed — it is
+ * half-built and silent, which is the state a founder reads as broken.
+ *
+ * AND A REFUSAL WAS RETRIED LIKE A BLIP. A 403 took the same four attempts
+ * and the same 7.6s: asking a server that has just said no, three more
+ * times, to be told no three more times. A 4xx is an ANSWER. The only two
+ * worth asking again are 408 and 429, which are both the server saying
+ * "later" rather than "never".
+ *
+ * One retry covers the thing retries are actually for — a single dropped
+ * request — and brings the message to about a second. Anything longer than
+ * that is better served by the Try again button the failure state already
+ * carries, and by refetchOnWindowFocus / refetchOnReconnect below, which are
+ * how the factory-floor case recovers.
+ */
+const RETRY_ANYWAY = new Set([408, 429]);
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 60_000,
       refetchOnWindowFocus: true,
       refetchOnReconnect: true,
+      retry: (failureCount, error) => {
+        const status = error?.response?.status;
+        if (status >= 400 && status < 500 && !RETRY_ANYWAY.has(status)) return false;
+        return failureCount < 1;
+      },
     },
   },
 });

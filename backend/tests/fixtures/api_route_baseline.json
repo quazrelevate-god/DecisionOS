@@ -1,6 +1,6 @@
 {
-  "count": 360,
-  "sha": "118ac3d672d918b3a673a168b5ac2976f92faa84493214a01e690f3a0821c2ad",
+  "count": 361,
+  "sha": "fa0639a64e6b6a9e7c193ccf85092830087632bffce0d08e74e84b184a8a1879",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -247,6 +247,7 @@
     "POST /api/auth/owner-credentials",
     "POST /api/auth/password/forgot",
     "POST /api/auth/password/reset",
+    "POST /api/auth/password/reset/check",
     "POST /api/auth/phone/send-code",
     "POST /api/auth/register",
     "POST /api/auth/tenant/transfer-ownership",

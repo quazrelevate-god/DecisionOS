@@ -377,3 +377,50 @@ class TestEmailTemplates:
         html = render_reset_email("Anita", "https://app.example.com/reset-password?token=xyz")
         assert "https://app.example.com/reset-password?token=xyz" in html
         assert "1 hour" in html
+
+
+# ===========================================================================
+# is_live -- the reset page asks before it shows its form (2026-10-03)
+# ===========================================================================
+
+
+class TestIsLive:
+    """A preview of consume() that spends nothing."""
+
+    def _issue(self, db, kind="password_reset"):
+        from services.auth import auth_emails
+        return _run(auth_emails.issue(
+            db, kind=kind, user_id="u1", tenant_id="t1", email="a@x.com",
+        ))
+
+    def test_a_fresh_link_is_live_and_asking_does_not_spend_it(self):
+        from services.auth import auth_emails
+        db = _FakeDB()
+        row = self._issue(db)
+        assert _run(auth_emails.is_live(db, token=row["token"], kind="password_reset")) is True
+        assert _run(auth_emails.is_live(db, token=row["token"], kind="password_reset")) is True
+        assert db.auth_email_tokens.docs[0]["used_at"] is None
+        # and the reset itself still works afterwards
+        assert _run(auth_emails.consume(db, token=row["token"], kind="password_reset")) is not None
+
+    def test_a_spent_link_is_not_live(self):
+        from services.auth import auth_emails
+        db = _FakeDB()
+        row = self._issue(db)
+        _run(auth_emails.consume(db, token=row["token"], kind="password_reset"))
+        assert _run(auth_emails.is_live(db, token=row["token"], kind="password_reset")) is False
+
+    def test_an_expired_link_is_not_live(self):
+        from services.auth import auth_emails
+        db = _FakeDB()
+        row = self._issue(db)
+        db.auth_email_tokens.docs[0]["expires_at"] = datetime.now(timezone.utc) - timedelta(minutes=1)
+        assert _run(auth_emails.is_live(db, token=row["token"], kind="password_reset")) is False
+
+    def test_unknown_empty_or_wrong_kind_is_not_live(self):
+        from services.auth import auth_emails
+        db = _FakeDB()
+        row = self._issue(db, kind="password_reset")
+        assert _run(auth_emails.is_live(db, token="nope", kind="password_reset")) is False
+        assert _run(auth_emails.is_live(db, token="", kind="password_reset")) is False
+        assert _run(auth_emails.is_live(db, token=row["token"], kind="email_verify")) is False

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import api, { formatApiError } from "../../lib/api";
 import { ShieldStar, Spinner } from "@phosphor-icons/react";
+import { CARD_BASE, ADMIN_H3 } from "./adminStyle";
+import { DRAWER_FIELD, INK_PILL } from "../../components/karma/glass";
 
 export default function AdminLogin({ onSuccess }) {
   const [email, setEmail] = useState("");
@@ -23,63 +25,61 @@ export default function AdminLogin({ onSuccess }) {
   };
 
   return (
-    <div className="min-h-[calc(100vh/var(--ui-scale,1))] flex items-center justify-center bg-[#0a0a0b] px-4" data-testid="admin-login-screen">
+    <div className="min-h-[calc(100vh/var(--ui-scale,1))] flex items-center justify-center bg-[linear-gradient(180deg,hsl(220_20%_97%),hsl(220_14%_91%))] px-4" data-testid="admin-login-screen">
       <div className="w-full max-w-md">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-12 h-12 flex items-center justify-center bg-[#e5484d] border-2 border-white/10">
-            <ShieldStar size={26} weight="fill" className="text-white" />
+        <div className="mb-8 flex items-center gap-3">
+          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#cf222e] text-white">
+            <ShieldStar size={26} weight="fill" />
           </div>
           <div>
-            <h1 className="font-heading text-2xl font-black tracking-tighter uppercase text-white leading-none">
-              DecisionOS
-            </h1>
-            <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-[#e5484d]">Admin Console</p>
+            <h1 className="font-display text-2xl leading-none text-slate-900">DecisionOS</h1>
+            <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#b91c1c]">Admin console</p>
           </div>
         </div>
 
-        <form onSubmit={submit} className="border-2 border-white/10 bg-[#141418] p-7 space-y-5">
+        <form onSubmit={submit} className={`${CARD_BASE} space-y-5 p-7`}>
           <div>
-            <label className="font-mono text-[11px] uppercase tracking-widest text-white/50 block mb-2">Email</label>
+            <label htmlFor="admin-email" className={ADMIN_H3 + " block"}>Email</label>
             <input
+              id="admin-email"
               data-testid="admin-email-input"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="username"
-              className="w-full bg-[#0a0a0b] border border-white/15 text-white px-4 py-3 font-mono text-sm focus:border-[#e5484d] focus:outline-none"
+              className={DRAWER_FIELD}
               placeholder="admin@decisionos.biz"
             />
           </div>
           <div>
-            <label className="font-mono text-[11px] uppercase tracking-widest text-white/50 block mb-2">Password</label>
+            <label htmlFor="admin-password" className={ADMIN_H3 + " block"}>Password</label>
             <input
+              id="admin-password"
               data-testid="admin-password-input"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
-              className="w-full bg-[#0a0a0b] border border-white/15 text-white px-4 py-3 font-mono text-sm focus:border-[#e5484d] focus:outline-none"
+              className={DRAWER_FIELD}
               placeholder="••••••••"
             />
           </div>
           {err && (
-            <p data-testid="admin-login-error" className="text-[#e5484d] text-sm font-mono">{err}</p>
+            <p data-testid="admin-login-error" role="alert" className="text-sm text-[#b91c1c]">{err}</p>
           )}
           <button
             data-testid="admin-login-submit"
             type="submit"
             disabled={busy}
-            className="w-full bg-[#e5484d] text-white py-3 font-heading font-black uppercase tracking-wider text-sm hover:bg-[#d13940] transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+            className={`flex h-12 w-full items-center justify-center gap-2 rounded-pill text-sm font-medium disabled:opacity-60 ${INK_PILL}`}
           >
             {busy && <Spinner size={16} className="animate-spin" />}
-            {busy ? "Signing in…" : "Enter Console"}
+            {busy ? "Signing in…" : "Enter console"}
           </button>
         </form>
-        <p className="text-white/30 font-mono text-[11px] text-center mt-6 uppercase tracking-widest">
-          Platform operators only
-        </p>
+        <p className="mt-6 text-center text-xs text-slate-600">Platform operators only</p>
       </div>
     </div>
   );

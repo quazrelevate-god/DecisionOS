@@ -1,3 +1,4 @@
+import { ADMIN_BTN, ADMIN_H2, ADMIN_H3, ADMIN_INP, ADMIN_SEL, CARD_BASE } from "./adminStyle";
 // Announcements & comms (Epic 10 Sprint 8).
 // Create in-app broadcasts / maintenance banners (audience all / plan / tenant),
 // activate/deactivate, delete, and email to targeted owners.
@@ -7,13 +8,13 @@ import { toast } from "sonner";
 import { ConfirmAction } from "../../components/common";
 import { Spinner, ArrowClockwise, Plus, Trash, PaperPlaneRight } from "@phosphor-icons/react";
 
-const CARD = "border border-white/10 bg-[#141418] p-4";
-const H2 = "font-heading text-lg font-black uppercase tracking-tight text-white";
-const H3 = "font-mono text-[10px] uppercase tracking-widest text-white/40 mb-2";
-const BTN = "font-mono text-[11px] uppercase tracking-wider px-3 py-2 border transition-colors";
-const SEL = "bg-[#0a0a0b] border border-white/10 px-2 py-1.5 font-mono text-[11px] text-white outline-none";
-const INP = "bg-[#0a0a0b] border border-white/10 px-2 py-1.5 font-mono text-[11px] text-white placeholder:text-white/30 outline-none";
-const KIND_COLOR = { info: "#3b82f6", warning: "#d29922", maintenance: "#e5484d" };
+const CARD = `${CARD_BASE} p-4`;
+const H2 = ADMIN_H2;
+const H3 = ADMIN_H3;
+const BTN = ADMIN_BTN;
+const SEL = ADMIN_SEL;
+const INP = ADMIN_INP;
+const KIND_COLOR = { info: "#0969da", warning: "#7d4e00", maintenance: "#cf222e" };
 
 export function AnnouncementsSection() {
   const [rows, setRows] = useState(null);
@@ -47,14 +48,14 @@ export function AnnouncementsSection() {
     catch (e) { toast.error(formatApiError(e)); }
   };
 
-  if (!rows) return <div className="flex items-center gap-2 text-white/40 font-mono text-sm py-10 justify-center"><Spinner size={16} className="animate-spin" /> Loading…</div>;
+  if (!rows) return <div className="flex items-center gap-2 text-slate-600 font-mono text-sm py-10 justify-center"><Spinner size={16} className="animate-spin" /> Loading…</div>;
   const ts = (s) => (s ? String(s).slice(0, 16).replace("T", " ") : "—");
 
   return (
     <div data-testid="admin-announcements">
       <div className="flex items-center justify-between mb-4">
         <h2 className={H2}>Announcements</h2>
-        <button onClick={load} className={BTN + " border-white/15 text-white/60 hover:text-white flex items-center gap-1.5"}><ArrowClockwise size={13} /> Refresh</button>
+        <button onClick={load} className={BTN + " border-slate-900/15 text-slate-600 hover:text-slate-900 flex items-center gap-1.5"}><ArrowClockwise size={13} /> Refresh</button>
       </div>
 
       <form onSubmit={create} className={CARD + " mb-4 space-y-2"}>
@@ -66,26 +67,26 @@ export function AnnouncementsSection() {
             {["info", "warning", "maintenance"].map((k) => <option key={k} value={k}>{k}</option>)}
           </select>
           <input value={form.audience} onChange={(e) => setForm({ ...form, audience: e.target.value })} placeholder="audience: all | plan:starter | tenant:<id>" className={INP + " flex-1 min-w-[16rem]"} />
-          <label className="flex items-center gap-1.5 font-mono text-[11px] text-white/60"><input type="checkbox" checked={form.dismissible} onChange={(e) => setForm({ ...form, dismissible: e.target.checked })} className="accent-[#e5484d]" /> dismissible</label>
-          <button type="submit" className={BTN + " border-[#3fb950]/50 text-[#3fb950] hover:bg-[#3fb950]/10 flex items-center gap-1"}><Plus size={12} /> Create</button>
+          <label className="flex items-center gap-1.5 font-mono text-[11px] text-slate-600"><input type="checkbox" checked={form.dismissible} onChange={(e) => setForm({ ...form, dismissible: e.target.checked })} className="accent-[#cf222e]" /> dismissible</label>
+          <button type="submit" className={BTN + " border-[#116329]/50 text-[#116329] hover:bg-[#116329]/10 flex items-center gap-1"}><Plus size={12} /> Create</button>
         </div>
       </form>
 
       <div className="space-y-2">
         {rows.map((a) => (
-          <div key={a.id} className={CARD + " flex items-center justify-between"} style={{ borderLeft: `3px solid ${KIND_COLOR[a.kind] || "#6b6b75"}` }}>
+          <div key={a.id} className={CARD + " flex items-center justify-between"} style={{ borderLeft: `3px solid ${KIND_COLOR[a.kind] || "#57606a"}` }}>
             <div>
-              <div className="text-white text-sm">{a.title} <span className="font-mono text-[9px] uppercase" style={{ color: KIND_COLOR[a.kind] }}>{a.kind}</span></div>
-              <div className="font-mono text-[10px] text-white/40 mt-0.5">{a.audience} · {a.live ? <span className="text-[#3fb950]">live</span> : <span className="text-white/40">off</span>} · {ts(a.created_at)}</div>
+              <div className="text-slate-900 text-sm">{a.title} <span className="font-mono text-[9px] uppercase" style={{ color: KIND_COLOR[a.kind] }}>{a.kind}</span></div>
+              <div className="font-mono text-[10px] text-slate-600 mt-0.5">{a.audience} · {a.live ? <span className="text-[#116329]">live</span> : <span className="text-slate-600">off</span>} · {ts(a.created_at)}</div>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => toggle(a)} className={BTN + (a.active ? " border-[#d29922]/50 text-[#d29922]" : " border-[#3fb950]/50 text-[#3fb950]")}>{a.active ? "Disable" : "Enable"}</button>
-              <button onClick={() => setPendingEmail(a)} title="Email to targeted owners" className={BTN + " border-white/15 text-white/60 hover:text-white"}><PaperPlaneRight size={13} /></button>
-              <button onClick={() => setPendingDel(a)} className={BTN + " border-[#e5484d]/50 text-[#e5484d] hover:bg-[#e5484d]/10"}><Trash size={13} /></button>
+              <button onClick={() => toggle(a)} className={BTN + (a.active ? " border-[#7d4e00]/50 text-[#7d4e00]" : " border-[#116329]/50 text-[#116329]")}>{a.active ? "Disable" : "Enable"}</button>
+              <button onClick={() => setPendingEmail(a)} title="Email to targeted owners" className={BTN + " border-slate-900/15 text-slate-600 hover:text-slate-900"}><PaperPlaneRight size={13} /></button>
+              <button onClick={() => setPendingDel(a)} className={BTN + " border-[#cf222e]/50 text-[#b91c1c] hover:bg-[#cf222e]/10"}><Trash size={13} /></button>
             </div>
           </div>
         ))}
-        {rows.length === 0 && <div className="font-mono text-xs text-white/30 py-6 text-center">No announcements.</div>}
+        {rows.length === 0 && <div className="font-mono text-xs text-slate-600 py-6 text-center">No announcements.</div>}
       </div>
       <ConfirmAction
         open={!!pendingDel}

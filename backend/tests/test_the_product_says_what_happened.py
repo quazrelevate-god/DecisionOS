@@ -151,3 +151,85 @@ def test_access_denied_is_in_the_current_style():
 
 def test_an_admin_download_failure_is_a_sentence():
     assert '"Download failed: " + e.message' not in src("pages/admin/ComplianceSection.js")
+
+
+# ═════════════ and the minor ones from the same pass (2026-10-03) ═════════════
+BACKEND = Path(__file__).resolve().parents[1]
+
+
+def bsrc(rel):
+    return (BACKEND / rel).read_text(encoding="utf-8")
+
+
+def test_the_reset_page_asks_before_it_shows_the_form():
+    """A dead link used to be discovered only after a new password had been
+    chosen and typed twice."""
+    p = src("pages/PasswordReset.js")
+    assert 'api.post("/auth/password/reset/check", { token })' in p
+    assert "if (alive && r.data?.ok === false) setDead(true);" in p
+    # if the question cannot be asked, the form shows and the reset decides
+    assert ".catch(() => { /* unknown: let the reset decide */ })" in p
+    assert 'testid="reset-password-checking"' in p
+
+
+def test_the_check_spends_nothing_and_is_reachable_signed_out():
+    a = bsrc("routers/auth.py")
+    i = a.index('@router.post("/password/reset/check")')
+    body = a[i:i + 900]
+    assert "auth_emails.is_live(" in body and "consume(" not in body
+    assert '"/api/auth/password/reset/check",' in bsrc("config.py")
+
+
+def test_an_option_holds_one_string():
+    """Text + expressions inside <option> rendered as invalid markup in
+    development (the console's only warning across all 17 admin tabs)."""
+    assert '{`${s} (${data.counts?.[s] ?? 0})`}' in src("pages/admin/SupportDeskSection.js")
+    assert '{`default (${r.default || "—"})`}' in src("pages/admin/ConfigSection.js")
+    assert '{`${m.name} · ${roleLabel(m.role, roleOptions)}`}' in src("pages/Tasks.js")
+
+
+ADMIN_FILES = [
+    "AdminPortal.js", "AdminLogin.js", "AdminSections.js", "AdminRbacSection.js",
+    "AnnouncementsSection.js", "BillingSection.js", "ComplianceSection.js",
+    "ConfigSection.js", "ImpersonationSection.js", "ObservabilitySection.js",
+    "SupportDeskSection.js", "Tenant360Section.js",
+]
+
+
+def test_the_admin_console_is_in_the_apps_own_style():
+    for f in ADMIN_FILES:
+        s = src(f"pages/admin/{f}")
+        for retired in ("bg-[#0a0a0b]", "bg-[#141418]", "font-heading", "font-black", "border-2"):
+            assert retired not in s, f"{f} still has {retired}"
+
+
+def test_the_admin_sections_share_one_set_of_styles():
+    for f in ADMIN_FILES[2:]:
+        s = src(f"pages/admin/{f}")
+        assert 'from "./adminStyle";' in s, f
+        assert 'const BTN = "' not in s and 'const CARD = "' not in s, f
+
+
+def test_admin_status_text_is_dark_enough_to_read_on_white():
+    """The dark theme's #3fb950 green read at about 2:1 on white."""
+    for f in ADMIN_FILES:
+        s = src(f"pages/admin/{f}").lower()
+        for faint in ("#3fb950", "#d29922", "#e5484d", "text-[#cf222e]"):
+            assert faint not in s, f"{f} still uses {faint}"
+
+
+def test_the_workspace_list_asks_four_questions_not_four_per_workspace():
+    """24 s for 13 workspaces against the hosted database, 0.8 s after."""
+    a = bsrc("routers/admin.py")
+    i = a.index('@router.get("/tenants")')
+    body = a[i:a.index('@router.post("/tenants/{tenant_id}/suspend")')]
+    assert "for t in tenants:" in body
+    loop = body[body.index("for t in tenants:"):]
+    assert "await db." not in loop
+    assert "asyncio.gather(" in body and body.count("_per_tenant(") == 4
+
+
+def test_support_counts_are_asked_together():
+    s = bsrc("routers/admin_support.py")
+    assert "await asyncio.gather(*(db.support_tickets.count_documents" in s
+    assert s.index('"""') < s.index("import asyncio")   # the docstring stays the docstring

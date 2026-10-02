@@ -781,15 +781,26 @@ export default function Desk() {
      DESKTOP IS UNTOUCHED: it has the width for five tiles and the room for the
      tall card, and neither of the founder's complaints exists there. */
   const kpiWide = isMobile || searchParams.get("kpi") === "wide";
-  /* ?desk=sheet — A PROPOSAL, rendered only in /design-lab (2026-10-02).
+  /* THE SHEET IS THE PHONE'S DESK (approved 2026-10-02).
      Today the phone's Desk is three stacked blocks: the black sheet, then the
      slider, then the dock. The founder wants two: the sheet becomes the
      primary container and runs all the way down to the dock, with the slider
      sitting ON it rather than beside it.
-     What does NOT change is the gradient card inside — it keeps its own width
-     and its own content height, the three rows and the "Show all". The sheet
-     grows around it; the card is untouched. Nothing in the app reads this. */
-  const deskSheet = searchParams.get("desk") === "sheet";
+     What does NOT change is the gradient card's width — it keeps the three rows
+     and the "Show all"; the sheet grows around it and the rows grow inside it.
+
+     ?desk=sheet survives so /design-lab can still put the two side by side, and
+     so the old arrangement is one flag away rather than one revert away.
+     DESKTOP NEVER READS THIS: there is no slider up there and no sheet to put
+     one on.
+
+     IT BELONGS TO THE SLIDER, hence the DEX_SLIDER in the condition. Written as
+     `isMobile ||` first, which silently took the Dex WELL off the flag-off
+     phone entirely: the well renders in the branch this arrangement replaces,
+     and the control the sheet carries only exists when the flag is on. The
+     flag's promise is that turning it off puts the product back exactly as it
+     was, and for one build it did not. verify:dex caught it. */
+  const deskSheet = (isMobile && DEX_SLIDER) || searchParams.get("desk") === "sheet";
   // KM-28 — ?decision=<id> redirects to the page rather than raising the
   // modal behind the Desk, so a notification and a tap land in the same place.
   // ?decision=<id> (notifications, pasted links) opens the same popup over

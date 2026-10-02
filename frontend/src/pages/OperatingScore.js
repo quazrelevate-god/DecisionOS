@@ -23,9 +23,11 @@
 // Deep link preserved: /operating-score?user=<id> renders that person's
 // self-view with the view-as strip (U7-01.40).
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import api from "../lib/api";
+import api, { formatApiError } from "../lib/api";
+import { toast } from "sonner";
+import { hasPerm } from "../lib/perms";
 import { useAuth } from "../context/AuthContext";
 import { selfScore, scoreBand, scoreActions } from "../lib/karmaScore";
 import { StickyHeader } from "../components/common";
@@ -1279,31 +1281,74 @@ function FormulaToggle({ open, onToggle }) {
 
 // ─── empty + loading ─────────────────────────────────────────────────────────
 
+/* 2026-10-02 — THIS BOX USED TO THROW AWAY WHAT WAS TYPED INTO IT.
+ *
+ * `submit` cleared the field, showed "sent" for 2.4 seconds, and made no
+ * request. It sits in the empty state a brand-new company sees FIRST, so the
+ * one decision a founder types to turn their score on was discarded in
+ * silence — and the page then went on telling them they had no activity. A
+ * control that lies is worse than a control that is missing.
+ *
+ * It posts to /voice-notes/text now: the same endpoint the Desk's Dex well
+ * and the mobile sheet use, with the same words on success, so a decision
+ * captured here is the same object captured anywhere else. The operating
+ * score and the lists it is complaining about are invalidated on the way out,
+ * because the whole point of typing here is to watch the page stop being
+ * empty.
+ *
+ * Gated on the same permission as every other capture surface: a member who
+ * may not capture is told who can, rather than being handed a box that will
+ * be refused.
+ */
 function InlineCapture() {
+  const { user } = useAuth();
+  const canCapture = user?.role === "owner" || hasPerm(user, "voice_capture");
+  const qc = useQueryClient();
   const [text, setText] = useState("");
-  const [sent, setSent] = useState(false);
-  useEffect(() => {
-    if (!sent) return undefined;
-    const t = setTimeout(() => setSent(false), 2400);
-    return () => clearTimeout(t);
-  }, [sent]);
-  const submit = (e) => {
+  const [sending, setSending] = useState(false);
+
+  const submit = async (e) => {
     e.preventDefault();
-    if (!text.trim()) return;
-    setSent(true);
-    setText("");
+    const body = text.trim();
+    if (!body || sending) return;
+    setSending(true);
+    try {
+      await api.post("/voice-notes/text", { text: body, file_ids: [] });
+      setText("");
+      toast.success("Captured — Dex is structuring it now");
+      /* The score is computed from this work, so it has to be asked again;
+         without this the founder captures a decision and the page keeps
+         saying the company has done nothing. */
+      ["operating-score", "tasks", "decisions", "desk-summary"].forEach(
+        (k) => qc.invalidateQueries({ queryKey: [k] }));
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || "Couldn't capture that — try again.");
+    } finally {
+      setSending(false);
+    }
   };
+
+  if (!canCapture) {
+    return (
+      <p className="mt-5 text-sm text-slate-500" data-testid="operating-inline-capture-denied">
+        Ask an owner to turn on capture.
+      </p>
+    );
+  }
+
   return (
     <form onSubmit={submit} className="mt-5 flex items-center gap-2" data-testid="operating-inline-capture">
       <div className="relative min-w-0 flex-1">
         <Microphone size={16} aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-        <input type="text" value={text} onChange={(e) => setText(e.target.value)} placeholder="Or capture a decision right here"
+        <input type="text" value={text} onChange={(e) => setText(e.target.value)} disabled={sending}
+          placeholder="Or capture a decision right here"
           aria-label="Capture a decision" className={cn(DRAWER_FIELD, "h-11 py-0 pl-10 text-sm")} />
       </div>
-      <button type="submit" disabled={!text.trim()} className={`h-11 shrink-0 rounded-pill px-5 text-sm font-medium disabled:opacity-40 ${INK_PILL}`}>
-        Capture
+      <button type="submit" disabled={!text.trim() || sending}
+        data-testid="operating-inline-capture-send"
+        className={`h-11 shrink-0 rounded-pill px-5 text-sm font-medium disabled:opacity-40 ${INK_PILL}`}>
+        {sending ? "Capturing…" : "Capture"}
       </button>
-      {sent && <span className="text-xs font-medium text-slate-600" role="status">sent</span>}
     </form>
   );
 }

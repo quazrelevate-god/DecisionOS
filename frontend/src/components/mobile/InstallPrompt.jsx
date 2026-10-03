@@ -11,6 +11,7 @@ import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { DeviceMobile, Export, Plus, X } from "@phosphor-icons/react";
 import { BottomSheet } from "./BottomSheet";
+import { useIsMobile } from "../../hooks/useIsMobile";
 import { sessionCount, installDismissed, dismissInstall } from "@/serviceWorkerRegistration";
 
 const MIN_SESSIONS = 3;
@@ -30,6 +31,10 @@ export function InstallPrompt() {
   const [visible, setVisible] = React.useState(false);
   const [iosSheet, setIosSheet] = React.useState(false);
   const deferredRef = React.useRef(null);
+  /* 2026-10-03 (founder: what on desktop is not needed) — desktop Chrome fires
+     beforeinstallprompt too, so from the third visit a laptop was offered the
+     phone app, phone icon and all. The app is installed on phones. */
+  const isMobile = useIsMobile();
 
   React.useEffect(() => {
     // Already installed, already said no, or too early — stay out of the way.
@@ -96,7 +101,7 @@ export function InstallPrompt() {
     deferredRef.current = null;
   };
 
-  if (!visible && !iosSheet) return null;
+  if (!isMobile || (!visible && !iosSheet)) return null;
 
   return (
     <>

@@ -785,6 +785,16 @@ async def read_audit_log(
         db, tenant_id=user["tenant_id"],
         filters=filters, limit=limit, before_ts=before_ts,
     )
+    # 2026-10-03 — say WHO. Rows carry the actor's id and, for password
+    # accounts, their email; a member who signs in by mobile has no email, so
+    # the log read "Logout — A member" for every one of them.
+    ids = list({r.get("actor_id") for r in rows if r.get("actor_id")})
+    if ids:
+        names = {u["id"]: u.get("name") for u in await db.users.find(
+            {"id": {"$in": ids}, "tenant_id": user["tenant_id"]}, {"_id": 0, "id": 1, "name": 1}).to_list(len(ids))}
+        for r in rows:
+            if r.get("actor_id") in names:
+                r["actor_name"] = names[r["actor_id"]]
     return {"rows": rows, "count": len(rows)}
 
 

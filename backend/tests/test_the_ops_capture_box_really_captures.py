@@ -77,7 +77,9 @@ def test_a_member_who_may_not_capture_is_told_who_can():
     """Rather than being handed a box whose request will be refused. Same
     permission and same sentence as the Desk's well."""
     body = _inline_capture()
-    assert 'user?.role === "owner" || hasPerm(user, "voice_capture")' in body
+    # 2026-10-03 RBAC audit: owners are no longer special-cased here -- an
+    # owner holds the key unless the company switched it off for owners.
+    assert 'hasPerm(user, "voice_capture")' in body and 'user?.role === "owner" ||' not in body
     assert "Ask an owner to turn on capture." in body
     assert 'data-testid="operating-inline-capture-denied"' in body
 

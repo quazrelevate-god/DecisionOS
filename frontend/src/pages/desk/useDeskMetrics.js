@@ -23,7 +23,7 @@ export function useDeskMetrics() {
      logs and in any monitoring as a permission error that nobody caused.
      Ledger.js already gates its own copy of this query the same way. */
   const { user } = useAuth();
-  const canLedger = user?.role === "owner" || hasPerm(user, "finance");
+  const canLedger = hasPerm(user, "finance");
 
   const opsQ = useQuery({
     queryKey: ["operating-score", null],
@@ -103,13 +103,22 @@ export function useDeskMetrics() {
     };
   }, [trends]);
 
+  // The local calendar month as the ledger keys it ("2026-10"), not UTC's.
+  const thisMonthKey = () => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
+  };
   const ledger = useMemo(() => {
     const d = ledgerQ.data;
     if (!d) return null;
     return {
       byMonth: Array.isArray(d.by_month) ? d.by_month : [],
       netProfit: Number(d.totals?.net_profit),
-      lastMonthSpend: d.by_month?.length ? Number(d.by_month[d.by_month.length - 1].amount) : null,
+      /* 2026-10-03 — "Spend, this month" is THIS month. It read the last month
+         that had any spend (August, in October, if nothing was booked since),
+         and with no rows at all it was null, which the tile draws as "…" --
+         loading, forever. A loaded ledger with nothing this month is ₹0. */
+      lastMonthSpend: Number((d.by_month || []).find((x) => x.month === thisMonthKey())?.amount) || 0,
     };
   }, [ledgerQ.data]);
 

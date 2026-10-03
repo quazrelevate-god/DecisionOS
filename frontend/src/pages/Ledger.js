@@ -128,7 +128,7 @@ function QuickCapture({ pendingCount, isMobile, onIngested, onOpenInbox, onAddEx
   const { user } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const canIngest = user?.role === "owner" || hasPerm(user, "data_input");
+  const canIngest = hasPerm(user, "data_input");
   const [uploading, setUploading] = useState(false);
   const [active, setActive] = useState(null);
   const [question, setQuestion] = useState("");
@@ -288,7 +288,7 @@ export default function Ledger() {
      a sales person with data_input arrived at Overview and watched six calls
      come back 403. They get the Inbox, which is theirs, and the ledger tabs
      are not offered or fetched at all. */
-  const canLedger = user?.role === "owner" || hasPerm(user, "finance");
+  const canLedger = hasPerm(user, "finance");
   const tabs = canLedger ? TABS : TABS.filter((tb) => tb.key === "inbox");
   const isMobile = useIsMobile();
   const qc = useQueryClient();

@@ -52,7 +52,7 @@ export function DexCaptureBar({
   size = "default",
 }) {
   const { user } = useAuth();
-  const canCapture = user?.role === "owner" || hasPerm(user, "voice_capture");
+  const canCapture = hasPerm(user, "voice_capture");
   const {
     text, setText, sending, recording, recordSecs,
     sendText, startRecording, stopRecording, uploadFile, fileRef,

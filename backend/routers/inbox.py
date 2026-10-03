@@ -13,7 +13,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from core import db, get_current_user
+from core import db, get_current_user, require_role
 from models.inbox import INBOX_CLASSES, InboxStatusInput
 
 
@@ -28,7 +28,10 @@ async def list_inbox(
     # items can page. Counters still reflect the full total_open so the
     # UI can show 'showing N of M'.
     limit: int = Query(300, ge=1, le=1000),
-    user: dict = Depends(get_current_user),
+    # 2026-10-03 RBAC audit: no screen reads this since the Desk replaced the
+    # Inbox (E2-73), and it handed every member -- even one with no access at
+    # all -- decision summaries with prices and every customer complaint.
+    user: dict = Depends(require_role("owner")),
 ):
     tid = user["tenant_id"]
     query: dict = {"tenant_id": tid}
@@ -52,7 +55,7 @@ async def list_inbox(
 
 
 @router.post("/inbox/{item_id}/status")
-async def set_inbox_status(item_id: str, inp: InboxStatusInput, user: dict = Depends(get_current_user)):
+async def set_inbox_status(item_id: str, inp: InboxStatusInput, user: dict = Depends(require_role("owner"))):  # see list_inbox
     if inp.status not in ("open", "done", "dismissed"):
         raise HTTPException(status_code=400, detail="Invalid status")
     res = await db.inbox.update_one(

@@ -206,6 +206,14 @@ export function AuthProvider({ children }) {
     // Auth token lives in a secure HttpOnly cookie set by the server.
     setUser(data.user);
     setTenant(data.tenant);
+    /* 2026-10-03 RBAC audit — and then ask /auth/me, the one answer that
+       carries `effective_permissions`: the company's role settings, temporary
+       grants and what owners were switched off from, resolved by the server.
+       The sign-in responses do not, so until a reload the screens fell back to
+       the built-in role defaults and could offer doors the server then shut
+       (or hide ones it would open). Fire-and-forget: the session is already
+       good, and askMe only replaces the user with the fuller answer. */
+    askMe();
   };
 
   const login = async (email, password) => {

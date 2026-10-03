@@ -214,6 +214,13 @@ async def decision_moves(decision_id: str, user: dict = Depends(get_current_user
     """The cards approving this decision will move, and the open work each
     would leave behind -- what the review asks about (2026-09-21)."""
     from services.decision_flow import moves_preview
+    # 2026-10-03 RBAC audit: the decision itself is refused to anyone outside
+    # it, but which cards it moves and the open tasks on them were not.
+    d = await db.decisions.find_one({"id": decision_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Not found")
+    if user["id"] not in await _decision_participants(user["tenant_id"], d):
+        raise HTTPException(status_code=403, detail="You don't have access to this decision")
     return await moves_preview(user, decision_id)
 
 

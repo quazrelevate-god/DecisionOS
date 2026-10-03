@@ -23,7 +23,13 @@ async def _get_draft(cid, user):
     d = await db.capture_drafts.find_one({"id": cid, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not d:
         raise HTTPException(status_code=404, detail="Capture not found")
-    if user["role"] != "owner" and d["reviewer_role"] != user["role"]:
+    # 2026-10-03 RBAC audit: the queue (list_captures below) shows a draft to
+    # its reviewer ROLE or to anyone holding its reviewer PERMISSION, but acting
+    # on one checked the role alone -- so someone given the permission saw the
+    # draft in their queue and was then told it was "not your review queue".
+    # One rule for seeing it and acting on it.
+    on_queue = d.get("reviewer_role") == user["role"] or d.get("reviewer_perm") in user_perms(user)
+    if user["role"] != "owner" and not on_queue:
         raise HTTPException(status_code=403, detail="Not your review queue")
     return d
 

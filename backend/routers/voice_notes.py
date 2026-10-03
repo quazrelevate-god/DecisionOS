@@ -90,7 +90,7 @@ async def transcribe_only(file: UploadFile = File(...), language: str = Form("au
     """
     # RBAC P2 (2026-09-16): dictation feeds Ask or a capture, so it needs one of those.
     from core import user_perms
-    if user.get("role") != "owner" and not ({"ask", "voice_capture"} & user_perms(user)):
+    if not ({"ask", "voice_capture"} & user_perms(user)):  # 2026-10-03: owners too, unless switched off
         raise HTTPException(status_code=403, detail="Dictation needs Ask AI or Voice capture. Ask an owner.")
     import tempfile
     ext = (file.filename or "audio.webm").split(".")[-1]
@@ -162,11 +162,34 @@ async def clarify_directive(inp: ClarifyInput, user: dict = Depends(require_perm
 
 
 
+async def _notes_heard_via_decisions(user: dict) -> list:
+    """The notes behind decisions this person decides or raised."""
+    rows = await db.decisions.find(
+        {"tenant_id": user["tenant_id"], "voice_note_id": {"$nin": [None, ""]},
+         "$or": [{"approver_id": user["id"]}, {"created_by": user["id"]}]},
+        {"_id": 0, "voice_note_id": 1},
+    ).to_list(1000)
+    return [r["voice_note_id"] for r in rows]
+
+
+async def _may_read_note(user: dict, note: dict) -> bool:
+    """2026-10-03 — ONE RULE FOR WHAT WAS SAID, WHETHER HEARD OR READ.
+    The recording was already limited (below: the owner, the person who
+    recorded it, whoever decides or raised a decision made from it), but the
+    transcript of the same words -- and every other note's -- was handed to
+    any member who asked /voice-notes. An owner dictating about a supplier or
+    a person was readable by the whole team. Same rule for both now."""
+    if user.get("role") == "owner" or note.get("created_by") == user["id"]:
+        return True
+    return note.get("id") in await _notes_heard_via_decisions(user)
+
+
 @router.get("/voice-notes")
 async def list_voice_notes(user: dict = Depends(get_current_user)):
-    notes = await db.voice_notes.find(
-        {"tenant_id": user["tenant_id"]}, {"_id": 0, "audio_path": 0}
-    ).sort("created_at", -1).to_list(100)
+    q = {"tenant_id": user["tenant_id"]}
+    if user.get("role") != "owner":
+        q["$or"] = [{"created_by": user["id"]}, {"id": {"$in": await _notes_heard_via_decisions(user)}}]
+    notes = await db.voice_notes.find(q, {"_id": 0, "audio_path": 0}).sort("created_at", -1).to_list(100)
     return notes
 
 
@@ -198,4 +221,6 @@ async def get_voice_note(note_id: str, user: dict = Depends(get_current_user)):
     note = await db.voice_notes.find_one({"id": note_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "audio_path": 0})
     if not note:
         raise HTTPException(status_code=404, detail="Not found")
+    if not await _may_read_note(user, note):
+        raise HTTPException(status_code=403, detail="You don't have access to this note")
     return note

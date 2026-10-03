@@ -78,7 +78,7 @@ async def _resolve_counterparty(tenant_id: str, counterparty: str, contact_id):
 
 
 @router.get("/workflows/counts")
-async def workflow_counts(user: dict = Depends(get_current_user)):
+async def workflow_counts(user: dict = Depends(require_perm("workflows"))):
     """How many workflows each pipeline holds: {pipeline_key: n} (2026-09-19).
 
     The board loads one pipeline at a time (/workflows?type=…), and every
@@ -118,7 +118,9 @@ async def _pipelines_by_key(tenant_id: str) -> dict:
 @router.get("/workflows")
 async def list_workflows(type: Optional[str] = None,
                          with_tasks: Optional[bool] = False,
-                         user: dict = Depends(get_current_user)):
+                         # 2026-10-03 RBAC audit: changing a workflow took Workflows
+                         # access; reading every order and its tasks took none.
+                         user: dict = Depends(require_perm("workflows"))):
     q = {"tenant_id": user["tenant_id"]}
     if type:
         q["type"] = type
@@ -249,7 +251,7 @@ async def create_workflow(inp: WorkflowCreateInput, user: dict = Depends(require
 
 
 @router.get("/workflows/{workflow_id}")
-async def get_workflow(workflow_id: str, user: dict = Depends(get_current_user)):
+async def get_workflow(workflow_id: str, user: dict = Depends(require_perm("workflows"))):
     """The whole card in one request (A2, 2026-09-21).
 
     Yokesh: "when I see the workflow I have to know what is going on." Until
@@ -389,7 +391,7 @@ async def update_workflow(workflow_id: str, inp: WorkflowUpdateInput,
 
 
 @router.get("/workflows/{workflow_id}/leftover")
-async def workflow_leftover(workflow_id: str, user: dict = Depends(get_current_user)):
+async def workflow_leftover(workflow_id: str, user: dict = Depends(require_perm("workflows"))):
     """The open work on the card's current stage -- what the "work left
     behind" review lists when a move would leave it (2026-09-21)."""
     from services.workflow_engine import leftover_tasks

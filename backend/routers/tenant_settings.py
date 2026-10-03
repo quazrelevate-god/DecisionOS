@@ -779,7 +779,7 @@ async def read_audit_log(
 
 
 @router.get("/invites")
-async def list_invites(user: dict = Depends(get_current_user)):
+async def list_invites(user: dict = Depends(require_perm("team_manage"))):  # 2026-10-03: phone numbers of invitees; adding one already needed this
     t = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "invited_employees": 1})
     return (t or {}).get("invited_employees", [])
 

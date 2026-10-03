@@ -1302,7 +1302,7 @@ function FormulaToggle({ open, onToggle }) {
  */
 function InlineCapture() {
   const { user } = useAuth();
-  const canCapture = user?.role === "owner" || hasPerm(user, "voice_capture");
+  const canCapture = hasPerm(user, "voice_capture");
   const qc = useQueryClient();
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);

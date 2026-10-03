@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 
-from core import db, get_current_user
+from core import db, get_current_user, require_role
 from services.tasks import enrich_tasks
 from services.finance_signals import run_followup
 from services.enrich import enrich_decisions
@@ -17,7 +17,10 @@ router = APIRouter(prefix="/api")
 
 
 @router.get("/dashboard")
-async def dashboard(user: dict = Depends(get_current_user)):
+# 2026-10-03 RBAC audit: unused since /dashboard became the Desk, and it listed
+# every pending decision, purchase and overdue task to any member -- the
+# decisions list itself shows a member only the ones they are part of.
+async def dashboard(user: dict = Depends(require_role("owner"))):
     tid = user["tenant_id"]
     await run_followup(tid)
     now = datetime.now(timezone.utc).isoformat()

@@ -52,6 +52,7 @@
 // apart, this will be wrong within a week." So nothing about a decision is
 // drawn anywhere but here.
 
+import { WorkflowLink } from "./workflow/WorkflowLink";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api, { formatApiError } from "../lib/api";
@@ -322,9 +323,14 @@ export function DecisionPanel({
 
   /* ASK-32 Phase 2 — only the person it waits on (or an owner) decides it or
      hands it to someone else; anyone else who can open it sees who decides. */
-  const mayDecide = canDecide && (user?.role === "owner" || d?.approver_id === user?.id
-    || (!!d?.approver_id && (user?._acting_for || []).includes(d.approver_id)) // RBAC P2: handed to me while away
-    || (!d?.approver_id && userPerms(user).includes("decisions_approve")));
+  /* 2026-10-03 RBAC audit — and only while they hold "Approve decisions": the
+     server asks every decider for it (require_perm on approve/reject), so a
+     named approver whose access was later taken away saw Approve and was
+     refused. An owner holds it unless the company switched it off for owners. */
+  const mayDecide = canDecide && userPerms(user).includes("decisions_approve")
+    && (user?.role === "owner" || d?.approver_id === user?.id
+      || (!!d?.approver_id && (user?._acting_for || []).includes(d.approver_id)) // RBAC P2: handed to me while away
+      || !d?.approver_id);
   const waitingOn = d?.approver_id && d.approver_id === user?.id ? "Waiting on you"
     : d?.approver_name ? `Waiting on ${d.approver_name}` : "Waiting on an owner";
   /* ASK-50 — "Change who decides" is gone, and its query and mutation with it.
@@ -1068,8 +1074,8 @@ export function DecisionPanel({
                         <li key={w.id} className="flex gap-3" data-testid={`decision-workflow-${w.id}`}>
                           <TimelineDot tone="green" check />
                           <div className="min-w-0 flex-1">
-                            <a href={`/workflows?type=${encodeURIComponent(w.type || "")}&focus=${encodeURIComponent(w.id)}`}
-                              className="text-sm text-slate-800 underline-offset-2 hover:underline">{w.title}</a>
+                            <WorkflowLink href={`/workflows?type=${encodeURIComponent(w.type || "")}&focus=${encodeURIComponent(w.id)}`}
+                              className="text-sm text-slate-800 underline-offset-2 hover:underline">{w.title}</WorkflowLink>
                             <p className="text-xs capitalize text-slate-500">{String(w.stage || "").replace(/_/g, " ")}</p>
                           </div>
                         </li>

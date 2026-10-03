@@ -9,7 +9,7 @@ from fastapi import (
     APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File, Form,
 )
 
-from core import db, get_current_user, require_perm, new_id, now_iso
+from core import db, get_current_user, require_perm, require_role, new_id, now_iso
 from models.voice import TextNoteInput
 from services.meetings import process_meeting
 
@@ -57,12 +57,15 @@ async def create_meeting_text(inp: TextNoteInput, background: BackgroundTasks, u
 
 
 @router.get("/meetings")
-async def list_meetings(user: dict = Depends(get_current_user)):
+# 2026-10-03 RBAC audit: Meeting Notes is retired from the UI (E2-31), and these
+# two still handed any member every meeting's transcript. Owner-only until the
+# feature returns with a real rule.
+async def list_meetings(user: dict = Depends(require_role("owner"))):
     return await db.meetings.find({"tenant_id": user["tenant_id"]}, {"_id": 0, "audio_path": 0}).sort("created_at", -1).to_list(100)
 
 
 @router.get("/meetings/{meeting_id}")
-async def get_meeting(meeting_id: str, user: dict = Depends(get_current_user)):
+async def get_meeting(meeting_id: str, user: dict = Depends(require_role("owner"))):
     m = await db.meetings.find_one({"id": meeting_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "audio_path": 0})
     if not m:
         raise HTTPException(status_code=404, detail="Not found")

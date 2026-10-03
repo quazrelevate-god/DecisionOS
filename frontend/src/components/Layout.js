@@ -64,7 +64,17 @@ import { InstallPrompt } from "./mobile/InstallPrompt";
 // Epic 2 Sprint A (E2-01 / E2-02 / E2-15): People retired; CRM (customers +
 // suppliers) and Team (employees) are separate top-level entries. Ops is a
 // new owner-only shortcut to Operating Score (removed from Brief in E2-11).
-const NAV = [
+/* Whether a nav entry shows, given the role and a permission check. Exported
+   with NAV so the Team page's "They will see these menus" preview answers with
+   the same rule as the real nav (2026-10-03 — it was a hand-kept copy that
+   still listed CEO Brief and Meeting Notes, both long retired). */
+export function navEntryOpen(n, isOwner, has) {
+  if (n.ownerOnly && !isOwner) return false;
+  if (n.perms) return n.perms.some((p) => has(p));
+  return !n.perm || has(n.perm);
+}
+
+export const NAV = [
   // KR-5: `/inbox`, not `/`. The root route only ever REDIRECTS a signed-in
   // user here (App.js Home), so a pill pointing at "/" was active for zero
   // real URLs — the Desk pill never lit. Router-driven active state is only
@@ -230,11 +240,7 @@ export default function Layout({ children }) {
      the cost does not grow with what is open. See hooks/usePulse.js. */
   usePulse(!!user);
   // NAV/BOTTOM_NAV/hasPerm are stable module-level refs; only `user` can change.
-  const navMain = useMemo(() => NAV.filter((n) => {
-    if (n.ownerOnly && user?.role !== "owner") return false;
-    if (n.perms) return n.perms.some((p) => hasPerm(user, p));
-    return !n.perm || hasPerm(user, n.perm);
-  }), [user]);
+  const navMain = useMemo(() => NAV.filter((n) => navEntryOpen(n, user?.role === "owner", (p) => hasPerm(user, p))), [user]);
   /* KM-46 — the dip is as wide as the nav actually is. A fixed centre width
      would drift the moment a translation makes "Decision Desk" longer or
      shorter, and the S-curves would then start somewhere other than the end of

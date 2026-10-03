@@ -5,6 +5,7 @@
    edit access, profile, invite link — moved onto the glass design system:
    GlassSelect for role and reporting manager, and a job title, which the
    tree shows under each name. */
+import { NAV, navEntryOpen } from "../components/Layout";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatPhone, timeAgo } from "../lib/format";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -12,7 +13,7 @@ import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { normIndianMobile, displayIndianMobile } from "../lib/phone";
 import OtpBoxes from "../components/auth/OtpBoxes";
-import { PERMISSIONS, hasPerm, roleDefaultPerms, userPerms } from "../lib/perms";
+import { PERMISSIONS, PERMISSION_GROUPS, hasPerm, roleDefaultPerms, userPerms } from "../lib/perms";
 import { toast } from "sonner";
 import {
   AirplaneTakeoff, Briefcase, Camera, ChatText, Check, Copy, EnvelopeSimple, Eye, LinkSimple, MagnifyingGlass,
@@ -150,16 +151,28 @@ function InviteLinkModal({ info, onClose }) {
   );
 }
 
-const MENU_PREVIEW = [
-  { label: "Decision Desk", perm: "inbox" },
-  { label: "CEO Brief", perm: null },
-  { label: "My Work", perm: null },
-  { label: "People", perm: "people" },
-  { label: "Company Brain", perm: "brain" },
-  { label: "Capture", perm: "data_input" },
+/* 2026-10-03 — "They will see these menus", read from the REAL nav. This was
+   a hand-kept list that still offered CEO Brief and Meeting Notes (both
+   retired), called CRM "People", and never mentioned Finance: an Accounts
+   member with Finance on was shown a preview without it. Now it is Layout's
+   NAV and its own rule, plus the two More entries that depend on access. */
+const MORE_PREVIEW = [
   { label: "Workflows", perm: "workflows" },
-  { label: "Meeting Notes", perm: null },
+  { label: "Approvals", perm: "approvals" },
 ];
+function previewMenus(perms) {
+  const has = (p) => perms.includes(p);
+  return [
+    ...NAV.map((n) => {
+      const visible = navEntryOpen(n, false, has);
+      // Finance opens on Data Input alone, but only its upload inbox.
+      const label = n.to === "/finance" && visible && !has("finance") ? "Finance (upload only)"
+        : n.label === "Dex" ? "Dex (Company Brain)" : n.label;
+      return { label, visible };
+    }),
+    ...MORE_PREVIEW.map((m) => ({ label: m.label, visible: has(m.perm) })),
+  ];
+}
 
 /* Add a member, or edit one (`initial`). `defaultRole` pre-sets the team when
    the dialog opens from that team's branch; `defaultManagerId` pre-sets
@@ -586,7 +599,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
             {form.role === "owner" ? (
               <div className={`px-4 py-3.5 text-sm ${DRAWER_CARD}`} data-testid="owner-access-note">
                 <p className="flex items-center gap-1.5 font-semibold text-neutral-900"><ShieldCheck size={15} weight="bold" aria-hidden="true" /> Full company access</p>
-                <p className="mt-1 text-xs text-neutral-600">Owners can open and manage everything — team, finances, workflows and all data. Individual permissions don't apply.</p>
+                <p className="mt-1 text-xs text-neutral-600">Owners can open and manage everything — team, finances, workflows and all data — except any area switched off for owners in Settings › Workspace › What owners can open. Individual permissions don't apply.</p>
               </div>
             ) : (
               <>
@@ -609,34 +622,41 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                   </span>
                 </label>
                 {/* An area that is on is a solid white glass card with the black tick; one that is off is a faint one. */}
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2" data-testid="permission-list">
-                  {PERMISSIONS.map((p) => {
-                    const on = shownPerms.includes(p.key);
-                    // RBAC P0 (2026-09-15) — same rule as the server: someone who isn't
-                    // an owner gives only access they hold, the person already has, or
-                    // their role's defaults (not to themselves).
-                    const selfEdit = editing && initial?.id === me?.id;
-                    const locked = me?.role !== "owner" && !on && !userPerms(me).includes(p.key)
-                      && !(initial?.permissions || []).includes(p.key)
-                      && (selfEdit || !rolePerms.includes(p.key));
-                    return (
-                      <button key={p.key} type="button" data-testid={`perm-${p.key}`} aria-pressed={on} disabled={locked || form.follow_role}
-                        title={form.follow_role ? "Set by the team — untick “Use the team’s access” to choose" : locked ? "Only an owner can give access you don't have" : undefined}
-                        onClick={() => togglePerm(p.key)}
-                        className={`flex min-h-11 items-center justify-between gap-2 rounded-2xl px-3.5 py-2 text-left text-[13px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 disabled:cursor-not-allowed disabled:opacity-45 ${on ? PERM_ON : PERM_OFF}`}>
-                        <span>{p.label}</span>
-                        <span aria-hidden="true" className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${on ? "bg-neutral-900 text-white" : "ring-1 ring-inset ring-slate-900/20"}`}>
-                          {on && <Check size={11} weight="bold" />}
-                        </span>
-                      </button>
-                    );
-                  })}
+                <div className="space-y-4" data-testid="permission-list">
+                  {PERMISSION_GROUPS.map((g) => (
+                    <div key={g.title}>
+                      <p className={DRAWER_LABEL}>{g.title}</p>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {g.items.map((p) => {
+                          const on = shownPerms.includes(p.key);
+                          // RBAC P0 (2026-09-15) — same rule as the server: someone who isn't
+                          // an owner gives only access they hold, the person already has, or
+                          // their role's defaults (not to themselves).
+                          const selfEdit = editing && initial?.id === me?.id;
+                          const locked = me?.role !== "owner" && !on && !userPerms(me).includes(p.key)
+                            && !(initial?.permissions || []).includes(p.key)
+                            && (selfEdit || !rolePerms.includes(p.key));
+                          return (
+                            <button key={p.key} type="button" data-testid={`perm-${p.key}`} aria-pressed={on} disabled={locked || form.follow_role}
+                              title={form.follow_role ? "Set by the team — untick “Use the team’s access” to choose" : locked ? "Only an owner can give access you don't have" : undefined}
+                              onClick={() => togglePerm(p.key)}
+                              className={`flex min-h-11 items-center justify-between gap-2 rounded-2xl px-3.5 py-2 text-left text-[13px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 disabled:cursor-not-allowed disabled:opacity-45 ${on ? PERM_ON : PERM_OFF}`}>
+                              <span>{p.label}</span>
+                              <span aria-hidden="true" className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${on ? "bg-neutral-900 text-white" : "ring-1 ring-inset ring-slate-900/20"}`}>
+                                {on && <Check size={11} weight="bold" />}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
                 <div className="mt-4" data-testid="menu-preview">
                   <p className={DRAWER_LABEL}>They will see these menus</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {MENU_PREVIEW.map((m) => {
-                      const visible = !m.perm || shownPerms.includes(m.perm);
+                    {previewMenus(shownPerms).map((m) => {
+                      const { visible } = m;
                       return (
                         <span key={m.label} data-testid={`preview-${m.label}`}
                           className={`${CHIP} ${visible ? "bg-neutral-900 text-white ring-transparent" : `${QUIET_CHIP} line-through opacity-60`}`}>
@@ -645,7 +665,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                       );
                     })}
                   </div>
-                  <p className="mt-2 text-xs text-neutral-500">CEO Brief shows their own brief. Everyone always has CEO Brief, My Work and Meeting Notes.</p>
+                  <p className="mt-2 text-xs text-neutral-500">My Work, Ops, Team, Leave and Settings are always there; Ops shows their own score.</p>
                 </div>
               </>
             )}
@@ -1261,7 +1281,8 @@ function MemberProfileDialog({
   if (!u) return null;
   const isMe = u.id === currentUserId;
   const status = statusOf(u);
-  const perms = u.role === "owner" ? PERMISSIONS.map((p) => p.key) : userPerms(u);
+  // userPerms reads the server-resolved list, which honours what owners were switched off from.
+  const perms = userPerms(u);
   const granted = PERMISSIONS.filter((pp) => perms.includes(pp.key));
   const denied = PERMISSIONS.filter((pp) => !perms.includes(pp.key));
   const manager = (members || []).find((m) => m.id === u.reporting_manager_id);

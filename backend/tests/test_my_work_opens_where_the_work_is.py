@@ -75,12 +75,16 @@ def test_the_desk_does_not_ask_for_the_ledger_it_cannot_open():
     request on the busiest page in the product, once per member per load,
     landing in the logs and in any monitoring as a permission error nobody
     caused."""
-    assert "const canLedger = user?.role === \"owner\" || hasPerm(user, \"finance\");" in DESK
+    # 2026-10-03 RBAC audit: owners are no longer special-cased here -- an
+    # owner holds the key unless the company switched it off for owners.
+    assert "const canLedger = hasPerm(user, \"finance\");" in DESK
     at = DESK.index('queryKey: ["ledger-summary"]')
     assert "enabled: canLedger," in DESK[at:at + 260]
 
 
 def test_it_is_the_same_gate_the_ledger_page_already_used():
     """Two copies of one query; they should agree about who may run it."""
-    assert 'user?.role === "owner" || hasPerm(user, "finance")' in LEDGER
+    # 2026-10-03 RBAC audit: owners are no longer special-cased here -- an
+    # owner holds the key unless the company switched it off for owners.
+    assert 'hasPerm(user, "finance")' in LEDGER
     assert "enabled: canLedger" in LEDGER

@@ -182,7 +182,7 @@ def _score_employees(tasks, members, now):
 async def _company_operating_view(tid: str, viewer: dict, now: str, window: Optional[int] = None) -> dict:
     """Compute the owner-facing company payload. Extracted so /operating-score
     can dispatch by role (Epic 7 Sprint 1 Phase A -- role split)."""
-    can_finance = viewer.get("role") == "owner" or "finance" in user_perms(viewer)
+    can_finance = "finance" in user_perms(viewer)
 
     # S9 (U8-09.5): the view is identical for every viewer sharing the same
     # can_finance flag, so cache on (tenant, can_finance). Best-effort: any cache

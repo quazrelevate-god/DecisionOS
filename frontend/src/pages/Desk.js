@@ -705,10 +705,15 @@ export default function Desk() {
      open tasks at each card's current stage, which is what "needs you",
      "stuck" and "late" are read from (pages/desk/workflowAttention). Same
      query key the Workflows page uses, so a move made here refreshes there. */
+  /* 2026-10-03 RBAC audit — reading workflows takes Workflows access now, as
+     changing them always did; without it the Desk neither asks nor draws the
+     tile, rather than showing a failed count. */
+  const seesWorkflows = hasPerm(user, "workflows");
   const workflowsQ = useQuery({
     queryKey: ["workflows", "attention"],
     queryFn: () => api.get("/workflows?with_tasks=true").then((r) => r.data),
     refetchInterval: 60000,
+    enabled: seesWorkflows,
   });
   const wfAttention = useMemo(() => workflowAttention({
     workflows: workflowsQ.data || [],
@@ -777,7 +782,7 @@ export default function Desk() {
       .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || ""))),
     [approvalsQ.data, user] // eslint-disable-line react-hooks/exhaustive-deps
   );
-  const showApprovals = user?.role === "owner" || hasPerm(user, "approvals") || approvals.length > 0;
+  const showApprovals = hasPerm(user, "approvals") || approvals.length > 0;
   /* J9-04 (DD-03) and J8-04 (CR-13), founder 24 Sep — A TILE IS ONLY SHOWN TO
      SOMEBODY WHO CAN OPEN IT. A salesperson's Desk carried "To collect
      (overdue)" — a company receivables figure she has no Finance access to —
@@ -789,7 +794,7 @@ export default function Desk() {
      boards. What the tiles COUNT is still company-wide — the founder's call of
      24 Sep is that the Desk is for the people who make decisions, and a
      per-person Desk is phase two. */
-  const seesMoney = user?.role === "owner" || hasPerm(user, "finance");
+  const seesMoney = hasPerm(user, "finance");
   const seesComplaints = canSeeBuyers(user);
   /* 2026-09-14, founder — "if I click the open icon for the approvals, open
      the drawer in the Decision Desk itself, don't go to My Work". The row
@@ -825,7 +830,7 @@ export default function Desk() {
   };
 
   // ASK-25 · Leave: the chip on the Desk, the cards on /approvals.
-  const canApproveLeave = user?.role === "owner" || hasPerm(user, "leave_approve");
+  const canApproveLeave = hasPerm(user, "leave_approve");
   const leavesQ = useQuery({
     queryKey: ["leaves", "approvals"],
     queryFn: () => api.get("/leaves?scope=approvals").then((r) => r.data),
@@ -1366,12 +1371,12 @@ export default function Desk() {
                button inside something that is itself a link. Net profit
                keeps its home on /finance, where this pill used to go.
                RETIRED TESTID: kpi-profit-m (no test referenced it). */
-            { icon: FlowArrow, label: "Workflows",
+            ...(seesWorkflows ? [{ icon: FlowArrow, label: "Workflows",
               value: workflowsQ.isError && !workflowsQ.data ? "—"
                 : workflowsQ.isLoading ? "…" : String(wfAttention.needAttention),
               sub: workflowsQ.isLoading || (workflowsQ.isError && !workflowsQ.data) ? null : `/${wfAttention.total}`,
               urgent: wfAttention.needAttention > 0,
-              to: "/workflows", testid: "kpi-workflows-m" },
+              to: "/workflows", testid: "kpi-workflows-m" }] : []),
           ].map((k) => (
             /* ASK-42 A — p-2.5 below lg (p-3 from lg up): 4px off each tile is
                8px off the strip, and the strip is two rows deep. */
@@ -1448,11 +1453,13 @@ export default function Desk() {
               row, and this sits under them beside the one quiet money number.
               Its numbers come from workflowAttention, which the Workflows page
               can read later without the two disagreeing. */}
+          {seesWorkflows && (
           <WorkflowsTile
             attention={wfAttention}
             loading={workflowsQ.isLoading}
             className="lg:col-span-2"
           />
+          )}
           {seesMoney && (
           <StatTile
             icon={Receipt}

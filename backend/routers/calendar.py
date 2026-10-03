@@ -40,7 +40,14 @@ async def update_leave_approvers(inp: LeaveApproverMapInput, user: dict = Depend
 async def business_calendar(days: int = 45, user: dict = Depends(get_current_user)):
     """Unified business calendar: upcoming payments due, task deadlines, deliveries, complaints, birthdays."""
     tid = user["tenant_id"]
-    can_finance = user.get("role") == "owner" or "finance" in user_perms(user)
+    perms = user_perms(user)
+    # 2026-10-03 RBAC audit: each kind of event follows the rule of the screen
+    # it comes from. Payments already did; tasks, complaints, customer
+    # birthdays and deliveries were the whole company's for every member.
+    can_finance = "finance" in perms
+    from services.tasks import task_list_query, can_see_all_tasks
+    from routers.complaints import complaint_scope
+    from core import crm_types
     now = datetime.now(timezone.utc)
     start = (now - timedelta(days=14)).date().isoformat()
     end = (now + timedelta(days=days)).date().isoformat()
@@ -65,9 +72,10 @@ async def business_calendar(days: int = 45, user: dict = Depends(get_current_use
                 f"{i.get('currency') or ''} {i.get('amount')}", i.get("contact_id"), i.get("id"), i.get("amount"))
 
     # Task deadlines (open)
-    tasks = await db.tasks.find(
-        {"tenant_id": tid, "status": {"$in": ["todo", "blocked", "in_progress", "waiting", "review"]}, "due_date": {"$ne": None}},  # ASK-28 TK-07
-        {"_id": 0}).to_list(500)
+    # The same tasks the Tasks page shows this person (task_list_query).
+    tq = task_list_query(user, can_approve_any="approvals" in perms, see_all=can_see_all_tasks(user, perms))
+    tq.update({"status": {"$in": ["todo", "blocked", "in_progress", "waiting", "review"]}, "due_date": {"$ne": None}})  # ASK-28 TK-07
+    tasks = await db.tasks.find(tq, {"_id": 0}).to_list(500)
     for t in tasks:
         add(t.get("due_date"), "task", t.get("title", "Task"),
             (t.get("assignee_role") or "team"), None, t.get("id"))
@@ -80,7 +88,7 @@ async def business_calendar(days: int = 45, user: dict = Depends(get_current_use
     _cal_term = await _tts(tid)
     wfs = await db.workflows.find(
         {"tenant_id": tid, "type": {"$in": ["distribution", "sales_dispatch"]}, "stage": {"$nin": _cal_term}},
-        {"_id": 0}).to_list(300)
+        {"_id": 0}).to_list(300) if "workflows" in perms else []
     for w in wfs:
         dt = w.get("expected_date") or w.get("due_date")
         if dt:
@@ -88,13 +96,13 @@ async def business_calendar(days: int = 45, user: dict = Depends(get_current_use
                 (w.get("stage") or "").replace("_", " "), w.get("contact_id"), w.get("id"))
 
     # Complaints (recent)
-    comps = await db.complaints.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    comps = await db.complaints.find({"tenant_id": tid, **(await complaint_scope(user))}, {"_id": 0}).sort("created_at", -1).to_list(200)
     for c in comps:
         add(c.get("created_at"), "complaint", f"Complaint: {(c.get('text') or '')[:50]}",
             c.get("severity") or "", c.get("customer_id"), c.get("id"))
 
     # Birthdays (this year, from contact.birthday MM-DD or YYYY-MM-DD)
-    contacts = await db.contacts.find({"tenant_id": tid, "birthday": {"$nin": [None, ""]}},
+    contacts = await db.contacts.find({"tenant_id": tid, "birthday": {"$nin": [None, ""]}, "type": {"$in": list(crm_types(user))}},
                                       {"_id": 0, "id": 1, "name": 1, "birthday": 1}).to_list(500)
     for c in contacts:
         b = (c.get("birthday") or "").strip()

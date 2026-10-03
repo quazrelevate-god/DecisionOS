@@ -569,7 +569,7 @@ export default function WorkflowDetail({ workflowId, open, onOpenChange, onAdvan
   const [approving, setApproving] = useState(false);
   const closeRef = useRef(null);
 
-  const canEdit = user?.role === "owner" || userPerms(user).includes("workflows");
+  const canEdit = userPerms(user).includes("workflows");
 
   const cardQ = useQuery({
     queryKey: ["workflow", workflowId],

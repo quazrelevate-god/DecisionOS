@@ -236,7 +236,7 @@ async def _check_assignable(user: dict, lead_id: Optional[str] = None, team_key:
     owner and holders of "Assign tasks to anyone" pass; everyone else may give
     work to themselves, their own team and their direct reports."""
     perms = user_perms(user)
-    if user.get("role") == "owner" or "tasks_assign_any" in perms:
+    if "tasks_assign_any" in perms:
         return
     if team_key and not can_assign_team(user, team_key, perms):
         raise HTTPException(status_code=403, detail=(
@@ -353,7 +353,7 @@ async def get_task(task_id: str, user: dict = Depends(get_current_user)):
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Task not found")
-    allowed = (user.get("role") == "owner" or "tasks_view_all" in user_perms(user)  # ASK-28 TK-08
+    allowed = ("tasks_view_all" in user_perms(user)  # ASK-28 TK-08
                or _can_work_task(user, t)
                or t.get("approver_id") == user["id"] or t.get("created_by") == user["id"]
                or (t.get("waiting_on") or {}).get("user_id") == user["id"]  # ASK-28 TK-07: waited on
@@ -466,7 +466,7 @@ async def task_activity(task_id: str, user: dict = Depends(get_current_user)):
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Task not found")
-    allowed = (user.get("role") == "owner" or "tasks_view_all" in user_perms(user)  # ASK-28 TK-08
+    allowed = ("tasks_view_all" in user_perms(user)  # ASK-28 TK-08
                or _can_work_task(user, t)
                or t.get("approver_id") == user["id"] or t.get("created_by") == user["id"]
                or (t.get("waiting_on") or {}).get("user_id") == user["id"]  # ASK-28 TK-07: waited on

@@ -1,3 +1,4 @@
+import { WorkflowLink } from "../components/workflow/WorkflowLink";
 import { Fragment, useRef, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -2675,7 +2676,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
         the summary row. */}
     {t.workflow_summary && t.workflow_summary.id && (
       <div>
-        <a
+        <WorkflowLink
           href={`/workflows?type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
           data-testid={`wf-chip-full-${t.id}`}
           className="inline-flex items-center gap-1.5 nm-tile px-2.5 py-1 text-xs font-mono bg-nm-sunken hover:bg-accent transition-colors"
@@ -2689,7 +2690,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
           <span className=" text-[10px]">
             {(t.workflow_summary.stage || "").replace(/_/g, " ")}
           </span>
-        </a>
+        </WorkflowLink>
       </div>
     )}
 
@@ -3214,7 +3215,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                 touch box (a[data-testid] — the MPWA-01 floor in index.css):
                 the tint lives on the inner span so the pill keeps its size. */}
             {t.workflow_summary?.id && (
-              <a
+              <WorkflowLink
                 href={`/workflows?type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
                 onClick={(e) => e.stopPropagation()}
                 data-testid={`wf-chip-${t.id}`}
@@ -3225,7 +3226,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                   <FlowArrow size={12} weight="bold" aria-hidden="true" className="shrink-0" />
                   <span className="min-w-0 max-w-[8rem] truncate lg:max-w-[11rem]">{t.workflow_summary.title || "Workflow"}</span>
                 </span>
-              </a>
+              </WorkflowLink>
             )}
             {(t.attachment_count || 0) > 0 && (
               <span className="inline-flex items-center gap-0.5 text-[11px] tabular-nums text-muted-foreground"
@@ -3718,7 +3719,7 @@ export default function MyWork({ only = null }) {
   // other people's work, so the ranking and its columns are off there.
   // RBAC P2 (2026-09-16): scoring runs AI for the whole list, so it's for owners
   // and Manage team (the server's rule); the toggle no longer shows then fails.
-  const canPrioritize = user?.role === "owner" || userPerms(user).includes("team_manage");
+  const canPrioritize = userPerms(user).includes("team_manage");
   // 2026-09-19 — Yokesh: the Workflows way in from My Work was lost (ASK-42 C
   // took it out when /workflows became a page of its own), and on desktop
   // nothing else reaches that page — it is not in the top nav. It comes back
@@ -3726,7 +3727,7 @@ export default function MyWork({ only = null }) {
   // entry in the phone's view menu, both opening /workflows. Same gate as the
   // More menu's tile and the page's own data.
   const navigate = useNavigate();
-  const canSeeWorkflows = user?.role === "owner" || userPerms(user).includes("workflows");
+  const canSeeWorkflows = userPerms(user).includes("workflows");
   const aiOn = canPrioritize && aiPriority && !asked && !team;
   // ASK-24 — with Person set, every card would repeat the same name.
   const showAssignee = ((canSeeAll && scope === "all") || team) && !personFilter;

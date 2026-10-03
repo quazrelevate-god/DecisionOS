@@ -222,12 +222,15 @@ def can_note_task(user: dict, t: dict, manages: bool = False) -> bool:
 
 def can_see_all_tasks(user: dict, perms) -> bool:
     """ASK-28 TK-08 (plan 6.4) — All Tasks: the owner, or anyone given
-    "See all tasks" (tasks_view_all). Off for every role by default."""
-    return user.get("role") == "owner" or "tasks_view_all" in (perms or ())
+    "See all tasks" (tasks_view_all). Off for every role by default.
+    2026-10-03 — read from the permissions alone: an owner holds every key
+    except any the company switched off for owners (Settings > What owners
+    can open), and a role shortcut here used to ignore that switch."""
+    return "tasks_view_all" in (perms or ())
 
 
 def can_assign_any(user: dict, perms) -> bool:
-    return user.get("role") == "owner" or "tasks_assign_any" in (perms or ())
+    return "tasks_assign_any" in (perms or ())
 
 
 def can_assign_person(user: dict, target: dict, team_ids, perms) -> bool:

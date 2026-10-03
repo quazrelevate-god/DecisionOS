@@ -197,6 +197,17 @@ def require_perm(perm):
     return checker
 
 
+def require_any_perm(*perms):
+    """Any one of several permissions opens the door (2026-10-03). For a
+    screen two kinds of people use -- the Finance inbox is read by Finance and
+    by whoever is given Data Input to upload into it."""
+    async def checker(user: dict = Depends(get_current_user)) -> dict:
+        if not (set(perms) & user_perms(user)):
+            raise HTTPException(status_code=403, detail="You don't have access to this feature")
+        return user
+    return checker
+
+
 async def tenant_role_keys(tenant_id: str) -> set:
     t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "roles": 1})
     keys = {r.get("key") for r in ((t.get("roles") if t else None) or [])}

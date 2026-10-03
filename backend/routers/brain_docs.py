@@ -27,7 +27,7 @@ from fastapi.responses import Response
 
 from services import obj_store
 from services.tenancy import tenant_filter  # FIX-001-C
-from core import db, get_current_user, new_id, now_iso, logger, user_perms
+from core import db, get_current_user, require_perm, new_id, now_iso, logger, user_perms
 
 
 router = APIRouter(prefix="/api/brain/documents")
@@ -249,7 +249,10 @@ async def list_documents(
     from_date: Optional[str] = Query(None, alias="from", max_length=32),
     to_date: Optional[str] = Query(None, alias="to", max_length=32),
     limit: int = Query(100, ge=1, le=500),
-    user: dict = Depends(get_current_user),
+    # 2026-10-03 RBAC audit: the Brain's documents are read on the Brain page,
+    # which takes Company Brain access; the API took none. Visibility below
+    # still decides WHICH documents.
+    user: dict = Depends(require_perm("brain")),
 ):
     """List documents visible to this user, with optional filters + a `q` free-text search."""
     filt: dict = {"tenant_id": user["tenant_id"], "is_deleted": False}
@@ -302,7 +305,7 @@ async def _fetch(doc_id: str, tenant_id: str) -> dict:
 
 
 @router.get("/{doc_id}")
-async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
+async def get_document(doc_id: str, user: dict = Depends(require_perm("brain"))):
     doc = await _fetch(doc_id, user["tenant_id"])
     if not _user_can_see(doc, user):
         raise HTTPException(status_code=403, detail="You don't have access to this document")
@@ -360,7 +363,7 @@ async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
 
 
 @router.get("/{doc_id}/download")
-async def download_document(doc_id: str, user: dict = Depends(get_current_user)):
+async def download_document(doc_id: str, user: dict = Depends(require_perm("brain"))):
     doc = await _fetch(doc_id, user["tenant_id"])
     if not _user_can_see(doc, user):
         raise HTTPException(status_code=403, detail="You don't have access to this document")

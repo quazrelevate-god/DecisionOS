@@ -822,7 +822,7 @@ export default function Settings() {
   // 8-cards-to-4-tabs restructure replaced this component wholesale, so the
   // mobile branch is re-applied on top of it rather than merged into it.
   const { user } = useAuth();
-  const isOwner = user?.role === "owner" || hasPerm(user, "team_manage");
+  const isOwner = hasPerm(user, "team_manage");
   // U7-11.1 (2026-08-17): persist active tab in URL. Was useState-only,
   // so reload / back-forward / deep-link all landed on Business. Owner
   // ask: fix the missing / optimizable bits -- deep-linking Settings

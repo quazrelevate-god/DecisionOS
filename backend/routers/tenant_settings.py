@@ -349,7 +349,17 @@ async def add_role(inp: RoleLabelInput, user: dict = Depends(require_perm("team_
     roles = (t or {}).get("roles") or []
     if any(r.get("key") == key for r in roles):
         raise HTTPException(status_code=400, detail="A role with this name already exists")
-    roles.append({"key": key, "label": label})
+    # 2026-10-03 (founder) — A TEAM ADDED HERE STARTS WITH WHAT IT DOES, as a
+    # team made at sign-up has since J1-05: an "Accounts" team the owner adds
+    # on day thirty opened no Finance until they found the Access toggle. The
+    # owner changes it under Access like any other team; nothing is hidden.
+    from shared.roles import starting_perms
+    from core.permissions import _BASE_PERMS
+    role_doc = {"key": key, "label": label}
+    extra = starting_perms(key, label)
+    if extra:
+        role_doc["permissions"] = sorted(set(_BASE_PERMS) | set(extra))
+    roles.append(role_doc)
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"roles": roles}})
     await log_activity(user["tenant_id"], user["id"], "role_added", f"{user['name']} added the role '{label}'")
     return await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)

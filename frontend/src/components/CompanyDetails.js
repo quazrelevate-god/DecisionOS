@@ -79,7 +79,16 @@ export function CompanyDetails() {
       setRoles((data.roles || []).map((r) => ({ ...r })));
       setRoleInput("");
       await refreshTenant();
-      toast.success(`Team "${label}" added`);
+      /* 2026-10-03 — a team named for its work starts with that work's access
+         (server: shared/roles.starting_perms). Say what it was given, so the
+         owner never discovers it later. */
+      const BASE = defaultPermsForRole("__custom__");
+      const added = (data.roles || []).find((r) => r.label === label);
+      const extra = (added?.permissions || []).filter((k) => !BASE.includes(k))
+        .map((k) => PERMISSION_GROUPS.flatMap((g) => g.items).find((p) => p.key === k)?.label).filter(Boolean);
+      toast.success(`Team "${label}" added`, extra.length ? {
+        description: `It starts with ${extra.join(", ")} as well as everyday work. Change it under Access.`,
+      } : undefined);
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Couldn't add role");
     } finally { setRoleBusy(false); }
@@ -391,7 +400,7 @@ function RoleAccessEditor({ role, members, onSaved }) {
   return (
     <div className="mt-2 rounded-2xl bg-white/60 p-3 ring-1 ring-inset ring-slate-900/[0.06]" data-testid={`role-access-${role.key}`}>
       <p className="text-xs text-muted-foreground">
-        {inRole.length} {inRole.length === 1 ? "person" : "people"} in this team · {custom ? "custom access" : "built-in default"} · owners have everything not switched off for owners in Workspace
+        {inRole.length} {inRole.length === 1 ? "person" : "people"} in this team · {custom ? "set for this team" : "built-in default"} · owners have everything not switched off for owners in Workspace
       </p>
       <div className="mt-2 space-y-3">
         {PERMISSION_GROUPS.map((g) => (

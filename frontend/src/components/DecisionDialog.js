@@ -1074,7 +1074,7 @@ export function DecisionPanel({
                         <li key={w.id} className="flex gap-3" data-testid={`decision-workflow-${w.id}`}>
                           <TimelineDot tone="green" check />
                           <div className="min-w-0 flex-1">
-                            <WorkflowLink href={`/workflows?type=${encodeURIComponent(w.type || "")}&focus=${encodeURIComponent(w.id)}`}
+                            <WorkflowLink type={w.type} href={`/workflows?type=${encodeURIComponent(w.type || "")}&focus=${encodeURIComponent(w.id)}`}
                               className="text-sm text-slate-800 underline-offset-2 hover:underline">{w.title}</WorkflowLink>
                             <p className="text-xs capitalize text-slate-500">{String(w.stage || "").replace(/_/g, " ")}</p>
                           </div>

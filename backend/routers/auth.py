@@ -1151,7 +1151,12 @@ async def me(request: Request, response: Response, user: dict = Depends(get_curr
         {"id": user["id"]}, {"_id": 0, "phone_norm": 1, "phone_verified_at": 1,
                              "passwordless": 1, "email": 1, "role": 1, "id": 1}) or {}
     _elsewhere = await has_credentials_elsewhere(db, {**_full, "role": user.get("role")})
+    # 2026-10-03 — which pipelines this person's team works in, from the same
+    # rule the workflow endpoints enforce, so the board's tabs and the links to
+    # it never offer a pipeline the server will refuse. null = every pipeline.
+    from services.workflows import workflow_scope
     return {"user": {**user, "effective_permissions": sorted(user_perms(user)),
+                     "workflow_scope": await workflow_scope(user),
                      "credentials_elsewhere": _elsewhere},
             "tenant": tenant}
 

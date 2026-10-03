@@ -40,10 +40,28 @@ async def brain_search(q: str = "", user: dict = Depends(require_perm("brain")))
     if not privileged:
         task_q["$and"].append({"$or": [{"assignee_id": uid}, {"assignee_role": urole}, {"created_by": uid}]})
 
-    decisions = await db.decisions.find({"tenant_id": tid, "$or": [{"title": rx}, {"summary": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    # 2026-10-03 — each kind of record by the rule of the screen it lives on.
+    # Decisions and contacts were returned whole to any member with Brain
+    # access: 9 decisions to a member whose own Decisions list showed 2, and
+    # contacts with no CRM access at all.
+    from routers.decisions import visible_decisions_clause
+    from services.workflows import workflow_scope, scope_query
+    from core import crm_types
+    dec_q = {"tenant_id": tid, "$and": [{"$or": [{"title": rx}, {"summary": rx}]}]}
+    dclause = await visible_decisions_clause(user)
+    if dclause:
+        dec_q["$and"].append(dclause)
+    decisions = await db.decisions.find(dec_q, {"_id": 0}).sort("created_at", -1).to_list(50)
     tasks = await db.tasks.find(task_q, {"_id": 0}).sort("created_at", -1).to_list(50)
-    workflows = await db.workflows.find({"tenant_id": tid, "$or": [{"title": rx}, {"detail": rx}, {"counterparty": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
-    contacts = await db.contacts.find({"tenant_id": tid, "$or": [{"name": rx}, {"company": rx}, {"email": rx}, {"phone": rx}, {"notes": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    wf_q = {"tenant_id": tid, "$and": [{"$or": [{"title": rx}, {"detail": rx}, {"counterparty": rx}]}]}
+    wscope = scope_query(await workflow_scope(user)) if "workflows" in user_perms(user) else {"id": {"$in": []}}
+    if wscope:
+        wf_q["$and"].append(wscope)
+    workflows = await db.workflows.find(wf_q, {"_id": 0}).sort("created_at", -1).to_list(50)
+    types = list(crm_types(user))
+    contacts = await db.contacts.find({"tenant_id": tid, "type": {"$in": types},
+                                       "$or": [{"name": rx}, {"company": rx}, {"email": rx}, {"phone": rx}, {"notes": rx}]},
+                                      {"_id": 0}).sort("created_at", -1).to_list(50) if types else []
     memory = await db.memory.find({"tenant_id": tid, "text": rx}, {"_id": 0}).sort("created_at", -1).to_list(50)
 
     # Financial records: department-restricted to Owner / Finance / Ledger roles only.

@@ -77,6 +77,18 @@ async def _resolve_counterparty(tenant_id: str, counterparty: str, contact_id):
     return (counterparty or contact.get("company") or contact.get("name") or ""), contact_id
 
 
+async def _in_my_pipelines(user: dict, workflow_id: str) -> None:
+    """2026-10-03 — a card in a pipeline this person's team has no stage in is
+    not theirs to read or move (services/workflows.workflow_scope). 404 for a
+    card that does not exist, 403 for one that is not theirs."""
+    from services.workflows import workflow_scope, in_scope
+    wf = await db.workflows.find_one({"id": workflow_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "type": 1})
+    if not wf:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not in_scope(await workflow_scope(user), wf.get("type")):
+        raise HTTPException(status_code=403, detail="This workflow belongs to another team.")
+
+
 @router.get("/workflows/counts")
 async def workflow_counts(user: dict = Depends(require_perm("workflows"))):
     """How many workflows each pipeline holds: {pipeline_key: n} (2026-09-19).
@@ -89,8 +101,9 @@ async def workflow_counts(user: dict = Depends(require_perm("workflows"))):
     """
     # The async client returns the cursor from an awaited aggregate() (see
     # routers/admin_billing.py) — not a cursor to call .to_list() on directly.
+    from services.workflows import workflow_scope, scope_query
     cur = await db.workflows.aggregate([
-        {"$match": {"tenant_id": user["tenant_id"]}},
+        {"$match": {"tenant_id": user["tenant_id"], **scope_query(await workflow_scope(user))}},
         {"$group": {"_id": "$type", "n": {"$sum": 1}}},
     ])
     return {r["_id"]: r["n"] for r in await cur.to_list(200) if r.get("_id")}
@@ -121,7 +134,8 @@ async def list_workflows(type: Optional[str] = None,
                          # 2026-10-03 RBAC audit: changing a workflow took Workflows
                          # access; reading every order and its tasks took none.
                          user: dict = Depends(require_perm("workflows"))):
-    q = {"tenant_id": user["tenant_id"]}
+    from services.workflows import workflow_scope, scope_query
+    q = {"tenant_id": user["tenant_id"], **scope_query(await workflow_scope(user))}
     if type:
         q["type"] = type
     wfs = await db.workflows.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
@@ -212,6 +226,9 @@ async def create_workflow(inp: WorkflowCreateInput, user: dict = Depends(require
     from services.ai.generators import tenant_operating_model
     om = await tenant_operating_model(user["tenant_id"])
     pipeline = next((p for p in om["pipelines"] if p["key"] == inp.type), None)
+    from services.workflows import workflow_scope, in_scope
+    if pipeline and not in_scope(await workflow_scope(user), inp.type):
+        raise HTTPException(status_code=403, detail="This pipeline belongs to another team.")
     if not pipeline:
         raise HTTPException(status_code=400, detail="Invalid workflow type")
     wid = new_id()
@@ -268,6 +285,7 @@ async def get_workflow(workflow_id: str, user: dict = Depends(require_perm("work
 
     Same access as the board list it belongs to.
     """
+    await _in_my_pipelines(user, workflow_id)  # 2026-10-03: the team that owns a stage
     from services.workflow_engine import _load_pipeline, check_stage_ready
     wf = await db.workflows.find_one(
         {"id": workflow_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
@@ -342,6 +360,7 @@ async def update_workflow(workflow_id: str, inp: WorkflowUpdateInput,
     writer of that, and the stage list is not, because it is the rails under a
     card that is already moving.
     """
+    await _in_my_pipelines(user, workflow_id)  # 2026-10-03: the team that owns a stage
     wf = await db.workflows.find_one(
         {"id": workflow_id, "tenant_id": user["tenant_id"]},
         {"_id": 0, "id": 1, "title": 1, "counterparty": 1, "contact_id": 1})
@@ -394,6 +413,7 @@ async def update_workflow(workflow_id: str, inp: WorkflowUpdateInput,
 async def workflow_leftover(workflow_id: str, user: dict = Depends(require_perm("workflows"))):
     """The open work on the card's current stage -- what the "work left
     behind" review lists when a move would leave it (2026-09-21)."""
+    await _in_my_pipelines(user, workflow_id)  # 2026-10-03: the team that owns a stage
     from services.workflow_engine import leftover_tasks
     wf = await db.workflows.find_one({"id": workflow_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "id": 1})
     if not wf:
@@ -418,6 +438,7 @@ async def approve_workflow_stage(workflow_id: str,
     approval does not move the card — it clears the gate, and `readiness` comes
     back so the caller can offer the move straight away.
     """
+    await _in_my_pipelines(user, workflow_id)  # 2026-10-03: the team that owns a stage
     from services.workflow_engine import check_stage_ready, record_stage_approval
     res = await record_stage_approval(
         user["tenant_id"], workflow_id,
@@ -468,6 +489,7 @@ async def advance_workflow(workflow_id: str, inp: WorkflowAdvanceInput,
     the legacy behaviour via a one-time backfill migration
     (see backfill_procurement_side_effects_v1 in _bootstrap).
     """
+    await _in_my_pipelines(user, workflow_id)  # 2026-10-03: the team that owns a stage
     from services.workflow_engine import advance as _engine_advance
     from services.workflow_engine import WorkflowAdvanceError
     try:

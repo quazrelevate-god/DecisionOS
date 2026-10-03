@@ -40,6 +40,7 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { lex } from "../lib/lexicon";
 import { opModel } from "../lib/operatingModel";
+import { canSeePipeline } from "../lib/perms";
 import { money, timeAgo, fullTime, humanStage } from "../lib/format";
 import { toast } from "sonner";
 import {
@@ -403,7 +404,9 @@ export default function Workflows() {
   const { tenant, user } = useAuth();
   const L = lex(tenant);
   const om = opModel(tenant);
-  const pipelines = om.pipelines;
+  // 2026-10-03 — only the pipelines this person's team works in (the server
+  // refuses the others); the owner and "See all tasks" see every one.
+  const pipelines = om.pipelines.filter((p) => canSeePipeline(user, p.key));
   const [params] = useSearchParams();
   const focusWf = params.get("wf") || params.get("focus");
   const focusWfType = params.get("wf_type") || params.get("type");

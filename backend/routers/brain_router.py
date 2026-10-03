@@ -183,7 +183,7 @@ async def _tool_mongo_query(query: str, user: dict) -> dict:
         if (plan.get("needs_finance") or plan.get("primary_entity") in FINANCE_ENTITIES) and not scope["can_finance"]:
             return {"tool": "mongo_query", "query": query, "restricted": True,
                     "message": "Financial records are restricted to Owner and Finance roles."}
-        retrieved = await _retrieve(plan, scope)
+        retrieved = await _retrieve(plan, scope, user=user)
         kpis, table, cites = await _compute(plan, retrieved, scope)
         # Strip money columns for non-finance users (belt & suspenders).
         if not scope["can_finance"]:

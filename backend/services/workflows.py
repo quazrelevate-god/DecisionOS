@@ -304,3 +304,45 @@ def stage_key_for_backfill(workflow_doc: dict) -> Optional[str]:
         return None
     first = stages[0]
     return first if isinstance(first, str) else first.get("key")
+
+
+# ---------------------------------------------------------------------------
+# 2026-10-03 (founder: "build both") — WHICH PIPELINES SOMEONE WORKS IN.
+#
+# Workflows was one switch for every pipeline, so a sales member with no
+# Finance access saw — and could advance — a Buyer Payments card ("30% Advance
+# Invoice Raised -> Advance Received") on their Desk. Every stage already says
+# which team owns it (stage.role, and each stage task's role), so a person now
+# sees a pipeline's cards when their team owns a stage in it. The owner, and
+# anyone given "See all tasks", see every pipeline. A workflow whose type is
+# not in the company's operating model (pre-model cards) has no owner to ask,
+# so the Workflows switch alone still decides it.
+# ---------------------------------------------------------------------------
+async def workflow_scope(user: dict) -> Optional[dict]:
+    """None when this person sees every pipeline; otherwise
+    {"visible": [keys], "modelled": [keys]} -- a card shows when its type is
+    visible, or is not a modelled pipeline at all."""
+    from core.permissions import user_perms
+    if user.get("role") == "owner" or "tasks_view_all" in user_perms(user):
+        return None
+    from services.ai.generators import tenant_operating_model
+    from core import db
+    om = await tenant_operating_model(user["tenant_id"])
+    pipelines = [p for p in ((om or {}).get("pipelines") or []) if isinstance(p, dict) and p.get("key")]
+    t = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "roles": 1})
+    role_keys = [r.get("key") for r in ((t or {}).get("roles") or []) if r.get("key")]
+    visible = [p["key"] for p in pipelines if stage_owned_by(p, user.get("role") or "", role_keys)]
+    return {"visible": visible, "modelled": [p["key"] for p in pipelines]}
+
+
+def scope_query(scope: Optional[dict]) -> dict:
+    """The Mongo condition on workflows.type for a workflow_scope()."""
+    if scope is None:
+        return {}
+    return {"$or": [{"type": {"$nin": scope["modelled"]}}, {"type": {"$in": scope["visible"]}}]}
+
+
+def in_scope(scope: Optional[dict], wf_type: Optional[str]) -> bool:
+    if scope is None:
+        return True
+    return wf_type not in scope["modelled"] or wf_type in scope["visible"]

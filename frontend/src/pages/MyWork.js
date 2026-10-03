@@ -2676,7 +2676,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
         the summary row. */}
     {t.workflow_summary && t.workflow_summary.id && (
       <div>
-        <WorkflowLink
+        <WorkflowLink type={t.workflow_summary.type}
           href={`/workflows?type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
           data-testid={`wf-chip-full-${t.id}`}
           className="inline-flex items-center gap-1.5 nm-tile px-2.5 py-1 text-xs font-mono bg-nm-sunken hover:bg-accent transition-colors"
@@ -3215,7 +3215,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                 touch box (a[data-testid] — the MPWA-01 floor in index.css):
                 the tint lives on the inner span so the pill keeps its size. */}
             {t.workflow_summary?.id && (
-              <WorkflowLink
+              <WorkflowLink type={t.workflow_summary.type}
                 href={`/workflows?type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
                 onClick={(e) => e.stopPropagation()}
                 data-testid={`wf-chip-${t.id}`}

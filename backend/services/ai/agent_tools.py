@@ -117,8 +117,9 @@ async def _t_get_contact(user: dict, name: str = "") -> dict:
 
 async def _t_list_workflows(user: dict) -> dict:
     """List active workflows (pipelines) and their current stage."""
+    from services.workflows import workflow_scope, scope_query  # 2026-10-03: the board's own rule
     rows = await db.workflows.find(
-        {"tenant_id": user["tenant_id"]},
+        {"tenant_id": user["tenant_id"], **scope_query(await workflow_scope(user))},
         {"_id": 0, "id": 1, "type": 1, "title": 1, "stage": 1, "counterparty": 1}
     ).sort("created_at", -1).to_list(25)
     return {"count": len(rows), "workflows": rows}

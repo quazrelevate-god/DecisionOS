@@ -107,3 +107,14 @@ export function hasPerm(user, perm) {
 export const canSeeBuyers = (user) => hasPerm(user, "people") || hasPerm(user, "crm_buyers");
 export const canSeeSuppliers = (user) => hasPerm(user, "people") || hasPerm(user, "crm_suppliers");
 export const canSeeAnyCrm = (user) => canSeeBuyers(user) || canSeeSuppliers(user);
+
+/* 2026-10-03 — which pipelines a person's team works in. The server decides
+   (services/workflows.workflow_scope: a team that owns a stage in it; every
+   pipeline for owners and "See all tasks") and sends it on /auth/me as
+   `workflow_scope`; null means all. A pipeline the company's model does not
+   know has no owner to ask, so Workflows access alone decides it. */
+export function canSeePipeline(user, key) {
+  const scope = user?.workflow_scope;
+  if (!scope) return true;
+  return !(scope.modelled || []).includes(key) || (scope.visible || []).includes(key);
+}

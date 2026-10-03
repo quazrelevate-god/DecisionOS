@@ -86,8 +86,10 @@ async def business_calendar(days: int = 45, user: dict = Depends(get_current_use
     # tenant_procurement_pipeline provides — logged separately).
     from services.workflows import tenant_terminal_stages as _tts
     _cal_term = await _tts(tid)
+    from services.workflows import workflow_scope, scope_query
     wfs = await db.workflows.find(
-        {"tenant_id": tid, "type": {"$in": ["distribution", "sales_dispatch"]}, "stage": {"$nin": _cal_term}},
+        {"tenant_id": tid, "type": {"$in": ["distribution", "sales_dispatch"]}, "stage": {"$nin": _cal_term},
+         **scope_query(await workflow_scope(user))},
         {"_id": 0}).to_list(300) if "workflows" in perms else []
     for w in wfs:
         dt = w.get("expected_date") or w.get("due_date")

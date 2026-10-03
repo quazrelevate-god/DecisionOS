@@ -72,7 +72,8 @@ OPEN_TO_EVERY_MEMBER = {
     # the company's own support conversation with us
     "/api/support/tickets": "company tickets", "/api/support/tickets/{ticket_id}": "company tickets",
     # by unguessable id only; see the report on file access
-    "/api/files/{file_id}/download": "unguessable id", "/api/files/{fname}": "tenant-scoped lookup",
+    "/api/files/{file_id}/download": "may_read_file: the record the file belongs to (2026-10-03)",
+    "/api/files/{fname}": "may_read_file, Finance/Data Input for bills, the review queue for drafts",
 }
 
 

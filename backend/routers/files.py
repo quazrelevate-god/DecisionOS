@@ -15,6 +15,42 @@ from services.files import _store_file, _file_public
 router = APIRouter(prefix="/api")
 
 
+# ---------------------------------------------------------------------------
+# 2026-10-03 RBAC (founder) — WHO MAY OPEN A FILE.
+#
+# A file was served to any member who had its id. Ids are random and only
+# travel inside records a person may see, so this was never a door anyone
+# could find -- but it meant the record's rule was not the file's rule: a task
+# photo stayed readable after the task was reassigned away, a bill photo to
+# someone without Finance. Each file now asks the question its record asks.
+# ---------------------------------------------------------------------------
+async def may_read_file(user: dict, rec: dict) -> bool:
+    if rec.get("kind") == "avatar":
+        return True                                   # faces are drawn on every card
+    if user.get("role") == "owner" or rec.get("uploaded_by") == user["id"]:
+        return True
+    fid = rec.get("id")
+    if rec.get("task_id"):
+        from routers.tasks import may_read_task
+        t = await db.tasks.find_one({"id": rec["task_id"], "tenant_id": user["tenant_id"]}, {"_id": 0})
+        if t and await may_read_task(user, t):
+            return True
+    if fid:
+        # A reference handed to Dex with a capture, or carried by a decision.
+        note = await db.voice_notes.find_one(
+            {"tenant_id": user["tenant_id"], "reference_file_ids": fid}, {"_id": 0, "audio_path": 0})
+        if note:
+            from routers.voice_notes import _may_read_note
+            if await _may_read_note(user, note):
+                return True
+        d = await db.decisions.find_one({"tenant_id": user["tenant_id"], "reference_file_ids": fid}, {"_id": 0})
+        if d:
+            from routers.decisions import _decision_participants
+            if user["id"] in await _decision_participants(user["tenant_id"], d):
+                return True
+    return False
+
+
 @router.post("/files")
 async def upload_file(file: UploadFile = File(...), kind: str = Form("reference"),
                       user: dict = Depends(get_current_user)):
@@ -30,6 +66,8 @@ async def download_file(file_id: str, user: dict = Depends(get_current_user)):
     if not rec:
         # legacy local-disk fallback (older attachments stored a bare filename)
         raise HTTPException(status_code=404, detail="Not found")
+    if not await may_read_file(user, rec):
+        raise HTTPException(status_code=403, detail="You don't have access to this file")
     data, ctype = await obj_store.get_object(rec["storage_path"])
     fname = rec.get("original_filename", file_id)
     headers = {"Content-Disposition": f'inline; filename="{fname}"'}
@@ -66,8 +104,12 @@ async def get_file(fname: str, user: dict = Depends(get_current_user)):
             {"storage_path": {"$regex": re.escape(fname) + "$"}},
             {"original_filename": fname},
         ], "is_deleted": {"$ne": True}},
-        {"_id": 0, "storage_path": 1, "content_type": 1, "original_filename": 1},
+        {"_id": 0},
     )
+    from core import user_perms
+    perms = user_perms(user)
+    if rec and not await may_read_file(user, rec):          # 2026-10-03, as /download
+        raise HTTPException(status_code=403, detail="You don't have access to this file")
     storage_path = (rec or {}).get("storage_path")
     content_type = (rec or {}).get("content_type")
 
@@ -80,6 +122,9 @@ async def get_file(fname: str, user: dict = Depends(get_current_user)):
             {"_id": 0, "storage_path": 1, "kind": 1},
         )
         if ing:
+            # 2026-10-03 — an uploaded bill opens for whoever opens the Finance inbox.
+            if not ({"finance", "data_input"} & perms):
+                raise HTTPException(status_code=403, detail="You don't have access to this file")
             storage_path = ing.get("storage_path") or fname  # legacy fallback
             content_type = None
 
@@ -94,6 +139,8 @@ async def get_file(fname: str, user: dict = Depends(get_current_user)):
                 {"_id": 0, "attachment": 1},
             )
             if row and (row.get("attachment") or {}).get("storage_path"):
+                if "finance" not in perms:                     # 2026-10-03: the ledger's own rule
+                    raise HTTPException(status_code=403, detail="You don't have access to this file")
                 storage_path = row["attachment"]["storage_path"]
                 content_type = row["attachment"].get("mime")
                 break
@@ -102,9 +149,13 @@ async def get_file(fname: str, user: dict = Depends(get_current_user)):
     if not storage_path:
         cd = await db.capture_drafts.find_one(
             {"tenant_id": tid, "file_url": f"/api/files/{fname}"},
-            {"_id": 0, "storage_path": 1, "file_url": 1},
+            {"_id": 0, "storage_path": 1, "file_url": 1, "reviewer_role": 1, "reviewer_perm": 1},
         )
         if cd:
+            # 2026-10-03 — the draft's review queue (routers/captures._get_draft).
+            on_queue = cd.get("reviewer_role") == user.get("role") or cd.get("reviewer_perm") in perms
+            if user.get("role") != "owner" and not on_queue:
+                raise HTTPException(status_code=403, detail="You don't have access to this file")
             storage_path = cd.get("storage_path") or fname
 
     # 5) Legacy fallback: serve from local disk if the file exists.

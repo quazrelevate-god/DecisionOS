@@ -155,6 +155,9 @@ _PUBLIC_EXACT = {
     "/api/admin/login", "/api/billing/webhook",
     "/api/auth/register", "/api/auth/login", "/api/auth/logout",
     "/api/auth/password/forgot", "/api/auth/password/reset", "/api/auth/2fa/verify-login",
+    # 2026-10-03 -- read-only: is a reset link still good? Spends nothing, and
+    # is asked by someone signed out, from the link in their email.
+    "/api/auth/password/reset/check",
     "/api/auth/otp/request", "/api/auth/otp/verify", "/api/auth/invite/{token}/start",
 }
 

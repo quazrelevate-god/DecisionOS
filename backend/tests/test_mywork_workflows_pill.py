@@ -18,7 +18,9 @@ def _src():
 
 def test_gate_matches_the_workflows_permission():
     s = _src()
-    assert 'const canSeeWorkflows = user?.role === "owner" || userPerms(user).includes("workflows");' in s
+    # 2026-10-03 RBAC audit: owners are no longer special-cased here -- an
+    # owner holds the key unless the company switched it off for owners.
+    assert 'const canSeeWorkflows = userPerms(user).includes("workflows");' in s
 
 
 def test_the_desktop_pill_is_gone_again_and_that_is_the_founders_call():

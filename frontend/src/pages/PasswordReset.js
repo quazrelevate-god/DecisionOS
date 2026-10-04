@@ -16,12 +16,13 @@
  * account?" oracle), and the copy has to keep the promise rather than leak the
  * answer by being more helpful for a real address.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { DeviceMobile, CheckCircle } from "@phosphor-icons/react";
 import api, { formatApiError } from "../lib/api";
 import Shell, { inputCls, labelCls, primaryCls } from "../components/auth/AuthShell";
+import { Loader } from "../components/common";
 import { passwordProblem } from "../lib/password";
 
 /* ------------------------------------------------------------------ */
@@ -116,6 +117,21 @@ export function ResetPassword() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [dead, setDead] = useState(!token);   // no token, or the API refused it
+  /* 2026-10-03 — ASK BEFORE THE FORM, NOT AFTER IT. A spent or expired link
+     used to show "Set a new password", let the founder choose one and type
+     it twice, and only then say the link was dead. The check spends nothing
+     (/auth/password/reset/check); if it cannot be asked -- no signal, a 500
+     -- the form shows as before and the reset itself still decides. */
+  const [checking, setChecking] = useState(!!token);
+  useEffect(() => {
+    if (!token) return undefined;
+    let alive = true;
+    api.post("/auth/password/reset/check", { token })
+      .then((r) => { if (alive && r.data?.ok === false) setDead(true); })
+      .catch(() => { /* unknown: let the reset decide */ })
+      .finally(() => { if (alive) setChecking(false); });
+    return () => { alive = false; };
+  }, [token]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -154,6 +170,17 @@ export function ResetPassword() {
         <Link to="/login" className="mt-3 block text-center text-sm font-semibold text-foreground underline underline-offset-2">
           Back to sign in
         </Link>
+      </Shell>
+    );
+  }
+
+  if (checking) {
+    return (
+      <Shell testid="reset-password-checking">
+        <div className="py-10 text-center">
+          <Loader size={24} />
+          <p className="mt-4 text-sm text-muted-foreground">Checking your link…</p>
+        </div>
       </Shell>
     );
   }

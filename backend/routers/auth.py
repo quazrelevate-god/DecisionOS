@@ -94,7 +94,7 @@ async def _login_clear_attempts(ident: str) -> None:
 from models.auth import (  # noqa: F401
     RoleItem, ProductItem, RegisterInput, LoginInput, SwitchWorkspaceInput,
     TotpConfirmInput, TotpVerifyLoginInput, TotpDisableInput, TransferOwnershipInput,
-    ProfileUpdateInput, ChangePasswordInput, PasswordForgotInput, PasswordResetInput,
+    ProfileUpdateInput, ChangePasswordInput, PasswordForgotInput, PasswordResetInput, PasswordResetCheckInput,
     PhoneChangeCodeInput,
     OwnerCredentialsInput,
 )
@@ -1151,7 +1151,12 @@ async def me(request: Request, response: Response, user: dict = Depends(get_curr
         {"id": user["id"]}, {"_id": 0, "phone_norm": 1, "phone_verified_at": 1,
                              "passwordless": 1, "email": 1, "role": 1, "id": 1}) or {}
     _elsewhere = await has_credentials_elsewhere(db, {**_full, "role": user.get("role")})
+    # 2026-10-03 — which pipelines this person's team works in, from the same
+    # rule the workflow endpoints enforce, so the board's tabs and the links to
+    # it never offer a pipeline the server will refuse. null = every pipeline.
+    from services.workflows import workflow_scope
     return {"user": {**user, "effective_permissions": sorted(user_perms(user)),
+                     "workflow_scope": await workflow_scope(user),
                      "credentials_elsewhere": _elsewhere},
             "tenant": tenant}
 
@@ -1482,6 +1487,19 @@ async def password_forgot(inp: PasswordForgotInput):
     # Best-effort email; if SMTP is down the user can retry.
     await send_email(email, "Reset your DecisionOS password", html)
     return canonical_response
+
+
+@router.post("/password/reset/check")
+async def password_reset_check(inp: PasswordResetCheckInput):
+    """Is this reset link still good? Spends nothing (2026-10-03).
+
+    The page used to show its form for any token and only learn the link
+    was dead after the founder had chosen and confirmed a new password.
+    Answers only about the token its holder already has -- no account
+    details -- and POST keeps the token out of access logs."""
+    from services.auth import auth_emails
+    live = await auth_emails.is_live(db, token=inp.token, kind=auth_emails.KIND_PASSWORD_RESET)
+    return {"ok": live}
 
 
 @router.post("/password/reset")

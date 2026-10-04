@@ -176,7 +176,7 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
                               surface = "well", open = false, onClose, onMeter }) {
   const { user } = useAuth();
   // The gate every Dex capture surface uses (DexFab, DexCaptureBar).
-  const canCapture = user?.role === "owner" || hasPerm(user, "voice_capture");
+  const canCapture = hasPerm(user, "voice_capture");
   const qc = useQueryClient();
   const refresh = useCallback(
     () => REFRESH_KEYS.forEach((k) => qc.invalidateQueries({ queryKey: [k] })),

@@ -23,6 +23,38 @@ function forgetPersonOnDevice(person) {
 import { toast } from "sonner";
 import { setAppLanguage } from "../i18n";
 
+/* The page somebody was on when their session ended, handed to the sign-in
+   screen so it can put them back. Read once and cleared: a stale value would
+   send a later, deliberate sign-in somewhere they did not ask for. */
+export const RETURN_TO_KEY = "dos_return_to";
+
+/* 2026-10-03 — AND THE PAGE SOMEBODY ARRIVED AT SIGNED OUT.
+   The note above was only written when a session ended under the open app.
+   Tapping a link from an email or a WhatsApp reminder while signed out --
+   /decisions/<id>, /finance?tab=inbox -- went to sign-in with nothing written
+   down, so the founder signed in and landed on the Desk, the link spent.
+   Written only on a load that has not had anyone signed in: once someone
+   was, a missing user means they signed out on purpose (or the session ended,
+   which writes its own note), and bringing a deliberate sign-out back to
+   where it left is the stale value the note above warns about. */
+let hadUserThisLoad = false;
+export function rememberArrival(path) {
+  if (hadUserThisLoad || !path || path === "/" || path.startsWith("/app")) return;
+  try {
+    if (!sessionStorage.getItem(RETURN_TO_KEY)) sessionStorage.setItem(RETURN_TO_KEY, path);
+  } catch (e) { /* private window: they land on the Desk, as before */ }
+}
+
+export function takeReturnTo() {
+  try {
+    const v = sessionStorage.getItem(RETURN_TO_KEY);
+    if (v) sessionStorage.removeItem(RETURN_TO_KEY);
+    return v || null;
+  } catch (e) {
+    return null;
+  }
+}
+
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
@@ -95,7 +127,7 @@ export function AuthProvider({ children }) {
      leave, and every one of them ends here. Deliberately NOT cleared when
      `offline` goes true: not knowing is the whole reason the flag exists. */
   useEffect(() => {
-    if (user) rememberSessionHere();
+    if (user) { rememberSessionHere(); hadUserThisLoad = true; }
   }, [user]);
 
   /* And it retries itself, so the founder never has to know to pull-to-refresh:
@@ -133,6 +165,18 @@ export function AuthProvider({ children }) {
           setUser(null);
           setTenant(null);
           forgetSessionHere();          // settled: the session is gone
+          /* 2026-10-02 — AND REMEMBER WHERE THEY WERE. The toast below already
+             explains what happened; what it could not do was give the page
+             back. Signing in again landed everybody on the Desk, so a founder
+             pulled out of Finance mid-reconciliation had to find their way
+             back to it. sessionStorage, not local: this belongs to the tab
+             that was thrown out, and must not follow them to another one. */
+          try {
+            const here = window.location.pathname + window.location.search;
+            if (here && here !== "/" && !here.startsWith("/login")) {
+              sessionStorage.setItem(RETURN_TO_KEY, here);
+            }
+          } catch (e) { /* private window: they land on the Desk, as before */ }
           toast.info("You were signed out. Sign in again to carry on.", { id: "session-lost" });
         }
       } finally {
@@ -162,6 +206,14 @@ export function AuthProvider({ children }) {
     // Auth token lives in a secure HttpOnly cookie set by the server.
     setUser(data.user);
     setTenant(data.tenant);
+    /* 2026-10-03 RBAC audit — and then ask /auth/me, the one answer that
+       carries `effective_permissions`: the company's role settings, temporary
+       grants and what owners were switched off from, resolved by the server.
+       The sign-in responses do not, so until a reload the screens fell back to
+       the built-in role defaults and could offer doors the server then shut
+       (or hide ones it would open). Fire-and-forget: the session is already
+       good, and askMe only replaces the user with the fuller answer. */
+    askMe();
   };
 
   const login = async (email, password) => {
@@ -170,6 +222,7 @@ export function AuthProvider({ children }) {
     return data;
   };
 
+  /* Where the session was lost, for the sign-in page to return them to. */
   const register = async (payload) => {
     const { data } = await api.post("/auth/register", payload);
     persist(data);

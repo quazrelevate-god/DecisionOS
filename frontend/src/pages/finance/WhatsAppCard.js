@@ -27,7 +27,7 @@ export default function WhatsAppCard() {
   const qc = useQueryClient();
   const isOwner = user?.role === "owner";
   const { data: st } = useQuery({ queryKey: ["wa-status"], queryFn: () => api.get("/whatsapp/status").then((r) => r.data) });
-  const { data: logs } = useQuery({
+  const { data: logs, isError: logsFailed } = useQuery({
     queryKey: ["wa-logs"], enabled: isOwner, refetchInterval: 15000,
     queryFn: () => api.get("/whatsapp/logs").then((r) => r.data),
   });
@@ -85,7 +85,16 @@ export default function WhatsAppCard() {
                   <ArrowClockwise size={12} weight="bold" /> Refresh
                 </button>
               </div>
-              {(logs || []).length === 0 ? (
+              {/* 2026-10-02 — this empty state is a DIAGNOSIS: it tells the
+                  owner the webhook probably is not reaching the app, and sends
+                  them into Meta's console to check a callback URL. Said when
+                  the log simply failed to load, it sends them to debug a
+                  working integration. */}
+              {logsFailed && !logs ? (
+                <div className="nm-tile p-3 text-xs text-muted-foreground" data-testid="whatsapp-logs-failed">
+                  Couldn&rsquo;t load the message log just now — this is our side, not your WhatsApp setup. Try Refresh in a moment.
+                </div>
+              ) : (logs || []).length === 0 ? (
                 <div className="nm-tile p-3 text-xs text-muted-foreground" data-testid="whatsapp-logs-empty">
                   No inbound messages logged yet. Scan the QR and send a test message — it will appear here within seconds. If nothing shows after sending, the webhook isn't reaching the app (check Meta → WhatsApp → Configuration: callback URL, <span className="font-mono">messages</span> field subscribed, and app published).
                 </div>

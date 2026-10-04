@@ -801,7 +801,7 @@ export function TaskBoard() {
                       onChange={(e) => reassign(t, e.target.value)}
                       className="mt-3 w-full border border-border px-2 py-1.5 text-xs font-mono bg-white focus:outline-none focus:shadow-sm">
                       <option value="">Reassign to…</option>
-                      {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {roleLabel(m.role, roleOptions)}</option>)}
+                      {members.map((m) => <option key={m.id} value={m.id}>{`${m.name} · ${roleLabel(m.role, roleOptions)}`}</option>)}
                     </select>
                     {NEXT[t.status] && (
                       <button onClick={() => move(t)} data-testid={`advance-task-${t.id}`}

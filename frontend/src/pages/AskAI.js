@@ -8,6 +8,8 @@
 // here and is exported.
 import { useState } from "react";
 import api from "../lib/api";
+import { useAuth } from "../context/AuthContext";
+import { hasPerm } from "../lib/perms";
 import { money } from "../lib/format";
 import { toast } from "sonner";
 import {
@@ -111,7 +113,10 @@ function Sources({ sources, onGo }) {
 
 function ExportBar({ options, contextId }) {
   const [busy, setBusy] = useState("");
-  if (!options?.length) return null;
+  const { user } = useAuth();
+  /* 2026-10-03 RBAC audit — exporting an answer needs "Export Company Brain";
+     the buttons showed to everyone who could ask and the server refused them. */
+  if (!options?.length || !hasPerm(user, "brain_export")) return null;
   const run = async (fmt) => {
     setBusy(fmt);
     try {

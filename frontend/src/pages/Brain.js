@@ -34,6 +34,7 @@ import { DocumentsPanel } from "./BrainDocuments";
 import { useDexCapture } from "../hooks/useDexCapture";
 import { DexStage } from "./brain/DexStage";
 import { useAuth } from "../context/AuthContext";
+import { hasPerm } from "../lib/perms";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 // ASK-36 5 — the app's one loading animation.
 import { Loader } from "../components/common";
@@ -44,7 +45,13 @@ export default function Brain() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const { tenant } = useAuth();
+  const { tenant, user } = useAuth();
+  /* 2026-10-03 RBAC audit — this page opens with Company Brain access, but
+     asking takes Ask AI (/ask is require_perm("ask")). Someone with the one
+     and not the other typed a question and read "AI service error", which no
+     retry could fix. Say what it is instead, and don't offer the chips. */
+  const canAsk = hasPerm(user, "ask");
+  const NO_ASK = "Asking Dex needs Ask AI access. Your owner can switch it on for you in Team.";
   const currency = tenant?.currency || "INR";
 
   // NM-13: one implementation for both viewports. The mobile branch here was a
@@ -66,6 +73,10 @@ export default function Brain() {
   });
 
   const ask = useCallback(async (question) => {
+    if (!canAsk) {
+      setLog((l) => [...l, { id: uid(), role: "ai", resp: { type: "ANSWER", answer: NO_ASK } }]);
+      return;
+    }
     const text = String(question || "").trim();
     if (!text) return;
     setShowDocs(false);
@@ -80,12 +91,13 @@ export default function Brain() {
          with AI switched off was told, however many times they tried. When it
          is the consent gate, say that instead; the toast beside it carries the
          way to the screen that turns it on (lib/aiConsent). */
-      const answer = isAiConsentError(e) ? aiConsentMessage() : t("ask.error");
+      const answer = isAiConsentError(e) ? aiConsentMessage()
+        : e?.response?.status === 403 ? NO_ASK : t("ask.error");
       setLog((l) => [...l, { id: uid(), role: "ai", resp: { type: "ANSWER", answer } }]);
     } finally {
       setBusy(false);
     }
-  }, [ctxId, t]);
+  }, [ctxId, t, canAsk]);
 
   // The header's global search lands here as ?q=…. Ask it once, on arrival.
   const seededRef = useRef(false);
@@ -183,7 +195,7 @@ export default function Brain() {
         </div>
       ) : (
         <div className="order-1 mb-6 space-y-5 lg:mb-6 lg:mt-0" data-testid="brain-conversation">
-          {log.length === 0 && !busy && (
+          {log.length === 0 && !busy && canAsk && (
             /* The opener. Four real questions rather than a paragraph about
                what Dex can do — the fastest way to learn a chat surface is to
                watch it answer once. */

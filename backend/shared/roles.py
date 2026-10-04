@@ -120,6 +120,13 @@ _SELLING_WORDS = FAMILIES[1] | {"buyer", "buyers", "dealer", "dealers", "retail"
                                 "enquiry", "enquiries", "leads", "quotation", "quotations"}
 
 
+# 2026-10-03 (founder: "build both") — AND WHO LOOKS AFTER THE PEOPLE. A team
+# named for HR starts able to approve leave. Deliberately narrow: "people",
+# "staff" and "admin" are in the HR family above but name plenty of teams that
+# are not HR ("Admin & Dispatch"), so only these words count here.
+_PEOPLE_WORDS = {"hr", "human", "payroll", "personnel"}
+
+
 def starting_perms(*names: Optional[str]) -> list:
     """The EXTRA permissions a team starts with, read off what it is called.
 
@@ -130,9 +137,13 @@ def starting_perms(*names: Optional[str]) -> list:
         words |= _words(n or "")
     out = []
     if words & _MONEY_WORDS:
-        out += ["finance", "crm_suppliers"]
+        # 2026-10-03 — and the AI drafts that land in the Finance inbox, as the
+        # built-in Finance role has had since J14-13 (core/permissions.py).
+        out += ["finance", "crm_suppliers", "captures_approve"]
     if words & _SELLING_WORDS:
         out += ["crm_buyers"]
+    if words & _PEOPLE_WORDS:
+        out += ["leave_approve"]
     return sorted(set(out))
 
 

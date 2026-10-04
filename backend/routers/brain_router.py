@@ -30,7 +30,7 @@ from services.ai import brain_context
 from services.ai import brain_rbac
 from core import (
     db, claude_chat, _extract_json, new_id, now_iso, logger,
-    get_current_user, user_perms,
+    get_current_user, user_perms, require_perm,
 )
 from core import model_for
 from prompts import render
@@ -183,7 +183,7 @@ async def _tool_mongo_query(query: str, user: dict) -> dict:
         if (plan.get("needs_finance") or plan.get("primary_entity") in FINANCE_ENTITIES) and not scope["can_finance"]:
             return {"tool": "mongo_query", "query": query, "restricted": True,
                     "message": "Financial records are restricted to Owner and Finance roles."}
-        retrieved = await _retrieve(plan, scope)
+        retrieved = await _retrieve(plan, scope, user=user)
         kpis, table, cites = await _compute(plan, retrieved, scope)
         # Strip money columns for non-finance users (belt & suspenders).
         if not scope["can_finance"]:
@@ -312,7 +312,7 @@ from models.brain import (
 
 
 @router.post("/create-task")
-async def create_task_from_suggestion(inp: SuggestedTaskInput, user: dict = Depends(get_current_user)):
+async def create_task_from_suggestion(inp: SuggestedTaskInput, user: dict = Depends(require_perm("ask"))):
     """One-tap create a task from an agent-suggested action. Keeps the answer
     → action → brain_context loop closed so tomorrow's router benefits from
     today's picks."""
@@ -363,7 +363,9 @@ async def create_task_from_suggestion(inp: SuggestedTaskInput, user: dict = Depe
 
 
 @router.post("/run")
-async def run_bounded_agent(inp: AgentRequest, user: dict = Depends(get_current_user)):
+# 2026-10-03 RBAC audit: /ask takes Ask AI access; the agent answering the same
+# questions took none, so a member denied Ask could still ask here.
+async def run_bounded_agent(inp: AgentRequest, user: dict = Depends(require_perm("ask"))):
     """Sprint 4: the bounded, governed tool-calling agent (observe -> act -> re-plan).
     Answers open-ended questions by calling RBAC-gated tools; propose_* actions land in
     the pending_approval flow. Carries conversation_id for per-conversation memory."""
@@ -378,7 +380,7 @@ async def run_bounded_agent(inp: AgentRequest, user: dict = Depends(get_current_
 
 
 @router.post("")
-async def ask_agent(inp: AgentRequest, user: dict = Depends(get_current_user)):
+async def ask_agent(inp: AgentRequest, user: dict = Depends(require_perm("ask"))):
     q = (inp.question or "").strip()
     if not q:
         raise HTTPException(status_code=400, detail="Ask me something about your company")

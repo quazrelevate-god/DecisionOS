@@ -880,7 +880,7 @@ async def mark_attendance(inp: AttendanceInput, user: dict = Depends(require_rol
 
 
 @router.get("/attendance")
-async def list_attendance(date: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def list_attendance(date: Optional[str] = None, user: dict = Depends(require_perm("team_manage"))):  # 2026-10-03 RBAC audit: the whole team's register
     date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     return await db.attendance.find(
         {"tenant_id": user["tenant_id"], "date": date}, {"_id": 0}
@@ -923,7 +923,7 @@ async def report_absence(inp: AbsenceInput, user: dict = Depends(get_current_use
 @router.get("/leaves")
 async def list_leaves(scope: str = "mine", user: dict = Depends(get_current_user)):
     tid = user["tenant_id"]
-    can_approve_all = user.get("role") == "owner" or "leave_approve" in user_perms(user)
+    can_approve_all = "leave_approve" in user_perms(user)
     q: dict = {"tenant_id": tid}
     if scope == "mine":
         q["user_id"] = user["id"]

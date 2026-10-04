@@ -321,6 +321,14 @@ function DelegationCard() {
     } finally { setBusy(false); }
   };
   const who = ac && (people.find((m) => m.id === ac.delegate_user_id)?.name || ac.delegate_name || "Someone");
+  /* 2026-10-03 — only for someone with approvals to hand over: an approver,
+     someone people report to (their leave and unassigned work come to them),
+     or a hand-over already running (so it can be stopped). A member who
+     approves nothing was offered to hand over nothing. */
+  const approves = user?.role === "owner"
+    || ["approvals", "decisions_approve", "leave_approve", "captures_approve"].some((p) => hasPerm(user, p))
+    || (usersQ.data || []).some((m) => m.reporting_manager_id === user?.id);
+  if (!approves && !ac) return null;
   return (
     <div className="kr-bento p-5 sm:p-6" data-testid="settings-delegation-card">
       <h2 className="text-base font-medium">While you&rsquo;re away</h2>
@@ -467,8 +475,12 @@ function AiKeysCard() {
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const rows = data?.providers || [];
-  const label = (p) => ({ anthropic: "Anthropic (Claude)", openai: "OpenAI", gemini: "Google Gemini", google: "Google", sarvam: "Sarvam (speech)" }[p]
-    || p.charAt(0).toUpperCase() + p.slice(1));
+  // 2026-10-03 — every row named for a person, not a setting: "Wa_access_token"
+  // and "Wa_phone_number_id" were shown as if they were AI providers.
+  const label = (p) => ({ anthropic: "Anthropic (Claude)", openai: "OpenAI", gemini: "Google Gemini", google: "Google",
+    sarvam: "Sarvam (speech)", voyage: "Voyage (document search)",
+    wa_access_token: "WhatsApp Business access token", wa_phone_number_id: "WhatsApp Business phone number ID" }[p]
+    || p.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase()));
   const save = async (provider) => {
     setBusy(true);
     try {
@@ -494,8 +506,8 @@ function AiKeysCard() {
   };
   return (
     <div className="kr-bento p-5 sm:p-6" data-testid="settings-ai-keys-card">
-      <h2 className="text-base font-medium">AI keys</h2>
-      <p className="mt-1 text-xs text-muted-foreground">Use your company&rsquo;s own AI accounts instead of DecisionOS&rsquo;s. Keys are stored for your company only and never shown in full.</p>
+      <h2 className="text-base font-medium">AI and WhatsApp keys</h2>
+      <p className="mt-1 text-xs text-muted-foreground">Use your company&rsquo;s own AI and WhatsApp Business accounts instead of DecisionOS&rsquo;s. Keys are stored for your company only and never shown in full.</p>
       {!data ? <div className="ds-skeleton mt-4 h-16 rounded-xl" aria-hidden="true" />
         : data.error ? <p className="mt-3 text-sm text-muted-foreground">Couldn&rsquo;t load the AI keys.</p> : (
         <ul className="mt-4 divide-y divide-slate-900/[0.06]">
@@ -619,7 +631,7 @@ function AuditLogCard() {
                 <tr key={r.id}>
                   <td className="whitespace-nowrap py-2 pr-3 tabular-nums text-muted-foreground">{r.timestamp ? new Date(r.timestamp).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : ""}</td>
                   <td className="py-2 pr-3">{what(r.action)}</td>
-                  <td className="py-2 text-muted-foreground">{r.actor_email || (r.actor_id ? "A member" : "System")}</td>
+                  <td className="py-2 text-muted-foreground">{r.actor_name || r.actor_email || (r.actor_id ? "A former member" : "System")}</td>
                 </tr>
               ))}
             </tbody>
@@ -822,7 +834,7 @@ export default function Settings() {
   // 8-cards-to-4-tabs restructure replaced this component wholesale, so the
   // mobile branch is re-applied on top of it rather than merged into it.
   const { user } = useAuth();
-  const isOwner = user?.role === "owner" || hasPerm(user, "team_manage");
+  const isOwner = hasPerm(user, "team_manage");
   // U7-11.1 (2026-08-17): persist active tab in URL. Was useState-only,
   // so reload / back-forward / deep-link all landed on Business. Owner
   // ask: fix the missing / optimizable bits -- deep-linking Settings

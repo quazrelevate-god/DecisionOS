@@ -109,6 +109,21 @@ async def issue(db, *, kind: str, user_id: str, tenant_id: str, email: str) -> d
     return dict(doc)
 
 
+async def is_live(db, *, token: str, kind: str) -> bool:
+    """Would consume() accept this token right now? Read-only: it spends
+    nothing. (2026-10-03) The reset page asks before showing its form, so a
+    dead link says so up front instead of after the founder has typed a new
+    password twice. consume() still decides; this only previews it."""
+    if not token or kind not in VALID_KINDS:
+        return False
+    row = await db[COLLECTION].find_one(
+        {"token": token, "kind": kind, "used_at": None,
+         "expires_at": {"$gt": _now()}},
+        {"_id": 0, "token": 1},
+    )
+    return row is not None
+
+
 async def consume(db, *, token: str, kind: str) -> Optional[dict]:
     """Atomically mark a token as used.
 

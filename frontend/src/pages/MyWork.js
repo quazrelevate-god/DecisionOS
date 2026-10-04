@@ -1,3 +1,4 @@
+import { WorkflowLink } from "../components/workflow/WorkflowLink";
 import { Fragment, useRef, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -5,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import api from "../lib/api";
 import { timeAgo, fullTime, TASK_STATUS_LABELS } from "../lib/format";
 import { roleLabel } from "../lib/departments";
-import { PageHeader, Chip, EmptyState, SkeletonCard, StickyHeader } from "../components/common";
+import { PageHeader, Chip, EmptyState, LoadFailed, SkeletonCard, StickyHeader } from "../components/common";
 import { useAuth } from "../context/AuthContext";
 import { userPerms } from "../lib/perms";
 import { canAssignPerson, canAssignTeam, canSeeAllTasks, taskEditRights } from "../lib/taskAccess";
@@ -2675,7 +2676,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
         the summary row. */}
     {t.workflow_summary && t.workflow_summary.id && (
       <div>
-        <a
+        <WorkflowLink type={t.workflow_summary.type}
           href={`/workflows?type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
           data-testid={`wf-chip-full-${t.id}`}
           className="inline-flex items-center gap-1.5 nm-tile px-2.5 py-1 text-xs font-mono bg-nm-sunken hover:bg-accent transition-colors"
@@ -2689,7 +2690,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
           <span className=" text-[10px]">
             {(t.workflow_summary.stage || "").replace(/_/g, " ")}
           </span>
-        </a>
+        </WorkflowLink>
       </div>
     )}
 
@@ -3214,7 +3215,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                 touch box (a[data-testid] — the MPWA-01 floor in index.css):
                 the tint lives on the inner span so the pill keeps its size. */}
             {t.workflow_summary?.id && (
-              <a
+              <WorkflowLink type={t.workflow_summary.type}
                 href={`/workflows?type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
                 onClick={(e) => e.stopPropagation()}
                 data-testid={`wf-chip-${t.id}`}
@@ -3225,7 +3226,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                   <FlowArrow size={12} weight="bold" aria-hidden="true" className="shrink-0" />
                   <span className="min-w-0 max-w-[8rem] truncate lg:max-w-[11rem]">{t.workflow_summary.title || "Workflow"}</span>
                 </span>
-              </a>
+              </WorkflowLink>
             )}
             {(t.attachment_count || 0) > 0 && (
               <span className="inline-flex items-center gap-0.5 text-[11px] tabular-nums text-muted-foreground"
@@ -3664,12 +3665,16 @@ export default function MyWork({ only = null }) {
      the mobile band bar can sit in the fixed header while the columns render
      in the body; desktop shows all three columns and ignores it. */
   const [band, setBand] = useState("high");
+  /* Whether the person has picked a band themselves. Until they have, the
+     band is ours to choose well; after, it is theirs and we leave it. */
+  const bandChosen = useRef(false);
+  const pickBand = (key) => { bandChosen.current = true; setBand(key); };
   // Dismissing AI priority resets the band. It no longer clears Status: that
   // was so the list could never stay filtered by a control no longer on
   // screen, and since ASK-24 Status is always on screen — the desktop row and
   // the phone's filter sheet both carry it.
   useEffect(() => {
-    if (!aiPriority) setBand("high");
+    if (!aiPriority) { bandChosen.current = false; setBand("high"); }
   }, [aiPriority]);
   // MW-19 / ASK-24 — "Completed" is a Status now. A tab of "completed" can
   // only arrive from saved prefs written before that; move it across once.
@@ -3714,7 +3719,7 @@ export default function MyWork({ only = null }) {
   // other people's work, so the ranking and its columns are off there.
   // RBAC P2 (2026-09-16): scoring runs AI for the whole list, so it's for owners
   // and Manage team (the server's rule); the toggle no longer shows then fails.
-  const canPrioritize = user?.role === "owner" || userPerms(user).includes("team_manage");
+  const canPrioritize = userPerms(user).includes("team_manage");
   // 2026-09-19 — Yokesh: the Workflows way in from My Work was lost (ASK-42 C
   // took it out when /workflows became a page of its own), and on desktop
   // nothing else reaches that page — it is not in the top nav. It comes back
@@ -3722,7 +3727,7 @@ export default function MyWork({ only = null }) {
   // entry in the phone's view menu, both opening /workflows. Same gate as the
   // More menu's tile and the page's own data.
   const navigate = useNavigate();
-  const canSeeWorkflows = user?.role === "owner" || userPerms(user).includes("workflows");
+  const canSeeWorkflows = userPerms(user).includes("workflows");
   const aiOn = canPrioritize && aiPriority && !asked && !team;
   // ASK-24 — with Person set, every card would repeat the same name.
   const showAssignee = ((canSeeAll && scope === "all") || team) && !personFilter;
@@ -3778,7 +3783,12 @@ export default function MyWork({ only = null }) {
   useEffect(() => {
     if (!openId) { wasMine.current = null; return; }
     if (openTaskGone) {
-      toast.info(t("mywork.task_removed_live", "This task was removed while you had it open."));
+      /* Only if it WAS open: wasMine is set once the task has loaded. A link
+         to a task that was already gone never loaded it, and the banner below
+         says that one -- the toast on top claimed something untrue twice. */
+      if (wasMine.current !== null) {
+        toast.info(t("mywork.task_removed_live", "This task was removed while you had it open."));
+      }
       setOpenId(null);
       wasMine.current = null;
       return;
@@ -3801,9 +3811,22 @@ export default function MyWork({ only = null }) {
   useEffect(() => { if (focusTaskId) setOpenId(focusTaskId); }, [focusTaskId]);
   // ...and closing it takes the link out of the address, so a refresh doesn't
   // reopen a task the reader has already put away.
+  /* 2026-10-02 — TWO GUARDS, AND THEY ARE WHY ASK-28's BANNER WAS NEVER SEEN.
+     This ran on mount, in the same commit as the effect above: `openId` was
+     still null while setOpenId was in flight, so the very first pass decided
+     the task had been "closed" and stripped ?task= from the address. With the
+     id gone, `focusTaskId` went empty, `focusDenied` could never become true,
+     and the "This task no longer exists" banner below — written, translated,
+     dismissible — was unreachable code. Following a link to a deleted task
+     dropped you on the list with no word about it.
+     `hadOpen` makes closing mean closing: the address is only tidied after
+     the task has actually been open once. And a denied or missing task keeps
+     its id, because that id is what the banner is about. */
+  const hadOpen = useRef(false);
+  useEffect(() => { if (openId) hadOpen.current = true; }, [openId]);
   useEffect(() => {
-    if (!openId && focusTaskId) setFilterParams({ task: "", focus: "" });
-  }, [openId]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!openId && focusTaskId && hadOpen.current && !focusDenied) setFilterParams({ task: "", focus: "" });
+  }, [openId, focusDenied]); // eslint-disable-line react-hooks/exhaustive-deps
   // The chosen view lives in ?view=, so Back and Forward move between views:
   // when the address changes, the page follows it. The first render has
   // already read it.
@@ -3859,7 +3882,13 @@ export default function MyWork({ only = null }) {
   const focusDrawer = (shownIds, listReady) => (
     focusTaskId && focusQ.data && listReady && openId === focusTaskId && !shownIds.includes(focusTaskId) ? (
       <div hidden data-testid="focus-task-standalone">
-        <TaskCard t={focusQ.data} open onToggleOpen={() => setOpenId(null)} highlight
+        <TaskCard t={focusQ.data} open
+          /* Closing the task a link opened also takes it out of the address,
+             so a refresh does not reopen what the reader just put away. This
+             lives on the close itself rather than in an effect watching
+             `openId`, which is what used to strip the id on MOUNT and make
+             the "no longer exists" banner unreachable. */
+          onToggleOpen={() => { setOpenId(null); setFilterParams({ task: "", focus: "" }); }} highlight
           onChange={() => { refresh(); qc.invalidateQueries({ queryKey: ["task", focusTaskId] }); }}
           members={members} roleOptions={roleOptions} />
       </div>
@@ -3954,6 +3983,24 @@ export default function MyWork({ only = null }) {
   if (aiOn && !showingCompleted) {
     list = [...list].sort((a, b) => (scoreMap[b.id]?.priority_score || 0) - (scoreMap[a.id]?.priority_score || 0));
   }
+
+  /* 2026-10-02 — OPEN ON A BAND THAT HAS WORK IN IT.
+     Below lg only the selected band's column is on screen, and the band
+     started at "high" whatever the list held. Found walking the app: My Work
+     read "Nothing here" at 620px while the chips directly above it said
+     "Medium 3" — three open tasks, assigned to the person reading, one tap
+     away in a column they could not see. The counts were right and the list
+     was right; the choice of which column to show was wrong.
+     Only until they choose for themselves: a deliberate tap on an empty band
+     is an answer ("nothing is high"), and bouncing them out of it would be
+     the page arguing with them. */
+  const bandCounts = BANDS.map((b) => [b.key, list.filter((tk) => TIER_OF(tk) === b.key).length]);
+  const bandHasWork = Object.fromEntries(bandCounts);
+  const firstBandWithWork = (bandCounts.find(([, n]) => n > 0) || [])[0];
+  useEffect(() => {
+    if (!aiOn || bandChosen.current) return;
+    if (!bandHasWork[band] && firstBandWithWork) setBand(firstBandWithWork);
+  }, [aiOn, band, firstBandWithWork, bandHasWork]);
 
   // KR-14.6 · MOBILE HEADER — reference-driven layout for MyWork on phones:
   //   Row 1 (segment views only): h1 title left, [+ New Task] and the
@@ -4741,7 +4788,7 @@ export default function MyWork({ only = null }) {
                   {BANDS.map((b) => {
                     const n = list.filter((tk) => TIER_OF(tk) === b.key).length;
                     return (
-                      <button key={b.key} type="button" onClick={() => setBand(b.key)}
+                      <button key={b.key} type="button" onClick={() => pickBand(b.key)}
                         aria-pressed={band === b.key} data-testid={`priority-band-${b.key}`}
                         className={`kr-seg-compact flex h-9 flex-1 items-center justify-center gap-1.5 rounded-pill px-2 text-[12px] ${
                           band === b.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
@@ -4845,12 +4892,20 @@ export default function MyWork({ only = null }) {
               ))}
             </div>
           )}
+          {/* 2026-10-02 — AND BEFORE EITHER EMPTY STATE, ASK WHETHER THE LIST
+              ARRIVED. Both of them below are sentences about a founder's work
+              ("Nothing here", "No tasks yet"), and a failed fetch reached them
+              as an empty array, so a broken call told somebody with fourteen
+              open tasks that they had none. */}
+          {tasksQ.isError && !tasksQ.data && (
+            <LoadFailed what="your tasks" onRetry={() => tasksQ.refetch()} testid="mywork-load-failed" />
+          )}
           {/* E2-13: empty state with a CTA. Sends the founder to Desk
               (where decisions become tasks) rather than a dead screen. */}
           {/* ASK-24 — the filters emptied the list, not the workspace: say
               so, and offer the way back, instead of "tasks appear once
               decisions are approved". */}
-          {!tasksQ.isLoading && list.length === 0 && filtersActive && all.length > 0 && (
+          {!tasksQ.isLoading && !tasksQ.isError && list.length === 0 && filtersActive && all.length > 0 && (
             <EmptyState
               testid="mywork-empty-filtered"
               title="No tasks match these filters"
@@ -4859,7 +4914,7 @@ export default function MyWork({ only = null }) {
               onCta={clearFilters}
             />
           )}
-          {!tasksQ.isLoading && list.length === 0 && !(filtersActive && all.length > 0) && (
+          {!tasksQ.isLoading && !tasksQ.isError && list.length === 0 && !(filtersActive && all.length > 0) && (
             <EmptyState
               testid="mywork-empty"
               /* B23 (2026-09-29) — "Nothing here" is what you say to somebody

@@ -44,7 +44,9 @@ def test_a_selling_team_starts_with_the_buyers_and_nothing_else():
 
 def test_a_team_that_is_both_gets_the_whole_of_crm():
     got = starting_perms("sales_and_accounts", "Sales & Accounts")
-    assert got == ["crm_buyers", "crm_suppliers", "finance"], got
+    # 2026-10-03 (founder) — a money team also approves the AI drafts that land
+    # in its Finance inbox, as the built-in Finance role does.
+    assert got == ["captures_approve", "crm_buyers", "crm_suppliers", "finance"], got
 
 
 def test_everybody_else_starts_where_they_started():
@@ -52,7 +54,8 @@ def test_everybody_else_starts_where_they_started():
         ("loom_floor_&_production", "Loom Floor & Production"),
         ("dispatch_&_lorry_coordination", "Dispatch & Lorry Coordination"),
         ("quality_control", "Quality Control"),
-        ("hr", "HR"),
+        # (HR left this list 2026-10-03, founder: it starts able to approve leave.)
+        ("admin_&_dispatch", "Admin & Dispatch"),
         ("", ""),
     ]:
         assert starting_perms(key, label) == [], f"{key} should not have been granted anything"
@@ -71,3 +74,24 @@ def test_the_stored_list_keeps_the_base_a_team_already_had():
     stored = sorted(set(_BASE_PERMS) | set(starting_perms("accounts_gst", "Accounts & GST")))
     assert "finance" in stored
     assert _BASE_PERMS <= set(stored), "a money team must not lose the Desk, tasks or capture"
+
+
+def test_an_hr_team_starts_able_to_approve_leave_and_nothing_else():
+    """2026-10-03 (founder: 'build both')."""
+    for key, label in [("hr", "HR"), ("human_resources", "Human Resources"), ("payroll", "Payroll")]:
+        assert starting_perms(key, label) == ["leave_approve"], key
+
+
+def test_a_money_team_approves_its_ai_drafts():
+    assert "captures_approve" in starting_perms("accounts_gst", "Accounts & GST")
+    assert "captures_approve" not in starting_perms("orders", "Orders")
+
+
+def test_a_team_added_in_settings_starts_the_same_way():
+    """It only happened at sign-up; a team the owner added later started bare."""
+    from pathlib import Path
+    t = (Path(__file__).resolve().parents[1] / "routers" / "tenant_settings.py").read_text(encoding="utf-8")
+    i = t.index("async def add_role(")
+    body = t[i:i + 1600]
+    assert "extra = starting_perms(key, label)" in body
+    assert 'role_doc["permissions"] = sorted(set(_BASE_PERMS) | set(extra))' in body

@@ -94,8 +94,9 @@ def test_what_is_left_of_each_local_copy_is_a_call_to_the_one(rel, call):
     ("pages/MyWork.js", "${m.name} · ${m.role}"),
     # who covers your approvals while you are away, and who approves a team
     ("pages/Leave.js", "${m.name} · ${m.role}"),
-    # who owns a contact
-    ("pages/Contacts.js", "{u.name} ({u.role})"),
+    # (pages/Contacts.js was the sixth; E2-01 had retired it to a redirect and
+    #  nothing imported it, so this sweep was maintaining a file nobody could
+    #  reach. Deleted 2026-10-03 — see test_a_picker_does_not_invite_a_duplicate.)
     # the stage-work review
     ("components/StageWorkReview.js", "· {r.role}</span>"),
     # the header, both lines
@@ -113,7 +114,7 @@ def test_the_stored_key_is_not_rendered(rel, raw):
 
 
 @pytest.mark.parametrize("rel", [
-    "pages/MyWork.js", "pages/Leave.js", "pages/Contacts.js",
+    "pages/MyWork.js", "pages/Leave.js",
     "components/StageWorkReview.js", "components/Layout.js", "pages/Team.js",
     "pages/OperatingScore.js", "pages/admin/AdminSections.js",
     "pages/admin/Tenant360Section.js",

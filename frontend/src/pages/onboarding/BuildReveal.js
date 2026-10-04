@@ -480,10 +480,13 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
       setStage("preview");
       // The one failure a founder can act on: the email is taken. Say so, and
       // offer the door — pressing "Create" again cannot help.
-      if (detail?.code === "phone_unverified" || detail?.code === "phone_invalid") {
+      /* The code lives on detail_full since lib/api started flattening the
+         structured shape; `detail` itself is the sentence. */
+      const code = e.response?.data?.detail_full?.code;
+      if (code === "phone_unverified" || code === "phone_invalid") {
         setPhoneIssue(true);
         setError(formatApiError(detail) || "Confirm your mobile number again.");
-      } else if (detail?.code === "email_registered" || /already ha[sd] a workspace|already registered/i.test(formatApiError(detail) || "")) {
+      } else if (code === "email_registered" || /already ha[sd] a workspace|already registered/i.test(formatApiError(detail) || "")) {
         setTakenEmail(true);
         setError(formatApiError(detail) || "This email already has a workspace. Sign in instead.");
       } else {

@@ -9,7 +9,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 
-from core import get_current_user
+from core import get_current_user, require_perm
 from services.ai import brain_context
 
 
@@ -22,7 +22,7 @@ async def list_context(
     kind: Optional[str] = Query(None, max_length=40),
     tag: Optional[str] = Query(None, max_length=40),
     limit: int = Query(50, ge=1, le=200),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_perm("brain")),   # 2026-10-03 RBAC audit, as /brain/search
 ):
     """List past decisions/approvals/resolutions the caller may see."""
     rows = await brain_context.query_context(

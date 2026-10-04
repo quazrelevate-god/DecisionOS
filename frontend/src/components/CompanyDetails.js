@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { hasPerm, PERMISSIONS, defaultPermsForRole } from "../lib/perms";
+import { hasPerm, PERMISSION_GROUPS, defaultPermsForRole } from "../lib/perms";
 import { toast } from "sonner";
 import { Buildings, Package, Plus, Trash, UsersThree, Kanban, ListChecks, ShieldCheck, Copy, WhatsappLogo, Check } from "@phosphor-icons/react";
 import { GlassSelect } from "./karma/GlassSelect";
@@ -79,7 +79,16 @@ export function CompanyDetails() {
       setRoles((data.roles || []).map((r) => ({ ...r })));
       setRoleInput("");
       await refreshTenant();
-      toast.success(`Team "${label}" added`);
+      /* 2026-10-03 — a team named for its work starts with that work's access
+         (server: shared/roles.starting_perms). Say what it was given, so the
+         owner never discovers it later. */
+      const BASE = defaultPermsForRole("__custom__");
+      const added = (data.roles || []).find((r) => r.label === label);
+      const extra = (added?.permissions || []).filter((k) => !BASE.includes(k))
+        .map((k) => PERMISSION_GROUPS.flatMap((g) => g.items).find((p) => p.key === k)?.label).filter(Boolean);
+      toast.success(`Team "${label}" added`, extra.length ? {
+        description: `It starts with ${extra.join(", ")} as well as everyday work. Change it under Access.`,
+      } : undefined);
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Couldn't add role");
     } finally { setRoleBusy(false); }
@@ -261,7 +270,6 @@ export function CompanyDetails() {
                   onBlur={(e) => canManage && renameRole(r.key, e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } }}
                   placeholder="Team name" />
-                <span className="label-mono text-muted-foreground shrink-0 hidden sm:inline">{r.key}</span>
                 {isOwner && (
                   <button type="button" onClick={() => setOpenRole(openRole === r.key ? null : r.key)} aria-expanded={openRole === r.key}
                     data-testid={`role-access-toggle-${r.key}`}
@@ -392,20 +400,27 @@ function RoleAccessEditor({ role, members, onSaved }) {
   return (
     <div className="mt-2 rounded-2xl bg-white/60 p-3 ring-1 ring-inset ring-slate-900/[0.06]" data-testid={`role-access-${role.key}`}>
       <p className="text-xs text-muted-foreground">
-        {inRole.length} {inRole.length === 1 ? "person" : "people"} in this team · {custom ? "custom access" : "built-in default"} · owners always have everything
+        {inRole.length} {inRole.length === 1 ? "person" : "people"} in this team · {custom ? "set for this team" : "built-in default"} · owners have everything not switched off for owners in Workspace
       </p>
-      <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-        {PERMISSIONS.map((p) => {
-          const on = draft.includes(p.key);
-          return (
-            <button key={p.key} type="button" aria-pressed={on} onClick={() => toggle(p.key)} disabled={busy}
-              data-testid={`role-perm-${role.key}-${p.key}`}
-              className={`flex min-h-10 items-center justify-between gap-2 rounded-xl px-3 py-1.5 text-left text-xs font-medium ring-1 ring-inset transition-colors ${on ? "bg-neutral-900 text-white ring-transparent" : "bg-white/80 text-slate-700 ring-slate-900/[0.06] hover:bg-white"}`}>
-              <span>{p.label}</span>
-              {on && <Check size={12} weight="bold" aria-hidden="true" />}
-            </button>
-          );
-        })}
+      <div className="mt-2 space-y-3">
+        {PERMISSION_GROUPS.map((g) => (
+          <div key={g.title} data-testid={`role-perm-group-${role.key}-${g.title}`}>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{g.title}</p>
+            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+              {g.items.map((p) => {
+                const on = draft.includes(p.key);
+                return (
+                  <button key={p.key} type="button" aria-pressed={on} onClick={() => toggle(p.key)} disabled={busy}
+                    data-testid={`role-perm-${role.key}-${p.key}`}
+                    className={`flex min-h-10 items-center justify-between gap-2 rounded-xl px-3 py-1.5 text-left text-xs font-medium ring-1 ring-inset transition-colors ${on ? "bg-neutral-900 text-white ring-transparent" : "bg-white/80 text-slate-700 ring-slate-900/[0.06] hover:bg-white"}`}>
+                    <span>{p.label}</span>
+                    {on && <Check size={12} weight="bold" aria-hidden="true" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
       {ownAccess.length > 0 && (
         <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs text-slate-700">

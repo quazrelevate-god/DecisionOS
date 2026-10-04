@@ -11,7 +11,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 
-from core import db, get_current_user, require_perm, new_id, now_iso, log_activity, logger
+from core import db, get_current_user, require_perm, require_any_perm, new_id, now_iso, log_activity, logger
 from services.tasks import enrich_tasks
 from services.inbox import add_inbox_item
 from services.ingestion import (
@@ -170,12 +170,14 @@ async def commit_ingestion(ingestion_id: str, inp: IngestCommitInput,
 
 
 @router.get("/ingest")
-async def list_ingestions(user: dict = Depends(get_current_user)):
+# 2026-10-03 RBAC audit: uploaded bills and their amounts were readable by any
+# member. The Finance inbox they belong to is opened by Finance or Data Input.
+async def list_ingestions(user: dict = Depends(require_any_perm("finance", "data_input"))):
     return await db.ingestions.find({"tenant_id": user["tenant_id"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
 
 
 @router.get("/ingest/{ingestion_id}")
-async def get_ingestion(ingestion_id: str, user: dict = Depends(get_current_user)):
+async def get_ingestion(ingestion_id: str, user: dict = Depends(require_any_perm("finance", "data_input"))):
     ing = await db.ingestions.find_one({"id": ingestion_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not ing:
         raise HTTPException(status_code=404, detail="Not found")

@@ -157,7 +157,7 @@ export function DexSheet({ open, onClose, onRecordingChange, onCaptured }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const canCapture = user?.role === "owner" || hasPerm(user, "voice_capture");
+  const canCapture = hasPerm(user, "voice_capture");
   const [busy, setBusy] = React.useState(false);
 
   const dex = useDexCapture({ onCaptured, onRecordingChange, watch: true });

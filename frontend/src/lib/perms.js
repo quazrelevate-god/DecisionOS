@@ -42,6 +42,19 @@ export const PERMISSIONS = [
 
 export const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 
+/* 2026-10-03 — the editors showed all of these as one flat list of nineteen,
+   and an owner handing out access had to read every one to find the money or
+   the approvals. Grouped by the part of the business each one opens. Every
+   key is in exactly one group (tests/test_roles_read_as_a_product.py). */
+export const PERMISSION_GROUPS = [
+  { title: "Everyday work", keys: ["inbox", "voice_capture", "tasks", "workflows", "data_input"] },
+  { title: "Customers & suppliers", keys: ["crm_buyers", "crm_suppliers", "people"] },
+  { title: "Money", keys: ["finance"] },
+  { title: "Company Brain", keys: ["brain", "ask", "brain_export"] },
+  { title: "Approvals", keys: ["approvals", "captures_approve", "decisions_approve", "leave_approve"] },
+  { title: "Running the team", keys: ["team_manage", "tasks_assign_any", "tasks_view_all"] },
+].map((g) => ({ ...g, items: g.keys.map((k) => PERMISSIONS.find((p) => p.key === k)).filter(Boolean) }));
+
 // FIX-FUP-51: mirror of backend core._BASE_PERMS — kept in sync so the
 // nav/route gates match the API. "people" is opt-in (contact list is
 // sensitive); Owner still passes via the role==='owner' branch below.
@@ -70,10 +83,13 @@ export function roleDefaultPerms(role, tenantRoles) {
 
 export function userPerms(user) {
   if (!user) return [];
-  if (user.role === "owner") return PERMISSION_KEYS;
   // ASK-28 TK-08 — the signed-in user carries what the server resolved
-  // (company role settings included); other members fall back to their list.
+  // (company role settings included). 2026-10-03 RBAC audit: for owners too.
+  // An owner holds every key EXCEPT those the company switched off for owners
+  // (Settings > What owners can open); answering "everything" here kept the
+  // switched-off area in the nav while the server refused it.
   if (Array.isArray(user.effective_permissions)) return user.effective_permissions.filter((k) => PERMISSION_KEYS.includes(k));
+  if (user.role === "owner") return PERMISSION_KEYS;
   const p = user.permissions;
   // A deliberate own list (permissions_custom) may be empty: No access.
   if (user.permissions_custom || (Array.isArray(p) && p.length)) return (p || []).filter((k) => PERMISSION_KEYS.includes(k));
@@ -82,7 +98,6 @@ export function userPerms(user) {
 
 export function hasPerm(user, perm) {
   if (!user) return false;
-  if (user.role === "owner") return true;
   return userPerms(user).includes(perm);
 }
 
@@ -92,3 +107,14 @@ export function hasPerm(user, perm) {
 export const canSeeBuyers = (user) => hasPerm(user, "people") || hasPerm(user, "crm_buyers");
 export const canSeeSuppliers = (user) => hasPerm(user, "people") || hasPerm(user, "crm_suppliers");
 export const canSeeAnyCrm = (user) => canSeeBuyers(user) || canSeeSuppliers(user);
+
+/* 2026-10-03 — which pipelines a person's team works in. The server decides
+   (services/workflows.workflow_scope: a team that owns a stage in it; every
+   pipeline for owners and "See all tasks") and sends it on /auth/me as
+   `workflow_scope`; null means all. A pipeline the company's model does not
+   know has no owner to ask, so Workflows access alone decides it. */
+export function canSeePipeline(user, key) {
+  const scope = user?.workflow_scope;
+  if (!scope) return true;
+  return !(scope.modelled || []).includes(key) || (scope.visible || []).includes(key);
+}

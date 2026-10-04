@@ -60,20 +60,27 @@ from models.decisions import (
 )
 
 
+async def visible_decisions_clause(user: dict) -> dict:
+    """RBAC P1 (2026-09-15): only decisions this person can open — the same
+    people get_decision lets in. Every title in the company was listed.
+    2026-10-03: one function, because Company Brain search listed every
+    decision matching a word to any member while this list did not."""
+    if user.get("role") == "owner":
+        return {}
+    mine = [t["decision_id"] async for t in db.tasks.find(
+        {"tenant_id": user["tenant_id"], "decision_id": {"$nin": [None, ""]},
+         "$or": [{"assignee_id": user["id"]}, {"co_assignee_ids": user["id"]}]},
+        {"_id": 0, "decision_id": 1})]
+    return {"$or": [{"created_by": user["id"]}, {"approver_id": user["id"]}, {"id": {"$in": mine}}]}
+
+
 @router.get("/decisions")
 async def list_decisions(status: Optional[str] = None, user: dict = Depends(get_current_user)):
     from services.enrich import enrich_decisions
     q = {"tenant_id": user["tenant_id"]}
     if status:
         q["status"] = status
-    if user.get("role") != "owner":
-        # RBAC P1 (2026-09-15): only decisions this person can open — the same
-        # people get_decision lets in. Every title in the company was listed.
-        mine = [t["decision_id"] async for t in db.tasks.find(
-            {"tenant_id": user["tenant_id"], "decision_id": {"$nin": [None, ""]},
-             "$or": [{"assignee_id": user["id"]}, {"co_assignee_ids": user["id"]}]},
-            {"_id": 0, "decision_id": 1})]
-        q["$or"] = [{"created_by": user["id"]}, {"approver_id": user["id"]}, {"id": {"$in": mine}}]
+    q.update(await visible_decisions_clause(user))
     decisions = await db.decisions.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
     # FIX-003-B (S2-05): explicit tenant_id makes the defense-in-depth
     # filter unconditional even in the (unlikely) case where a decision
@@ -214,6 +221,13 @@ async def decision_moves(decision_id: str, user: dict = Depends(get_current_user
     """The cards approving this decision will move, and the open work each
     would leave behind -- what the review asks about (2026-09-21)."""
     from services.decision_flow import moves_preview
+    # 2026-10-03 RBAC audit: the decision itself is refused to anyone outside
+    # it, but which cards it moves and the open tasks on them were not.
+    d = await db.decisions.find_one({"id": decision_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Not found")
+    if user["id"] not in await _decision_participants(user["tenant_id"], d):
+        raise HTTPException(status_code=403, detail="You don't have access to this decision")
     return await moves_preview(user, decision_id)
 
 

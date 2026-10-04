@@ -24,7 +24,7 @@ import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "react-i18next";
 import { hasPerm, canSeeBuyers, canSeeSuppliers } from "../lib/perms";
 import { lex } from "../lib/lexicon";
-import { SkeletonGrid, StickyHeader } from "../components/common";
+import { SkeletonGrid, StickyHeader, LoadFailed } from "../components/common";
 import { inr, money } from "../lib/format";
 import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
@@ -752,7 +752,7 @@ export default function CRM() {
   const can360 = hasPerm(user, "finance");
   const canImport = hasPerm(user, "data_input");
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["crm-contacts", status, q],
     queryFn: () => api.get(`/contacts?type=&status=${status}&q=${encodeURIComponent(q)}`).then((r) => r.data),
   });
@@ -942,7 +942,10 @@ export default function CRM() {
                   <span>{s.label}</span>
                   <span data-testid={`crm-scope-count-${s.key}`}
                     className={`min-w-[1.5rem] rounded-pill px-1.5 py-0.5 text-center text-[11px] font-semibold tabular-nums ${on ? "bg-white/20 text-white" : "bg-slate-900/[0.06] text-slate-600"}`}>
-                    {s.count}
+                    {/* 2026-10-02 — a count is an ANSWER, and we only have
+                        one when the list arrived. "0" next to a failed load is
+                        the same lie the empty card was telling. */}
+                    {isError && !data ? "–" : s.count}
                   </span>
                 </button>
               );
@@ -977,6 +980,12 @@ export default function CRM() {
 
       {isLoading && !data ? (
         <SkeletonGrid count={6} lines={3} />
+      ) : isError && !data ? (
+        /* 2026-10-02 — ASKED BEFORE `length === 0`, and that order is the whole
+           fix. With /contacts answering 500 this page said "Buyers 0 ·
+           Partners 0 · Suppliers 0" and nothing else, which is not an error a
+           founder can see: it is a wrong answer about their own customers. */
+        <LoadFailed what={`your ${scopeLabel.toLowerCase()}`} onRetry={() => refetch()} testid="crm-load-failed" />
       ) : contacts.length === 0 ? (
         <div className={`flex flex-col items-center px-6 py-12 text-center ${CARD}`} data-testid="crm-empty">
           <p className="text-base font-semibold text-slate-900" data-testid="crm-empty-title">

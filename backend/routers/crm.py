@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from core import db, get_current_user, new_id, now_iso, require_role, require_perm, may_see_contact
+from core import db, get_current_user, new_id, now_iso, require_role, require_perm, may_see_contact, crm_types
 
 # E2-08: allowed activity kinds. Kept small on purpose -- more kinds
 # = harder to scan the timeline. `other` is the escape hatch.
@@ -47,10 +47,16 @@ async def outstanding_by_contact(user: dict = Depends(get_current_user)):
     else contact_name matched to contacts (denormalized-name fallback,
     same pattern /contacts/{id}/profile uses)."""
     tid = user["tenant_id"]
+    # 2026-10-03 RBAC audit: what each customer and supplier owes was given to
+    # any member, CRM access or not. Now only for the contacts this person
+    # may open (crm_types) -- the same cards the pill is drawn on.
+    visible = crm_types(user)
+    if not visible:
+        return {}
 
     # Build a name -> id lookup so we can attribute name-only invoices.
     name_to_id: dict = {}
-    async for c in db.contacts.find({"tenant_id": tid},
+    async for c in db.contacts.find({"tenant_id": tid, "type": {"$in": list(visible)}},
                                      {"_id": 0, "id": 1, "name": 1, "company": 1}):
         cid = c["id"]
         for key in (c.get("name"), c.get("company")):
@@ -95,6 +101,8 @@ async def outstanding_by_contact(user: dict = Depends(get_current_user)):
             except (ValueError, TypeError):
                 pass
 
+    allowed = set(name_to_id.values())
+    out = {cid: b for cid, b in out.items() if cid in allowed}
     # Round the totals for wire consistency
     for cid, b in out.items():
         b["receivables"] = round(b["receivables"], 2)

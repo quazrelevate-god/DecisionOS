@@ -142,13 +142,13 @@ async def checkout(inp: CheckoutInput,
     if not BILLING_LANDING_URL:
         raise HTTPException(
             status_code=503,
-            detail="Billing not configured. Set BILLING_LANDING_URL + RAZORPAY_KEY_ID env vars.",
+            detail="Upgrading isn't switched on yet. Nothing has been charged — tell us and we'll turn it on for you.",
         )
     from services.plans import PLAN_KEYS
     plan_key = inp.plan_key.lower().strip()
     if plan_key not in PLAN_KEYS or plan_key in ("trial", "grandfathered"):
         raise HTTPException(status_code=400,
-                             detail="Invalid plan_key. Purchasable plans: starter, business, enterprise.")
+                             detail="That plan can't be bought here. Choose Starter, Business or Enterprise.")
     tid = user["tenant_id"]
     # 15-minute handoff window; landing page must complete Checkout
     # before this expires.

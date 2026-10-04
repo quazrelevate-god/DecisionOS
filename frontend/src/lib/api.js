@@ -1,5 +1,6 @@
 import axios from "axios";
-import { showAiConsentToast } from "./aiConsent";
+import { toast } from "sonner";
+import { showAiConsentToast, aiConsentMessage } from "./aiConsent";
 
 /* DEPLOY-3 — an EMPTY backend url is now the correct production value, and
    the `|| ""` is what makes it usable. The app is served by a node process
@@ -187,9 +188,118 @@ function sentenceFor(entry) {
   return word ? `Check the ${word}.` : "One of the answers needs a second look.";
 }
 
+/* THE SERVER'S OWN VOCABULARY, WHICH IS NOT OURS. (2026-10-02.)
+ *
+ * Saving company details against a 500 put a toast on screen whose entire
+ * text was
+ *
+ *     Internal Server Error
+ *
+ * Right mechanism, wrong words: no what-failed, no was-anything-saved, no
+ * what-now. It arrives because an unhandled exception leaves FastAPI to answer
+ * `{"detail": "Internal Server Error"}` and a string detail is passed straight
+ * through -- correct for the sentences we wrote, wrong for the one phrase we
+ * did not. Every 5xx in the app read like this.
+ *
+ * Matched WHOLE and case-insensitively, never as a substring: these are HTTP's
+ * reason phrases verbatim, and no message we would write is exactly one of
+ * them. A sentence of ours that merely CONTAINS "not found" is still ours.
+ */
+const FRAMEWORK_PHRASES = {
+  "internal server error": "Something broke on our side. Nothing you did caused it — try again in a moment.",
+  "bad gateway": "We couldn't reach our own server. Try again in a moment.",
+  "service unavailable": "DecisionOS is briefly unavailable. Try again in a moment.",
+  "gateway timeout": "Our server took too long to answer. Try again in a moment.",
+  "request timeout": "That took too long to answer. Try again.",
+  "not found": "We couldn't find that — it may have been deleted.",
+  "unauthorized": "Your session has ended. Sign in and we'll bring you back.",
+  "not authenticated": "Your session has ended. Sign in and we'll bring you back.",
+  "forbidden": "You don't have access to that. Ask the owner if you need it.",
+  "not enough permissions": "You don't have access to that. Ask the owner if you need it.",
+  "method not allowed": "Something broke on our side. Nothing you did caused it — try again in a moment.",
+  "unprocessable entity": "Some of what was sent didn't look right. Check the form and try again.",
+  "too many requests": "That was a lot at once. Wait a moment and try again.",
+  "payload too large": "That file is too big to send.",
+  "request entity too large": "That file is too big to send.",
+  "conflict": "Somebody else changed this first. Reload and try again.",
+};
+
+/** Our sentence for one of HTTP's reason phrases, or "" when it is not one. */
+function humanPhrase(detail) {
+  return FRAMEWORK_PHRASES[String(detail).trim().toLowerCase().replace(/\.$/, "")] || "";
+}
+
+/* NO ANSWER AT ALL. (2026-10-03.)
+ *
+ * Everything above is about what the server SAID. When the phone has no
+ * signal, or the server never replies inside our timeout, it says nothing:
+ * axios rejects with no `response`, the call site reads
+ * `e.response?.data?.detail`, finds undefined, and the founder got either
+ * "Something went wrong. Please try again." or the call site's own two words
+ * -- creating a task offline put "Create failed" on screen and nothing else.
+ * No cause, and no answer to the question that matters: did it save?
+ *
+ * The interceptor below writes down that the last request went unanswered,
+ * and what kind of silence it was. Two readers:
+ *   - formatApiError(undefined) says the connection sentence instead of the
+ *     shrug, and
+ *   - toast.error (wrapped further down) hangs it under whatever title the
+ *     call site chose, so "Create failed" arrives with its reason.
+ * A request that times out may have landed, so that wording does NOT promise
+ * nothing was saved; a request that never left plainly did not. */
+const SILENCE_FRESH_MS = 2000;
+let _silence = { at: 0, write: false, slow: false, open: false };
+
+function silenceWords({ write, slow }) {
+  if (slow) {
+    return write
+      ? "DecisionOS took too long to answer, so this may or may not have saved. Check before you try again."
+      : "DecisionOS took too long to answer. Try again in a moment.";
+  }
+  return write
+    ? "We couldn't reach DecisionOS, so nothing was saved. Check your connection and try again."
+    : "We couldn't reach DecisionOS. Check your connection and try again.";
+}
+
+/** The sentence for the request that just went unanswered, or "" when the last
+ *  thing we heard was an answer. `sticky` reads it until the next answer
+ *  arrives, for a screen that stays up (LoadFailed); without it the note is
+ *  only good for a moment, for the toast that follows the failure. */
+export function connectionTrouble({ sticky = false } = {}) {
+  const fresh = Date.now() - _silence.at < SILENCE_FRESH_MS;
+  if (_silence.open && (sticky || fresh)) return silenceWords(_silence);
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return silenceWords({ write: false, slow: false });
+  }
+  return "";
+}
+
+/* And the toast. There are a few hundred `toast.error(...)` calls, each with
+   its own title ("Create failed", "Couldn't save the leave request"), and the
+   title is worth keeping -- it says WHAT failed. What none of them can say is
+   why, because they were handed nothing. So the reason goes underneath, as
+   the toast's description, only while the silence is fresh, and never over a
+   description the call site wrote itself. aiConsent wraps toast.error too;
+   this wraps whatever is there, so the two compose. */
+(function explainTheSilence() {
+  try {
+    if (typeof toast?.error !== "function") return;
+    const plain = toast.error.bind(toast);
+    toast.error = (msg, opts) => {
+      const why = connectionTrouble();
+      if (why && typeof msg === "string" && !msg.includes(why) && !opts?.description) {
+        return plain(msg, { ...(opts || {}), description: why });
+      }
+      return plain(msg, opts);
+    };
+  } catch (e) { /* a frozen toast object: the titles still show, as before */ }
+})();
+
 export function formatApiError(detail) {
-  if (detail == null) return "Something went wrong. Please try again.";
-  if (typeof detail === "string") return detail;   // ours, already in English
+  if (detail == null) return connectionTrouble() || "Something went wrong. Please try again.";
+  if (typeof detail === "string") {
+    return humanPhrase(detail) || detail;          // ours, already in English
+  }
   if (Array.isArray(detail)) {
     /* One sentence per field, and each field only once: a single bad address
        can arrive as two entries (the type rule and the format rule) and
@@ -296,8 +406,67 @@ const AUTH_PATHS = ["/auth/", "/signup/"];
 export const SESSION_LOST_EVENT = "dos:session-lost";
 
 api.interceptors.response.use(
-  (r) => r,
+  (r) => { _silence.open = false; return r; },
   (err) => {
+    /* NO ANSWER AT ALL (see connectionTrouble). Any answer, even a refusal,
+       proves the line works and clears the note; a cancel is ours, not the
+       network's, and says nothing either way. */
+    if (err?.response) {
+      _silence.open = false;
+    } else if (err?.code !== "ERR_CANCELED") {
+      const method = String(err?.config?.method || "get").toLowerCase();
+      _silence = {
+        at: Date.now(),
+        write: method !== "get" && method !== "head",
+        slow: err?.code === "ECONNABORTED" || err?.code === "ETIMEDOUT",
+        open: true,
+      };
+    }
+    /* 2026-10-02 — THE TRANSLATION HAPPENS HERE, NOT AT THE CALL SITE.
+     *
+     * formatApiError turns HTTP's reason phrases into sentences, and 141
+     * places use it. A census found 88 MORE that read e.response.data.detail
+     * and show it raw, so approving a decision against a 500 still put the
+     * words "Internal Server Error" on screen — the exact fault that fix was
+     * for, surviving in a third of the app.
+     *
+     * Rewriting the detail once, here, reaches every one of them and every
+     * one written tomorrow: by the time any call site sees it, the framework's
+     * phrase is already a sentence. Only WHOLE matches are replaced, so our
+     * own messages are untouched, and nothing in the app branches on these
+     * strings (lib/aiConsent looks for its own code, which is not one).
+     * A dict detail -- our {code, message} shape -- is left alone entirely.
+     */
+    try {
+      const d = err?.response?.data;
+      if (d && typeof d.detail === "string") {
+        const said = humanPhrase(d.detail);
+        if (said) d.detail = said;
+      } else if (d && d.detail && typeof d.detail === "object" && !Array.isArray(d.detail)) {
+        /* 2026-10-02 — AND A STRUCTURED REFUSAL IS FLATTENED TO ITS SENTENCE.
+         *
+         * 17 of the server's raises use our {code, message} shape -- the seat
+         * limit, the AI budget, the consent gate. formatApiError reads
+         * `.message` from those, but the 88 call sites that pass the detail
+         * straight to toast.error handed React an OBJECT, and React does not
+         * render objects: "Objects are not valid as a React child (found:
+         * object with keys {code, message, seat_limit})", thrown during the
+         * commit. In dev that is an uncaught error; in production it unmounts
+         * the tree. Forced in the browser on the decision-approve path: the
+         * founder saw NOTHING and the app was left broken.
+         *
+         * So `detail` becomes the sentence, and the object it came from stays
+         * on `detail_full` for the four places that branch on `code` -- the
+         * seat wall, the consent check, and signup's two phone/email cases.
+         */
+        const full = d.detail;
+        d.detail_full = full;
+        d.detail = typeof full.message === "string" && full.message
+          ? full.message
+          : "Something went wrong. Please try again.";
+      }
+    } catch (e) { /* never let tidying the words swallow the error itself */ }
+
     if (err?.response?.status === 401) {
       const url = String(err?.config?.url || "");
       if (!AUTH_PATHS.some((p) => url.includes(p))) {
@@ -309,6 +478,11 @@ api.interceptors.response.use(
          lib/aiConsent (the same helper the capture and extraction paths use),
          so a refusal reads the same wherever it lands, and an owner is offered
          the switch while everyone else is told who can throw it. */
+      /* 2026-10-02 — and hand the call site the SAME sentence, so the guard in
+         lib/aiConsent can recognise the duplicate it is about to fire and drop
+         it. Without this the two routes say the same thing in two wordings and
+         neither can tell they are the same fact. */
+      try { err.response.data.detail = aiConsentMessage(); } catch (e) { /* no body */ }
       showAiConsentToast();
     }
     return Promise.reject(err);

@@ -5,7 +5,7 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { roleLabel } from "../lib/departments";
 import { hasPerm } from "../lib/perms";
-import { PageHeader, StickyHeader, EmptyState } from "../components/common";
+import { PageHeader, StickyHeader, EmptyState, LoadFailed } from "../components/common";
 import { timeAgo } from "../lib/format";
 import { GlassSelect } from "../components/karma/GlassSelect";
 import { GlassDateField } from "../components/karma/GlassDateField";
@@ -463,7 +463,7 @@ export function ApproverConfig({ roleOptions, members }) {
     <div className="nm-tile p-5" data-testid="leave-approver-config">
       <div className="flex items-center gap-2 mb-1"><Gear size={18} weight="regular" aria-hidden="true" className="text-muted-foreground" />
         <h3 className="text-base font-medium">Leave Approvers by Department</h3></div>
-      <p className="text-xs text-muted-foreground mb-3">Choose who approves leave for each role. If an employee has a Reporting Manager set (in People → Employees), that manager takes priority. Otherwise this mapping is used, then the Owner.</p>
+      <p className="text-xs text-muted-foreground mb-3">Choose who approves leave for each team. If someone has a reporting manager (set on their Team card), that manager decides. Otherwise this person does, then the owner.</p>
       <div className="space-y-2">
         {roleOptions.filter((r) => r.key !== "owner").map((r) => (
           <div key={r.key} className="flex items-center gap-3">
@@ -568,6 +568,12 @@ export default function Leave() {
 
       {mineQ.isLoading && !mineQ.data ? (
         <p className="text-sm text-muted-foreground">Loading your leave…</p>
+      ) : mineQ.isError && !mineQ.data ? (
+        /* 2026-10-02 — a failed load used to sit on "Loading your leave…" for
+           ever: react-query had stopped, the sentence had not, so the page
+           promised something that was never coming. Worse than an empty list,
+           because waiting feels like progress. */
+        <LoadFailed what="your leave" onRetry={() => mineQ.refetch()} testid="leave-load-failed" />
       ) : mine.length === 0 ? (
         <EmptyState title="No leave requests yet"
           hint="Use Mark Leave to plan time off, or Report Absence Today if you can't come in." />

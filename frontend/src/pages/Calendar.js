@@ -28,7 +28,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
-import { EmptyState } from "../components/common";
+import { EmptyState, LoadFailed } from "../components/common";
 import { ymd, addDays, startOfWeek, DOW, dayTitle } from "../lib/dates";
 import {
   CurrencyCircleDollar, CheckSquare, Truck, Warning, Cake, CalendarBlank,
@@ -59,7 +59,7 @@ export default function Calendar() {
   const [mode, setMode] = useState("day");
   const [selected, setSelected] = useState(() => ymd(new Date()));
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["calendar"],
     queryFn: () => api.get("/calendar?days=45").then((r) => r.data),
   });
@@ -88,8 +88,12 @@ export default function Calendar() {
   const monthLabel = new Date(`${week[0]}T00:00:00`)
     .toLocaleDateString(undefined, { month: "long", year: "numeric" });
 
-  const FILTERS = [{ key: "all", label: "All", n: data?.total || 0 }]
-    .concat(Object.entries(TYPES).map(([key, t]) => ({ key, label: t.label, n: counts[key] || 0 })));
+  const FILTERS = [{ key: "all", label: "All", n: (isError && !data) ? null : (data?.total || 0) }]
+    .concat(Object.entries(TYPES).map(([key, t]) => ({
+      key, label: t.label,
+      // A count is an answer; we only have one when the month arrived.
+      n: (isError && !data) ? null : (counts[key] || 0),
+    })));
 
   const daysToRender = mode === "day" ? [selected] : week;
   const hasAnything = daysToRender.some((d) => byDate[d]?.length);
@@ -194,7 +198,7 @@ export default function Calendar() {
               ? <CalendarBlank size={14} weight="regular" aria-hidden="true" />
               : (() => { const I = TYPES[f.key].icon; return <I size={14} weight="regular" aria-hidden="true" />; })()}
             {f.label}
-            <span className="tabular-nums opacity-60">{f.n}</span>
+            <span className="tabular-nums opacity-60">{f.n == null ? "–" : f.n}</span>
           </button>
         ))}
       </div>
@@ -203,6 +207,11 @@ export default function Calendar() {
         <div className="space-y-3" aria-hidden="true">
           {[0, 1, 2].map((i) => <div key={i} className="ds-skeleton h-[76px] rounded-cardlg" />)}
         </div>
+      ) : isError && !data ? (
+        /* 2026-10-02 — a failed load read as a free week: "Nothing this week"
+           over a filter row of honest-looking zeros. On a calendar that is not
+           a blank screen, it is a wrong answer about whether anything is due. */
+        <LoadFailed what="your calendar" onRetry={() => refetch()} testid="calendar-load-failed" />
       ) : !hasAnything ? (
         <EmptyState
           title={mode === "day" ? "Nothing on this day." : "Nothing this week."}

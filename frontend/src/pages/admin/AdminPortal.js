@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import api from "../../lib/api";
 import AdminLogin from "./AdminLogin";
+import { GLASS_PILL, INK_PILL } from "../../components/karma/glass";
+// The app's quiet grey ground, not the old black one.
+const PAGE = "min-h-[calc(100vh/var(--ui-scale,1))] bg-[linear-gradient(180deg,hsl(220_20%_97%),hsl(220_14%_91%))] text-slate-900";
 import {
   OverviewSection, AiKeysSection, TenantsSection, UsersSection, HealthSection, AuditSection, UsageSection,
   MaintenanceSection,
@@ -63,7 +66,7 @@ export default function AdminPortal() {
 
   if (admin === undefined)
     return (
-      <div className="min-h-[calc(100vh/var(--ui-scale,1))] flex items-center justify-center bg-[#0a0a0b] text-white/40 font-mono text-sm gap-2">
+      <div className={`${PAGE} flex items-center justify-center gap-2 text-sm text-slate-600`}>
         <Spinner size={16} className="animate-spin" /> Loading console…
       </div>
     );
@@ -72,44 +75,46 @@ export default function AdminPortal() {
   const Active = TABS.find((t) => t.key === tab)?.C || OverviewSection;
 
   return (
-    <div className="min-h-[calc(100vh/var(--ui-scale,1))] bg-[#0a0a0b] text-white" data-testid="admin-portal">
-      {/* Top bar */}
-      <header className="border-b border-white/10 bg-[#0a0a0b] sticky top-0 z-20">
+    <div className={PAGE} data-testid="admin-portal">
+      {/* Top bar. The red mark stays: an operator must never mistake this
+          console for a tenant's workspace. */}
+      <header className="sticky top-0 z-20 border-b border-slate-900/[0.06] bg-white/70 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 flex items-center justify-center bg-[#e5484d]">
-              <ShieldStar size={20} weight="fill" className="text-white" />
+            <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#cf222e] text-white">
+              <ShieldStar size={20} weight="fill" />
             </div>
             <div>
-              <div className="font-heading font-black uppercase tracking-tighter leading-none">DecisionOS</div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-[#e5484d]">Admin Console</div>
+              <div className="font-display text-lg leading-none text-slate-900">DecisionOS</div>
+              <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#b91c1c]">Admin console</div>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="font-mono text-xs text-white/40 hidden sm:block">{admin.email}</span>
+          <div className="flex items-center gap-3">
+            <span className="hidden text-xs text-slate-600 sm:block">{admin.email}</span>
             <button
               data-testid="admin-logout"
               onClick={logout}
-              className="font-mono text-[11px] uppercase tracking-wider px-3 py-2 border border-white/20 text-white/70 hover:border-[#e5484d] hover:text-[#e5484d] transition-colors flex items-center gap-1.5"
+              className={`inline-flex h-9 items-center gap-1.5 rounded-pill px-4 text-xs font-medium text-slate-700 hover:text-[#b91c1c] ${GLASS_PILL}`}
             >
-              <SignOut size={14} /> Logout
+              <SignOut size={14} /> Sign out
             </button>
           </div>
         </div>
       </header>
 
       {/* Tab nav */}
-      <nav className="border-b border-white/10 bg-[#0a0a0b] sticky top-16 z-10">
-        <div className="max-w-6xl mx-auto px-5 flex gap-1 overflow-x-auto">
+      <nav className="sticky top-16 z-10 border-b border-slate-900/[0.06] bg-white/60 backdrop-blur-xl">
+        <div className="max-w-6xl mx-auto px-5 py-2 flex gap-1 overflow-x-auto">
           {TABS.map((t) => (
             <button
               key={t.key}
               data-testid={`admin-tab-${t.key}`}
               onClick={() => setTab(t.key)}
-              className={`font-mono text-[11px] uppercase tracking-wider px-4 py-4 flex items-center gap-2 border-b-2 whitespace-nowrap transition-colors ${
+              aria-current={tab === t.key ? "page" : undefined}
+              className={`inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-pill px-3.5 text-[13px] font-medium transition-colors ${
                 tab === t.key
-                  ? "border-[#e5484d] text-white"
-                  : "border-transparent text-white/40 hover:text-white/70"
+                  ? INK_PILL
+                  : "text-slate-600 hover:bg-slate-900/[0.05] hover:text-slate-900"
               }`}
             >
               <t.icon size={15} weight={tab === t.key ? "fill" : "regular"} />
@@ -122,16 +127,16 @@ export default function AdminPortal() {
       <main className="max-w-6xl mx-auto px-5 py-8">
         {alerts.length > 0 && (
           <div data-testid="admin-alert-banner"
-            className="mb-6 border-2 border-[#e5484d] bg-[#e5484d]/10 p-4 flex items-start gap-3">
-            <WarningCircle size={22} weight="fill" className="text-[#e5484d] shrink-0 mt-0.5" />
+            className="mb-6 border border-[#cf222e] bg-[#cf222e]/10 p-4 flex items-start gap-3 rounded-xl">
+            <WarningCircle size={22} weight="fill" className="text-[#b91c1c] shrink-0 mt-0.5" />
             <div className="min-w-0">
-              <div className="font-heading font-black uppercase text-[#e5484d] text-sm tracking-tight">
+              <div className="text-sm font-semibold text-[#b91c1c]">
                 AI Provider Alert{alerts.length > 1 ? `s (${alerts.length})` : ""}
               </div>
               {alerts.map((a) => (
-                <div key={a.id} className="font-mono text-xs text-white/70 mt-1">
-                  <span className="uppercase text-white/90">{a.provider}</span> — {(a.status || "").replace(/_/g, " ")}.
-                  {" "}Update or clear the key in <button onClick={() => setTab("ai-keys")} className="underline text-[#e5484d]">AI Keys</button> to restore service.
+                <div key={a.id} className="font-mono text-xs text-slate-600 mt-1">
+                  <span className="uppercase text-slate-800">{a.provider}</span> — {(a.status || "").replace(/_/g, " ")}.
+                  {" "}Update or clear the key in <button onClick={() => setTab("ai-keys")} className="underline text-[#b91c1c]">AI Keys</button> to restore service.
                 </div>
               ))}
             </div>

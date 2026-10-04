@@ -40,6 +40,7 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { lex } from "../lib/lexicon";
 import { opModel } from "../lib/operatingModel";
+import { canSeePipeline } from "../lib/perms";
 import { money, timeAgo, fullTime, humanStage } from "../lib/format";
 import { toast } from "sonner";
 import {
@@ -65,7 +66,7 @@ import {
   AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
 } from "../components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../components/ui/dropdown-menu";
-import { StickyHeader } from "../components/common";
+import { StickyHeader, LoadFailed } from "../components/common";
 import {
   DRAWER_FIELD, GLASS_MENU, GLASS_MENU_ITEM, INK_PILL,
 } from "../components/karma/glass";
@@ -403,7 +404,9 @@ export default function Workflows() {
   const { tenant, user } = useAuth();
   const L = lex(tenant);
   const om = opModel(tenant);
-  const pipelines = om.pipelines;
+  // 2026-10-03 — only the pipelines this person's team works in (the server
+  // refuses the others); the owner and "See all tasks" see every one.
+  const pipelines = om.pipelines.filter((p) => canSeePipeline(user, p.key));
   const [params] = useSearchParams();
   const focusWf = params.get("wf") || params.get("focus");
   const focusWfType = params.get("wf_type") || params.get("type");
@@ -419,7 +422,7 @@ export default function Workflows() {
   }, [focusWfType, pipelines, tab]);
   const activeKey = pipelines.some((p) => p.key === tab) ? tab : pipelines[0]?.key;
 
-  const { data } = useQuery({
+  const { data, isError: boardFailed, refetch: refetchBoard } = useQuery({
     queryKey: ["workflows", activeKey, "with_tasks"],
     queryFn: () => api.get(`/workflows?type=${activeKey}&with_tasks=true`).then((r) => r.data),
   });
@@ -728,6 +731,14 @@ export default function Workflows() {
           wanted the sunken tray look for the whole board, just not the
           per-column white cards. Columns clear their own background below
           (bg-none) so only the outer well reads as a container. */}
+      {/* 2026-10-02 — WHEN THE BOARD DID NOT ARRIVE, DO NOT DRAW THE BOARD.
+          Every column falls back to "Nothing at this stage", so a failed fetch
+          painted an entire pipeline as empty — the most reassuring possible
+          picture of an outage, on the screen that exists to show what is
+          stuck. */}
+      {boardFailed && !data ? (
+        <LoadFailed what="this pipeline" onRetry={() => refetchBoard()} testid="workflows-load-failed" />
+      ) : (
       <div className="flex flex-col gap-3 lg:kr-glass-well lg:min-h-0 lg:flex-1 lg:gap-0 lg:p-4 lg:overflow-x-auto" data-testid="workflow-board">
         {/* 2026-09-14 — lg:pb-6 is room for the lanes' drop shadow (.kr-lane).
             The board scrolls, so it clips at its padding edge, and with ASK-25
@@ -1026,6 +1037,7 @@ export default function Workflows() {
           })}
         </div>
       </div>
+      )}
 
       {/* 2026-09-21 — work left behind, on the board's own move. */}
       <Dialog open={!!leftCtx} onOpenChange={(v) => { if (!v) setLeftCtx(null); }}>

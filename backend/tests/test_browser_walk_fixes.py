@@ -46,7 +46,12 @@ def test_the_seat_limit_is_said_where_it_bites():
     assert PLAN_DEFINITIONS[PLAN_TRIAL]["seat_limit"] == 15
     team = _fe("pages", "Team.js")
     assert 'data-testid="team-seats"' in team and "{seatPlan.seats_used} of {seatPlan.seat_limit} seats" in team
-    assert 'if (detail?.code === "seat_limit_reached") setSeatWall(detail);' in team
+    # 2026-10-02 - the shape moved, the promise did not. lib/api now flattens
+    # a {code, message} detail to its sentence (88 call sites were handing the
+    # object to React, which throws) and keeps the object on detail_full. The
+    # wall is still built from the object, which is what carries the counts.
+    assert 'full?.code === "seat_limit_reached"' in team
+    assert "setSeatWall(full)" in team
     assert 'data-testid="member-seat-wall"' in team
     assert "What you've typed here is kept." in team
 

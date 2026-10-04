@@ -274,7 +274,10 @@ async def _retrieve(plan: dict, scope: dict, user: Optional[dict] = None):
         return {"records": rows, "entity": entity}
 
     if entity == "workflows":
-        q = {"tenant_id": tid}
+        # 2026-10-03 — only the pipelines this person's team works in
+        # (services/workflows.workflow_scope), as the board shows them.
+        from services.workflows import workflow_scope, scope_query
+        q = {"tenant_id": tid, **(scope_query(await workflow_scope(user)) if user else {})}
         if rx:
             q["$or"] = [{"title": rx}, {"detail": rx}, {"counterparty": rx}]
         rows = await db.workflows.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
@@ -951,7 +954,7 @@ async def export(inp: ExportRequest, user: dict = Depends(require_perm("brain_ex
     plan = ctx["plan"]
     if (plan.get("needs_finance") or plan.get("primary_entity") in FINANCE_ENTITIES) and not scope["can_finance"]:
         raise HTTPException(status_code=403, detail=_PERM_DENIED_MSG)
-    retrieved = await _retrieve(plan, scope)
+    retrieved = await _retrieve(plan, scope, user=user)
     _, table, _ = await _compute(plan, retrieved, scope)
     if not scope["can_finance"]:
         money_keys = {c["key"] for c in table["columns"] if c["type"] == "money"}
@@ -1027,4 +1030,4 @@ async def export(inp: ExportRequest, user: dict = Depends(require_perm("brain_ex
         return StreamingResponse(bio, media_type="application/pdf",
                                  headers={"Content-Disposition": "attachment; filename=company-brain.pdf"})
 
-    raise HTTPException(status_code=400, detail="Unsupported format")
+    raise HTTPException(status_code=400, detail="That format isn't available. Choose PDF or CSV.")

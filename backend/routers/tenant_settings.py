@@ -349,7 +349,17 @@ async def add_role(inp: RoleLabelInput, user: dict = Depends(require_perm("team_
     roles = (t or {}).get("roles") or []
     if any(r.get("key") == key for r in roles):
         raise HTTPException(status_code=400, detail="A role with this name already exists")
-    roles.append({"key": key, "label": label})
+    # 2026-10-03 (founder) — A TEAM ADDED HERE STARTS WITH WHAT IT DOES, as a
+    # team made at sign-up has since J1-05: an "Accounts" team the owner adds
+    # on day thirty opened no Finance until they found the Access toggle. The
+    # owner changes it under Access like any other team; nothing is hidden.
+    from shared.roles import starting_perms
+    from core.permissions import _BASE_PERMS
+    role_doc = {"key": key, "label": label}
+    extra = starting_perms(key, label)
+    if extra:
+        role_doc["permissions"] = sorted(set(_BASE_PERMS) | set(extra))
+    roles.append(role_doc)
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"roles": roles}})
     await log_activity(user["tenant_id"], user["id"], "role_added", f"{user['name']} added the role '{label}'")
     return await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
@@ -775,11 +785,21 @@ async def read_audit_log(
         db, tenant_id=user["tenant_id"],
         filters=filters, limit=limit, before_ts=before_ts,
     )
+    # 2026-10-03 — say WHO. Rows carry the actor's id and, for password
+    # accounts, their email; a member who signs in by mobile has no email, so
+    # the log read "Logout — A member" for every one of them.
+    ids = list({r.get("actor_id") for r in rows if r.get("actor_id")})
+    if ids:
+        names = {u["id"]: u.get("name") for u in await db.users.find(
+            {"id": {"$in": ids}, "tenant_id": user["tenant_id"]}, {"_id": 0, "id": 1, "name": 1}).to_list(len(ids))}
+        for r in rows:
+            if r.get("actor_id") in names:
+                r["actor_name"] = names[r["actor_id"]]
     return {"rows": rows, "count": len(rows)}
 
 
 @router.get("/invites")
-async def list_invites(user: dict = Depends(get_current_user)):
+async def list_invites(user: dict = Depends(require_perm("team_manage"))):  # 2026-10-03: phone numbers of invitees; adding one already needed this
     t = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "invited_employees": 1})
     return (t or {}).get("invited_employees", [])
 

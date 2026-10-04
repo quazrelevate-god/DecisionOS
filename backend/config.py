@@ -148,6 +148,7 @@ CSRF_EXEMPT_PATHS = frozenset([
     "/api/auth/otp/verify",
     "/api/auth/password/forgot",
     "/api/auth/password/reset",
+    "/api/auth/password/reset/check",   # read-only preview, same page as reset
     "/api/auth/verify-email",
     "/api/auth/invite/start",
     "/api/health",

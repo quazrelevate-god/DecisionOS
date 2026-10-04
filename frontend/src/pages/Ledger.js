@@ -128,7 +128,7 @@ function QuickCapture({ pendingCount, isMobile, onIngested, onOpenInbox, onAddEx
   const { user } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const canIngest = user?.role === "owner" || hasPerm(user, "data_input");
+  const canIngest = hasPerm(user, "data_input");
   const [uploading, setUploading] = useState(false);
   const [active, setActive] = useState(null);
   const [question, setQuestion] = useState("");
@@ -237,7 +237,10 @@ function QuickCapture({ pendingCount, isMobile, onIngested, onOpenInbox, onAddEx
               <span className="text-sm font-medium text-slate-800">Quick capture</span>
               <span aria-hidden="true" className="mx-1 h-6 w-px bg-slate-900/10" />
               {pick("doc", FilePdf, "Upload bill / receipt", "/ingest/document", "image/*,application/pdf", "Upload a bill or receipt (PDF or photo)")}
-              {pick("photo", Camera, "Photo", "/ingest/document", "image/*", "Take a photo of a receipt", "environment")}
+              {/* 2026-10-03 (founder) — no "Photo" on desktop: a computer has no
+                  camera to point at a receipt, so it opened the same file picker
+                  as "Upload bill / receipt", which already takes photos. The
+                  phone keeps it (above), where it opens the camera. */}
               {pick("csv", UploadSimple, "CSV / Excel", "/ingest/csv", ".csv,.xlsx,.xls", "Bulk import from CSV or Excel")}
               {pendingCount > 0 && (
                 <button type="button" data-testid="finance-hero-inbox-badge" onClick={onOpenInbox}
@@ -288,7 +291,7 @@ export default function Ledger() {
      a sales person with data_input arrived at Overview and watched six calls
      come back 403. They get the Inbox, which is theirs, and the ledger tabs
      are not offered or fetched at all. */
-  const canLedger = user?.role === "owner" || hasPerm(user, "finance");
+  const canLedger = hasPerm(user, "finance");
   const tabs = canLedger ? TABS : TABS.filter((tb) => tb.key === "inbox");
   const isMobile = useIsMobile();
   const qc = useQueryClient();

@@ -71,7 +71,7 @@ function CategoryGroup({ title, items, onSet, onAdd, onDel, testid, canEdit }) {
 
 export function FinanceCategoriesEditor() {
   const { user, tenant, refreshTenant } = useAuth();
-  const canEdit = user?.role === "owner" || userPerms(user).includes("team_manage");
+  const canEdit = userPerms(user).includes("team_manage");
   const [cats, setCats] = useState(() => fromTenant(tenant));
   const [saving, setSaving] = useState(false);
   const [regen, setRegen] = useState(false);

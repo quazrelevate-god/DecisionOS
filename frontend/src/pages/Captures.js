@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { hasPerm } from "../lib/perms";
 import { PageHeader } from "../components/common";
 import { timeAgo, fullTime } from "../lib/format";
 import { GlassSelect } from "../components/karma/GlassSelect";
@@ -321,6 +322,19 @@ function CaptureCard({ c, user, onChange }) {
                 <PencilSimple size={14} weight="bold" aria-hidden="true" /> Save
               </button>
               <button type="button" onClick={() => setEdit(false)} className={SMALL_PILL}>Cancel</button>
+            </>
+          ) : !hasPerm(user, "captures_approve") ? (
+            /* 2026-10-03 RBAC audit — Approve, Reassign, Clarify and Reject each
+               need "Approve what the AI drafted from a message"; the buttons
+               showed to anyone the draft was routed to and the server refused
+               all four. Editing the draft stays: that is the queue's own job. */
+            <>
+              <button type="button" data-testid={`capture-edit-btn-${c.id}`} disabled={busy} onClick={() => setEdit(true)} className={SMALL_PILL}>
+                <PencilSimple size={14} weight="bold" aria-hidden="true" /> Edit
+              </button>
+              <p className="text-xs text-muted-foreground" data-testid={`capture-needs-approver-${c.id}`}>
+                Someone who can approve AI drafts signs this off.
+              </p>
             </>
           ) : (
             <>

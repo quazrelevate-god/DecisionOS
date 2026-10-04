@@ -421,7 +421,7 @@ export function ExpensesTab({ rows, loading, error, payables, cur, onDelete, onC
   const { t } = useTranslation();
   const f = fmt(cur);
   const { user } = useAuth();
-  const canApprove = user?.role === "owner" || hasPerm(user, "approvals");
+  const canApprove = hasPerm(user, "approvals");
   const decide = async (e, approve) => {
     try {
       await api.post(`/expenses/${e.id}/approval`, { approve });

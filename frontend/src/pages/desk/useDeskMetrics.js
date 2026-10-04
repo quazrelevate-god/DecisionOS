@@ -9,10 +9,22 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import api from "../../lib/api";
+import { useAuth } from "../../context/AuthContext";
+import { hasPerm } from "../../lib/perms";
 
 const ymd = (d) => d.toISOString().slice(0, 10);
 
 export function useDeskMetrics() {
+  /* 2026-10-02 — DON'T ASK FOR WHAT YOU ARE NOT ALLOWED TO HAVE. Found walking
+     the app as a sales member: every Desk load fired GET /ledger/summary and
+     took a 403 back. The money tile was correctly hidden either way, so
+     nothing looked wrong on screen -- it was a guaranteed-to-fail request on
+     the busiest page in the product, once per member per load, landing in the
+     logs and in any monitoring as a permission error that nobody caused.
+     Ledger.js already gates its own copy of this query the same way. */
+  const { user } = useAuth();
+  const canLedger = hasPerm(user, "finance");
+
   const opsQ = useQuery({
     queryKey: ["operating-score", null],
     queryFn: () => api.get("/operating-score").then((r) => r.data),
@@ -31,6 +43,7 @@ export function useDeskMetrics() {
   const ledgerQ = useQuery({
     queryKey: ["ledger-summary"],
     queryFn: () => api.get("/ledger/summary").then((r) => r.data),
+    enabled: canLedger,
   });
 
   // Work buckets, client-side off /tasks — created/due dates are reliable
@@ -90,13 +103,22 @@ export function useDeskMetrics() {
     };
   }, [trends]);
 
+  // The local calendar month as the ledger keys it ("2026-10"), not UTC's.
+  const thisMonthKey = () => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
+  };
   const ledger = useMemo(() => {
     const d = ledgerQ.data;
     if (!d) return null;
     return {
       byMonth: Array.isArray(d.by_month) ? d.by_month : [],
       netProfit: Number(d.totals?.net_profit),
-      lastMonthSpend: d.by_month?.length ? Number(d.by_month[d.by_month.length - 1].amount) : null,
+      /* 2026-10-03 — "Spend, this month" is THIS month. It read the last month
+         that had any spend (August, in October, if nothing was booked since),
+         and with no rows at all it was null, which the tile draws as "…" --
+         loading, forever. A loaded ledger with nothing this month is ₹0. */
+      lastMonthSpend: Number((d.by_month || []).find((x) => x.month === thisMonthKey())?.amount) || 0,
     };
   }, [ledgerQ.data]);
 

@@ -22,6 +22,7 @@ import { hasPerm } from "../lib/perms";
 import { startNativeBack } from "../lib/native/back";
 // B19 — a link that belongs to DecisionOS lands on the right screen.
 import { startNativeLinks } from "../lib/native/links";
+import { setAppNavigate } from "../lib/navigate";
 // IOS-3 — tapping a field stops zooming the screen.
 import { lockZoomInApp } from "../lib/native/viewport";
 // IOS-4 — an edge swipe closes an open sheet, which WKWebView will not do.
@@ -43,6 +44,15 @@ export function useNativeBack() {
   /* IOS-4 — iOS only, and only while an overlay holds the top history entry;
      everywhere else the native gesture keeps the touch. */
   useEffect(() => startOverlaySwipeBack(), []);
+
+  /* 2026-10-02 — and the same mount point registers the app's navigate for
+     code that is not a component (lib/navigate), for the third time the same
+     reason: this is the root, inside the Router. A toast that sends somebody
+     to Settings should not restart the application to do it. */
+  useEffect(() => {
+    setAppNavigate(navigate);
+    return () => setAppNavigate(null);
+  }, [navigate]);
 
   /* B19 — the same mount point, because it answers the same plugin and has
      the same one requirement: a router to navigate with. */

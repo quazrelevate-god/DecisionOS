@@ -83,7 +83,7 @@ async def dex_capture(
     # voice_capture check that guards creating a decision is made here too.
     ctype = (file.content_type or "").lower() if file else ""
     makes_decision = bool(text and not file) or ctype.startswith("audio/") or ctype == "application/octet-stream"
-    if makes_decision and user.get("role") != "owner" and "voice_capture" not in user_perms(user):
+    if makes_decision and "voice_capture" not in user_perms(user):  # 2026-10-03: owners too, unless switched off
         raise HTTPException(status_code=403, detail="You don't have access to capture decisions.")
 
     if text and not file:

@@ -72,7 +72,22 @@ async def list_complaints(status: Optional[str] = None, user: dict = Depends(get
     q = {"tenant_id": user["tenant_id"]}
     if status:
         q["status"] = status
+    q.update(await complaint_scope(user))
     return await db.complaints.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
+
+
+async def complaint_scope(user: dict) -> dict:
+    """2026-10-03 RBAC audit — who reads which complaint. Raising or closing
+    one already followed the contact it is about (J14-05); the list did not,
+    so every complaint about every customer reached every member. Now: the
+    owner sees all; anyone else the complaints on contacts they may open, plus
+    the ones they raised themselves. Also used by the calendar."""
+    if user.get("role") == "owner":
+        return {}
+    types = list(crm_types(user))
+    ids = [c["id"] for c in await db.contacts.find(
+        {"tenant_id": user["tenant_id"], "type": {"$in": types}}, {"_id": 0, "id": 1}).to_list(5000)] if types else []
+    return {"$or": [{"customer_id": {"$in": ids}}, {"created_by": user["id"]}]}
 
 
 @router.patch("/complaints/{cid}/resolve")
@@ -103,7 +118,9 @@ async def resolve_complaint(cid: str, user: dict = Depends(get_current_user)):
 
 
 @router.get("/memory")
-async def list_memory(user: dict = Depends(get_current_user)):
+async def list_memory(user: dict = Depends(require_perm("brain"))):
+    # 2026-10-03 RBAC audit: the company memory the AI cites is the Brain's;
+    # reading it takes Brain access, as writing it already did.
     return await db.memory.find({"tenant_id": user["tenant_id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
 
 

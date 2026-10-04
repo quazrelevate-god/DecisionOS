@@ -7,6 +7,8 @@ is audited. Tenant-facing submission lives in routers/support.py.
 """
 from __future__ import annotations
 
+import asyncio
+
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -61,9 +63,10 @@ async def admin_tickets(admin: dict = Depends(get_platform_admin),
     if tenant_id:
         q["tenant_id"] = tenant_id
     rows = await db.support_tickets.find(q, {"_id": 0, "messages": 0}).sort("updated_at", -1).to_list(limit)
-    counts = {}
-    for s in STATUSES:
-        counts[s] = await db.support_tickets.count_documents({"status": s})
+    # Asked together, not one after another (2026-10-03): four round trips
+    # to the hosted database cost four times the wait for the same answer.
+    ns = await asyncio.gather(*(db.support_tickets.count_documents({"status": s}) for s in STATUSES))
+    counts = dict(zip(STATUSES, ns))
     return {"tickets": rows, "counts": counts}
 
 

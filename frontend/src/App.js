@@ -1,10 +1,11 @@
 import { useEffect } from "react";
 import "./App.css";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { Toaster } from "./components/ui/sonner";
-import { AuthProvider, useAuth } from "./context/AuthContext";
+import { AuthProvider, useAuth, rememberArrival } from "./context/AuthContext";
 import { hasPerm } from "./lib/perms";
-import { LockKey } from "@phosphor-icons/react";
+import { LockKey, MapTrifold, ArrowClockwise } from "@phosphor-icons/react";
+import { INK_PILL } from "./components/karma/glass";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Login from "./pages/Login";
@@ -64,25 +65,74 @@ import { useNativeBack } from "./hooks/useNativeBack";
 // B04: the screen for "we cannot reach the server", which is not "signed out".
 import { CantReachUs } from "./components/auth/CantReachUs";
 
-function AccessDenied() {
-  const navigate = useNavigate();
+/* A screen that is not the page you asked for: no access, no such page.
+   2026-10-03 — Access Denied was the last screen still in the retired
+   brutalist style (black borders, uppercase, a red square). Both now share
+   the quiet layout CantReachUs uses. */
+function NotThePage({ testid, Icon, title, body, action, onAction, actionTestid }) {
   return (
-    <div className="max-w-lg mx-auto text-center py-20" data-testid="access-denied">
-      <div className="w-16 h-16 mx-auto flex items-center justify-center border-2 border-black bg-brand-600 text-white mb-6">
-        <LockKey size={30} weight="bold" />
+    <div className="mx-auto flex max-w-md flex-col items-center gap-4 px-6 py-20 text-center" data-testid={testid}>
+      <span className="grid h-14 w-14 place-items-center rounded-full bg-slate-900/[0.05] text-slate-500">
+        <Icon size={26} weight="bold" aria-hidden="true" />
+      </span>
+      <div>
+        <h1 className="font-display text-2xl text-foreground">{title}</h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">{body}</p>
       </div>
-      <h1 className="font-heading text-4xl font-black tracking-tighter uppercase">Access Denied</h1>
-      <p className="text-muted-foreground mt-3">You don't have permission to open this page. Ask your owner to grant access from Team settings.</p>
-      <button onClick={() => navigate("/my-work")} data-testid="access-denied-home"
-        className="mt-6 bg-brand-ink text-white px-6 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-nm transition-all">
-        Go to My Work
+      <button type="button" onClick={onAction} data-testid={actionTestid}
+        className={`mt-2 inline-flex h-11 items-center rounded-pill px-6 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline ${INK_PILL}`}>
+        {action}
       </button>
     </div>
   );
 }
 
+function AccessDenied() {
+  const navigate = useNavigate();
+  return (
+    <NotThePage testid="access-denied" Icon={LockKey}
+      title="This page isn't open to you"
+      body="Your owner can give you access from Team."
+      action="Go to My Work" onAction={() => navigate("/my-work")} actionTestid="access-denied-home" />
+  );
+}
+
+/* 2026-10-03 — A MISTYPED OR OLD ADDRESS SAID NOTHING.
+   `*` redirected to "/", which forwarded a signed-in person to the Desk, so
+   /taks or a link to a retired page landed somewhere unrelated with no word
+   about why. Now it says so, inside the app for someone signed in, and on its
+   own for anyone else (who is offered sign-in, not the Desk they cannot see). */
+function NotFound() {
+  const { user, loading, offline } = useAuth();
+  const navigate = useNavigate();
+  if (loading) return null;
+  if (!user && offline) return <CantReachUs />;
+  const page = (
+    <NotThePage testid="not-found" Icon={MapTrifold}
+      title="We couldn't find that page"
+      body="The link may be old, or the address has a typo."
+      action={user ? "Take me home" : "Sign in"}
+      onAction={() => navigate(user ? "/app" : "/login", { replace: true })}
+      actionTestid="not-found-home" />
+  );
+  return user ? <Layout>{page}</Layout> : <div className="min-h-[calc(100vh/var(--ui-scale,1))] grid place-items-center">{page}</div>;
+}
+
+/* 2026-10-03 — ONE BROKEN PAGE COSTS THAT PAGE, NOT THE APP.
+   The only boundary sat around <Routes>, outside the Layout, so a page that
+   threw took the sidebar and the dock with it, and its message ("the rest of
+   the app should still work") was untrue: there was nothing left to click.
+   It also never reset, so even Back showed the same apology. This one sits
+   INSIDE the Layout, keyed to the address, so the navigation survives and
+   going anywhere else clears it. The outer one stays as the last resort. */
+function PageBoundary({ children }) {
+  const location = useLocation();
+  return <ErrorBoundary resetKey={location.pathname}>{children}</ErrorBoundary>;
+}
+
 function Protected({ children, perm, perms, ownerOnly }) {
   const { user, loading, offline } = useAuth();
+  const location = useLocation();
   if (loading)
     return (
       <div className="min-h-[calc(100vh/var(--ui-scale,1))] flex items-center justify-center font-mono text-sm uppercase tracking-widest">
@@ -93,12 +143,16 @@ function Protected({ children, perm, perms, ownerOnly }) {
      being refused. Sending them to sign in here is what asked a founder with
      no signal for an OTP that could not arrive. */
   if (!user && offline) return <CantReachUs />;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) {
+    // 2026-10-03 — a link opened signed out is kept for after sign-in.
+    rememberArrival(location.pathname + location.search);
+    return <Navigate to="/login" replace />;
+  }
   let denied = false;
   if (ownerOnly) denied = user.role !== "owner";
   else if (perms) denied = !perms.some((p) => hasPerm(user, p));
   else if (perm) denied = !hasPerm(user, perm);
-  return <Layout>{denied ? <AccessDenied /> : children}</Layout>;
+  return <Layout>{denied ? <AccessDenied /> : <PageBoundary>{children}</PageBoundary>}</Layout>;
 }
 
 function Home() {
@@ -186,7 +240,16 @@ function App() {
               React tree). If the boundary itself is what needs replacing
               on route change, wrap in a keyed remount at the page level
               in a follow-up. */}
-          <ErrorBoundary>
+          <ErrorBoundary fallback={({ reload }) => (
+            /* The last resort: reached only when the shell itself broke, so
+               there is no "rest of the app" to promise -- only a reload. */
+            <div className="min-h-[calc(100vh/var(--ui-scale,1))] grid place-items-center">
+              <NotThePage testid="app-broke" Icon={ArrowClockwise}
+                title="DecisionOS hit a problem"
+                body="Nothing you saved is lost. Reload to carry on — the error has been logged."
+                action="Reload" onAction={reload} actionTestid="app-broke-reload" />
+            </div>
+          )}>
           <Routes>
             {/* KM-55 — the one place that answers "where does a signed-in user
                 belong?". "/" used to do it, but "/" is the marketing site now.
@@ -332,7 +395,7 @@ function App() {
                 ? <Protected ownerOnly><DesignLab /></Protected>
                 : <DesignLab />}
             />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
           </ErrorBoundary>
         </BrowserRouter>

@@ -26,6 +26,7 @@
  *     after the request that started it has gone.
  */
 import { toast } from "sonner";
+import { goTo } from "./navigate";
 
 export const AI_CONSENT_CODE = "ai_consent_required";
 export const AI_CONSENT_HREF = "/settings?tab=business#ai-consent";
@@ -44,6 +45,10 @@ export function isAiConsentError(x) {
   if (!x) return false;
   if (x.response?.status === 451 || x.status === 451) return true;
   const detail = x.response?.data?.detail ?? x.detail ?? x;
+  /* lib/api flattens a {code, message} detail to its sentence and keeps the
+     object on detail_full, so look there first; the object form is still
+     checked for callers that hand us an error we never saw. */
+  if (x.response?.data?.detail_full?.code === AI_CONSENT_CODE) return true;
   if (detail && typeof detail === "object" && detail.code === AI_CONSENT_CODE) return true;
   return typeof detail === "string" && detail.includes(AI_CONSENT_CODE);
 }
@@ -60,6 +65,40 @@ export function aiConsentMessage(isOwner = _viewerIsOwner) {
 let _shownAt = 0;
 const QUIET_MS = 8000;
 
+/* 2026-10-02 — AND ONE TOAST FOR ONE REFUSAL, ACROSS BOTH ROUTES.
+ *
+ * A 451 produced TWO toasts, seen in the browser: the rich one below, with
+ * the way out on it, and a plain copy from whichever call site made the
+ * request -- 88 of them pass the server's detail straight to toast.error and
+ * cannot know this has already been said. One fact, said twice, and only one
+ * of the two carries the button.
+ *
+ * The quiet period above already exists for exactly this reason; it just
+ * could not see the other route. So `toast.error` is wrapped ONCE, here, and
+ * drops a message that is EXACTLY the consent sentence while a consent toast
+ * is still live. Exact text and a bounded window, so nothing else is ever
+ * swallowed: a different error in the same second still gets through.
+ *
+ * The wrap is on sonner's shared `toast` object, which every importer holds a
+ * reference to, so the 88 call sites are covered without touching one of
+ * them. It installs on import, and lib/api imports this module, and every
+ * page imports lib/api.
+ */
+let _rawToastError = typeof toast?.error === "function" ? toast.error.bind(toast) : null;
+(function guardTheDuplicate() {
+  if (!_rawToastError) return;
+  const plain = _rawToastError;
+  try {
+    toast.error = (msg, opts) => {
+      const live = Date.now() - _shownAt < QUIET_MS;
+      if (live && typeof msg === "string" && msg === aiConsentMessage()) return undefined;
+      return plain(msg, opts);
+    };
+  } catch (e) {
+    /* A frozen export would mean two toasts, which is what we had: no worse. */
+  }
+})();
+
 /**
  * Say it, with the way out. Safe to call from anywhere an AI call can fail.
  * @returns true when this was a consent refusal (so the caller shows nothing else)
@@ -68,13 +107,17 @@ export function showAiConsentToast(force = false) {
   const now = Date.now();
   if (!force && now - _shownAt < QUIET_MS) return true;
   _shownAt = now;
-  toast.error(aiConsentMessage(), {
+  /* The UNWRAPPED one on purpose: the guard above drops the consent sentence
+     while a consent toast is live, and _shownAt has just been set, so going
+     through the wrapper here would make this swallow itself. Found exactly
+     that way -- the first version showed nothing at all. */
+  (_rawToastError || toast.error)(aiConsentMessage(), {
     duration: 8000,
     action: {
       // An owner lands on the button that turns it on; anyone else lands on the
       // same card, which says who agreed and that only an owner may change it.
       label: _viewerIsOwner ? "Turn on AI" : "See settings",
-      onClick: () => { window.location.href = AI_CONSENT_HREF; },
+      onClick: () => goTo(AI_CONSENT_HREF),
     },
   });
   return true;

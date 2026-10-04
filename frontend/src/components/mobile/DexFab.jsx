@@ -65,7 +65,7 @@ export function DexFab({ onOpen, recording = false, seconds = 0, onStop, intent 
   const stoppedRef = React.useRef(false);
   const { user } = useAuth();
   // Same check DexCaptureBar makes — hidden entirely, not disabled (§8).
-  const canCapture = user?.role === "owner" || hasPerm(user, "voice_capture");
+  const canCapture = hasPerm(user, "voice_capture");
   if (!canCapture) return null;
 
   return (

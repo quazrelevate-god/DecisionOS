@@ -90,7 +90,15 @@ const decisions = Array.from({ length: 30 }, (_, i) => {
     unblocks: i % 2 ? "Diwali production run" : "Festive stock build",
     amount, created_at: iso(-((i % 9) + 1)), due_date: ymd((i % 5) + 1),
     created_by: from.id,
-    proposed_tasks: Array.from({ length: i % 4 }, (_, k) => ({ id: `pt_${i}_${k}`, title: `Follow-up step ${k + 1}` })),
+    /* 2026-10-05 — a spread of graded work, so the Desk's priority bands are
+       exercised by the fixture rather than only in a unit test. One in three
+       decisions carries a task somebody marked high, the next a medium, and
+       the rest are ungraded — which is the resting case and reads low. */
+    proposed_tasks: Array.from({ length: i % 4 }, (_, k) => ({
+      id: `pt_${i}_${k}`, title: `Follow-up step ${k + 1}`,
+      ...(k === 0 && i % 3 === 0 ? { priority: "high" } : {}),
+      ...(k === 0 && i % 3 === 1 ? { priority: "medium" } : {}),
+    })),
   };
 });
 
@@ -166,6 +174,13 @@ const data = {
     cards: {
       needs_decision: decisions.map((d, i) => ({
         id: d.id, kind: "decision", title: d.title,
+        /* The same rule routers/desk.py applies: the highest priority anyone
+           SET on a proposed task, and low when nobody has set one. */
+        priority: (() => {
+          const RANK = { low: 0, medium: 1, high: 2 };
+          const bands = d.proposed_tasks.map((t) => t.priority).filter((b) => b in RANK);
+          return bands.length ? bands.reduce((a, b) => (RANK[b] > RANK[a] ? b : a)) : "low";
+        })(),
         context_line: `Raised by ${TEAM[(i % 3) + 1].name} · You decide · Waiting ${(i % 9) + 1} days${d.proposed_tasks.length ? ` · Unblocks ${d.proposed_tasks.length} tasks` : ""}`,
         amount: d.amount, cta: "review", target_id: d.id, target_kind: "decision",
         waiting_days: (i % 9) + 1, from_name: TEAM[(i % 3) + 1].name,

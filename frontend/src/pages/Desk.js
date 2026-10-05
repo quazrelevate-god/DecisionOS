@@ -1215,6 +1215,12 @@ export default function Desk() {
     onOpen: () => setOpenDecisionId(c.target_id),
     // PILOT-2 B — read, then saved as a draft. The row says so, on any device.
     deferred: isDraft(c, draftMarks),
+    /* The band the sheet's pill is tinted by (2026-10-05). Computed on the
+       server as the highest priority among the tasks this decision proposes —
+       work the founder can already see and set in the review card — so the
+       colour is never something the Desk guessed on its own. Falls back to
+       low, which is also what a decision proposing nothing reads as. */
+    priority: c.priority || "low",
   }));
   /* ASK-41 1 — the row opens the task; TaskCard's drawer is where it is
      approved or rejected. Its approval block carries both, and the reject there

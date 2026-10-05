@@ -509,7 +509,7 @@ def _latest_update(t: dict) -> Optional[dict]:
 
 # ---------------------------------------------------------------------------
 # Chip builders — each returns a list of card dicts.
-# Card contract: {id, kind, title, context_line, amount?, amount_formatted?,
+# Card contract: {id, kind, title, context_line, priority?, amount?, amount_formatted?,
 #                 cta, target_id, target_kind, target_owner_id?}
 # ---------------------------------------------------------------------------
 async def _cards_needs_decision(tid: str, user: dict) -> list:
@@ -585,9 +585,27 @@ async def _cards_needs_decision(tid: str, user: dict) -> list:
         if amount is None:
             amounts = [w.get("amount") for w in prop.get("workflows") or [] if isinstance(w.get("amount"), (int, float))]
             amount = sum(amounts) if amounts else None
+        # 2026-10-05 — THE BAND THE DESK'S ROW IS COLOURED BY, and a decision
+        # has no priority of its own: the field belongs to the tasks it
+        # PROPOSES (ASK-50, services/proposal_task_settings). The founder's
+        # call is the highest of them, which means the colour is read off work
+        # they can already see and already edit in the review card rather than
+        # off anything inferred. A decision with no proposal has no claim on
+        # attention yet and reads low.
+        # ONLY A PRIORITY SOMEBODY SET COUNTS. A proposed task that nobody has
+        # touched reads "medium" everywhere else (proposal_task_settings), and
+        # taking that default here would paint almost every row amber on a
+        # screen whose whole job is to say which row is different. So an unset
+        # priority contributes nothing and a decision nobody has graded rests
+        # at low. Raising a row is then always something a person did.
+        _rank = {"low": 0, "medium": 1, "high": 2}
+        _bands = [t.get("priority") for t in prop.get("tasks") or []]
+        _bands = [b for b in _bands if b in _rank]
+        priority = max(_bands, key=lambda b: _rank[b]) if _bands else "low"
         cards.append({
             "id": d["id"],
             "kind": "decision",
+            "priority": priority,
             "title": d.get("title") or d.get("summary", "")[:80],
             "context_line": " · ".join(ctx_parts),
             "amount": amount,

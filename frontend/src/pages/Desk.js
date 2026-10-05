@@ -973,6 +973,16 @@ export default function Desk() {
   const askOn = !!doors?.inline;
   const [askTyping, setAskTyping] = useState(false);
   useEffect(() => { if (!askOn) setAskTyping(false); }, [askOn]);
+  /* THE INLINE ASK NEEDS ITS OWN PAPERCLIP. (2026-10-05 — founder: "I can't
+     click the attach icon... no pop-up is showing".)
+     They were right and it was not the icon: the only phone-side <input
+     type="file"> bound to the capture lives INSIDE DexChat, and DexChat is the
+     sheet this redesign stands down. So `pickFile` was faithfully clicking a
+     ref pointing at nothing. One lives here now, for as long as the Desk is
+     hosting the conversation. It goes through chat.attach, which stages the
+     file and uploads it on send — the behaviour the founder asked for earlier
+     and the reason attaching no longer starts an analysis by itself. */
+  const askFileRef = useRef(null);
   const dexCap = doors?.dex;
   const chatC = doors?.chat;
   const askMeterRef = useRef(null);
@@ -994,7 +1004,7 @@ export default function Desk() {
       send: () => { const q = (chatC.draft || "").trim();
         if (!q && !(chatC.pendingFiles || []).length) return;
         chatC.ask?.(q); },
-      pickFile: () => dexCap.fileRef?.current?.click(),
+      pickFile: () => askFileRef.current?.click(),
       /* WHAT IS ABOUT TO BE SENT, ABOVE THE CONTROL — the founder's rule from
          the first Ask pass, unchanged by the move: "the attach document or
          media file should be above the slider container". DexSlider renders
@@ -1926,11 +1936,23 @@ export default function Desk() {
             the control under it. Everything here is Layout's `chat`, so the
             words are the same ones the dock would have shown. */}
         {isMobile && askOn && (
-          <DeskAskPane
-            chat={chatC}
-            onClose={() => doors?.closeAsk?.()}
-            onOpenDecision={(id) => setOpenDecisionId(id)}
-          />
+          <>
+            <DeskAskPane
+              chat={chatC}
+              onClose={() => doors?.closeAsk?.()}
+              onOpenDecision={(id) => setOpenDecisionId(id)}
+            />
+            {/* The paperclip's actual input. Same accept list the sheet used. */}
+            <input
+              ref={askFileRef}
+              type="file"
+              accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+              className="hidden"
+              tabIndex={-1}
+              data-testid="desk-ask-file"
+              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) chatC?.attach?.(f); }}
+            />
+          </>
         )}
         {/* ASK-34 B — THE PHONE'S CARD. One card, three tabs, the same rows the
             desktop columns use. */}
@@ -2029,8 +2051,20 @@ export default function Desk() {
               levelsRef={askOn ? askChat.levelsRef : dexLive.levelsRef}
               onStop={askOn ? askChat.stopAndSend : dexStop}
               composer={askOn}
+              /* The capture came from the LEFT end here, so that is the wall it
+                 parks against — see DexSlider's park(). */
+              parkLeft={askOn}
               typing={askOn && askTyping}
-              onTypingChange={setAskTyping}
+              /* GOING TO THE KEYBOARD ENDS THE LISTENING FIRST. The founder
+                 pressed it mid-capture and got a field that filled itself with
+                 whatever the room had been saying — two composers racing for
+                 one draft. Stopping first makes the order plain: the mic hands
+                 over its words, then the field has them, and only one of the
+                 two is live at a time. */
+              onTypingChange={(v) => {
+                if (v && dexCap?.recording) dexCap.stopRecording?.();
+                setAskTyping(v);
+              }}
               draft={askChat?.draft || ""}
               onDraft={askChat?.setDraft}
               onSend={askChat?.send}

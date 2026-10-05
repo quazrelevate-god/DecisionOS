@@ -123,6 +123,10 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
                                (useDexConversation), not to a control that can
                                unmount when the sheet changes shape. */
                             composer = false, typing = false, onTypingChange,
+                            /* Which wall a running capture parks against —
+                               the end the finger committed from. Decide
+                               comes from the right and keeps it. */
+                            parkLeft = false,
                             draft = "", onDraft, onSend, onAttach,
                             attachments = null,
                             disabled = false, className }) {
@@ -198,19 +202,28 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
     return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
   })();
 
-  /* PARKED. While the right end is open the handle is not a handle: it sits at
-     the stop and it is a send button. Dragging is off rather than merely
-     ignored, so a stray finger cannot scrub a live recording. */
+  /* PARKED — AT THE END IT CAME FROM. While a capture is open the handle is
+     not a handle: it sits at the stop and it is a send button. Dragging is off
+     rather than merely ignored, so a stray finger cannot scrub a live
+     recording.
+     2026-10-05 — THE SIDE WAS HARDCODED RIGHT, which was invisible while the
+     only capture started by dragging right (Decide). Ask starts by dragging
+     LEFT, so the handle shot back across the whole control and parked on top
+     of the plus: the founder's photograph shows the knob and the plus occupying
+     the same corner, and their note says it exactly — "when I swipe left the
+     button should stay left and it should become a send icon, but it again
+     switches back to the right side". A control that travels away from the
+     finger that committed it is lying about what it just did. */
   React.useEffect(() => {
     if (!capturing) return;
     draggingRef.current = false;
     setDragging(false);
-    const park = () => { const m = travel(); lastDxRef.current = m; setDx(m); };
+    const park = () => { const m = parkLeft ? -travel() : travel(); lastDxRef.current = m; setDx(m); };
     park();
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(park) : null;
     if (ro && trackRef.current) ro.observe(trackRef.current);
     return () => ro?.disconnect();
-  }, [capturing, travel]);
+  }, [capturing, travel, parkLeft]);
   React.useEffect(() => { if (!capturing) settle(); }, [capturing, settle]);
 
   const onPointerDown = (e) => {
@@ -231,7 +244,11 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
        stops. The handle follows the whole way — it never jumps ahead of the
        finger or lags it. */
     const raw = e.clientX - (r.left + r.width / 2);
-    const next = Math.max(-max, Math.min(max, raw));
+    /* IN A CONVERSATION THE HANDLE ONLY GOES LEFT. The right end belongs to
+       the plus now — the Decide label is already gone from it — and a handle
+       that could still travel there would slide under the plus and offer a
+       door that makes no sense mid-question. The stop is the centre. */
+    const next = Math.max(-max, Math.min(composer ? 0 : max, raw));
     lastDxRef.current = next;          // onPointerUp reads this, not `dx`
     setDx(next);
     const at = end(next);

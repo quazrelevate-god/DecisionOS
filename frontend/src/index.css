@@ -138,7 +138,7 @@
            390px phone (488 own px against a 448 cap) and put 20px gutters down
            both sides of a screen that had none. 28rem / 0.8 = 35rem of own
            pixels = the same 28rem on the glass. */
-        --app-shell: calc(28rem / var(--ui-scale, 1));
+        --app-shell: calc(28rem / var(--ui-density, 1));
 
         /* HOW FAR THE CENTRED SHELL'S EDGE IS FROM THE VIEWPORT'S — signed, so
            it goes NEGATIVE once the viewport is narrower than the cap. The
@@ -232,7 +232,7 @@
        not mine to invent. Landscape is already the desktop layout and untouched. */
     @media (min-width: 768px) and (max-width: 1023.98px) {
         :root {
-            --app-shell: calc(40rem / var(--ui-scale, 1));
+            --app-shell: calc(40rem / var(--ui-density, 1));
         }
     }
 
@@ -849,7 +849,7 @@
    on --control-h-sm: lifting the global floor would widen every small control
    on every phone screen by a quarter, which is a change nobody asked for. */
 :root {
-    --touch-min: calc(2.75rem / var(--ui-scale, 1));
+    --touch-min: calc(2.75rem / var(--ui-density, 1));
 
     --sa-top:    calc(env(safe-area-inset-top, 0px)    / var(--ui-scale, 1));
     --sa-bottom: calc(env(safe-area-inset-bottom, 0px) / var(--ui-scale, 1));

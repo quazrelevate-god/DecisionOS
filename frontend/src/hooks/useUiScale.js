@@ -137,6 +137,21 @@ export function useUiScale() {
       if (viaViewport) { widenViewport(computeUiScale(deviceWidth())); return; }
 
       const s = computeUiScale(window.innerWidth);
+      /* TWO NUMBERS, BECAUSE --ui-scale WAS DOING TWO JOBS. (2026-10-05.)
+         The viewport fallback sets --ui-scale to 1, and for everything that
+         UNDOES a zoom — viewport units, env() insets, visual-to-CSS pixel
+         conversion — that is exactly right: a pre-scaled viewport has nothing
+         to undo. But a handful of rules were never compensations at all. They
+         convert a DESIGN width given on the glass into the page's own pixels:
+         `--app-shell: 28rem / scale` means "28rem as the eye sees it". Divided
+         by 1 instead of 0.8 the shell came out 448 own px inside a 487 own px
+         viewport and put ~20px gutters down both sides of every page — which
+         is the precise bug the note above --app-shell was already written
+         about, returning by another door.
+         So --ui-density is the scale the design is drawn at, always, in both
+         modes; --ui-scale stays what must be divided OUT, which the fallback
+         correctly makes 1. */
+      root.style.setProperty("--ui-density", s.toFixed(1));
       root.style.setProperty("--ui-scale", s.toFixed(1));
       try { document.body.style.zoom = String(s); } catch (e) { /* no zoom here */ }
 

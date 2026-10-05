@@ -144,20 +144,28 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
     return (
       <div
         data-testid={testid}
-        className={cn("kr-stat nm-tile grid grid-cols-[minmax(0,0.85fr)_1px_minmax(0,1.6fr)] items-center gap-3 p-3", className)}
+        /* 2026-10-05 (founder) — THE LABEL IS GONE AND THE NUMBER TAKES ITS
+           PLACE. "Remove the sentence that contains Workflows — need attention
+           on the left; instead increase the font size of the number and align
+           it in the same row where the icon is, and make space for the right
+           side content by moving the separator to the left a little."
+           The sentence was wrapping to two lines on a phone and still arriving
+           truncated ("Workflows — need…"), so it was costing two rows to say
+           less than the icon does. The flow glyph names the card, the numeral
+           answers it, and the right-hand half — which carries the actual stuck
+           card and its move — gets the width back: 0.85fr/1.6fr becomes
+           0.6fr/1.9fr, which is the separator stepping left. */
+        className={cn("kr-stat nm-tile grid grid-cols-[minmax(0,0.6fr)_1px_minmax(0,1.9fr)] items-center gap-3 p-3", className)}
       >
         <div className="flex min-w-0 items-center gap-2.5">
           <IconChip icon={FlowArrow} alert={needAttention > 0} />
           <div className="min-w-0">
             <span className="flex items-baseline whitespace-nowrap leading-none">
-              <BigNumeral text={loading ? "…" : String(needAttention)} size="md"
+              <BigNumeral text={loading ? "…" : String(needAttention)} size="lg"
                 className={quiet ? "text-foreground/45" : undefined}
                 accent={!quiet && !loading} testid={`${testid}-count`} />
               {!loading && <span className="ml-1 text-base font-medium text-muted-foreground">/ {total}</span>}
             </span>
-            <p className="kr-stat__label mt-0.5 line-clamp-2 text-sm leading-tight text-foreground/80">
-              Workflows — need attention
-            </p>
             {!loading && !quiet && parts.length > 0 && (
               <span className="mt-1 block" data-testid={`${testid}-split`}>
                 <span className="flex h-1.5 w-full max-w-[9rem] overflow-hidden rounded-full bg-slate-900/[0.06]">

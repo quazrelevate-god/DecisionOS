@@ -4974,28 +4974,17 @@ export default function MyWork({ only = null }) {
               openReassign={() => { setBulkAssigneeId(""); setBulkAssigneeRole(""); setBulkReassignOpen(true); }}
             />
           )}
-          {/* PILOT-1 C — tasks made before a date was required, counted, one
-              tap from the list that holds them. Nothing is dated for anyone:
-              each card's own "No due date · Set" is where a date is chosen. */}
-          {(() => {
-            const undated = countWith({ status: "no_date" });
-            if (!undated || filters.status === "no_date" || showingCompleted) return null;
-            return (
-              <div data-testid="mywork-no-date-notice" role="status"
-                className="mb-3 flex min-w-0 items-center justify-between gap-3 rounded-2xl bg-badge-pending py-1 pl-4 pr-1 text-sm text-badge-pending-fg ring-1 ring-inset ring-badge-pending-line">
-                <span className="flex min-w-0 items-center gap-2">
-                  <CalendarBlank size={15} weight="bold" aria-hidden="true" className="shrink-0" />
-                  <span className="min-w-0">
-                    {undated} {undated === 1 ? "task has" : "tasks have"} no due date, so {undated === 1 ? "it won't" : "they won't"} show as due or late.
-                  </span>
-                </span>
-                <button type="button" onClick={() => setStatusFilter("no_date")} data-testid="mywork-no-date-show"
-                  className="flex min-h-11 shrink-0 items-center rounded-pill px-4 font-semibold underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40">
-                  Show them
-                </button>
-              </div>
-            );
-          })()}
+          {/* PILOT-1 C's undated notice is GONE (2026-10-05, founder): a strip
+              across the top of every list saying how many tasks had no date,
+              with a "Show them" that set the filter.
+              It was saying globally what each card already says locally — every
+              undated card carries its own "No due date · Set", which is also
+              the only place a date can actually be chosen — so the strip cost a
+              row of the list on every screen to repeat a fact the rows beneath
+              it were already making. The "no_date" status filter stays in the
+              filter sheet for anyone who wants exactly that list.
+              RETIRED TESTIDS: mywork-no-date-notice, mywork-no-date-show.
+              Neither was referenced by any suite. */}
           {(() => {
             const cardProps = (t) => ({
               onChange: refresh,

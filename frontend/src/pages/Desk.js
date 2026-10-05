@@ -704,7 +704,7 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
             space between them is what says so. */}
         <div ref={listRef} className={cn(
           scrolls ? "kr-scroll-quiet min-h-0 flex-1 overflow-y-auto" : !open ? "flex min-h-0 flex-1 flex-col" : undefined,
-          roomy && !open && "gap-2")}>
+          roomy && !open && "gap-2.5")}>
         {children || (
           <>
             {loading && (
@@ -738,8 +738,17 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
             unambiguous about. */}
         {/* ASK-49 — and when there is nothing more to show, its SPACE stays:
             an empty slot the same 48px, so a tab with two rows is not shorter
-            than a tab with thirty. */}
-        {!children && !open && (loading || !(hidden > 0 || showAll)) && (
+            than a tab with thirty.
+            NOT IN THE SHEET (2026-10-05, founder). That reservation exists to
+            stop the card changing HEIGHT with its contents, which matters only
+            while the card hugs them. In the sheet the card is flex-1 — its
+            height is the sheet's whichever tab is open — so holding 44px back
+            for a control that is not there buys nothing and spends the one
+            thing the rows are short of. The founder spotted it as the gap
+            above the slider: "that space is left for the show more drop down
+            but since it's only three in the row we can utilize that remaining
+            space to increase the pill height". */}
+        {!children && !open && !roomy && (loading || !(hidden > 0 || showAll)) && (
           <div aria-hidden="true" className="mt-1 h-11 shrink-0" data-testid="desk-phone-more-slot" />
         )}
         {!children && !loading && (hidden > 0 || showAll) && (

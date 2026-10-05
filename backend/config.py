@@ -278,7 +278,6 @@ MODEL_ROUTES = {
     "coaching.leave_impact": "claude-sonnet", "coaching.file_reference": "claude-sonnet",
     # company brain (text)
     "brain.planner": "claude-sonnet", "brain.answer": "claude-sonnet",
-    "brain.agent_planner": "claude-sonnet", "brain.agent_synth": "claude-sonnet",
     # finance / ledger (text)
     "ledger.expense_cat": "claude-sonnet", "ledger.analysis": "claude-sonnet",
     "ledger.ask": "claude-sonnet", "documents.csv_map": "claude-sonnet",

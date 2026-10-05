@@ -24,7 +24,7 @@ from services.ingestion import (
     _find_duplicate_record, _has_unclassified_purchase,
 )
 from services.captures import (
-    _capture_settings, persist_capture_draft, execute_capture, ai_capture_triage,
+    _capture_settings, _capture_auto_file, persist_capture_draft, execute_capture, ai_capture_triage,
     _needs_owner_review, _decide_processing_level, DOC_CLASS,
 )
 
@@ -106,6 +106,21 @@ async def resolve_wa_tenant(sender: str):
          "wa_primary": 1},
     ).to_list(50)
     if matches:
+        # 2026-10-05 (AI audit) — only a LIVE member's messages get in. Removing
+        # someone soft-removes the membership and leaves their number on the
+        # user row, so a removed employee could still WhatsApp bills and
+        # instructions into the company. Same rule as sign-in
+        # (split_by_membership): removed, suspended or never-joined is not in.
+        # And a known number that is no longer anyone's is dropped, never
+        # handed to the WA_TENANT_ID fallback.
+        from services.auth.phone import split_by_membership
+        live, _pending, _gone = await split_by_membership(
+            db, [{"user_id": m["id"], "tenant_id": m["tenant_id"]} for m in matches])
+        live_keys = {(c["user_id"], c["tenant_id"]) for c in live}
+        matches = [m for m in matches if (m["id"], m["tenant_id"]) in live_keys]
+        if not matches:
+            logger.info("[WHATSAPP] Sender %s is not an active member of any workspace; ignoring.", sender)
+            return None
         distinct_tenants = {m["tenant_id"] for m in matches}
         # 2026-09-20 — one founder may now run several companies on one mobile
         # (register creates the second workspace from a confirmed number). That
@@ -203,7 +218,7 @@ async def process_whatsapp_message(message: dict):
     try:
         tenant_id = await resolve_wa_tenant(sender)
         if not tenant_id:
-            await update_wa_event(ev_id, status="ignored", reason="Sender not registered in any workspace and no fallback (WA_TENANT_ID) is set")
+            await update_wa_event(ev_id, status="ignored", reason="Sender is not an active member of any workspace (and no WA_TENANT_ID fallback applies)")
             logger.info(f"[WHATSAPP] no tenant for {sender}; ignoring")
             return
         await update_wa_event(ev_id, tenant_id=tenant_id)
@@ -212,6 +227,7 @@ async def process_whatsapp_message(message: dict):
         owner_id = owner["id"] if owner else "whatsapp"
         troles = await tenant_role_keys(tenant_id)
         cap_threshold, _cap_signoff = await _capture_settings(tenant_id)
+        cap_auto_file = await _capture_auto_file(tenant_id)
 
         if mtype in ("image", "document"):
             media = message[mtype]
@@ -259,7 +275,8 @@ async def process_whatsapp_message(message: dict):
             unknown_purchase = _has_unclassified_purchase(recs, result.get("doc_type", ""))
             level, reason = _decide_processing_level(cls, confidence, amt or None, needs_owner,
                                                      bool(dup), has_records, is_document=True,
-                                                     has_unknown_purchase=unknown_purchase)
+                                                     has_unknown_purchase=unknown_purchase,
+                                                     auto_file=cap_auto_file, threshold=cap_threshold)
             tri = {"classification": cls, "intent": result.get("doc_type", "document"),
                    "summary": result.get("summary", ""), "department": dept,
                    "priority": "medium", "amount": amt or None}

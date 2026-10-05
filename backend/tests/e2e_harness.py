@@ -30,12 +30,13 @@ _DB_MODULES = [
     "services.voice", "services.captures", "services.whatsapp", "services.ingestion",
     "services.inbox", "services.leave", "services.enrich", "services.notifications",
     "services.ai.generators", "services.ai.brain_context",
+    "services.record_access",  # 2026-10-05: the read rules Dex shares with the screens
     "services.decision_flow", "services.captures", "routers.voice_notes", "routers.desk",
     # The follow-up sweep is on the journey too (overdue escalation, D2's
     # due-soon warning) and its module-level db was reaching the production
     # client from inside an isolated test.
     "services.finance_signals",
-    "services.workflows", "services.ai.agent_tools",
+    "services.workflows",
     "routers.access", "routers.tenant_settings",
     "routers.pulse",       # 2026-09-28: the shared-screen watch
     "services.routines",   # 2026-09-21: the sign-up routines

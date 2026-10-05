@@ -103,95 +103,88 @@ def test_triage_unparseable_response_is_safe_other(monkeypatch):
 
 
 # ===========================================================================
-# T10-09.9  Brain RBAC intent gate (P0) -- deterministic security decision
+# T10-09.9  Ask access (P0) -- 2026-10-05: access follows the DATA, not the words
 # ===========================================================================
+# The word/role-name gate these tests used to pin refused a salesperson
+# "what were our sales?" (her team is "Sales & Order Management", not "sales")
+# and refused "status of the Bluewave UK order" as a finance question. Access
+# is now one rule per kind of record (services/ai/brain_rbac.entity_open), the
+# same rule as that record's screen.
 from services.ai import brain_rbac
 
 
-def _gate(role, question, perms=None):
-    """Re-create the /ask fail-closed gate (routers/brain.py:779-786) purely."""
-    user = {"role": role, "id": "u", "name": "Test User"}
-    if perms is not None:
-        user["permissions"] = perms
-    intent = brain_rbac.classify_intent(question)
-    allowed = brain_rbac.allowed_intents(user)
-    return intent, (intent in allowed)
+def _who(role="sales_&_order_management", perms=(), name="Priya Nair"):
+    return {"role": role, "id": "u", "name": name, "tenant_id": "t", "permissions": list(perms)}
 
 
-def test_classify_finance_question():
-    assert brain_rbac.classify_intent("show me all unpaid invoices") == "finance"
+BASE = ("inbox", "data_input", "workflows", "tasks", "brain", "ask")
 
 
-def test_classify_sales_question():
-    assert brain_rbac.classify_intent("what are our sales this month?") == "sales"
+def test_every_member_can_ask_about_tasks_decisions_leave_and_workload():
+    u = _who(perms=())
+    for entity in ("tasks", "decisions", "leaves", "employees"):
+        assert brain_rbac.entity_open(u, entity), entity
 
 
-def test_classify_policy_beats_domain():
-    # "leave policy" is public policy, not private HR
-    assert brain_rbac.classify_intent("what is our leave policy?") == "policy"
+def test_money_records_need_finance_whatever_the_team_is_called():
+    assert not brain_rbac.entity_open(_who(perms=BASE + ("crm_buyers",)), "invoices")
+    assert brain_rbac.entity_open(_who("accounts_&_buyer_payments", BASE + ("finance",)), "invoices")
+    assert brain_rbac.entity_open(_who("accounts_&_buyer_payments", BASE + ("finance",)), "expenses")
 
 
-def test_operations_user_denied_finance_question():
-    intent, ok = _gate("operations", "list overdue invoices and payments")
-    assert intent == "finance" and ok is False
+def test_pipelines_crm_and_memory_follow_their_permissions():
+    u = _who(perms=("tasks", "ask"))
+    assert not brain_rbac.entity_open(u, "workflows")
+    assert not brain_rbac.entity_open(u, "contacts")
+    assert not brain_rbac.entity_open(u, "memory")
+    v = _who(perms=BASE + ("crm_suppliers",))
+    assert brain_rbac.entity_open(v, "workflows") and brain_rbac.entity_open(v, "contacts")
+    assert brain_rbac.entity_open(v, "memory")
 
 
-def test_operations_user_denied_sales_question():
-    intent, ok = _gate("operations", "what are our sales this quarter?")
-    assert intent == "sales" and ok is False
+def test_an_unknown_kind_of_record_is_closed():
+    assert not brain_rbac.entity_open(_who(perms=BASE), "salaries")
 
 
-def test_sales_user_allowed_sales_but_denied_finance():
-    _, ok_sales = _gate("sales", "show me the sales pipeline")
-    intent_fin, ok_fin = _gate("sales", "what is our GST payable?")
-    assert ok_sales is True
-    assert intent_fin == "finance" and ok_fin is False   # sales role != finance grant
+def test_the_owner_opens_everything_unless_excluded():
+    owner = {"role": "owner", "id": "o", "tenant_id": "t", "name": "Kavya"}
+    for entity in ("invoices", "workflows", "contacts", "memory", "tasks"):
+        assert brain_rbac.entity_open(owner, entity), entity
 
 
-def test_finance_user_allowed_finance():
-    intent, ok = _gate("finance", "list all overdue invoices")
-    assert intent == "finance" and ok is True
+def test_money_questions_are_told_apart_from_questions_that_name_a_record():
+    for q in ("How much does Bluewave owe us?", "Show outstanding customer invoices", "What were our sales figures?",
+              "total revenue this month", "What is our GST payable?", "Rs 50,000 bills", "\u20b9 spent on yarn",
+              "Is the Bluewave invoice paid?", "what's the balance with Kumar Traders"):
+        assert brain_rbac.asks_for_money(q), q
+    for q in ("What is the status of the Bluewave UK order?", "Has the Bluewave shipment been dispatched?",
+              "Who is working on the Bluewave proforma invoice?", "What is pending on the Bluewave order?",
+              "Send proforma invoice to Bluewave - is that task done?"):
+        assert not brain_rbac.asks_for_money(q), q
 
 
-def test_owner_allowed_everything():
-    for q in ("our sales", "GST payable", "hiring plan", "production backlog"):
-        _, ok = _gate("owner", q)
-        assert ok is True, q
+def test_mine_means_the_askers_own_records_not_show_me():
+    for q in ("Show my tasks", "What is overdue for me?", "tasks assigned to me", "What do I have due today?",
+              "my leave balance", "Do I have anything pending?"):
+        assert brain_rbac.is_about_me(q), q
+    for q in ("Show me all tasks", "show me overdue work", "Which employees have the most overdue tasks?",
+              "Give me the Bluewave order status"):
+        assert not brain_rbac.is_about_me(q), q
 
 
-def test_baseline_intents_allowed_for_all_roles():
-    # policy / personal / general are the baseline every user always gets
-    for role in ("sales", "operations", "finance", "hr"):
-        _, ok = _gate(role, "what is our expense policy?")   # -> policy
-        assert ok is True, role
+def test_a_refusal_names_the_access_and_what_they_can_ask():
+    msg = brain_rbac.closed_message(_who(perms=BASE + ("crm_buyers",)), "invoices")
+    assert msg.startswith("Sorry Priya")
+    assert "Finance" in msg
+    tail = msg.split("You can ask me about", 1)[-1]
+    assert "tasks" in tail and "pipelines" in tail and "customers" in tail
+    assert "Finance" not in tail, "never re-offers what was just refused"
 
 
-def test_refusal_names_what_user_can_ask():
-    msg = brain_rbac.refusal_message({"role": "operations", "name": "Ravi"}, "finance")
-    assert "Ravi" in msg
-    # the denied intent IS named in the opening ("questions about X aren't ...")
-    assert "invoices, payments and cash" in msg
-    # ...but the "you CAN ask about" tail offers operations' real grants, not finance
-    tail = msg.split("you can ask me about", 1)[-1]
-    assert "vendors and purchase orders" in tail or "production" in tail
-    assert "cash" not in tail        # never re-offers the denied money domain
-
-
-def test_bug17_plural_finance_questions_are_gated():
-    # BUG-17: plurals used to fall through to 'general' (deterministic gate miss).
-    for q in ("list all invoices", "show me the payments", "what are our expenses",
-              "any refunds pending", "overdue invoices this week"):
-        assert brain_rbac.classify_intent(q) == "finance", q
-    # singular still classifies (no regression)
-    assert brain_rbac.classify_intent("show the invoice") == "finance"
-    # and plural sales/procurement too
-    assert brain_rbac.classify_intent("who are our top clients") == "sales"
-    assert brain_rbac.classify_intent("list our vendors") == "procurement"
-
-
-def test_allowed_intents_is_fail_closed_for_unknown_role():
-    allowed = brain_rbac.allowed_intents({"role": "intern-with-no-grant"})
-    assert allowed == {"policy", "personal", "general"}   # baseline only, nothing private
+def test_a_reroute_says_so_in_one_sentence():
+    assert brain_rbac.reroute_note("invoices", "invoices") is None
+    note = brain_rbac.reroute_note("invoices", "workflows")
+    assert note.startswith("(Invoices") and "records you can open" in note
 
 
 # ===========================================================================
@@ -333,7 +326,8 @@ def test_doc_clean_high_conf_small_amount_can_auto():
     cal, _, needs = calibrate_doc_confidence(
         {"invoices": [{"amount": 1000}]}, raw=0.95, parse_ok=True, doc_type="sales_invoice")
     lvl, _ = _decide_processing_level("sales", cal, amount=1000, needs_owner=False,
-                                      is_duplicate=False, has_records=True, is_document=True)
+                                      is_duplicate=False, has_records=True, is_document=True,
+                                      auto_file=True)  # 2026-10-05: only when the company opted in
     assert needs is False and cal >= AUTO_CONFIDENCE and lvl == "auto"
 
 

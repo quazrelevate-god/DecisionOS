@@ -60,18 +60,8 @@ from models.decisions import (
 )
 
 
-async def visible_decisions_clause(user: dict) -> dict:
-    """RBAC P1 (2026-09-15): only decisions this person can open — the same
-    people get_decision lets in. Every title in the company was listed.
-    2026-10-03: one function, because Company Brain search listed every
-    decision matching a word to any member while this list did not."""
-    if user.get("role") == "owner":
-        return {}
-    mine = [t["decision_id"] async for t in db.tasks.find(
-        {"tenant_id": user["tenant_id"], "decision_id": {"$nin": [None, ""]},
-         "$or": [{"assignee_id": user["id"]}, {"co_assignee_ids": user["id"]}]},
-        {"_id": 0, "decision_id": 1})]
-    return {"$or": [{"created_by": user["id"]}, {"approver_id": user["id"]}, {"id": {"$in": mine}}]}
+# 2026-10-05 — the rule moved to services/record_access so the AI (a service) can follow it too.
+from services.record_access import visible_decisions_clause  # noqa: E402,F401
 
 
 @router.get("/decisions")

@@ -140,7 +140,7 @@ function CaptureCard({ c, user, onChange }) {
 
   const act = async (fn, okMsg) => {
     setBusy(true);
-    try { await fn(); toast.success(okMsg); onChange(); }
+    try { const r = await fn(); toast.success(typeof okMsg === "function" ? okMsg(r) : okMsg); onChange(); }
     catch (e) { toast.error(e?.response?.data?.detail || "Action failed"); }
     finally { setBusy(false); }
   };
@@ -160,7 +160,10 @@ function CaptureCard({ c, user, onChange }) {
       toast.error("Classify each purchase bill as Expense, Asset or Inventory before approving.");
       return;
     }
-    return act(() => api.post(`/captures/${c.id}/approve`), "Approved & actioned");
+    /* 2026-10-05 — an approved instruction becomes a DRAFT on the Desk, where
+       its tasks and moves are shown and approved; only a bill is filed here. */
+    return act(() => api.post(`/captures/${c.id}/approve`),
+      (r) => (r?.data?.result?.on_desk ? "Drafted on the Desk — approve the plan there" : "Approved & filed"));
   };
   const reject = () => {
     const reason = window.prompt("Reason for rejecting?") || "";

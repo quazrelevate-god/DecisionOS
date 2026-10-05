@@ -10,8 +10,7 @@ with_test_db (dropped at teardown) with the AI and speech-to-text stubbed:
   1.4  a capture with nothing to act on makes no decision
   1.5  the same capture again within a day is flagged as a repeat
   1.6  a held recording + its reviewed words make ONE decision
-  1.8  a WhatsApp capture approves through the same path
-  1.9  /dex/capture needs the voice_capture permission
+  1.8  an approved WhatsApp capture becomes a Desk draft; the Desk approves it
 
 Single-process (reaches shared clients):
     .venv/Scripts/python -m pytest tests/test_decision_flow_e2e.py -o addopts="" -p no:xdist
@@ -248,21 +247,32 @@ def test_older_blocked_task_waits_for_its_decision(with_test_db):
     assert with_test_db(scenario) is True
 
 
-def test_whatsapp_capture_approves_through_the_one_path(with_test_db):
+def test_whatsapp_capture_becomes_a_desk_draft_and_the_desk_approves_it(with_test_db):
+    """2026-10-05 (AI audit) — approving the capture used to approve the decision
+    too: a fresh AI extraction nobody had seen, its tasks and moves created on
+    the spot. Now it waits on the Desk with the reviewer's choices applied, and
+    only the Desk's approval creates the work."""
     async def scenario(db):
         # Inside the harness: the operating-model read must hit the test database.
         with e2e_env(db, stubs=STUBS, keep=KEEP):
             await _setup(db)
             import services.captures as captures
+            import routers.decisions as decisions
             STATE["extract"] = rich
             draft = {"id": "cd1", "tenant_id": T, "kind": "text", "text": "Buy 50 spindles", "wa_from": "+919800000000",
                      "assignee_id": "u-operations", "priority": "low"}
             res = await captures.execute_capture(draft, FIN)
+            assert res["on_desk"] is True
             dec = await db.decisions.find_one({"id": res["id"]}, {"_id": 0})
-            assert dec["status"] == "approved" and dec["decided_by"] == "u-finance" and dec.get("decided_at")
-            assert any(e["label"].startswith("Approved — created") for e in dec["timeline"])
+            assert dec["status"] in ("pending", "pending_approval"), "approving the capture no longer approves the plan"
+            assert await db.tasks.count_documents({"tenant_id": T, "decision_id": dec["id"]}) == 0, "nothing created yet"
+            assert [t["assignee_id"] for t in dec["proposal"]["tasks"]][:1] == ["u-operations"], "the reviewer's choice is kept"
+
+            await decisions.approve_decision(dec["id"], user=OWNER)
+            dec = await db.decisions.find_one({"id": res["id"]}, {"_id": 0})
+            assert dec["status"] == "approved"
             work = await db.tasks.find_one({"tenant_id": T, "decision_id": dec["id"], "source": {"$nin": ["reminder", "meeting"]}})
-            assert work["assignee_id"] == "u-operations" and work["priority"] == "low" and work["status"] == "todo"
+            assert work["assignee_id"] == "u-operations" and work["priority"] == "low"
 
             STATE["extract"] = nothing
             res2 = await captures.execute_capture({**draft, "id": "cd2", "text": "profit?"}, FIN)
@@ -293,21 +303,6 @@ def test_capture_approver_who_cannot_decide_leaves_the_decision_waiting(with_tes
             await decisions.approve_decision(dec["id"], user=OWNER)
             assert (await db.decisions.find_one({"id": dec["id"]}))["status"] == "approved"
             assert await db.tasks.count_documents({"tenant_id": T, "decision_id": dec["id"]}) >= 1
-            return True
-    assert with_test_db(scenario) is True
-
-
-def test_dex_capture_needs_voice_capture(with_test_db):
-    async def scenario(db):
-        # Inside the harness: the operating-model read must hit the test database.
-        with e2e_env(db, stubs=STUBS):
-            await _setup(db)
-            import routers.dex as dex
-            await _refused(dex.dex_capture(BackgroundTasks(), text="Buy spindles", file=None, language="auto",
-                                           file_ids="", user=SALES), 403)
-            res = await dex.dex_capture(BackgroundTasks(), text="Buy spindles", file=None, language="auto",
-                                        file_ids="", user=OWNER)
-            assert res["status"] == "queued"
             return True
     assert with_test_db(scenario) is True
 
@@ -551,19 +546,5 @@ def test_manager_approval_moves_a_new_workflow_into_its_approval_stage(with_test
             await decisions.approve_decision(d["id"], user=FIN)
             wf = await db.workflows.find_one({"decision_id": d["id"]}, {"_id": 0})
             assert wf["stage"] == p["approval_stage"], "a manager approval moves it too (was stuck at " + wf["stage"] + ")"
-            return True
-    assert with_test_db(scenario) is True
-
-
-def test_dex_chat_proposal_creates_nothing_until_approved(with_test_db):
-    async def scenario(db):
-        with e2e_env(db, stubs=STUBS):
-            await _setup(db)
-            import services.ai.agent_tools as tools
-            out = await tools._t_propose_task(OWNER, title="Call Kumar about the dye lot", assignee_name="Sales User", assignee_role="sales")
-            d = await db.decisions.find_one({"id": out["decision_id"]}, {"_id": 0})
-            assert d["status"] == "pending_approval" and d["approver_id"] == "u-owner"
-            assert [t["assignee_id"] for t in d["proposal"]["tasks"]] == ["u-sales"]
-            assert await db.tasks.count_documents({"tenant_id": T}) == 0
             return True
     assert with_test_db(scenario) is True

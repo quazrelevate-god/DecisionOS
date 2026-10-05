@@ -160,7 +160,20 @@ async def approve_capture(cid: str, user: dict = Depends(require_perm("captures_
         raise HTTPException(status_code=400, detail="Already processed")
     if d.get("needs_owner") and user["role"] != "owner":
         raise HTTPException(status_code=403, detail="This item requires Owner approval")
-    result = await execute_capture(d, user)
+    # 2026-10-05 (AI audit) — claim it first, atomically: two taps (or two
+    # reviewers) both passed the status check above and both executed, so a
+    # bill could be filed into the books twice.
+    claim = await db.capture_drafts.update_one(
+        {"id": cid, "tenant_id": user["tenant_id"], "status": d["status"]},
+        {"$set": {"status": "processing", "updated_at": now_iso()}})
+    if not claim.modified_count:
+        raise HTTPException(status_code=400, detail="Already processed")
+    try:
+        result = await execute_capture(d, user)
+    except Exception:
+        await db.capture_drafts.update_one({"id": cid, "tenant_id": user["tenant_id"], "status": "processing"},
+                                           {"$set": {"status": d["status"]}})
+        raise
     await db.capture_drafts.update_one({"id": cid}, {"$set": {
         "status": "executed", "review_action": "approved", "reviewed_by": user["id"],
         "reviewed_at": now_iso(), "result_ref": result,

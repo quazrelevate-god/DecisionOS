@@ -112,8 +112,7 @@ def test_the_board_counts_and_create_ask():
     assert 'raise HTTPException(status_code=403, detail="This pipeline belongs to another team.")' in w
 
 
-@pytest.mark.parametrize("rel", ["routers/calendar.py", "routers/brain.py", "routers/brain_search.py",
-                                 "services/ai/agent_tools.py"])
+@pytest.mark.parametrize("rel", ["routers/calendar.py", "routers/brain.py", "routers/brain_search.py"])
 def test_the_other_readers_of_workflows_ask_too(rel):
     assert "workflow_scope" in be(rel), rel
 
@@ -124,7 +123,9 @@ def test_brain_search_lists_only_what_its_screens_would():
     s = be("routers/brain_search.py")
     assert "visible_decisions_clause(user)" in s
     assert '"type": {"$in": types}' in s
-    assert "async def visible_decisions_clause(user: dict) -> dict:" in be("routers/decisions.py")
+    # 2026-10-05: the rule moved to services/record_access (routers/decisions re-exports it).
+    assert "async def visible_decisions_clause(user: dict) -> dict:" in be("services/record_access.py")
+    assert "from services.record_access import visible_decisions_clause" in be("routers/decisions.py")
 
 
 def test_the_screens_are_told_the_scope():

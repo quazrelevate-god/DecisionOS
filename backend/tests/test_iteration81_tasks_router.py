@@ -32,7 +32,7 @@ Cross-domain regressions:
   • services.tasks._attach_reference_ids still callable from server.py capture flow
   • services.tasks._tenant_industry still callable from /api/capture/clarify
   • Decisions router (Phase B step 3) still works: POST /api/decisions/{id}/tasks
-  • Non-task endpoints still 200: /brief, /inbox, /brain/documents, /brain/agent, /ask
+  • Non-task endpoints still 200: /brief, /inbox, /brain/documents, /ask
 """
 import io
 import os

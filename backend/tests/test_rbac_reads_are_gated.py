@@ -160,9 +160,12 @@ def test_the_reads_the_audit_closed(routes, path, gate):
 
 @pytest.mark.parametrize("method,path", [
     ("POST", "/api/brain/agent"), ("POST", "/api/brain/agent/run"), ("POST", "/api/brain/agent/create-task"),
+    ("POST", "/api/dex/capture"),
 ])
-def test_the_agent_asks_for_ask_as_ask_does(routes, method, path):
-    assert ("perm", "ask") in routes[(method, path)]
+def test_the_unused_agent_doors_are_gone(routes, method, path):
+    """2026-10-05 (AI audit) — no screen called them, and they read more than
+    /ask lets a member read (every open task, any customer's dues)."""
+    assert (method, path) not in routes
     assert ("perm", "ask") in routes[("POST", "/api/ask")]
 
 
@@ -181,7 +184,9 @@ def test_a_transcript_follows_the_recording_rule():
 def test_complaints_follow_the_contact():
     c = be("routers/complaints.py")
     assert "q.update(await complaint_scope(user))" in c
-    assert 'return {"$or": [{"customer_id": {"$in": ids}}, {"created_by": user["id"]}]}' in c
+    # 2026-10-05: the rule moved to services/record_access so Dex follows it too.
+    assert "from services.record_access import complaint_scope" in c
+    assert 'return {"$or": [{"customer_id": {"$in": ids}}, {"created_by": user["id"]}]}' in be("services/record_access.py")
 
 
 def test_what_a_contact_owes_follows_crm_access():

@@ -1,6 +1,6 @@
 {
-  "count": 361,
-  "sha": "fa0639a64e6b6a9e7c193ccf85092830087632bffce0d08e74e84b184a8a1879",
+  "count": 357,
+  "sha": "363f12636078b3a5afdd34e195738f0257041070fed719a3f7593169e0489cda",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -254,9 +254,6 @@
     "POST /api/auth/welcome/done",
     "POST /api/billing/checkout",
     "POST /api/billing/webhook",
-    "POST /api/brain/agent",
-    "POST /api/brain/agent/create-task",
-    "POST /api/brain/agent/run",
     "POST /api/brain/documents",
     "POST /api/brain/export",
     "POST /api/capture/clarify",
@@ -275,7 +272,6 @@
     "POST /api/decisions/{decision_id}/reject",
     "POST /api/decisions/{decision_id}/tasks",
     "POST /api/desk/nudge/{item_id}",
-    "POST /api/dex/capture",
     "POST /api/expenses",
     "POST /api/expenses/suggest-category",
     "POST /api/expenses/with-file",

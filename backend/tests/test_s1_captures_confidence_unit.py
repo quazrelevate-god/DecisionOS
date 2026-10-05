@@ -83,10 +83,25 @@ def test_needs_owner_routes_to_confirm():
 
 
 def test_auto_file_happy_path():
-    """A clean, high-confidence, low-value purchase DOCUMENT auto-files."""
+    """A clean, high-confidence, low-value purchase DOCUMENT auto-files —
+    when the company has opted in (2026-10-05: off by default)."""
     lvl, _ = _decide_processing_level("purchase", AUTO_CONFIDENCE, 1000, needs_owner=False,
-                                      is_duplicate=False, has_records=True, is_document=True)
+                                      is_duplicate=False, has_records=True, is_document=True, auto_file=True)
     assert lvl == "auto"
+
+
+def test_nothing_files_itself_unless_the_company_opted_in():
+    """2026-10-05 (AI audit) — the same clean, small bill waits for one tap by
+    default: the model's own confidence is not a reviewer."""
+    lvl, _ = _decide_processing_level("purchase", 0.99, 1000, needs_owner=False,
+                                      is_duplicate=False, has_records=True, is_document=True)
+    assert lvl == "confirm"
+
+
+def test_auto_file_uses_the_companys_own_threshold():
+    lvl, _ = _decide_processing_level("purchase", 0.99, 9000, needs_owner=False, is_duplicate=False,
+                                      has_records=True, is_document=True, auto_file=True, threshold=5000)
+    assert lvl == "confirm"
 
 
 def test_amount_exactly_50000_never_auto_files():

@@ -57,7 +57,7 @@ def _lang_directive(lang: Optional[str]) -> str:
 # ---------------------------------------------------------------------------
 FINANCE_ENTITIES = {"invoices", "payments", "expenses"}
 KNOWN_ENTITIES = {"tasks", "decisions", "workflows", "contacts", "invoices",
-                  "payments", "expenses", "leaves", "employees", "memory"}
+                  "payments", "expenses", "leaves", "employees", "memory", "documents"}
 
 
 def _deep_link(entity: str, r: dict) -> str:
@@ -138,12 +138,45 @@ async def _plan(question: str, prev: Optional[dict], lang) -> dict:
     plan.setdefault("keywords", [])
     plan.setdefault("output", "TABLE")
     plan.setdefault("needs_finance", plan["primary_entity"] in FINANCE_ENTITIES)
+    plan["mine"] = bool(plan.get("mine"))
     return _refine_plan(plan, question)
+
+
+_OPEN_TASK_STATUSES = ("todo", "in_progress", "waiting", "review", "blocked")
+_WHO_WORKS = re.compile(
+    r"\b(who(?:'s| is| are)? (?:working on|handling|doing|assigned to|responsible for)"
+    r"|is (?:that|the|this|it) (?:task )?(?:done|finished|complete|completed)"
+    r"|has .{1,60} been (?:done|finished|completed|sent))\b", re.I)
 
 
 def _refine_plan(plan: dict, question: str) -> dict:
     """Deterministic guardrails over the LLM plan for the most common misreadings."""
     ql = (question or "").lower()
+    from services.ai.brain_rbac import is_about_me, speaks_for_the_business
+    # 2026-10-05 — "my ..." / "for me" means the asker's own records, whatever the
+    # planner said; "show me all tasks" does not, and neither does "my team",
+    # "my company" or "my attention" (the asker speaking for the business).
+    if is_about_me(question):
+        plan["mine"] = True
+    elif speaks_for_the_business(question) or re.search(r"\b(all|every|everyone|everybody|whole|entire)\b", ql):
+        plan["mine"] = False
+    # "What needs my attention / what should I focus on today?" is the open and
+    # overdue work, not only what was created or falls due today (live: the
+    # owner was told she had nothing to do beside two overdue tasks).
+    if plan.get("primary_entity") == "tasks" and re.search(
+            r"attention|focus|priorit|urgent|what should (?:i|we) (?:do|work)|what(?:'s| is) next", ql):
+        plan["status"] = "open"
+        plan["date_preset"] = None
+        plan["on_time_analysis"] = False
+    # A question about who does a piece of work, or whether it is done, is about
+    # the TASK even when its title says "invoice" ("who is working on the
+    # Bluewave proforma invoice?" was planned as invoices).
+    if plan.get("primary_entity") in FINANCE_ENTITIES and _WHO_WORKS.search(question or ""):
+        plan["primary_entity"] = "tasks"
+        plan["needs_finance"] = False
+    # "pending" is not a task status; it means still open.
+    if plan.get("primary_entity") == "tasks" and plan.get("status") == "pending":
+        plan["status"] = "open"
     on_time_words = ("on time" in ql or "on-time" in ql or "ontime" in ql)
     completion_words = ("complet" in ql or "finished" in ql or "done on" in ql)
     # "overdue" without completion context is an OPEN-tasks query, not an on-time report.
@@ -189,6 +222,10 @@ _KW_STOP = {
     "payables", "due", "dues", "balance", "balances", "total", "totals",
     "much", "many", "most", "money", "amount", "amounts", "collect",
     "collection", "collections", "revenue", "spend", "spent", "profit", "loss",
+    # 2026-10-05 — words that describe a record's state, not its name: "the
+    # Bluewave UK order" names Bluewave UK; "order" matched half the board.
+    "order", "orders", "stage", "progress", "update", "latest", "current", "working",
+    "finished", "proforma",
 }
 
 
@@ -249,8 +286,37 @@ async def _enrich_with_brain(plan: dict, scope: dict, user: dict, question: str 
     return {"document_hits": doc_hits, "knowledge_hits": ctx_hits, "passages": passages}
 
 
+async def _people_named(tid: str, keywords) -> tuple:
+    """(user ids, the keywords left over). 2026-10-05 — "show Priya Nair's
+    overdue tasks" matched the NAME against task titles and found nothing
+    (she had six). A keyword that is a teammate's name -- full name or first
+    name, possessive dropped -- selects that person instead."""
+    users = await db.users.find({"tenant_id": tid}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
+    ids, rest = [], []
+    for k in keywords or []:
+        w = re.sub(r"['\u2019]s$", "", str(k).strip()).lower()
+        hit = [u["id"] for u in users if u.get("name") and len(w) >= 3 and (
+            u["name"].lower() == w or u["name"].lower().split()[0] == w)]
+        if hit:
+            ids.extend(hit)
+        else:
+            rest.append(k)
+    return ids, rest
+
+
 async def _retrieve(plan: dict, scope: dict, user: Optional[dict] = None):
     tid = scope["tenant_id"]
+    people: list = []
+    if plan.get("primary_entity") in ("tasks", "leaves"):
+        people, left = await _people_named(tid, plan.get("keywords"))
+        if people:
+            plan = {**plan, "keywords": left}
+    # 2026-10-05 (AI audit) — Dex reads what the asker's own screens show, by
+    # the same rules (services/record_access): decisions, contacts, leaves and
+    # memory used to come back for the whole company to any member.
+    from services.record_access import visible_decisions_clause, leave_scope
+    from core.permissions import crm_types
+    who = user or {"id": scope["uid"], "role": scope["role"], "tenant_id": tid}
     entity = plan["primary_entity"]
     kw = plan.get("keywords")
     rx = _rx(kw)
@@ -260,6 +326,10 @@ async def _retrieve(plan: dict, scope: dict, user: Optional[dict] = None):
         q = {"tenant_id": tid}
         if rx and entity == "tasks":
             q["$or"] = [{"title": rx}, {"description": rx}]
+        if plan.get("mine") and entity == "tasks":
+            q = {"$and": [q, {"$or": [{"assignee_id": scope["uid"]}, {"co_assignee_ids": scope["uid"]}]}]}
+        if people and entity == "tasks":
+            q = {"$and": [q, {"$or": [{"assignee_id": {"$in": people}}, {"co_assignee_ids": {"$in": people}}]}]}
         if not scope["privileged"]:
             dept = [{"assignee_id": scope["uid"]}, {"assignee_role": scope["role"]}, {"created_by": scope["uid"]}]
             q = {"$and": [q, {"$or": dept}]}
@@ -270,6 +340,9 @@ async def _retrieve(plan: dict, scope: dict, user: Optional[dict] = None):
         q = {"tenant_id": tid}
         if rx:
             q["$or"] = [{"title": rx}, {"summary": rx}]
+        q = {"$and": [q, await visible_decisions_clause(who)]}
+        if plan.get("mine"):
+            q = {"$and": [q, {"$or": [{"created_by": scope["uid"]}, {"approver_id": scope["uid"]}]}]}
         rows = await db.decisions.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
         return {"records": rows, "entity": entity}
 
@@ -287,17 +360,39 @@ async def _retrieve(plan: dict, scope: dict, user: Optional[dict] = None):
         return {"records": rows, "entity": entity}
 
     if entity == "contacts":
-        q = {"tenant_id": tid}
+        types = list(crm_types(who))
+        if not types:
+            return {"records": [], "entity": entity}
+        q = {"tenant_id": tid, "type": {"$in": types}}
         if rx:
             q["$or"] = [{"name": rx}, {"company": rx}, {"email": rx}, {"phone": rx}, {"notes": rx}]
         rows = await db.contacts.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
         return {"records": rows, "entity": entity}
 
     if entity == "leaves":
-        rows = await db.leaves.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(500)
+        q = {"tenant_id": tid, **leave_scope(who)}
+        if plan.get("mine"):
+            q["user_id"] = scope["uid"]
+        elif people:
+            q = {"$and": [q, {"user_id": {"$in": people}}]}
+        rows = await db.leaves.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+        return {"records": rows, "entity": entity}
+
+    if entity == "documents":
+        # 2026-10-05 — policy / SOP / contract questions: the Brain document
+        # search (each document's own visibility) answers them in
+        # _enrich_with_brain; a term often lives only in a saved company NOTE
+        # ("payment terms: 30% advance"), so those come too for anyone with
+        # Brain access -- shown as notes, never called documents.
+        if "brain" not in user_perms(who) or not rx:
+            return {"records": [], "entity": entity}
+        rows = await db.memory.find({"tenant_id": tid, "text": rx}, {"_id": 0}).sort("created_at", -1).to_list(50)
         return {"records": rows, "entity": entity}
 
     if entity == "memory":
+        # The company memory is the Brain's (GET /memory needs "brain").
+        if "brain" not in user_perms(who):
+            return {"records": [], "entity": entity}
         q = {"tenant_id": tid}
         if rx:
             q["text"] = rx
@@ -496,6 +591,9 @@ async def _compute_tasks(ctx, plan, recs):
         if st == "overdue":
             if not (t.get("status") in ("todo", "in_progress") and t.get("due_date") and str(t["due_date"]) < now):
                 continue
+        elif st == "open":
+            if t.get("status") not in _OPEN_TASK_STATUSES:
+                continue
         elif st and t.get("status") != st:
             continue
         if start and not _in_range(t.get("created_at"), start, end) and not _in_range(t.get("due_date"), start, end):
@@ -659,7 +757,17 @@ async def _compute_workflows(_ctx, _plan, recs):
     return kpis, {"columns": columns, "rows": rows, "total_rows": len(rows)}, cites[:12]
 
 
-async def _compute_leaves(_ctx, _plan, recs):
+async def _compute_leaves(ctx, plan, recs):
+    # 2026-10-05 — "who is on leave this week?" listed every leave ever filed.
+    # A date window means leave that OVERLAPS it; a status filters by status.
+    start, end = ctx.get("start"), ctx.get("end")
+    st = plan.get("status")
+    if st:
+        recs = [lv for lv in recs if lv.get("status") == st]
+    if start:
+        lo, hi = start.date().isoformat(), (end or start).date().isoformat()
+        recs = [lv for lv in recs
+                if (lv.get("from_date") or "") <= hi and (lv.get("to_date") or lv.get("from_date") or "") >= lo]
     rows, cites = [], []
     for lv in recs[:200]:
         rows.append({"employee": lv.get("user_name") or "-", "type": lv.get("leave_type") or "-",
@@ -688,9 +796,18 @@ async def _compute_memory(_ctx, _plan, recs):
     return kpis, {"columns": columns, "rows": rows, "total_rows": len(rows)}, cites[:12]
 
 
+async def _compute_documents(ctx, plan, recs):
+    """2026-10-05 — documents answer from the Brain search; saved company notes
+    that match ride along as notes."""
+    if not recs:
+        return [], {"columns": [], "rows": [], "total_rows": 0}, []
+    return await _compute_memory(ctx, plan, recs)
+
+
 # Dispatch registry — extend by adding an entry here + a `_compute_<entity>` function.
 # Future intents (procurement, production, inventory) plug in without touching `_compute`.
 _COMPUTE_HANDLERS = {
+    "documents": _compute_documents,
     "employees": _compute_employees,
     "tasks": _compute_tasks,
     "invoices": _compute_invoices,
@@ -713,7 +830,8 @@ _ANSWER_SYSTEM = render("brain.answer")  # prompt in prompts/brain.py
 async def _answer(question, kpis, table, lang,
                     knowledge_hits: Optional[list] = None,
                     document_hits: Optional[list] = None,
-                    passages: Optional[list] = None):
+                    passages: Optional[list] = None,
+                    currency: str = "INR", no_money: bool = False, not_everything: bool = False):
     """FIX-007-C (S4-04): the LLM answer now sees three signal streams:
       * `kpis` + `table` (deterministic domain metrics, as before)
       * `knowledge_hits` — brain_context provenance rows (past decisions,
@@ -750,8 +868,28 @@ async def _answer(question, kpis, table, lang,
     # E3-08.1: retrieved document summaries / passages / past-context are user-authored
     # content that could carry an injection -- arm the guard whenever we include retrieved data.
     _guard = INJECTION_GUARD if (knowledge_hits or document_hits or passages) else ""
+    # 2026-10-05 — three things the answer got wrong live: "$0 billed" for an
+    # Indian company; "according to the document in your workspace" for a
+    # company with no documents (it was a past-decision record); and a
+    # salesperson's answer totalling an order's value.
+    _rules = (f" Money is in {currency}"
+              + (" -- write it as Rs with Indian digit grouping (Rs 12,50,000), never $" if currency == "INR" else "") + "."
+              " past_context items are records of what happened in the company (decisions, approvals, workflow moves)"
+              " and table rows with a Note column are saved company notes -- never call either a document; only"
+              " policies_or_documents and relevant_document_passages are documents. If the asker asks what a"
+              " document says and only a note or record answers it, say it comes from a saved note or record.")
+    if not_everything:
+        _rules += (" The asker sees only the records their access allows: when something is empty or missing, say"
+                   " none that you can see, never that none exist.")
+    if no_money:
+        # A record the asker can open on their own screen may carry a price in
+        # its title (a decision they made); quoting THAT is what the screen
+        # shows. Working out values is Finance's: no totals, no balances.
+        _rules += (" The asker does NOT have Finance access: never compute, total, multiply, estimate or infer any"
+                   " money figure (no order values, balances, outstanding or totals). Quote an amount only if it is"
+                   " written word-for-word in a record title above, and do not add to it.")
     chat = claude_chat(task="brain.answer", session_id=f"brain-ans-{new_id()}",
-                       system_message=_ANSWER_SYSTEM + _lang_directive(lang) + _guard).with_model(*model_for("brain.answer"))
+                       system_message=_ANSWER_SYSTEM + _rules + _lang_directive(lang) + _guard).with_model(*model_for("brain.answer"))
     try:
         raw = await chat.send_message(UserMessage(text=f"Question: {question}\n\nComputed data:\n{json.dumps(sample, default=str)}"))
         data = _extract_json(raw) or {}
@@ -780,6 +918,52 @@ async def _answer(question, kpis, table, lang,
 
 
 _PERM_DENIED_MSG = "You do not have permission to access financial or profitability information. Ask your workspace owner for Finance access."
+NL_NL = chr(10) * 2
+
+
+async def _named_matches(entity: str, plan: dict, scope: dict, user: dict) -> int:
+    """How many distinct named keywords one of this person's visible records of
+    this kind matches (0 = none). Reuses _retrieve, so the scoping is identical."""
+    words = [k for k in (plan.get("keywords") or []) if len(str(k)) >= 3 and str(k).lower() not in _KW_STOP]
+    if not words:
+        return 0
+    probe = {**plan, "primary_entity": entity, "keywords": words, "mine": False}
+    rows = (await _retrieve(probe, scope, user=user))["records"][:200]
+    fields = {"workflows": ("title", "detail", "counterparty"), "tasks": ("title", "description"),
+              "decisions": ("title", "summary"), "contacts": ("name", "company")}[entity]
+    best = 0
+    for r in rows:
+        text = " ".join(str(r.get(f) or "") for f in fields).lower()
+        best = max(best, sum(1 for w in words if str(w).lower() in text))
+    return best
+
+
+async def _resolve_access(plan: dict, question: str, user: dict, scope: dict):
+    """(plan, refusal message or None). 2026-10-05 — access follows the data.
+
+    The plan's records are open to the asker -> answer (trimmed to their scope).
+    Closed, and the question asks for a money figure -> refuse, saying which
+    access that takes and what they can ask instead.
+    Closed, but the question NAMES something -> answer from the records of it
+    the asker CAN open: a named order is a pipeline card, a named piece of work
+    a task ("what is the status of the Bluewave UK order?" from the salesperson
+    who owns it). Nothing they can open matches -> refuse the same way."""
+    from services.ai import brain_rbac
+    entity = plan.get("primary_entity")
+    if brain_rbac.entity_open(user, entity):
+        return plan, None
+    if not brain_rbac.asks_for_money(question):
+        scores = []
+        for alt in brain_rbac.REROUTE_ORDER:
+            if alt != entity and brain_rbac.entity_open(user, alt):
+                n = await _named_matches(alt, plan, scope, user)
+                if n:
+                    scores.append((n, -brain_rbac.REROUTE_ORDER.index(alt), alt))
+        if scores:
+            alt = max(scores)[2]
+            return {**plan, "primary_entity": alt, "rerouted_from": entity, "needs_finance": False,
+                    "on_time_analysis": False, "status": None, "group_by": None}, None
+    return plan, brain_rbac.closed_message(user, entity)
 
 
 # Request models consolidated into models/ (Epic 8 Sprint 5).
@@ -798,17 +982,12 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
     if not q:
         raise HTTPException(status_code=400, detail="Ask a question")
 
-    # RBAC gate — fail closed on intent BEFORE we plan/retrieve/compute so a
-    # random employee cannot ask "what are our sales?" and get a real answer.
+    # 2026-10-05 — NO word gate. Access is decided below from the RECORDS the
+    # question needs (services/ai/brain_rbac), with each kind trimmed to what
+    # the asker's own screens show (_retrieve). The word gate refused a
+    # salesperson "what were our sales?" because her team is not literally
+    # named "sales".
     from services.ai import brain_rbac
-    intent = brain_rbac.classify_intent(q)
-    allowed = brain_rbac.allowed_intents(user)
-    if intent not in allowed:
-        await _audit(tid, scope["uid"], q, {"intent": intent}, [], "PERMISSION_DENIED")
-        return {"type": "PERMISSION_DENIED",
-                "message": brain_rbac.refusal_message(user, intent),
-                "intent": intent,
-                "allowed_intents": sorted(allowed)}
 
     prev = None
     if inp.context_id:
@@ -816,8 +995,9 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
         # db.brain_query_cache — collection storing /ask query-plan cache
         # (kept the singular/plural name collision with the decision-
         # provenance store from silently corrupting data on typo).
+        # 2026-10-05: and only the asker's own earlier question.
         prev = await db.brain_query_cache.find_one(
-            {"id": inp.context_id, "tenant_id": tid}, {"_id": 0, "plan": 1})
+            {"id": inp.context_id, "tenant_id": tid, "user_id": scope["uid"]}, {"_id": 0, "plan": 1})
         prev = (prev or {}).get("plan")
 
     try:
@@ -835,10 +1015,12 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
         logger.exception("brain planning failed")
         raise HTTPException(status_code=502, detail="AI planning error")
 
-    # Permission validation BEFORE retrieval (disclosure by omission, not filtering)
-    if (plan.get("needs_finance") or plan.get("primary_entity") in FINANCE_ENTITIES) and not scope["can_finance"]:
+    # Access, from the records the plan needs — BEFORE anything is read.
+    plan, refusal = await _resolve_access(plan, q, user, scope)
+    if refusal:
         await _audit(tid, scope["uid"], q, plan, [], "PERMISSION_DENIED")
-        return {"type": "PERMISSION_DENIED", "message": _PERM_DENIED_MSG}
+        return {"type": "PERMISSION_DENIED", "message": refusal,
+                "can_ask": brain_rbac.what_you_can_ask(user)}
 
     retrieved = await _retrieve(plan, scope, user=user)
     kpis, table, cites = await _compute(plan, retrieved, scope)
@@ -881,7 +1063,12 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
         knowledge_hits=brain_extras["knowledge_hits"],
         document_hits=brain_extras["document_hits"],
         passages=brain_extras.get("passages"),
+        currency=await _currency(tid), no_money=not scope["can_finance"],
+        not_everything=user.get("role") != "owner",
     )
+    note = brain_rbac.reroute_note(plan.get("rerouted_from") or plan["primary_entity"], plan["primary_entity"])
+    if note:
+        answer = note + NL_NL + answer
     ctx_id = new_id()
     plan["_currency"] = await _currency(tid)
     # FIX-007-A (S4-03): renamed from brain_contexts to brain_query_cache.
@@ -948,12 +1135,13 @@ async def export(inp: ExportRequest, user: dict = Depends(require_perm("brain_ex
     scope = {"tenant_id": tid, "uid": user.get("id"), "role": user.get("role"),
              "can_finance": _can_finance(user), "privileged": _privileged(user)}
     # FIX-007-A (S4-03): renamed from brain_contexts to brain_query_cache.
-    ctx = await db.brain_query_cache.find_one({"id": inp.context_id, "tenant_id": tid}, {"_id": 0})
+    ctx = await db.brain_query_cache.find_one({"id": inp.context_id, "tenant_id": tid, "user_id": scope["uid"]}, {"_id": 0})
     if not ctx:
         raise HTTPException(status_code=404, detail="This result has expired. Re-run the question, then export.")
     plan = ctx["plan"]
-    if (plan.get("needs_finance") or plan.get("primary_entity") in FINANCE_ENTITIES) and not scope["can_finance"]:
-        raise HTTPException(status_code=403, detail=_PERM_DENIED_MSG)
+    from services.ai import brain_rbac
+    if not brain_rbac.entity_open(user, plan.get("primary_entity")):
+        raise HTTPException(status_code=403, detail=brain_rbac.closed_message(user, plan.get("primary_entity")))
     retrieved = await _retrieve(plan, scope, user=user)
     _, table, _ = await _compute(plan, retrieved, scope)
     if not scope["can_finance"]:

@@ -110,12 +110,12 @@ class TestImportSanity:
         code = (
             "from services.obj_store import put_object, get_object;"
             "from services.ai.brain_context import record_context, query_context;"
-            "from services.ai.brain_rbac import classify_intent, allowed_intents;"
+            "from services.ai.brain_rbac import entity_open, closed_message;"
             "from services.tasks import enrich_task, enrich_tasks, _can_work_task, "
             "_derive_task_type, _task_activity, TASK_STATUSES, _plan_progress;"
             "from models.tasks import TaskCreateInput, TaskUpdateInput;"
             "import services.obj_store as obj_store, services.ai.brain_context as brain_context, services.ai.brain_rbac as brain_rbac;"
-            "assert obj_store.put_object and brain_context.record_context and brain_rbac.classify_intent"
+            "assert obj_store.put_object and brain_context.record_context and brain_rbac.entity_open"
         )
         import sys
         backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -409,14 +409,6 @@ class TestBrainEndpoints:
         # intent should be classified as finance
         if "intent" in body:
             assert body["intent"] == "finance"
-
-    def test_brain_agent_owner_200(self, owner_token):
-        r = requests.post(f"{BASE_URL}/api/brain/agent",
-                          json={"question": "How many decisions are pending approval?"},
-                          headers=_h(owner_token), timeout=120)
-        assert r.status_code == 200, r.text
-        body = r.json()
-        assert "answer" in body
 
 
 # ---------------------------------------------------------------------------

@@ -103,9 +103,24 @@ async def _capture_settings(tenant_id: str):
     return thr, bool((t or {}).get("require_owner_signoff"))
 
 
-def _decide_processing_level(cls, confidence, amount, needs_owner, is_duplicate, has_records, is_document, has_unknown_purchase=False):
+async def _capture_auto_file(tenant_id: str) -> bool:
+    """2026-10-05 (AI audit) — may a WhatsApp bill be filed with nobody looking?
+    Only when the owner has said so (`capture_auto_file` on the company).
+    It used to be on for everyone: a bill under Rs 50,000 that the reading
+    model rated itself 90% sure of went straight into the books. Off, it is
+    still read and drafted, and waits in Captures for one tap."""
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "capture_auto_file": 1})
+    return (t or {}).get("capture_auto_file") is True
+
+
+def _decide_processing_level(cls, confidence, amount, needs_owner, is_duplicate, has_records, is_document,
+                             has_unknown_purchase=False, auto_file=False, threshold=CAPTURE_THRESHOLD):
     """Map an AI-triaged capture to one of: auto | confirm | attention.
-    Returns (level, reason)."""
+    Returns (level, reason).
+
+    2026-10-05 — "auto" only when the company opted in (`auto_file`, see
+    _capture_auto_file), and under the company's OWN high-value threshold
+    rather than the server-wide default."""
     if is_duplicate:
         return "attention", "Possible duplicate of an already-filed invoice — please verify before saving."
     if has_unknown_purchase:
@@ -116,8 +131,8 @@ def _decide_processing_level(cls, confidence, amount, needs_owner, is_duplicate,
         return "attention", "Couldn't read clear structured data from this document — please review."
     if needs_owner:
         return "confirm", ""
-    if (is_document and confidence is not None and confidence >= AUTO_CONFIDENCE
-            and amount is not None and 0 < amount < CAPTURE_THRESHOLD
+    if (auto_file and is_document and confidence is not None and confidence >= AUTO_CONFIDENCE
+            and amount is not None and 0 < amount < threshold
             and cls in ("purchase", "sales")):
         return "auto", ""
     return "confirm", ""
@@ -263,18 +278,24 @@ async def execute_capture(d: dict, user: dict):
                     t["due_date"] = d["due_date"]
             # FIX-001-C: tenant-scoped write.
             await db.decisions.update_one({"id": decision_id, "tenant_id": tenant_id}, {"$set": {"proposal.tasks": proposal["tasks"]}})
-        # ...and approving the capture approves the decision through the one
-        # approve path (ASK-32 1.8): it creates the work, writes the timeline,
-        # moves procurement and records the outcome — but only when the reviewer
-        # may decide it. RBAC P0 (2026-09-15): "Approve tasks" used to approve
-        # the decision too, skipping its named decider and Approve decisions.
-        # Otherwise the decision waits for the person it names, who is told.
-        from services.decision_flow import approve_decision_flow, can_decide, notify_decision_waiting
+        # ...and the decision WAITS ON THE DESK, for everyone.
+        #
+        # 2026-10-05 (AI audit, founder: "fix the 1"). Approving the capture
+        # used to approve this decision on the spot (ASK-32 1.8) — but the
+        # reviewer had approved the triage SUMMARY, and the decision is a
+        # second, fresh AI extraction made only now: its tasks, assignees and
+        # workflow moves (applied with override) were created without anyone
+        # seeing them. A WhatsApp message from outside the company could steer
+        # that. Now it lands on the Desk as a draft like every other capture,
+        # where the whole plan and its moves are shown and approved by the
+        # person it names, who is told — unless that is the reviewer, who is
+        # already looking at it.
+        from services.decision_flow import notify_decision_waiting
         dec = await db.decisions.find_one({"id": decision_id, "tenant_id": tenant_id}, {"_id": 0})
-        if dec and not can_decide(user, dec):
-            await db.voice_notes.update_one({"id": note_id, "tenant_id": tenant_id}, {"$set": {"review_approved": False}})
+        await db.voice_notes.update_one({"id": note_id, "tenant_id": tenant_id}, {"$set": {"review_approved": False}})
+        if dec and dec.get("approver_id") != user.get("id"):
             await notify_decision_waiting(tenant_id, dec, sender_name=user.get("name"))
-            return {"type": "decision", "id": decision_id, "waiting_on": dec.get("approver_id")}
-        await approve_decision_flow(user, decision_id, authorized=True)
+        return {"type": "decision", "id": decision_id, "on_desk": True,
+                "waiting_on": (dec or {}).get("approver_id")}
     return {"type": "decision", "id": decision_id,
             **({"nothing_to_decide": True} if (vn or {}).get("outcome") == "nothing_to_decide" else {})}

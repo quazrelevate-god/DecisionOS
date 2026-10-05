@@ -64,7 +64,7 @@ import { StaleStamp } from "../components/mobile/StaleStamp";
 // the capture hooks and hosts the repurposed InsightWell container itself.
 import { DeskDexWell } from "./desk/DeskDexWell";
 import { DeskAskPane } from "./desk/DeskAskPane";
-import { DeskAskReview } from "./desk/DeskAskReview";
+import { DexCapturePopup } from "./desk/DexCapturePopup";
 // DEX-SLIDER Part 1 — the phone Desk's new order sits behind this.
 import { DEX_SLIDER } from "../lib/flags";
 import { DexSlider } from "../components/karma/DexSlider";
@@ -1928,21 +1928,30 @@ export default function Desk() {
               onClose={() => doors?.closeAsk?.()}
               onOpenDecision={(id) => setOpenDecisionId(id)}
             />
-            {/* THE REVIEW CARD — opened by the send, closed by a send or a
-                discard. `loading` is the window between the mic stopping and
-                the words coming back: dex.sending is true and the draft is
-                still empty. */}
-            <DeskAskReview
+            {/* THE REVIEW CARD IS DECIDE'S OWN. (2026-10-05 — founder: "keep
+                the same UI design used for the pop-up card in the decide
+                section for transcription view".) So it IS that component,
+                borrowed rather than imitated: same card, same centring, same
+                refusal to close on a stray tap outside, and the `ask` step
+                gives it one stage instead of three and a Send instead of a
+                Next. `transcribing` is the window between the mic stopping and
+                the words arriving — the pulse the founder asked to see BEFORE
+                the text, not after. */}
+            <DexCapturePopup
               open={askReview}
-              loading={!!dexCap?.sending && !(chatC?.draft || "").trim()}
-              draft={chatC?.draft || ""}
-              onDraft={chatC?.setDraft}
-              sending={!!chatC?.busy}
-              pendingFiles={chatC?.pendingFiles || []}
+              step="ask"
+              phone
+              text={chatC?.draft || ""}
+              onText={(v) => chatC?.setDraft?.(v)}
+              transcribing={!!dexCap?.sending && !(chatC?.draft || "").trim()}
+              files={chatC?.pendingFiles || []}
               onRemoveFile={(id) => chatC?.removeFile?.(id)}
+              busy={!!chatC?.busy}
               onAttach={() => askFileRef.current?.click()}
-              onCancel={() => { setAskReview(false); chatC?.setDraft?.(""); }}
-              onSend={() => {
+              attaching={!!chatC?.attaching}
+              onClose={() => setAskReview(false)}
+              onDiscard={() => { setAskReview(false); chatC?.setDraft?.(""); }}
+              onNext={() => {
                 const q = (chatC?.draft || "").trim();
                 if (!q && !(chatC?.pendingFiles || []).length) return;
                 setAskReview(false);

@@ -220,6 +220,10 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
   React.useEffect(() => { if (!capturing) settle(); }, [capturing, settle]);
 
   const onPointerDown = (e) => {
+    /* BEFORE the capturing guard, deliberately: while a capture runs dragging
+       is off and this returns early, and a disarm that never ran is how the
+       stale flag survived to eat a real press. A touch always disarms. */
+    ghostClickRef.current = false;
     if (disabled || capturing) return;
     handleRef.current?.setPointerCapture?.(e.pointerId);
     draggingRef.current = true;
@@ -251,19 +255,27 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
 
   /* THE CLICK THAT FOLLOWS A DRAG IS NOT A PRESS. A pointerdown, a move and a
      pointerup on a <button> also produce a `click`, and the handle's click is
-     the SEND. So committing Ask with a swipe armed the capture and then, one
-     event later, the same gesture pressed send on it — the review card opened
-     the instant the founder's thumb left the glass, with nothing recorded.
-     Caught by verify:slider, which could not reach the Ask pane's close button
-     because a card nobody asked for was already over it.
-     Guarded by the gesture, not by a timer: a real press never sets this. */
-  const draggedRef = React.useRef(false);
+     the SEND — so committing Ask with a swipe armed the capture and then, one
+     event later, the same gesture pressed send on it, opening the review the
+     instant a thumb left the glass with nothing recorded.
+     TOLD APART BY THE POINTERDOWN, not by a clock. Two earlier guards were
+     wrong in opposite directions: a flag the trailing click cleared assumed
+     that click always arrives (WebKit suppresses it after a pointer that
+     moved, so the flag stayed set and ate the founder's next REAL press —
+     "I need to press twice"); a 400ms window then swallowed any press inside
+     it, including the legitimate one verify:dex makes immediately after
+     opening the door.
+     A ghost click arrives with NO pointerdown of its own. A real press always
+     has one. So pointerdown disarms, pointerup after a move arms, and the
+     thing in between is the only click ever dropped — no timing, and a stale
+     flag cannot survive the next touch. */
+  const ghostClickRef = React.useRef(false);
   const onPointerUp = () => {
     if (!draggingRef.current) return;
     draggingRef.current = false;
     setDragging(false);
     const at = end(lastDxRef.current);
-    draggedRef.current = Math.abs(lastDxRef.current) > 4;
+    ghostClickRef.current = Math.abs(lastDxRef.current) > 4;
     settle();
     if (!at) return;                       // short of the end: nothing happened
     tick("fire");
@@ -414,8 +426,8 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
              out of the field's way, which is also where the founder asked for
              it to be. */
           onClick={capturing
-            ? () => { if (draggedRef.current) { draggedRef.current = false; return; } onStop?.(); }
-            : () => { draggedRef.current = false; }}
+            ? () => { if (ghostClickRef.current) { ghostClickRef.current = false; return; } onStop?.(); }
+            : undefined}
           className={cn(
             /* THE HANDLE IS THE CONTROL, so it is the size of the control.
                h-14 left 40px of empty channel above and below it and read as a

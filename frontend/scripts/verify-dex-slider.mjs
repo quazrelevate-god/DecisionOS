@@ -211,11 +211,25 @@ for (const [w, h] of WIDTHS) {
     `${Math.round((settled.x + settled.width / 2) - (track.x + track.width / 2))}px off centre`);
   check('and the ends are named again', (await visibleEnds()) === 2);
 
-  // ── left: Ask, unchanged ──────────────────────────────────────────────────
+  /* ── left: Ask, IN THE SHEET ───────────────────────────────────────────────
+     2026-10-05 — the left end no longer raises a sheet over the Desk. The
+     founder's redesign clears the board and talks in it: the transcript takes
+     the sheet, the KPI grid folds away, and this control becomes the composer.
+     So the check is the same question asked of the new place. */
   await drag(track.x + 2);
-  check('a full drag left opens Ask', (await page.locator('[data-testid="dex-chat"]').count()) === 1);
-  await page.goBack();
+  await page.waitForTimeout(600);
+  check('a full drag left opens Ask in the sheet',
+    (await page.locator('[data-testid="desk-ask-pane"]').count()) === 1);
+  check('…and not as a sheet over the Desk',
+    (await page.locator('[data-testid="dex-chat"]').count()) === 0);
+  check('the KPI grid folds away to make room',
+    (await page.locator('[data-testid="desk-kpi-grid"]').count()) === 0);
+  check('the control carries the plus now',
+    (await page.locator('[data-testid="dex-slider-plus"]').count()) === 1);
+  await page.locator('[data-testid="desk-ask-close"]').click();
   await page.waitForTimeout(700);
+  check('closing Ask gives the Desk back',
+    (await page.locator('[data-testid="desk-kpi-grid"]').count()) === 1);
   check('the handle is back at centre after a door closes',
     Math.abs((await page.locator('[data-testid="dex-slider-handle"]').boundingBox()).x - rest.x) <= 2);
 

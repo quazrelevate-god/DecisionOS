@@ -297,7 +297,12 @@ export default function Layout({ children }) {
      way to the same room and not a second room. Memoised so a page that reads
      it does not re-render on every tick of Layout's own state. */
   const dexDoors = useMemo(() => ({
-    openAsk: () => { setDexChannel("ask"); setDexOpen(true); },
+    openAsk: () => { setDexChannel("ask"); setDexOpen(true); setDexInline(false); },
+    /* The Desk's own door: same channel, same conversation, drawn in its sheet.
+       `chat` and `dex` ride along because the page cannot reach Layout's state
+       any other way, and the whole point is that it is not a second copy. */
+    openAskInline: () => { setDexChannel("ask"); setDexOpen(true); setDexInline(true); },
+    closeAsk: () => { setDexOpen(false); setDexChannel(null); setDexInline(false); },
   }), []);
   const wantDark = dexRoute;
   const lastDark = useRef(null);
@@ -376,6 +381,16 @@ export default function Layout({ children }) {
   // MPWA-03 mobile navigation state.
   const [allAppsOpen, setAllAppsOpen] = useState(false);
   const [dexOpen, setDexOpen] = useState(false);
+  /* ASK-INLINE (2026-10-05) — the same conversation, hosted by the Desk.
+     The founder's redesign puts Ask inside the Desk's black sheet rather than
+     in a sheet of its own: the board clears, the KPI grid folds away and the
+     transcript takes the space, with the slider below it as the composer.
+     What must NOT change is that there is ONE conversation. Layout still owns
+     it — the dock, the FAB and the Desk have always shared a single `chat`,
+     and two would mean a founder's question going to a transcript they are not
+     looking at. So this flag only decides WHERE it is drawn: `true` and the
+     overlay sheet stands down because the Desk is already drawing it. */
+  const [dexInline, setDexInline] = useState(false);
   /* KM-25 — the mobile shell stops being a document that scrolls and becomes a
      frame: a top region that does not move, and a scroller under it. The slot
      is state rather than a ref because a page's header portals into it and has
@@ -508,6 +523,13 @@ export default function Layout({ children }) {
     userId: user?.id,
     onEnding: onDexEnding,
   });
+  /* The value the Desk actually receives. Re-made when the conversation ticks,
+     unlike `dexDoors` above, which is memoised once because a page that only
+     opens a door must not re-render on every word Dex says. Declared HERE, not
+     beside the doors, because `chat` does not exist until this line. */
+  const dexDeskHost = useMemo(() => ({
+    ...dexDoors, chat, dex, inline: dexInline && dexOpen,
+  }), [dexDoors, chat, dex, dexInline, dexOpen]);
   draftSinkRef.current = chat.setDraftFromVoice;
   dexChatRef.current = chat;
   dexReadingRef.current = () => isReading(dex) || chat.busy;
@@ -666,7 +688,7 @@ export default function Layout({ children }) {
      with the theme instead of snapping — see .app-sky::before. */
   return (
     <HeaderSlotContext.Provider value={isMobileShell ? headerSlot : null}>
-    <DexDoorsContext.Provider value={isMobileShell ? dexDoors : null}>
+    <DexDoorsContext.Provider value={isMobileShell ? dexDeskHost : null}>
     {/* ASK-43 — the phone's shell divides by the scale too. Viewport units are
         not divided by CSS zoom, so at 0.8 a bare 100dvh paints at 80% of the
         screen and the app stops short of the bottom; the desktop half of this
@@ -1088,7 +1110,7 @@ export default function Layout({ children }) {
            .app-dock-right-wide). Everywhere else the anchoring is untouched. */
         /* …and the dock gives the width back when the circle returns, or the
            two would overlap on the one screen that has both. */
-        wide={deskHasSlider && !dexOpen}
+        wide={deskHasSlider && (!dexOpen || dexInline)}
         user={user}
         onMore={() => setAllAppsOpen(true)}
         moreOpen={allAppsOpen}
@@ -1102,15 +1124,19 @@ export default function Layout({ children }) {
            the panel; that tile has left for the Desk's top bar, so the number
            on More now counts something nothing inside More can show. The bell
            on /inbox carries it. */
-        dexActive={dexOpen}
+        /* ASK-INLINE — the dock knows nothing about a conversation the Desk
+           is hosting. Left as it was, the shared draft reached its own field
+           and the founder got two composers echoing each other, one in the
+           slider and one in the dock. These four are the whole of that leak. */
+        dexActive={dexOpen && !dexInline}
         dexLevels={dex.levels}
         /* KM-60 — the live meter, read on the wave's own animation frame.
            `dexLevels` stays for the state-shaped API; this is what actually
            drives the motion, and it costs Layout no renders. */
         dexLevelsRef={dex.levelsRef}
-        dexMode={chat.mode}
+        dexMode={dexInline ? "voice" : chat.mode}
         dexWaveState={dex.recording ? "listening" : chat.busy ? "thinking" : "idle"}
-        dexDraft={chat.draft}
+        dexDraft={dexInline ? "" : chat.draft}
         onDexDraft={chat.setDraft}
         onDexSubmit={chat.submit}
         /* KM-53 — the gap between "stop" and the transcript coming back.
@@ -1118,7 +1144,7 @@ export default function Layout({ children }) {
            narrows it to the window where there is genuinely nothing to show,
            so the placeholder never sits on top of text that has already
            arrived. */
-        dexTranscribing={!!dex.sending && !chat.draft}
+        dexTranscribing={!dexInline && !!dex.sending && !chat.draft}
         /* ASK-33.1 — which Dex the bar is serving, for its placeholder. */
         dexChannel={dexChannel}
       />
@@ -1148,7 +1174,13 @@ export default function Layout({ children }) {
           the send button with it, so Ask opened on the Desk as a bar with
           nowhere to press — and only on the Desk, which is exactly the shape
           of the report. `dexOpen` is the whole fix. */}
-      {(!deskHasSlider || dexOpen) && (
+      {/* ASK-INLINE — and NOT while the Desk's slider is the composer. The
+          dock grows a mic and a field whenever Ask is open, which is right when
+          Ask is a sheet over the page and wrong when the slider below the
+          transcript is already carrying both. Two composers on one screen is
+          the bug the founder called out the first time, arriving from the
+          other side. */}
+      {(!deskHasSlider || (dexOpen && !dexInline)) && (
       <DexFab
         /* ASK-33 Phase 4 — closed, the FAB opens Dex in ASK: one tap, no
            picker, no scrim (KM-54's two doors collapsed; see DexFab.jsx). Open,
@@ -1190,7 +1222,7 @@ export default function Layout({ children }) {
           a door opened earlier. ASK-33 Phase 4: the next tap on the FAB opens
           Ask; Decide is reached from the Desk's Dex well. */}
       <DexChat
-        open={dexOpen}
+        open={dexOpen && !dexInline}
         onClose={() => { setDexOpen(false); setDexChannel(null); }}
         dex={dex}
         chat={chat}

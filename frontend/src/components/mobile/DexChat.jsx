@@ -76,7 +76,7 @@ const ACTION = "flex h-11 items-center rounded-pill px-4 text-sm focus-visible:o
 const ACTION_MAIN = cn(ACTION, "h-14 min-h-touch-lg px-6 bg-[#fff] font-semibold text-kr-ink");
 const ACTION_QUIET = cn(ACTION, "bg-white/10 font-medium text-white hover:bg-white/20");
 
-function Outcome({ o, onReview, onRetry, onDismiss, retryDisabled }) {
+export function Outcome({ o, onReview, onRetry, onDismiss, retryDisabled }) {
   if (o.kind === "ready") {
     return (
       <div data-testid="dex-outcome-ready">
@@ -144,7 +144,7 @@ function Outcome({ o, onReview, onRetry, onDismiss, retryDisabled }) {
    a filename is not a preview of a photograph); everything else shows the
    paperclip and its name. The object URL is revoked on unmount — these are
    megabyte-sized blobs and the sheet can hold several. */
-function AttachedChip({ file, onRemove, disabled }) {
+export function AttachedChip({ file, onRemove, disabled }) {
   const isImage = !!file.file && (file.type || "").startsWith("image/");
   const [src, setSrc] = React.useState(null);
   React.useEffect(() => {
@@ -225,7 +225,7 @@ function SentFile({ file, onOpen }) {
 }
 
 /** One turn in the transcript. */
-function Bubble({ m, index, onOpenFile }) {
+export function Bubble({ m, index, onOpenFile }) {
   const mine = m.role === "user";
   const files = m.files || [];
   return (

@@ -63,6 +63,8 @@ import { StaleStamp } from "../components/mobile/StaleStamp";
 // ASK-33 — the well on the left column's floor is Dex's Decide door. It owns
 // the capture hooks and hosts the repurposed InsightWell container itself.
 import { DeskDexWell } from "./desk/DeskDexWell";
+import { DeskAskPane } from "./desk/DeskAskPane";
+import { AttachedChip } from "../components/mobile/DexChat";
 // DEX-SLIDER Part 1 — the phone Desk's new order sits behind this.
 import { DEX_SLIDER } from "../lib/flags";
 import { DexSlider } from "../components/karma/DexSlider";
@@ -957,6 +959,56 @@ export default function Desk() {
   const qc = useQueryClient();
   // DEX-SLIDER Part 2 — Ask lives in Layout; the slider reaches it from here.
   const doors = useDexDoors();
+
+  /* ASK-INLINE (2026-10-05) — ASK HAPPENS IN THE SHEET NOW.
+     The founder's redesign: the left end of the slider no longer raises a
+     sheet over the Desk. The board clears, the KPI grid folds away, the black
+     sheet grows up to the greeting and becomes the transcript, and this one
+     control below it carries the voice, the send, the paperclip and the
+     keyboard that the dock used to.
+     The conversation itself is still Layout's — `doors.chat` and `doors.dex`
+     are the same objects the dock and the FAB use — because a second one would
+     mean a founder's question landing in a transcript they are not looking at.
+     What follows only ADAPTS them to the shapes DexSlider wants. */
+  const askOn = !!doors?.inline;
+  const [askTyping, setAskTyping] = useState(false);
+  useEffect(() => { if (!askOn) setAskTyping(false); }, [askOn]);
+  const dexCap = doors?.dex;
+  const chatC = doors?.chat;
+  const askMeterRef = useRef(null);
+  const askChat = useMemo(() => {
+    if (!dexCap || !chatC) return null;
+    return {
+      /* The capture, as the control reads it. `capturing` is the well's cue to
+         become a waveform: true while the mic is live AND while Dex is reading
+         what was said, because both are states where the control has something
+         to show and nothing to be dragged. */
+      recording: !!dexCap.recording,
+      capturing: !!dexCap.recording || !!dexCap.sending,
+      levelsRef: dexCap.levelsRef,
+      readLevel: askMeterRef.current,
+      startVoice: () => { if (!dexCap.recording) dexCap.startRecording?.(); },
+      stopAndSend: () => dexCap.stopRecording?.(),
+      draft: chatC.draft,
+      setDraft: chatC.setDraft,
+      send: () => { const q = (chatC.draft || "").trim();
+        if (!q && !(chatC.pendingFiles || []).length) return;
+        chatC.ask?.(q); },
+      pickFile: () => dexCap.fileRef?.current?.click(),
+      /* WHAT IS ABOUT TO BE SENT, ABOVE THE CONTROL — the founder's rule from
+         the first Ask pass, unchanged by the move: "the attach document or
+         media file should be above the slider container". DexSlider renders
+         whatever this is directly over the well. */
+      attachments: (chatC.pendingFiles || []).length > 0 ? (
+        <div className="mb-2 flex flex-wrap gap-1.5 px-1" data-testid="desk-ask-attachments">
+          {chatC.pendingFiles.map((f) => (
+            <AttachedChip key={f.id} file={f} onRemove={() => chatC.removeFile?.(f.id)} />
+          ))}
+        </div>
+      ) : null,
+    };
+  }, [dexCap, chatC]);
+
   /* DEX-SLIDER Part 3 — the slider's right end. useBackDismiss is what makes
      the Android back button and the iOS edge swipe close it: it puts a marker
      entry on history while the door is open, and both gestures pop that. One
@@ -1584,7 +1636,15 @@ export default function Desk() {
             column got shorter (the numeral, the gauge and the well all took a
             step down); the tiles follow, they are not sized on their own. */}
         {/* ASK-52 — still three columns and two rows; the second row is the
-            two-wide Workflows card plus one tile. */}
+            two-wide Workflows card plus one tile.
+            ASK-INLINE — AND IT FOLDS AWAY WHILE ASK IS OPEN. The founder set
+            the ceiling of the chat at the greeting and the score: "the KPI grid
+            will become removed and the black sheet will increase its height
+            until the entire KPI grid area... so below the greeting and score
+            the screen of the black sheet will start". Unmounted rather than
+            hidden, so the sheet's flex-1 simply takes the room — no height to
+            animate and nothing left measuring itself behind the chat. */}
+        {!(isMobile && askOn) && (
         <div className={cn(
           /* ONE GRID, BOTH SIZES. Three columns on a phone as well as on
              desktop — which sounds wrong until you remember --ui-scale: the
@@ -1682,6 +1742,7 @@ export default function Desk() {
           />
           )}
         </div>
+        )}
       </div>
 
       {/* ── THE DESK ─────────────────────────────────────────────────── */}
@@ -1859,9 +1920,21 @@ export default function Desk() {
           pop && "max-lg:grid-rows-[minmax(0,1fr)]"
         )}
       >
+        {/* ASK-INLINE — THE SHEET IS THE TRANSCRIPT WHILE ASK IS OPEN. Not a
+            card inside it and not a sheet over it: the board's own tabs, rows
+            and "Show all" stand down, and what is left is the conversation and
+            the control under it. Everything here is Layout's `chat`, so the
+            words are the same ones the dock would have shown. */}
+        {isMobile && askOn && (
+          <DeskAskPane
+            chat={chatC}
+            onClose={() => doors?.closeAsk?.()}
+            onOpenDecision={(id) => setOpenDecisionId(id)}
+          />
+        )}
         {/* ASK-34 B — THE PHONE'S CARD. One card, three tabs, the same rows the
             desktop columns use. */}
-        {isMobile && (
+        {isMobile && !askOn && (
         <PhoneTabCard
           tone={phoneTab === "decisions" ? "needs" : phoneTab === "approvals" ? "flag" : "today"}
           roomy={deskSheet}
@@ -1946,13 +2019,23 @@ export default function Desk() {
                  you cannot read, so the slider gets the dark-surface treatment
                  the dock already has. */
               tone="ink"
-              onAsk={() => doors?.openAsk?.()}
+              /* ASK-INLINE — the left end no longer opens a sheet over the
+                 Desk. It clears this one and starts talking in it. */
+              onAsk={() => { doors?.openAskInline?.(); askChat?.startVoice?.(); }}
               onDecide={() => setDecideOpen(true)}
-              readLevel={dexMeter}
-              capturing={dexLive.capturing}
-              recording={dexLive.recording}
-              levelsRef={dexLive.levelsRef}
-              onStop={dexStop}
+              readLevel={askOn ? askChat.readLevel : dexMeter}
+              capturing={askOn ? askChat.capturing : dexLive.capturing}
+              recording={askOn ? askChat.recording : dexLive.recording}
+              levelsRef={askOn ? askChat.levelsRef : dexLive.levelsRef}
+              onStop={askOn ? askChat.stopAndSend : dexStop}
+              composer={askOn}
+              typing={askOn && askTyping}
+              onTypingChange={setAskTyping}
+              draft={askChat?.draft || ""}
+              onDraft={askChat?.setDraft}
+              onSend={askChat?.send}
+              onAttach={askChat?.pickFile}
+              attachments={askOn ? askChat.attachments : null}
             />
           </div>
         )}

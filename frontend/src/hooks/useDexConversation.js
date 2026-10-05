@@ -239,8 +239,33 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
          and by embedding. Naming them in the question is what points the
          retrieval at them; it is also what the founder just said out loud, so
          the transcript already reads that way. */
-      const named = pendingFiles.map((f) => f.name).join(", ");
-      const question = named ? `${text} (about the attached file${pendingFiles.length > 1 ? "s" : ""}: ${named})` : text;
+      /* THE UPLOAD HAPPENS HERE, once, on send. Each staged picture goes into
+         the Company Brain now — which is also when it gets indexed, which is
+         what makes naming it in the question find it. A file that will not
+         upload is said out loud and left out of the question rather than
+         silently named: Dex must not be told to look for something that is not
+         there. */
+      const staged = pendingFiles.filter((f) => f.staged && f.file);
+      const landed = pendingFiles.filter((f) => !f.staged).map((f) => f.name);
+      for (const f of staged) {
+        try {
+          const fd = new FormData();
+          fd.append("file", f.file);
+          fd.append("title", f.name);
+          fd.append("kind", "other");
+          fd.append("visibility", "private");
+          const { data } = await api.post("/brain/documents", fd, { headers: { "Content-Type": "multipart/form-data" } });
+          if (data?.id) landed.push(f.name);
+          else push({ role: "dex", text: `${f.name} didn't go through, so I haven't read it.` });
+        } catch (err) {
+          const detail = err.response?.data?.detail;
+          push({ role: "dex", text: typeof detail === "string" && detail
+            ? detail
+            : `${f.name} didn't go through, so I haven't read it.` });
+        }
+      }
+      const named = landed.join(", ");
+      const question = named ? `${text} (about the attached file${landed.length > 1 ? "s" : ""}: ${named})` : text;
       setPendingFiles([]);
       // Verified shape: { type, answer, missing_information, suggested_questions }.
       const { data } = await api.post("/ask", { question, context_id: ctxId });
@@ -296,24 +321,39 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
   const attach = useCallback(async (file, label = "File") => {
     if (!file) return;
     const tempId = `up_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    /* IN ASK, ATTACHING STAGES — IT DOES NOT UPLOAD. (2026-10-05.)
+       Founder: "when I attach multiple images one by one, suddenly it started
+       uploading and started analysing the image automatically without me
+       clicking the send button."
+       They were reading it exactly right. Ask's attach posted straight to
+       /brain/documents, which files the image into the Company Brain as a
+       permanent document AND spawns index_document() to embed it — so by the
+       third picture the backend was three uploads and three embeddings deep
+       into a question nobody had asked yet. (It is also owner/manager-only, so
+       for anyone else the paperclip answered 403 for no reason they could see.)
+       The upload moves to send(), where `ask` does it just before posting the
+       question. Nothing reaches the Brain until the founder commits. The chip
+       is drawn from the local File, so staging is instant and needs no
+       skeleton — the picture is simply there the moment it is picked. */
+    if (channel !== "decide") {
+      setPendingFiles((p) => [...p, {
+        id: tempId, name: file.name, type: file.type || "", file, staged: true,
+      }]);
+      return { ok: true, id: tempId, staged: true };
+    }
+
     setPendingFiles((p) => [...p, {
       id: tempId, name: file.name, type: file.type || "", file, uploading: true,
     }]);
     setAttaching((n) => n + 1);
     setBusy(true);
     try {
+      // Decide only, now: /files KEEPS a file and reads nothing. Ask's own
+      // upload lives in `ask`, above, and happens on send.
       const fd = new FormData();
       fd.append("file", file);
-      let data;
-      if (channel === "decide") {
-        ({ data } = await api.post("/files", fd, { headers: { "Content-Type": "multipart/form-data" } }));
-      } else {
-        // The Company Brain reads what it is given; /files only keeps it.
-        fd.append("title", file.name);
-        fd.append("kind", "other");
-        fd.append("visibility", "private");
-        ({ data } = await api.post("/brain/documents", fd, { headers: { "Content-Type": "multipart/form-data" } }));
-      }
+      const { data } = await api.post("/files", fd, { headers: { "Content-Type": "multipart/form-data" } });
       const id = data?.id || data?.file?.id;
       if (id) {
         /* ASK-33 — the entry also keeps the File and its type, so the Desk

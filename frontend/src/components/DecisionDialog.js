@@ -629,16 +629,19 @@ export function DecisionPanel({
             <CheckCircle size={16} weight="bold" aria-hidden="true" className="shrink-0" />
             {approveM.isPending ? "Approving…" : "Approve"}
           </button>
-          {!!decisionId && (
+          {/* Offered on the way IN only, like the dialog's own: a decision that
+              is already a draft has nothing useful to say here, and "Not a
+              draft" was the phone's copy of the line the founder struck. */}
+          {!!decisionId && !(isDraft && !onSaveDraft) && (
             <button
               type="button"
-              onClick={() => draftM.mutate(!isDraft)}
+              onClick={() => draftM.mutate(true)}
               disabled={busy}
               /* The testid the Dex suites look for, kept. */
               data-testid="desk-dex-later"
               className={`flex h-14 min-w-0 flex-1 items-center justify-center rounded-pill px-4 text-sm font-medium text-slate-800 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 disabled:opacity-60 lg:h-12 ${GLASS_PILL}`}
             >
-              {draftM.isPending ? "Saving…" : isDraft && !onSaveDraft ? "Not a draft" : "Save as draft"}
+              {draftM.isPending ? "Saving…" : "Save as draft"}
             </button>
           )}
           <button
@@ -921,15 +924,25 @@ export function DecisionPanel({
                           it from the ones that arrived overnight. Below the
                           two, because it is not a decision: it is the note
                           that they have been here. */}
+                      {/* 2026-10-05 — AND IT IS ONLY OFFERED ON THE WAY IN.
+                          Opening a decision that is ALREADY a draft used to put
+                          "Not a draft any more" under Approve and Reject, which
+                          the founder read as noise and they were right: by then
+                          the only answers that matter are the two above it, and
+                          both clear the draft flag themselves. Saving one is a
+                          thing you do to a decision you are leaving; un-saving
+                          it is not a thing anybody came here to do. */}
+                      {!isDraft && (
                       <button
                         type="button"
-                        onClick={() => draftM.mutate(!isDraft)}
+                        onClick={() => draftM.mutate(true)}
                         disabled={busy}
                         data-testid="decision-save-draft"
                         className="mt-2.5 flex h-11 w-full items-center justify-center rounded-pill px-5 text-sm font-medium text-slate-600 transition-colors hover:bg-white hover:text-slate-900 disabled:opacity-60"
                       >
-                        {draftM.isPending ? "Saving…" : isDraft ? "Not a draft any more" : "Save as draft — decide later"}
+                        {draftM.isPending ? "Saving…" : "Save as draft — decide later"}
                       </button>
+                      )}
                       {confirmReject && (
                         <p className="mt-3 text-xs text-rose-700" data-testid="decision-reject-warning">
                           {proposing

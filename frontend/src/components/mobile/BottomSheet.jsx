@@ -281,10 +281,17 @@ export function BottomSheet({
                 </DialogPrimitive.Description>
               )}
             </div>
+            {/* 2026-10-05 — THE SHEET'S X IS THE APP'S X NOW. This was the one
+                survivor of the pre-neumorphic kit: a flat rounded-SQUARE on
+                hover:bg-accent, wearing the theme's blue focus ring, sitting on
+                top of a decision card built entirely out of kr-pop. The founder
+                photographed it. Same material and same shape as the Ask sheet's
+                close (DexChat) so the two cannot drift again; the ring goes
+                with it, since kr-pop carries its own pressed state. */}
             <DialogPrimitive.Close
               data-testid={`${testId}-close`}
               aria-label="Close"
-              className="shrink-0 grid place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="kr-pop shrink-0 grid place-items-center rounded-full text-foreground/70 focus-visible:outline-none"
               style={{ minHeight: "var(--control-h-sm)", minWidth: "var(--control-h-sm)" }}
             >
               <X size={22} weight="bold" />

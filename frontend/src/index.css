@@ -749,6 +749,56 @@
     --desk-kpi-cap: 9rem;
     --desk-phone-row: calc(2.75rem + 2 * 0.25rem);
     --desk-phone-body: calc(3 * var(--desk-phone-row) + 2px + 4px + 2.75rem);
+
+    /* THREE ROWS, ALWAYS — THE TYPE BENDS INSTEAD. (2026-10-05.)
+       Founder, on short phones: "instead of making the floor scrollable list,
+       I would like to go with the scaling down approach. Scale until
+       everything fits spaciously and tight enough. No need to scroll
+       internally, because we have an intention of showing three recent items
+       always, no matter the phone screen size."
+       So the sheet's rows are written against this one number and Desk.js
+       measures it: 1 wherever three rows already fit (the 6.1" and up, which
+       is every screen the founder has signed off, so they are untouched), and
+       below 1 only where they would not.
+       THE FLOOR IS 0.8 AND IT IS NOT A TASTE DECISION. The title is 17 CSS px
+       inside a tree the app zooms to 0.8, so it is drawn at 13.6 real points;
+       accessibility.md puts the iOS minimum at 11pt, which is reached at
+       exactly 11 / (17 x 0.8) = 0.808. Past that the rows would be small
+       before they were short, so the scale stops and the titles truncate —
+       which they already do — rather than shrinking out of legibility. */
+    --desk-row-scale: 1;
+}
+
+/* The sheet's rows, written against --desk-row-scale. Tailwind cannot express
+   a calc() against a custom property in an arbitrary value without stringly
+   duplication at three call sites, and these three rules are read together
+   anyway: a row's height, its title and its supporting line all shrink by the
+   same number or the row stops looking like itself.
+   `overflow: hidden` is the part that is NOT about scaling and matters most:
+   the row is `flex-1 min-h-0`, so a container shorter than its content will
+   push it below its own text — which is exactly how the founder's Android 6.1"
+   screenshot came to have three titles printed on top of one another. Clipping
+   a row is ugly; a row printing over its neighbour is unreadable.
+   Scoped under the breakpoint on purpose: these are plain class selectors in
+   an UNLAYERED sheet, so they outrank Tailwind's `lg:text-[15px]` on the same
+   element (an unlayered rule beats @layer utilities whatever the specificity).
+   The sheet is a phone surface and never renders at lg, but the row's desktop
+   sizes are still written on it, and silently winning that fight is how a
+   phone fix turns up on a laptop a month later. */
+@media (max-width: 1023.98px) {
+    .kr-desk-row-roomy {
+        padding-block: calc(0.5rem * var(--desk-row-scale));
+        max-height: calc(6.5rem * var(--desk-row-scale));
+        overflow: hidden;
+    }
+    .kr-desk-row-title {
+        font-size: calc(17px * var(--desk-row-scale));
+        line-height: calc(1.5rem * var(--desk-row-scale));
+    }
+    .kr-desk-row-meta {
+        font-size: calc(15px * var(--desk-row-scale));
+        line-height: calc(1.5rem * var(--desk-row-scale));
+    }
 }
 
 /* Mobile PWA (2026-09-14) — the dock, the Dex button, their pickers, the

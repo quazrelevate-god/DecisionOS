@@ -60,9 +60,16 @@ const END_SLOP = 6;
    not see at all — so the slider runs the app's real ripple material instead,
    decoratively: the same canvas the Dex well uses, clipped to the pill, with no
    control of its own. */
+/* 2026-10-05 — SUBTLER, AND THE WAVE ITSELF HEAVIER. The founder wanted both
+   at once, which sounds contradictory and is not: `thickness` is the ridge's
+   weight, `gain` is how far a voice throws it and `density` is how many are in
+   flight. A heavier ridge pushed less hard, fewer at a time, reads as one slow
+   swell instead of a busy shimmer. gain .95 -> .6, density .65 -> .45,
+   thickness 3 -> 4.5; softness stays, since blurring a thicker ridge further
+   would spend the weight we just added. */
 const SLIDER_RIPPLE = {
-  gain: 0.95, thickness: 3, softness: 2.5, water: 1,
-  elastic: 0, speed: 0.9, density: 0.65,
+  gain: 0.6, thickness: 4.5, softness: 2.5, water: 1,
+  elastic: 0, speed: 0.9, density: 0.45,
 };
 
 /* The haptic tick. Capacitor only — the browser PWA has no vibration API worth

@@ -24,7 +24,7 @@
 //
 // Deep-link contract preserved: /inbox?decision=<id> redirects to the
 // decision page (KM-28).
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
@@ -276,7 +276,7 @@ function DeskRow({ r, first, testid, roomy = false }) {
          holding them; six of those pixels are here, three times over. Desktop
          keeps its 7 — it has the room and the columns are read at arm's
          length. */
-      className={`flex cursor-pointer items-center justify-between gap-3 ${roomy ? "min-h-0 flex-1 max-h-[6.5rem] py-2" : "max-lg:py-1 py-[7px]"} ${first ? "" : "border-t border-white/[.14]"} ${
+      className={`flex cursor-pointer items-center justify-between gap-3 ${roomy ? "kr-desk-row-roomy min-h-0 flex-1 overflow-hidden" : "max-lg:py-1 py-[7px]"} ${first ? "" : "border-t border-white/[.14]"} ${
         /* ASK-42 E — THE MARK IS LOUDER. It was a 2px bar and a 5% white wash,
            which on near-black is a shade of the same black: the founder could
            see it only once they knew where to look. It is the SAME grammar,
@@ -301,12 +301,12 @@ function DeskRow({ r, first, testid, roomy = false }) {
             "Show all" by design (ASK-42), and a row that can double in height
             is a different card. Both carry the full title as a tooltip. */}
         <p title={r.title}
-          className={`truncate ${roomy ? "text-[17px] leading-6" : "text-[15px] leading-5"} font-medium tracking-[-0.006em] lg:whitespace-normal lg:line-clamp-2 lg:text-[15px] lg:leading-5 ${r.deferred ? "text-white" : "text-neutral-300"}`}>{r.title}</p>
+          className={`truncate ${roomy ? "kr-desk-row-title" : "text-[15px] leading-5"} font-medium tracking-[-0.006em] lg:whitespace-normal lg:line-clamp-2 lg:text-[15px] lg:leading-5 ${r.deferred ? "text-white" : "text-neutral-300"}`}>{r.title}</p>
         {(r.meta || r.deferred) && (
           /* text-sm + neutral-400, measured: the supporting line was 12px
              (9.6pt after --ui-scale) at 3.87:1 on the board's own ink, against
              an 11pt floor and a 4.5:1 requirement. 14px is 11.2pt. */
-          <p title={r.meta || undefined} className={`truncate text-neutral-400 ${roomy ? "text-[15px] leading-6 lg:text-sm lg:leading-5" : "text-sm leading-5"}`}>
+          <p title={r.meta || undefined} className={`truncate text-neutral-400 ${roomy ? "kr-desk-row-meta lg:text-sm lg:leading-5" : "text-sm leading-5"}`}>
             {r.deferred && <span className="font-medium text-neutral-300">Draft</span>}
             {r.deferred && r.meta ? " · " : ""}
             {r.meta}
@@ -546,6 +546,48 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
   const { t } = useTranslation();
   const showAll = open;
 
+  /* THE ROWS SCALE TO THE ROOM THEY ARE GIVEN. (2026-10-05.)
+     The founder's call for short screens: keep three rows, never scroll inside
+     the card, and let the type come down until they fit.
+     MEASURED, NOT GUESSED FROM THE VIEWPORT. A formula on innerHeight would
+     have been shorter and would have been wrong, because the thing that eats
+     this space is not always the screen: it is the safe areas, the dock, the
+     slider's locked band and — on the device this started on — the app's own
+     zoom failing to apply. Reading clientHeight against scrollHeight catches
+     every one of those for the same three lines.
+     The reset to 1 before measuring is what keeps it from walking: scrollHeight
+     is read at full size every pass, so the answer does not depend on the
+     answer we gave last time. */
+  const listRef = useRef(null);
+  const [fitTick, setFitTick] = useState(0);
+  useEffect(() => {
+    if (!roomy) return undefined;
+    const onResize = () => setFitTick((n) => n + 1);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [roomy]);
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    if (!roomy || open) { el.style.removeProperty("--desk-row-scale"); return; }
+    el.style.setProperty("--desk-row-scale", "1");
+    /* ASK THE ROWS, NOT THE BOX. The list's own scrollHeight never exceeds its
+       clientHeight here and never will: the rows are `flex-1 min-h-0`, so a
+       short container does not overflow, it SQUEEZES them — 19px boxes around
+       45px of words. The deficit is invisible from the outside and has to be
+       read off each row's content height instead. */
+    const kids = el.querySelectorAll("[data-row]");
+    if (!kids.length) return;
+    const avail = el.clientHeight;
+    let needed = 0;
+    kids.forEach((k) => { needed += k.scrollHeight; });
+    needed += kids.length - 1;                            // the hairline between rows
+    if (!avail || !needed || needed <= avail) return;     // already fits: leave it alone
+    const DESK_ROW_SCALE_FLOOR = 0.8;                     // 11pt, see index.css
+    const s = Math.max(DESK_ROW_SCALE_FLOOR, avail / needed);
+    el.style.setProperty("--desk-row-scale", s.toFixed(3));
+  }, [roomy, open, rows, loading, fitTick]);
+
   /* ASK-35 1.1 — THREE, AND THEN A CONTROL: the Desk's job on a phone is to say
      what is waiting, not to show it all.
      ASK-46 — AND THE CARD IS THE HEIGHT OF THREE ROWS NOW, so there is nothing
@@ -636,7 +678,7 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
         style={!open && !roomy ? { height: "calc(var(--desk-phone-body) + 1.25rem)" } : undefined}
         data-testid={`${testid}-card`}
       >
-        <div className={scrolls ? "kr-scroll-quiet min-h-0 flex-1 overflow-y-auto" : !open ? "flex min-h-0 flex-1 flex-col" : undefined}>
+        <div ref={listRef} className={scrolls ? "kr-scroll-quiet min-h-0 flex-1 overflow-y-auto" : !open ? "flex min-h-0 flex-1 flex-col" : undefined}>
         {children || (
           <>
             {loading && (

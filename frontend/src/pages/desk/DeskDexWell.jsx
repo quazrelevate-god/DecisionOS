@@ -278,8 +278,18 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
   const roomAbove = kb.avail || (typeof window !== "undefined" ? window.innerHeight : 640);
   const growCap = Math.max(120, Math.round(roomAbove * 0.4));
 
-  /* ASK-33 Phase 5 — the in-card field grows to two lines, no further. While
-     floating it grows to the text (measured), capped at growCap then scrolls. */
+  /* THE FIELD GROWS WITH THE SENTENCE. (2026-10-05 — was two lines.)
+     Founder: "the text box is not dynamically increasing its height based on
+     the number of text lines, instead it's going in an infinite line in a
+     single row." It was wrapping all along — a textarea always does — but the
+     BOX was pinned to two lines and the rest scrolled out of sight, so one row
+     of visible words is all you ever got.
+     IN_CARD_LINES is the ceiling, not the height: the field is one line until
+     there are two, and it only scrolls once the text passes the ceiling. Five
+     is what fits above the Desk's own card without the composer eating it.
+     While floating (the keyboard is up) it keeps growCap, which is measured
+     against the room the keyboard left rather than guessed. */
+  const IN_CARD_LINES = 5;
   const fieldRef = useRef(null);
   useLayoutEffect(() => {
     const el = fieldRef.current;
@@ -288,7 +298,7 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
     const line = parseFloat(cs.lineHeight) || 20;
     const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
     el.style.height = "auto";
-    const max = floating ? growCap : Math.round(line * 2 + pad);
+    const max = floating ? growCap : Math.round(line * IN_CARD_LINES + pad);
     el.style.height = `${Math.min(el.scrollHeight, max)}px`;
     el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
   }, [chat.draft, recording, fieldOpen, floating, growCap]);

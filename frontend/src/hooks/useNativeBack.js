@@ -26,6 +26,8 @@ import { startNativeLinks } from "../lib/native/links";
 import { lockZoomInApp } from "../lib/native/viewport";
 // IOS-4 — an edge swipe closes an open sheet, which WKWebView will not do.
 import { startOverlaySwipeBack } from "../lib/native/swipeBack";
+// PUSH (2026-10-05) — register for device notifications once signed in.
+import { startPush } from "../lib/native/push";
 
 export function useNativeBack() {
   const navigate = useNavigate();
@@ -55,6 +57,22 @@ export function useNativeBack() {
     });
     return () => { cancelled = true; stop?.(); };
   }, [navigate]);
+
+  /* PUSH — only once there is a signed-in user (a token belongs to a person,
+     and the permission prompt should not greet a sign-in screen). Keyed on the
+     user id so it registers on sign-in and re-registers if the account changes,
+     not on every unrelated user-object update. Sign-out cleanup lives in
+     AuthContext.logout (it must not run on app close). Inert in a browser. */
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    let stop = null;
+    let cancelled = false;
+    startPush((path) => navigate(path)).then((off) => {
+      if (cancelled) off?.();
+      else stop = off;
+    });
+    return () => { cancelled = true; stop?.(); };
+  }, [user?.id, navigate]);
 
   useEffect(() => {
     let stop = null;

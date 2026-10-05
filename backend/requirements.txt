@@ -167,3 +167,8 @@ qdrant-client==1.19.0
 
 # S5-03 observability (optional error tracking; activated only when SENTRY_DSN is set)
 sentry-sdk[fastapi]>=2.0
+
+# 2026-10-05 — device push (FCM). Backend sender is a no-op until a Firebase
+# service-account credential is set in the env (FIREBASE_SERVICE_ACCOUNT), so
+# this can be installed and deployed before push is switched on.
+firebase-admin==6.5.0

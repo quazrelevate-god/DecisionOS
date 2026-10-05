@@ -3,6 +3,10 @@ import api, { SESSION_LOST_EVENT } from "../lib/api";
 import { setViewerIsOwner } from "../lib/aiConsent";
 import { carryOverLocalDrafts } from "../lib/decisionDrafts";
 import { clearAllDrafts } from "../lib/drafts";
+/* PUSH (2026-10-05) — a device token is per-install; drop THIS device's on
+   sign-out so the next person on a shared phone never gets the last one's
+   notifications. Inert in a browser. */
+import { unregisterPush } from "../lib/native/push";
 /* B04 follow-up — which sentence CantReachUs is allowed to say. */
 import { rememberSessionHere, forgetSessionHere } from "../lib/sessionSeen";
 
@@ -231,6 +235,10 @@ export function AuthProvider({ children }) {
        name him, and they go with him. */
     clearAllDrafts();
     forgetPersonOnDevice(user);
+    /* PUSH — tell the backend to stop sending to this device, like the drafts
+       above: local/outbound side first, before the session ends. Guarded and
+       best-effort (no-op in a browser), so it never delays a sign-out. */
+    try { await unregisterPush(); } catch (e) { /* best effort */ }
     /* JOURNEY-1 J12-05 — AND THE SAVED SCREENS GO WITH THEM. The service
        worker empties the API cache when the sign-out POST passes through it
        (service-worker.js, the /api/auth/logout route), which is a condition

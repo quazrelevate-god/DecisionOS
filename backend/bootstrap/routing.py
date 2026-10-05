@@ -57,6 +57,7 @@ from routers.whatsapp import router as whatsapp_router
 from routers.files import router as files_router
 from routers.routines import router as routines_router
 from routers.pulse import router as pulse_router  # J14-03: what changed, in one cheap answer
+from routers.devices import router as devices_router  # 2026-10-05: FCM device-token registration (push)
 from routers.health import router as health_router
 
 # Every extracted domain router, in the exact order server.py mounted them.
@@ -109,6 +110,7 @@ _DOMAIN_ROUTERS = (
     files_router,      # Epic 8 S3: file upload/download extracted
     routines_router,   # 2026-09-21: the sign-up routines, confirmed and made to repeat
     pulse_router,      # J14-03: the open screens ask this one, not every list
+    devices_router,    # 2026-10-05: device push-token registration (FCM)
     health_router,     # Epic 8 S3: /api/health + /api/ root (last off the api router)
 )
 

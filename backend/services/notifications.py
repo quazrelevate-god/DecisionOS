@@ -12,6 +12,23 @@ from services.email import send_email
 
 NOTIF_LEVELS = {1: "reminder", 2: "urgency", 3: "manager", 4: "owner"}
 
+# Short banner titles for the device-push channel (the body is the `message`,
+# which already reads as a full sentence). Keyed by the notification `ntype`.
+PUSH_TITLES = {
+    "assigned": "New work",
+    "approval": "Approval needed",
+    "approved": "Approved",
+    "rejected": "Changes requested",
+    "clarification": "Clarification needed",
+    "status": "Status update",
+    "comment": "New comment",
+    "waiting": "Waiting on you",
+    "due_soon": "Due soon",
+    "stage_entered": "Workflow update",
+    "workflow_stuck": "Workflow stuck",
+    "reminder": "Reminder",
+}
+
 
 async def _owner_ids(tenant_id: str) -> list:
     return [u["id"] for u in await db.users.find({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0, "id": 1}).to_list(50)]
@@ -58,6 +75,23 @@ async def push_notification(tenant_id, user_ids, level, message, entity_type=Non
             "type": ntype or "reminder", "work_title": title, "sender_name": sender,
             "read": False, "created_at": now_iso(),
         })
+
+    # Second delivery channel — the same event to the phone, so it arrives while
+    # the app is closed. Guarded end to end (no firebase creds / no device token
+    # → no-op), and wrapped so a push failure can never break the in-app write
+    # above or the caller. The `data` carries what notifLink() needs on the
+    # client to open the right screen on tap.
+    if ids:
+        try:
+            from services.push_fcm import send_push_to_users
+            await send_push_to_users(
+                tenant_id, ids,
+                PUSH_TITLES.get(ntype or "reminder", "DecisionOS"),
+                message,
+                {"entity_type": entity_type, "entity_id": entity_id, "type": ntype or "reminder"},
+            )
+        except Exception as e:
+            logger.warning(f"[push] dispatch skipped: {e}")
 
 
 async def dispatch_owner_alert(tenant_id, message):

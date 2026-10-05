@@ -26,37 +26,14 @@ export default function ScaleProbe() {
   const [on, setOn] = useState(false);
   const [m, setM] = useState(null);
 
-  /* IT TURNS ITSELF ON WHEN IT IS NEEDED, because the thing it diagnoses has
-     no address bar. In the native shell the app is served from
-     capacitor://localhost with no URL to edit, so `?probe=scale` — fine in a
-     browser — can never be typed on the device that has the fault. So the
-     check runs on every load and the panel appears ONLY when the web view and
-     the stylesheet disagree: --ui-scale says 0.8 and the body is not actually
-     drawn at 0.8. On a phone where zoom works that is never true and nothing
-     renders; on the one where it does not, the evidence is already on screen
-     when the founder looks. */
-  useEffect(() => {
-    let forced = false;
-    try {
-      forced = new URLSearchParams(window.location.search).get("probe") === "scale";
-    } catch { forced = false; }
-    if (forced) { setOn(true); return undefined; }
-
-    const broken = () => {
-      const want = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale"));
-      if (!want || Number.isNaN(want)) return false;
-      const got = parseFloat(getComputedStyle(document.body).zoom);
-      // `zoom: normal` parses to NaN; that IS the failure, not an excuse.
-      if (Number.isNaN(got)) return true;
-      return Math.abs(got - want) > 0.01;
-    };
-
-    /* Checked after the first paint settles, not during it: the class and the
-       variable are both written in an effect, so the opening frame legitimately
-       has neither and must not be reported as a fault. */
-    const t = setTimeout(() => { if (broken()) setOn(true); }, 900);
-    return () => clearTimeout(t);
-  }, []);
+  /* ALWAYS ON IN THIS BUILD — and the previous version is why.
+     It only showed itself when getComputedStyle(body).zoom disagreed with
+     --ui-scale, and on the founder's iPhone 13 it never showed while the page
+     was plainly drawn 25% too large. So the web view REPORTS the zoom it was
+     given and does not lay out by it; asking the engine what it thinks is
+     worthless, and a diagnostic that hides unless the engine admits a fault is
+     worse than none. Nothing here is conditional any more. */
+  useEffect(() => { setOn(true); }, []);
 
   /* The reader starts only once the panel is on — whichever way it got there. */
   useEffect(() => {
@@ -75,19 +52,33 @@ export default function ScaleProbe() {
       const saTop = Math.round(probe.getBoundingClientRect().height);
       probe.remove();
 
+      /* GROUND TRUTH. A box declared exactly 100 CSS px wide, measured through
+         getBoundingClientRect, which reports VISUAL pixels. Inside a tree drawn
+         at 0.8 it comes back 80. This is the only number in the panel the
+         engine cannot be wrong about: it is not asking what zoom is set to, it
+         is asking how big things actually ARE. `effective` is what we came for;
+         everything beside it is context for why. */
+      const ruler = document.createElement("div");
+      ruler.style.cssText = "position:absolute;top:-9999px;left:0;width:100px;height:10px;pointer-events:none";
+      document.body.appendChild(ruler);
+      const effective = +(ruler.getBoundingClientRect().width / 100).toFixed(3);
+      ruler.remove();
+
       const se = document.scrollingElement || root;
       setM({
+        effective,
         inner: `${window.innerWidth}x${window.innerHeight}`,
+        docEl: `${root.clientWidth}x${root.clientHeight}`,
         screen: `${window.screen?.width}x${window.screen?.height}`,
         dpr: window.devicePixelRatio,
         varScale: getComputedStyle(root).getPropertyValue("--ui-scale").trim() || "(unset)",
-        /* The number that matters. If the var says 0.8 and this says 1 or
-           "normal", the web view is refusing the property and everything else
-           in this box is a symptom. */
+        /* What the engine SAYS, kept only so the two can be compared: on the
+           iPhone 13 this read 0.8 while `effective` was 1. */
         zoomApplied: cs.zoom,
         hasClass: document.body.classList.contains("ui-scale") ? "yes" : "NO",
+        inlineZoom: document.body.style.zoom || "(none)",
         currentCSSZoom: typeof document.body.currentCSSZoom === "number"
-          ? document.body.currentCSSZoom : "(not supported)",
+          ? document.body.currentCSSZoom : "(unsupported)",
         scroll: `${Math.round(se.scrollHeight)} in ${Math.round(se.clientHeight)}`,
         overflow: Math.round(se.scrollHeight - se.clientHeight),
         saTop,
@@ -104,22 +95,34 @@ export default function ScaleProbe() {
 
   if (!on || !m) return null;
 
-  /* Fixed, opaque, and OUTSIDE the zoomed tree's concerns: it reads its own
-     numbers whether or not the thing it is measuring works. */
+  /* AT THE TOP, not the foot. The last one sat at bottom: 0 under a dock that
+     is itself fixed at z 10000, and the founder's screenshots show no sign of
+     it — covered, clipped, or pushed off by the very overflow it was there to
+     report. Under the status bar there is nothing to lose a fight with.
+     `zoom: 1` on the panel itself so it is legible whatever is happening to
+     the tree around it. */
+  const agrees = Math.abs(m.effective - (parseFloat(m.varScale) || 1)) <= 0.01;
   return (
     <div
       data-testid="scale-probe"
       style={{
-        position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 2147483647,
-        background: "#0b0b0cf2", color: "#fff", font: "600 11px/1.45 ui-monospace,Menlo,monospace",
-        padding: "10px 12px", whiteSpace: "pre-wrap", wordBreak: "break-word",
+        position: "fixed", left: 0, right: 0, top: 0, zIndex: 2147483647, zoom: 1,
+        /* IT MUST NOT EAT TAPS. At the top it lies over the header — the bell,
+           the tabs — and a diagnostic that stops the founder using the screen
+           it is diagnosing is no use. Caught by verify:nav, which could not
+           click through it. */
+        pointerEvents: "none",
+        background: agrees ? "#0b3b1af2" : "#5b0b0bf2", color: "#fff",
+        font: "600 11px/1.5 ui-monospace,Menlo,monospace",
+        padding: "calc(env(safe-area-inset-top,0px) + 6px) 10px 8px",
+        whiteSpace: "pre-wrap", wordBreak: "break-word",
       }}
     >
       {[
-        `inner      ${m.inner}        screen ${m.screen}  dpr ${m.dpr}`,
-        `--ui-scale ${m.varScale}      body.zoom ${m.zoomApplied}   .ui-scale ${m.hasClass}`,
-        `currentCSSZoom ${m.currentCSSZoom}   visualViewport.scale ${m.vvScale}`,
-        `scrollHeight ${m.scroll}   OVERFLOW ${m.overflow}px   safe-top ${m.saTop}px`,
+        `MEASURED ${m.effective}   vs --ui-scale ${m.varScale}   ${agrees ? "AGREE" : "** DISAGREE **"}`,
+        `body.zoom(says) ${m.zoomApplied}  inline ${m.inlineZoom}  currentCSSZoom ${m.currentCSSZoom}`,
+        `inner ${m.inner}  docEl ${m.docEl}  screen ${m.screen}  dpr ${m.dpr}`,
+        `.ui-scale ${m.hasClass}   scrollH ${m.scroll}   OVERFLOW ${m.overflow}px   sa-top ${m.saTop}`,
         m.ua,
       ].join("\n")}
     </div>

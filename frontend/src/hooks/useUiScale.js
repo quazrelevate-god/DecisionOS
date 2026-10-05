@@ -79,7 +79,26 @@ export function useUiScale() {
     let raf = 0;
     const apply = () => {
       raf = 0;
-      root.style.setProperty("--ui-scale", computeUiScale(window.innerWidth).toFixed(1));
+      const s = computeUiScale(window.innerWidth);
+      root.style.setProperty("--ui-scale", s.toFixed(1));
+      /* AND WRITTEN STRAIGHT ONTO THE ELEMENT. (2026-10-05.)
+         The stylesheet says `.ui-scale { zoom: var(--ui-scale, 1) }`, and on
+         the founder's iPhone 13 (iOS 26.3.1, WKWebView) the page is laid out
+         as though that rule had never run: every box 1.25x, 211px of scroll
+         under a dock that cannot move. The same binary is correct on the 13
+         mini, so it is not the value — both phones take the same 0.8 step —
+         and it is not Display Zoom, which is off on both.
+         `zoom` is a legacy property WebKit only recently standardised, and a
+         var() substitution into one is exactly the kind of thing an older code
+         path drops on the floor: invalid at computed-value time, zoom falls
+         back to 1, and getComputedStyle still cheerfully reports 0.8 — which
+         is why the first diagnostic saw nothing wrong.
+         An inline literal cannot hit that path: there is no substitution to
+         fail. It also wins over the class rule by cascade, so the CSS stays
+         exactly as it is for every surface that is already working, and this
+         is belt and braces rather than a replacement. ScaleProbe measures a
+         100px ruler on the device to say which of the two actually landed. */
+      try { document.body.style.zoom = String(s); } catch (e) { /* no zoom here */ }
     };
     const onResize = () => { if (!raf) raf = requestAnimationFrame(apply); };
     apply();
@@ -88,6 +107,7 @@ export function useUiScale() {
       window.removeEventListener("resize", onResize);
       if (raf) cancelAnimationFrame(raf);
       root.style.removeProperty("--ui-scale");
+      try { document.body.style.zoom = ""; } catch (e) { /* never had one */ }
       document.body.classList.remove("ui-scale");
     };
   }, []);

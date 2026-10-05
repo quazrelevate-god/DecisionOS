@@ -2,11 +2,17 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api, { formatApiError } from "../lib/api";
-import { hasPerm, PERMISSIONS } from "../lib/perms";
+import { hasPerm, userPerms, PERMISSION_GROUPS } from "../lib/perms";
+import { roleLabel } from "../lib/departments";
 import { PageHeader } from "../components/common";
 import { CompanyDetails } from "../components/CompanyDetails";
 import { GlassSelect } from "../components/karma/GlassSelect";
 import { BusinessVocabulary } from "../components/BusinessVocabulary";
+// 2026-10-05 — teams and their access get a tab of their own; task templates
+// move to Operations. Both were sections at the bottom of Company Details.
+import { TeamsCard } from "../components/settings/TeamsCard";
+import { TaskTemplatesCard } from "../components/settings/TaskTemplatesCard";
+import { AccessSwitch } from "../components/settings/AccessSwitch";
 import { OperatingModelEditor } from "../components/OperatingModelEditor";
 // ASK-8 (2026-09-12): Leave Approvers by Department moves from
 // pages/Leave.js gear icon to Settings › Operations, alongside pipelines
@@ -19,7 +25,7 @@ import { ProfileForm, ChangePasswordForm } from "../components/ProfileDialog";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { CurrencyCircleDollar, ShieldCheck, FloppyDisk, Info, UserCircle, Translate, Lock, Buildings, FlowArrow, User, SignOut } from "@phosphor-icons/react";
+import { CurrencyCircleDollar, ShieldCheck, FloppyDisk, Info, UserCircle, Translate, Lock, Buildings, FlowArrow, User, SignOut, UsersThree } from "@phosphor-icons/react";
 
 const CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "AUD"];
 const inp = "w-full nm-field px-3 py-2 text-sm";
@@ -551,6 +557,41 @@ function AiKeysCard() {
   );
 }
 
+/* 2026-10-05 — a member could not see what they can open. Something missing
+   from their screen might be access or might be a fault, and only the owner
+   could tell them which. Read-only, from the server-resolved list (team access,
+   their own access, temporary grants), grouped like the editors. */
+function YourAccessCard() {
+  const { user, tenant } = useAuth();
+  const mine = userPerms(user);
+  const teamLabel = roleLabel(user?.role, tenant?.roles, "No team");
+  return (
+    <div className="kr-bento p-5 sm:p-6" data-testid="settings-your-access-card">
+      <h2 className="text-base font-medium">Your access</h2>
+      <p className="mt-1 text-xs text-muted-foreground">
+        What you can open in {tenant?.name || "this company"}, as {teamLabel}. To change it, ask an owner or whoever manages the team.
+      </p>
+      <div className="mt-4 space-y-3">
+        {PERMISSION_GROUPS.map((g) => {
+          const on = g.items.filter((p) => mine.includes(p.key));
+          return (
+            <div key={g.title} data-testid={`your-access-${g.title}`}>
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{g.title}</p>
+              {on.length ? (
+                <ul className="flex flex-wrap gap-1.5">
+                  {on.map((p) => (
+                    <li key={p.key} className="rounded-pill bg-slate-900/[0.06] px-2.5 py-1 text-xs text-slate-800">{p.label}</li>
+                  ))}
+                </ul>
+              ) : <p className="text-xs text-muted-foreground">Nothing here.</p>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function OwnerExclusionsCard() {
   const { tenant, refreshTenant } = useAuth();
   const [excl, setExcl] = useState(tenant?.owner_exclusions || []);
@@ -572,19 +613,24 @@ function OwnerExclusionsCard() {
       <p className="mt-1 text-xs text-muted-foreground">
         Every owner can open everything. Switch an area off to keep it from all owners, you included &mdash; for example a co-founder who shouldn&rsquo;t see finance. Manage team always stays on.
       </p>
-      <div className="mt-4 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-        {PERMISSIONS.map((p) => {
-          const locked = p.key === "team_manage";
-          const on = locked || !excl.includes(p.key);
-          return (
-            <button key={p.key} type="button" aria-pressed={on} disabled={locked || busy} onClick={() => toggle(p.key)}
-              data-testid={`owner-perm-${p.key}`}
-              className={`flex min-h-10 items-center justify-between gap-2 rounded-xl px-3 py-1.5 text-left text-xs font-medium ring-1 ring-inset transition-colors disabled:cursor-not-allowed ${on ? "bg-neutral-900 text-white ring-transparent" : "bg-white/80 text-slate-700 ring-slate-900/[0.06] hover:bg-white"} ${locked ? "opacity-70" : ""}`}>
-              <span>{p.label}</span>
-              <span className="text-[10px] uppercase tracking-wide">{on ? "On" : "Off"}</span>
-            </button>
-          );
-        })}
+      {/* 2026-10-05 — grouped by area like the team editor, not nineteen in a row. */}
+      <div className="mt-4 space-y-3">
+        {PERMISSION_GROUPS.map((g) => (
+          <div key={g.title}>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{g.title}</p>
+            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+              {g.items.map((p) => {
+                const locked = p.key === "team_manage";
+                return (
+                  <AccessSwitch key={p.key} label={p.label} on={locked || !excl.includes(p.key)}
+                    onToggle={() => toggle(p.key)} disabled={busy} locked={locked}
+                    testid={`owner-perm-${p.key}`}
+                    title={locked ? "Owners always keep Manage Team, or nobody could manage the team" : undefined} />
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
       <button type="button" onClick={save} disabled={busy} data-testid="owner-exclusions-save" className={`${INK} mt-4`}>
         {busy ? "Saving…" : "Save what owners can open"}
@@ -648,7 +694,11 @@ function AuditLogCard() {
 
 const TABS = [
   { key: "business", label: "Business", icon: Buildings,
-    desc: "Company profile, products, roles, and the words your team uses." },
+    desc: "Company profile, products, AI processing, and the words your team uses." },
+  // 2026-10-05 (founder) — who is in which team and what each team can open,
+  // in one place: it used to be split across Business, Operations and Workspace.
+  { key: "team", label: "Team & access", icon: UsersThree,
+    desc: "Teams, what each one can open, who approves leave, and what owners can open." },
   { key: "operations", label: "Operations", icon: FlowArrow,
     desc: "Pipelines, stages, task templates and approval gates. The single source of truth for how work moves." },
   { key: "money", label: "Money", icon: CurrencyCircleDollar,
@@ -657,7 +707,7 @@ const TABS = [
     desc: "Your language, look, profile, password, and who handles your approvals while you're away." },
   // RBAC P2 (2026-09-16): owner only.
   { key: "workspace", label: "Workspace", icon: ShieldCheck,
-    desc: "Plan and seats, your own AI keys, what owners can open, and the audit log." },
+    desc: "Plan and seats, your own AI and WhatsApp keys, and the audit log." },
 ];
 const VALID_TAB_KEYS = new Set(TABS.map((t) => t.key));
 
@@ -829,6 +879,146 @@ function DeleteAccountCard() {
   );
 }
 
+/* 2026-10-05 (founder: "in the desktop version there is a lot of space, no
+   design") — SETTINGS AS A TWO-PANE PAGE.
+   The page was one 600px column pinned to the left of a 1300px screen, with
+   the rest empty. From lg up it is a sticky side panel — who you are, then the
+   sections (the owner's six tabs, each with the cards it holds) — beside a
+   wider column of cards. Below lg nothing changes: the phone keeps its row of
+   tabs or its single stack. The side panel's card links are read from the
+   cards actually on screen (`Section`), so a card that renders nothing for
+   this person (a hand-over for someone with nothing to hand over) is never
+   offered, and the one in view is marked as you scroll. */
+function Section({ id, label, children }) {
+  return (
+    <section id={id} data-settings-section={label} className="scroll-mt-6 empty:hidden">
+      {children}
+    </section>
+  );
+}
+
+function useSettingsSections(key) {
+  const [sections, setSections] = useState([]);
+  const [current, setCurrent] = useState(null);
+  useEffect(() => {
+    /* Re-read whenever the cards change, not once after a delay: a card can
+       appear after its data loads (or vanish when it decides it has nothing
+       for this person), and a fast tab switch must not leave the last tab's
+       links behind. */
+    const root = document.querySelector("[data-settings-root]");
+    if (!root) return undefined;
+    let io;
+    const collect = () => {
+      const els = [...root.querySelectorAll("[data-settings-section]")].filter((e) => e.firstElementChild);
+      setSections((prev) => {
+        const next = els.map((e) => ({ id: e.id, label: e.dataset.settingsSection }));
+        return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+      });
+      setCurrent((c) => (c && els.some((e) => e.id === c) ? c : els[0]?.id || null));
+      if (io) io.disconnect();
+      if (typeof IntersectionObserver === "undefined") return;
+      io = new IntersectionObserver((entries) => {
+        const seen = entries.filter((en) => en.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (seen[0]) setCurrent(seen[0].target.id);
+      }, { rootMargin: "0px 0px -60% 0px" });
+      els.forEach((e) => io.observe(e));
+    };
+    // MutationObserver already batches a burst of changes into one call;
+    // no timer, which a backgrounded tab would delay by a second or more.
+    const schedule = () => collect();
+    const mo = new MutationObserver(schedule);
+    mo.observe(root, { childList: true, subtree: true });
+    schedule();
+    return () => { mo.disconnect(); if (io) io.disconnect(); };
+  }, [key]);
+  return [sections, current, setCurrent];
+}
+
+function SettingsSectionLinks({ sections, current, onJump }) {
+  return (
+    <ul className="space-y-0.5 border-l border-slate-900/[0.08] pl-3" data-testid="settings-nav-sections">
+      {sections.map((sec) => (
+        <li key={sec.id}>
+          <button type="button" onClick={() => onJump(sec.id)} data-testid={`settings-nav-section-${sec.id}`}
+            aria-current={current === sec.id ? "location" : undefined}
+            className={`w-full truncate rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors ${
+              current === sec.id ? "font-medium text-slate-900" : "text-slate-500 hover:text-slate-800"}`}>
+            {sec.label}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function SettingsShell({ eyebrow, nav, sectionsKey, children }) {
+  const { user, tenant } = useAuth();
+  const [sections, current, setCurrent] = useSettingsSections(sectionsKey);
+  const jump = (id) => {
+    setCurrent(id);
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const initials = (user?.name || "?").split(" ").filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+  return (
+    <div className="mx-auto max-w-6xl">
+      <header className="mb-7">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{eyebrow}</p>
+        <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">Settings</h1>
+      </header>
+      <div className="lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start lg:gap-8 xl:grid-cols-[17.5rem_minmax(0,1fr)]">
+        <aside className="hidden lg:sticky lg:top-6 lg:block" data-testid="settings-side-panel">
+          <div className="kr-bento p-4">
+            <div className="flex items-center gap-3 border-b border-slate-900/[0.06] pb-4">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-neutral-900 text-sm font-semibold text-white" aria-hidden="true">{initials}</span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-slate-900">{user?.name}</p>
+                <p className="truncate text-xs text-slate-500" data-testid="settings-side-who">
+                  {roleLabel(user?.role, tenant?.roles, "Member")}{tenant?.name ? ` · ${tenant.name}` : ""}
+                </p>
+              </div>
+            </div>
+            {nav ? (
+              <nav className="mt-3 space-y-1" aria-label="Settings sections" data-testid="settings-side-tabs">
+                {nav.tabs.map((t) => {
+                  const Icon = t.icon;
+                  const on = t.key === nav.active;
+                  return (
+                    <div key={t.key}>
+                      <button type="button" onClick={() => nav.onPick(t.key)} aria-current={on ? "page" : undefined}
+                        data-testid={`settings-side-tab-${t.key}`}
+                        className={`flex w-full items-start gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors ${
+                          on ? "bg-slate-900/[0.06]" : "hover:bg-slate-900/[0.03]"}`}>
+                        <Icon size={17} weight={on ? "fill" : "regular"} aria-hidden="true"
+                          className={`mt-0.5 shrink-0 ${on ? "text-slate-900" : "text-slate-500"}`} />
+                        <span className="min-w-0">
+                          <span className={`block text-sm ${on ? "font-semibold text-slate-900" : "font-medium text-slate-700"}`}>{t.label}</span>
+                          {on && <span className="mt-0.5 block text-xs leading-snug text-slate-500">{t.desc}</span>}
+                        </span>
+                      </button>
+                      {on && sections.length > 1 && (
+                        <div className="mb-2 ml-[1.4rem] mt-1">
+                          <SettingsSectionLinks sections={sections} current={current} onJump={jump} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </nav>
+            ) : (
+              <nav className="mt-3" aria-label="Settings sections">
+                <SettingsSectionLinks sections={sections} current={current} onJump={jump} />
+              </nav>
+            )}
+          </div>
+        </aside>
+        <div className="min-w-0 lg:max-w-[52rem]" data-settings-root>{children}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function Settings() {
   // MPWA-11 (§8): rebuilt below lg as a row-list; desktop untouched. WE-04's
   // 8-cards-to-4-tabs restructure replaced this component wholesale, so the
@@ -872,137 +1062,109 @@ export default function Settings() {
   // Non-owner view stays a simple stack -- just Profile + Security.
   // No tabs needed for 2 sections; the tabbed layout is an owner-only
   // reorg of the workspace config.
+  const visibleTabs = TABS.filter((t) => t.key !== "workspace" || user?.role === "owner");
+  const active = TABS.find((t) => t.key === tab) || TABS[0];
+
   if (!isOwner) {
     return (
-      <div>
-      <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Account</p>
-          <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">Settings</h1>
+      <SettingsShell eyebrow="Account" sectionsKey="member" nav={null}>
+        {/* RBAC P2 (2026-09-16): Language for everyone, and the hand-over.
+            Mobile PWA (2026-09-14): Sign out for everyone (KM-5 had moved it
+            here from the phone's More panel, but only the owner saw it). */}
+        <div className="space-y-6" data-testid="settings-panel-member">
+          <Section id="settings-s-profile" label="Your profile"><ProfileCard /></Section>
+          <Section id="settings-s-access" label="Your access"><YourAccessCard /></Section>
+          <Section id="settings-s-language" label="Language"><LanguageCard /></Section>
+          <Section id="settings-s-ai" label="AI processing"><AiConsentCard /></Section>
+          <Section id="settings-s-security" label="Password & security"><SecurityCard /></Section>
+          <Section id="settings-s-away" label="While you’re away"><DelegationCard /></Section>
+          <Section id="settings-s-session" label="Session"><SignOutCard /></Section>
+          <Section id="settings-s-delete" label="Delete your account"><DeleteAccountCard /></Section>
         </div>
-        </header>
-        <div className="max-w-2xl">
-          {/* RBAC P2 (2026-09-16): Language for everyone, and the hand-over.
-              The Appearance card went with the theme switch (ASK-33 Phase 5,
-              2eed722: the app is light-only) — it was dropped from the owner's
-              Account tab but left standing here, which threw "ThemeCard is not
-              defined" and broke the whole page for everyone but an owner. */}
-          <LanguageCard />
-          <div className="mt-6"><ProfileCard /></div>
-          <div className="mt-6"><AiConsentCard /></div>
-          <div className="mt-6"><SecurityCard /></div>
-          <div className="mt-6"><DelegationCard /></div>
-          {/* Mobile PWA (2026-09-14) — Sign out, for everyone. KM-5 moved it
-              out of the phone's More panel into Settings, but only the owner
-              view rendered it, so on a phone a teammate could not sign out. */}
-          <div className="mt-6"><SignOutCard /></div>
-          <div className="mt-6"><DeleteAccountCard /></div>
-        </div>
-      </div>
+      </SettingsShell>
     );
   }
 
-  const active = TABS.find((t) => t.key === tab) || TABS[0];
-
   return (
-    <div>
-      <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Account &amp; workspace</p>
-          <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">Settings</h1>
+    <SettingsShell eyebrow="Account & workspace" sectionsKey={tab}
+      nav={{ tabs: visibleTabs, active: tab, onPick: selectTab }}>
+      {/* Below lg the sections are a scrolling row of tabs (KM-5's pressed
+          track); from lg up they are the side panel (SettingsShell). */}
+      <div className="lg:hidden">
+        <div className="kr-pressed mb-3 flex items-center gap-1 overflow-x-auto rounded-pill p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+             role="tablist" aria-label="Settings sections" data-testid="settings-tabs">
+          {visibleTabs.map((t) => {
+            const isActive = t.key === tab;
+            return (
+              <button key={t.key} type="button" onClick={() => selectTab(t.key)}
+                data-testid={`settings-tab-${t.key}`} role="tab" aria-selected={isActive}
+                ref={isActive ? (el) => el?.scrollIntoView?.({ block: "nearest", inline: "nearest" }) : undefined}
+                className={`flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-pill px-3.5 text-xs ${
+                  isActive ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
+                {t.label}
+              </button>
+            );
+          })}
         </div>
-      </header>
-
-      {/* KM-5 — a neumorphic segmented bar, not four hairline pills in a
-          scroller. The founder's read is that Business / Operations / Money /
-          Account looked misaligned, and it did: the pills were natural-width
-          inside an overflow-x-auto that also carried `flex-wrap` on its
-          parent, so the four sat ragged and the last one clipped at the
-          gutter with nothing to say it had. Four equal segments in a
-          .kr-pressed track cannot go ragged, and they cannot clip.
-          Icons drop below lg — at ~78px a segment, an icon costs more label
-          than it earns. No transition utility (outset/inset shadows). */}
-      <div className="kr-pressed mb-5 flex items-center gap-1 rounded-pill p-1"
-           role="tablist" aria-label="Settings sections" data-testid="settings-tabs">
-        {TABS.filter((t) => t.key !== "workspace" || user?.role === "owner").map((t) => {
-          const Icon = t.icon;
-          const isActive = t.key === tab;
-          return (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => selectTab(t.key)}
-              data-testid={`settings-tab-${t.key}`}
-              aria-pressed={isActive}
-              className={`flex h-10 min-w-0 flex-1 basis-0 items-center justify-center gap-1.5 rounded-pill px-1 text-xs lg:text-sm ${
-                isActive ? "kr-pop font-semibold text-foreground" : "text-foreground/60"
-              }`}
-            >
-              <Icon size={15} weight="regular" aria-hidden="true" className="hidden shrink-0 lg:block" />
-              <span className="truncate">{t.label}</span>
-            </button>
-          );
-        })}
+        <p className="mb-4 text-xs text-muted-foreground">{active.desc}</p>
       </div>
 
-      <p className="text-xs text-muted-foreground mb-4 max-w-2xl">{active.desc}</p>
-
-      <div className="space-y-6 max-w-2xl" data-testid={`settings-panel-${tab}`}>
+      <div className="space-y-6" data-testid={`settings-panel-${tab}`}>
         {tab === "business" && (
           <>
-            <AiConsentCard />
-            <CompanyDetails />
-            <BusinessVocabulary />
+            <Section id="settings-s-ai" label="AI processing"><AiConsentCard /></Section>
+            <Section id="settings-s-company" label="Company details"><CompanyDetails /></Section>
+            <Section id="settings-s-vocabulary" label="Business vocabulary"><BusinessVocabulary /></Section>
+          </>
+        )}
+
+        {tab === "team" && (
+          <>
+            <Section id="settings-s-teams" label="Teams"><TeamsCard /></Section>
+            {/* ASK-8: who approves leave (gated on team_manage); with the teams
+                since 2026-10-05. */}
+            <Section id="settings-s-leave" label="Who approves leave"><LeaveApproversCard /></Section>
+            {user?.role === "owner" && <Section id="settings-s-owners" label="What owners can open"><OwnerExclusionsCard /></Section>}
           </>
         )}
 
         {tab === "operations" && (
           <>
-            <OperatingModelEditor />
-            {/* ASK-8: Leave Approvers by Department, moved here from the
-                gear on the retired Leave page. Sits alongside pipelines
-                and approval gates -- the Operations tab's own
-                description already covers "approval gates". Gated on
-                team_manage: non-managers see nothing at all. */}
-            <LeaveApproversCard />
-            {user?.role === "owner" && <EscalationCard />}
+            <Section id="settings-s-model" label="Operating model"><OperatingModelEditor /></Section>
+            <Section id="settings-s-templates" label="Task templates"><TaskTemplatesCard /></Section>
+            {user?.role === "owner" && <Section id="settings-s-deadlines" label="Deadlines"><EscalationCard /></Section>}
           </>
         )}
 
         {tab === "money" && (
           <>
-            {/* U7-11.1 (2026-08-17): approvals card promoted to top.
-                Currency + high-value threshold are the controls the
-                owner actually touches; the category editor is a long
-                list they rarely re-order. Putting categories first
-                buried the two decisions that matter for approvals. */}
-            {/* RBAC P0 (2026-09-15): the server lets only an owner save this card,
-                so Manage team without owner saw it and hit "Could not save". */}
-            {user?.role === "owner" && <MoneyAndApprovalsCard />}
-            <FinanceCategoriesEditor />
+            {/* U7-11.1: approvals first. RBAC P0 (2026-09-15): only an owner can
+                save it, so only an owner sees it. */}
+            {user?.role === "owner" && <Section id="settings-s-money" label="Money & approvals"><MoneyAndApprovalsCard /></Section>}
+            <Section id="settings-s-categories" label="Finance categories"><FinanceCategoriesEditor /></Section>
           </>
         )}
 
         {tab === "account" && (
           <>
-            <LanguageCard />
-            <ProfileCard />
-            <SecurityCard />
-            <DelegationCard />
-            <SignOutCard />
-            <DeleteAccountCard />
+            <Section id="settings-s-profile" label="Your profile"><ProfileCard /></Section>
+            {user?.role !== "owner" && <Section id="settings-s-access" label="Your access"><YourAccessCard /></Section>}
+            <Section id="settings-s-language" label="Language"><LanguageCard /></Section>
+            <Section id="settings-s-security" label="Password & security"><SecurityCard /></Section>
+            <Section id="settings-s-away" label="While you’re away"><DelegationCard /></Section>
+            <Section id="settings-s-session" label="Session"><SignOutCard /></Section>
+            <Section id="settings-s-delete" label="Delete your account"><DeleteAccountCard /></Section>
           </>
         )}
 
         {tab === "workspace" && user?.role === "owner" && (
           <>
-            <PlanSeatsCard />
-            <AiKeysCard />
-            <OwnerExclusionsCard />
-            <AuditLogCard />
+            <Section id="settings-s-plan" label="Plan and seats"><PlanSeatsCard /></Section>
+            <Section id="settings-s-keys" label="AI and WhatsApp keys"><AiKeysCard /></Section>
+            <Section id="settings-s-audit" label="Audit log"><AuditLogCard /></Section>
           </>
         )}
       </div>
-    </div>
+    </SettingsShell>
   );
 }

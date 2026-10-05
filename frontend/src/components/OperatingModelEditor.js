@@ -8,8 +8,9 @@ import { toast } from "sonner";
 import { FlowArrow, FloppyDisk, Plus, Trash, ArrowUp, ArrowDown, ShieldCheck, ListChecks, Lightning } from "@phosphor-icons/react";
 import { GlassSelect } from "./karma/GlassSelect";
 
-const inp = "w-full border border-nm-edge/40 rounded-lg px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
-const smInp = "border border-nm-edge/40 rounded-md px-2 py-1.5 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
+// 2026-10-05 — the glass fields every other Settings card uses (were square-bordered).
+const inp = "w-full rounded-2xl bg-white/80 px-3 py-2 text-sm text-slate-800 ring-1 ring-inset ring-slate-900/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25";
+const smInp = "rounded-xl bg-white/80 px-2 py-1.5 text-sm text-slate-800 ring-1 ring-inset ring-slate-900/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25";
 /* 2026-09-29 — THIS EDITOR WAS UNUSABLE ON A PHONE, and it is the screen that
    decides how work moves: pipelines, stages, task templates, approval gates.
    Measured at 375px, a stage's role picker was cut off by 22px, the evidence
@@ -287,7 +288,7 @@ export function OperatingModelEditor() {
   };
 
   return (
-    <div className="nm-tile p-5" data-testid="settings-operating-model-card">
+    <div className="kr-bento p-5 sm:p-6" data-testid="settings-operating-model-card">
       <div className="flex items-center gap-2 mb-1">
         <FlowArrow size={20} weight="bold" className="text-muted-foreground" />
         <h2 className="text-base font-medium">Operating Model</h2>
@@ -301,7 +302,7 @@ export function OperatingModelEditor() {
       <p className="label-mono text-muted-foreground mb-2">Workflow pipelines</p>
       <div className="space-y-4">
         {model.pipelines.map((p, pi) => (
-          <div key={p._uid} className="border border-nm-edge/40 rounded-lg p-3" data-testid={`op-pipeline-${pi}`}>
+          <div key={p._uid} className="rounded-2xl bg-white/60 p-3 ring-1 ring-inset ring-slate-900/[0.06]" data-testid={`op-pipeline-${pi}`}>
             <div className="flex items-start gap-2">
               <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <input data-testid={`op-pipeline-label-${pi}`} className={inp} placeholder="Pipeline name (e.g. Appointments)" value={p.label} onChange={(e) => setPipeline(pi, { label: e.target.value })} />
@@ -315,15 +316,15 @@ export function OperatingModelEditor() {
             <div className="mt-3 space-y-3">
               <span className="label-mono text-muted-foreground">Stages (in order)</span>
               {p.stages.map((s, si) => (
-                <div key={s._uid} className="border border-nm-edge/60 rounded-md p-2.5 bg-accent/30" data-testid={`op-stage-${pi}-${si}`}>
+                <div key={s._uid} className="rounded-xl bg-slate-900/[0.03] p-2.5 ring-1 ring-inset ring-slate-900/[0.05]" data-testid={`op-stage-${pi}-${si}`}>
                   {/* The stage's NAME gets the line; the controls that act on
                       it sit underneath. All six of these used to share one
                       row, which is how the role picker and the delete ended
                       up past the right edge of a phone. */}
                   <div className="flex items-center gap-1.5">
                     <input className={`${smInp} min-w-0 flex-1`} placeholder="Stage name" value={s.label} onChange={(e) => setStage(pi, si, { label: e.target.value })} />
-                    <button onClick={() => moveStage(pi, si, -1)} disabled={si === 0} title="Move up" aria-label="Move stage up" className={`${iconBtn} hover:text-brand-blue`}><ArrowUp size={14} weight="bold" /></button>
-                    <button onClick={() => moveStage(pi, si, 1)} disabled={si === p.stages.length - 1} title="Move down" aria-label="Move stage down" className={`${iconBtn} hover:text-brand-blue`}><ArrowDown size={14} weight="bold" /></button>
+                    <button onClick={() => moveStage(pi, si, -1)} disabled={si === 0} title="Move up" aria-label="Move stage up" className={`${iconBtn} hover:text-slate-900`}><ArrowUp size={14} weight="bold" /></button>
+                    <button onClick={() => moveStage(pi, si, 1)} disabled={si === p.stages.length - 1} title="Move down" aria-label="Move stage down" className={`${iconBtn} hover:text-slate-900`}><ArrowDown size={14} weight="bold" /></button>
                     <button onClick={() => delStage(pi, si)} title="Delete stage" aria-label="Delete stage" className={iconBtn}><Trash size={14} weight="bold" /></button>
                   </div>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -374,7 +375,7 @@ export function OperatingModelEditor() {
                       ))}
                     </div>
                     <button onClick={() => addStageTask(pi, si)} data-testid={`op-add-stage-task-${pi}-${si}`}
-                      className="flex items-center gap-1 text-[11px] font-semibold text-brand-blue hover:underline mt-1.5">
+                      className="flex items-center gap-1 text-[11px] font-semibold text-slate-900 hover:underline mt-1.5">
                       <Plus size={11} weight="bold" /> Add task template
                     </button>
                   </div>
@@ -408,7 +409,7 @@ export function OperatingModelEditor() {
                       <div className="flex flex-wrap gap-1.5">
                         {s.side_effects.map((se, ei) => (
                           <span key={se._uid} data-testid={`op-stage-side-effect-${pi}-${si}-${ei}`}
-                            className="inline-flex items-center gap-1 border border-nm-edge/40 rounded-md px-2 py-0.5 text-[11px] font-mono bg-card">
+                            className="inline-flex items-center gap-1 rounded-pill bg-white/80 px-2 py-0.5 text-[11px] ring-1 ring-inset ring-slate-900/[0.06]">
                             {se.kind}
                             <button onClick={() => delSideEffect(pi, si, ei)} title="Remove" className="text-muted-foreground hover:text-kr-accent">
                               <Trash size={10} weight="bold" />
@@ -420,7 +421,7 @@ export function OperatingModelEditor() {
                   )}
                 </div>
               ))}
-              <button onClick={() => addStage(pi)} data-testid={`op-add-stage-${pi}`} className="flex items-center gap-1 text-xs font-semibold text-brand-blue hover:underline mt-1">
+              <button onClick={() => addStage(pi)} data-testid={`op-add-stage-${pi}`} className="flex items-center gap-1 text-xs font-semibold text-slate-900 hover:underline mt-1">
                 <Plus size={13} weight="bold" /> Add stage
               </button>
             </div>
@@ -452,19 +453,19 @@ export function OperatingModelEditor() {
       <p className="label-mono text-muted-foreground mt-6 mb-2">Task categories</p>
       <div className="flex flex-wrap gap-2">
         {model.task_categories.map((c, i) => (
-          <div key={c._uid} className="flex items-center gap-1 border border-nm-edge/40 rounded-md pl-2 pr-1 py-1" data-testid={`op-cat-${i}`}>
+          <div key={c._uid} className="flex items-center gap-1 rounded-xl bg-white/70 py-1 pl-2 pr-1 ring-1 ring-inset ring-slate-900/[0.06]" data-testid={`op-cat-${i}`}>
             <input className="bg-transparent text-sm w-28 focus:outline-none" value={c.label} onChange={(e) => setCat(i, e.target.value)} />
             <button onClick={() => delCat(i)} title="Delete" className="text-muted-foreground hover:text-kr-accent"><Trash size={13} weight="bold" /></button>
           </div>
         ))}
-        <button onClick={addCat} data-testid="op-add-cat" className="flex items-center gap-1 text-sm font-semibold text-brand-blue hover:underline px-2 py-1">
+        <button onClick={addCat} data-testid="op-add-cat" className="flex items-center gap-1 text-sm font-semibold text-slate-900 hover:underline px-2 py-1">
           <Plus size={13} weight="bold" /> Add category
         </button>
       </div>
 
       <div className="mt-6 flex flex-wrap gap-3">
         <button onClick={save} disabled={saving} data-testid="op-save"
-          className="flex items-center gap-2 bg-kr-ink text-white px-5 py-2 text-sm font-medium rounded-lg transition-all disabled:opacity-60">
+          className="flex h-11 items-center gap-2 rounded-pill bg-kr-ink px-5 text-sm font-medium text-white transition-all hover:brightness-125 disabled:opacity-60">
           <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Model"}
         </button>
         <RegenerateWithAi onConfirm={regenerate} busy={regen} testid="op-regenerate"

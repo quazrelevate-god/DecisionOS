@@ -460,9 +460,9 @@ export function ApproverConfig({ roleOptions, members }) {
     } catch (e) { toast.error(e.response?.data?.detail || "Save failed"); }
   };
   return (
-    <div className="nm-tile p-5" data-testid="leave-approver-config">
+    <div className="kr-bento p-5 sm:p-6" data-testid="leave-approver-config">
       <div className="flex items-center gap-2 mb-1"><Gear size={18} weight="regular" aria-hidden="true" className="text-muted-foreground" />
-        <h3 className="text-base font-medium">Leave Approvers by Department</h3></div>
+        <h2 className="text-base font-medium">Who approves leave</h2></div>
       <p className="text-xs text-muted-foreground mb-3">Choose who approves leave for each team. If someone has a reporting manager (set on their Team card), that manager decides. Otherwise this person does, then the owner.</p>
       <div className="space-y-2">
         {roleOptions.filter((r) => r.key !== "owner").map((r) => (

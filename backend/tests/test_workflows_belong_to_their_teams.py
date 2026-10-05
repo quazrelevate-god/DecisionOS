@@ -137,5 +137,5 @@ def test_the_screens_are_told_the_scope():
 
 
 def test_a_new_team_says_what_it_started_with():
-    c = fe("components/CompanyDetails.js")
+    c = fe("components/settings/TeamsCard.js")  # moved 2026-10-05
     assert "as well as everyday work. Change it under Access." in c

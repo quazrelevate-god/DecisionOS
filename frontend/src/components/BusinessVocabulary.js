@@ -6,7 +6,8 @@ import { lex } from "../lib/lexicon";
 import { toast } from "sonner";
 import { Translate, FloppyDisk } from "@phosphor-icons/react";
 
-const inp = "w-full border border-nm-edge/40 rounded-lg px-3 py-2 text-sm font-mono bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
+// 2026-10-05 — the glass field the rest of Settings uses.
+const inp = "w-full rounded-2xl bg-white/80 px-3 py-2 text-sm text-slate-800 ring-1 ring-inset ring-slate-900/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25";
 
 // WE-02 (2026-08-16): WF_KEYS + workflow pipelines editor removed. The
 // three labels were a dead output; pipeline labels are edited via the
@@ -64,7 +65,7 @@ export function BusinessVocabulary() {
   };
 
   return (
-    <div className="nm-tile p-5" data-testid="settings-vocabulary-card">
+    <div className="kr-bento p-5 sm:p-6" data-testid="settings-vocabulary-card">
       <div className="flex items-center gap-2 mb-1">
         <Translate size={20} weight="bold" className="text-muted-foreground" />
         <h2 className="text-base font-medium">Business Vocabulary</h2>
@@ -97,7 +98,7 @@ export function BusinessVocabulary() {
 
       <div className="mt-6 flex flex-wrap gap-3">
         <button onClick={save} disabled={saving} data-testid="vocab-save"
-          className="flex items-center gap-2 bg-kr-ink text-white px-5 py-2 text-sm font-medium rounded-lg transition-all disabled:opacity-60">
+          className="flex h-11 items-center gap-2 rounded-pill bg-kr-ink px-5 text-sm font-medium text-white transition-all hover:brightness-125 disabled:opacity-60">
           <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Vocabulary"}
         </button>
         <RegenerateWithAi onConfirm={regenerate} busy={regen} testid="vocab-regenerate"

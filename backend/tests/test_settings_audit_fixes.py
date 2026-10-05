@@ -190,7 +190,8 @@ def test_the_editor_sends_the_stage_department():
     load = src[src.index("function withUids"):src.index("export function OperatingModelEditor")]
     save = src[src.index("const toPayload"):src.index("const save = async")]
     assert 'role: s.role || ""' in load and 'role: s.role || ""' in save
-    assert 'data-testid={`op-stage-role-${pi}-${si}`}' in src, "and the owner can see and set it"
+    # (a GlassSelect since af77b20, which takes `testid` and renders data-testid)
+    assert 'testid={`op-stage-role-${pi}-${si}`}' in src, "and the owner can see and set it"
 
 
 # --- Your own sign-in details, on the Team page -----------------------------
@@ -220,10 +221,15 @@ def test_an_owner_cannot_change_their_own_sign_in_details_on_the_team_page(with_
 
 # --- Frontend guards ---------------------------------------------------------
 def test_company_card_keeps_unsaved_sections_when_another_saves():
+    """2026-10-05: the sections that shared this card now have cards of their
+    own (Teams, Task templates), so another section's save cannot reach it at
+    all; each still re-reads only while it holds no unsaved edits."""
     src = (FE / "components" / "CompanyDetails.js").read_text(encoding="utf-8")
     effect = src[src.index("const dirty = useRef"):src.index("}, [tenant]);")]
-    assert "if (!dirty.current.company)" in effect and "if (!dirty.current.os)" in effect
-    assert src.count("dirty.current.company = false") == 1 and src.count("dirty.current.os = false") == 1
+    assert "dirty.current.company" in effect
+    assert src.count("dirty.current.company = false") == 1
+    tt = (FE / "components" / "settings" / "TaskTemplatesCard.js").read_text(encoding="utf-8")
+    assert "if (!tenant || dirty.current) return;" in tt and tt.count("dirty.current = false") == 1
 
 
 def test_regenerate_asks_first_on_all_three_cards():

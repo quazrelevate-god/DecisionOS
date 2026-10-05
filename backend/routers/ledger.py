@@ -236,12 +236,12 @@ def _num(x) -> float:
     return parse_amount(x)
 
 
-async def _write_brain(tenant_id: str, user_id: str, text: str, tag: str) -> None:
-    """Mirror a finance record into the Company Brain (searchable memory)."""
-    await db.memory.insert_one({
-        "id": new_id(), "tenant_id": tenant_id, "text": text, "tag": tag,
-        "created_by": user_id, "created_at": now_iso(),
-    })
+# 2026-10-06 (AI audit) — finance records are NOT copied into the company
+# memory any more. `_write_brain` wrote "Expense: … — INR 45,000" notes into
+# db.memory, which every member with Brain access reads through Ask: the books,
+# one note at a time, to people without Finance. The Brain still records each
+# finance event (brain_context, visibility "dept"/finance -- see FINANCE_TAGS in
+# services/record_access for the notes already written).
 
 
 # --- Attachment + AI vision extraction from an uploaded bill/photo ----------
@@ -381,9 +381,6 @@ async def create_expense(tenant_id: str, user_id: str, data: dict, source: str =
     await db.expenses.insert_one(dict(doc))
     doc.pop("_id", None)
     if write_brain if write_brain is not None else (source != "manual"):
-        vend = f" to {doc['vendor_name']}" if doc["vendor_name"] else ""
-        await _write_brain(tenant_id, user_id,
-                            f"Expense: {doc['title']} — {currency} {amount:,.0f} ({category}){vend} [{source}]", "expense")
         # FIX-007-B (S4-10): every expense that's brain-worthy (i.e.
         # auto-created from a workflow / ingestion / capture — anything
         # non-manual) ALSO drops a brain_context row so Dex + /ask can
@@ -451,10 +448,6 @@ async def create_asset(tenant_id: str, user_id: str, data: dict, source: str = "
     }
     await db.assets.insert_one(dict(doc))
     doc.pop("_id", None)
-    if write_brain if write_brain is not None else (source != "manual"):
-        vend = f" from {doc['vendor_name']}" if doc["vendor_name"] else ""
-        await _write_brain(tenant_id, user_id,
-                            f"Asset acquired: {doc['name']} — {currency} {amt:,.0f} ({doc['category']}){vend} [{source}]", "asset")
     return doc
 
 
@@ -473,10 +466,6 @@ async def create_inventory(tenant_id: str, user_id: str, data: dict, source: str
     }
     await db.inventory.insert_one(dict(doc))
     doc.pop("_id", None)
-    if write_brain if write_brain is not None else (source != "manual"):
-        await _write_brain(tenant_id, user_id,
-                            f"Inventory: {qty:g} {doc['unit']} of {doc['item']} @ {currency} {unit_cost:,.0f} "
-                            f"= {currency} {doc['value']:,.0f} [{source}]", "inventory")
     return doc
 
 
@@ -503,8 +492,6 @@ async def create_income(tenant_id: str, user_id: str, data: dict, source: str = 
     doc.pop("_id", None)
     label = doc["title"] or ("Sale to " + cust if cust else "Sale")
     frm = f" from {cust}" if cust else ""
-    await _write_brain(tenant_id, user_id,
-                       f"Income: {label} — {currency} {amount:,.0f}{frm} [{source}]", "income")
     # FIX-007-B (S4-10): capture the invoice creation as a queryable
     # Brain event. Sales invoices are the mirror of expenses; the
     # tracker's gap called out "invoices" specifically.

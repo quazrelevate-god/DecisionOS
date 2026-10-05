@@ -112,26 +112,31 @@ async def decision_timeline(decision_id: str, user: dict = Depends(get_current_u
 # JOURNEY-1 access matrix recorded it as "refused, explained" — because the
 # tester checked the screen, which does refuse. Nobody had asked the API.
 @router.get("/journal")
-async def ceo_journal(q: str = "", user: dict = Depends(require_role("owner"))):
+async def ceo_journal(q: str = "", user: dict = Depends(require_perm("decisions_approve"))):
+    """The decision history -- what was decided, when, by whom, and what came of
+    it (each decision's timeline opens from its card).
+
+    2026-10-06 (founder: "the journal is the owner's or decision makers' place to
+    refer to the history of decisions; it should be different from the brain").
+    It also listed the company notes, which made it half a knowledge store and
+    the only screen the notes had. Notes are the Company Brain's now
+    (/api/brain/notes); the Journal is decisions only, opened to decision makers,
+    each seeing the decisions they may open (visible_decisions_clause)."""
     tid = user["tenant_id"]
     tokens = [re.escape(t) for t in q.split() if len(t) >= 2]
-    rx = {"$regex": "|".join(tokens), "$options": "i"} if tokens else {"$exists": True}
-    dfilter = {"tenant_id": tid, "$or": [{"title": rx}, {"summary": rx}]} if tokens else {"tenant_id": tid}
+    rx = {"$regex": "|".join(tokens), "$options": "i"} if tokens else None
+    dfilter: dict = {"tenant_id": tid}
+    if rx:
+        dfilter["$or"] = [{"title": rx}, {"summary": rx}]
+    dfilter = {"$and": [dfilter, await visible_decisions_clause(user)]}
     decisions = await db.decisions.find(
         dfilter,
-        {"_id": 0, "id": 1, "title": 1, "dtype": 1, "status": 1, "created_at": 1},
-    ).sort("created_at", -1).to_list(500)
-    mfilter = {"tenant_id": tid, "text": rx} if tokens else {"tenant_id": tid}
-    memory = await db.memory.find(
-        mfilter, {"_id": 0, "id": 1, "text": 1, "tag": 1, "created_at": 1},
+        {"_id": 0, "id": 1, "title": 1, "dtype": 1, "status": 1, "created_at": 1, "decided_at": 1},
     ).sort("created_at", -1).to_list(500)
     days = {}
     for d in decisions:
         day = (d.get("created_at") or "")[:10]
         days.setdefault(day, {"date": day, "decisions": [], "notes": []})["decisions"].append(d)
-    for m in memory:
-        day = (m.get("created_at") or "")[:10]
-        days.setdefault(day, {"date": day, "decisions": [], "notes": []})["notes"].append(m)
     return {"days": sorted(days.values(), key=lambda x: x["date"], reverse=True)}
 
 

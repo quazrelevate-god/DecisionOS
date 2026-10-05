@@ -364,6 +364,78 @@ async def deindex_document(tenant_id: str, doc_id: str) -> None:
         logger.warning(f"brain_embed: deindex failed for {doc_id}: {e}")
 
 
+# --- Company Brain NOTES (2026-10-06) ------------------------------------------
+# Notes live in db.memory and are indexed beside documents under the id
+# "note:<id>", so a question finds a note by meaning, not only by its exact
+# words. Who may read one is decided at search time from the LIVE note
+# (services/record_access.memory_scope), exactly as for documents.
+NOTE_PREFIX = "note:"
+
+
+async def _mark_note(note: dict, state: str, *, chunks: int = 0, note_text: str = "") -> None:
+    try:
+        await db.memory.update_one(
+            {"id": note["id"], "tenant_id": note["tenant_id"]},
+            {"$set": {"index": {"state": state, "chunks": chunks, "key": index_key(),
+                                "note": note_text[:200], "at": now_iso()}}})
+    except Exception as e:
+        logger.debug(f"brain_embed: note mark failed for {note.get('id')}: {e}")
+
+
+async def index_note(note: dict) -> int:
+    """Embed one Company Brain note. Same rules as documents: AI consent first,
+    nothing written if the note was deleted meanwhile, never raises."""
+    tenant_id, nid = note.get("tenant_id"), note.get("id")
+    text = (note.get("text") or "").strip()
+    if not tenant_id or not nid:
+        return 0
+    vid = NOTE_PREFIX + nid
+    try:
+        if not await _consented(tenant_id):
+            await _mark_note(note, "waiting_for_ai_consent", note_text="AI is off for this company")
+            return 0
+        pieces = chunk_text(text)
+        if not pieces:
+            await _clear(tenant_id, vid)
+            return 0
+        vectors = await embed_texts(pieces, input_type="document", task="brain_doc", tenant_id=tenant_id)
+        if not await db.memory.find_one({"id": nid, "tenant_id": tenant_id}, {"_id": 0, "id": 1}):
+            await _clear(tenant_id, vid)
+            return 0
+        payload = {"source": "note", "title": text[:80], "visibility": note.get("visibility") or "public"}
+        chunks = [{"chunk_idx": i, "text": p, "embedding": v, "payload": payload,
+                   "visibility": payload["visibility"], "tags": [note.get("tag") or "note"]}
+                  for i, (p, v) in enumerate(zip(pieces, vectors))]
+        n = await _write(tenant_id, vid, chunks)
+        await _mark_note(note, "indexed", chunks=n)
+        return n
+    except Exception as e:
+        logger.warning(f"brain_embed: index_note failed for {nid}: {e}")
+        await _mark_note(note, "failed", note_text=str(e))
+        return 0
+
+
+async def deindex_note(tenant_id: str, note_id: str) -> None:
+    try:
+        await _clear(tenant_id, NOTE_PREFIX + note_id)
+    except Exception as e:
+        logger.warning(f"brain_embed: note deindex failed for {note_id}: {e}")
+
+
+def spawn(coro) -> None:
+    """Run an index job in the background (callers are request handlers / captures)."""
+    import asyncio
+    try:
+        t = asyncio.get_running_loop().create_task(coro)
+        _BG.add(t)
+        t.add_done_callback(_BG.discard)
+    except RuntimeError:
+        coro.close()
+
+
+_BG: set = set()
+
+
 async def purge_tenant(tenant_id: str) -> None:
     """Erase a company's whole index, wherever it lives (tenant deletion / DPDP)."""
     if not tenant_id:
@@ -403,6 +475,20 @@ async def backfill_documents(tenant_id=None, limit: int = 5000, *, only_stale: b
             continue
         total_docs += 1
         total_chunks += await index_document(doc)
+    # Company Brain notes, the same way (2026-10-06).
+    nq: dict = {"text": {"$nin": [None, ""]}}
+    if tenant_id:
+        nq["tenant_id"] = tenant_id
+    if only_stale and store_kind() != "memory":
+        nq["index.key"] = {"$ne": index_key()}
+    for note in await db.memory.find(nq, {"_id": 0}).to_list(limit):
+        tid = note.get("tenant_id")
+        if tid not in consent:
+            consent[tid] = await _consented(tid)
+        if not consent[tid]:
+            continue
+        total_docs += 1
+        total_chunks += await index_note(note)
     if total_docs:
         logger.info(f"brain_embed: backfill indexed {total_docs} docs -> {total_chunks} chunks ({store_kind()})")
     return {"docs": total_docs, "chunks": total_chunks}

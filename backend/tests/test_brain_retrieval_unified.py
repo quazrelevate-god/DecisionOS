@@ -164,7 +164,7 @@ class TestCitesFromHits:
             "id": "d1", "title": "Vendor NDA",
             "source_type": "brain_document",
             # 2026-10-05: the Sources chip's label and where it opens
-            "type": "document", "deep_link": "/brain?docs=1&doc=d1",
+            "type": "document", "deep_link": "/company-brain?doc=d1",   # 2026-10-06: the Brain page
             "kind": "contract", "tags": ["legal"],
             "created_at": "2026-08-01T00:00:00Z",
         }]

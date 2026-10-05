@@ -823,6 +823,18 @@ export default function Layout({ children }) {
                     because it is something you READ about the company, next to
                     the identity and workspace blocks it follows, where Settings
                     is configuration. Shown on the backend's own flag. */}
+                {/* 2026-10-06 — the Company Brain's way in on desktop. Not an
+                    eighth pill: seven is the strip's ceiling (KR-5), and the Brain
+                    is a place you go to look things up, like the Journal. */}
+                {hasPerm(user, "brain") && (
+                  <button
+                    onClick={() => navigate("/company-brain")}
+                    data-testid="nav-company-brain"
+                    className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-900/[0.06] hover:text-slate-900"
+                  >
+                    <BrainIcon size={15} /> {t("nav.company_brain", "Company Brain")}
+                  </button>
+                )}
                 {showJournal && (
                   <button
                     onClick={() => navigate("/journal")}

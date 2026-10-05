@@ -112,7 +112,9 @@ async def resolve_complaint(cid: str, user: dict = Depends(get_current_user)):
 async def list_memory(user: dict = Depends(require_perm("brain"))):
     # 2026-10-03 RBAC audit: the company memory the AI cites is the Brain's;
     # reading it takes Brain access, as writing it already did.
-    return await db.memory.find({"tenant_id": user["tenant_id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    from services.record_access import memory_scope
+    return await db.memory.find({"tenant_id": user["tenant_id"], **memory_scope(user)},
+                                {"_id": 0}).sort("created_at", -1).to_list(200)
 
 
 @router.post("/memory")
@@ -121,11 +123,18 @@ async def add_memory(inp: MemoryInput, user: dict = Depends(require_perm("brain"
     # facts the AI later cites) is a brain-permission action, not a
     # read anyone can do. Read of memory stays open via /memory GET
     # (no perm), only WRITE is gated.
+    # 2026-10-06 (founder): the Company Brain is curated by the owner and Manage
+    # Team -- the same rule as /api/brain/notes, which is where the app writes.
+    from services.record_access import can_manage_brain
+    if not can_manage_brain(user):
+        raise HTTPException(status_code=403, detail="Only the owner or someone with Manage Team can add to the Company Brain.")
     mid = new_id()
     doc = {"id": mid, "tenant_id": user["tenant_id"], "text": inp.text, "tag": inp.tag or "note",
-           "created_by": user["id"], "created_at": now_iso()}
+           "visibility": "public", "source": "manual", "created_by": user["id"], "created_at": now_iso()}
     await db.memory.insert_one(doc)
     doc.pop("_id", None)
+    from services.ai import brain_embed
+    brain_embed.spawn(brain_embed.index_note(dict(doc)))
     return doc
 
 

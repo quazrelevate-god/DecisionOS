@@ -179,3 +179,30 @@ def test_two_taps_on_approve_file_a_bill_once(with_test_db):
             assert (await db.capture_drafts.find_one({"id": "cd1"}))["status"] == "executed"
             return True
     assert with_test_db(scenario) is True
+
+
+def test_money_notes_in_the_company_memory_are_finances(with_test_db):
+    """2026-10-06 — the ledger used to copy every expense/asset/inventory/income
+    with its amount into the company memory, which any member reads through Ask.
+    New ones are no longer written; the ones already there are Finance's."""
+    async def scenario(db):
+        with e2e_env(db):
+            await seed_tenant_and_users(db)
+            await db.memory.insert_many([
+                {"id": "m-exp", "tenant_id": T, "text": "Expense: Yarn - INR 45,000", "tag": "expense", "created_at": now_iso()},
+                {"id": "m-note", "tenant_id": T, "text": "Bluewave prefers morning calls", "tag": "note", "created_at": now_iso()},
+            ])
+            from routers.brain import _retrieve
+            fin = {**SALES, "permissions": SALES["permissions"] + ["finance"]}
+
+            async def ids(user):
+                scope = {"tenant_id": T, "uid": user["id"], "role": user["role"], "can_finance": False, "privileged": False}
+                out = await _retrieve({"primary_entity": "memory", "keywords": [], "date_preset": None}, scope, user)
+                return sorted(r["id"] for r in out["records"])
+            assert await ids(SALES) == ["m-note"]
+            assert await ids(fin) == ["m-exp", "m-note"]
+            import inspect
+            import routers.ledger as ledger
+            assert not hasattr(ledger, "_write_brain") and "db.memory.insert" not in inspect.getsource(ledger)
+            return True
+    assert with_test_db(scenario) is True

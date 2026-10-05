@@ -25,6 +25,7 @@ from routers.admin_announcements import router as admin_announcements_router, te
 from routers.admin_compliance import router as admin_compliance_router  # Epic 9 S9 (DPDP/GDPR)
 from routers.brain import router as brain_router
 from routers.brain_docs import router as brain_docs_router
+from routers.brain_notes import router as brain_notes_router
 from routers.brain_context_api import router as brain_context_router
 from routers.signup import router as signup_router
 from routers.auth import router as auth_router
@@ -76,6 +77,7 @@ _DOMAIN_ROUTERS = (
     admin_compliance_router,
     brain_router,
     brain_docs_router,
+    brain_notes_router,   # 2026-10-06: Company Brain notes
     brain_context_router,
     signup_router,
     auth_router,

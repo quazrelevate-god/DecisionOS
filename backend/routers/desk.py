@@ -335,7 +335,8 @@ async def desk_summary(user: dict = Depends(get_current_user)):
     # Shortcuts: which top-of-Desk quick-links to render.
     # Owner-only for CEO Journal and Ops health.
     shortcuts = {
-        "ceo_journal": is_owner,
+        # 2026-10-06: the Journal is the decision makers' (GET /journal needs decisions_approve).
+        "ceo_journal": is_owner or "decisions_approve" in user_perms(user),
         "ops_health": is_owner,
         "team_leaderboard": is_owner,
     }

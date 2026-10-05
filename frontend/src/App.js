@@ -47,6 +47,7 @@ import Settings from "./pages/Settings";
 // live in pages/finance/*, imported directly by Ledger.js.
 import ContactProfile from "./pages/ContactProfile";
 import Journal from "./pages/Journal";
+import CompanyBrain from "./pages/CompanyBrain";
 import Calendar from "./pages/Calendar";
 // E2-73 (2026-08-15): Meetings.js retired. Sprint 3 (E2-31) hid it
 // from the sidebar and redirected /meetings to /. Re-enable path: git
@@ -293,7 +294,10 @@ function App() {
                 and must not be driven by a layout signal (see
                 useWasMobileAtMount for what that cost the first time). */}
             <Route path="/brief" element={<Navigate to="/inbox?scope=morning" replace />} />
-            <Route path="/journal" element={<Protected ownerOnly><Journal /></Protected>} />
+            {/* 2026-10-06: the Journal is the decision makers' history, not the owner's alone. */}
+            <Route path="/journal" element={<Protected perms={["decisions_approve"]}><Journal /></Protected>} />
+            {/* 2026-10-06: the Company Brain — documents + notes, its own place (Dex stays at /brain). */}
+            <Route path="/company-brain" element={<Protected perm="brain"><CompanyBrain /></Protected>} />
             <Route path="/my-work" element={<Protected><MyWork /></Protected>} />
             {/* 2026-09-19 — your leave: request, absence, history. The
                 register stays on Team, approving in Approvals, per-department

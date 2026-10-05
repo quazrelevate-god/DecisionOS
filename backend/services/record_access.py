@@ -41,6 +41,42 @@ async def complaint_scope(user: dict) -> dict:
     return {"$or": [{"customer_id": {"$in": ids}}, {"created_by": user["id"]}]}
 
 
+# 2026-10-06 — company-memory notes that are money records (written by the old
+# finance mirror, routers/ledger) are Finance's: hidden from everyone else.
+FINANCE_TAGS = ("expense", "asset", "inventory", "income")
+
+
+def can_manage_brain(user: dict) -> bool:
+    """Who adds, edits and removes Company Brain documents and notes (founder,
+    2026-10-06: owner + Manage Team)."""
+    return user.get("role") == "owner" or "team_manage" in user_perms(user)
+
+
+def memory_scope(user: dict) -> dict:
+    """The Company Brain notes this person may read.
+
+    2026-10-06 — notes carry the same "who can see" as documents (public /
+    dept / private, with department and roles_allowed); a note written before
+    that has none and is public. Money records (the old finance mirror) are
+    Finance's. Owner and Manage Team see every note they may (Finance rule still
+    applies to a Manage-Team member without Finance)."""
+    perms = user_perms(user)
+    clauses = []
+    if "finance" not in perms:
+        clauses.append({"tag": {"$nin": list(FINANCE_TAGS)}})
+    if not can_manage_brain(user):
+        role = user.get("role") or ""
+        clauses.append({"$or": [
+            {"visibility": {"$in": [None, "public"]}},
+            {"created_by": user.get("id")},
+            {"visibility": "dept", "$or": [{"department": role}, {"roles_allowed": role}]},
+            {"visibility": "private", "roles_allowed": role},
+        ]})
+    if not clauses:
+        return {}
+    return clauses[0] if len(clauses) == 1 else {"$and": clauses}
+
+
 def leave_scope(user: dict) -> dict:
     """The leaves this person may read — /leaves?scope=all's rule: everyone's
     with "Approve leave", otherwise their own and the ones they approve."""

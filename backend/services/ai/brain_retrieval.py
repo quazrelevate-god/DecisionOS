@@ -146,6 +146,7 @@ async def search_context(
 def cites_from_hits(
     document_hits: list[dict] | None = None,
     context_hits: list[dict] | None = None,
+    note_hits: list[dict] | None = None,
 ) -> list[dict]:
     """Shape retrieval hits into the citation format /ask's response
     already uses (`{id, title, source_type, source_id, kind, ...}`).
@@ -160,10 +161,19 @@ def cites_from_hits(
             # 2026-10-05 — the Sources chips read `type` + `deep_link`; Brain cites
             # carried neither, so they showed no label and went nowhere.
             "type": "document",
-            "deep_link": f"/brain?docs=1&doc={h.get('id')}",
+            "deep_link": f"/company-brain?doc={h.get('id')}",
             "kind": h.get("kind"),
             "tags": h.get("tags") or [],
             "created_at": h.get("created_at"),
+        })
+    for h in (note_hits or []):
+        out.append({
+            "id": h.get("note_id") or h.get("id"),
+            "title": h.get("title") or "Note",
+            "source_type": "brain_note",
+            "type": "note",
+            "deep_link": f"/company-brain?tab=notes&note={h.get('note_id') or h.get('id')}",
+            "tags": [h.get("tag")] if h.get("tag") else [],
         })
     for h in (context_hits or []):
         kind, link = _context_link(h)
@@ -268,7 +278,9 @@ async def search_chunks(*, user: dict, query: str, limit: int = 8, alt_query: st
         floor = RAG_MIN_SCORE if min_score is None else min_score
         top = ranked[0].get("score", 0)
         ranked = [c for c in ranked if c.get("score", 0) >= max(floor, top - RAG_BEST_MARGIN)]
-        ids = list({c.get("doc_id") for c in ranked if c.get("doc_id")})
+        pre = brain_embed.NOTE_PREFIX
+        ids = list({c.get("doc_id") for c in ranked if c.get("doc_id") and not str(c["doc_id"]).startswith(pre)})
+        note_ids = list({str(c["doc_id"])[len(pre):] for c in ranked if str(c.get("doc_id") or "").startswith(pre)})
         live = {}
         if ids:
             async for d in db.brain_documents.find(
@@ -276,12 +288,25 @@ async def search_chunks(*, user: dict, query: str, limit: int = 8, alt_query: st
                     {"_id": 0, "id": 1, "visibility": 1, "department": 1, "roles_allowed": 1,
                      "uploaded_by": 1, "title": 1, "original_filename": 1}):
                 live[d["id"]] = d
+        notes = {}
+        if note_ids:
+            # 2026-10-06: a note is read under the note rule (who can see + Finance).
+            from services.record_access import memory_scope
+            async for n in db.memory.find(
+                    {"tenant_id": tenant_id, "id": {"$in": note_ids}, **memory_scope(user)},
+                    {"_id": 0, "id": 1, "text": 1, "tag": 1}):
+                notes[pre + n["id"]] = n
         out = []
         for c in ranked:
+            n = notes.get(c.get("doc_id"))
+            if n:
+                out.append({**c, "source": "note", "note_id": n["id"], "title": (n.get("text") or "")[:80],
+                            "tag": n.get("tag")})
+                continue
             d = live.get(c.get("doc_id"))
             if not d:
-                continue                      # deleted, or never a document of this company
-            current = {**c, **brain_embed._doc_payload(d)}
+                continue                      # deleted, hidden, or never this company's
+            current = {**c, "source": "document", **brain_embed._doc_payload(d)}
             if _chunk_visible(current, user):
                 out.append(current)
         return out[:limit]

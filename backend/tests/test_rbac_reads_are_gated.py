@@ -297,3 +297,14 @@ def test_asking_without_ask_access_says_so():
     b = fe("pages/Brain.js")
     assert 'const canAsk = hasPerm(user, "ask");' in b
     assert "e?.response?.status === 403 ? NO_ASK" in b
+
+
+def test_the_journal_is_for_decision_makers_and_brain_notes_for_brain_readers(routes):
+    """2026-10-06 — the Journal is decision history for the people who approve
+    decisions (was owner-only); Company Brain notes are read with Brain access
+    and changed only by owner + Manage Team (checked in the handler)."""
+    assert ("perm", "decisions_approve") in routes[("GET", "/api/journal")]
+    assert ("perm", "brain") in routes[("GET", "/api/brain/notes")]
+    for method in ("POST", "PATCH", "DELETE"):
+        path = "/api/brain/notes" if method == "POST" else "/api/brain/notes/{note_id}"
+        assert ("perm", "brain") in routes[(method, path)]

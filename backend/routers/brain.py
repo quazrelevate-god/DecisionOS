@@ -270,12 +270,17 @@ async def _enrich_with_brain(plan: dict, scope: dict, user: dict, question: str 
     # plan keywords), RRF-fused with the keyword doc hits. Passages are the actual
     # relevant text the answer quotes; the deterministic metrics path is untouched.
     passages: list = []
+    note_hits: list = []
     chunk_hits = await brain_retrieval.search_chunks(user=user, query=(question or q_txt), limit=6,
                                                      alt_query=q_txt)
     if chunk_hits:
         kw_ids = [d.get("id") for d in doc_hits]
         vec_doc_ids: list = []
         for c in chunk_hits:
+            if c.get("source") == "note":
+                if not any(n.get("note_id") == c.get("note_id") for n in note_hits):
+                    note_hits.append(c)
+                continue
             if c.get("doc_id") and c["doc_id"] not in vec_doc_ids:
                 vec_doc_ids.append(c["doc_id"])
         by_id = {d.get("id"): d for d in doc_hits}
@@ -293,7 +298,7 @@ async def _enrich_with_brain(plan: dict, scope: dict, user: dict, question: str 
         doc_hits = fused_docs or doc_hits
         passages = [{"title": c.get("title"), "doc_id": c.get("doc_id"),
                      "text": (c.get("text") or "")[:_PASSAGE_CHARS]} for c in chunk_hits[:4]]
-    return {"document_hits": doc_hits, "knowledge_hits": ctx_hits, "passages": passages}
+    return {"document_hits": doc_hits, "knowledge_hits": ctx_hits, "passages": passages, "note_hits": note_hits}
 
 
 async def _people_named(tid: str, keywords) -> tuple:
@@ -324,7 +329,7 @@ async def _retrieve(plan: dict, scope: dict, user: Optional[dict] = None):
     # 2026-10-05 (AI audit) — Dex reads what the asker's own screens show, by
     # the same rules (services/record_access): decisions, contacts, leaves and
     # memory used to come back for the whole company to any member.
-    from services.record_access import visible_decisions_clause, leave_scope
+    from services.record_access import visible_decisions_clause, leave_scope, memory_scope
     from core.permissions import crm_types
     who = user or {"id": scope["uid"], "role": scope["role"], "tenant_id": tid}
     entity = plan["primary_entity"]
@@ -396,14 +401,14 @@ async def _retrieve(plan: dict, scope: dict, user: Optional[dict] = None):
         # Brain access -- shown as notes, never called documents.
         if "brain" not in user_perms(who) or not rx:
             return {"records": [], "entity": entity}
-        rows = await db.memory.find({"tenant_id": tid, "text": rx}, {"_id": 0}).sort("created_at", -1).to_list(50)
+        rows = await db.memory.find({"tenant_id": tid, "text": rx, **memory_scope(who)}, {"_id": 0}).sort("created_at", -1).to_list(50)
         return {"records": rows, "entity": entity}
 
     if entity == "memory":
         # The company memory is the Brain's (GET /memory needs "brain").
         if "brain" not in user_perms(who):
             return {"records": [], "entity": entity}
-        q = {"tenant_id": tid}
+        q = {"tenant_id": tid, **memory_scope(who)}
         if rx:
             q["text"] = rx
         rows = await db.memory.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
@@ -799,8 +804,9 @@ async def _compute_memory(_ctx, _plan, recs):
     rows, cites = [], []
     for m in recs[:200]:
         rows.append({"note": m.get("text"), "tag": m.get("tag") or "note"})
-        cites.append({"type": "memory", "title": (m.get("text") or "")[:60], "id": m["id"],
-                      "deep_link": "/brain", "confidence": "EMPLOYEE_REPORTED"})
+        # 2026-10-06: a note is a Company Brain note -- the chip opens it there.
+        cites.append({"type": "note", "title": (m.get("text") or "")[:60], "id": m["id"],
+                      "deep_link": f"/company-brain?tab=notes&note={m['id']}", "confidence": "EMPLOYEE_REPORTED"})
     kpis = [{"label": "Memory notes", "value": len(recs)}]
     columns = [{"key": "note", "label": "Note", "type": "text"}, {"key": "tag", "label": "Tag", "type": "text"}]
     return kpis, {"columns": columns, "rows": rows, "total_rows": len(rows)}, cites[:12]
@@ -1060,6 +1066,7 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
     extra_cites = brain_retrieval.cites_from_hits(
         document_hits=brain_extras["document_hits"],
         context_hits=brain_extras["knowledge_hits"],
+        note_hits=brain_extras.get("note_hits"),
     )
 
     # Disclosure guard (belt & suspenders): strip money columns for non-finance users

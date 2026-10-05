@@ -75,30 +75,83 @@ export function computeUiScale(width) {
 export function useUiScale() {
   useEffect(() => {
     const root = document.documentElement;
+    const meta = document.querySelector('meta[name="viewport"]');
+    const metaWas = meta ? meta.getAttribute("content") : null;
     document.body.classList.add("ui-scale");
     let raf = 0;
+    let viaViewport = false;
+
+    /* ZOOM IS NOT AVAILABLE EVERYWHERE, AND THE APP MUST NOT NEED IT.
+       (2026-10-05, measured on two phones running the same binary.)
+         iPhone 13 mini, iOS 27    — zoom honoured, page correct.
+         iPhone 13,      iOS 26.3.1 — zoom IGNORED. Every box 1.25x, 1055px of
+                                      page in an 844px window, the dock alone
+                                      still because it is fixed.
+       On the older one the device reported `--ui-scale 0.8`, `body.zoom 0.8`
+       AND an inline `0.8`, measured an effective scale of 1, and answered
+       `currentCSSZoom: unsupported` — a WebKit from before CSS `zoom` was
+       standardised. It accepts the declaration, reports it back, and does not
+       lay out by it. There is no way to set it that fixes that, so the app
+       stops depending on it.
+       THE FALLBACK IS THE OLDEST TRICK THERE IS: hand the page a wider layout
+       viewport and let the browser fit it to the glass. `width=488` on a 390pt
+       screen is drawn at 390/488 = 0.8 — the same result, through page scale,
+       which every web view has always implemented.
+       And then --ui-scale becomes 1, which is not a lie but the point: every
+       compensation in this app (--sa-* over the scale, 100dvh over the scale,
+       DexSlider's visual-to-CSS conversion) exists to undo a zoom, and with
+       the viewport pre-scaled there is nothing to undo. One divides by 1 and
+       they all come out right.
+       WHICH PATH RUNS IS MEASURED, NEVER SNIFFED. A 100px ruler read back
+       through getBoundingClientRect says what actually happened; no version
+       test, no UA string, and a web view that gains zoom later simply keeps
+       the fast path. */
+    const deviceWidth = () => {
+      /* screen.width is the glass, and does NOT move when we rewrite the
+         viewport meta — innerWidth does, which would make this compound. */
+      const w = window.screen && window.screen.width;
+      return typeof w === "number" && w > 64 ? w : window.innerWidth;
+    };
+
+    const effectiveScale = () => {
+      const ruler = document.createElement("div");
+      ruler.style.cssText = "position:absolute;top:-9999px;left:0;width:100px;height:1px;pointer-events:none";
+      document.body.appendChild(ruler);
+      const got = ruler.getBoundingClientRect().width / 100;
+      ruler.remove();
+      return got;
+    };
+
+    const widenViewport = (s) => {
+      if (!meta) return;
+      /* FLOOR, not round. The browser fits this width to the glass, so asking
+         for 488 on a 390pt screen scales by 390/488 = 0.7992 and the page ends
+         a rounded pixel TALLER than the window — one stray pixel of scroll on
+         a page whose whole point is not to scroll. Flooring always asks for
+         slightly less than the exact 487.5, so the fit rounds the other way. */
+      meta.setAttribute("content", `width=${Math.floor(deviceWidth() / s)}, viewport-fit=cover`);
+    };
+
     const apply = () => {
       raf = 0;
+      if (viaViewport) { widenViewport(computeUiScale(deviceWidth())); return; }
+
       const s = computeUiScale(window.innerWidth);
       root.style.setProperty("--ui-scale", s.toFixed(1));
-      /* AND WRITTEN STRAIGHT ONTO THE ELEMENT. (2026-10-05.)
-         The stylesheet says `.ui-scale { zoom: var(--ui-scale, 1) }`, and on
-         the founder's iPhone 13 (iOS 26.3.1, WKWebView) the page is laid out
-         as though that rule had never run: every box 1.25x, 211px of scroll
-         under a dock that cannot move. The same binary is correct on the 13
-         mini, so it is not the value — both phones take the same 0.8 step —
-         and it is not Display Zoom, which is off on both.
-         `zoom` is a legacy property WebKit only recently standardised, and a
-         var() substitution into one is exactly the kind of thing an older code
-         path drops on the floor: invalid at computed-value time, zoom falls
-         back to 1, and getComputedStyle still cheerfully reports 0.8 — which
-         is why the first diagnostic saw nothing wrong.
-         An inline literal cannot hit that path: there is no substitution to
-         fail. It also wins over the class rule by cascade, so the CSS stays
-         exactly as it is for every surface that is already working, and this
-         is belt and braces rather than a replacement. ScaleProbe measures a
-         100px ruler on the device to say which of the two actually landed. */
       try { document.body.style.zoom = String(s); } catch (e) { /* no zoom here */ }
+
+      /* Only below the desktop tree: the viewport meta is a phone mechanism
+         and a desktop browser ignores it, so there would be nothing to fall
+         back TO. A laptop whose web view lacked zoom would simply run at 1,
+         which is what it did before any of this existed. */
+      if (s === 1 || window.innerWidth >= LG) return;
+      if (Math.abs(effectiveScale() - s) <= 0.01) return;   // zoom landed; done
+
+      viaViewport = true;
+      document.body.classList.remove("ui-scale");
+      try { document.body.style.zoom = ""; } catch (e) { /* never had one */ }
+      root.style.setProperty("--ui-scale", "1");
+      widenViewport(s);
     };
     const onResize = () => { if (!raf) raf = requestAnimationFrame(apply); };
     apply();
@@ -108,6 +161,7 @@ export function useUiScale() {
       if (raf) cancelAnimationFrame(raf);
       root.style.removeProperty("--ui-scale");
       try { document.body.style.zoom = ""; } catch (e) { /* never had one */ }
+      if (meta && metaWas !== null) meta.setAttribute("content", metaWas);
       document.body.classList.remove("ui-scale");
     };
   }, []);

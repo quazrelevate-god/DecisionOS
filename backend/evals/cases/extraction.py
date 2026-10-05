@@ -9,7 +9,7 @@ from evals.base import (
     in_range, one_of, each_item, predicate,
 )
 from services.ai.extraction import (
-    ai_extract, ai_score_tasks, ai_score_contact, ai_meeting_notes,
+    ai_extract, ai_meeting_notes,
     ai_execution_plan, ai_step_assist,
 )
 from routers.voice_notes import ai_clarify_directive
@@ -109,63 +109,9 @@ register(EvalCase(
 
 
 # --- extraction.score_tasks -------------------------------------------------
-register(EvalCase(
-    task="extraction.score_tasks", name="scores_every_task_in_range",
-    fn=ai_score_tasks,
-    kwargs={
-        "tasks": [
-            {"id": "t1", "title": "Chase overdue invoice", "priority": "high", "status": "todo"},
-            {"id": "t2", "title": "Update product catalogue", "priority": "low", "status": "todo"},
-        ],
-        "currency": "INR", "session_id": "eval-score-1",
-    },
-    golden="""{"scores": [
-      {"id": "t1", "business_impact": 85, "revenue": 90, "risk": 70, "urgency": 88, "priority_score": 86, "reason": "Overdue cash"},
-      {"id": "t2", "business_impact": 30, "revenue": 20, "risk": 15, "urgency": 25, "priority_score": 24, "reason": "Low urgency"}
-    ]}""",
-    checks=[
-        predicate("both task ids scored", lambda r: {"t1", "t2"} <= set(r)),
-        predicate("t1 scores 0..100", lambda r: all(0 <= r["t1"][a] <= 100 for a in
-                  ("business_impact", "revenue", "risk", "urgency", "priority_score"))),
-    ],
-    note="Every task gets a scored entry; all 5 axes clamped to 0..100.",
-))
-
-register(EvalCase(
-    task="extraction.score_tasks", name="out_of_range_clamped",
-    fn=ai_score_tasks,
-    kwargs={"tasks": [{"id": "t1", "title": "x", "priority": "high", "status": "todo"}],
-            "currency": "INR", "session_id": "eval-score-2"},
-    golden="""{"scores": [{"id": "t1", "business_impact": 250, "revenue": -40, "risk": "high",
-      "urgency": 60, "priority_score": 999, "reason": "extreme"}]}""",
-    checks=[
-        predicate("t1 present", lambda r: "t1" in r),
-        predicate("all clamped 0..100", lambda r: all(0 <= r["t1"][a] <= 100 for a in
-                  ("business_impact", "revenue", "risk", "urgency", "priority_score"))),
-    ],
-    note="Clamp guard: a model returning 250 / -40 / a string still yields 0..100 ints.",
-))
 
 
 # --- extraction.score_contact -----------------------------------------------
-register(EvalCase(
-    task="extraction.score_contact", name="relationship_and_risk",
-    fn=ai_score_contact,
-    kwargs={
-        "contact": {"name": "Sharma Textiles", "type": "customer", "status": "active"},
-        "metrics": {"outstanding": 200000, "total_billed": 800000, "open_complaints": 1},
-        "currency": "INR", "session_id": "eval-contact-1",
-    },
-    golden="""{"relationship_score": 72, "risk_score": 34, "reason": "Good history, some outstanding",
-      "signals": ["pays late occasionally", "high lifetime value", "one open complaint"]}""",
-    checks=[
-        in_range("relationship_score", 0, 100),
-        in_range("risk_score", 0, 100),
-        nonempty_str("reason"),
-        predicate("<=3 signals", lambda r: isinstance(r.get("signals"), list) and len(r["signals"]) <= 3),
-    ],
-    note="Contact scoring: both scores in range, reason present, signals capped at 3.",
-))
 
 
 # --- extraction.meeting_notes -----------------------------------------------

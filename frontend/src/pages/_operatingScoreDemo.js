@@ -18,7 +18,10 @@
 // written for; real tenants get honest fallbacks (usually: the element is
 // absent). One predicate, so post-demo removal is a single grep for
 // isDemoTenant.
-export const isDemoTenant = (tenant) => /kapoor/i.test(tenant?.name || "");
+// 2026-10-06 (AI audit step 5) — gated on the seeder's explicit `is_demo` flag
+// (the same one DemoWorkspaceBanner reads), not on the name: a real customer
+// called "Kapoor …" was shown this made-up trend and coach text as theirs.
+export const isDemoTenant = (tenant) => tenant?.is_demo === true;
 
 // ----- 30-day trend (used for hero sparkline) -----
 // One entry per day, oldest first. Values 0-100.

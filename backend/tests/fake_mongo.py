@@ -32,6 +32,17 @@ def _match_value(val, present, cond):
                 return False
             if op == "$gt" and not (present and val is not None and val > arg):
                 return False
+            if op == "$gte" and not (present and val is not None and val >= arg):
+                return False
+            if op == "$lt" and not (present and val is not None and val < arg):
+                return False
+            if op == "$lte" and not (present and val is not None and val <= arg):
+                return False
+            if op == "$regex":
+                import re as _re
+                flags = _re.I if "i" in (cond.get("$options") or "") else 0
+                if not (isinstance(val, str) and _re.search(arg, val, flags)):
+                    return False
         return True
     if isinstance(val, list) and not isinstance(cond, list):
         return cond in val

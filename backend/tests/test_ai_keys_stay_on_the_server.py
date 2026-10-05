@@ -58,13 +58,25 @@ OWNER = {"id": "u-owner", "tenant_id": TENANT, "name": "Rajesh", "role": "owner"
 
 
 def test_a_members_auth_me_carries_no_ai_keys(with_test_db):
+    # /me reaches many modules now (permissions, setup claim): rebind them all,
+    # or one binds the shared Mongo client to this test's loop and breaks the next.
+    from tests.e2e_harness import e2e_env
+
     async def scenario(db):
-        restore = _patch(db, rauth)
+        restore = _patch(db, rauth)          # routers.auth is not in the harness list
         try:
-            await _seed(db)
-            return await rauth.me(user=MEMBER)
+            with e2e_env(db):
+                return await _me(db)
         finally:
             restore()
+
+    async def _me(db):
+        await _seed(db)
+        # /me takes the request + response since B27 (CSRF token echo)
+        from starlette.requests import Request
+        from starlette.responses import Response
+        req = Request({"type": "http", "method": "GET", "path": "/api/auth/me", "headers": []})
+        return await rauth.me(req, Response(), user=MEMBER)
 
     out = with_test_db(scenario)
     assert out["tenant"]["name"] == "Keys Co", "the tenant still comes back"

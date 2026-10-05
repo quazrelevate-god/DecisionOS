@@ -155,18 +155,6 @@ async def _create_leave(tenant_id, requester, leave_type, from_date, to_date, da
     return doc
 
 
-async def ai_leave_impact(person_name: str, from_date: str, to_date: str, tasks: list, members: list) -> dict:
-    if not tasks:
-        return {"summary": "No active tasks are affected by this leave.", "suggestions": []}
-    system = render("coaching.leave_impact")
-    payload = {
-        "person_on_leave": person_name, "leave_from": from_date, "leave_to": to_date,
-        "at_risk_tasks": [{"task_id": t["id"], "title": t.get("title"), "priority": t.get("priority"),
-                           "status": t.get("status"), "due_date": (t.get("due_date") or "")[:10]} for t in tasks],
-        "available_members": [{"id": m["id"], "name": m["name"], "role": m["role"],
-                               "active_task_count": m["load"]} for m in members],
-    }
-    chat = claude_chat(task="coaching.leave_impact", session_id=f"leave-impact-{new_id()}", system_message=system).with_model(*model_for("coaching.leave_impact"))
-    resp = await chat.send_message(UserMessage(text=json.dumps(payload)))
-    data = _extract_json(resp)
-    return data if isinstance(data, dict) else {"summary": "", "suggestions": []}
+# 2026-10-06 (AI audit step 5): leave impact is calculated now -- services/calculated.leave_impact.
+
+

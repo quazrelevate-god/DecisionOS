@@ -32,7 +32,7 @@ export default function WorkCoach() {
 
   const refresh = useMutation({
     mutationFn: () => api.post(`/work-coach/refresh${userId ? `?user_id=${userId}` : ""}`).then((r) => r.data),
-    onSuccess: (d) => { qc.setQueryData(["work-coach", userId], d); toast.success("AI coach updated"); },
+    onSuccess: (d) => { qc.setQueryData(["work-coach", userId], d); toast.success("Review updated"); },
     onError: () => toast.error("Could not refresh coaching"),
   });
 
@@ -40,7 +40,7 @@ export default function WorkCoach() {
     const status = error?.response?.status;
     return (
       <div>
-        <PageHeader eyebrow="AI Work Coach" title="Access denied" />
+        <PageHeader eyebrow="Work Coach" title="Access denied" />
         <div className="card-brutal p-8 text-center" data-testid="coach-error">
           <ShieldWarning size={32} weight="bold" className="text-brand-600 mx-auto mb-3" />
           <p className="text-base font-medium">
@@ -65,7 +65,7 @@ export default function WorkCoach() {
 
   return (
     <div>
-      <PageHeader eyebrow={`${target.name} · ${roleLabel(target.role, tenant?.roles, "Member")}`} title="AI Work Coach">
+      <PageHeader eyebrow={`${target.name} · ${roleLabel(target.role, tenant?.roles, "Member")}`} title="Work Coach">
         <button onClick={() => refresh.mutate()} disabled={refresh.isPending} data-testid="coach-refresh-btn"
           className="flex items-center gap-2 border border-border px-4 py-2 text-sm font-medium bg-caution-50 transition-all disabled:opacity-50">
           <Sparkle size={16} weight="bold" /> {refresh.isPending ? "Analyzing…" : s ? "Refresh" : "Generate coaching"}
@@ -104,12 +104,12 @@ export default function WorkCoach() {
         </div>
       </div>
 
-      {/* AI review */}
+      {/* Review — calculated from the stats above (services/calculated.work_coach) */}
       {!s ? (
         <div className="card-brutal p-8 text-center" data-testid="coach-empty">
           <Trophy size={32} weight="bold" className="text-brand-600 mx-auto mb-3" />
           <p className="text-base font-medium">No coaching yet</p>
-          <p className="text-sm text-muted-foreground mt-1">Generate an AI performance review based on the stats above.</p>
+          <p className="text-sm text-muted-foreground mt-1">Generate a review from the stats above.</p>
         </div>
       ) : (
         <div className="space-y-5" data-testid="coach-summary">
@@ -149,7 +149,7 @@ export default function WorkCoach() {
           </div>
 
           <div className="card-brutal p-5 border-l-4 border-l-brand-600" data-testid="coach-recommendation">
-            <p className="label-mono text-brand-600 mb-1">AI Recommendation</p>
+            <p className="label-mono text-brand-600 mb-1">Recommendation</p>
             <p className="text-sm font-medium leading-relaxed">{s.recommendation}</p>
           </div>
 

@@ -97,7 +97,9 @@ CLAUDE, LLMCHAT, RAW_MODELS = _collect()
 def test_call_sites_discovered():
     """Sanity: the AST walk actually found the AI surface (guards against a bad
     scan silently passing every gate)."""
-    assert len(CLAUDE) >= 25, f"only found {len(CLAUDE)} claude_chat calls -- scan broken?"
+    # 2026-10-06 (AI audit step 5): six AI calls became calculated rules (services/calculated),
+    # so the floor dropped 25 -> 20 on purpose; below that the scan itself is suspect.
+    assert len(CLAUDE) >= 20, f"only found {len(CLAUDE)} claude_chat calls -- scan broken?"
 
 
 # --- Gate 1: no inline prompts ----------------------------------------------
@@ -140,7 +142,8 @@ def test_gate3_no_pinned_models_except_probe():
 # --- Gate 4: registry + evals wired -----------------------------------------
 def test_gate4_registry_populated():
     from prompts import all_prompts
-    assert len(all_prompts()) >= 25, "prompt registry unexpectedly small"
+    # 2026-10-06: six prompts retired with those calls (step 5) -- floor 25 -> 20.
+    assert len(all_prompts()) >= 20, "prompt registry unexpectedly small"
 
 
 def test_gate4_every_eval_case_targets_a_registered_prompt():

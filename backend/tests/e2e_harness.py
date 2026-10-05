@@ -32,6 +32,7 @@ _DB_MODULES = [
     "services.ai.generators", "services.ai.brain_context",
     "services.record_access",  # 2026-10-05: the read rules Dex shares with the screens
     "routers.brain_notes", "services.ai.brain_embed", "services.ai.brain_retrieval",  # 2026-10-06: Company Brain notes + index + search
+    "services.finance_words", "services.calculated",  # 2026-10-06: calculated finance rules
     "services.decision_flow", "services.captures", "routers.voice_notes", "routers.desk",
     # The follow-up sweep is on the journey too (overdue escalation, D2's
     # due-soon warning) and its module-level db was reaching the production

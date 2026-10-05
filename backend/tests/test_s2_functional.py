@@ -625,10 +625,11 @@ def test_ledger_typed_crud_payment_match_and_delete_cascade(with_test_db):
     import core.deps as core_deps
     import routers.ledger as led
     import services.ai.brain_context as bctx
+    import services.finance_words as fw   # 2026-10-06: categories read through here now
     from models.finance import ExpenseInput
 
     async def scenario(db):
-        restore = _use_db(db, led, core, core_deps, bctx)
+        restore = _use_db(db, led, core, core_deps, bctx, fw)
         try:
             tid = "t1"
             owner = _u("owner", "o1")

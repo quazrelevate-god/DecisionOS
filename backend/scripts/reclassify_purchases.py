@@ -64,7 +64,7 @@ async def _owner_for(tenant_id: str):
 
 async def preview_tenant(tenant_id: str) -> dict:
     """Read-only: report what WOULD change (purchase re-classification only), without writing."""
-    from server import ai_classify_purchase  # lazy: pulls AI + full app config
+    from services.calculated import classify_purchase   # 2026-10-06: rules, not AI
     from routers.ledger import get_finance_categories
     fc = await get_finance_categories(tenant_id)
     bills = await db.invoices.find({"tenant_id": tenant_id, "type": "purchase_bill"},
@@ -77,7 +77,8 @@ async def preview_tenant(tenant_id: str) -> dict:
                       if isinstance(x, dict))
         text = (f"Vendor: {inv.get('contact_name', '')}. Bill no: {inv.get('number', '')}. "
                 f"Items: {li}. Amount: {inv.get('amount')} {inv.get('currency', '')}")
-        result = await ai_classify_purchase(text, expense_categories=fc["expense"], asset_categories=fc["asset"])
+        result = await classify_purchase(tenant_id, f"{li} {inv.get('notes') or ''}", vendor=inv.get("contact_name"),
+                                         asset_categories=fc["asset"])
         new_type = result.get("purchase_type", "unknown")
         old_type = (inv.get("purchase_type") or "expense").strip().lower() or "expense"
         if new_type == "unknown":

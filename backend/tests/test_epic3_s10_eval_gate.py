@@ -29,15 +29,20 @@ def _golden_by_domain():
 
 # floors sit just below current counts: they catch DELETION of coverage without
 # being brittle to a single case being retired. Bump them up as the set grows.
+# 2026-10-06 (AI audit step 5): coaching.work_coach / leave_impact,
+# documents.purchase_class, extraction.score_tasks / score_contact and
+# ledger.expense_cat are no longer AI calls -- they are calculated
+# (services/calculated, tests/test_calculated_not_ai.py). Their 10 golden cases
+# went with them; the floors below are the remaining AI tasks'.
 _DOMAIN_FLOORS = {
-    "captures": 5, "coaching": 3, "documents": 5,
+    "captures": 5, "documents": 1,
     "extraction": 10, "generators": 4, "onboarding": 8,
 }
 
 
 def test_golden_set_total_floor():
     total = sum(1 for c in all_cases() if c.golden is not None)
-    assert total >= 36, f"golden set shrank to {total} replayable cases (floor 36)"
+    assert total >= 29, f"golden set shrank to {total} replayable cases (floor 29)"
 
 
 def test_every_core_domain_meets_its_floor():

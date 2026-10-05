@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from core import db, get_current_user, now_iso
 from services.operating_score import (
     WINDOWS, _company_operating_view, _self_operating_view, compute_employee_stats,
-    _resolve_coach_target, ai_work_coach,
+    _resolve_coach_target,
 )
 
 router = APIRouter(prefix="/api")
@@ -104,7 +104,8 @@ async def get_work_coach(user_id: Optional[str] = None, user: dict = Depends(get
 async def refresh_work_coach(user_id: Optional[str] = None, user: dict = Depends(get_current_user)):
     target = await _resolve_coach_target(user, user_id)
     stats = await compute_employee_stats(user["tenant_id"], target)
-    summary = await ai_work_coach(target, stats, session_id=f"coach-{target['id']}")
+    from services.calculated import work_coach   # 2026-10-06: from the person's own numbers, not AI
+    summary = work_coach(target, stats)
     summary["generated_at"] = now_iso()
     summary["stats_snapshot"] = stats
     await db.users.update_one({"id": target["id"]}, {"$set": {"coach_summary": summary}})

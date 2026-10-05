@@ -37,6 +37,7 @@ Task-only helpers (defined here, since they're not called from anywhere else):
   `_can_approve_task`, `_tenant_industry`, `_resolve_task_handoff`,
   `_attach_reference_ids`.
 """
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -1619,28 +1620,30 @@ async def prioritize_tasks(force: bool = False, limit: int = 25, user: dict = De
     # FIX-004-C (RBAC-07): tenant-wide AI re-score of every open task.
     # Costs Claude tokens and rewrites priority ordering the whole
     # team sees — team-manage permission gates the action.
-    from services.ai.extraction import ai_score_tasks
-    from services.ingestion import _tenant_currency
+    # 2026-10-06 — a formula over due date, priority, status and what the task
+    # moves (services/calculated.score_tasks), not AI: instant, so every call
+    # re-scores (dates move every day).
+    from services.calculated import score_tasks
     tid = user["tenant_id"]
     q = {"tenant_id": tid, "status": {"$in": list(OPEN_STATUSES)}}  # ASK-28 TK-07: every open stage
     if user["role"] != "owner":
         q["$or"] = [{"assignee_id": user["id"]}, {"co_assignee_ids": user["id"]}, {"assignee_role": user["role"]}]
     open_tasks = await db.tasks.find(q, {"_id": 0}).sort("created_at", -1).to_list(limit)
-    todo = [t for t in open_tasks if force or not t.get("ai_scores")]
+    scores = score_tasks(open_tasks)
+    now = now_iso()
     scored_n = 0
-    if todo:
-        currency = await _tenant_currency(tid)
-        now = now_iso()
-        for i in range(0, len(todo), 25):
-            chunk = todo[i:i + 25]
-            scores = await ai_score_tasks(chunk, currency, session_id=f"prioritize-{tid}-{i}")
-            for t in open_tasks:
-                s = scores.get(t["id"])
-                if s:
-                    t["ai_scores"] = s
-                    t["scored_at"] = now
-                    scored_n += 1
-                    await db.tasks.update_one(tenant_filter(t["id"], tid), {"$set": {"ai_scores": s, "scored_at": now}})  # FIX-001-C
+    writes = []
+    for t in open_tasks:
+        s = scores.get(t["id"])
+        if s:
+            scored_n += 1
+            if t.get("ai_scores") != s:      # unchanged scores need no write
+                writes.append(db.tasks.update_one(tenant_filter(t["id"], tid), {"$set": {"ai_scores": s, "scored_at": now}}))  # FIX-001-C
+                t["scored_at"] = now
+            t["ai_scores"] = s
+    # one at a time was ~7 s for 50 tasks over the network; in parallel, 20 at a time
+    for i in range(0, len(writes), 20):
+        await asyncio.gather(*writes[i:i + 20])
     open_tasks = await enrich_tasks(open_tasks)
     open_tasks.sort(key=lambda t: (t.get("ai_scores") or {}).get("priority_score", -1), reverse=True)
     return {"tasks": open_tasks, "scored": scored_n}

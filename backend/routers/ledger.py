@@ -34,27 +34,13 @@ router = APIRouter(prefix="/api")
 UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
-EXPENSE_CATEGORIES = [
-    "Raw Material", "Salary & Wages", "Rent", "Utilities", "Logistics & Freight",
-    "Marketing", "Professional Services", "Asset Purchase", "Maintenance & Repairs",
-    "Taxes & Duties", "Office Supplies", "Other",
-]
-ASSET_CATEGORIES = ["Machinery", "Equipment", "Vehicle", "Furniture", "IT & Electronics", "Building", "Other"]
 
-_CATEGORY_KEYWORDS = [
-    ("Salary & Wages", ["salary", "wage", "payroll", "stipend", "bonus"]),
-    ("Rent", ["rent", "lease"]),
-    ("Utilities", ["electric", "power bill", "water bill", "gas bill", "internet", "broadband", "telephone", "utility"]),
-    ("Logistics & Freight", ["freight", "transport", "courier", "shipping", "logistics", "cartage", "delivery"]),
-    ("Marketing", ["advertis", "marketing", "promo", "campaign", "branding", "hoarding"]),
-    ("Professional Services", ["consult", "audit", "legal", "lawyer", "accountant", "professional", "service fee", "retainer"]),
-    ("Asset Purchase", ["machine", "machinery", "equipment", "vehicle", "laptop", "computer", "furniture", "plant", "generator"]),
-    ("Maintenance & Repairs", ["repair", "maintenance", "amc", "spare part", "servicing"]),
-    ("Taxes & Duties", ["gst", "tds", "income tax", "duty", "cess", "customs", "tax payment"]),
-    ("Office Supplies", ["stationery", "office supplies", "printer", "cartridge", "toner"]),
-    ("Raw Material", ["raw material", "yarn", "fabric", "cotton", "cloth", "thread", "dye", "chemical", "spindle", "material"]),
-]
-
+# 2026-10-06: categories + keyword rules live in services/finance_words (shared with
+# services/calculated); re-exported here under their old names.
+from services.finance_words import (  # noqa: E402,F401
+    EXPENSE_CATEGORIES, ASSET_CATEGORIES, _CATEGORY_KEYWORDS, guess_expense_category,
+    _ASSET_KEYWORDS, guess_asset_category, get_finance_categories, _match_category,
+)
 
 # J2-06 (JOURNEY-1, founder 24 Sep) — BUYING STOCK IS NOT A LOSS.
 # A wholesaler's first act is buying Rs 86,400 of groundnut oil to sell. Under
@@ -130,71 +116,7 @@ def _spend_split(expenses) -> tuple:
     return operating, stock, capital
 
 
-def guess_expense_category(text: str) -> str:
-    t = (text or "").lower()
-    for cat, kws in _CATEGORY_KEYWORDS:
-        if any(k in t for k in kws):
-            return cat
-    return "Other"
-
-
-_ASSET_KEYWORDS = [
-    ("IT & Electronics", ["computer", "laptop", "desktop", "server", "switch", "router", "firewall",
-                          "monitor", "printer", "scanner", "ups", "network", "cctv", "camera", "biometric",
-                          "appliance", "rack", "patch panel", "cabling", "cable", "phone", "mobile", "tablet",
-                          "hardware", "electronic", "poe", "nvr", "storage", "nas", "projector"]),
-    ("Vehicle", ["vehicle", "truck", "van", "car", "bike", "scooter", "forklift", "tempo", "lorry", "trailer"]),
-    ("Machinery", ["machine", "machinery", "cnc", "lathe", "mill", "press", "motor", "pump", "compressor",
-                   "generator", "plant", "boiler", "turbine", "conveyor"]),
-    ("Furniture", ["furniture", "chair", "table", "desk", "cabinet", "shelf", "sofa", "workstation", "cupboard"]),
-    ("Building", ["building", "land", "property", "construction", "warehouse", "office space", "premises", "godown"]),
-    ("Equipment", ["equipment", "tool", "instrument", "device", "kit", "apparatus", "meter", "gauge"]),
-]
-
-
-def guess_asset_category(text: str) -> str:
-    t = (text or "").lower()
-    for cat, kws in _ASSET_KEYWORDS:
-        if any(k in t for k in kws):
-            return cat
-    return "Other"
-
-
-async def get_finance_categories(tenant_id: str) -> dict:
-    """The company's AI-generated finance categories (falls back to defaults for legacy tenants)."""
-    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "finance_categories": 1})
-    fc = (t or {}).get("finance_categories") or {}
-    return {"expense": fc.get("expense") or list(EXPENSE_CATEGORIES),
-            "asset": fc.get("asset") or list(ASSET_CATEGORIES)}
-
-
-def _match_category(value, allowed, fallback="Other") -> str:
-    """Case-insensitively snap a value onto the allowed list; else return fallback."""
-    v = str(value or "").strip()
-    if not v:
-        return fallback
-    for a in allowed:
-        if a.lower() == v.lower():
-            return a
-    return fallback
-
-
-async def ai_suggest_expense_category(text: str, tenant_id: str) -> str:
-    text = (text or "").strip()
-    if not text:
-        return "Other"
-    cats = (await get_finance_categories(tenant_id))["expense"]
-    try:
-        system = render("ledger.expense_cat", cats=", ".join(cats))
-        chat = claude_chat(task="ledger.expense_cat", session_id=f"expcat-{tenant_id}", system_message=system).with_model(*model_for("ledger.expense_cat"))
-        resp = await chat.send_message(UserMessage(text=text[:600]))
-        data = _extract_json(resp) or {}
-        matched = _match_category(data.get("category"), cats, "")
-        if matched:
-            return matched
-    except Exception as e:  # noqa: BLE001
-        logger.warning(f"AI expense categorization failed, using heuristic: {e}")
-    return _match_category(guess_expense_category(text), cats, "Other")
+# 2026-10-06 (AI audit step 5): the expense category suggestion is calculated now -- services/calculated.suggest_expense_category.
 
 
 async def _currency(tenant_id: str) -> str:
@@ -996,7 +918,11 @@ async def _read_attachment(file: Optional[UploadFile], kind: str, tenant_id: str
                 cats = fc["expense"] if kind == "expense" else fc["asset"]
             ai = await ai_extract_ledger_file(str(tmp), mime or "application/octet-stream", kind, currency, typed, categories=cats)
             data = _merge_typed(ai, typed)
+            # 2026-10-06 — whether the bill was really READ, so the screen can say so
+            # truthfully ("AI read your bill" showed even when only typed values were used).
+            attachment["read"] = bool(ai) and any(v not in (None, "", 0) for k, v in (ai or {}).items() if k not in typed or not typed.get(k))
         except Exception as e:  # noqa: BLE001
+            attachment["read"] = False
             logger.warning(f"Ledger {kind} OCR failed, using typed values: {e}")
         finally:
             try:
@@ -1020,7 +946,7 @@ async def add_expense_with_file(
     party = await _linked_party(user["tenant_id"], vendor_id, "vendor")
     if party:
         typed.update(vendor_id=party["id"], vendor_name=party["name"])
-    data, _ = await _read_attachment(file, "expense", user["tenant_id"], typed)
+    data, _att = await _read_attachment(file, "expense", user["tenant_id"], typed)
     if not (str(data.get("title") or "").strip()) and not _num(data.get("amount")):
         raise HTTPException(status_code=400, detail="Add a title/amount or attach a readable bill")
     # J7 — the same threshold as the typed route above; a bill photographed
@@ -1032,7 +958,7 @@ async def add_expense_with_file(
     await log_activity(user["tenant_id"], user["id"], "expense_added", f"Added expense '{doc['title']}'", "expense", doc["id"])
     if held:
         await _tell_the_owners(user["tenant_id"], user, doc)
-    return doc
+    return {**doc, "bill_read": bool(_att and _att.get("read"))}
 
 
 @router.patch("/expenses/{eid}")
@@ -1063,7 +989,10 @@ async def delete_expense(eid: str, user: dict = Depends(require_ledger)):
 
 @router.post("/expenses/suggest-category")
 async def suggest_category(inp: SuggestCategoryInput, user: dict = Depends(require_ledger)):
-    return {"category": await ai_suggest_expense_category(inp.text, user["tenant_id"])}
+    """2026-10-06 — calculated from the company's own bills and categories (no AI):
+    {category, reason, how}; `reason` says what decided it."""
+    from services.calculated import suggest_expense_category
+    return await suggest_expense_category(user["tenant_id"], inp.text)
 
 
 # --- Assets -----------------------------------------------------------------
@@ -1094,12 +1023,12 @@ async def add_asset_with_file(
     party = await _linked_party(user["tenant_id"], vendor_id, "vendor")
     if party:
         typed.update(vendor_id=party["id"], vendor_name=party["name"])
-    data, _ = await _read_attachment(file, "asset", user["tenant_id"], typed)
+    data, _att = await _read_attachment(file, "asset", user["tenant_id"], typed)
     if not (str(data.get("name") or "").strip()):
         raise HTTPException(status_code=400, detail="Add an asset name or attach a readable bill")
     doc = await create_asset(user["tenant_id"], user["id"], data, source="manual", write_brain=True)
     await log_activity(user["tenant_id"], user["id"], "asset_added", f"Added asset '{doc['name']}'", "asset", doc["id"])
-    return doc
+    return {**doc, "bill_read": bool(_att and _att.get("read"))}
 
 
 @router.patch("/assets/{aid}")
@@ -1151,12 +1080,12 @@ async def add_inventory_with_file(
     party = await _linked_party(user["tenant_id"], vendor_id, "vendor")
     if party:
         typed.update(vendor_id=party["id"], vendor_name=party["name"])
-    data, _ = await _read_attachment(file, "inventory", user["tenant_id"], typed)
+    data, _att = await _read_attachment(file, "inventory", user["tenant_id"], typed)
     if not (str(data.get("item") or "").strip()):
         raise HTTPException(status_code=400, detail="Add an item name or attach a readable bill")
     doc = await create_inventory(user["tenant_id"], user["id"], data, source="manual", write_brain=True)
     await log_activity(user["tenant_id"], user["id"], "inventory_added", f"Added inventory '{doc['item']}'", "inventory", doc["id"])
-    return doc
+    return {**doc, "bill_read": bool(_att and _att.get("read"))}
 
 
 @router.patch("/inventory/{iid}")
@@ -1370,14 +1299,14 @@ async def add_revenue_with_file(
     party = await _linked_party(user["tenant_id"], contact_id, "customer")
     if party:
         typed.update(contact_id=party["id"], customer_name=party["name"])
-    data, _ = await _read_attachment(file, "income", user["tenant_id"], typed)
+    data, _att = await _read_attachment(file, "income", user["tenant_id"], typed)
     data["received"] = str(received).lower() in ("true", "1", "yes", "on")
     if not (str(data.get("title") or "").strip()) and not _num(data.get("amount")) and not (str(data.get("customer_name") or "").strip()):
         raise HTTPException(status_code=400, detail="Add a title/amount or attach a readable invoice")
     doc = await create_income(user["tenant_id"], user["id"], data, source="manual")
     await log_activity(user["tenant_id"], user["id"], "income_added",
                        f"Recorded income '{doc.get('title') or doc.get('contact_name') or 'Sale'}'", "invoice", doc["id"])
-    return doc
+    return {**doc, "bill_read": bool(_att and _att.get("read"))}
 
 
 @router.delete("/revenue/invoice/{iid}")
@@ -1413,8 +1342,10 @@ async def _recategorize_expenses(tid: str, fc: dict) -> int:
         cur = (e.get("category") or "").strip()
         if cur in fc["expense"] and cur != "Other":
             continue  # already a good company category
-        text = f"{e.get('title', '')} {e.get('vendor_name', '')} {e.get('notes', '')}"
-        newcat = await ai_suggest_expense_category(text, tid)
+        text = f"{e.get('title', '')} {e.get('notes', '')}"
+        from services.calculated import suggest_expense_category
+        got = await suggest_expense_category(tid, text, vendor=e.get("vendor_name"), categories=fc["expense"])
+        newcat = got["category"] if got["how"] != "none" else None   # no rule: leave it for the owner
         if newcat and newcat != cur:
             await db.expenses.update_one({"id": e["id"], "tenant_id": tid}, {"$set": {"category": newcat}})
             changed += 1
@@ -1502,7 +1433,7 @@ async def resync_finance(tid: str, uid: str, user_name: str = "System") -> dict:
     """The full 'Fix Mis-booked Purchases' engine: (1) re-classify purchase bills into the right
     bucket with company categories, (2) re-categorize expenses & assets onto the company categories,
     (3) recompute payment matching & outstanding balances."""
-    from services.ingestion import ai_classify_purchase
+    from services.calculated import classify_purchase   # 2026-10-06: rules, not AI
     fc = await get_finance_categories(tid)
     bills = await db.invoices.find({"tenant_id": tid, "type": "purchase_bill"}, {"_id": 0}).to_list(5000)
     summary = {"reviewed": 0, "to_asset": 0, "to_inventory": 0, "kept_expense": 0, "unknown": 0, "unchanged": 0,
@@ -1514,7 +1445,8 @@ async def resync_finance(tid: str, uid: str, user_name: str = "System") -> dict:
         li = " ".join(str(x.get("description", "")) for x in (inv.get("line_items") or []) if isinstance(x, dict))
         text = (f"Vendor: {inv.get('contact_name', '')}. Bill no: {inv.get('number', '')}. "
                 f"Items: {li}. Amount: {inv.get('amount')} {inv.get('currency', '')}")
-        result = await ai_classify_purchase(text, expense_categories=fc["expense"], asset_categories=fc["asset"])
+        result = await classify_purchase(tid, f"{li} {inv.get('notes') or ''}", vendor=inv.get("contact_name"),
+                                         asset_categories=fc["asset"])
         new_type = result.get("purchase_type", "unknown")
         old_type = (inv.get("purchase_type") or "expense").strip().lower() or "expense"
         exp = await db.expenses.find_one({"tenant_id": tid, "invoice_id": inv["id"]}, {"_id": 0})

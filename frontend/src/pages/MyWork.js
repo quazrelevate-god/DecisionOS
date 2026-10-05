@@ -1020,7 +1020,7 @@ function PriorityScoreBars({ scores }) {
   return (
     <div className="mt-3 nm-inset p-3" data-testid="priority-score-bars">
       <div className="flex items-center justify-between mb-2">
-        <span className="label-mono text-muted-foreground flex items-center gap-1"><Sparkle size={12} weight="bold" aria-hidden="true" className="text-muted-foreground" /> AI Priority</span>
+        <span className="label-mono text-muted-foreground flex items-center gap-1"><Sparkle size={12} weight="bold" aria-hidden="true" className="text-muted-foreground" /> Priority score</span>
         {scores.priority_score != null && (
           <span
             className="font-heading font-black text-lg leading-none"
@@ -2646,7 +2646,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
     {/* U7-05.4: AI-priority bars get a "why?" tooltip on the container
         so users understand what drove the ranking. */}
     {scores && (
-      <div title="AI ranker: higher score = more urgent to open next. Bars show what drove it -- priority signal, overdue, workflow blockage, complaints touched." data-testid={`ai-scores-${t.id}`}>
+      <div title="Priority score: higher = more urgent to open next. Bars show what drove it -- priority signal, overdue, workflow blockage, complaints touched." data-testid={`ai-scores-${t.id}`}>
         <PriorityScoreBars scores={scores} />
       </div>
     )}
@@ -4263,8 +4263,8 @@ export default function MyWork({ only = null }) {
             {inSegmentView && canPrioritize && (
               <button type="button" onClick={() => { setAiPriority((v) => !v); setView("mywork"); }}
                 aria-pressed={aiPriority} data-testid="work-mobile-priority"
-                aria-label={aiPriority ? t("mywork.ai_priority_on", "AI priority on") : t("mywork.ai_priority", "AI priority")}
-                title={scoring ? t("mywork.scoring", "Scoring…") : (aiPriority ? t("mywork.ai_priority_on", "AI priority on") : t("mywork.ai_priority", "AI priority"))}
+                aria-label={aiPriority ? t("mywork.ai_priority_on", "Smart priority on") : t("mywork.ai_priority", "Smart priority")}
+                title={scoring ? t("mywork.scoring", "Scoring…") : (aiPriority ? t("mywork.ai_priority_on", "Smart priority on") : t("mywork.ai_priority", "Smart priority"))}
                 className={`${MCIRCLE} ${aiPriority ? "kr-pressed" : "kr-pop"}`}>
                 <Sparkle size={15} weight={aiPriority ? "fill" : "bold"} aria-hidden="true"
                   className={scoring ? "animate-pulse" : ""} />

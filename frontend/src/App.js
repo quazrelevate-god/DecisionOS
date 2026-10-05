@@ -19,7 +19,6 @@ import DeleteAccount from "./pages/DeleteAccount";
 import Privacy from "./pages/Privacy";
 import DecisionReview from "./pages/DecisionReview";
 import { useUiScale } from "./hooks/useUiScale";
-import ScaleProbe from "./components/ScaleProbe";
 import Workflows from "./pages/Workflows";
 // ASK-42 B — /approvals is a room of its own now, not a redirect into My Work.
 import Approvals from "./pages/Approvals";
@@ -231,9 +230,6 @@ function App() {
   useUiScale();
   return (
     <div className="App">
-      {/* ?probe=scale only — the readout that tells us whether a device's web
-          view is honouring the app's zoom. Diagnostic; remove with the file. */}
-      <ScaleProbe />
       <AuthProvider>
         <BrowserRouter>
           <NativeBack />

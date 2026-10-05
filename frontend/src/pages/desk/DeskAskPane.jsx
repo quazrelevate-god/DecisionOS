@@ -32,7 +32,7 @@ import { Bubble, Outcome } from "../../components/mobile/DexChat";
 import { cn } from "@/lib/utils";
 
 export function DeskAskPane({ chat, onClose, onOpenDecision }) {
-  const { log = [], busy, attaching = false, retry, canRetry, clear } = chat || {};
+  const { log = [], busy, attaching = false, retry, canRetry, clear, ask } = chat || {};
   const navigate = useNavigate();
   const endRef = React.useRef(null);
   const [lightbox, setLightbox] = React.useState(null);
@@ -93,7 +93,7 @@ export function DeskAskPane({ chat, onClose, onOpenDecision }) {
               m.outcome
                 ? <Outcome key={m.id || i} o={m.outcome} onReview={onReview}
                     onRetry={() => retry?.()} retryDisabled={!canRetry} />
-                : <Bubble key={m.id || i} m={m} index={i} onOpenFile={openFile} />
+                : <Bubble key={m.id || i} m={m} index={i} onOpenFile={openFile} onAsk={(q) => ask?.(q)} />
             ))}
           </AnimatePresence>
           {/* Dex is reading. Not shown while a file is still going up: that has

@@ -45,7 +45,7 @@
  */
 import * as React from "react";
 import { useTranslation } from "react-i18next";
-import { ChatCircle, PaperPlaneTilt, Waveform, Plus, Paperclip, Keyboard } from "@phosphor-icons/react";
+import { ChatCircle, PaperPlaneTilt, Waveform } from "@phosphor-icons/react";
 import { DexWave } from "../mobile/DexWave";
 import { VoiceRipple } from "./VoiceRipple";
 import { cn } from "@/lib/utils";
@@ -110,25 +110,18 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
                                white, because near-black ink on that sheet
                                measured 1.05:1. */
                             tone = "light",
-                            /* THE SLIDER IS THE COMPOSER TOO. (2026-10-05.)
-                               In Ask the founder wants this one control to
-                               carry everything the dock used to: the voice
-                               loop, the send, the paperclip and the keyboard.
-                               All of it is opt-in — `composer` off and this
-                               component is exactly what it was on every other
-                               surface, which is how the Decide path stays
-                               untouched.
-                               `draft`/`onDraft`/`onSend` are lifted rather than
-                               held here: the words belong to the conversation
-                               (useDexConversation), not to a control that can
-                               unmount when the sheet changes shape. */
-                            composer = false, typing = false, onTypingChange,
-                            /* Which wall a running capture parks against —
-                               the end the finger committed from. Decide
-                               comes from the right and keeps it. */
-                            parkLeft = false,
-                            draft = "", onDraft, onSend, onAttach,
-                            attachments = null,
+                            /* ASK USES THE SAME CONTROL, NOT A DIFFERENT ONE.
+                               (2026-10-05, second pass.) The first cut hung a
+                               plus, two mini-buttons and a text field off this
+                               component; the founder threw it out, and rightly
+                               — Ask now behaves exactly as Decide does, and all
+                               the typing, attaching and editing happens in the
+                               review card that opens on send. So `composer` is
+                               down to the two things that genuinely differ:
+                               the handle parks LEFT (the end Ask commits from)
+                               and the right end offers nothing, because there
+                               is no Decide door to open mid-question. */
+                            composer = false,
                             disabled = false, className }) {
   const onInk = tone === "ink";
   const { t } = useTranslation();
@@ -218,12 +211,12 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
     if (!capturing) return;
     draggingRef.current = false;
     setDragging(false);
-    const park = () => { const m = parkLeft ? -travel() : travel(); lastDxRef.current = m; setDx(m); };
+    const park = () => { const m = composer ? -travel() : travel(); lastDxRef.current = m; setDx(m); };
     park();
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(park) : null;
     if (ro && trackRef.current) ro.observe(trackRef.current);
     return () => ro?.disconnect();
-  }, [capturing, travel, parkLeft]);
+  }, [capturing, travel, composer]);
   React.useEffect(() => { if (!capturing) settle(); }, [capturing, settle]);
 
   const onPointerDown = (e) => {
@@ -256,11 +249,21 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
     if (!at) reachedRef.current = null;
   };
 
+  /* THE CLICK THAT FOLLOWS A DRAG IS NOT A PRESS. A pointerdown, a move and a
+     pointerup on a <button> also produce a `click`, and the handle's click is
+     the SEND. So committing Ask with a swipe armed the capture and then, one
+     event later, the same gesture pressed send on it — the review card opened
+     the instant the founder's thumb left the glass, with nothing recorded.
+     Caught by verify:slider, which could not reach the Ask pane's close button
+     because a card nobody asked for was already over it.
+     Guarded by the gesture, not by a timer: a real press never sets this. */
+  const draggedRef = React.useRef(false);
   const onPointerUp = () => {
     if (!draggingRef.current) return;
     draggingRef.current = false;
     setDragging(false);
     const at = end(lastDxRef.current);
+    draggedRef.current = Math.abs(lastDxRef.current) > 4;
     settle();
     if (!at) return;                       // short of the end: nothing happened
     tick("fire");
@@ -317,61 +320,13 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
     >{children}</span>
   );
 
-  /* THE PLUS, AND WHAT IT OPENS. Two icons, horizontally, to the LEFT of the
-     plus — the founder was explicit that they do not stack above it and that
-     there is no camera among them: "it should be only two icons, one attach
-     and the other keyboard typing". Solid white like everything else on this
-     control, not the translucent chips the old sheet used. */
-  const [plusOpen, setPlusOpen] = React.useState(false);
-  React.useEffect(() => { if (!composer) setPlusOpen(false); }, [composer]);
-  const fieldRef = React.useRef(null);
-  /* THE FIELD GROWS UPWARD, which is the one thing a composer sitting on the
-     floor of the screen must do: its baseline cannot move, because the send
-     and the plus are on that line. Height is measured off the content and the
-     well grows with it; `bottom` is fixed by the flex row, so every new line
-     is taken from above. */
-  React.useLayoutEffect(() => {
-    const el = fieldRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    const cs = getComputedStyle(el);
-    const line = parseFloat(cs.lineHeight) || 20;
-    const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
-    const max = Math.round(line * 4 + pad);          // four lines, then it scrolls
-    el.style.height = `${Math.min(el.scrollHeight, max)}px`;
-    el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
-  }, [draft, typing]);
-  React.useEffect(() => { if (typing) fieldRef.current?.focus(); }, [typing]);
-
-  const MiniBtn = ({ onClick, label, icon: Icon, testid }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      data-testid={testid}
-      className={cn(
-        "grid h-12 w-12 shrink-0 place-items-center rounded-full",
-        "bg-white text-kr-ink shadow-[0_2px_10px_-4px_rgb(0_0_0/0.5)]",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
-      )}
-    >
-      <Icon size={20} weight="bold" aria-hidden="true" />
-    </button>
-  );
-
   return (
     <div className={cn("flex w-full flex-col", className)} data-testid="dex-slider">
-      {/* WHAT IS ATTACHED SITS ABOVE THE CONTROL, never inside it — the
-          founder's rule from the first Ask pass, kept: the control is for
-          doing, the row above it is for what you are about to send. */}
-      {composer && attachments}
       <div className="flex w-full items-center">
       <div
         ref={trackRef}
         className={cn("kr-slider-well relative flex w-full items-center justify-between overflow-hidden",
-          /* min-h, not h: in type mode the field grows and the well grows with
-             it, upward, because the row below is the floor. */
-          typing ? "min-h-[var(--desk-slider-track)] py-2" : "h-[var(--desk-slider-track)]",
+          "h-[var(--desk-slider-track)]",
           onInk && "kr-slider-well--ink")}
         data-at={at || undefined}
       >
@@ -416,34 +371,6 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
               className="h-full w-full"
             />
           </div>
-        ) : typing ? (
-          /* TYPE MODE — the field takes the middle, the send keeps the left
-             and the plus keeps the right, evenly spaced around it, which is
-             the founder's layout exactly. White and neumorphic like the knob,
-             because it is the same material family and the same height. */
-          /* The insets are the two controls' own widths plus the breathing
-             room between: the knob is 5.375rem parked at the left wall, the
-             plus is 3rem at the right. Measured after, not guessed — the field
-             sits 9 visual px off each of them. */
-          <div className="relative z-10 flex w-full items-end gap-2.5 pl-[6.1rem] pr-[4.5rem]">
-            <div className="nm-field flex min-w-0 flex-1 items-center overflow-hidden rounded-[1.6rem] bg-white">
-              <textarea
-                ref={fieldRef}
-                rows={1}
-                value={draft}
-                disabled={disabled}
-                onChange={(e) => onDraft?.(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSend?.(); }
-                  if (e.key === "Escape") { e.preventDefault(); onTypingChange?.(false); }
-                }}
-                placeholder={t("desk.slider.typeHere", "Ask Dex anything…")}
-                aria-label={t("desk.slider.typeHere", "Ask Dex anything…")}
-                data-testid="dex-slider-field"
-                className="block min-w-0 flex-1 resize-none bg-transparent px-4 py-3 text-[15px] leading-6 text-kr-ink placeholder:text-kr-ink/45 focus:outline-none [scrollbar-width:none]"
-              />
-            </div>
-          </div>
         ) : (
           <>
             <Label side="ask">{t("desk.slider.ask", "Ask")}</Label>
@@ -452,39 +379,6 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
                 not while a conversation is open, and the plus sat on the word. */}
             {!composer && <Label side="decide">{t("desk.slider.decide", "Decide")}</Label>}
           </>
-        )}
-
-        {/* THE PLUS — pinned to the right end, centred on the control's own
-            line, and the size it has always been rather than the knob's. It is
-            the one thing in here that does not move when the handle does. */}
-        {composer && (
-          <div className="absolute inset-y-0 right-3 z-20 flex items-center gap-2">
-            {plusOpen && (
-              <>
-                <MiniBtn testid="dex-slider-attach" icon={Paperclip}
-                  label={t("desk.slider.attach", "Attach a file")}
-                  onClick={() => { setPlusOpen(false); onAttach?.(); }} />
-                <MiniBtn testid="dex-slider-keyboard" icon={Keyboard}
-                  label={typing ? t("desk.slider.voice", "Switch to voice") : t("desk.slider.type", "Type instead")}
-                  onClick={() => { setPlusOpen(false); onTypingChange?.(!typing); }} />
-              </>
-            )}
-            <button
-              type="button"
-              data-testid="dex-slider-plus"
-              aria-label={plusOpen ? t("desk.slider.hideMore", "Hide options") : t("desk.slider.more", "More ways to talk to Dex")}
-              aria-expanded={plusOpen}
-              onClick={() => setPlusOpen((v) => !v)}
-              className={cn(
-                "grid h-12 w-12 shrink-0 place-items-center rounded-full",
-                "bg-white text-kr-ink shadow-[0_2px_10px_-4px_rgb(0_0_0/0.5)]",
-                "transition-transform duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
-                plusOpen && "rotate-45"
-              )}
-            >
-              <Plus size={22} weight="bold" aria-hidden="true" />
-            </button>
-          </div>
         )}
 
         {/* The end the handle is heading for lights, in the page's own brand
@@ -519,7 +413,9 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
              what is in the field — and it parks itself at the left wall to get
              out of the field's way, which is also where the founder asked for
              it to be. */
-          onClick={capturing ? () => onStop?.() : typing ? () => onSend?.() : undefined}
+          onClick={capturing
+            ? () => { if (draggedRef.current) { draggedRef.current = false; return; } onStop?.(); }
+            : () => { draggedRef.current = false; }}
           className={cn(
             /* THE HANDLE IS THE CONTROL, so it is the size of the control.
                h-14 left 40px of empty channel above and below it and read as a
@@ -544,16 +440,11 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
                the handle's own rect against the track's, which is the only
                check that could have caught it: every internal number was
                already self-consistent and wrong together. */
-            /* Type mode parks it at the left wall and holds it there: the
-               field owns the middle, and a handle that could still be dragged
-               out of its own send would be a control arguing with itself. */
-            transform: `translateX(calc(-50% + ${(typing ? -travel() : dx) / (uiScale || 1)}px))`,
+            transform: `translateX(calc(-50% + ${dx / (uiScale || 1)}px))`,
             transition: dragging ? "none" : "transform 220ms cubic-bezier(.22,1,.36,1)",
           }}
         >
-          {typing
-            ? <PaperPlaneTilt size={34} weight="regular" aria-hidden="true" className="text-foreground/75" />
-            : Glyph ? <Glyph size={34} weight="regular" aria-hidden="true" className="text-foreground/75" /> : null}
+          {Glyph ? <Glyph size={34} weight="regular" aria-hidden="true" className="text-foreground/75" /> : null}
         </button>
 
         {/* What a screen reader hears while the handle moves. */}

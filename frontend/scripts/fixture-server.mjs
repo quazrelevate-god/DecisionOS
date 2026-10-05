@@ -1027,7 +1027,16 @@ function resolve(method, path, q, body = {}) {
   ] };
   if (p === '/brain/export') return { url: null, message: 'Export not available in fixtures' };
   if (seg[1] === 'brain' && seg[2] === 'documents' && seg[3]) return OK;
-  if (p === '/ask') return { answer: 'Krishna Garments owes ₹4,00,000 and is 31 days late. Priya has chased twice with no answer.', sources: [{ id: 'i_1', title: 'Invoice SBT/25-26/0412' }] };
+  /* 2026-10-05 — the real /ask answers {type, answer, missing_information,
+     suggested_questions}; the fixture only ever sent `answer`, so the
+     follow-up chips a thin answer hands back were never exercised by any
+     suite — which is how they stayed decorative long enough for the founder
+     to find them. They are part of the contract now. */
+  if (p === '/ask') return { type: 'answer',
+    answer: 'Krishna Garments owes ₹4,00,000 and is 31 days late. Priya has chased twice with no answer.',
+    missing_information: [],
+    suggested_questions: ['How much is overdue in total?', 'Who else is past 30 days?'],
+    sources: [{ id: 'i_1', title: 'Invoice SBT/25-26/0412' }] };
 
   // --- misc screens ---
   if (p === '/calendar') return CALENDAR;

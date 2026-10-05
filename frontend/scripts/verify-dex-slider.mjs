@@ -224,8 +224,13 @@ for (const [w, h] of WIDTHS) {
     (await page.locator('[data-testid="dex-chat"]').count()) === 0);
   check('the KPI grid folds away to make room',
     (await page.locator('[data-testid="desk-kpi-grid"]').count()) === 0);
-  check('the control carries the plus now',
-    (await page.locator('[data-testid="dex-slider-plus"]').count()) === 1);
+  /* 2026-10-05 second pass — the plus and the in-slider text field are GONE.
+     Ask behaves as Decide does: the handle parks left, pressing it ends the
+     listening and raises a review card, and all the typing, attaching and
+     editing happens in there. */
+  check('the control carries no plus and no field',
+    (await page.locator('[data-testid="dex-slider-plus"]').count()) === 0
+    && (await page.locator('[data-testid="dex-slider-field"]').count()) === 0);
   await page.locator('[data-testid="desk-ask-close"]').click();
   await page.waitForTimeout(700);
   check('closing Ask gives the Desk back',

@@ -596,6 +596,8 @@ async function run(viewport) {
       check(`${w} F: … and it is ASK`, /\bAsk\b/i.test(await pane.innerText().catch(() => '')),
         clip(await pane.innerText().catch(() => ''), 60));
       check(`${w} F: … and no sheet was raised over the Desk`, (await sheet(page).count()) === 0);
+      check(`${w} F: … and the composer is the slider, not a plus menu`,
+        (await page.getByTestId('dex-slider-plus').count()) === 0);
       await page.getByTestId('desk-ask-close').click();
     } else {
       await sheet(page).waitFor({ timeout: 8000 }).catch(() => {});

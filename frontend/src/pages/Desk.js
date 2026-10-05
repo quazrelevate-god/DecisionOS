@@ -64,7 +64,7 @@ import { StaleStamp } from "../components/mobile/StaleStamp";
 // the capture hooks and hosts the repurposed InsightWell container itself.
 import { DeskDexWell } from "./desk/DeskDexWell";
 import { DeskAskPane } from "./desk/DeskAskPane";
-import { AttachedChip } from "../components/mobile/DexChat";
+import { DeskAskReview } from "./desk/DeskAskReview";
 // DEX-SLIDER Part 1 — the phone Desk's new order sits behind this.
 import { DEX_SLIDER } from "../lib/flags";
 import { DexSlider } from "../components/karma/DexSlider";
@@ -971,51 +971,37 @@ export default function Desk() {
      mean a founder's question landing in a transcript they are not looking at.
      What follows only ADAPTS them to the shapes DexSlider wants. */
   const askOn = !!doors?.inline;
-  const [askTyping, setAskTyping] = useState(false);
-  useEffect(() => { if (!askOn) setAskTyping(false); }, [askOn]);
-  /* THE INLINE ASK NEEDS ITS OWN PAPERCLIP. (2026-10-05 — founder: "I can't
-     click the attach icon... no pop-up is showing".)
-     They were right and it was not the icon: the only phone-side <input
-     type="file"> bound to the capture lives INSIDE DexChat, and DexChat is the
-     sheet this redesign stands down. So `pickFile` was faithfully clicking a
-     ref pointing at nothing. One lives here now, for as long as the Desk is
-     hosting the conversation. It goes through chat.attach, which stages the
-     file and uploads it on send — the behaviour the founder asked for earlier
-     and the reason attaching no longer starts an analysis by itself. */
-  const askFileRef = useRef(null);
   const dexCap = doors?.dex;
   const chatC = doors?.chat;
-  const askMeterRef = useRef(null);
+
+  /* THE REVIEW CARD IS OPEN once a capture has been sent for transcription and
+     until the founder sends or discards it. Opened on the PRESS, not on the
+     answer — "once I click the send icon it should immediately open the pop-up
+     and close the voice capturing, and in the pop-up give me the transcription
+     loading animation and then the text; it shouldn't pop up AFTER the
+     transcription, that's the opposite of the flow I need." */
+  const [askReview, setAskReview] = useState(false);
+  useEffect(() => { if (!askOn) setAskReview(false); }, [askOn]);
+
+  /* The paperclip's input, for as long as the Desk hosts the conversation:
+     the only phone-side one bound to this capture lives inside DexChat, which
+     this redesign stands down. chat.attach stages it and uploads on send. */
+  const askFileRef = useRef(null);
+
   const askChat = useMemo(() => {
     if (!dexCap || !chatC) return null;
     return {
-      /* The capture, as the control reads it. `capturing` is the well's cue to
-         become a waveform: true while the mic is live AND while Dex is reading
-         what was said, because both are states where the control has something
-         to show and nothing to be dragged. */
       recording: !!dexCap.recording,
-      capturing: !!dexCap.recording || !!dexCap.sending,
+      /* The WELL shows a waveform only while the mic is actually live now.
+         It used to stay a wave through `sending` too, which is the window the
+         review card now owns — two things describing one moment. */
+      capturing: !!dexCap.recording,
       levelsRef: dexCap.levelsRef,
-      readLevel: askMeterRef.current,
+      readLevel: null,
       startVoice: () => { if (!dexCap.recording) dexCap.startRecording?.(); },
-      stopAndSend: () => dexCap.stopRecording?.(),
-      draft: chatC.draft,
-      setDraft: chatC.setDraft,
-      send: () => { const q = (chatC.draft || "").trim();
-        if (!q && !(chatC.pendingFiles || []).length) return;
-        chatC.ask?.(q); },
+      /* THE SEND. Stops the mic dead and raises the card in the same tick. */
+      stopAndReview: () => { dexCap.stopRecording?.(); setAskReview(true); },
       pickFile: () => askFileRef.current?.click(),
-      /* WHAT IS ABOUT TO BE SENT, ABOVE THE CONTROL — the founder's rule from
-         the first Ask pass, unchanged by the move: "the attach document or
-         media file should be above the slider container". DexSlider renders
-         whatever this is directly over the well. */
-      attachments: (chatC.pendingFiles || []).length > 0 ? (
-        <div className="mb-2 flex flex-wrap gap-1.5 px-1" data-testid="desk-ask-attachments">
-          {chatC.pendingFiles.map((f) => (
-            <AttachedChip key={f.id} file={f} onRemove={() => chatC.removeFile?.(f.id)} />
-          ))}
-        </div>
-      ) : null,
     };
   }, [dexCap, chatC]);
 
@@ -1942,6 +1928,27 @@ export default function Desk() {
               onClose={() => doors?.closeAsk?.()}
               onOpenDecision={(id) => setOpenDecisionId(id)}
             />
+            {/* THE REVIEW CARD — opened by the send, closed by a send or a
+                discard. `loading` is the window between the mic stopping and
+                the words coming back: dex.sending is true and the draft is
+                still empty. */}
+            <DeskAskReview
+              open={askReview}
+              loading={!!dexCap?.sending && !(chatC?.draft || "").trim()}
+              draft={chatC?.draft || ""}
+              onDraft={chatC?.setDraft}
+              sending={!!chatC?.busy}
+              pendingFiles={chatC?.pendingFiles || []}
+              onRemoveFile={(id) => chatC?.removeFile?.(id)}
+              onAttach={() => askFileRef.current?.click()}
+              onCancel={() => { setAskReview(false); chatC?.setDraft?.(""); }}
+              onSend={() => {
+                const q = (chatC?.draft || "").trim();
+                if (!q && !(chatC?.pendingFiles || []).length) return;
+                setAskReview(false);
+                chatC?.ask?.(q);
+              }}
+            />
             {/* The paperclip's actual input. Same accept list the sheet used. */}
             <input
               ref={askFileRef}
@@ -2045,31 +2052,14 @@ export default function Desk() {
                  Desk. It clears this one and starts talking in it. */
               onAsk={() => { doors?.openAskInline?.(); askChat?.startVoice?.(); }}
               onDecide={() => setDecideOpen(true)}
-              readLevel={askOn ? askChat.readLevel : dexMeter}
+              readLevel={askOn ? null : dexMeter}
               capturing={askOn ? askChat.capturing : dexLive.capturing}
               recording={askOn ? askChat.recording : dexLive.recording}
               levelsRef={askOn ? askChat.levelsRef : dexLive.levelsRef}
-              onStop={askOn ? askChat.stopAndSend : dexStop}
+              /* Pressing the parked handle ends the listening and opens the
+                 review — Decide's gesture exactly, and now Ask's. */
+              onStop={askOn ? askChat.stopAndReview : dexStop}
               composer={askOn}
-              /* The capture came from the LEFT end here, so that is the wall it
-                 parks against — see DexSlider's park(). */
-              parkLeft={askOn}
-              typing={askOn && askTyping}
-              /* GOING TO THE KEYBOARD ENDS THE LISTENING FIRST. The founder
-                 pressed it mid-capture and got a field that filled itself with
-                 whatever the room had been saying — two composers racing for
-                 one draft. Stopping first makes the order plain: the mic hands
-                 over its words, then the field has them, and only one of the
-                 two is live at a time. */
-              onTypingChange={(v) => {
-                if (v && dexCap?.recording) dexCap.stopRecording?.();
-                setAskTyping(v);
-              }}
-              draft={askChat?.draft || ""}
-              onDraft={askChat?.setDraft}
-              onSend={askChat?.send}
-              onAttach={askChat?.pickFile}
-              attachments={askOn ? askChat.attachments : null}
             />
           </div>
         )}

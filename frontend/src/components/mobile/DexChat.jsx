@@ -225,7 +225,7 @@ function SentFile({ file, onOpen }) {
 }
 
 /** One turn in the transcript. */
-export function Bubble({ m, index, onOpenFile }) {
+export function Bubble({ m, index, onOpenFile, onAsk }) {
   const mine = m.role === "user";
   const files = m.files || [];
   return (
@@ -356,7 +356,15 @@ export function Bubble({ m, index, onOpenFile }) {
               <button
                 key={i}
                 type="button"
-                onClick={() => m.onAsk?.(q)}
+                /* 2026-10-05 — A PROP, NOT A FIELD ON THE MESSAGE.
+                   It used to read `m.onAsk`, which the SHEET set by spreading
+                   it onto every turn — so the follow-ups worked there and were
+                   dead everywhere else. The Desk's new inline transcript hands
+                   the raw message straight to Bubble, so every chip in it
+                   called undefined, which is the "static clickable button" the
+                   founder hit. Passing the handler in makes it the renderer's
+                   job, and there is now one way to do it rather than two. */
+                onClick={() => onAsk?.(q)}
                 className="rounded-pill bg-white/10 px-2.5 py-1 text-left text-[14px] text-white/75 hover:bg-white/20"
               >
                 {q}
@@ -596,6 +604,7 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                 <Bubble
                   key={m.id}
                   onOpenFile={openFile}
+                  onAsk={(q) => ask?.(q)}
                   m={{
                     ...m,
                     /* Only the LAST reading turn is live: an older one from a
@@ -605,7 +614,9 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                     reading: m.reading && reading && i === log.length - 1,
                     stages: ["sending", ...stages],
                     reduceMotion,
-                    onAsk: ask,
+                    /* onAsk is a PROP now (see Bubble) rather than a field
+                       smuggled through the message, so the Desk's inline
+                       transcript can hand in its own. */
                     onReview,
                     onDismiss: onClose,
                     onRetry: () => retry(m.outcome?.retry, m.id),

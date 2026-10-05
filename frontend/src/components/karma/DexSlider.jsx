@@ -133,7 +133,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
                                reports the travel (0..1 and which way) so the
                                caller can fade them in step with the gesture
                                rather than guessing at a duration. */
-                            behind = null, onDrag,
+                            behind = null, onDrag, onPressChange,
                             disabled = false, className }) {
   const onInk = tone === "ink";
   const { t } = useTranslation();
@@ -237,6 +237,12 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
        stale flag survived to eat a real press. A touch always disarms. */
     ghostClickRef.current = false;
     if (disabled || capturing) return;
+    /* THE TOUCH IS THE SIGNAL, not the travel. The founder wants the dock's
+       destinations gone the instant the knob is pressed — "then only it looks
+       elegant, otherwise it feels like some sloppy stuff" — rather than
+       dissolving across the drag. Reported here so the bar can clear itself
+       before the finger has moved a pixel. */
+    onPressChange?.(true);
     handleRef.current?.setPointerCapture?.(e.pointerId);
     draggingRef.current = true;
     setDragging(true);
@@ -283,6 +289,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
      flag cannot survive the next touch. */
   const ghostClickRef = React.useRef(false);
   const onPointerUp = () => {
+    onPressChange?.(false);
     if (!draggingRef.current) return;
     draggingRef.current = false;
     setDragging(false);
@@ -421,11 +428,21 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
           </div>
         ) : (
           <>
-            <Label side="ask">{t("desk.slider.ask", "Ask")}</Label>
-            {/* The right end is the plus's now, in composer mode. Printing
-                "Decide" under it said the control still led somewhere it does
-                not while a conversation is open, and the plus sat on the word. */}
-            {!composer && <Label side="decide">{t("desk.slider.decide", "Decide")}</Label>}
+            {/* THE WORD IS ON THE SIDE THE THUMB IS NOT. (2026-10-06.)
+                Founder: "when I swipe right my thumb obviously covers the
+                Decide text, and I can clearly see the Ask text on the left."
+                Of course — you drag toward the word and then your hand is on
+                top of it. So in the dock the ends TRADE PLACES: Decide prints
+                on the left, Ask on the right, and each is read over the hand
+                that is not moving. What the ends DO is unchanged — left still
+                commits Ask and right still commits Decide; only the labels
+                moved, because the gesture was never the thing that was wrong. */}
+            <Label side="ask">{behind
+              ? t("desk.slider.decide", "Decide")
+              : t("desk.slider.ask", "Ask")}</Label>
+            {!composer && <Label side="decide">{behind
+              ? t("desk.slider.ask", "Ask")
+              : t("desk.slider.decide", "Decide")}</Label>}
           </>
         )}
 
@@ -454,7 +471,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          onPointerCancel={() => { draggingRef.current = false; setDragging(false); settle(); }}
+          onPointerCancel={() => { onPressChange?.(false); draggingRef.current = false; setDragging(false); settle(); }}
           onKeyDown={onKeyDown}
           /* THREE JOBS, ONE BUTTON. At rest it is the handle. While a capture
              runs it is the send that stops it. In type mode it is the send for

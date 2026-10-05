@@ -46,7 +46,11 @@ const page = await ctx.newPage();
 page.on('pageerror', (e) => check('no page errors', false, e.message.split('\n')[0]));
 check('signed in', await signIn(page, BASE));
 await page.goto(`${BASE}/inbox`, { waitUntil: 'domcontentloaded' });
-await page.waitForSelector('[data-testid="floating-dock"]', { timeout: 15000 });
+/* 2026-10-06 — THE BAR HAS TWO NAMES. With DEX_SLIDER on it is DockSlider on
+   every page; with the flag off it is FloatingDock. Every geometry check below
+   is about "the bar at the bottom", so it asks for whichever one is there. */
+const BAR = '[data-testid="dock-slider"], [data-testid="floating-dock"]';
+await page.waitForSelector(BAR, { timeout: 15000 });
 await page.waitForTimeout(600);
 
 // the old navigation is gone
@@ -62,12 +66,19 @@ check('language switcher is off the mobile header',
   (await page.locator('header [data-testid="language-switcher"]:visible').count()) === 0);
 
 // the dock
-const dockItems = await page.locator('[data-testid^="dock-"]:not([data-testid$="-badge"])').all();
+/* The SLOTS, not every element whose testid starts with "dock-" — the slider
+   bar is itself `dock-slider` and carries a `dock-slider-items` wrapper. */
+const dockItems = await page.locator('[data-testid^="dock-"]:not([data-testid$="-badge"])'
+  + ':not([data-testid="dock-slider"]):not([data-testid="dock-slider-items"])').all();
 /* ASK-38 brought CRM DOWN from the More panel — "it was a tile behind the dots,
    which is two taps and a panel for the screen an owner opens to look somebody
    up" — so an owner's dock is five slots, not four. The rule §8 was written for
    still holds: four destinations plus More, and nothing in both places. */
-check('dock has five slots for an owner: four destinations plus More', dockItems.length === 5,
+/* 2026-10-06 — FOUR WITH THE SLIDER, five without. The handle took the middle
+   of the bar and CRM went back to the More panel to make room, so an owner's
+   bar is Desk · Work │ handle │ Money · More. */
+check(DEX_SLIDER ? 'dock has four slots either side of the handle' : 'dock has five slots for an owner: four destinations plus More',
+  dockItems.length === (DEX_SLIDER ? 4 : 5),
   (await Promise.all(dockItems.map((d) => d.getAttribute('data-testid')))).join(', '));
 for (const d of dockItems) {
   const box = await own(d);
@@ -78,7 +89,7 @@ for (const d of dockItems) {
 }
 
 // dock is a floating pill, detached from the edges, above the home indicator
-const pill = await page.locator('[data-testid="floating-dock"] > div').boundingBox();
+const pill = await page.locator(`${BAR}`).first().locator('> div').boundingBox();
 const vh = page.viewportSize().height;
 const vw = page.viewportSize().width;
 /* THE RULE, NOT A NUMBER (2026-10-02). This was `>= 12`, which was really the
@@ -97,7 +108,7 @@ check('dock floats off the bottom edge', vh - (pill.y + pill.height) > 0,
   await page.evaluate((s) => document.documentElement.style
     .setProperty('--sa-bottom', `calc(34px / ${s})`), k);
   await page.waitForTimeout(250);
-  const lifted = await page.locator('[data-testid="floating-dock"] > div').boundingBox();
+  const lifted = await page.locator(`${BAR}`).first().locator('> div').boundingBox();
   const gap = vh - (lifted.y + lifted.height);
   check('…and clears the home indicator, without sitting on it',
     gap >= 34 && gap < 44, `${Math.round(gap)}pt above the edge, indicator is 34`);
@@ -108,8 +119,10 @@ check('dock floats off the left edge', pill.x >= 12, `${Math.round(pill.x)}px`);
 /* ASK-41 — 72, not 64. The founder's highlight "covers the icon, which is not a
    standard way to do it": it fills the whole slot, text and all, as a squircle,
    and the bar grew by the padding that takes. */
-const pillOwn = await own(page.locator('[data-testid="floating-dock"] > div'));
-check('dock is 72px tall', pillOwn.h === 72, `${pillOwn.h}px`);
+const pillOwn = await own(page.locator(`${BAR}`).first().locator('> div'));
+/* The slider bar is the slider's own height (6rem = 96 own px); the original
+   bar is 72. Both are "the bar is the height it is meant to be". */
+check('dock is the bar\'s own height', pillOwn.h === (DEX_SLIDER ? 96 : 72), `${pillOwn.h}px`);
 
 /* DEX-SLIDER Part 1 — THE CIRCLE IS NOT ON THE DESK ANY MORE. The slider's
    left end is Ask there, so a second door to the same room was one too many.
@@ -132,8 +145,9 @@ if (DEX_SLIDER) {
     (await page.locator('[data-testid="dex-fab"]').count()) === 0);
   check('off the Desk the dock is the slider',
     (await page.locator('[data-testid="dex-slider-handle"]').count()) === 1);
-  check('…with two destinations each side of the handle',
-    (await page.locator('[data-testid="dock-slider-items"] a').count()) === 4);
+  check('…with two slots each side of the handle',
+    /* Not `a`: More is a button, not a destination. */
+    (await page.locator('[data-testid="dock-slider-items"] [data-testid^="dock-"]').count()) === 4);
 } else {
   check('the Desk keeps its Ask circle', (await page.locator('[data-testid="dex-fab"]').count()) === 1);
   check('the Desk dock holds the circle its clearance', pillRightGap > pill.x,
@@ -157,7 +171,7 @@ if (!DEX_SLIDER) {
   const K = await toOwn(page);
   const centreGap = ((fab.y + fab.height / 2) - (pill.y + pill.height / 2)) * K;
   check('Dex FAB is centred on the dock', Math.abs(centreGap) <= 2, `${centreGap.toFixed(1)}px off`);
-  const pillHere = await page.locator('[data-testid="floating-dock"] > div').boundingBox();
+  const pillHere = await page.locator(`${BAR}`).first().locator('> div').boundingBox();
   check('Dex FAB clears the pill by >= 12px', (fab.x - (pillHere.x + pillHere.width)) * K >= 12,
     `${((fab.x - (pillHere.x + pillHere.width)) * K).toFixed(1)}px`);
   check('Dex FAB is labelled "Dex" for screen readers',
@@ -167,7 +181,7 @@ if (!DEX_SLIDER) {
 /* Back to the Desk: everything below is about the active slot, and the active
    slot is the page you are on. */
 await page.goto(`${BASE}/inbox`, { waitUntil: 'domcontentloaded' });
-await page.waitForSelector('[data-testid="floating-dock"]', { timeout: 10000 });
+await page.waitForSelector(BAR, { timeout: 10000 });
 await page.waitForTimeout(400);
 
 // active state uses three cues: fill weight + colour + label
@@ -341,13 +355,16 @@ check('the calendar is one tap from the Journal\'s Events desk pill',
 // --------------------------------------------- MPWA-12c · the promoted slot
 // §2.1: "The dock becomes Desk · Work · Money · More + Dex FAB."
 await page.goto(`${BASE}/inbox`, { waitUntil: 'domcontentloaded' });
-await page.waitForSelector('[data-testid="floating-dock"]', { timeout: 8000 });
+await page.waitForSelector(BAR, { timeout: 8000 });
 await page.waitForTimeout(400);
-const dockLabels = await page.locator('[data-testid^="dock-"]:not([data-testid$="-badge"])')
+const dockLabels = await page.locator('[data-testid^="dock-"]:not([data-testid$="-badge"])'
+  + ':not([data-testid="dock-slider"]):not([data-testid="dock-slider-items"])')
   .evaluateAll((els) => els.map((e) => e.innerText.trim()));
-// ASK-38 seated CRM in the dock; More is still last.
-check('dock reads Desk · Work · Money · CRM · More',
-  dockLabels.join(' · ') === 'Desk · Work · Money · CRM · More', dockLabels.join(' · '));
+/* ASK-38 seated CRM in the dock; 2026-10-06 sent it back to the More panel so
+   the handle could have the middle. More is still last either way. */
+check(DEX_SLIDER ? 'dock reads Desk · Work · Money · More' : 'dock reads Desk · Work · Money · CRM · More',
+  dockLabels.join(' · ') === (DEX_SLIDER ? 'Desk · Work · Money · More' : 'Desk · Work · Money · CRM · More'),
+  dockLabels.join(' · '));
 check('Brief no longer occupies a dock slot',
   (await page.locator('[data-testid="dock-brief"]').count()) === 0);
 await page.locator('[data-testid="dock-work"]').click();                 // tap 1
@@ -414,7 +431,7 @@ if (DEX_SLIDER) {
   await page.locator('[data-testid="dock-ask-close"]').click();
   await page.waitForTimeout(700);
   check('closing gives the destinations back',
-    (await page.locator('[data-testid="dock-slider-items"] a').count()) === 4);
+    (await page.locator('[data-testid="dock-slider-items"] [data-testid^="dock-"]').count()) === 4);
 } else {
   await page.goto(`${BASE}/inbox`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('[data-testid="dex-fab"]', { timeout: 8000 });

@@ -69,9 +69,13 @@ for (const [w, h] of WIDTHS) {
 
   // ── the Desk's order, and that it still fits ───────────────────────────────
   const box = async (t) => (await page.locator(`[data-testid="${t}"]`).boundingBox());
-  const [kpi, board, dex] = [await box('desk-kpi-grid'), await box('desk-board'), await box('desk-insight')];
+  /* 2026-10-06 — THE CONTROL LEFT THE PAGE. It is the dock now, on every
+     screen, so the Desk's order is tiles then card then the BAR — and the bar
+     is `fixed`, not a row in the column, so "sits directly on" is measured
+     against it rather than against a sibling. */
+  const [kpi, board, dex] = [await box('desk-kpi-grid'), await box('desk-board'), await box('dock-slider')];
   check('tiles, then the card, then the control', kpi.y < board.y && board.y < dex.y);
-  check('the card sits directly on the control', dex.y - (board.y + board.height) <= 16,
+  check('the card sits directly on the control', dex.y - (board.y + board.height) <= 24,
     `${Math.round(dex.y - (board.y + board.height))}px`);
   check('the page does not scroll',
     await page.evaluate(() => document.scrollingElement.scrollHeight <= window.innerHeight + 2));
@@ -126,8 +130,13 @@ for (const [w, h] of WIDTHS) {
       .filter((e) => /^(Ask|Decide)$/.test(e.textContent.trim()))
       .map((e) => Number(getComputedStyle(e).opacity)));
 
+  /* 2026-10-06 — THE ENDS INVERT IN THE DOCK. On the Desk's old in-sheet
+     control they were named at rest and got out of the way as the handle
+     arrived; the bar already carries four destinations, so they ARRIVE as those
+     leave. Same number driving both, opposite direction. */
   const rest0 = await labelOpacity();
-  check('at rest the ends are named, legibly', rest0.length === 2 && rest0.every((o) => o > 0.9));
+  check('at rest the bar shows destinations, not ends',
+    rest0.length === 2 && rest0.every((o) => o < 0.05), `${rest0.map((o) => o.toFixed(2)).join(' / ')}`);
 
   await drag(track.x + track.width / 2 + 40, false);     // part way, held
   const mid = await labelOpacity();
@@ -138,10 +147,10 @@ for (const [w, h] of WIDTHS) {
   await page.waitForTimeout(200);
   const far = await labelOpacity();
   const atEnd = await page.locator('[data-testid="dex-slider-handle"]').boundingBox();
-  check('the words fade progressively on the approach',
-    mid.every((o) => o < 0.95) && far.every((o) => o < mid[0]),
+  check('the words arrive progressively on the approach',
+    mid.every((o) => o > 0.05) && far.every((o) => o > mid[0]),
     `${rest0[0].toFixed(2)} -> ${mid[0].toFixed(2)} -> ${far[0].toFixed(2)}`);
-  check('…and are gone by the time it commits', far.every((o) => o <= 0.05));
+  check('…and are fully there by the time it commits', far.every((o) => o >= 0.95));
   check('the handle reaches the wall, with nothing held back',
     Math.abs((atEnd.x + atEnd.width) - (track.x + track.width)) <= 1,
     `${Math.round((track.x + track.width) - (atEnd.x + atEnd.width))}px short`);
@@ -216,27 +225,25 @@ for (const [w, h] of WIDTHS) {
      founder's redesign clears the board and talks in it: the transcript takes
      the sheet, the KPI grid folds away, and this control becomes the composer.
      So the check is the same question asked of the new place. */
+  /* ── left: Ask, IN THE DOCK ────────────────────────────────────────────────
+     2026-10-06 — the sheet is a sheet again. Ask moved off this page entirely:
+     the dock is the control on every screen and the conversation grows out of
+     the bar, so what the left end opens is the dock's own panel. */
   await drag(track.x + 2);
-  await page.waitForTimeout(600);
-  check('a full drag left opens Ask in the sheet',
-    (await page.locator('[data-testid="desk-ask-pane"]').count()) === 1);
-  check('…and not as a sheet over the Desk',
+  await page.waitForTimeout(900);
+  check('a full drag left opens Ask in the dock',
+    (await page.locator('[data-testid="dock-ask-panel"]').count()) === 1);
+  check('…and not as a sheet over the page',
     (await page.locator('[data-testid="dex-chat"]').count()) === 0);
-  check('the KPI grid folds away to make room',
-    (await page.locator('[data-testid="desk-kpi-grid"]').count()) === 0);
-  /* 2026-10-05 second pass — the plus and the in-slider text field are GONE.
-     Ask behaves as Decide does: the handle parks left, pressing it ends the
-     listening and raises a review card, and all the typing, attaching and
-     editing happens in there. */
+  check('the Desk keeps its KPI grid',
+    (await page.locator('[data-testid="desk-kpi-grid"]').count()) === 1);
   check('the control carries no plus and no field',
     (await page.locator('[data-testid="dex-slider-plus"]').count()) === 0
     && (await page.locator('[data-testid="dex-slider-field"]').count()) === 0);
-  await page.locator('[data-testid="desk-ask-close"]').click();
-  await page.waitForTimeout(700);
-  check('closing Ask gives the Desk back',
-    (await page.locator('[data-testid="desk-kpi-grid"]').count()) === 1);
-  check('the handle is back at centre after a door closes',
-    Math.abs((await page.locator('[data-testid="dex-slider-handle"]').boundingBox()).x - rest.x) <= 2);
+  await page.locator('[data-testid="dock-ask-close"]').click();
+  await page.waitForTimeout(800);
+  check('closing gives the bar its destinations back',
+    (await page.locator('[data-testid="dock-slider-items"] [data-testid^="dock-"]').count()) === 4);
 
   check('no page errors', errs.length === 0, errs[0]);
   await ctx.close();

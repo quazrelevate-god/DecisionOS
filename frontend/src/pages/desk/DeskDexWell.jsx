@@ -172,7 +172,7 @@ function useKeyboardInset(active) {
  * guard, the refusal, the draft that survives a reload, the pop-up — is shared
  * code reached by both, so the door cannot drift from the well it replaces.
  */
-export function DeskDexWell({ className, testid, phone = false, onReview, onLater,
+export function DeskDexWell({ className, style, testid, phone = false, onReview, onLater,
                               surface = "well", open = false, onClose, onMeter }) {
   const { user } = useAuth();
   // The gate every Dex capture surface uses (DexFab, DexCaptureBar).
@@ -1096,7 +1096,7 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
         <input ref={fileInputRef} type="file" className="hidden" tabIndex={-1} onChange={onPickFile} />
       )}
       {surface === "overlay" && deskTop
-        ? <div className={cn("relative z-20 order-3 shrink-0 px-1 lg:hidden", className)} data-testid={testid}>{deskTop}</div>
+        ? <div className={cn("relative z-20 order-3 shrink-0 px-1 lg:hidden", className)} style={style} data-testid={testid}>{deskTop}</div>
         : null}
       {surface === "overlay" ? null : (
       <InsightWell

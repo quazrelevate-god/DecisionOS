@@ -31,7 +31,7 @@
 import * as React from "react";
 import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { X } from "@phosphor-icons/react";
+import { X, DotsThree } from "@phosphor-icons/react";
 import { AnimatePresence } from "framer-motion";
 import { DexSlider } from "../karma/DexSlider";
 import { dockSlots, DockItem } from "./FloatingDock";
@@ -39,7 +39,7 @@ import { Bubble, Outcome } from "./DexChat";
 import { cn } from "@/lib/utils";
 
 export function DockSlider({
-  user, chat, askOpen, onAsk, onDecide, onCloseAsk,
+  user, chat, askOpen, onAsk, onDecide, onCloseAsk, onMore, moreOpen = false,
   capturing = false, recording = false, levelsRef = null, onStop,
   onOpenDecision,
 }) {
@@ -47,21 +47,31 @@ export function DockSlider({
   const location = useLocation();
   const slots = React.useMemo(() => dockSlots(user, t), [user, t]);
   const [pct, setPct] = React.useState(0);
+  const [pressed, setPressed] = React.useState(false);
   const onDrag = React.useCallback((p) => setPct(p), []);
 
-  /* The destinations fade exactly as the ends arrive: 1 - pct * 1.25 is the
-     curve DexSlider's own labels use, so the two halves of the swap are the
-     same movement rather than two that look alike. `pointer-events` goes with
-     the opacity — a destination you cannot see must not be tappable either,
-     or a committed swipe can end on a navigation. */
-  const fade = Math.max(0, 1 - pct * 1.25);
+  /* THE DESTINATIONS GO ON THE TOUCH, not across the drag. The founder's call:
+     the moment the knob is pressed the bar should be the control and nothing
+     else — "then only it looks elegant, otherwise it feels like some sloppy
+     stuff." So the press clears them outright; the travel still drives the
+     ENDS fading in, because those have somewhere to arrive from.
+     `pointer-events` goes with the opacity: a destination you cannot see must
+     not be tappable either, or a committed swipe can end on a navigation. */
+  const fade = pressed ? 0 : Math.max(0, 1 - pct * 1.25);
+  /* TWO AND TWO, AND THE FOURTH IS MORE. dockSlots hands back Desk, Work,
+     Money, CRM; the founder moved CRM into the More panel and gave its slot to
+     More itself, so the bar reads Desk · Work │ handle │ Money · More. */
   const left = slots.slice(0, 2);
-  const right = slots.slice(2, 4);
+  const right = [
+    ...slots.slice(2, 3),
+    { to: "#more", label: t("bottomnav.more", "More"), icon: DotsThree, testid: "dock-more", onClick: onMore, isMore: true },
+  ];
 
   const items = (side) => (
     <div className="flex min-w-0 flex-1 items-stretch justify-around gap-0.5">
       {side.map((s) => (
-        <DockItem key={s.to} {...s} active={location.pathname.startsWith(s.to)} />
+        <DockItem key={s.to} {...s}
+          active={s.isMore ? moreOpen : location.pathname.startsWith(s.to)} />
       ))}
     </div>
   );
@@ -73,7 +83,7 @@ export function DockSlider({
     <div
       aria-hidden={pct > 0.4 ? "true" : undefined}
       style={{ opacity: fade, pointerEvents: fade < 0.6 ? "none" : undefined }}
-      className="absolute inset-0 flex items-stretch px-2 transition-opacity duration-75"
+      className="absolute inset-0 flex items-stretch px-2 transition-opacity duration-150"
       data-testid="dock-slider-items"
     >
       {items(left)}
@@ -107,6 +117,7 @@ export function DockSlider({
           tone="ink"
           behind={behind}
           onDrag={onDrag}
+          onPressChange={setPressed}
           onAsk={onAsk}
           onDecide={onDecide}
           capturing={capturing}

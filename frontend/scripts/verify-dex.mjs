@@ -583,22 +583,21 @@ async function run(viewport) {
     } else {
       await page.getByTestId('dex-fab').click();
     }
-    /* 2026-10-05 — WHERE ASK OPENS DEPENDS ON HOW YOU GOT IN, and that is the
-       founder's redesign rather than a quirk. From the Desk's slider it opens
-       IN the sheet (the board clears, the KPI grid folds, the control becomes
-       the composer); from the FAB, on every other page, it is still the sheet
-       over the page. Each path is checked where it actually lands. */
+    /* 2026-10-06 — ASK OPENS IN THE BAR, on every page. The Desk's in-sheet
+       chat is gone with the Desk's slider: there is one control and one place
+       the conversation appears, which is the dock grown into a panel. From the
+       FAB (flag off) it is still the sheet over the page. */
     if (DEX_SLIDER) {
-      const pane = page.getByTestId('desk-ask-pane');
+      const pane = page.getByTestId('dock-ask-panel');
       await pane.waitFor({ timeout: 8000 }).catch(() => {});
       await page.waitForTimeout(500);
-      check(`${w} F: the slider's left end opens Ask in the sheet`, (await pane.count()) === 1);
+      check(`${w} F: the slider's left end opens Ask in the dock`, (await pane.count()) === 1);
       check(`${w} F: … and it is ASK`, /\bAsk\b/i.test(await pane.innerText().catch(() => '')),
         clip(await pane.innerText().catch(() => ''), 60));
-      check(`${w} F: … and no sheet was raised over the Desk`, (await sheet(page).count()) === 0);
+      check(`${w} F: … and no sheet was raised over the page`, (await sheet(page).count()) === 0);
       check(`${w} F: … and the composer is the slider, not a plus menu`,
         (await page.getByTestId('dex-slider-plus').count()) === 0);
-      await page.getByTestId('desk-ask-close').click();
+      await page.getByTestId('dock-ask-close').click();
     } else {
       await sheet(page).waitFor({ timeout: 8000 }).catch(() => {});
       await page.waitForTimeout(700);

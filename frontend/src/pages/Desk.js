@@ -63,11 +63,8 @@ import { StaleStamp } from "../components/mobile/StaleStamp";
 // ASK-33 — the well on the left column's floor is Dex's Decide door. It owns
 // the capture hooks and hosts the repurposed InsightWell container itself.
 import { DeskDexWell } from "./desk/DeskDexWell";
-import { DeskAskPane } from "./desk/DeskAskPane";
-import { DexCapturePopup } from "./desk/DexCapturePopup";
 // DEX-SLIDER Part 1 — the phone Desk's new order sits behind this.
 import { DEX_SLIDER } from "../lib/flags";
-import { DexSlider } from "../components/karma/DexSlider";
 import { useDexDoors } from "../components/mobile/DexDoors";
 // 2026-09-14, founder — the Task approvals column opens My Work's task
 // drawer HERE, on the Desk, instead of sending the founder to My Work.
@@ -118,7 +115,17 @@ const DOCK_SEAM = 4; */
    min-h — no !important, no fork of the component, and `lg:` is untouched so
    desktop keeps every pixel it had. max-lg: only — this app allows xs and lg
    breakpoints inside .app-shell and nothing between. */
-const PHONE_TILE = "kr-kpi-tile max-lg:min-h-0 max-lg:p-2.5 max-lg:rounded-[1.1rem]";
+/* 2026-10-06 — THE TILES TAKE THE SLIDER'S ROOM. Removing the control from the
+   sheet left the page with six rems and nowhere for them to go but black under
+   three rows; the founder's call was to spend them here — "the empty space we
+   can cover it by increasing the scale and size of the workflow tile and any
+   other tile of the KPI grid."
+   A FLOOR, not a stretch. The hero was given `flex-1` once before and it put a
+   199px void between the tiles and the card, because a capped tile cannot
+   absorb what a growing parent hands it; this grows the tile ITSELF, so the
+   space is spent on the thing the founder wanted bigger and the board takes
+   what is left. --desk-kpi-floor is the number, in one place. */
+const PHONE_TILE = "kr-kpi-tile max-lg:min-h-[var(--desk-kpi-floor)] max-lg:p-3 max-lg:rounded-[1.25rem]";
 /* ASK-35 1.4 — the inner card's material, lifted from the recipe the desktop
    top nav shelf is cut from (INK_PILL / .kr-navplate::before) so the two stay
    the same black. Only the fill and the lit top edge: INK_PILL's drop shadow
@@ -960,56 +967,16 @@ export default function Desk() {
   // DEX-SLIDER Part 2 — Ask lives in Layout; the slider reaches it from here.
   const doors = useDexDoors();
 
-  /* ASK-INLINE (2026-10-05) — ASK HAPPENS IN THE SHEET NOW.
-     The founder's redesign: the left end of the slider no longer raises a
-     sheet over the Desk. The board clears, the KPI grid folds away, the black
-     sheet grows up to the greeting and becomes the transcript, and this one
-     control below it carries the voice, the send, the paperclip and the
-     keyboard that the dock used to.
-     The conversation itself is still Layout's — `doors.chat` and `doors.dex`
-     are the same objects the dock and the FAB use — because a second one would
-     mean a founder's question landing in a transcript they are not looking at.
-     What follows only ADAPTS them to the shapes DexSlider wants. */
-  const askOn = !!doors?.inline;
-  const dexCap = doors?.dex;
-  const chatC = doors?.chat;
-
-  /* THE REVIEW CARD IS OPEN once a capture has been sent for transcription and
-     until the founder sends or discards it. Opened on the PRESS, not on the
-     answer — "once I click the send icon it should immediately open the pop-up
-     and close the voice capturing, and in the pop-up give me the transcription
-     loading animation and then the text; it shouldn't pop up AFTER the
-     transcription, that's the opposite of the flow I need." */
-  const [askReview, setAskReview] = useState(false);
-  useEffect(() => { if (!askOn) setAskReview(false); }, [askOn]);
-
-  /* The paperclip's input, for as long as the Desk hosts the conversation:
-     the only phone-side one bound to this capture lives inside DexChat, which
-     this redesign stands down. chat.attach stages it and uploads on send. */
-  const askFileRef = useRef(null);
-
-  const askChat = useMemo(() => {
-    if (!dexCap || !chatC) return null;
-    return {
-      recording: !!dexCap.recording,
-      /* The WELL shows a waveform only while the mic is actually live now.
-         It used to stay a wave through `sending` too, which is the window the
-         review card now owns — two things describing one moment. */
-      capturing: !!dexCap.recording,
-      levelsRef: dexCap.levelsRef,
-      readLevel: null,
-      startVoice: () => { if (!dexCap.recording) dexCap.startRecording?.(); },
-      /* THE SEND. Stops the mic dead and raises the card in the same tick. */
-      stopAndReview: () => { dexCap.stopRecording?.(); setAskReview(true); },
-      pickFile: () => askFileRef.current?.click(),
-    };
-  }, [dexCap, chatC]);
-
+  /* ASK AND DECIDE LEFT THIS PAGE (2026-10-06). Both now live on the one
+     control the app has everywhere — the dock, which is the slider (see
+     components/mobile/DockSlider). The founder: "remove the slider container
+     from the home screen desk and make this dock change universal." So the
+     Desk is a Desk again: a greeting, a score, the KPI grid and the sheet of
+     decisions, with nothing here that talks to Dex. */
   /* DEX-SLIDER Part 3 — the slider's right end. useBackDismiss is what makes
      the Android back button and the iOS edge swipe close it: it puts a marker
      entry on history while the door is open, and both gestures pop that. One
      behaviour, described once. */
-  const [decideOpen, setDecideOpen] = useState(false);
   /* DEX-SLIDER — THE SLIDER'S RIPPLE BORROWS THE CAPTURE'S METER. The door
      (DeskDexWell, mounted below) owns the microphone; a second useDexCapture
      here would be a second MediaRecorder on the same device. So the door hands
@@ -1037,7 +1004,6 @@ export default function Desk() {
   }, []);
   const dexMeter = useCallback(() => (dexMeterRef.current ? dexMeterRef.current() : 0), []);
   const dexStop = useCallback(() => dexStopRef.current?.(), []);
-  useBackDismiss(decideOpen, (v) => setDecideOpen(!!v));
   /* JOURNEY-1 J13 — on a slow line the phone's saved copy stands in for the
      server after 3 s (service-worker.js), and the Desk used to show those
      numbers as if they were live. Now it says when they are from. */
@@ -1453,7 +1419,16 @@ export default function Desk() {
              seams the page's single gap instead of one 199px hole and two
              33px ones. The hero is now exactly as tall as the greeting, the
              score and the tiles need. */
-          DEX_SLIDER && "order-1 shrink-0 lg:order-none")}>
+          /* 2026-10-06 — AND NOW IT GROWS AGAIN, with the thing that made it
+             wrong last time removed. The slider left the sheet and the founder
+             put its room into the tiles: "cover it by increasing the scale and
+             size of the workflow tile and any other tile of the KPI grid." The
+             199px void happened because a growing hero handed space to tiles
+             that could not take it; the grid stretches now (auto-rows-fr, no
+             fixed tile height) so the space lands IN the tiles, and the grid is
+             capped so a tall phone cannot make a numeral float in the middle of
+             nothing. Measured on three screens below. */
+          DEX_SLIDER && (deskSheet ? "order-1 min-h-0 max-lg:flex-1 lg:order-none" : "order-1 shrink-0 lg:order-none"))}>
         {/* LEFT column — greeting, the score row, the well on the floor.
             KR-14.2 · MOBILE — display:contents so its children flow into
             the outer column and the KPI strip can slot between them. */}
@@ -1640,7 +1615,6 @@ export default function Desk() {
             the screen of the black sheet will start". Unmounted rather than
             hidden, so the sheet's flex-1 simply takes the room — no height to
             animate and nothing left measuring itself behind the chat. */}
-        {!(isMobile && askOn) && (
         <div className={cn(
           /* ONE GRID, BOTH SIZES. Three columns on a phone as well as on
              desktop — which sounds wrong until you remember --ui-scale: the
@@ -1651,6 +1625,7 @@ export default function Desk() {
              the three tiles that can raise an alert dot on the top row, and
              Workflows two-wide beside the quiet money number below. */
           "order-3 grid min-w-0 grid-cols-3 gap-2",
+          deskSheet && "max-lg:flex-1 max-lg:auto-rows-fr max-lg:max-h-[calc(2*var(--desk-kpi-cap)+0.5rem)]",
           /* No forced height. The first cut pinned the grid to 14rem with
              auto-rows-fr so the second row could not be taller than the first —
              and the card simply overflowed and vanished behind the black card,
@@ -1664,7 +1639,15 @@ export default function Desk() {
              with mt-auto, so a stretched row puts the label at the top, the
              number at the bottom and a hole between them — 143px tall tiles
              full of nothing, which is the complaint this grid was brought in to
-             answer. Content-sized rows here; the slack belongs to the card. */
+             answer. Content-sized rows here; the slack belongs to the card.
+             2026-10-06 — AND NOW THE SLACK BELONGS TO THE GRID. Removing the
+             slider from the sheet gave the page back six rems, and the founder
+             wants them here rather than as black under the three rows: "the
+             empty space we can cover it by increasing the scale and size of the
+             workflow tile and any other tile of the KPI grid." So below lg the
+             grid takes a share of what is left and its rows stretch into it,
+             capped (--desk-kpi-cap) so a sparse Desk cannot make a 200px tile
+             with a number floating in the middle of it. */
           "lg:order-none lg:auto-rows-fr lg:gap-3")} data-testid="desk-kpi-grid">
           <StatTile
             icon={Timer}
@@ -1738,7 +1721,6 @@ export default function Desk() {
           />
           )}
         </div>
-        )}
       </div>
 
       {/* ── THE DESK ─────────────────────────────────────────────────── */}
@@ -1771,38 +1753,19 @@ export default function Desk() {
           card is the last thing above the dock. Only the ORDER changes: the
           well still takes whatever height is left over (flex-1) and the card
           is still the fixed three rows it has been since ASK-46. */}
-      {isMobile && DEX_SLIDER && (
-        <DeskDexWell
-          surface="overlay"
-          open={decideOpen}
-          onClose={() => setDecideOpen(false)}
-          phone
-          onMeter={onDexMeter}
-          onReview={(id) => setOpenDecisionId(id)}
-          onLater={(id) => saveAsDraft(id).then((ok) => { qc.invalidateQueries({ queryKey: ["desk"] }); return ok; })}
-        />
-      )}
-      {/* DEX-SLIDER Part 2 — the slider takes the control's slot on a phone.
-          The well is NOT deleted: it is the other branch of the flag and
-          renders exactly as it always has when DEX_SLIDER is off. */}
-      {isMobile && !deskSheet && (DEX_SLIDER ? (
-        /* mb-2 — THE FOURTH SEAM. The other three are the column's own gap; the dock
-             is `fixed` and so is not in this column at all, which left the
-             slider sitting 2px off it while every other seam was 9. The margin
-             comes out of the board's share, so nothing else moves. */
-          <div className="order-4 mb-1 flex shrink-0 items-center px-1 lg:order-none"
-             data-testid="desk-insight">
-          <DexSlider
-            onAsk={() => doors?.openAsk?.()}
-            onDecide={() => setDecideOpen(true)}
-            readLevel={dexMeter}
-            capturing={dexLive.capturing}
-            recording={dexLive.recording}
-            levelsRef={dexLive.levelsRef}
-            onStop={dexStop}
-          />
-        </div>
-      ) : dexWell)}
+      {/* THE DESK'S OWN DECIDE WELL IS GONE (2026-10-06). The slider left this
+          page, so `decideOpen` could never be set again — but the component was
+          still mounted, and DeskDexWell owns a useDexCapture. With Layout
+          mounting one for the dock's right end there were TWO recorders on the
+          screen, and the microphone went to neither: the well published
+          recording:false for the whole capture, so the handle's stop toggled
+          the mic ON instead of handing over to the pop-up. verify:slider and
+          verify:dex both stopped at exactly that step, and both passed at the
+          commit before. One well, in Layout, where the control now is. */}
+      {/* DEX-SLIDER Part 2's slider is gone (2026-10-06) — the dock carries it
+          on every page now. The WELL is not: it is the other branch of the
+          flag and renders exactly as it always has when DEX_SLIDER is off. */}
+      {isMobile && !deskSheet && !DEX_SLIDER && dexWell}
       {/* DEX-SLIDER Part 3 — the door the right end opens. The SAME component
           the well is, in its overlay surface: same capture hook, same pop-up
           handover, same one-at-a-time guard. Mounted whenever the slider is,
@@ -1916,63 +1879,9 @@ export default function Desk() {
           pop && "max-lg:grid-rows-[minmax(0,1fr)]"
         )}
       >
-        {/* ASK-INLINE — THE SHEET IS THE TRANSCRIPT WHILE ASK IS OPEN. Not a
-            card inside it and not a sheet over it: the board's own tabs, rows
-            and "Show all" stand down, and what is left is the conversation and
-            the control under it. Everything here is Layout's `chat`, so the
-            words are the same ones the dock would have shown. */}
-        {isMobile && askOn && (
-          <>
-            <DeskAskPane
-              chat={chatC}
-              onClose={() => doors?.closeAsk?.()}
-              onOpenDecision={(id) => setOpenDecisionId(id)}
-            />
-            {/* THE REVIEW CARD IS DECIDE'S OWN. (2026-10-05 — founder: "keep
-                the same UI design used for the pop-up card in the decide
-                section for transcription view".) So it IS that component,
-                borrowed rather than imitated: same card, same centring, same
-                refusal to close on a stray tap outside, and the `ask` step
-                gives it one stage instead of three and a Send instead of a
-                Next. `transcribing` is the window between the mic stopping and
-                the words arriving — the pulse the founder asked to see BEFORE
-                the text, not after. */}
-            <DexCapturePopup
-              open={askReview}
-              step="ask"
-              phone
-              text={chatC?.draft || ""}
-              onText={(v) => chatC?.setDraft?.(v)}
-              transcribing={!!dexCap?.sending && !(chatC?.draft || "").trim()}
-              files={chatC?.pendingFiles || []}
-              onRemoveFile={(id) => chatC?.removeFile?.(id)}
-              busy={!!chatC?.busy}
-              onAttach={() => askFileRef.current?.click()}
-              attaching={!!chatC?.attaching}
-              onClose={() => setAskReview(false)}
-              onDiscard={() => { setAskReview(false); chatC?.setDraft?.(""); }}
-              onNext={() => {
-                const q = (chatC?.draft || "").trim();
-                if (!q && !(chatC?.pendingFiles || []).length) return;
-                setAskReview(false);
-                chatC?.ask?.(q);
-              }}
-            />
-            {/* The paperclip's actual input. Same accept list the sheet used. */}
-            <input
-              ref={askFileRef}
-              type="file"
-              accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
-              className="hidden"
-              tabIndex={-1}
-              data-testid="desk-ask-file"
-              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) chatC?.attach?.(f); }}
-            />
-          </>
-        )}
         {/* ASK-34 B — THE PHONE'S CARD. One card, three tabs, the same rows the
             desktop columns use. */}
-        {isMobile && !askOn && (
+        {isMobile && (
         <PhoneTabCard
           tone={phoneTab === "decisions" ? "needs" : phoneTab === "approvals" ? "flag" : "today"}
           roomy={deskSheet}
@@ -2042,37 +1951,8 @@ export default function Desk() {
             floor rather than directly under the card: the board is a flex
             column in this variant, the card keeps its content height at the
             top, and the slack between them belongs to the sheet. */}
-        {isMobile && DEX_SLIDER && deskSheet && (
-          /* mb-2 — EVEN, not merely bigger. The control sat on the sheet's own
-             floor with about 10 real pixels under it; mb-5 fixed that and
-             overshot, giving 26 below against 16 above. The board's own padding
-             is 0.75rem (9.6 real) below lg, so mb-2 adds 6.4 and the two seams
-             meet at 16. Measured, both sides. */
-          <div className="mt-auto mb-2 flex shrink-0 items-center px-1" data-testid="desk-insight">
-            <DexSlider
-              /* ON INK. Measured in the first render of this proposal: the
-                 light well's glass over the black sheet samples to rgb(22,22,24)
-                 and the ends, which are near-black foreground ink, came out at
-                 1.05:1 — invisible. A layout cannot be judged through a control
-                 you cannot read, so the slider gets the dark-surface treatment
-                 the dock already has. */
-              tone="ink"
-              /* ASK-INLINE — the left end no longer opens a sheet over the
-                 Desk. It clears this one and starts talking in it. */
-              onAsk={() => { doors?.openAskInline?.(); askChat?.startVoice?.(); }}
-              onDecide={() => setDecideOpen(true)}
-              readLevel={askOn ? null : dexMeter}
-              capturing={askOn ? askChat.capturing : dexLive.capturing}
-              recording={askOn ? askChat.recording : dexLive.recording}
-              levelsRef={askOn ? askChat.levelsRef : dexLive.levelsRef}
-              /* Pressing the parked handle ends the listening and opens the
-                 review — Decide's gesture exactly, and now Ask's. */
-              onStop={askOn ? askChat.stopAndReview : dexStop}
-              composer={askOn}
-            />
-          </div>
-        )}
-
+        {/* The slider that used to sit here is gone (2026-10-06): one Dex
+            control, and it is the dock. */}
         {!isMobile && showDecisions && (
           <DeskCard
             tone="needs"

@@ -32,7 +32,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   UsersThree, BookOpen, Gauge, AirplaneTakeoff, CaretRight,
-  ShieldCheck, FlowArrow, GearSix,
+  ShieldCheck, FlowArrow, GearSix, AddressBook,
 } from "@phosphor-icons/react";
 import { hasPerm } from "@/lib/perms";
 import { INK_PLATE } from "@/components/karma/glass";
@@ -82,6 +82,12 @@ function buildTiles({ user, t }) {
       perm: "approvals",
     },
     { key: "workflows", to: "/workflows", label: t("nav.workflows", "Workflows"), icon: FlowArrow, perm: "workflows" },
+    /* 2026-10-06 — CRM COMES BACK UP HERE. ASK-38 brought it DOWN to the dock
+       because "the rest of More is genuinely occasional and CRM is not"; the
+       dock now spends that slot on the slider's own More, so CRM returns to the
+       panel it came from. Same `people` permission it carried either way, so
+       nobody gains or loses access by the move — only the number of taps. */
+    { key: "crm", to: "/crm", label: t("nav.crm", "CRM"), icon: AddressBook, perm: "people" },
     { key: "journal", to: "/journal", label: t("nav.journal", "Journal"), icon: BookOpen, ownerOnly: true },
     /* GL-02 (JOURNEY-1 J9p-01..03, J10-03) — OPS IS NOT OWNER-ONLY. The page
        behind it has never been: /operating-score is Protected with no

@@ -754,7 +754,13 @@
        enough that the tiles read as having grown, not enough to look stretched.
        What is left over stays as breathing room between the tiles and the
        card, which is where a gap belongs if there is going to be one. */
-    --desk-kpi-cap: 9rem;
+    /* 2026-10-06 — RAISED, because the slider left the sheet and the founder
+       put its six rems here. 9rem was the ceiling when the grid was sharing a
+       page with a control; with that control gone the tiles are what fills the
+       gap, and 12rem is as far as a tile can grow before the numeral starts
+       floating in the middle of it again (the complaint --desk-kpi-cap was
+       written to answer in the first place). */
+    --desk-kpi-cap: 12rem;
     --desk-phone-row: calc(2.75rem + 2 * 0.25rem);
     --desk-phone-body: calc(3 * var(--desk-phone-row) + 2px + 4px + 2.75rem);
 

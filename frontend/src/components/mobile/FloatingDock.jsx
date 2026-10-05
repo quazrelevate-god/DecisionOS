@@ -60,6 +60,12 @@ export function dockSlots(user, t = (k, d) => d) {
     ? { to: "/crm", label: t("nav.crm", "CRM"), icon: AddressBook, testid: "dock-crm" }
     : null;
 
+  /* 2026-10-06 — THE FOURTH SLOT IS MORE NOW, not CRM. The slider took the
+     middle of the bar and left four places; the founder's call was that More
+     earns one of them and CRM goes back to the panel it came from (ASK-38
+     brought it down; this sends it back). `more` is not a destination — the
+     caller gives it the handler — so it carries no `to` and the dock renders
+     it as a button. */
   const slots = [desk, work, money, crm].filter(Boolean);
   // If a permission collapse duplicated My Work, drop the repeat rather than
   // showing the same destination twice — §8: nothing appears in two places.

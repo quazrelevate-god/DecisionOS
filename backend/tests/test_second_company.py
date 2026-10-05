@@ -426,25 +426,37 @@ def test_a_removed_membership_is_not_a_way_back_in(with_test_db):
 # The gate, and WhatsApp.
 # ---------------------------------------------------------------------------
 def test_the_owner_gate_stands_down_when_the_credentials_exist_elsewhere(with_test_db):
+    # /me takes the request + response since B27 (2026-09-29, CSRF token echo)
+    # and reaches many modules (permissions, workflow scope, the setup claim):
+    # rebind them all, plus routers.auth, which is not in the harness list.
+    from tests.e2e_harness import e2e_env
+
+    def _me(user):
+        return rauth.me(_req("/api/auth/me"), Response(), user=user)
+
     async def scenario(db):
-        restore = _patch(db, rauth, core)
+        restore = _patch(db, rauth)
         try:
-            await _two_companies(db)
-            second = {"id": "u-rajesh-2", "tenant_id": "t-nila", "role": "owner",
-                      "permissions": [], "passwordless": True, "email": ""}
-            out = await rauth.me(user=second)
-            # someone genuinely mobile-only, with nothing anywhere else
-            await db.tenants.insert_one({"id": "t-solo", "name": "Solo Co", **_SETTLED})
-            await db.users.insert_one({
-                "id": "u-solo", "tenant_id": "t-solo", "name": "Solo", "role": "owner",
-                "email": "", "passwordless": True, "phone_norm": OTHER,
-                "phone_verified_at": now_iso(), "created_at": now_iso()})
-            solo = {"id": "u-solo", "tenant_id": "t-solo", "role": "owner",
-                    "permissions": [], "passwordless": True, "email": ""}
-            out_solo = await rauth.me(user=solo)
-            return out["user"]["credentials_elsewhere"], out_solo["user"]["credentials_elsewhere"]
+            with e2e_env(db):
+                return await _both(db)
         finally:
             restore()
+
+    async def _both(db):
+        await _two_companies(db)
+        second = {"id": "u-rajesh-2", "tenant_id": "t-nila", "role": "owner",
+                  "permissions": [], "passwordless": True, "email": ""}
+        out = await _me(second)
+        # someone genuinely mobile-only, with nothing anywhere else
+        await db.tenants.insert_one({"id": "t-solo", "name": "Solo Co", **_SETTLED})
+        await db.users.insert_one({
+            "id": "u-solo", "tenant_id": "t-solo", "name": "Solo", "role": "owner",
+            "email": "", "passwordless": True, "phone_norm": OTHER,
+            "phone_verified_at": now_iso(), "created_at": now_iso()})
+        solo = {"id": "u-solo", "tenant_id": "t-solo", "role": "owner",
+                "permissions": [], "passwordless": True, "email": ""}
+        out_solo = await _me(solo)
+        return out["user"]["credentials_elsewhere"], out_solo["user"]["credentials_elsewhere"]
 
     second, solo = with_test_db(scenario)
     assert second is True, "their first company already has an email and a password"

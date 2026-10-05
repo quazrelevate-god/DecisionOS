@@ -6,7 +6,6 @@ import { GLASS_PILL, INK_PILL } from "../../components/karma/glass";
 const PAGE = "min-h-[calc(100vh/var(--ui-scale,1))] bg-[linear-gradient(180deg,hsl(220_20%_97%),hsl(220_14%_91%))] text-slate-900";
 import {
   OverviewSection, AiKeysSection, TenantsSection, UsersSection, HealthSection, AuditSection, UsageSection,
-  MaintenanceSection,
 } from "./AdminSections";
 import { Tenant360Section } from "./Tenant360Section";
 import { ImpersonationSection } from "./ImpersonationSection";
@@ -19,7 +18,7 @@ import { AnnouncementsSection } from "./AnnouncementsSection";
 import { ComplianceSection } from "./ComplianceSection";
 import {
   ShieldStar, SquaresFour, Key, Buildings, Users, Pulse, SignOut, Spinner,
-  ClockCounterClockwise, ChartBar, WarningCircle, Wrench, MagnifyingGlass, UserSwitch, Lifebuoy, CurrencyInr, ChartLineUp, Sliders, ShieldCheck, Megaphone, Scales,
+  ClockCounterClockwise, ChartBar, WarningCircle, MagnifyingGlass, UserSwitch, Lifebuoy, CurrencyInr, ChartLineUp, Sliders, ShieldCheck, Megaphone, Scales,
 } from "@phosphor-icons/react";
 
 const TABS = [
@@ -37,7 +36,6 @@ const TABS = [
   { key: "ai-keys", label: "AI Keys", icon: Key, C: AiKeysSection },
   { key: "tenants", label: "Workspaces", icon: Buildings, C: TenantsSection },
   { key: "users", label: "Users", icon: Users, C: UsersSection },
-  { key: "maintenance", label: "Maintenance", icon: Wrench, C: MaintenanceSection },
   { key: "audit", label: "Audit Log", icon: ClockCounterClockwise, C: AuditSection },
   { key: "health", label: "Health", icon: Pulse, C: HealthSection },
 ];

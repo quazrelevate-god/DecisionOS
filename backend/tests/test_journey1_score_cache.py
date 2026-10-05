@@ -63,7 +63,8 @@ def test_the_score_page_does_not_serve_a_number_older_than_the_last_write(with_t
             await db.tenants.insert_one({"id": T, "name": "Sharma Textiles", "currency": "INR"})
             # A cache entry that is well inside the 90s TTL, holding an old answer.
             await db.operating_score_cache.insert_one({
-                "_id": f"{T}:1", "computed_at": _iso(-10),
+                # tenant : can_finance : period ("all" = no window, 2026-09-29)
+                "_id": f"{T}:1:all", "computed_at": _iso(-10),
                 "payload": {"company": {"overall": 11}, "marker": "from the cache"},
             })
             served_fresh = await _company_operating_view(T, OWNER, _iso(0))

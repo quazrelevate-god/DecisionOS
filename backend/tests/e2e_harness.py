@@ -48,6 +48,9 @@ _DB_MODULES = [
     # read, and the event loop refused before it got that far, but a test that
     # can touch the live database is a test that will.
     "routers.brain",
+    # 2026-10-06: GET /auth/me claims the tenant-setup backfill here. Unbound,
+    # every in-process /me reached the production client from a test.
+    "services.ai.ai_setup",
 ]
 
 # fire-and-forget writers to neutralise: (module, attr, kind) where kind is
@@ -59,6 +62,9 @@ _NEUTRALISE = [
     ("services.notifications", "push_notification", "noop"),
     ("services.enrich", "enrich_decision", "identity"),
     ("services.enrich", "enrich_decisions", "identity_list"),
+    # the background lexicon / operating model / finance categories fill is
+    # three LLM calls; a test's tenant without them must not start it
+    ("services.ai.ai_setup", "_backfill_missing_setup", "noop"),
 ]
 
 

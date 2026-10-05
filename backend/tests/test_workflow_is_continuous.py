@@ -472,6 +472,9 @@ def test_the_person_who_lost_the_race_is_told_someone_else_moved_it(with_test_db
         import services.workflow_engine as engine
         from models.workflows import WorkflowAdvanceInput
         with _env(db, **{"services.workflow_engine.advance": already}):
+            # The route checks the card is there and in this person's pipelines
+            # before it moves anything (2026-10-03), so the card must exist.
+            await db.workflows.insert_one(_card())
             assert engine.advance is already
             return await wf.advance_workflow(
                 "wf1", WorkflowAdvanceInput(stage="checked"), user=SALES)
@@ -488,6 +491,7 @@ def test_a_move_this_caller_did_make_says_nothing_of_the_sort(with_test_db):
         import routers.workflows as wf
         from models.workflows import WorkflowAdvanceInput
         with _env(db, **{"services.workflow_engine.advance": moved}):
+            await db.workflows.insert_one(_card())
             return await wf.advance_workflow(
                 "wf1", WorkflowAdvanceInput(stage="checked"), user=SALES)
 

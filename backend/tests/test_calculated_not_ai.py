@@ -1,7 +1,7 @@
 """AI audit step 5 (2026-10-06): calculated, not AI.
 
-The expense category, expense/asset/stock class, contact score, task priority,
-work review and leave impact are rules over the company's own data now
+The expense category, contact score, task priority, work review and leave
+impact are rules over the company's own data now
 (services/calculated). These pin each rule, that the retired AI calls are gone,
 that GET /auth/me no longer generates setup inline, and that a bill upload says
 truthfully whether the bill was read.
@@ -81,43 +81,6 @@ def test_category_reads_company_list_when_not_given(fdb):
     fdb.tenants.docs.append({"id": "t1", "finance_categories": {"expense": ["Diesel", "Other"], "asset": ["Other"]}})
     got = _run(calc.suggest_expense_category("t1", "diesel for generator"))
     assert got["category"] == "Diesel"
-
-
-# --- expense / asset / stock ---------------------------------------------------------
-def test_purchase_follows_vendor_history(fdb):
-    fdb.invoices.docs += [
-        {"tenant_id": "t1", "type": "purchase_bill", "contact_name": "KG Mills", "purchase_type": "inventory"},
-        {"tenant_id": "t1", "type": "purchase_bill", "contact_name": "kg mills", "purchase_type": "inventory"},
-    ]
-    got = _run(calc.classify_purchase("t1", "Lot 22", vendor="KG Mills", asset_categories=fw.ASSET_CATEGORIES))
-    assert got["purchase_type"] == "inventory" and got["how"] == "vendor"
-
-
-def test_purchase_vendor_history_ignores_flagged_and_mixed(fdb):
-    fdb.invoices.docs += [
-        {"tenant_id": "t1", "type": "purchase_bill", "contact_name": "Acme", "purchase_type": "asset",
-         "needs_reclassification": True},
-        {"tenant_id": "t1", "type": "purchase_bill", "contact_name": "Acme", "purchase_type": "expense"},
-        {"tenant_id": "t1", "type": "purchase_bill", "contact_name": "Acme", "purchase_type": "asset"},
-    ]
-    got = _run(calc.classify_purchase("t1", "misc", vendor="Acme", asset_categories=fw.ASSET_CATEGORIES))
-    assert got["how"] != "vendor"     # 1 vs 1: no clear habit
-
-
-def test_purchase_asset_stock_service_unknown(fdb):
-    a = _run(calc.classify_purchase("t1", "HP laptop for accounts", asset_categories=fw.ASSET_CATEGORIES))
-    assert a["purchase_type"] == "asset" and a["asset_category"] == "IT & Electronics"
-    s = _run(calc.classify_purchase("t1", "Cotton yarn 40s 250 kg", asset_categories=fw.ASSET_CATEGORIES))
-    assert s["purchase_type"] == "inventory" and s["inventory_qty"] == 250.0 and s["inventory_unit"] == "kg"
-    e = _run(calc.classify_purchase("t1", "Freight charges Chennai", asset_categories=fw.ASSET_CATEGORIES))
-    assert e["purchase_type"] == "expense"
-    u = _run(calc.classify_purchase("t1", "Item 7", asset_categories=fw.ASSET_CATEGORIES))
-    assert u["purchase_type"] == "unknown" and u["how"] == "none"
-
-
-def test_purchase_cartons_are_not_a_car(fdb):
-    got = _run(calc.classify_purchase("t1", "20 cartons of packing tape", asset_categories=fw.ASSET_CATEGORIES))
-    assert got["purchase_type"] != "asset"
 
 
 # --- contact score ---------------------------------------------------------------

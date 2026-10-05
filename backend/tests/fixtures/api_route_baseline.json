@@ -1,6 +1,6 @@
 {
-  "count": 361,
-  "sha": "6e03d2f8e7aca128f38fabb7f327fbf578bda6b669b44a25d34f9c77e5d6ff0a",
+  "count": 358,
+  "sha": "0d063abccf7259cbc63b4726ccad85051e616b821b493342a051025af9e275b7",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -57,7 +57,6 @@
     "GET /api/admin/observability/errors",
     "GET /api/admin/observability/outages",
     "GET /api/admin/observability/reliability",
-    "GET /api/admin/reclassify-purchases/status",
     "GET /api/admin/retention/status",
     "GET /api/admin/scheduler-locks",
     "GET /api/admin/search",
@@ -219,7 +218,6 @@
     "POST /api/admin/impersonation/{session_id}/revoke",
     "POST /api/admin/login",
     "POST /api/admin/logout",
-    "POST /api/admin/reclassify-purchases",
     "POST /api/admin/retention/run",
     "POST /api/admin/tenants/{tenant_id}/delete-with-export",
     "POST /api/admin/tenants/{tenant_id}/impersonate",
@@ -300,7 +298,6 @@
     "POST /api/ledger/ask",
     "POST /api/ledger/categories",
     "POST /api/ledger/parties",
-    "POST /api/ledger/reclassify-purchases",
     "POST /api/me/acting-as",
     "POST /api/meetings",
     "POST /api/meetings/text",

@@ -181,7 +181,7 @@ Five tabs — the finance nerve centre.
 - Adds (multipart): `POST /expenses/with-file`, `POST /assets/with-file`, `POST /inventory/with-file`, `POST /revenue/with-file`
 - AI helpers: `POST /expenses/suggest-category`, `POST /ledger/ai/:scope/refresh`, `POST /ledger/ask`
 - Matching: `POST /revenue/payment/:id/match|standalone`, `POST /payables/payment/:id/match|standalone`
-- Owner-only: `POST /ledger/reclassify-purchases`
+- ~~Owner-only: `POST /ledger/reclassify-purchases`~~ — removed 2026-10-06 (bills are classified at upload before filing)
 - Task-from-insight: `POST /tasks`
 - Deletes: `DELETE /expenses/:id`, `/assets/:id`, `/inventory/:id`, `/revenue/invoice/:id`, `/revenue/payment/:id`
 
@@ -283,7 +283,6 @@ Boots by calling `GET /admin/me`. Unauthenticated → **AdminLogin** (dark login
 | **Users** | Cross-tenant user table with Suspend / Reactivate / Reset-access (owner protected from suspend) | `GET /admin/users`, `POST /admin/users/:id/suspend\|reactivate\|reset-access` |
 | **Audit Log** | Chronological admin action log with typed icons | `GET /admin/audit` |
 | **Health** | Database, follow-up scheduler, Emergent LLM key status + per-provider "key source" grid | `GET /admin/health` |
-| **Maintenance** | Cross-tenant "Fix mis-booked purchases" job with live progress bar (bills reviewed, to Asset/Inventory, re-categorised, matched, settled/partial, needs manual review) | `GET /admin/reclassify-purchases/status`, `POST /admin/reclassify-purchases` |
 
 ---
 

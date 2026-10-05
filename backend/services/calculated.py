@@ -2,10 +2,10 @@
 … we have to use a calculated approach").
 
 Each of these used to be a Claude call over numbers or fixed lists the app
-already had: an expense category out of the company's own list, whether a bill
-is an expense, an asset or stock, a 0-100 score for a customer or a task, a
-paragraph about someone's work stats, who should cover a person's tasks on
-leave. A rule does each of them the same way every time, explains itself, costs
+already had: an expense category out of the company's own list, a 0-100 score
+for a customer or a task, a paragraph about someone's work stats, who should
+cover a person's tasks on leave. (Expense / asset / stock for an old bill was
+one too; it went with the re-sync that used it, 2026-10-06.) A rule does each of them the same way every time, explains itself, costs
 nothing, answers instantly, and never sends company data out.
 
 The finance rules LEARN FROM THE COMPANY: its own past bills (the same vendor is
@@ -117,52 +117,6 @@ async def suggest_expense_category(tenant_id: str, text: str, vendor: Optional[s
     if guess and guess != "Other":
         return {"category": guess, "how": "keyword", "reason": f"Usually {guess}."}
     return {"category": other, "how": "none", "reason": "No rule matched — choose a category."}
-
-
-# --- expense / asset / stock ---------------------------------------------------
-_STOCK = {"raw", "material", "yarn", "fabric", "cotton", "thread", "cloth", "stock", "inventory", "goods",
-          "bale", "roll", "kg", "kgs", "mtr", "metre", "meter", "pcs", "piece", "packet", "carton", "dye",
-          "chemical", "trading", "resale", "polyester", "viscose", "grain", "oil", "steel", "sheet", "coil"}
-_SERVICE = {"rent", "freight", "transport", "courier", "repair", "maintenance", "service", "salary", "wage",
-            "electricity", "power", "internet", "telephone", "consult", "audit", "legal", "fee", "charge",
-            "commission", "travel", "fuel", "diesel", "petrol", "advertis", "marketing", "insurance", "tax", "gst"}
-_UNIT_RX = re.compile(r"(\d+(?:\.\d+)?)\s*(kg|kgs|mtr|mtrs|metres?|meters?|pcs|pieces|nos|bales?|rolls?|units?|litres?|l)\b", re.I)
-
-
-async def classify_purchase(tenant_id: str, text: str, vendor: Optional[str] = None,
-                            asset_categories: Optional[list] = None) -> dict:
-    """{purchase_type: expense|asset|inventory|unknown, reason, how, asset_category?,
-    inventory_qty?, inventory_unit?}. Unknown is an answer: the bill waits for the
-    owner instead of being guessed into the books."""
-    from services.finance_words import _ASSET_KEYWORDS, _match_category, get_finance_categories
-    vendor = (vendor or "").strip()
-    if vendor:
-        rows = await db.invoices.find(
-            {"tenant_id": tenant_id, "type": "purchase_bill", "contact_name": {"$regex": f"^{re.escape(vendor)}$", "$options": "i"},
-             "purchase_type": {"$in": ["expense", "asset", "inventory"]}, "needs_reclassification": {"$ne": True}},
-            {"_id": 0, "purchase_type": 1}).to_list(200)
-        same = Counter(r["purchase_type"] for r in rows)
-        if same:
-            kind, n = same.most_common(1)[0]
-            if n >= 2 or len(same) == 1:
-                return {"purchase_type": kind, "how": "vendor",
-                        "reason": f"Bills from {vendor} have been booked as {kind}."}
-    t = f"{text} {vendor}"
-    words = _words(t)
-    asset_cat = _guess(_ASSET_KEYWORDS, t)
-    if asset_cat != "Other":
-        cats = asset_categories or (await get_finance_categories(tenant_id))["asset"]
-        return {"purchase_type": "asset", "how": "keyword", "asset_category": _match_category(asset_cat, cats, "Other"),
-                "reason": f"Looks like equipment you keep ({asset_cat.lower()})."}
-    unit = _UNIT_RX.search(t)
-    if words & _STOCK or unit:
-        out = {"purchase_type": "inventory", "how": "keyword", "reason": "Looks like goods/stock bought by quantity."}
-        if unit:
-            out.update(inventory_qty=float(unit.group(1)), inventory_unit=unit.group(2).lower())
-        return out
-    if any(w.startswith(s) for w in words for s in _SERVICE):
-        return {"purchase_type": "expense", "how": "keyword", "reason": "A running cost or service."}
-    return {"purchase_type": "unknown", "how": "none", "reason": "Not clear from the bill — choose expense, asset or stock."}
 
 
 # --- scores ----------------------------------------------------------------------

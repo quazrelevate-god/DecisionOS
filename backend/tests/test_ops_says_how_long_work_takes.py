@@ -83,8 +83,11 @@ def test_a_persons_payload_carries_how_their_work_moves(with_test_db):
     # p1, p2 close in one working day; p3 in six (21st -> 28th, minus a Sunday).
     assert t["typical_days"] == 1, t
     assert t["closed"] == 3
-    # Two of the three dated tasks landed by their date.
-    assert t["on_time_rate"] == 67 and t["dated"] == 3
+    # Two of the four dated tasks landed by their date: p3 finished late, and
+    # p4 is still open past its 30 Sep date -- open work past its date has
+    # already missed it (2026-09-29, "Late means late").
+    assert t["on_time_rate"] == 50 and t["dated"] == 4
+    assert t["late_open"] == 1
     assert t["waiting_days"] is not None and t["waiting_days"] > 0
 
 
@@ -97,7 +100,7 @@ def test_the_company_is_measured_the_same_way(with_test_db):
 
     payload = with_test_db(_env(scenario))
     assert set(payload["stats"]["timing"]) == {
-        "typical_days", "closed", "on_time_rate", "dated", "waiting_days"}
+        "typical_days", "closed", "on_time_rate", "dated", "late_open", "waiting_days"}
     assert payload["stats"]["timing"]["closed"] == 4, "every finished task in the company"
 
 
@@ -145,7 +148,8 @@ def test_the_page_draws_the_three_numbers():
     for tid in ("ops-timing-typical", "ops-timing-on-time", "ops-timing-waiting"):
         assert f'testid="{tid}"' in OPS, tid
     assert "<WorkMovesRow timing={stats.timing} company />" in OPS, "the company's page"
-    assert "<WorkMovesRow timing={stats.timing} who={isViewAs ? firstName : null} />" in OPS
+    # a person's page also hands in their sign-off queue (approvals=...)
+    assert "<WorkMovesRow timing={stats.timing} who={isViewAs ? firstName : null}" in OPS
 
 
 def test_zero_days_reads_as_same_day_not_as_a_missing_number():

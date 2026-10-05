@@ -24,7 +24,7 @@ import pytest
 
 # Bump this when an admin route is intentionally added/removed (same discipline
 # as regenerating the whole-app baseline).
-EXPECTED_ADMIN_ROUTE_COUNT = 71
+EXPECTED_ADMIN_ROUTE_COUNT = 69   # 2026-10-06: -2, the reclassify-purchases job removed
 
 # Two /api/admin/* paths are legitimately NOT behind the platform-admin gate:
 #   * POST /api/admin/login -- the login entry point, open by design;

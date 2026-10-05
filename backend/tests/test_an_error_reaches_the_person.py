@@ -50,7 +50,8 @@ CONFIRM_SITES = [
     "pages/BrainDocuments.js",
     "pages/admin/AnnouncementsSection.js",
     "pages/admin/ComplianceSection.js",
-    "pages/admin/AdminSections.js",
+    # pages/admin/AdminSections.js left 2026-10-06: its only confirm was the
+    # "Re-classify all purchases" button, which was removed.
 ]
 
 

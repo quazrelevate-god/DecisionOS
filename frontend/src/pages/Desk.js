@@ -276,7 +276,20 @@ function DeskRow({ r, first, testid, roomy = false }) {
          holding them; six of those pixels are here, three times over. Desktop
          keeps its 7 — it has the room and the columns are read at arm's
          length. */
-      className={`flex cursor-pointer items-center justify-between gap-3 ${roomy ? "kr-desk-row-roomy min-h-0 flex-1 overflow-hidden" : "max-lg:py-1 py-[7px]"} ${first ? "" : "border-t border-white/[.14]"} ${
+      /* THE ROW IS ITS OWN PILL NOW (2026-10-05), in the sheet only.
+         It used to be a line inside one gradient card, separated from its
+         neighbours by a hairline, and the draft mark had to fight that: a
+         -mx-2 bleed, a left bar, a ring and a glow, all to lift a row off a
+         surface it was part of. The founder's call is simpler and better —
+         drop the card, give each row its own flat container with real space
+         between them, and let COLOUR say what the row is. The draft mark then
+         costs nothing: it is just this pill, painted.
+         `data-tone` is the priority band and `data-draft` overrides it; both
+         are read in index.css, where the hues live beside the Watch cards'
+         so the two cannot drift. */
+      data-tone={roomy ? (r.priority || "low") : undefined}
+      className={`flex cursor-pointer items-center justify-between gap-3 ${roomy ? "kr-desk-pill kr-desk-row-roomy min-h-0 flex-1 overflow-hidden" : `max-lg:py-1 py-[7px] ${first ? "" : "border-t border-white/[.14]"}`} ${
+        roomy ? "" :
         /* ASK-42 E — THE MARK IS LOUDER. It was a 2px bar and a 5% white wash,
            which on near-black is a shade of the same black: the founder could
            see it only once they knew where to look. It is the SAME grammar,
@@ -301,13 +314,16 @@ function DeskRow({ r, first, testid, roomy = false }) {
             "Show all" by design (ASK-42), and a row that can double in height
             is a different card. Both carry the full title as a tooltip. */}
         <p title={r.title}
-          className={`truncate ${roomy ? "kr-desk-row-title" : "text-[15px] leading-5"} font-medium tracking-[-0.006em] lg:whitespace-normal lg:line-clamp-2 lg:text-[15px] lg:leading-5 ${r.deferred ? "text-white" : "text-neutral-300"}`}>{r.title}</p>
+          /* In the sheet the pill owns the ink: a draft is painted solid
+             white and needs dark type on it, which a Tailwind colour here
+             could only fight. index.css sets both cases together. */
+          className={`truncate ${roomy ? "kr-desk-row-title" : `text-[15px] leading-5 ${r.deferred ? "text-white" : "text-neutral-300"}`} font-medium tracking-[-0.006em] lg:whitespace-normal lg:line-clamp-2 lg:text-[15px] lg:leading-5`}>{r.title}</p>
         {(r.meta || r.deferred) && (
           /* text-sm + neutral-400, measured: the supporting line was 12px
              (9.6pt after --ui-scale) at 3.87:1 on the board's own ink, against
              an 11pt floor and a 4.5:1 requirement. 14px is 11.2pt. */
-          <p title={r.meta || undefined} className={`truncate text-neutral-400 ${roomy ? "kr-desk-row-meta lg:text-sm lg:leading-5" : "text-sm leading-5"}`}>
-            {r.deferred && <span className="font-medium text-neutral-300">Draft</span>}
+          <p title={r.meta || undefined} className={`truncate ${roomy ? "kr-desk-row-meta lg:text-sm lg:leading-5" : "text-sm leading-5 text-neutral-400"}`}>
+            {r.deferred && <span className={`font-medium ${roomy ? "kr-desk-row-draftword" : "text-neutral-300"}`}>Draft</span>}
             {r.deferred && r.meta ? " · " : ""}
             {r.meta}
           </p>
@@ -317,7 +333,7 @@ function DeskRow({ r, first, testid, roomy = false }) {
           cross that used to sit between them are gone; the row is the link and
           the window it opens is where a decision is taken. */}
       <span className="flex shrink-0 items-center gap-2.5">
-        {r.amount && <span className={`font-mono text-neutral-300 ${roomy ? "text-[15px] leading-6 lg:text-sm lg:leading-5" : "text-sm leading-5"}`}>{r.amount}</span>}
+        {r.amount && <span className={`font-mono ${roomy ? "kr-desk-row-amount text-[15px] leading-6 lg:text-sm lg:leading-5" : "text-sm leading-5 text-neutral-300"}`}>{r.amount}</span>}
         <OpenButton onClick={(e) => { e.stopPropagation(); r.onOpen(); }} label={`Open: ${r.title}`} />
       </span>
     </div>
@@ -667,7 +683,13 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
           the whole list in that one frame and then sizes the card to it, which
           a fixed height would have clipped to three rows again. */}
       <div
-        className={cn(PHONE_CARD_INK, "mt-1.5 min-h-0 rounded-tile p-2.5",
+        /* NO CARD UNDER THE ROWS IN THE SHEET (2026-10-05, founder). The
+           gradient plate was a second black box inside a black box, and once
+           each row carries its own container it is drawing a border around
+           nothing. The sheet's own ink is the ground now, and the padding goes
+           with it — the pills bring their own. */
+        className={cn(!roomy && PHONE_CARD_INK, "mt-1.5 min-h-0 rounded-tile",
+          roomy ? "px-0.5" : "p-2.5",
           scrolls ? "flex flex-1 flex-col" : !open && "flex flex-col",
           roomy && !open && "flex-1")}
         /* ROOMY RELEASES THE FIXED HEIGHT. --desk-phone-body pins the body to
@@ -678,7 +700,11 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
         style={!open && !roomy ? { height: "calc(var(--desk-phone-body) + 1.25rem)" } : undefined}
         data-testid={`${testid}-card`}
       >
-        <div ref={listRef} className={scrolls ? "kr-scroll-quiet min-h-0 flex-1 overflow-y-auto" : !open ? "flex min-h-0 flex-1 flex-col" : undefined}>
+        {/* gap-2 in the sheet: the pills are separate objects now, and the
+            space between them is what says so. */}
+        <div ref={listRef} className={cn(
+          scrolls ? "kr-scroll-quiet min-h-0 flex-1 overflow-y-auto" : !open ? "flex min-h-0 flex-1 flex-col" : undefined,
+          roomy && !open && "gap-2")}>
         {children || (
           <>
             {loading && (
@@ -1798,7 +1824,19 @@ export default function Desk() {
              corners are untouched: nothing has changed up there, and a sheet
              with two different radii top and bottom is correct here because
              the two ends are doing different jobs. */
-          deskSheet && "max-lg:mb-1 max-lg:flex max-lg:flex-col max-lg:rounded-b-[3.5rem]",
+          /* THE FOOT OF THE SHEET SITS AS CLOSE TO THE DOCK AS THE KPIs SIT TO
+             ITS HEAD. (2026-10-05.) Founder: "the space between the dock and
+             the black sheet is quite high and not even with the space between
+             the black sheet and the KPI grid at the top."
+             Measured, both in visual px: 10 above, 19 below. Above is the
+             column's own `gap-3`; below is --dock-clear's 100px of foot
+             padding, which reserves room for a dock that is 4.5rem tall and
+             sits 0.75rem off the floor — generous by 11.75 CSS px once the
+             sheet runs to the dock rather than stopping short of it. The
+             margin gives those back. It is a constant, not a ratio, so the
+             pair stays even on every screen — which is the lock the founder
+             asked for and the measurements below confirm. */
+          deskSheet && "max-lg:-mb-2 max-lg:flex max-lg:flex-col max-lg:rounded-b-[3.5rem]",
           showDecisions && "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]",
           /* PILOT — the card stays its minimal content height on a phone (it does
              NOT grow to fill). The stack is top-aligned, so closing the demo

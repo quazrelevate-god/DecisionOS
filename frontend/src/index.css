@@ -799,6 +799,68 @@
         font-size: calc(15px * var(--desk-row-scale));
         line-height: calc(1.5rem * var(--desk-row-scale));
     }
+
+    /* THE DECISION ROW AS ITS OWN PILL. (2026-10-05, founder.)
+       "Remove the inside gradient black card inside the black sheet for the
+       row list; instead use individual pill type containers for all the three
+       rows with a fair amount of spacing in between them, and the container
+       pill shouldn't be neumorphic, instead flat, and the colour subtle just
+       like how it's shown in the watch section."
+       So this is the Watch cards' recipe (.kr-glass + the .kr-desk--* tones)
+       with everything the sheet does not need taken out: no backdrop blur
+       (there is nothing behind it but flat ink — the same finding KM-35 made
+       for those four), no lift, no inset highlight. A wash and a hairline.
+       THE HUES ARE THE DESK'S OWN, deliberately: fire for high and needs for
+       medium are the exact pairs the Watch cards carry, so a colour means the
+       same thing in both halves of this screen. Low is the hue drained out
+       rather than a new grey, so the three read as one family. */
+    .kr-desk-pill {
+        --kr-row-from: 0 0% 72%;
+        --kr-row-to:   0 0% 44%;
+        border-radius: 1.15rem;
+        padding-inline: 0.875rem;
+        background: linear-gradient(145deg,
+            hsl(var(--kr-row-from) / .12),
+            hsl(var(--kr-row-to) / .06));
+        border: 1px solid hsl(0 0% 100% / .10);
+        box-shadow: none;                       /* flat — not neumorphic */
+    }
+    .kr-desk-pill[data-tone="high"]   { --kr-row-from: 6 78% 52%;   --kr-row-to: 348 55% 26%; }
+    .kr-desk-pill[data-tone="medium"] { --kr-row-from: 33 92% 56%;  --kr-row-to: 16 82% 36%; }
+    .kr-desk-pill[data-tone="low"]    { --kr-row-from: 0 0% 72%;    --kr-row-to: 0 0% 44%; }
+
+    /* A DRAFT IS THE ONE THING PAINTED SOLID. The founder: amber already
+       means draft here, and amber is also the medium band — so the draft stops
+       using a hue at all and takes white, "full solid white, not as a stroke",
+       and nothing else in this list is solid. That makes the distinction
+       structural rather than chromatic: priority is a tint, a draft is a
+       filled pill, and the two cannot be confused even in one glance. */
+    .kr-desk-pill[data-deferred="true"] {
+        background: hsl(0 0% 100%);
+        border-color: hsl(0 0% 100%);
+    }
+
+    /* The type follows the ground it is printed on. On the tinted pills that
+       is the dark sheet; on a solid white draft it is ink, or none of it would
+       be readable at all. Measured on white: title 16.1:1, meta 7.0:1. */
+    .kr-desk-row-title     { color: hsl(0 0% 83%); }
+    .kr-desk-row-meta      { color: hsl(0 0% 64%); }
+    .kr-desk-row-amount    { color: hsl(0 0% 83%); }
+    .kr-desk-row-draftword { color: hsl(0 0% 83%); }
+    .kr-desk-pill[data-deferred="true"] .kr-desk-row-title     { color: hsl(0 0% 9%); }
+    .kr-desk-pill[data-deferred="true"] .kr-desk-row-meta      { color: hsl(0 0% 36%); }
+    .kr-desk-pill[data-deferred="true"] .kr-desk-row-amount    { color: hsl(0 0% 9%); }
+    .kr-desk-pill[data-deferred="true"] .kr-desk-row-draftword { color: hsl(0 0% 20%); }
+    /* …and so does the open control, which is a white-on-black glass circle
+       everywhere else in this list and would vanish entirely on a white pill. */
+    .kr-desk-pill[data-deferred="true"] button {
+        background: hsl(0 0% 9% / .08);
+        color: hsl(0 0% 20%);
+    }
+    .kr-desk-pill[data-deferred="true"] button:hover {
+        background: hsl(0 0% 9% / .16);
+        color: hsl(0 0% 9%);
+    }
 }
 
 /* Mobile PWA (2026-09-14) — the dock, the Dex button, their pickers, the

@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import api, { formatApiError } from "../lib/api";
 import { opModel } from "../lib/operatingModel";
 import { toast } from "sonner";
-import { FlowArrow, FloppyDisk, Plus, Trash, ArrowUp, ArrowDown, ShieldCheck, ListChecks, Lightning } from "@phosphor-icons/react";
+import { FlowArrow, FloppyDisk, Plus, Trash, ArrowUp, ArrowDown, ShieldCheck, ListChecks, Lightning, CaretDown } from "@phosphor-icons/react";
 import { GlassSelect } from "./karma/GlassSelect";
 
 // 2026-10-05 — the glass fields every other Settings card uses (were square-bordered).
@@ -82,6 +82,12 @@ export function OperatingModelEditor() {
   const [model, setModel] = useState(() => withUids(opModel(tenant)));
   const [saving, setSaving] = useState(false);
   const [regen, setRegen] = useState(false);
+  /* 2026-10-05 — one pipeline open at a time. Every pipeline used to show
+     every stage with every field, so on a phone this one card was 8,400px
+     (~14 screens) and Task templates / Deadlines sat below all of it. Closed,
+     a pipeline is one line that says what it holds. Kept by position, not
+     _uid, because a save re-issues the uids. A lone pipeline starts open. */
+  const [openPi, setOpenPi] = useState(() => (model.pipelines.length === 1 ? 0 : null));
 
   // Real role list -- populates every role dropdown in the editor so
   // an owner can't pick a stage-task role that doesn't exist in the
@@ -187,7 +193,7 @@ export function OperatingModelEditor() {
     return { ...m, pipelines };
   });
 
-  const addPipeline = () => setModel((m) => ({
+  const addPipeline = () => { setOpenPi(model.pipelines.length); setModel((m) => ({
     ...m, pipelines: [...m.pipelines, {
       _uid: uid(), key: "", label: "", sub: "", approval_stage: "",
       stages: [{
@@ -195,8 +201,11 @@ export function OperatingModelEditor() {
         tasks: [], approval: null, side_effects: [],
       }],
     }],
-  }));
-  const delPipeline = (i) => setModel((m) => ({ ...m, pipelines: m.pipelines.filter((_, x) => x !== i) }));
+  })); };
+  const delPipeline = (i) => {
+    setOpenPi((o) => (o === i ? null : o !== null && o > i ? o - 1 : o));
+    setModel((m) => ({ ...m, pipelines: m.pipelines.filter((_, x) => x !== i) }));
+  };
 
   const setCat = (i, label) => setModel((m) => {
     const task_categories = [...m.task_categories];
@@ -301,14 +310,32 @@ export function OperatingModelEditor() {
 
       <p className="label-mono text-muted-foreground mb-2">Workflow pipelines</p>
       <div className="space-y-4">
-        {model.pipelines.map((p, pi) => (
+        {model.pipelines.map((p, pi) => {
+          const open = openPi === pi;
+          const nTasks = p.stages.reduce((n, s) => n + (s.tasks || []).length, 0);
+          return (
           <div key={p._uid} className="rounded-2xl bg-white/60 p-3 ring-1 ring-inset ring-slate-900/[0.06]" data-testid={`op-pipeline-${pi}`}>
+            <button type="button" onClick={() => setOpenPi(open ? null : pi)} aria-expanded={open}
+              data-testid={`op-pipeline-toggle-${pi}`}
+              className="flex min-h-11 w-full items-center gap-3 rounded-xl px-1 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-slate-900">{p.label || "Untitled pipeline"}</span>
+                <span className="block truncate text-[11px] text-muted-foreground">
+                  {p.stages.length} {p.stages.length === 1 ? "stage" : "stages"}
+                  {nTasks > 0 && ` · ${nTasks} ${nTasks === 1 ? "task" : "tasks"}`}
+                  {p.stages.some((s) => s.label) && ` · ${p.stages.map((s) => s.label || "…").join(" → ")}`}
+                </span>
+              </span>
+              <span className="shrink-0 text-xs font-medium text-slate-500">{open ? "Close" : "Edit"}</span>
+              <CaretDown size={14} weight="bold" className={`shrink-0 text-slate-500 transition-transform ${open ? "rotate-180" : ""}`} />
+            </button>
+            {open && (<div className="mt-3">
             <div className="flex items-start gap-2">
               <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <input data-testid={`op-pipeline-label-${pi}`} className={inp} placeholder="Pipeline name (e.g. Appointments)" value={p.label} onChange={(e) => setPipeline(pi, { label: e.target.value })} />
                 <input data-testid={`op-pipeline-sub-${pi}`} className={inp} placeholder="Subtitle (e.g. Booked → Completed)" value={p.sub} onChange={(e) => setPipeline(pi, { sub: e.target.value })} />
               </div>
-              <button onClick={() => delPipeline(pi)} data-testid={`op-pipeline-delete-${pi}`} title="Delete pipeline" className="mt-1 text-muted-foreground hover:text-kr-accent transition-colors">
+              <button onClick={() => delPipeline(pi)} data-testid={`op-pipeline-delete-${pi}`} title="Delete pipeline" aria-label="Delete pipeline" className={iconBtn}>
                 <Trash size={16} weight="bold" />
               </button>
             </div>
@@ -443,8 +470,10 @@ export function OperatingModelEditor() {
                 onChange={(e) => setPipeline(pi, { stuck_after_days: e.target.value.replace(/[^0-9]/g, "").slice(0, 2) })} />
               <span className="text-[11px] text-muted-foreground">working days with no movement — the people on the card and the owner are told</span>
             </div>
+            </div>)}
           </div>
-        ))}
+          );
+        })}
       </div>
       <button onClick={addPipeline} data-testid="op-add-pipeline" className="flex items-center gap-1 text-sm font-semibold text-muted-foreground hover:underline mt-3">
         <Plus size={14} weight="bold" /> Add pipeline
@@ -454,8 +483,11 @@ export function OperatingModelEditor() {
       <div className="flex flex-wrap gap-2">
         {model.task_categories.map((c, i) => (
           <div key={c._uid} className="flex items-center gap-1 rounded-xl bg-white/70 py-1 pl-2 pr-1 ring-1 ring-inset ring-slate-900/[0.06]" data-testid={`op-cat-${i}`}>
-            <input className="bg-transparent text-sm w-28 focus:outline-none" value={c.label} onChange={(e) => setCat(i, e.target.value)} />
-            <button onClick={() => delCat(i)} title="Delete" className="text-muted-foreground hover:text-kr-accent"><Trash size={13} weight="bold" /></button>
+            {/* 2026-10-05 — sized to the name (a fixed w-28 cut "Order Management" to "Order Managen" on every screen). */}
+            <input className="min-w-0 max-w-[15rem] bg-transparent text-sm focus:outline-none" aria-label="Task category name"
+              style={{ width: `${Math.min(Math.max((c.label || "").length, 6), 30) + 1}ch` }}
+              value={c.label} onChange={(e) => setCat(i, e.target.value)} />
+            <button onClick={() => delCat(i)} title="Delete category" aria-label="Delete category" className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:text-kr-accent"><Trash size={13} weight="bold" /></button>
           </div>
         ))}
         <button onClick={addCat} data-testid="op-add-cat" className="flex items-center gap-1 text-sm font-semibold text-slate-900 hover:underline px-2 py-1">

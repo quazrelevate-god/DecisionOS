@@ -136,3 +136,32 @@ def test_owners_keep_manage_team_on_the_switch_too():
     i = s.index("function OwnerExclusionsCard()")
     assert 'locked={locked}' in s[i:i + 4000]
     assert "· always on" in src("components/settings/AccessSwitch.js")
+
+
+# ---- 2026-10-05: Settings on a phone (founder: "check the settings page in mobile view") ----
+def test_one_pipeline_is_open_at_a_time():
+    # Every pipeline showed every stage with every field: 8,400px on a phone.
+    s = src("components/OperatingModelEditor.js")
+    assert "const [openPi, setOpenPi] = useState(() => (model.pipelines.length === 1 ? 0 : null));" in s
+    assert "onClick={() => setOpenPi(open ? null : pi)} aria-expanded={open}" in s
+    assert "data-testid={`op-pipeline-toggle-${pi}`}" in s
+    assert "{open && (<div className=\"mt-3\">" in s
+    assert "setOpenPi(model.pipelines.length)" in s            # a new pipeline opens for its name
+    assert 'title="Delete pipeline" aria-label="Delete pipeline" className={iconBtn}' in s
+
+
+def test_a_task_category_shows_its_whole_name():
+    s = src("components/OperatingModelEditor.js")
+    assert "bg-transparent text-sm w-28" not in s
+    assert "style={{ width: `${Math.min(Math.max((c.label || \"\").length, 6), 30) + 1}ch` }}" in s
+
+
+def test_the_audit_log_fits_a_phone():
+    s = src("pages/Settings.js")
+    assert "min-w-[32rem]" not in s
+    assert '<table className="w-full text-left text-sm" data-testid="audit-table">' in s
+
+
+def test_the_open_phone_tab_is_not_clipped_by_the_row_end():
+    s = src("pages/Settings.js")
+    assert "flex scroll-px-1 items-center gap-1 overflow-x-auto rounded-pill p-1" in s

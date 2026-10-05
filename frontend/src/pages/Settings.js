@@ -666,7 +666,9 @@ function AuditLogCard() {
         <p className="mt-4 text-sm text-muted-foreground">Nothing recorded yet.</p>
       ) : (
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[32rem] text-left text-sm" data-testid="audit-table">
+          {/* 2026-10-05 — no 32rem floor: on a phone it pushed "Who" off screen
+              behind a sideways scroll. Three short columns fit; the text wraps. */}
+          <table className="w-full text-left text-sm" data-testid="audit-table">
             <thead>
               <tr className="text-xs text-muted-foreground">
                 <th className="py-2 pr-3 font-medium">When</th><th className="py-2 pr-3 font-medium">What</th><th className="py-2 font-medium">Who</th>
@@ -1091,7 +1093,9 @@ export default function Settings() {
       {/* Below lg the sections are a scrolling row of tabs (KM-5's pressed
           track); from lg up they are the side panel (SettingsShell). */}
       <div className="lg:hidden">
-        <div className="kr-pressed mb-3 flex items-center gap-1 overflow-x-auto rounded-pill p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        {/* scroll-px-1: the open tab scrolls into view INSIDE the row's
+            padding, not flush against its rounded end (Workspace was clipped). */}
+        <div className="kr-pressed mb-3 flex scroll-px-1 items-center gap-1 overflow-x-auto rounded-pill p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
              role="tablist" aria-label="Settings sections" data-testid="settings-tabs">
           {visibleTabs.map((t) => {
             const isActive = t.key === tab;

@@ -276,7 +276,14 @@ function DeskRow({ r, first, testid, roomy = false }) {
          holding them; six of those pixels are here, three times over. Desktop
          keeps its 7 — it has the room and the columns are read at arm's
          length. */
-      className={`flex cursor-pointer items-center justify-between gap-3 ${roomy ? "min-h-0 flex-1 max-h-[6.5rem] py-2" : "max-lg:py-1 py-[7px]"} ${first ? "" : "border-t border-white/[.14]"} ${
+      /* 2026-10-05 — a FLOOR under the roomy row. `flex-1` lets the three rows
+         share the board's height; with `min-h-0` they could shrink below their
+         own two lines, so when the demo banner steals ~280px the title+meta
+         overflowed each shrunken box and the rows looked congested/overlapping.
+         A min-height just above the content (1-line title + 1-line meta ≈ 4.1rem)
+         stops the crush; when even that will not fit, the list scrolls (the
+         container below gets overflow-y-auto in roomy) instead of overlapping. */
+      className={`flex cursor-pointer items-center justify-between gap-3 ${roomy ? "min-h-[4.25rem] flex-1 max-h-[6.5rem] py-2" : "max-lg:py-1 py-[7px]"} ${first ? "" : "border-t border-white/[.14]"} ${
         /* ASK-42 E — THE MARK IS LOUDER. It was a 2px bar and a 5% white wash,
            which on near-black is a shade of the same black: the founder could
            see it only once they knew where to look. It is the SAME grammar,
@@ -636,7 +643,7 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
         style={!open && !roomy ? { height: "calc(var(--desk-phone-body) + 1.25rem)" } : undefined}
         data-testid={`${testid}-card`}
       >
-        <div className={scrolls ? "kr-scroll-quiet min-h-0 flex-1 overflow-y-auto" : !open ? "flex min-h-0 flex-1 flex-col" : undefined}>
+        <div className={scrolls ? "kr-scroll-quiet min-h-0 flex-1 overflow-y-auto" : !open ? cn("flex min-h-0 flex-1 flex-col", roomy && "overflow-y-auto kr-scroll-quiet") : undefined}>
         {children || (
           <>
             {loading && (

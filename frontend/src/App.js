@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import "./App.css";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { Toaster } from "./components/ui/sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { hasPerm } from "./lib/perms";
@@ -171,6 +171,18 @@ function NativeBack() {
   return null;
 }
 
+/* B?? — the page-level ErrorBoundary now RESETS on navigation. It only clears
+   its error when `resetKey` changes (ErrorBoundary.jsx), and nothing supplied
+   one — so a screen that threw during render left the whole shell stuck on the
+   "Something broke here" card until a manual reload, even after the user tried
+   to navigate away. Feeding the pathname as resetKey (the follow-up the comment
+   below anticipated) clears the error the moment the route changes. Must sit
+   INSIDE BrowserRouter so useLocation has a router context. */
+function RoutedBoundary({ children }) {
+  const location = useLocation();
+  return <ErrorBoundary resetKey={location.pathname}>{children}</ErrorBoundary>;
+}
+
 function App() {
   // UI-SCALE — the whole app zooms with the screen (see hooks/useUiScale).
   useUiScale();
@@ -185,8 +197,8 @@ function App() {
               ReferenceError in UpdateForm was unmounting the entire
               React tree). If the boundary itself is what needs replacing
               on route change, wrap in a keyed remount at the page level
-              in a follow-up. */}
-          <ErrorBoundary>
+              in a follow-up. (Done — RoutedBoundary feeds resetKey.) */}
+          <RoutedBoundary>
           <Routes>
             {/* KM-55 — the one place that answers "where does a signed-in user
                 belong?". "/" used to do it, but "/" is the marketing site now.
@@ -334,7 +346,7 @@ function App() {
             />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-          </ErrorBoundary>
+          </RoutedBoundary>
         </BrowserRouter>
         <Toaster position="top-right" />
       </AuthProvider>

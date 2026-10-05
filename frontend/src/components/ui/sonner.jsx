@@ -33,6 +33,26 @@ const Toaster = ({
     <Sonner
       theme="light"
       className="toaster group"
+      /* SAFE-AREA (2026-10-05) — the toaster portals into <body>, which carries
+         the app's `zoom` (ASK-43), so Sonner's default 32px/16px offset is
+         PAINTED at 0.8× — ~26px — and a top-right toast on a notched phone sits
+         under the status bar / Dynamic Island. The --sa-* tokens are already
+         env()/scale-corrected, so offsetting by them lands the toast just below
+         whatever inset the device reports, at any proportion and orientation.
+         Both offset (desktop) and mobileOffset (<600px) are set so the phone
+         gets it too. */
+      offset={{
+        top: "calc(var(--sa-top) + 0.75rem)",
+        right: "calc(var(--sa-right) + 0.75rem)",
+        bottom: "calc(var(--sa-bottom) + 0.75rem)",
+        left: "calc(var(--sa-left) + 0.75rem)",
+      }}
+      mobileOffset={{
+        top: "calc(var(--sa-top) + 0.75rem)",
+        right: "calc(var(--sa-right) + 0.75rem)",
+        bottom: "calc(var(--sa-bottom) + 0.75rem)",
+        left: "calc(var(--sa-left) + 0.75rem)",
+      }}
       toastOptions={{
         unstyled: false,
         classNames: {

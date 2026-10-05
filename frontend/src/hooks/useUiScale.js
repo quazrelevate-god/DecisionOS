@@ -77,9 +77,21 @@ export function useUiScale() {
     const root = document.documentElement;
     document.body.classList.add("ui-scale");
     let raf = 0;
+    // B?? — the scale is a pure function of WIDTH (UI_SCALE_STEPS). The soft
+    // keyboard changes innerHeight, not innerWidth, so a keyboard open/close
+    // must not re-write --ui-scale: writing it re-runs the full-document `zoom`
+    // recalc (.ui-scale { zoom: var(--ui-scale) }), which reflowed the whole
+    // app mid-transition when a dialog autofocused a field. Compare the COMPUTED
+    // scale (not raw width) so only an actual step change applies — this also
+    // absorbs the few-px innerWidth jitter some Android WebViews emit with the
+    // keyboard. Rotation / desktop resize across a step still re-applies.
+    let lastScale = null;
     const apply = () => {
       raf = 0;
-      root.style.setProperty("--ui-scale", computeUiScale(window.innerWidth).toFixed(1));
+      const next = computeUiScale(window.innerWidth).toFixed(1);
+      if (next === lastScale) return;
+      lastScale = next;
+      root.style.setProperty("--ui-scale", next);
     };
     const onResize = () => { if (!raf) raf = requestAnimationFrame(apply); };
     apply();

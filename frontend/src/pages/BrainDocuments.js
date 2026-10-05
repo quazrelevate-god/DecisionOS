@@ -264,7 +264,15 @@ export function DocumentsPanel() {
         Dump the policies, filings, contracts and old reports here — employees can find them by asking Dex or searching.
       </p>
 
-      {loading && <p className="font-mono text-sm">Loading…</p>}
+      {/* B?? — skeleton rows instead of a bare "Loading…", so the list area
+          doesn't flash empty-then-content while the docs query resolves. */}
+      {loading && (
+        <div className="animate-pulse space-y-3" aria-hidden="true">
+          <div className="h-16 rounded-xl bg-slate-200/60" />
+          <div className="h-16 rounded-xl bg-slate-200/60" />
+          <div className="h-16 rounded-xl bg-slate-200/50" />
+        </div>
+      )}
       {!loading && docs.length === 0 && (
         <EmptyState
           title={q || kind ? "No documents match your search" : "No documents in the Brain yet"}

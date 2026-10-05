@@ -134,4 +134,5 @@ def reroute_note(entity_from: str, entity_to: str) -> Optional[str]:
         return None
     label, _need, plural = _AREAS.get(entity_from) or ("that", None, False)
     verb = "are" if plural else "is"
-    return f"({label[0].upper() + label[1:]} {verb}n't part of your access — this answer uses the records you can open.)"
+    source = "the company documents you can read" if entity_to == "documents" else "the records you can open"
+    return f"({label[0].upper() + label[1:]} {verb}n't part of your access — this answer uses {source}.)"

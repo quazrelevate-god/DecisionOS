@@ -266,9 +266,6 @@ def test_desk_summary_counters_run_side_by_side(monkeypatch):
     monkeypatch.setattr(desk, "db", db)
     monkeypatch.setattr(fs, "db", db)
 
-    async def _narrative(**kw):
-        return "stub"
-    monkeypatch.setattr(desk, "ai_desk_narrative", _narrative)
     db.tasks.docs.append({"tenant_id": "t1", "status": "open", "due_date": "2000-01-01", "assignee_id": "u1"})
 
     async def go():
@@ -283,7 +280,7 @@ def test_desk_summary_counters_run_side_by_side(monkeypatch):
     # bound above is unchanged.
     assert db.calls == 10
     assert out["counters"]["delayed"] == 1
-    assert out["narrative"] == "stub" and out["greeting"].endswith("Priya")
+    assert "1 task is delayed" in out["narrative"] and out["greeting"].endswith("Priya")
 
 
 # --------------------------------------------------------------------------

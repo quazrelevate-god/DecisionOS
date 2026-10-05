@@ -99,6 +99,12 @@ export default function Brain() {
     }
   }, [ctxId, t, canAsk]);
 
+  // 2026-10-05 — a Document source chip lands here as ?docs=1&doc=<id>.
+  const focusDoc = searchParams.get("doc");
+  useEffect(() => {
+    if (searchParams.get("docs")) setShowDocs(true);
+  }, [searchParams]);
+
   // The header's global search lands here as ?q=…. Ask it once, on arrival.
   const seededRef = useRef(false);
   useEffect(() => {
@@ -191,7 +197,7 @@ export default function Brain() {
 
       {showDocs ? (
         <div className="order-1 mb-6 lg:mb-0 lg:mt-6" data-testid="brain-documents">
-          <DocumentsPanel />
+          <DocumentsPanel focusId={focusDoc} />
         </div>
       ) : (
         <div className="order-1 mb-6 space-y-5 lg:mb-6 lg:mt-0" data-testid="brain-conversation">

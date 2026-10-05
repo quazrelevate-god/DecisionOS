@@ -53,10 +53,17 @@ def test_est_cost_unknown_provider_uses_defaults():
 
 
 def test_set_usage_tenant_sets_contextvar_only_when_truthy():
-    us.set_usage_tenant("tenant-xyz")
-    assert us._ctx_tenant.get() == "tenant-xyz"
-    us.set_usage_tenant(None)                        # falsy -> unchanged
-    assert us._ctx_tenant.get() == "tenant-xyz"
+    before = us._ctx_tenant.get()
+    try:
+        us.set_usage_tenant("tenant-xyz")
+        assert us._ctx_tenant.get() == "tenant-xyz"
+        us.set_usage_tenant(None)                        # falsy -> unchanged
+        assert us._ctx_tenant.get() == "tenant-xyz"
+    finally:
+        # 2026-10-05 — put it back: left set, every later test in this worker
+        # ran the AI guard's consent + quota checks against "tenant-xyz"
+        # (test_llm_limits failed depending on test order).
+        us._ctx_tenant.set(before)
 
 
 # --- resilient chat factory ------------------------------------------------

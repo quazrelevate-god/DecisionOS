@@ -63,6 +63,7 @@ def _wire(monkeypatch, test_db):
     # isolated Mongo for both retrieval + provenance stores
     monkeypatch.setattr(br, "db", test_db)
     monkeypatch.setattr(bc, "db", test_db)
+    monkeypatch.setattr(be, "db", test_db)   # 2026-10-05: indexing reads consent + the live doc
 
     if not LIVE:
         async def fake_embed_texts(texts, **k):
@@ -73,6 +74,9 @@ def _wire(monkeypatch, test_db):
         monkeypatch.setattr(be, "embed_texts", fake_embed_texts)
         monkeypatch.setattr(be, "embedding_dim", lambda task="default": _DIM)
         monkeypatch.setattr(emb, "embed_query", fake_embed_query)
+        # the production relevance floor is calibrated for real embeddings
+        monkeypatch.setattr(br, "RAG_MIN_SCORE", 0.0)
+        monkeypatch.setattr(br, "RAG_BEST_MARGIN", 1.0)
     q.reset_client()   # fresh in-memory Qdrant
 
 
@@ -88,8 +92,10 @@ async def _seed_brain(test_db):
     await test_db.brain_context.create_index(
         [("title", "text"), ("tags", "text"), ("why", "text")],
         name="brain_context_text", weights={"title": 6, "tags": 3, "why": 1})
+    from services.ai_consent import build_grant_payload
     await test_db.tenants.insert_one(
-        {"id": seed.TENANT, "company_name": "Weave Co", "industry": "Textile Manufacturing"})
+        {"id": seed.TENANT, "company_name": "Weave Co", "industry": "Textile Manufacturing",
+         "ai_consent": build_grant_payload(actor_user_id=seed.OWNER, actor_email="o@weave.test")})
     # documents -> Mongo catalog + embedded chunks in Qdrant
     records = [seed.doc_record(d) for d in seed.DOCS]
     await test_db.brain_documents.insert_many([dict(r) for r in records])

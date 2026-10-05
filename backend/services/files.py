@@ -113,7 +113,28 @@ async def _read_reference_text(rec: dict, tenant_id: str = "", max_chars: int = 
         logger.warning(f"[capture-ref] could not fetch {rec.get('id')}: {e}")
         return ""
     try:
-        # Images & PDFs -> general vision reader (business cards, lists, notes, invoices — anything).
+        # 2026-10-05 — a PDF with a text layer is READ, not looked at: the vision
+        # reader is asked for a "concise" extraction, so a 20-page policy came back
+        # summarised, and every page was a paid AI call. Scanned PDFs (no text
+        # layer) still go to the vision reader below.
+        if ctype == "application/pdf" or fname.lower().endswith(".pdf"):
+            try:
+                import io as _io
+                from pypdf import PdfReader
+                reader = PdfReader(_io.BytesIO(data))
+                pages = []
+                for i, page in enumerate(reader.pages):
+                    t = (page.extract_text() or "").strip()
+                    if t:
+                        pages.append(f"[page {i + 1}]\n{t}")
+                    if sum(len(p) for p in pages) >= max_chars:
+                        break
+                text = "\n\n".join(pages)
+                if len(text) >= 200:
+                    return f"[{fname}]\n" + text[:max_chars]
+            except Exception as e:
+                logger.info(f"[capture-ref] no text layer read for {fname}: {e}")
+        # Images & scanned PDFs -> general vision reader (business cards, lists, notes, invoices — anything).
         if ctype.startswith("image/") or ctype == "application/pdf":
             import tempfile
             import os as _os
@@ -144,6 +165,13 @@ async def _read_reference_text(rec: dict, tenant_id: str = "", max_chars: int = 
             import io as _io
             doc = docx.Document(_io.BytesIO(data))
             text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+            # 2026-10-05 — tables too (price lists, rate cards and leave grids
+            # live in tables, and were dropped).
+            for table in doc.tables:
+                for row in table.rows:
+                    cells = [c.text.strip() for c in row.cells]
+                    if any(cells):
+                        text += "\n" + " | ".join(cells)
             return f"[{fname}]\n" + text[:max_chars]
         # Plain text.
         if ctype.startswith("text/") or fname.lower().endswith(".txt"):

@@ -288,70 +288,11 @@ def _narrative(*, delayed: int, completed_yday: int, pending_decisions: int,
     return prose
 
 
-# --- Sprint 5 (E3-06): LLM-generated Desk narrative with a per-tenant 15-min cache ---
-import json as _json
-import hashlib as _hashlib
-import logging as _logging
-
-_desk_log = _logging.getLogger("decisionos")
-DESK_NARRATIVE_TTL = 900  # seconds (15 min): identical counters within the window reuse the narrative
-
-
-async def ai_desk_narrative(*, delayed, completed_yday, pending_decisions, cash, is_owner, tenant_id,
-                            sees_money: bool = True, currency: str = "INR") -> str:
-    """The Desk briefing, LLM-generated from the same counters the template used, cached per tenant
-    by a hash of those counters (so it only regenerates when the numbers actually change). Falls back
-    to the deterministic _narrative on any cache/LLM error -- the Desk must never break."""
-    counters = {"delayed": int(delayed or 0), "completed_yesterday": int(completed_yday or 0),
-                "pending_decisions": int(pending_decisions or 0) if is_owner else 0,
-                "is_owner": bool(is_owner)}
-    # JOURNEY-1 — the money counters go to the model only for someone who can
-    # see money, and with the amount already written in the company's words
-    # (the model wrote "$685,000" from a bare number).
-    if sees_money:
-        over = int(cash.get("overdue_receivables_amount") or 0)
-        counters.update({"cash_clear": bool(cash.get("clear")),
-                         "overdue_receivables": money_words(over, currency) if over else "none",
-                         "payments_to_match": int(cash.get("unmatched_payments") or 0)})
-    fallback = _narrative(delayed=delayed, completed_yday=completed_yday,
-                          pending_decisions=pending_decisions, cash=cash, is_owner=is_owner,
-                          sees_money=sees_money, currency=currency)
-    key = _hashlib.md5(_json.dumps(counters, sort_keys=True).encode()).hexdigest()
-    now = datetime.now(timezone.utc)
-    try:
-        cached = await db.desk_narrative_cache.find_one(
-            {"tenant_id": tenant_id, "key": key, "expires_at": {"$gt": now.isoformat()}},
-            {"_id": 0, "narrative": 1})
-        if cached and cached.get("narrative"):
-            return cached["narrative"]
-    except Exception as e:
-        _desk_log.debug(f"desk narrative cache read failed: {e}")
-
-    text = fallback
-    try:
-        from core import claude_chat, model_for
-        from prompts import render
-        from emergentintegrations.llm.chat import UserMessage
-        system = render("desk.narrative")
-        chat = claude_chat(task="desk.narrative", session_id=f"desk-{tenant_id}",
-                           system_message=system).with_model(*model_for("desk.narrative"))
-        # ensure_ascii=False — the model reads "₹6.85 lakh", not "\u20b96.85 lakh".
-        resp = await chat.send_message(UserMessage(text=_json.dumps(counters, ensure_ascii=False)))
-        cleaned = (resp or "").strip().strip('"')[:600]
-        if cleaned:
-            text = cleaned
-    except Exception as e:
-        _desk_log.warning(f"ai_desk_narrative LLM failed, using template: {e}")
-
-    try:
-        await db.desk_narrative_cache.update_one(
-            {"tenant_id": tenant_id, "key": key},
-            {"$set": {"narrative": text, "created_at": now.isoformat(),
-                      "expires_at": (now + timedelta(seconds=DESK_NARRATIVE_TTL)).isoformat()}},
-            upsert=True)
-    except Exception as e:
-        _desk_log.debug(f"desk narrative cache write failed: {e}")
-    return text
+# 2026-10-05 (AI audit) — the Desk briefing is the template above, not an AI
+# call. The LLM version (E3-06) rewrote four counters into prose on every
+# /desk/summary poll -- every page, every 60 s -- and no screen displayed it:
+# 41% of all AI calls and ~24% of a trial company's monthly AI allowance,
+# spent on text nobody read. The `narrative` field stays (template, free).
 
 
 # Request models consolidated into models/ (Epic 8 Sprint 5).
@@ -383,10 +324,10 @@ async def desk_summary(user: dict = Depends(get_current_user)):
 
     from core.permissions import user_perms
     tenant_row = tenant_row or {}
-    narrative = await ai_desk_narrative(
+    narrative = _narrative(
         delayed=delayed, completed_yday=completed_yday,
         pending_decisions=pending_decisions, cash=cash,
-        is_owner=is_owner, tenant_id=tid,
+        is_owner=is_owner,
         sees_money="finance" in user_perms(user),
         currency=tenant_row.get("currency") or "INR",
     )

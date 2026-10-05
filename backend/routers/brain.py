@@ -239,6 +239,12 @@ async def _users_map(tid):
     return {u["id"]: u for u in await db.users.find({"tenant_id": tid}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(500)}
 
 
+# 2026-10-05 — a passage reaches the answer whole. At 600 characters, "what is
+# the reject limit?" was answered "the policy doesn't say" while the limit sat
+# in the same chunk, past the cut. A chunk is at most brain_embed.CHUNK_SIZE.
+_PASSAGE_CHARS = 2400
+
+
 async def _enrich_with_brain(plan: dict, scope: dict, user: dict, question: str = "") -> dict:
     """FIX-007-C (S4-04): auxiliary retrieval pass — every /ask call
     now ALSO fetches top-N matching brain_context (provenance) and
@@ -251,9 +257,12 @@ async def _enrich_with_brain(plan: dict, scope: dict, user: dict, question: str 
     tid = scope["tenant_id"]
     # Cheap parallel-safe async calls — no I/O race because they hit
     # different collections + text indexes.
+    # 2026-10-05 — no keywords, no keyword search: an empty query returned the
+    # company's most recent documents, which then counted as "evidence" for
+    # every question (so "I don't know" never happened).
     doc_hits = await brain_retrieval.search_documents(
         tenant_id=tid, user=user, query=q_txt,
-    )
+    ) if q_txt else []
     ctx_hits = await brain_retrieval.search_context(
         tenant_id=tid, user=user, query=q_txt,
     )
@@ -261,7 +270,8 @@ async def _enrich_with_brain(plan: dict, scope: dict, user: dict, question: str 
     # plan keywords), RRF-fused with the keyword doc hits. Passages are the actual
     # relevant text the answer quotes; the deterministic metrics path is untouched.
     passages: list = []
-    chunk_hits = await brain_retrieval.search_chunks(user=user, query=(question or q_txt), limit=6)
+    chunk_hits = await brain_retrieval.search_chunks(user=user, query=(question or q_txt), limit=6,
+                                                     alt_query=q_txt)
     if chunk_hits:
         kw_ids = [d.get("id") for d in doc_hits]
         vec_doc_ids: list = []
@@ -282,7 +292,7 @@ async def _enrich_with_brain(plan: dict, scope: dict, user: dict, question: str 
         fused_docs = [by_id[i] for i in fused_ids if i in by_id]
         doc_hits = fused_docs or doc_hits
         passages = [{"title": c.get("title"), "doc_id": c.get("doc_id"),
-                     "text": (c.get("text") or "")[:600]} for c in chunk_hits[:5]]
+                     "text": (c.get("text") or "")[:_PASSAGE_CHARS]} for c in chunk_hits[:4]]
     return {"document_hits": doc_hits, "knowledge_hits": ctx_hits, "passages": passages}
 
 
@@ -863,7 +873,7 @@ async def _answer(question, kpis, table, lang,
     # payoff, so the answer can quote the source text, not just the doc summary.
     if passages:
         sample["relevant_document_passages"] = [
-            {"title": p.get("title"), "text": (p.get("text") or "")[:600]} for p in passages[:5]
+            {"title": p.get("title"), "text": (p.get("text") or "")[:_PASSAGE_CHARS]} for p in passages[:4]
         ]
     # E3-08.1: retrieved document summaries / passages / past-context are user-authored
     # content that could carry an injection -- arm the guard whenever we include retrieved data.
@@ -938,6 +948,11 @@ async def _named_matches(entity: str, plan: dict, scope: dict, user: dict) -> in
     return best
 
 
+# A document answers a closed area's question only on a STRONG match (calibrated:
+# right passage 0.40-0.73, unrelated <= 0.38 on text-embedding-3-small).
+_DOC_REROUTE_SCORE = 0.45
+
+
 async def _resolve_access(plan: dict, question: str, user: dict, scope: dict):
     """(plan, refusal message or None). 2026-10-05 — access follows the data.
 
@@ -952,6 +967,17 @@ async def _resolve_access(plan: dict, question: str, user: dict, scope: dict):
     entity = plan.get("primary_entity")
     if brain_rbac.entity_open(user, entity):
         return plan, None
+    # 2026-10-05 — a POLICY can answer what the ledger would: "when is the balance
+    # payment due from export buyers?" is in the payment-terms policy every member
+    # may read, and was refused as Finance. A strong match in a document the asker
+    # can open (search_chunks applies its visibility) answers it from there.
+    kw = plan.get("keywords") or []
+    docs = await brain_retrieval.search_chunks(
+        user=user, query=question, limit=3, alt_query=(kw if isinstance(kw, str) else " ".join(kw)),
+        min_score=_DOC_REROUTE_SCORE)
+    if docs:
+        return {**plan, "primary_entity": "documents", "rerouted_from": entity, "needs_finance": False,
+                "on_time_analysis": False, "status": None, "group_by": None}, None
     if not brain_rbac.asks_for_money(question):
         scores = []
         for alt in brain_rbac.REROUTE_ORDER:

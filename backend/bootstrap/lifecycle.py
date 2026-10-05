@@ -1123,6 +1123,10 @@ async def lifespan(app):
     # Epic 10 S6: apply runtime platform config (model routes, Sarvam) at boot.
     from services.platform_config import load_all as _load_platform_config
     asyncio.create_task(_load_platform_config())
+    # 2026-10-05: the Company Brain index catches up with the current store/model
+    # (documents uploaded while AI was off, or before a store/model change).
+    from services.ai.brain_embed import startup_backfill as _brain_backfill
+    asyncio.create_task(_brain_backfill())
     try:
         yield
     finally:

@@ -168,7 +168,13 @@ function UploadDialog({ onClose, onUploaded }) {
 // -----------------------------------------------------------------------------
 // Documents panel — used as a tab inside /brain
 // -----------------------------------------------------------------------------
-export function DocumentsPanel() {
+const INDEX_NOTE = {
+  waiting_for_ai_consent: "Not searchable by Dex yet — AI is switched off for this company (Settings › Business).",
+  no_text: "Dex can't read text in this file — keyword search still finds it by title and tags.",
+  failed: "Dex couldn't read this file — it will retry on the next restart.",
+};
+
+export function DocumentsPanel({ focusId = null }) {
   const { user } = useAuth();
   const isOwner = user?.role === "owner" || (user?.permissions || []).includes("team_manage");
   const [docs, setDocs] = useState([]);
@@ -198,6 +204,11 @@ export function DocumentsPanel() {
   // search box calls load() itself, debounced, just below.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); /* initial load */ }, []);
+  // 2026-10-05 — opened from an answer's Document source: show that one.
+  useEffect(() => {
+    if (!focusId || loading) return;
+    document.querySelector(`[data-testid="brain-doc-card-${focusId}"]`)?.scrollIntoView({ block: "center" });
+  }, [focusId, loading, docs]);
 
   const onQChange = (v) => {
     setQ(v);
@@ -283,7 +294,7 @@ export function DocumentsPanel() {
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4" data-testid="brain-doc-grid">
           {docs.map((d) => (
             <div key={d.id} data-testid={`brain-doc-card-${d.id}`}
-              className="nm-tile shadow-sm p-4 flex flex-col gap-3 transition-shadow">
+              className={`nm-tile shadow-sm p-4 flex flex-col gap-3 transition-shadow ${d.id === focusId ? "ring-2 ring-brand-600" : ""}`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <File size={18} weight="bold" className="shrink-0" />
@@ -292,6 +303,10 @@ export function DocumentsPanel() {
                 <span className={`px-2 py-0.5 border border-border text-[10px] font-mono  shrink-0 ${KIND_TINT[d.kind] || "bg-white"}`}>{d.kind}</span>
               </div>
               {d.summary && <p className="text-xs text-muted-foreground leading-relaxed">{d.summary}</p>}
+              {/* 2026-10-05 — why Ask can't find something in this file. */}
+              {INDEX_NOTE[d.index_state] && (
+                <p className="text-[11px] text-caution-600" data-testid={`brain-doc-index-${d.id}`}>{INDEX_NOTE[d.index_state]}</p>
+              )}
               {(d.tags || []).length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {d.tags.map((t) => (

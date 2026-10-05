@@ -93,10 +93,12 @@ async def search_documents(
         # Fallback — keyword + regex when the text index either fails
         # or the query happens to miss it entirely.
         tokens = _docs_keywords(q)
+        import re as _re
+        rq = _re.escape(q)   # 2026-10-05: the asker's words, not a pattern
         regex_or = [
-            {"title":             {"$regex": q, "$options": "i"}},
-            {"summary":           {"$regex": q, "$options": "i"}},
-            {"original_filename": {"$regex": q, "$options": "i"}},
+            {"title":             {"$regex": rq, "$options": "i"}},
+            {"summary":           {"$regex": rq, "$options": "i"}},
+            {"original_filename": {"$regex": rq, "$options": "i"}},
         ]
         if tokens:
             regex_or += [{"keywords": {"$in": tokens}},
@@ -155,21 +157,48 @@ def cites_from_hits(
             "id": h.get("id"),
             "title": h.get("title") or h.get("original_filename") or "Document",
             "source_type": "brain_document",
+            # 2026-10-05 — the Sources chips read `type` + `deep_link`; Brain cites
+            # carried neither, so they showed no label and went nowhere.
+            "type": "document",
+            "deep_link": f"/brain?docs=1&doc={h.get('id')}",
             "kind": h.get("kind"),
             "tags": h.get("tags") or [],
             "created_at": h.get("created_at"),
         })
     for h in (context_hits or []):
+        kind, link = _context_link(h)
         out.append({
             "id": h.get("id"),
             "title": h.get("title") or "Note",
             "source_type": "brain_context",
+            "type": kind,
+            "deep_link": link,
             "kind": h.get("kind"),
             "outcome": h.get("outcome"),
             "tags": h.get("tags") or [],
             "created_at": h.get("created_at"),
         })
     return out
+
+
+def _context_link(h: dict) -> tuple:
+    """(chip label key, where it opens) for a Brain memory row, by the record it
+    describes. The record's own screen still checks access when it opens."""
+    st, sid = h.get("source_type") or "", h.get("source_id") or ""
+    rel = h.get("related_ids") or {}
+    if st == "decision" and sid:
+        return "decision", f"/?focus=approval:{sid}"
+    if st == "workflow" and sid:
+        return "workflow", f"/my-work?view=workflows&wf={sid}&wf_type={rel.get('workflow_type') or ''}"
+    if st == "task" and sid:
+        return "task", f"/my-work?task={sid}"
+    if st == "complaint":
+        return "complaint", (f"/contacts/{rel['contact_id']}" if rel.get("contact_id") else "/crm")
+    if st in ("invoice", "payment", "expense"):
+        return st, "/ledger"
+    if st == "meeting":
+        return "meeting", None          # Meeting Notes is retired from the app (owner-only)
+    return "memory", None
 
 
 # --- E3-10.1: semantic (vector) retrieval over embedded chunks --------------
@@ -193,26 +222,69 @@ def _chunk_visible(chunk: dict, user: dict) -> bool:
     return False
 
 
-async def search_chunks(*, user: dict, query: str, limit: int = 8) -> list[dict]:
-    """Semantic retrieval (E3-10.1): embed the question, search the tenant's Qdrant
-    chunks, and enforce the SAME per-document RBAC as keyword search. Over-fetches a
-    buffer then filters in Python (reusing the visibility rules), so access can never
-    leak. Returns [] on any error -- retrieval is best-effort auxiliary context."""
+# 2026-10-05 — relevance cut-off, calibrated on text-embedding-3-small with real
+# company passages: relevant English/Hindi questions scored 0.40-0.73 against
+# their passage, unrelated questions 0.16-0.29. Below the floor a passage is
+# not evidence; within a match, only passages close to the best one count.
+# Without this the top passages were ALWAYS handed to the answer, relevant or
+# not, so "I don't know" never happened for a company with documents.
+import os as _os
+RAG_MIN_SCORE = float(_os.environ.get("RAG_MIN_SCORE", "0.30"))
+RAG_BEST_MARGIN = float(_os.environ.get("RAG_BEST_MARGIN", "0.15"))
+
+
+async def search_chunks(*, user: dict, query: str, limit: int = 8, alt_query: str = "",
+                        min_score: Optional[float] = None) -> list[dict]:
+    """Semantic retrieval: embed the question (and, when given, the planner's English
+    keywords -- a Tanglish question embeds weakly, its keywords do not), search the
+    tenant's chunks, keep only RELEVANT ones (floor + margin to the best), and check
+    each against the LIVE document: deleted -> gone, visibility/department/roles as
+    they are NOW (an edit needs no re-embedding). Returns [] on any error -- retrieval
+    is best-effort auxiliary context."""
     q = (query or "").strip()
     tenant_id = user.get("tenant_id")
     if not q or not tenant_id:
         return []
     try:
+        import asyncio as _asyncio
         from integrations.embeddings import embed_query
-        from integrations import qdrant
-        vec = await embed_query(q, tenant_id=tenant_id)
-        if not vec:
+        from services.ai import brain_embed
+        if not await brain_embed.has_chunks(tenant_id):
+            return []          # nothing indexed: don't embed (and send) the question at all
+        texts = [q] + ([alt_query.strip()] if (alt_query or "").strip() and alt_query.strip() != q else [])
+        vecs = [v for v in await _asyncio.gather(*[embed_query(t, tenant_id=tenant_id) for t in texts]) if v]
+        if not vecs:
             return []
-        # Over-fetch so RBAC filtering still leaves enough visible hits.
-        buffer = max(limit * 5, 30)
-        candidates = await qdrant.search(tenant_id, vec, k=min(buffer, 100))
-        visible = [c for c in candidates if _chunk_visible(c, user)]
-        return visible[:limit]
+        buffer = min(max(limit * 5, 30), 100)
+        best: dict = {}
+        for vec in vecs:
+            for c in await brain_embed.search_vectors(tenant_id, vec, k=buffer):
+                key = (c.get("doc_id"), c.get("chunk_idx"))
+                if key not in best or c.get("score", 0) > best[key].get("score", 0):
+                    best[key] = c
+        ranked = sorted(best.values(), key=lambda c: c.get("score", 0), reverse=True)
+        if not ranked:
+            return []
+        floor = RAG_MIN_SCORE if min_score is None else min_score
+        top = ranked[0].get("score", 0)
+        ranked = [c for c in ranked if c.get("score", 0) >= max(floor, top - RAG_BEST_MARGIN)]
+        ids = list({c.get("doc_id") for c in ranked if c.get("doc_id")})
+        live = {}
+        if ids:
+            async for d in db.brain_documents.find(
+                    {"tenant_id": tenant_id, "id": {"$in": ids}, "is_deleted": {"$ne": True}},
+                    {"_id": 0, "id": 1, "visibility": 1, "department": 1, "roles_allowed": 1,
+                     "uploaded_by": 1, "title": 1, "original_filename": 1}):
+                live[d["id"]] = d
+        out = []
+        for c in ranked:
+            d = live.get(c.get("doc_id"))
+            if not d:
+                continue                      # deleted, or never a document of this company
+            current = {**c, **brain_embed._doc_payload(d)}
+            if _chunk_visible(current, user):
+                out.append(current)
+        return out[:limit]
     except Exception as e:
         logger.warning(f"brain_retrieval.search_chunks failed: {e}")
         return []

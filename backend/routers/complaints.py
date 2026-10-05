@@ -101,6 +101,7 @@ async def resolve_complaint(cid: str, user: dict = Depends(get_current_user)):
             title=f"Resolved complaint: {(c.get('text') or '')[:120]}",
             outcome="resolved", why=c.get("text") or "",
             tags=["complaint"], source_type="complaint", source_id=cid,
+            related_ids={"contact_id": c.get("customer_id")},  # 2026-10-05: the source chip opens the contact
             actor_id=user["id"], actor_name=user.get("name") or "",
             department=user.get("role") or "", visibility="public",
         )

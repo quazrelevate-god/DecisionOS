@@ -146,6 +146,8 @@ def _public(doc: dict) -> dict:
         "visibility": doc.get("visibility") or "public",
         "roles_allowed": doc.get("roles_allowed") or [],
         "summary": doc.get("summary") or "",
+        # 2026-10-05: whether Ask can search inside it, and why not.
+        "index_state": (doc.get("index") or {}).get("state"),
         "filename": doc.get("original_filename"),
         "content_type": doc.get("content_type"),
         "size": doc.get("size"),
@@ -344,9 +346,10 @@ async def update_document(doc_id: str, inp: PatchInput, user: dict = Depends(get
                                   merged.get("original_filename") or "")
 
     await db.brain_documents.update_one(tenant_filter(doc_id, user["tenant_id"]), {"$set": patch})  # FIX-001-C
-    # E3-09.3: re-index so the chunks' RBAC payload (visibility/department/roles) stays in sync.
-    from services.ai.brain_embed import index_document
-    _spawn_index(index_document({**doc, **patch}))
+    # 2026-10-05 — no re-index: an edit changes the title/tags/visibility, never the
+    # file, and every search re-checks access against THIS row (brain_retrieval.
+    # search_chunks). Re-indexing re-ran OCR + embedding on every title edit, and a
+    # slow one could finish after a delete and bring the chunks back.
     return _public({**doc, **patch})
 
 

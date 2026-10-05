@@ -37,6 +37,9 @@ const DEEP_TYPES = {
   task: "Task", employee: "Employee", invoice: "Invoice", payment: "Payment",
   expense: "Expense", decision: "Decision", workflow: "Workflow", contact: "Contact",
   leave: "Leave", memory: "Note",
+  // 2026-10-05 — the Company Brain's own sources (documents and the records its
+  // memory describes) arrived with no label and no link.
+  document: "Document", complaint: "Complaint", meeting: "Meeting",
 };
 
 function KpiGrid({ kpis, currency }) {
@@ -104,14 +107,22 @@ function Sources({ sources, onGo }) {
     <div className="mb-3" data-testid="brain-sources">
       <p className="label-mono text-muted-foreground text-xs mb-1.5 flex items-center gap-1"><LinkSimple size={13} weight="bold" /> Sources · {sources.length}</p>
       <div className="flex flex-wrap gap-1.5">
-        {sources.map((s, i) => (
-          <button key={`${s.id}-${i}`} onClick={() => onGo(s.deep_link)} data-testid={`brain-source-${i}`}
-            title={s.confidence ? `${s.confidence}` : ""}
-            className="inline-flex items-center gap-1 nm-tile px-2 py-1 text-xs hover:bg-accent transition-colors">
-            <span className="text-brand-600 uppercase font-semibold">{DEEP_TYPES[s.type] || s.type}</span>
-            <span className="truncate max-w-[220px]">{s.title}</span>
-          </button>
-        ))}
+        {sources.map((s, i) => {
+          const label = <span className="text-brand-600 uppercase font-semibold">{DEEP_TYPES[s.type] || s.type || "Note"}</span>;
+          const title = <span className="truncate max-w-[220px]">{s.title}</span>;
+          return s.deep_link ? (
+            <button key={`${s.id}-${i}`} onClick={() => onGo(s.deep_link)} data-testid={`brain-source-${i}`}
+              title={s.confidence ? `${s.confidence}` : ""}
+              className="inline-flex items-center gap-1 nm-tile px-2 py-1 text-xs hover:bg-accent transition-colors">
+              {label}{title}
+            </button>
+          ) : (
+            <span key={`${s.id}-${i}`} data-testid={`brain-source-${i}`}
+              className="inline-flex items-center gap-1 nm-tile px-2 py-1 text-xs opacity-80">
+              {label}{title}
+            </span>
+          );
+        })}
       </div>
     </div>
   );

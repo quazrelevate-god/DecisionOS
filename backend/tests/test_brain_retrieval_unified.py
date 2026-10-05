@@ -163,9 +163,28 @@ class TestCitesFromHits:
         assert cites == [{
             "id": "d1", "title": "Vendor NDA",
             "source_type": "brain_document",
+            # 2026-10-05: the Sources chip's label and where it opens
+            "type": "document", "deep_link": "/brain?docs=1&doc=d1",
             "kind": "contract", "tags": ["legal"],
             "created_at": "2026-08-01T00:00:00Z",
         }]
+
+    def test_every_memory_source_says_what_it_is_and_where_it_opens(self):
+        from services.ai.brain_retrieval import cites_from_hits
+        rows = [{"id": "c1", "source_type": "decision", "source_id": "d9"},
+                {"id": "c2", "source_type": "workflow", "source_id": "w9", "related_ids": {"workflow_type": "order_management"}},
+                {"id": "c3", "source_type": "task", "source_id": "t9"},
+                {"id": "c4", "source_type": "complaint", "source_id": "k9", "related_ids": {"contact_id": "ct9"}},
+                {"id": "c5", "source_type": "complaint", "source_id": "k8"},
+                {"id": "c6", "source_type": "invoice", "source_id": "i9"},
+                {"id": "c7", "source_type": "meeting", "source_id": "m9"},
+                {"id": "c8"}]
+        got = [(c["type"], c["deep_link"]) for c in cites_from_hits(context_hits=rows)]
+        assert got == [("decision", "/?focus=approval:d9"),
+                       ("workflow", "/my-work?view=workflows&wf=w9&wf_type=order_management"),
+                       ("task", "/my-work?task=t9"),
+                       ("complaint", "/contacts/ct9"), ("complaint", "/crm"),
+                       ("invoice", "/ledger"), ("meeting", None), ("memory", None)]
 
     def test_shapes_context_hit(self):
         from services.ai.brain_retrieval import cites_from_hits

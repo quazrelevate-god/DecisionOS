@@ -506,6 +506,10 @@ async def grant_ai_consent(inp: AiConsentGrantInput, request: Request,
         user["tenant_id"], user["id"], "ai_consent_granted",
         f"{user['name']} granted AI-processing consent (v{payload['version']})",
     )
+    # 2026-10-05: documents uploaded while AI was off waited for this.
+    import asyncio as _asyncio
+    from services.ai.brain_embed import backfill_documents
+    _asyncio.create_task(backfill_documents(user["tenant_id"]))
     return _consent.consent_status(
         await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "ai_consent": 1})
     )

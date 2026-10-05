@@ -676,7 +676,15 @@
 /* ASK-33 Phase 5 — plus the height of a Dex failure notice docked above the
    dock, while one is up (components/mobile/DexFailureNotice sets the variable),
    so whatever it sits over can still be scrolled clear of it. */
-.pb-dock { padding-bottom: calc(7.5rem + var(--sa-bottom) + var(--dex-notice-space, 0px)); }
+/* THE BAR'S OWN HEIGHT, as a number the page can reserve against. (2026-10-06.)
+   It was written out as 4.5rem and 7.5rem in the two rules that keep content
+   off the dock — fine while there was one dock, wrong the moment the slider
+   became the bar off the Desk and brought the slider's 6rem with it. The undo
+   snackbar landed 13px INSIDE it, which verify:kit caught by measuring the bar
+   rather than trusting the constant. */
+:root { --dock-h: 4.5rem; }
+:root[data-dock-slider="1"] { --dock-h: var(--desk-slider-track, 6rem); }
+.pb-dock { padding-bottom: calc(var(--dock-h) + 3rem + var(--sa-bottom) + var(--dex-notice-space, 0px)); }
 
 /* ASK-46 · --dock-clear — the floor a page keeps clear when something of its
    own has to sit JUST above the bar rather than scroll safely past it. The
@@ -686,7 +694,7 @@
    at the bar, it should clear it. One expression each, both here, so a page
    picks the one it means instead of inventing a number. */
 :root {
-    --dock-clear: calc(4.5rem + 1rem + 0.75rem + var(--sa-bottom));
+    --dock-clear: calc(var(--dock-h) + 1rem + 0.75rem + var(--sa-bottom));
 }
 
 /* ASK-49 · THE PHONE'S BLACK CARD IS ONE HEIGHT, WHATEVER IS IN IT.
@@ -861,6 +869,26 @@
         background: hsl(0 0% 9% / .16);
         color: hsl(0 0% 9%);
     }
+}
+
+/* THE DOCK, GROWN INTO A CONVERSATION (2026-10-06).
+   Ask on every page but the Desk turns the bar into the chat. Half the screen
+   is the ceiling the founder chose — "about half the screen, then scroll" —
+   so the room behind stays visible and this reads as the dock growing rather
+   than a screen arriving. The height is the content's until it reaches that
+   line; `max-height` plus a scrolling transcript inside is what makes the
+   growth dynamic without any measuring in JS.
+   The material is the dock's own, because it IS the dock: the same frosted
+   ink, rim and shadow the bar carries, so nothing changes hands mid-gesture. */
+.kr-dock-chat {
+    max-height: calc(50dvh / var(--ui-scale, 1));
+    background: hsl(0 0% 7% / .92);
+    -webkit-backdrop-filter: blur(22px) saturate(1.2);
+    backdrop-filter: blur(22px) saturate(1.2);
+    border: 1px solid hsl(40 30% 92% / .28);
+    box-shadow: 0 8px 32px rgb(0 0 0 / .35),
+                inset 0 1px 0 hsl(40 40% 96% / .22),
+                0 0 20px -4px hsl(40 35% 92% / .30);
 }
 
 /* Mobile PWA (2026-09-14) — the dock, the Dex button, their pickers, the

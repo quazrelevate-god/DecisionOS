@@ -53,6 +53,8 @@ import { AllAppsPanel } from "./mobile/AllAppsPanel";
 import { DexFab } from "./mobile/DexFab";
 import { DexChat } from "./mobile/DexChat";
 import { HeaderSlotContext } from "./mobile/HeaderSlot";
+import { DockSlider } from "./mobile/DockSlider";
+import { DeskDexWell } from "../pages/desk/DeskDexWell";
 // DEX-SLIDER Part 2 — the Desk's slider opens Ask, which lives up here.
 import { DexDoorsContext } from "./mobile/DexDoors";
 import { useDexConversation } from "../hooks/useDexConversation";
@@ -398,6 +400,26 @@ export default function Layout({ children }) {
      ASK-35 1.5 — what it no longer is: a wordmark row that folds away. */
   const [headerSlot, setHeaderSlot] = useState(null);
   const isMobileShell = useIsMobile();
+  /* 2026-10-06 — AND EVERY OTHER ROOM GETS THE SLIDER TOO, as the dock itself.
+     The founder's point was that Dex looked like two different features: a
+     slider on the Desk and the old circle in the corner everywhere else. So
+     off the Desk the bar IS the control (DockSlider), the circle is gone, and
+     the only place that still runs the original dock is the Desk, which has
+     its own slider on its own sheet and is explicitly out of scope. */
+  const dockIsSlider = DEX_SLIDER && isMobileShell && !deskHasSlider;
+  /* Decide, off the Desk. The right end of the bar hands over to the SAME
+     component the Desk uses in its overlay form — one capture, one review, one
+     decision pipeline, rather than a second implementation that would drift. */
+  const [dockDecide, setDockDecide] = useState(false);
+  /* The page reserves room against --dock-h, and the slider bar is taller than
+     the one it replaces. Published on <html> so the CSS can switch the token
+     without every consumer learning which bar is up. */
+  useEffect(() => {
+    const root = document.documentElement;
+    if (dockIsSlider) root.dataset.dockSlider = "1"; else delete root.dataset.dockSlider;
+    return () => { delete root.dataset.dockSlider; };
+  }, [dockIsSlider]);
+  useEffect(() => { if (!dockIsSlider) setDockDecide(false); }, [dockIsSlider]);
   // ASK-42 D — the Desk is the one room with a top bar; several rules below
   // ask the same question, so it is asked once.
   const onInbox = location.pathname.startsWith("/inbox");
@@ -1105,6 +1127,25 @@ export default function Layout({ children }) {
           A floating pill detached from the edges (lists scroll *under* it,
           which is what `pb-dock` on main pays for), plus Dex as a separate
           64px circle on the same baseline. Desktop keeps its sidebar. */}
+      {dockIsSlider ? (
+        /* THE BAR IS THE CONTROL. Ask opens INSIDE it (the panel grows to half
+           the screen and then scrolls); Decide hands over to the same capture
+           and review card the Desk uses, through DeskDexWell's overlay, so
+           there is one Decide in the product rather than two. */
+        <DockSlider
+          user={user}
+          chat={chat}
+          askOpen={dexOpen && dexInline}
+          capturing={!!dex.recording}
+          recording={!!dex.recording}
+          levelsRef={dex.levelsRef}
+          onStop={() => dex.stopRecording()}
+          onAsk={() => { setDexChannel("ask"); setDexOpen(true); setDexInline(true); if (!dex.recording) dex.startRecording(); }}
+          onDecide={() => setDockDecide(true)}
+          onCloseAsk={() => { setDexOpen(false); setDexChannel(null); setDexInline(false); }}
+          onOpenDecision={(id) => navigate(`/inbox?decision=${encodeURIComponent(id)}`)}
+        />
+      ) : (
       <FloatingDock
         /* With no circle beside it the bar centres itself (index.css,
            .app-dock-right-wide). Everywhere else the anchoring is untouched. */
@@ -1148,6 +1189,7 @@ export default function Layout({ children }) {
         /* ASK-33.1 — which Dex the bar is serving, for its placeholder. */
         dexChannel={dexChannel}
       />
+      )}
       {/* KM-11 — the vignette. Rendered always so it can transition rather
           than pop in, and gated by a data attribute. Sits below the dock's
           z-index so the bar stays fully lit while the edges fall away. */}
@@ -1180,7 +1222,10 @@ export default function Layout({ children }) {
           transcript is already carrying both. Two composers on one screen is
           the bug the founder called out the first time, arriving from the
           other side. */}
-      {(!deskHasSlider || (dexOpen && !dexInline)) && (
+      {/* 2026-10-06 — and NOT where the dock is the slider: "remove the dex
+          button entirely in other pages". The circle now exists only on a
+          phone whose shell has neither slider, which is the flag-off path. */}
+      {!dockIsSlider && (!deskHasSlider || (dexOpen && !dexInline)) && (
       <DexFab
         /* ASK-33 Phase 4 — closed, the FAB opens Dex in ASK: one tap, no
            picker, no scrim (KM-54's two doors collapsed; see DexFab.jsx). Open,
@@ -1195,6 +1240,19 @@ export default function Layout({ children }) {
         onStop={() => dex.stopRecording()}
         intent={dexOpen ? chat.fabIntent : "sparkle"}
       />
+      )}
+      {/* DECIDE, OFF THE DESK. The same well the Desk opens from its own
+          slider's right end, in the surface that draws no screen of its own —
+          just the capture and its review card. It mounts only while open, so
+          a page that never swipes right never pays for it. */}
+      {dockIsSlider && dockDecide && (
+        <DeskDexWell
+          surface="overlay"
+          open
+          phone
+          onClose={() => setDockDecide(false)}
+          onReview={(id) => { setDockDecide(false); navigate(`/inbox?decision=${encodeURIComponent(id)}`); }}
+        />
       )}
       <AllAppsPanel
         open={allAppsOpen}

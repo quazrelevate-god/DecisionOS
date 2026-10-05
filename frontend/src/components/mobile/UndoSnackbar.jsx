@@ -66,7 +66,11 @@ export function UndoSnackbar({
         "flex items-center gap-3 rounded-xl border border-neutral-700 bg-neutral-800 px-3.5 py-3 text-white shadow-brutal-lg",
         className
       )}
-      style={{ bottom: "var(--dock-bottom)", marginBottom: "5rem" }}
+      /* 2026-10-06 — THE CLEARANCE IS THE BAR'S, not a number that happened to
+         match it. 5rem was the old dock's 4.5rem plus a little; off the Desk
+         the bar is the slider now and taller, and this landed 13px inside it.
+         --dock-h follows whichever bar is up, so this cannot drift again. */
+      style={{ bottom: "var(--dock-bottom)", marginBottom: "calc(var(--dock-h, 4.5rem) + 0.5rem)" }}
     >
       <p className="min-w-0 flex-1 text-sm leading-snug">{message}</p>
       <button

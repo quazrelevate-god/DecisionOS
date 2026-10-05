@@ -189,7 +189,11 @@ const gapOwn = (vh - (snack.y + snack.height)) * K;
    dock", and it stopped being true the moment the dock moved down (the lift
    went 1rem -> 0 on 2026-10-02). Measuring the dock is the claim itself, and it
    survives the bar moving again. */
-const dockTop = (await page.locator('[data-testid="floating-dock"]').boundingBox()).y;
+/* 2026-10-06 — THE BAR HAS TWO NAMES NOW. Off the Desk it is the slider
+   (DockSlider); on the Desk it is still FloatingDock. Whichever is present is
+   "the dock line" this check means. */
+const dockBar = page.locator('[data-testid="dock-slider"], [data-testid="floating-dock"]').first();
+const dockTop = (await dockBar.boundingBox()).y;
 check('undo sits above the dock line', snack.y + snack.height <= dockTop,
   `${Math.round(dockTop - (snack.y + snack.height))}px clear of the dock`);
 const undoBox = { height: await ownH(page.locator('[data-testid="undo-snackbar-undo"]')) };

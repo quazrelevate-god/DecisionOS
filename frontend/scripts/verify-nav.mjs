@@ -121,32 +121,48 @@ if (DEX_SLIDER) {
   /* With no circle beside it the bar takes the width back, symmetrically. */
   check('the Desk dock is centred', Math.abs(pillRightGap - pill.x) <= 2,
     `${Math.round(pill.x)}px left vs ${Math.round(pillRightGap)}px right`);
-  /* Measure the circle where it still lives. */
+  /* 2026-10-06 — AND THERE IS NOWHERE LEFT FOR IT TO LIVE. The founder's call:
+     off the Desk the dock IS the slider, so "remove the dex button entirely in
+     other pages". The circle is gone from the product on this flag; what the
+     checks below measured about it is measured about the bar instead. */
   await page.goto(`${BASE}/my-work`, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('[data-testid="dex-fab"]', { timeout: 10000 });
-  await page.waitForTimeout(400);
+  await page.waitForSelector('[data-testid="dock-slider"]', { timeout: 10000 });
+  await page.waitForTimeout(500);
+  check('off the Desk there is no Ask circle either',
+    (await page.locator('[data-testid="dex-fab"]').count()) === 0);
+  check('off the Desk the dock is the slider',
+    (await page.locator('[data-testid="dex-slider-handle"]').count()) === 1);
+  check('…with two destinations each side of the handle',
+    (await page.locator('[data-testid="dock-slider-items"] a').count()) === 4);
 } else {
   check('the Desk keeps its Ask circle', (await page.locator('[data-testid="dex-fab"]').count()) === 1);
   check('the Desk dock holds the circle its clearance', pillRightGap > pill.x,
     `${Math.round(pill.x)}px left vs ${Math.round(pillRightGap)}px right`);
 }
 
-// Dex FAB — separate circle, bottom-right, same baseline, 12px+ from the pill
-const fab = await page.locator('[data-testid="dex-fab"]').boundingBox();
-const fabOwn = await own(page.locator('[data-testid="dex-fab"]'));
-check('Dex FAB is 64px', fabOwn.w === 64 && fabOwn.h === 64, `${fabOwn.w}x${fabOwn.h}`);
-check('Dex FAB is bottom-right', vw - (fab.x + fab.width) <= 20 && fab.x > vw / 2,
-  `${Math.round(vw - (fab.x + fab.width))}px from right`);
-/* ASK-41 again: the bar is 72 and the circle is 64, so they cannot share a
-   baseline any more without the circle hanging low. They share a CENTRE. */
-const K = await toOwn(page);
-const centreGap = ((fab.y + fab.height / 2) - (pill.y + pill.height / 2)) * K;
-check('Dex FAB is centred on the dock', Math.abs(centreGap) <= 2, `${centreGap.toFixed(1)}px off`);
-const pillHere = await page.locator('[data-testid="floating-dock"] > div').boundingBox();
-check('Dex FAB clears the pill by >= 12px', (fab.x - (pillHere.x + pillHere.width)) * K >= 12,
-  `${((fab.x - (pillHere.x + pillHere.width)) * K).toFixed(1)}px`);
-check('Dex FAB is labelled "Dex" for screen readers',
-  (await page.locator('[data-testid="dex-fab"]').getAttribute('aria-label')) === 'Dex');
+/* 2026-10-06 — THE CIRCLE'S GEOMETRY, on the flag-off path only. With
+   DEX_SLIDER on there is no circle anywhere: the dock is the control on every
+   page and the Desk has its slider on its sheet. These checks are kept rather
+   than deleted because the flag still has an off position and this is what it
+   must look like there. */
+if (!DEX_SLIDER) {
+  // Dex FAB — separate circle, bottom-right, same baseline, 12px+ from the pill
+  const fab = await page.locator('[data-testid="dex-fab"]').boundingBox();
+  const fabOwn = await own(page.locator('[data-testid="dex-fab"]'));
+  check('Dex FAB is 64px', fabOwn.w === 64 && fabOwn.h === 64, `${fabOwn.w}x${fabOwn.h}`);
+  check('Dex FAB is bottom-right', vw - (fab.x + fab.width) <= 20 && fab.x > vw / 2,
+    `${Math.round(vw - (fab.x + fab.width))}px from right`);
+  /* ASK-41 again: the bar is 72 and the circle is 64, so they cannot share a
+     baseline any more without the circle hanging low. They share a CENTRE. */
+  const K = await toOwn(page);
+  const centreGap = ((fab.y + fab.height / 2) - (pill.y + pill.height / 2)) * K;
+  check('Dex FAB is centred on the dock', Math.abs(centreGap) <= 2, `${centreGap.toFixed(1)}px off`);
+  const pillHere = await page.locator('[data-testid="floating-dock"] > div').boundingBox();
+  check('Dex FAB clears the pill by >= 12px', (fab.x - (pillHere.x + pillHere.width)) * K >= 12,
+    `${((fab.x - (pillHere.x + pillHere.width)) * K).toFixed(1)}px`);
+  check('Dex FAB is labelled "Dex" for screen readers',
+    (await page.locator('[data-testid="dex-fab"]').getAttribute('aria-label')) === 'Dex');
+}
 
 /* Back to the Desk: everything below is about the active slot, and the active
    slot is the page you are on. */
@@ -361,48 +377,93 @@ check('the Desk slot is the active one after the redirect',
 // (scripts/verify-dex.mjs covers that side).
 const dexBadge = async () =>
   (await page.locator('[data-testid="dex-chat"] span.rounded-pill').first().innerText().catch(() => '')).trim().toLowerCase();
-/* DEX-SLIDER Part 1 — driven from the page that still has the circle. What it
-   opens is unchanged; only where it is pressed from moved. */
-await page.goto(`${BASE}/${DEX_SLIDER ? 'my-work' : 'inbox'}`, { waitUntil: 'domcontentloaded' });
-await page.waitForSelector('[data-testid="dex-fab"]', { timeout: 8000 });
-await page.waitForTimeout(300);
-await page.locator('[data-testid="dex-fab"]').click();
-await page.waitForSelector('[data-testid="dex-chat"]', { timeout: 5000 });
-await page.waitForTimeout(400);
-check('one tap on the Dex FAB opens the Dex sheet', await page.locator('[data-testid="dex-chat"]').isVisible());
-check('no two-door picker', (await page.locator('[data-testid^="dex-pick-"]').count()) === 0);
-check('the sheet opens on Ask', (await dexBadge()) === 'ask', await dexBadge());
-check('the dock becomes the composer',
-  (await page.locator('[data-testid="dock-dex-wave"]').isVisible())
-    && !(await page.locator('[data-testid="dock-desk"]').isVisible()));
-check('the FAB offers to speak',
-  (await page.locator('[data-testid="dex-fab"]').getAttribute('aria-label')) === 'Speak to Dex');
-await page.locator('[data-testid="dex-plus"]').click();
-await page.waitForTimeout(400);
-check('the plus offers type, attach and photo',
-  (await page.locator('[data-testid="dex-action-type"]').isVisible())
-    && (await page.locator('[data-testid="dex-action-file"]').isVisible())
-    && (await page.locator('[data-testid="dex-action-photo"]').isVisible()));
-await page.locator('[data-testid="dex-action-type"]').click();
-await page.waitForTimeout(400);
-check('Type turns the dock into a text field', await page.locator('[data-testid="dock-dex-input"]').isVisible());
-const fabBox = await page.locator('[data-testid="dex-fab"]').boundingBox();
-check('the Dex FAB is not clipped at the right edge', fabBox.x + fabBox.width <= vw - 4,
-  `right edge at ${Math.round(fabBox.x + fabBox.width)} of ${vw}`);
-// ASK-43's own pixels again — 64 CSS px reads back as 51 under the 0.8 zoom.
-const fabOwn2 = await own(page.locator('[data-testid="dex-fab"]'));
-check('the Dex FAB stays >= 56px as the composer\'s button', fabOwn2.h >= 56,
-  `${fabOwn2.w}x${fabOwn2.h}`);
-await page.locator('[data-testid="dex-chat-close"]').click();
+/* ASK, FROM WHEREVER IT IS REACHED. (Rewritten 2026-10-06.)
+   With DEX_SLIDER on there is no circle and no sheet off the Desk: the dock IS
+   the control, and Ask opens INSIDE it — the bar grows into the conversation,
+   the destinations fade out as the ends fade in, and a close button puts it
+   back. With the flag off it is the old circle and the old sheet, unchanged. */
+if (DEX_SLIDER) {
+  await page.goto(`${BASE}/my-work`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-testid="dock-slider"]', { timeout: 8000 });
+  await page.waitForTimeout(500);
+  const well = await page.locator('[data-testid="dock-slider"] .kr-slider-well').boundingBox();
+  const h = await page.locator('[data-testid="dex-slider-handle"]').boundingBox();
+  const cy = h.y + h.height / 2;
+  /* Halfway: the swap must be UNDER WAY in both directions at once, which is
+     the thing the founder asked for and the thing a duration would get wrong. */
+  await page.mouse.move(h.x + h.width / 2, cy);
+  await page.mouse.down();
+  await page.mouse.move(h.x + h.width / 2 - 40, cy, { steps: 6 });
+  const mid = await page.evaluate(() => {
+    const items = document.querySelector('[data-testid="dock-slider-items"]');
+    const ends = [...document.querySelectorAll('[data-testid="dock-slider"] .kr-slider-well > span')]
+      .filter((e) => /Ask|Decide/.test(e.textContent));
+    return { nav: +getComputedStyle(items).opacity, end: ends.length ? +getComputedStyle(ends[0]).opacity : 0 };
+  });
+  check('the destinations fade as the ends arrive', mid.nav < 1 && mid.end > 0,
+    `nav ${mid.nav.toFixed(2)} · ends ${mid.end.toFixed(2)}`);
+  await page.mouse.move(well.x + 2, cy, { steps: 10 });
+  await page.mouse.up();
+  await page.waitForTimeout(1200);
+  check('a full drag left turns the dock into the conversation',
+    (await page.locator('[data-testid="dock-ask-panel"]').count()) === 1);
+  check('…and raises no sheet over the page',
+    (await page.locator('[data-testid="dex-chat"]').count()) === 0);
+  check('the conversation can be closed back to a dock',
+    (await page.locator('[data-testid="dock-ask-close"]').count()) === 1);
+  await page.locator('[data-testid="dock-ask-close"]').click();
+  await page.waitForTimeout(700);
+  check('closing gives the destinations back',
+    (await page.locator('[data-testid="dock-slider-items"] a').count()) === 4);
+} else {
+  await page.goto(`${BASE}/inbox`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-testid="dex-fab"]', { timeout: 8000 });
+  await page.waitForTimeout(300);
+  await page.locator('[data-testid="dex-fab"]').click();
+  await page.waitForSelector('[data-testid="dex-chat"]', { timeout: 5000 });
+  await page.waitForTimeout(400);
+  check('one tap on the Dex FAB opens the Dex sheet', await page.locator('[data-testid="dex-chat"]').isVisible());
+  check('no two-door picker', (await page.locator('[data-testid^="dex-pick-"]').count()) === 0);
+  check('the sheet opens on Ask', (await dexBadge()) === 'ask', await dexBadge());
+  check('the dock becomes the composer',
+    (await page.locator('[data-testid="dock-dex-wave"]').isVisible())
+      && !(await page.locator('[data-testid="dock-desk"]').isVisible()));
+  await page.locator('[data-testid="dex-plus"]').click();
+  await page.waitForTimeout(400);
+  check('the plus offers type, attach and photo',
+    (await page.locator('[data-testid="dex-action-type"]').isVisible())
+      && (await page.locator('[data-testid="dex-action-file"]').isVisible())
+      && (await page.locator('[data-testid="dex-action-photo"]').isVisible()));
+  await page.locator('[data-testid="dex-action-type"]').click();
+  await page.waitForTimeout(400);
+  check('Type turns the dock into a text field', await page.locator('[data-testid="dock-dex-input"]').isVisible());
+  await page.locator('[data-testid="dex-chat-close"]').click();
+}
 await page.waitForTimeout(800);
 check('closing gives the dock its destinations back',
   (await page.locator('[data-testid="dex-chat"]').count()) === 0
     && (await page.locator('[data-testid="dock-desk"]').isVisible()));
-await page.locator('[data-testid="dex-fab"]').click();
-await page.waitForSelector('[data-testid="dex-chat"]', { timeout: 5000 });
-await page.waitForTimeout(400);
-check('the next tap opens Ask again, still with no picker',
-  (await page.locator('[data-testid^="dex-pick-"]').count()) === 0 && (await dexBadge()) === 'ask');
+/* Opening it a SECOND time, by whichever way in this flag has. The claim is
+   that nothing is left behind by the first close — not that a particular
+   control exists. */
+if (DEX_SLIDER) {
+  const well2 = await page.locator('[data-testid="dock-slider"] .kr-slider-well').boundingBox();
+  const h2 = await page.locator('[data-testid="dex-slider-handle"]').boundingBox();
+  const cy2 = h2.y + h2.height / 2;
+  await page.mouse.move(h2.x + h2.width / 2, cy2);
+  await page.mouse.down();
+  await page.mouse.move(well2.x + 2, cy2, { steps: 14 });
+  await page.mouse.up();
+  await page.waitForTimeout(1100);
+  check('the next swipe opens Ask again, in the dock',
+    (await page.locator('[data-testid="dock-ask-panel"]').count()) === 1);
+} else {
+  await page.locator('[data-testid="dex-fab"]').click();
+  await page.waitForSelector('[data-testid="dex-chat"]', { timeout: 5000 });
+  await page.waitForTimeout(400);
+  check('the next tap opens Ask again, still with no picker',
+    (await page.locator('[data-testid^="dex-pick-"]').count()) === 0 && (await dexBadge()) === 'ask');
+}
 await ctx.close();
 
 // ----------------------------------------------------------------- desktop

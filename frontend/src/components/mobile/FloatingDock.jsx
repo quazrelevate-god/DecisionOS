@@ -67,7 +67,7 @@ export function dockSlots(user, t = (k, d) => d) {
   return slots.filter((s) => (seen.has(s.to) ? false : seen.add(s.to)));
 }
 
-function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
+export function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
   /* KM-49 — THE SELECTED SLOT IS FLAT, and it is an INDICATOR rather than a
      treatment of the whole slot. Founder: "the neumorphic styled option is not
      nice in the bottom fab bar so make it a usual materialistic flat style menu

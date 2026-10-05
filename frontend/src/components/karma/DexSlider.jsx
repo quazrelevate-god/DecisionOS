@@ -122,6 +122,18 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
                                and the right end offers nothing, because there
                                is no Decide door to open mid-question. */
                             composer = false,
+                            /* THE DOCK USES THIS CONTROL AS ITS BAR. (2026-10-06.)
+                               On every page but the Desk the founder wants the
+                               navbar to BE the slider: its height, its well,
+                               the handle in the middle and the destinations
+                               either side, which fade out exactly as fast as
+                               the Ask/Decide ends fade in.
+                               `behind` is what the well carries under the
+                               handle — the dock passes its own items. `onDrag`
+                               reports the travel (0..1 and which way) so the
+                               caller can fade them in step with the gesture
+                               rather than guessing at a duration. */
+                            behind = null, onDrag,
                             disabled = false, className }) {
   const onInk = tone === "ink";
   const { t } = useTranslation();
@@ -290,6 +302,14 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
 
   const at = end(dx);
   const pct = (() => { const m = travel(); return m ? Math.min(1, Math.abs(dx) / m) : 0; })();
+  /* Reported after paint, not during the pointer handler: the caller re-renders
+     on it, and doing that inside the move would put a React commit between the
+     finger and the handle. */
+  const onDragRef = React.useRef(onDrag);
+  onDragRef.current = onDrag;
+  React.useEffect(() => {
+    onDragRef.current?.(pct, dx < -2 ? "ask" : dx > 2 ? "decide" : null);
+  }, [pct, dx]);
 
   /* WHICH WAY ARE YOU GOING. The icon turns the moment the handle leaves the
      middle, not only at the stop — half a drag should already tell you which
@@ -319,7 +339,12 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
   const Label = ({ side, children }) => (
     <span
       aria-hidden="true"
-      style={{ opacity: Math.max(0, 1 - pct * 1.25) }}
+      /* ON THE DESK the ends are NAMED AT REST and get out of the way as the
+         handle arrives. IN THE DOCK it is the other way round: the bar already
+         carries four destinations, so the ends appear as those fade, which is
+         the swap the founder asked to happen "simultaneously". One number
+         drives both directions, so they cannot drift apart. */
+      style={{ opacity: behind ? Math.min(1, pct * 1.6) : Math.max(0, 1 - pct * 1.25) }}
       className={cn(
         /* /70, not /45. Measured on the rendered control: foreground at 45%
            over the well's own wash lands at 2.99:1 for a 12pt label, against
@@ -342,6 +367,9 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
           onInk && "kr-slider-well--ink")}
         data-at={at || undefined}
       >
+        {/* WHAT THE WELL CARRIES. Under the ripple and under the handle, so a
+            drag passes over it rather than through it; the caller fades it. */}
+        {behind}
         {/* The ripple, under everything and reachable by nothing: VoiceRipple's
             inward mode already wraps itself in `pointer-events-none absolute
             inset-0 overflow-hidden rounded-[inherit]`, so the pill is the wall

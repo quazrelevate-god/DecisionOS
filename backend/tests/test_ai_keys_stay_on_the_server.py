@@ -85,15 +85,17 @@ def test_a_members_auth_me_carries_no_ai_keys(with_test_db):
 
 
 def test_a_settings_save_answers_without_the_keys(with_test_db):
+    # A save logs the change (core.log_activity): with only tenant_settings
+    # rebound, that write went to the real database, and failed outright once
+    # any earlier test had bound the shared client to another event loop.
+    from tests.e2e_harness import e2e_env
+
     async def scenario(db):
-        restore = _patch(db, ts)
-        try:
+        with e2e_env(db):
             await _seed(db)
             saved = await ts.update_tenant_settings(TenantSettingsInput(high_value_threshold=75000), user=OWNER)
             summary = await ts.get_tenant_ai_keys(user=OWNER)
             return saved, summary
-        finally:
-            restore()
 
     saved, summary = with_test_db(scenario)
     assert saved["high_value_threshold"] == 75000

@@ -373,7 +373,15 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
              answers the room without this component holding any audio itself.
              The track is the surface now: there is no blurred screen, no second
              mic, and nothing to dismiss. */
-          <div className="pointer-events-none absolute inset-0 flex items-center pl-6 pr-28" aria-hidden="true">
+          /* THE GAP GOES WHERE THE HANDLE IS. (2026-10-05.) These paddings
+             keep the wave clear of the parked knob, and they were written when
+             the only capture parked RIGHT — so in Ask, which parks LEFT, the
+             wave was held off an end with nothing on it and ran under the knob
+             at the other. The founder's photograph is the right-hand third of
+             the control, empty. Mirrored with the park side; 7rem is the
+             5.375rem knob and its breathing room, 1.5rem is the wall. */
+          <div className={cn("pointer-events-none absolute inset-0 flex items-center",
+            composer ? "pl-28 pr-6" : "pl-6 pr-28")} aria-hidden="true">
             <DexWave
               state={recording ? "listening" : "thinking"}
               levelsRef={levelsRef}

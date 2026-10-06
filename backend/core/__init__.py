@@ -68,7 +68,24 @@ from core.usage import (  # noqa: F401,E402
 )
 from integrations.llm import _ResilientChat, claude_chat  # noqa: F401,E402
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# 2026-10-06 (AB-18) — WHERE A LINE GOES DECIDES WHAT RAILWAY CALLS IT. The
+# default handler wrote every record to stderr, and Railway marks every stderr
+# line "error": "indexed doc …", "Company Brain index store: qdrant" and a real
+# traceback all read the same, so the errors were the ones nobody could find.
+# Routine lines (INFO, WARNING) go to stdout; ERROR and above stay on stderr.
+def _log_handlers():
+    import sys
+    fmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    out = logging.StreamHandler(sys.stdout)
+    out.addFilter(lambda r: r.levelno < logging.ERROR)
+    err = logging.StreamHandler(sys.stderr)
+    err.setLevel(logging.ERROR)
+    for h in (out, err):
+        h.setFormatter(fmt)
+    return [out, err]
+
+
+logging.basicConfig(level=logging.INFO, handlers=_log_handlers())
 logger = logging.getLogger("decisionos")
 
 # --- Auth primitives moved to core/security.py (Epic 8 Sprint 2) ------------

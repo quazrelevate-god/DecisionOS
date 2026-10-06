@@ -1499,17 +1499,43 @@ def _basis_of(ctx: dict) -> str:
     return hashlib.sha1(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
 
 
+def _brief_unavailable(failure) -> str:
+    """What to say when the analysis could not be written (AB-14)."""
+    code = getattr(failure, "status_code", None)
+    detail = getattr(failure, "detail", None)
+    if code == 402:
+        msg = detail.get("message") if isinstance(detail, dict) else None
+        return ("This month's AI allowance is used up, so the brief can't be written until it resets."
+                if (isinstance(detail, dict) and detail.get("code") == "quota_exceeded") or not msg else msg)
+    if code == 451:
+        return "AI is switched off for this company, so there is no brief. The figures above are still live."
+    return "The brief couldn't be written just now. Press Refresh to try again."
+
+
 async def _generate_analysis(tid: str, scope: str, ctx: Optional[dict] = None) -> dict:
     ctx = ctx if ctx is not None else await _finance_context(tid, scope)
     focus = _SCOPE_FOCUS.get(scope, _SCOPE_FOCUS["overview"])
     system = render("ledger.analysis", focus=focus, currency=ctx['currency'], today=ctx['today'])
     data = {}
+    failure = None
     try:
         chat = claude_chat(task="ledger.analysis", session_id=f"ledger-ai-{scope}-{new_id()}", system_message=system).with_model(*model_for("ledger.analysis"))
         resp = await chat.send_message(UserMessage(text=f"Finance data:\n{json.dumps(ctx)}\n\nProduce the JSON now."))
         data = _extract_json(resp) or {}
+        if not data:
+            failure = "unreadable"
     except Exception as e:  # noqa: BLE001
+        failure = e
         logger.warning(f"Ledger AI analysis ({scope}) failed: {e}")
+    if failure is not None:
+        # 2026-10-06 (AB-14) — A FAILURE IS NOT AN ANALYSIS. It used to fall
+        # through to the "Not enough data yet" headline and be CACHED with the
+        # current figures' fingerprint, so a company whose AI allowance ran out
+        # (or whose AI was switched off, or whose call merely timed out) was told
+        # its books were empty until the next invoice changed the fingerprint.
+        # Now it says what happened and is not stored: the next view asks again.
+        return {"scope": scope, "unavailable": True, "headline": _brief_unavailable(failure),
+                "insights": [], "generated_at": None}
     insights = []
     for it in (data.get("insights") or []):
         if not isinstance(it, dict) or not (it.get("title") or "").strip():

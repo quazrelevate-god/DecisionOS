@@ -169,7 +169,7 @@ export function DexStage({ capture, onAsk, thinking, compact = false, docked = f
 
   const submit = () => {
     const q = text.trim();
-    if (!q || busy) return;
+    if ((!q && !attachments.length) || busy) return;
     setText("");
     onAsk?.(q);
   };
@@ -242,7 +242,7 @@ export function DexStage({ capture, onAsk, thinking, compact = false, docked = f
         {attachments.length > 0 && (
           <p data-testid="dex-stage-attachments" className={cn("w-full max-w-2xl px-2 text-xs text-muted-foreground", compact ? "mt-3" : "mt-6")}>
             <Paperclip size={12} weight="bold" className="mr-1 inline" aria-hidden="true" />
-            Attached: {attachments.map((a) => a.name).join(", ")} — type what Dex should do with it and press Note
+            Attached: {attachments.map((a) => a.name).join(", ")} — ask about it, or press Note to log it
           </p>
         )}
         <div
@@ -300,7 +300,7 @@ export function DexStage({ capture, onAsk, thinking, compact = false, docked = f
             className="min-h-11 max-h-40 flex-1 resize-none bg-transparent px-2 py-2.5 text-[15px] leading-snug placeholder:text-muted-foreground focus:outline-none disabled:opacity-60"
           />
 
-          {text.trim() ? (
+          {text.trim() || attachments.length > 0 ? (
             <button
               type="button"
               onClick={submit}

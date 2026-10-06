@@ -76,12 +76,18 @@ export default function Brain() {
       setLog((l) => [...l, { id: uid(), role: "ai", resp: { type: "NOTICE", answer: NO_ASK } }]);
       return;
     }
-    const text = String(question || "").trim();
+    /* 2026-10-06 (AB-15) — a file on the paperclip goes WITH the question.
+       It was only ever sent by the Note button, so "what does this bill say?"
+       was asked of the records and the bill on screen was ignored. */
+    const files = capture.attachments || [];
+    const text = String(question || "").trim() || (files.length ? "What does this say?" : "");
     if (!text) return;
-    setLog((l) => [...l, { id: uid(), role: "user", text }]);
+    const named = files.map((a) => a.name).join(", ");
+    setLog((l) => [...l, { id: uid(), role: "user", text: named ? `${text}\n📎 ${named}` : text }]);
+    files.forEach((a) => capture.removeAttachment(a.id));
     setBusy(true);
     try {
-      const { data } = await api.post("/ask", { question: text, context_id: ctxId });
+      const { data } = await api.post("/ask", { question: text, context_id: ctxId, file_ids: files.map((a) => a.id) });
       if (data.query_context_id) setCtxId(data.query_context_id);
       setLog((l) => [...l, { id: uid(), role: "ai", resp: data }]);
     } catch (e) {
@@ -96,7 +102,7 @@ export default function Brain() {
     } finally {
       setBusy(false);
     }
-  }, [ctxId, t, canAsk]);
+  }, [ctxId, t, canAsk, capture]);
 
   // 2026-10-06 — documents live in the Company Brain now; an older link that
   // asked Dex to show them (?docs=1&doc=<id>) goes there.

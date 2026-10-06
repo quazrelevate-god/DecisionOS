@@ -206,18 +206,13 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
         onCommitted?.();
         return { ...sent, ok: true, noteId: data?.id || null };
       }
-      /* ASK-39 4 — the staged files leave with the question. /ask's contract is
-         {question, context_id} and nothing else, so the files do not ride the
-         request — they were uploaded into the Company Brain when they were
-         attached, and `_retrieve` searches that store by the plan's keywords
-         and by embedding. Naming them in the question is what points the
-         retrieval at them; it is also what the founder just said out loud, so
-         the transcript already reads that way. */
-      const named = pendingFiles.map((f) => f.name).join(", ");
-      const question = named ? `${text} (about the attached file${pendingFiles.length > 1 ? "s" : ""}: ${named})` : text;
+      /* ASK-39 4 — the staged files leave with the question: their ids ride
+         the request and /ask reads them for this answer (AB-15). */
+      const fileIds = pendingFiles.map((f) => f.id);
+      const question = text || "What does this say?";
       setPendingFiles([]);
       // Verified shape: { type, answer, missing_information, suggested_questions }.
-      const { data } = await api.post("/ask", { question, context_id: ctxId });
+      const { data } = await api.post("/ask", { question, context_id: ctxId, file_ids: fileIds });
       if (data.query_context_id) setCtxId(data.query_context_id);
       push({
         role: "dex",
@@ -254,23 +249,20 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
      reads brain_documents). So "what does this invoice say" is a question the
      backend can already answer; the sheet was simply posting to the endpoint
      that files things away rather than the one that reads them. No backend
-     change: this is two existing endpoints wired the right way round. */
+     change: this is two existing endpoints wired the right way round.
+     2026-10-06 (AB-15) — AND THEN IT WAS THE WRONG ONE. /brain/documents is
+     the Company Brain, curated by the owner and Manage Team since 2026-10-06:
+     everyone else was refused, and for those who weren't, every file asked
+     about stayed in the company's knowledge base for good. Both channels now
+     upload to /files; on Ask the ids ride the question (`file_ids`) and /ask
+     reads them for that one answer (routers/brain._attached_files). */
   const attach = useCallback(async (file, label = "File") => {
     if (!file) return;
     setBusy(true);
     try {
       const fd = new FormData();
       fd.append("file", file);
-      let data;
-      if (channel === "decide") {
-        ({ data } = await api.post("/files", fd, { headers: { "Content-Type": "multipart/form-data" } }));
-      } else {
-        // The Company Brain reads what it is given; /files only keeps it.
-        fd.append("title", file.name);
-        fd.append("kind", "other");
-        fd.append("visibility", "private");
-        ({ data } = await api.post("/brain/documents", fd, { headers: { "Content-Type": "multipart/form-data" } }));
-      }
+      const { data } = await api.post("/files", fd, { headers: { "Content-Type": "multipart/form-data" } });
       const id = data?.id || data?.file?.id;
       if (id) {
         /* ASK-33 — the entry also keeps the File and its type, so the Desk

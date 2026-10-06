@@ -40,6 +40,7 @@ const DEEP_TYPES = {
   // 2026-10-05 — the Company Brain's own sources (documents and the records its
   // memory describes) arrived with no label and no link.
   document: "Document", complaint: "Complaint", meeting: "Meeting", note: "Note",
+  file: "Attached",
 };
 
 function KpiGrid({ kpis, currency }) {

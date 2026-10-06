@@ -847,7 +847,8 @@ async def _answer(question, kpis, table, lang,
                     knowledge_hits: Optional[list] = None,
                     document_hits: Optional[list] = None,
                     passages: Optional[list] = None,
-                    currency: str = "INR", no_money: bool = False, not_everything: bool = False):
+                    currency: str = "INR", no_money: bool = False, not_everything: bool = False,
+                    attached: Optional[list] = None):
     """FIX-007-C (S4-04): the LLM answer now sees three signal streams:
       * `kpis` + `table` (deterministic domain metrics, as before)
       * `knowledge_hits` — brain_context provenance rows (past decisions,
@@ -881,9 +882,13 @@ async def _answer(question, kpis, table, lang,
         sample["relevant_document_passages"] = [
             {"title": p.get("title"), "text": (p.get("text") or "")[:_PASSAGE_CHARS]} for p in passages[:4]
         ]
+    # 2026-10-06 (AB-15) -- what the asker attached to this very question.
+    if attached:
+        sample["attached_files"] = [{"title": a.get("title"), "text": a.get("text") or "(could not be read)"}
+                                    for a in attached]
     # E3-08.1: retrieved document summaries / passages / past-context are user-authored
     # content that could carry an injection -- arm the guard whenever we include retrieved data.
-    _guard = INJECTION_GUARD if (knowledge_hits or document_hits or passages) else ""
+    _guard = INJECTION_GUARD if (knowledge_hits or document_hits or passages or attached) else ""
     # 2026-10-05 — three things the answer got wrong live: "$0 billed" for an
     # Indian company; "according to the document in your workspace" for a
     # company with no documents (it was a past-decision record); and a
@@ -897,6 +902,9 @@ async def _answer(question, kpis, table, lang,
     if not_everything:
         _rules += (" The asker sees only the records their access allows: when something is empty or missing, say"
                    " none that you can see, never that none exist.")
+    if attached:
+        _rules += (" attached_files are files the asker attached to this question: answer from them first, and"
+                   " say so (\"your attached bill shows ...\"). If one could not be read, say that plainly.")
     if no_money:
         # A record the asker can open on their own screen may carry a price in
         # its title (a decision they made); quoting THAT is what the screen
@@ -1049,25 +1057,33 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
 
     # Access, from the records the plan needs — BEFORE anything is read.
     plan, refusal = await _resolve_access(plan, q, user, scope)
-    if refusal:
+    # 2026-10-06 (AB-15) — the asker's own attachments are theirs to ask about
+    # whatever the records say: a salesperson can ask what the bill they just
+    # photographed says. Their records stay closed; only the file is read.
+    attached = await _attached_files(tid, scope["uid"], inp.file_ids)
+    if refusal and not attached:
         await _audit(tid, scope["uid"], q, plan, [], "PERMISSION_DENIED")
         return {"type": "PERMISSION_DENIED", "message": refusal,
                 "can_ask": brain_rbac.what_you_can_ask(user)}
 
-    retrieved = await _retrieve(plan, scope, user=user)
-    kpis, table, cites = await _compute(plan, retrieved, scope)
-
-    # FIX-007-C (S4-04): auxiliary Brain reach — every /ask call
-    # ALSO fetches top-N brain_context (provenance) + brain_documents
-    # (policies) hits keyed by the plan's keywords. Merged into the
-    # citation list so /ask can point at "how we handled this last
-    # time" and "what the contract says" — parity with /brain/agent.
-    brain_extras = await _enrich_with_brain(plan, scope, user, question=q)
+    if refusal:
+        kpis, table, cites = [], {"columns": [], "rows": [], "total_rows": 0}, []
+        brain_extras = {"document_hits": [], "knowledge_hits": [], "passages": [], "note_hits": []}
+    else:
+        retrieved = await _retrieve(plan, scope, user=user)
+        kpis, table, cites = await _compute(plan, retrieved, scope)
+        # FIX-007-C (S4-04): auxiliary Brain reach — every /ask call
+        # ALSO fetches top-N brain_context (provenance) + brain_documents
+        # (policies) hits keyed by the plan's keywords. Merged into the
+        # citation list so /ask can point at "how we handled this last
+        # time" and "what the contract says" — parity with /brain/agent.
+        brain_extras = await _enrich_with_brain(plan, scope, user, question=q)
     extra_cites = brain_retrieval.cites_from_hits(
         document_hits=brain_extras["document_hits"],
         context_hits=brain_extras["knowledge_hits"],
         note_hits=brain_extras.get("note_hits"),
     )
+    file_cites = [{"type": "file", "title": a["title"], "id": a["id"]} for a in attached]
 
     # Disclosure guard (belt & suspenders): strip money columns for non-finance users
     if not scope["can_finance"]:
@@ -1082,7 +1098,7 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
     # "we don't have data in the ledger but the vendor contract says X"
     # is a legitimate answer, not a dead-end. Only fall through to the
     # empty response when BOTH sides are empty.
-    if table["total_rows"] == 0 and not extra_cites:
+    if table["total_rows"] == 0 and not extra_cites and not attached:
         await _audit(tid, scope["uid"], q, plan, [], "INSUFFICIENT_DATA")
         return {
             "type": "INSUFFICIENT_DATA",
@@ -1098,6 +1114,7 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
         passages=brain_extras.get("passages"),
         currency=await _currency(tid), no_money=not scope["can_finance"],
         not_everything=user.get("role") != "owner",
+        attached=attached,
     )
     note = brain_rbac.reroute_note(plan.get("rerouted_from") or plan["primary_entity"], plan["primary_entity"])
     if note:
@@ -1112,7 +1129,7 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
     # FIX-007-C (S4-04): merge domain-record citations with Brain-store
     # citations. Domain rows first (they're the direct answer), then
     # brain_context (provenance), then brain_documents (policies).
-    all_cites = list(cites) + list(extra_cites)
+    all_cites = file_cites + list(cites) + list(extra_cites)
     # De-dup by id in case a domain record and a brain row share the same id.
     seen_ids: set = set()
     merged_cites: list = []
@@ -1137,6 +1154,33 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
         "export_options": ["csv", "excel", "pdf"] if table["total_rows"] else [],
         "currency": await _currency(tid),
     }
+
+
+_ATTACH_CHARS = 6000
+_ATTACH_MAX = 3
+
+
+async def _attached_files(tid: str, uid: str, file_ids) -> list:
+    """2026-10-06 (AB-15) — read what the asker attached to this question.
+
+    Ask used to upload every attachment into the Company Brain as a private
+    document: a member without Manage Team was refused (the Brain is curated
+    since 2026-10-06), and for everyone else each question's file stayed in the
+    Brain for good. The file now goes to the plain file store (POST /files) and
+    is read here, for this answer only. Only the asker's own uploads, in this
+    company, count — an id from anyone else's file reads as nothing."""
+    ids = [str(i) for i in (file_ids or []) if i][:_ATTACH_MAX]
+    if not ids:
+        return []
+    from services.files import _read_reference_text
+    recs = await db.files.find(
+        {"id": {"$in": ids}, "tenant_id": tid, "uploaded_by": uid, "is_deleted": False},
+        {"_id": 0}).to_list(_ATTACH_MAX)
+    out = []
+    for rec in recs:
+        text = (await _read_reference_text(rec, tenant_id=tid, max_chars=_ATTACH_CHARS) or "").strip()
+        out.append({"id": rec["id"], "title": rec.get("original_filename") or "Attached file", "text": text})
+    return out
 
 
 async def _currency(tid):

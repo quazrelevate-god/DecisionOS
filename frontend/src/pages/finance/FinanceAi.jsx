@@ -88,7 +88,8 @@ export function AiPanel({ scope, variant = "inline", scopeLabel, facts, positive
     try {
       const { data: d } = await api.post(`/ledger/ai/${scope}/refresh`);
       qc.setQueryData(["ledger-ai", scope], d);
-      toast.success(t("finance.refreshed"));
+      // AB-14: an unwritten brief says why in the panel; "refreshed" would be untrue.
+      if (!d?.unavailable) toast.success(t("finance.refreshed"));
     } catch {
       toast.error(t("finance.refresh_failed"));
     } finally {
@@ -160,6 +161,14 @@ export function AiPanel({ scope, variant = "inline", scopeLabel, facts, positive
         </div>
       ) : isError ? (
         <p className="mt-4 text-sm text-slate-500">The analysis couldn't load. Press Refresh to try again.</p>
+      ) : data?.unavailable ? (
+        /* 2026-10-06 (AB-14) — the brief could not be written (allowance used up,
+           AI switched off, or a failed call). Said plainly, in a neutral note:
+           not the green/red result card, and not "your books are empty". */
+        <p role="status" data-testid={`ai-unavailable-${scope}`}
+          className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-inset ring-slate-900/5">
+          {headline}
+        </p>
       ) : (
         <>
           {brief ? (

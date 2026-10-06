@@ -17,6 +17,9 @@ class AskInput(BaseModel):
 class AskRequest(BaseModel):
     question: str
     context_id: Optional[str] = None
+    # 2026-10-06 (AB-15) -- files the asker attached to THIS question (POST
+    # /files ids). Read for this answer only; never filed into the Brain.
+    file_ids: list = Field(default_factory=list)
 
 
 class ExportRequest(BaseModel):

@@ -468,6 +468,23 @@
         min-height: 0;
     }
 
+    /* 2026-10-06 — the THIRD documented exception, and the narrowest. The open
+       circle at the end of a Desk sheet row (.kr-desk-row-open, inside
+       .kr-desk-row-roomy only) is a second way into something the WHOLE ROW
+       already does: DeskRow's root is the link, its onClick is the same
+       r.onOpen, and it is full width and never under 44px tall. So the floor
+       here was not protecting a thumb — it was setting the row's height. A
+       pill whose type had already bent to 11pt on a 360x640 still could not
+       fit, because this one 44px circle held it open, and `overflow: hidden`
+       then took the difference out of the circle (3px off its foot, measured).
+       It is sized off --desk-row-scale with the rest of the row instead; 24px
+       at the floor, inside a 44px-tall row that is itself the target. Outside
+       the sheet the circle is untouched and keeps the floor. */
+    .kr-desk-row-roomy .kr-desk-row-open {
+        min-height: 0;
+        min-width: 0;
+    }
+
     /* A control that opted into a taller tier keeps it. */
     .min-h-touch-md { min-height: var(--control-h-md) !important; }
     .min-h-touch-lg { min-height: var(--control-h-lg) !important; }
@@ -802,7 +819,19 @@
 @media (max-width: 1023.98px) {
     .kr-desk-row-roomy {
         padding-block: calc(0.5rem * var(--desk-row-scale));
-        max-height: calc(6.5rem * var(--desk-row-scale));
+        /* NO CEILING IN THE SHEET ANY MORE. (2026-10-06, founder: the three
+           rows should be "utilizing the entire space for it… either it should
+           expand or contract its height".) 6.5rem capped a pill at 104px, which
+           is right at 390x844 where three of them plus the Show-all control
+           just fill the card — and wrong on anything taller: at 440x956 three
+           capped pills left 143px of black under them, the same hole Watch had.
+           The pills are `flex-1`, so with the cap gone they share whatever the
+           card is and the card is always full, at every phone size. The floor
+           is still a floor: `overflow: hidden` stays, because a row that is
+           given LESS than its content must clip rather than print over its
+           neighbour (an Android 6.1" screenshot of three titles on top of one
+           another is why that line exists) — and data-desk-tight below is what
+           now keeps the rows from ever getting there. */
         overflow: hidden;
     }
     .kr-desk-row-title {
@@ -812,6 +841,61 @@
     .kr-desk-row-meta {
         font-size: calc(15px * var(--desk-row-scale));
         line-height: calc(1.5rem * var(--desk-row-scale));
+    }
+
+    /* TIGHT — WHAT A SHORT SCREEN GIVES UP SO THREE ROWS STAY WHOLE.
+       (2026-10-06, founder: the rows "should never overlap or compressed in any
+       situation".) Desk.js sets data-desk-tight on <html> when, and only when,
+       three rows and their gaps cannot fit the card even at the 11pt floor —
+       measured, so it fires on an iPhone SE (375x667) and a 360x640 Android and
+       on nothing the founder has signed off. What it gives back, in the order
+       the space is least missed, all of it measured on those two screens:
+         · the supporting line (~20px a row, 60 of the ~85 needed). The title
+           and the amount are what a row is FOR; "Raised by Sunita Rao · You
+           decide" is the part a 4.7" screen can do without, and it is still on
+           the decision itself one tap away.
+         · the space between the pills, 10px to 6.
+         · the Show-all control, from 56px to the 44px touch floor.
+         · the KPI tiles' padding and the page's own gaps, 4px each — they are
+           content-sized, so this is the only room up there that is not a number
+           or a label.
+       Nothing here is a different design: it is the same Desk with the air
+       taken out of it, and one line fewer per row. */
+    :root[data-desk-tight] .kr-desk-row-meta { display: none; }
+    :root[data-desk-tight] .kr-desk-sheet-list { gap: 0.375rem; }
+    :root[data-desk-tight] [data-testid="desk-phone-more"] { height: 2.75rem; }
+    :root[data-desk-tight] .kr-kpi-tile { padding: 0.5rem; }
+    :root[data-desk-tight] [data-testid="desk-page"] { gap: 0.5rem; }
+    :root[data-desk-tight] .kr-desk-row-roomy { padding-block: calc(0.25rem * var(--desk-row-scale)); }
+
+    /* A ROW IS NEVER SHORTER THAN WHAT IS IN IT. (2026-10-06.)
+       The pills and the Watch cards are `flex-1` in a flex column, so the
+       browser is free to shrink them — and because they also carry
+       `overflow: hidden`, their AUTOMATIC minimum size is zero rather than
+       their content (css-flexbox-1 §4.5: a box with overflow other than
+       visible has no content-based minimum). That is the whole mechanism
+       behind every compressed row the founder has reported: a 14px pill around
+       38px of words, clipped, with the next row's title starting where this
+       one's was cut off. An explicit min-content floor takes the choice away —
+       the row keeps its height, the overflow lands on the LIST, and the fit
+       measurement in Desk.js can see it and scale the type until it is gone.
+       On [data-row] rather than on the pill, so Watch's cards are held to the
+       same rule by the same line. */
+    .kr-desk-sheet-list [data-row] { min-height: min-content; }
+
+    /* THE OPEN CIRCLE BENDS WITH THE ROW IT IS IN. A fixed 32px control inside
+       a row whose type scales is a floor the scale cannot reach past: at
+       375x667 the titles were already at the 11pt floor and the rows still did
+       not fit, so `overflow: hidden` took the difference out of the words. In
+       the sheet it is 2rem at full size — exactly what it was — and smaller
+       only as the row around it gets smaller. 1.5rem at the 0.8 floor is 24px,
+       which is under the 44px touch floor on its own; the ROW is the touch
+       target (it is a link, and its own height is well over 44), and this
+       circle is the second way into the same thing, which is why shrinking it
+       costs nothing a thumb can feel. Untouched off the sheet. */
+    .kr-desk-row-roomy .kr-desk-row-open {
+        height: calc(2rem * var(--desk-row-scale));
+        width: calc(2rem * var(--desk-row-scale));
     }
 
     /* THE DECISION ROW AS ITS OWN PILL. (2026-10-05, founder.)

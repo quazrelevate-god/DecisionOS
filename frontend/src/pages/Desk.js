@@ -218,7 +218,13 @@ function OpenButton({ onClick, label }) {
       title="Open"
       /* On the black board: a white-glass circle, no blur (nothing behind it
          to blur), lit a step on hover. */
-      className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/[.10] text-white/80 transition-colors hover:bg-white/[.20] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+      /* kr-desk-row-open — IT SCALES WITH THE ROW (2026-10-06). h-8 alone is a
+         32px floor under a row whose type bends: on a 375x667 the titles came
+         down to 11pt and the rows still would not fit, because this circle held
+         them open and the leftover was taken out of the text, which clipped. In
+         the sheet it is sized off --desk-row-scale like everything else in the
+         pill (index.css); elsewhere it stays exactly 32. */
+      className="kr-desk-row-open grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/[.10] text-white/80 transition-colors hover:bg-white/[.20] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
     >
       <ArrowSquareOut size={14} weight="bold" aria-hidden="true" />
     </button>
@@ -594,12 +600,75 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
      answer we gave last time. */
   const listRef = useRef(null);
   const [fitTick, setFitTick] = useState(0);
+  /* TIGHT — THE ONE SCREEN SIZE WHERE SCALING IS NOT ENOUGH. (2026-10-06.)
+     Founder: the rows "should never overlap or compressed in any situation".
+     Below the 11pt floor the old measure simply stopped and let `overflow:
+     hidden` cut the rows in half — three 23px slivers of sliced type on a
+     375x667 (iPhone SE), three 14px ones at 360x640. Measured, not guessed:
+     three two-line pills, their gaps and the Show-all control need ~216px of
+     the sheet and an SE gives the card 132.
+     So when the floor is about to be broken the card asks the PAGE for room
+     instead of cutting its contents — the founder's own words, "either it
+     should expand or contract its height and everything associated with it to
+     show three recent lists". `data-desk-tight` on <html> is that request, and
+     index.css answers it where the space actually is: the supporting line goes,
+     the gaps and the KPI tiles tighten, the Show-all control comes down to the
+     44px floor. It is MEASURED, so it fires on the screens that need it and on
+     no others — and it is immune to the two coordinate systems the phone can be
+     in (CSS zoom, or the widened viewport fallback), which a height media query
+     is not: the same SE reports 667px in one and 834 in the other.
+     IT IS ONLY EVER SET HERE, never cleared, and a resize clears it before the
+     next measurement. Clearing it from the measure would be a loop: tight makes
+     it fit, fitting clears tight, clearing stops it fitting. */
+  const [tight, setTight] = useState(false);
+  /* AND THE LAST RESORT, WHICH IS STILL NOT CLIPPING. (2026-10-06.)
+     Three rows is the design and it holds on every phone from a 4.7" iPhone SE
+     up. Below that it stops being arithmetic and starts being physics: a
+     360x640 Android gives the list 103px, and three rows at the 11pt floor —
+     already stripped of their supporting line, their padding halved and their
+     open circle shrunk — need 129. The founder's two rules meet there and only
+     one of them can hold, so this keeps the one they have just restated twice:
+     the rows are never compressed. As many WHOLE rows as the card can seat,
+     and "Show all 30" — which is already the way to the rest, and is on screen
+     — carries what is left. Reset on resize with `tight`, so a rotation or a
+     keyboard asks the question again from a clean layout. */
+  const [maxRows, setMaxRows] = useState(PHONE_ROWS);
+  /* The card height that asked for tight, so the card can give it back. The
+     measure runs while the page is still filling in — the Desk lays out once
+     with the query layer in flight — and a card that is briefly 40px tall asks
+     for tight on evidence that is gone a moment later. Nothing cleared it then
+     but a resize, so a 440x956 phone with room to spare was drawing the
+     tight Desk. TWICE the room, because the release has to be out of reach of
+     tight's OWN gain or it oscillates: tight hands the card back about a
+     quarter of its height (83px to 105px at 360x640, measured), and a release
+     at 1.25x sat exactly on that line — clear, shrink, re-enter, repeat, until
+     the page stopped rendering at all. Nothing short of a different layout
+     doubles the card. */
+  const tightAt = useRef(0);
+  /* ONE READING IS NOT EVIDENCE. Every false tight so far came from a layout
+     that was still moving: the Desk lays out once with the query layer in
+     flight, a tab switch re-flows the card a frame before its new rows are
+     measured, and in those frames the list is briefly a fraction of its height.
+     Acting on that gave a 390x844 phone the tight Desk on two of its three
+     tabs. So a shortfall has to be seen TWICE at the same card height before
+     anything is taken away from the page — the second look is asked for on the
+     next frame, and a layout that is still settling never gives the same
+     number twice. Capped, so a pathological page cannot spin here. */
+  const deficit = useRef({ avail: -1, hits: 0, asks: 0 });
   useEffect(() => {
     if (!roomy) return undefined;
-    const onResize = () => setFitTick((n) => n + 1);
+    const onResize = () => { setTight(false); setMaxRows(PHONE_ROWS); setFitTick((n) => n + 1); };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [roomy]);
+  /* Declared BEFORE the measure so that within one commit the attribute lands
+     first and the measure below reads the layout it produced. */
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    if (tight && roomy && !open) root.setAttribute("data-desk-tight", "");
+    else root.removeAttribute("data-desk-tight");
+    return () => root.removeAttribute("data-desk-tight");
+  }, [tight, roomy, open]);
   useLayoutEffect(() => {
     const el = listRef.current;
     if (!el) return;
@@ -613,14 +682,83 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
     const kids = el.querySelectorAll("[data-row]");
     if (!kids.length) return;
     const avail = el.clientHeight;
-    let needed = 0;
-    kids.forEach((k) => { needed += k.scrollHeight; });
-    needed += kids.length - 1;                            // the hairline between rows
-    if (!avail || !needed || needed <= avail) return;     // already fits: leave it alone
+    if (!avail) return;
+    /* THE GAPS ARE PART OF WHAT HAS TO FIT. This added one pixel per seam —
+       true of the hairline the rows used to be separated by, and wrong since
+       they became pills with `gap-2.5` (10px) between them: the measure was
+       short by ~18px on every phone and the rows were scaled one notch too
+       large. Read the gap the list is actually drawn with. */
+    const gap = parseFloat(getComputedStyle(el).rowGap) || 1;
+    if (tight && avail > tightAt.current * 2) {      // the room came back
+      setTight(false); setMaxRows(PHONE_ROWS); return;
+    }
+    /* WHAT A ROW NEEDS — not what it was given, and not what it admits to.
+       Two readings were tried here and both are wrong in a way worth recording.
+       scrollHeight under-reports: the rows are `flex-1`, so a short card
+       SQUEEZES them, and a squeezed box clamps its own scrollHeight (31px
+       reported against 34 needed at 360x640), which hid exactly the deficit
+       this measure exists to find. offsetHeight over-reports in the other
+       direction: a row GROWS to fill a tall card, so on a 440x956 the sum came
+       back as the whole card and the measure concluded, every pass, that the
+       rows did not fit the space they were comfortably filling — scaling down
+       until it hit the floor and asked for a tight layout on the roomiest
+       phone there is.
+       Reading the tallest CHILD instead has the same fault one level down: a
+       Watch card's inner row is stretched by `align-items: stretch`, so it is
+       as tall as the card it is in, grown and all.
+       So the rows are asked directly: taken out of the sharing for one reflow
+       (`flex: 0 0 auto`), each one draws at exactly its content height, and
+       that is the number. Restored before this effect returns, so nothing is
+       ever painted in the measured state. Two reflows a pass, at most three
+       passes, on resize and on new data. */
+    const need = () => {
+      kids.forEach((k) => { k.style.flex = "0 0 auto"; });
+      let n = 0;
+      kids.forEach((k) => { n += k.offsetHeight; });
+      kids.forEach((k) => { k.style.flex = ""; });
+      return n + (kids.length - 1) * gap;
+    };
     const DESK_ROW_SCALE_FLOOR = 0.8;                     // 11pt, see index.css
-    const s = Math.max(DESK_ROW_SCALE_FLOOR, avail / needed);
-    el.style.setProperty("--desk-row-scale", s.toFixed(3));
-  }, [roomy, open, rows, loading, fitTick]);
+    /* IT CONVERGES, IT DOES NOT ESTIMATE. One pass of avail/needed assumes a
+       row's height is proportional to the scale, and it is not quite: the gap
+       between the pills does not scale, and until this commit neither did the
+       open circle. So the single estimate always under-corrected, and the rows
+       at 375x667 were left ~6px short of their content with `overflow: hidden`
+       taking the difference out of the type. Applying the ratio and READING
+       AGAIN costs two reflows in an effect that runs on resize and on new data,
+       and it lands on the real answer rather than near it. */
+    let s = 1;
+    for (let pass = 0; pass < 3; pass += 1) {
+      const needed = need();
+      if (needed <= avail) return;                        // fits at this scale
+      s = Math.max(DESK_ROW_SCALE_FLOOR, s * (avail / needed));
+      el.style.setProperty("--desk-row-scale", s.toFixed(3));
+      if (s <= DESK_ROW_SCALE_FLOOR) break;
+    }
+    /* Still short at the floor: the type has gone as small as it is allowed to
+       and the card must be given room instead of cutting its contents. */
+    if (need() <= avail) { deficit.current = { avail: -1, hits: 0, asks: 0 }; return; }
+    /* Short — but only act on it once the same card height says so twice. */
+    const d = deficit.current;
+    if (d.avail !== avail) { deficit.current = { avail, hits: 1, asks: d.asks }; }
+    else d.hits += 1;
+    if (deficit.current.hits < 2) {
+      if (deficit.current.asks < 6) {
+        deficit.current.asks += 1;
+        requestAnimationFrame(() => setFitTick((n) => n + 1));
+      }
+      return;
+    }
+    if (!tight) { tightAt.current = avail; setTight(true); return; }
+    /* Tight too, and still short at the floor: seat ONE fewer row and measure
+       again (see maxRows above). One step at a time, never a division — an
+       arithmetic guess at how many "would" fit is taken against rows that are
+       currently squeezed, and it overshot on the first cut: a 375x667 that
+       seats three dropped to two and a 360x640 to one. Stepping down converges
+       on the real answer in at most two more passes and cannot overshoot,
+       because every pass is a fresh measurement of what is actually drawn. */
+    if (s <= DESK_ROW_SCALE_FLOOR && maxRows > 1) setMaxRows(maxRows - 1);
+  }, [roomy, open, rows, loading, fitTick, tight, maxRows]);
 
   /* ASK-35 1.1 — THREE, AND THEN A CONTROL: the Desk's job on a phone is to say
      what is waiting, not to show it all.
@@ -640,7 +778,7 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
      what knows where the card has to grow to. A card cannot own a state the
      page has to act on. */
   // ASK-42 A — three, always (see the measure above); "Show all" is the rest.
-  const shown = showAll ? rows : rows.slice(0, PHONE_ROWS);
+  const shown = showAll ? rows : rows.slice(0, maxRows);
   const hidden = rows.length - shown.length;
 
   return (
@@ -722,7 +860,10 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
             space between them is what says so. */}
         <div ref={listRef} className={cn(
           scrolls ? "kr-scroll-quiet min-h-0 flex-1 overflow-y-auto" : !open ? "flex min-h-0 flex-1 flex-col" : undefined,
-          roomy && !open && "gap-2.5")}>
+          /* kr-desk-sheet-list — the one handle index.css needs to tighten the
+             space between the pills when the card is tight (see data-desk-tight
+             above); the gap itself stays Tailwind's. */
+          roomy && !open && "kr-desk-sheet-list gap-2.5")}>
         {children || (
           <>
             {loading && (
@@ -798,6 +939,19 @@ function StackCard({ tone, title, count, line, tail, loading, empty, to, testid 
     <Link
       to={to}
       data-testid={testid}
+      /* data-row — THE SHEET'S FIT MEASURE COUNTS THESE TOO (2026-10-06).
+         PhoneTabCard sizes the sheet's rows by asking every [data-row] in the
+         list how much height its content needs; Watch's cards carried no such
+         mark, so on a short screen the three rows in the other tabs were
+         scaled to fit and these were left at full size to overflow the card.
+         One attribute puts them under the same rule. Inert off the sheet: the
+         measure only runs on the phone's roomy card. */
+      data-row=""
+      /* min-h-0 is the DESKTOP's: there the three cards share one column and
+         must be allowed to shrink. In the phone's sheet the list's own rule
+         (.kr-desk-sheet-list [data-row], index.css) overrides it with a
+         min-content floor, which is what stops a row being squeezed under its
+         own words — see that rule for why it has to exist at all. */
       className={`kr-glass kr-lift ${TONE[tone]} flex min-h-0 flex-1 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70`}
     >
       {/* ASK-43 — ON A PHONE THIS CARD IS A ROW. Watch's three feeds sat at
@@ -812,12 +966,19 @@ function StackCard({ tone, title, count, line, tail, loading, empty, to, testid 
         <div className="flex min-w-0 flex-col gap-1 max-lg:gap-0.5">
           <div className="flex min-w-0 items-center gap-2 max-lg:gap-1.5">
             <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full bg-[hsl(var(--kr-glass-from))] max-lg:h-2 max-lg:w-2" />
-            <h3 className="text-base font-medium tracking-[-0.006em] text-white/85 max-lg:text-[15px] max-lg:leading-5">{title}</h3>
+            {/* kr-desk-row-title/meta below lg (2026-10-06): the SAME two rules
+                the sheet's pills are written against, so Watch's cards and the
+                Decisions rows are one typeface at one size and bend by the same
+                --desk-row-scale when a short screen needs them smaller. The
+                max-lg sizes these used to carry were a copy of DeskRow's taken
+                before the sheet existed, and the two had since drifted apart —
+                15/12 here against 17/15 there. Desktop (lg:) is untouched. */}
+            <h3 className="kr-desk-row-title text-base font-medium tracking-[-0.006em] text-white/85 lg:text-base lg:leading-6">{title}</h3>
             <CountPill n={count} onInk />
           </div>
           {loading
             ? <div className="ds-skeleton h-4 w-2/3 rounded-control" aria-hidden="true" />
-            : <p className="truncate text-sm text-neutral-300 max-lg:text-xs max-lg:leading-4">
+            : <p className="kr-desk-row-meta truncate text-sm text-neutral-300 lg:text-sm lg:leading-5">
                 {line
                   ? <>{line}{tail && <span className="text-neutral-500"> &middot; {tail}</span>}</>
                   : <span className="text-neutral-500">{empty}</span>}
@@ -1933,7 +2094,17 @@ export default function Desk() {
           {/* Watch is three feeds, not a list of rows: they keep the cards they
               already had, which are links to the pages that hold the detail. */}
           {phoneTab === "watch" ? (
-            <div className="flex flex-col gap-2.5" data-testid="desk-watch">
+            /* 2026-10-06 (founder) — WATCH FILLS THE CARD, LIKE THE OTHER TWO
+               TABS. This was a plain `flex flex-col`: it hugged its three
+               cards at their content height (42px each) and left ~190px of
+               black under them at 390x844, while Decisions beside it drew
+               83px pills down to the floor of the same box. Switching tabs
+               changed the scale of the whole sheet.
+               `min-h-0 flex-1` is all it takes — the cards are already
+               `flex min-h-0 flex-1` (StackCard), so with a parent that has a
+               height to give they share it exactly the way DeskRow's pills do,
+               and the two tabs measure the same. */
+            <div className="flex min-h-0 flex-1 flex-col gap-2.5" data-testid="desk-watch">
               <StackCard
                 tone="today"
                 title="Due today"

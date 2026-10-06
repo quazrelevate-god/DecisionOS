@@ -123,6 +123,20 @@ const tasks = Array.from({ length: 42 }, (_, i) => {
     progress: [0, 25, 50, 75][i % 4],
     attachment_count: i % 3,
     task_type: ["operational", "financial", "sales"][i % 3],
+    /* 2026-10-06 — THE BUSIEST STATE NOW HAS APPROVALS IN IT. The Desk's
+       third tab reads /tasks?view=approvals and filters for a pending one the
+       signed-in person may approve; no task here carried the two fields, so
+       the tab was EMPTY in the fixture meant to show every layout at its
+       fullest — which is why the founder's ask to check the approvals rows
+       could not be answered from the lab at all. Five of the forty-two, none
+       of them the signed-in owner's own work, which is the rule the client and
+       the server both apply (canApproveTask / _can_approve_task).
+       created_at is what the Desk sorts these by and the row's meta line
+       counts the days from; without it they sorted arbitrarily and read
+       "today". */
+    ...(i % 8 === 3 && i % 5 !== 0
+      ? { approval_required: true, approval_status: "pending", created_at: iso(-((i % 6) + 1)) }
+      : {}),
   };
 });
 

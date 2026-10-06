@@ -66,6 +66,7 @@ for (const [w, h] of WIDTHS) {
   await page.waitForSelector('[data-testid="dex-slider"]', { timeout: 25000 });
   await page.waitForTimeout(1500);
   console.log(`\n${w}x${h}`);
+  const rowType = {};
 
   // ── the Desk's order, and that it still fits ───────────────────────────────
   const box = async (t) => (await page.locator(`[data-testid="${t}"]`).boundingBox());
@@ -82,6 +83,64 @@ for (const [w, h] of WIDTHS) {
   check('no horizontal overflow',
     (await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)) <= 0);
   check('the Desk has no Ask circle', (await page.locator('[data-testid="dex-fab"]').count()) === 0);
+
+  /* ── THE SHEET'S THREE TABS ARE ONE LIST ──────────────────────────────────
+     2026-10-06, founder: the rows should use "the entire space" of the card,
+     the Watch cards "scaled up to fill the entire space it has", approvals
+     "the same type of card height", and none of them "overlap or compressed in
+     any situation". Every one of those is a measurement, so here they are —
+     at 390x844 and at 360x640, which is the screen where the room runs out.
+     What the numbers caught when they were first taken: Watch drew three 42px
+     cards and left 190px of black under them; Decisions drew three 14px
+     slivers of sliced type at 360x640; Watch's third card ran out of the sheet
+     and under the dock there. */
+  for (const tab of ['decisions', 'watch', 'approvals']) {
+    await page.locator(`[data-testid="desk-tab-${tab}"]`).click();
+    await page.waitForTimeout(700);
+    const m = await page.evaluate(() => {
+      const card = document.querySelector('[data-testid="desk-phone-card-card"]');
+      const list = card && card.firstElementChild;
+      if (!list) return null;
+      const rows = [...list.querySelectorAll('[data-row]')];
+      const lb = list.getBoundingClientRect();
+      const boxes = rows.map((r) => r.getBoundingClientRect());
+      const more = document.querySelector('[data-testid="desk-phone-more"]');
+      return {
+        rows: rows.length,
+        /* clipped: the row is drawn shorter than the content inside it. 2px of
+           slack for sub-pixel line-heights at a fractional --desk-row-scale. */
+        clipped: rows.filter((r) => r.scrollHeight > r.clientHeight + 2).length,
+        /* the foot of the last row against the foot of the list it is in */
+        slack: boxes.length ? Math.round(lb.bottom - boxes[boxes.length - 1].bottom) : null,
+        overlap: boxes.some((b, i) => i > 0 && b.top < boxes[i - 1].bottom - 1),
+        escapes: boxes.some((b) => b.bottom > lb.bottom + 1 || b.top < lb.top - 1),
+        title: rows.length ? getComputedStyle(rows[0].querySelector('.kr-desk-row-title')).fontSize : null,
+        more: more ? Math.round(more.getBoundingClientRect().height) : 0,
+        empty: !!document.querySelector('[data-testid="desk-phone-card-empty"]'),
+      };
+    });
+    if (!m || (m.rows === 0 && m.empty)) { check(`${tab}: the tab is empty, nothing to fit`, true); continue; }
+    check(`${tab}: it has rows`, m.rows > 0, `${m.rows}`);
+    check(`${tab}: nothing is compressed`, m.clipped === 0, `${m.clipped} clipped`);
+    check(`${tab}: nothing overlaps or leaves the card`, !m.overlap && !m.escapes);
+    /* FILLS IT: the last row ends at the foot of the list, bar the slack a
+       capped row count leaves (one row's worth is the most that can be left
+       over before a row would have fitted). */
+    check(`${tab}: the rows use the whole card`, m.slack !== null && m.slack <= 24, `${m.slack}px left under them`);
+    rowType[tab] = m.title;
+  }
+  /* ONE TYPE ACROSS THE TABS, to within the scale. The tabs are not always
+     given the same height — a tab with more than three rows spends 44-56px of
+     its card on the Show all control and the others do not — so the fit can
+     land a tab a few per cent apart. Within half a point is "the same size" to
+     an eye; a tab drawn at a different SIZE (the 15px Watch cards against the
+     17px rows beside them, before this) is 2px out and fails. */
+  {
+    const sizes = Object.values(rowType).filter(Boolean).map((v) => parseFloat(v));
+    const spread = sizes.length ? Math.max(...sizes) - Math.min(...sizes) : 0;
+    check('one type across the three tabs', spread <= 0.75,
+      Object.entries(rowType).map(([k, v]) => `${k} ${v}`).join(', '));
+  }
 
   // ── the slider ────────────────────────────────────────────────────────────
   const track = await page.locator('[data-testid="dex-slider"] .kr-slider-well').boundingBox();

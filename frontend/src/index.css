@@ -976,22 +976,12 @@
    growth dynamic without any measuring in JS.
    The material is the dock's own, because it IS the dock: the same frosted
    ink, rim and shadow the bar carries, so nothing changes hands mid-gesture. */
-/* …AND THE SAME BAR, GROWN INTO THE MENU. (2026-10-06, founder: "the entire
-   dock should increase its height… no need of an additional card inside this
-   expanded dock sheet, only the pills.") Same material as the chat because it
-   is the same object; the ceiling is higher because the menu's height is known
-   — five rows of two and the bar — and it should not have to scroll to show a
-   nine-item list. Below that line the height is simply its content's. */
-.kr-dock-more {
-    max-height: calc(78dvh / var(--ui-scale, 1));
-    background: hsl(0 0% 7% / .92);
-    -webkit-backdrop-filter: blur(22px) saturate(1.2);
-    backdrop-filter: blur(22px) saturate(1.2);
-    border: 1px solid hsl(40 30% 92% / .28);
-    box-shadow: 0 8px 32px rgb(0 0 0 / .35),
-                inset 0 1px 0 hsl(40 40% 96% / .22),
-                0 0 20px -4px hsl(40 35% 92% / .30);
-}
+/* (There is no .kr-dock-more. The first cut of the More menu gave it this
+   material — a second surface with the bar nested inside it, which is exactly
+   what the founder sent back: "there is another sheet appeared, and in that
+   sheet the dock was there as a cutout inside it." The menu has no material of
+   its own now; it is drawn inside the dock's own well, which grows to hold it.
+   See DexSlider's `menu` prop.) */
 
 .kr-dock-chat {
     max-height: calc(50dvh / var(--ui-scale, 1));

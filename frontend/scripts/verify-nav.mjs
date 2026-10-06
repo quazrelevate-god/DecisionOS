@@ -212,7 +212,7 @@ check('active slot is marked aria-current', cue.current === 'page');
 await page.evaluate(() => window.scrollTo(0, 800));
 await page.waitForTimeout(250);
 const beforeY = await page.evaluate(() => Math.round(window.scrollY));
-const dockShut = await page.locator('[data-testid="dock-slider"], [data-testid="dock"]').first().boundingBox();
+const dockShut = await page.locator('[data-testid="dex-slider"] .kr-slider-well, [data-testid="dock"]').first().boundingBox();
 await page.locator('[data-testid="dock-more"]').click();
 await page.waitForSelector(DEX_SLIDER ? '[data-testid="dock-more-panel"]' : '[data-testid="allapps-panel"]', { timeout: 5000 });
 await page.waitForTimeout(500);
@@ -220,32 +220,45 @@ await page.waitForTimeout(500);
 if (DEX_SLIDER) {
   const g = await page.evaluate(() => {
     const nav = document.querySelector('[data-testid="dock-slider"]');
+    const well = document.querySelector('[data-testid="dex-slider"] .kr-slider-well');
     const panel = document.querySelector('[data-testid="dock-more-panel"]');
     const pills = [...panel.querySelectorAll('[data-testid^="allapps-tile-"]')];
     const box = (e) => { const b = e.getBoundingClientRect(); return { top: Math.round(b.top), bottom: Math.round(b.bottom), h: Math.round(b.height) }; };
+    /* HOW MANY SURFACES BETWEEN A PILL AND THE BAR. The founder's correction:
+       "there is another sheet appeared, and in that sheet the dock was there as
+       a cutout inside it… the exact dock black container should expand." So the
+       claim is not that a panel exists above the bar — it is that the bar IS
+       the panel, and that walking up from a pill to the well passes through
+       nothing that paints a surface of its own. */
+    let nested = 0;
+    for (let n = pills[0] && pills[0].parentElement; n && n !== well; n = n.parentElement) {
+      const cs = getComputedStyle(n);
+      if (cs.backgroundColor !== 'rgba(0, 0, 0, 0)' || cs.borderTopWidth !== '0px' || cs.boxShadow !== 'none') nested += 1;
+    }
     return {
-      nav: box(nav), panel: box(panel),
+      nav: box(nav), well: box(well), panel: box(panel),
       cols: getComputedStyle(panel.querySelector('[data-testid="dock-more-grid"]')).gridTemplateColumns.split(' ').length,
       rows: new Set(pills.map((p) => Math.round(p.getBoundingClientRect().top))).size,
       pills: pills.length,
       minH: Math.min(...pills.map((p) => p.offsetHeight)),
       bg: getComputedStyle(pills[0]).backgroundColor,
       ink: getComputedStyle(pills[0]).color,
-      sliderInside: !!panel.querySelector('[data-testid="dex-slider"]'),
-      cards: [...panel.querySelectorAll('div')].filter((d) => {
-        const cs = getComputedStyle(d);
-        return cs.backgroundColor !== 'rgba(0, 0, 0, 0)' && d.querySelector('[data-testid^="allapps-tile-"]');
-      }).length,
+      menuInWell: well.contains(panel),
+      handleInWell: !!well.querySelector('[data-testid="dex-slider-handle"]'),
+      navInWell: !!well.querySelector('[data-testid="dock-slider-items"]'),
+      cards: nested,
       floating: document.querySelectorAll('[data-testid="allapps-panel"]').length,
       backdrop: document.querySelectorAll('[data-testid="allapps-backdrop"]').length,
       pageScroll: document.documentElement.scrollHeight - window.innerHeight,
     };
   });
   check('More grows the dock rather than floating a card over the page',
-    g.floating === 0 && g.backdrop === 0 && g.panel.bottom === g.nav.bottom,
-    `panel ${g.panel.top}→${g.panel.bottom}, dock ${g.nav.top}→${g.nav.bottom}`);
-  check('…and the dock is taller for it', dockShut && g.nav.h > dockShut.height + 100,
-    `${Math.round(dockShut.height)} → ${g.nav.h}`);
+    g.floating === 0 && g.backdrop === 0 && g.well.bottom === g.nav.bottom,
+    `well ${g.well.top}→${g.well.bottom}, dock ${g.nav.top}→${g.nav.bottom}`);
+  check('…and it is the bar\'s OWN container that grew', dockShut && g.well.h > dockShut.height + 100,
+    `${Math.round(dockShut.height)} → ${g.well.h}`);
+  check('…with the menu, the handle and the destinations all inside that one box',
+    g.menuInWell && g.handleInWell && g.navInWell);
   check('the nine menu pills are in it, two up in five rows',
     g.pills === 9 && g.cols === 2 && g.rows === 5, `${g.pills} pills, ${g.cols} cols, ${g.rows} rows`);
   check('the pills clear the 44px floor', g.minH >= 44, `${g.minH}px`);
@@ -256,8 +269,7 @@ if (DEX_SLIDER) {
   const ink = g.ink.match(/\d+/g).map(Number);
   check('the pills are white-ish, with dark type on them',
     Math.min(rgb[0], rgb[1], rgb[2]) >= 230 && Math.max(ink[0], ink[1], ink[2]) <= 80, `${g.bg} on ${g.ink}`);
-  check('no second card between the pills and the dock', g.cards === 0, `${g.cards} card(s)`);
-  check('the bar keeps its destinations at the foot', g.sliderInside);
+  check('no second sheet between the pills and the bar', g.cards === 0, `${g.cards} surface(s)`);
   check('the page behind does not scroll', g.pageScroll <= 0, `${g.pageScroll}px`);
 }
 
@@ -409,7 +421,10 @@ if (DEX_SLIDER) {
      is deliberately hidden half the time. This drag goes LEFT, which is Ask. */
   const mid = await page.evaluate(() => {
     const items = document.querySelector('[data-testid="dock-slider-items"]');
-    const ends = [...document.querySelectorAll('[data-testid="dock-slider"] .kr-slider-well > span')]
+    /* Descendants, not direct children: the track is a row inside the well
+       since More grew that same container (DexSlider's `menu`), so the labels
+       are one level deeper than they were. */
+    const ends = [...document.querySelectorAll('[data-testid="dock-slider"] .kr-slider-well span')]
       .filter((e) => /^(Ask|Decide)$/.test(e.textContent.trim()));
     const ask = ends.find((e) => e.textContent.trim() === 'Ask');
     const decide = ends.find((e) => e.textContent.trim() === 'Decide');

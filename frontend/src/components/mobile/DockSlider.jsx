@@ -108,20 +108,19 @@ export function DockSlider({
            grows it into a conversation. The slider stays at the foot, so the
            destinations and the control never leave — and the same press on More
            puts it back. */
-        <DockMorePanel user={user} onClose={onMore}>
-          <DexSlider
-            tone="ink"
-            behind={behind}
-            onDrag={onDrag}
-            onPressChange={setPressed}
-            onAsk={onAsk}
-            onDecide={onDecide}
-            capturing={capturing}
-            recording={recording}
-            levelsRef={levelsRef}
-            onStop={onStop}
-          />
-        </DockMorePanel>
+        <DexSlider
+          tone="ink"
+          behind={behind}
+          menu={<DockMore user={user} onClose={onMore} />}
+          onDrag={onDrag}
+          onPressChange={setPressed}
+          onAsk={onAsk}
+          onDecide={onDecide}
+          capturing={capturing}
+          recording={recording}
+          levelsRef={levelsRef}
+          onStop={onStop}
+        />
       ) : askOpen ? (
         <DockAskPanel chat={chat} onClose={onCloseAsk} onOpenDecision={onOpenDecision}>
           <DexSlider
@@ -167,7 +166,7 @@ export function DockSlider({
  * AllAppsPanel's list — one set of destinations, two ways of drawing it — so a
  * page added to the menu appears here without anyone remembering to.
  */
-function DockMorePanel({ user, onClose, children }) {
+function DockMore({ user, onClose }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   /* The nine, in the order the panel has always had them: the destinations
@@ -188,10 +187,10 @@ function DockMorePanel({ user, onClose, children }) {
   useBackDismiss(true, (o) => { if (!o) onClose?.(); });
 
   return (
-    <div
-      className="kr-dock-more flex flex-col overflow-hidden rounded-[var(--radius-card)]"
-      data-testid="dock-more-panel"
-    >
+    /* NO CONTAINER OF ITS OWN. This is drawn inside the dock's well (DexSlider's
+       `menu`), so the black around these pills IS the bar — there is no second
+       sheet and nothing is nested in anything. */
+    <div className="flex min-h-0 flex-col" data-testid="dock-more-panel">
       <div className="flex shrink-0 items-center justify-between gap-2 px-3 pt-2.5">
         <span className="text-[13px] font-medium text-white/60">{t("bottomnav.more", "More")}</span>
         <button
@@ -208,7 +207,7 @@ function DockMorePanel({ user, onClose, children }) {
       {/* Five rows of two, on the dock's own ink — no card between them and it.
           It scrolls only if a role ever has more than fits, which no role does
           today; the panel is sized to its content. */}
-      <div className="kr-scroll-quiet min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2">
+      <div className="kr-scroll-quiet min-h-0 max-h-[calc(58dvh/var(--ui-scale,1))] overflow-y-auto overscroll-contain px-2 py-2">
         <div className="grid grid-cols-2 gap-2" data-testid="dock-more-grid">
           {items.map((it) => {
             const Icon = it.icon;
@@ -243,8 +242,6 @@ function DockMorePanel({ user, onClose, children }) {
         </div>
       </div>
 
-      {/* The bar, at the foot, exactly where it was before it grew. */}
-      <div className="shrink-0 px-1 pb-1">{children}</div>
     </div>
   );
 }

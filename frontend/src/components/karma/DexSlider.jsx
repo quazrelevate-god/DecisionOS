@@ -90,6 +90,9 @@ async function tick(style) {
  * @param {Function} onDecide   reached and released at the RIGHT end
  * @param {Function} [readLevel] 0..1 mic loudness, read per frame, never state
  * @param {boolean}  [disabled]
+ * @param {React.ReactNode} [menu]  drawn INSIDE the well, above the track: the
+ *   dock's More menu, which grows this same container rather than opening a
+ *   second one over it.
  */
 /**
  * @param {Function} onAsk      reached and released at the LEFT end
@@ -134,7 +137,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
                                caller can fade them in step with the gesture
                                rather than guessing at a duration. */
                             behind = null, onDrag, onPressChange,
-                            disabled = false, className }) {
+                            disabled = false, menu = null, className }) {
   const onInk = tone === "ink";
   const { t } = useTranslation();
   const trackRef = React.useRef(null);
@@ -388,12 +391,28 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
   return (
     <div className={cn("flex w-full flex-col", className)} data-testid="dex-slider">
       <div className="flex w-full items-center">
+      {/* THE WELL IS THE CONTAINER; THE TRACK IS A ROW INSIDE IT.
+          (2026-10-06, founder, on the More menu: "the exact dock black
+          container should expand to reveal the more menu items" — the first cut
+          grew a NEW sheet and left the bar sitting inside it as a cutout, which
+          is two containers where there should be one.)
+          So anything handed in as `menu` is drawn INSIDE this same well, above
+          the track, and the well takes the height: one black object that is a
+          pill when it is a bar and a card when it has a menu in it. With no
+          menu the two boxes are the same box — the well is exactly the track's
+          height and carries the same radius it always did — so nothing about
+          the control's geometry, its measurements or its suites changes. */}
       <div
-        ref={trackRef}
-        className={cn("kr-slider-well relative flex w-full items-center justify-between overflow-hidden",
-          "h-[var(--desk-slider-track)]",
+        className={cn("kr-slider-well relative flex w-full overflow-hidden",
+          menu ? "flex-col rounded-[var(--radius-card)]" : "h-[var(--desk-slider-track)]",
           onInk && "kr-slider-well--ink")}
         data-at={at || undefined}
+        data-testid={menu ? "dex-slider-expanded" : undefined}
+      >
+      {menu}
+      <div
+        ref={trackRef}
+        className="relative flex h-[var(--desk-slider-track)] w-full shrink-0 items-center justify-between"
       >
         {/* WHAT THE WELL CARRIES. Under the ripple and under the handle, so a
             drag passes over it rather than through it; the caller fades it. */}
@@ -545,6 +564,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
       </div>
       {/* pct is read by the suite to prove the handle follows the finger. */}
       <span className="sr-only" data-testid="dex-slider-progress">{Math.round(pct * 100)}</span>
+      </div>
       </div>
     </div>
   );

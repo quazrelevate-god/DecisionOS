@@ -904,12 +904,109 @@
    task drawer's last actions, the filter sheet's Done. More (AllAppsPanel)
    grows out of the dock and marks itself data-keeps-chrome, so it keeps it. */
 @media (max-width: 1023.98px) {
+    /* The dock/FAB/vignette sit at z-10000, ABOVE the dialog, so they are
+       hidden INSTANTLY while a dialog is open. (An earlier version faded them
+       out over 180ms — but because they sit above the dialog, during that fade
+       they ghosted on top of the dialog's own bottom action bar, which was half
+       of the "crack" on opening a card. Instant hide, no transition.) */
     body:has([role="dialog"][data-state="open"]:not([data-keeps-chrome])) [data-mobile-chrome],
     body:has([role="alertdialog"][data-state="open"]) [data-mobile-chrome] {
         opacity: 0 !important;
         visibility: hidden;
         pointer-events: none;
     }
+    /* (An earlier build HID the page behind the dialog to mask a one-frame late
+       paint. That root cause is now fixed by [data-dialog-scale-root] giving the
+       dialog its own zoom raster layer, so the page no longer needs hiding — and
+       it must stay VISIBLE for the backdrop blur to have something to frost.) */
+}
+
+/* B?? — MOBILE DIALOGS APPEAR INSTANTLY (no enter/exit animation), because
+   ANY opacity animation cross-fades. The shared DialogContent
+   (components/ui/dialog.jsx) ships the shadcn/tailwindcss-animate enter
+   (zoom-in-95 + slide + fade-in-0). On the app's near-full-screen mobile
+   sheets (task detail max-w-2xl/90vh in MyWork, the New buyer/supplier sheet in
+   CRM) that enter animated OPACITY from 0, so for its duration the panel was
+   translucent: the page behind showed THROUGH the dialog and the (above-dialog)
+   dock ghosted over the dialog's bottom action bar — the "crack when a card or
+   dialog opens" the founder reported, confirmed on slow-motion capture. A fade
+   cannot fix a fade. So on mobile the dialog is opaque from the first frame: it
+   covers the page immediately, nothing shows through, nothing to cross-fade.
+   Desktop (≥lg) keeps the original zoom. Scoped to the dialog/alertdialog panels
+   only — popovers, menus and dropdowns keep their own animations. The scrim
+   overlay keeps its own fade (it only dims; it never caused the ghosting). */
+@media (max-width: 1023.98px) {
+    /* B?? — the dialog ANIMATES again (smooth), but only its TRANSFORM, never
+       its opacity. The panel is pinned opaque in BOTH states, so the shadcn
+       enter/exit (zoom-in-95 + slide, duration-200) plays as an opaque
+       scale/settle with no translucent cross-fade that could reveal the page.
+       The scrim (data-dialog-overlay) keeps its own fade — it only dims. The
+       panel no longer tile-glitches because [data-dialog-scale-root] now gives
+       it its own zoom layer (see that rule), so this animation is finally
+       smooth AND clean. (Earlier this block killed the animation and forced
+       the panel full-screen; both are removed now — rounded sheets, animated.) */
+    [role="dialog"][data-state="open"],
+    [role="dialog"][data-state="closed"],
+    [role="alertdialog"][data-state="open"],
+    [role="alertdialog"][data-state="closed"] {
+        opacity: 1 !important;
+        /* B?? — the panel is on its own GPU layer (will-change) so it rasterises
+           as ONE texture — no half-rendered/bleed on open — AND it is a CARD that
+           PULLS UP from the bottom: a pure vertical slide (no scale, no fade),
+           opaque the whole way, which reads as a sheet sliding up. 220ms, snappy.
+           (A blurred backdrop used to sit behind this; it was the biggest cause of
+           open/close lag, so it is gone — see [data-dialog-overlay] below.) */
+        will-change: transform;
+        -webkit-backface-visibility: hidden;
+        backface-visibility: hidden;
+        --tw-enter-translate-x: 0 !important;
+        --tw-enter-translate-y: 100% !important;
+        --tw-enter-scale: 1 !important;
+        --tw-exit-translate-x: 0 !important;
+        --tw-exit-translate-y: 100% !important;
+        --tw-exit-scale: 1 !important;
+        animation-duration: 220ms !important;
+        animation-timing-function: cubic-bezier(.33, 1, .68, 1) !important;
+    }
+
+    /* B?? — FLAT scrim, NO backdrop-filter. A full-viewport `backdrop-filter:
+       blur()` re-blurred the whole page every composited frame of the fade, both
+       ways, on every dialog — the single biggest source of open/close lag
+       (measured ~80% janky frames, GPU-bound). A plain semi-opaque veil fades in
+       just as smoothly for free. Soft and non-black. */
+    [data-dialog-overlay] {
+        background-color: hsl(222 22% 26% / 0.42) !important;
+        -webkit-backdrop-filter: none !important;
+        backdrop-filter: none !important;
+        animation-duration: 220ms !important;
+        animation-timing-function: cubic-bezier(.33, 1, .68, 1) !important;
+    }
+}
+
+/* A SCRIM ON ITS WAY OUT IS NOT A SCRIM — IT WAS EATING THE NEXT TAP.
+   (2026-10-06, found by verify:dex on the merge, then measured on the page.)
+   Radix keeps a closing overlay mounted for the length of its own fade-out and
+   only then unmounts it, and the panel inside it goes first. So for ~400ms after
+   a card closes there is nothing on screen but a full-viewport `fixed inset-0
+   z-50` layer at pointer-events: auto — and the first press after closing a
+   card landed on THAT, not on the thing under the finger.
+   Measured, not reasoned: a pointerdown on the dock's slider handle 5727ms into
+   a run reported its target as `DIV.fixed inset-0 z-50 bg-black/…` with NO
+   [role=dialog] left in the document; the overlay was removed at 5930ms. The
+   drag that press began therefore never happened. On a phone this is exactly
+   the founder's "I need to press twice" — reported for the slider, present on
+   every screen in the app, after every dialog.
+   The window got wide enough to catch because origin/mobile-capacitor gave the
+   mobile scrim its own 220ms ease-out, but nothing about the cause is new or
+   mobile-only: a layer that is fading out must not take presses, at any width.
+   Radix marks it for us — data-state="closed" IS "on the way out" — and the
+   panel gets the same treatment, since a card in its exit animation should not
+   be collecting clicks either. */
+[data-scrim][data-state="closed"],
+[data-dialog-overlay][data-state="closed"],
+[role="dialog"][data-state="closed"],
+[role="alertdialog"][data-state="closed"] {
+    pointer-events: none !important;
 }
 
 /* UI-SCALE · .ui-scale — the app scales with the screen. hooks/useUiScale
@@ -965,6 +1062,35 @@
    dropdowns too (the view picker, the pipeline picker, every GlassSelect). */
 .ui-scale [data-radix-popper-content-wrapper] { zoom: calc(1 / var(--ui-scale, 1)); }
 .ui-scale [data-radix-popper-content-wrapper] > * { zoom: var(--ui-scale, 1); }
+
+/* B?? — DIALOGS ESCAPE THE BODY ZOOM, exactly like the poppers above. A
+   portalled dialog (components/ui/dialog.jsx) lives inside <body>'s `zoom`;
+   the webview then re-rasterises its fixed, centred panel IN TILES, so the
+   cards paint top-down and the opaque backdrop lands a frame late and the page
+   shows through for ~2 frames on open. Wrapping the overlay + panel in
+   [data-dialog-scale-root] and cancelling the zoom there gives the subtree its
+   OWN raster layer (no tiling under the parent zoom); the child puts the zoom
+   back, so the sheet is still drawn at the page's 0.8 scale. Net-neutral, and a
+   no-op at scale 1.0 (desktop). This is the root-cause fix for the open/close
+   glitch — poppers have never shown it because they already do this. */
+.ui-scale [data-dialog-scale-root] {
+    /* Full-viewport fixed box. It is a child of the 0.8-zoomed <body>; its own
+       zoom 1/0.8 makes its CUMULATIVE zoom 1.0, so `inset:0` is exactly the
+       viewport. That gives the fixed panel inside a correct containing block to
+       centre against (left/top:50% = screen centre), while the boundary still
+       makes the panel rasterise as its own layer. */
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    pointer-events: none;
+    zoom: calc(1 / var(--ui-scale, 1));
+}
+.ui-scale [data-dialog-scale-root] > * {
+    /* Put the page scale back on the panel so it is drawn at 0.8 like everything
+       else; re-enable pointer events the wrapper turned off. */
+    zoom: var(--ui-scale, 1);
+    pointer-events: auto;
+}
 
 @layer base {
     /* ASK-43 — TEXT AUTOSIZING OFF. WebKit inflates font sizes when it decides
@@ -2496,21 +2622,23 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
 }
 
 @keyframes kr-page-in {
-    from { opacity: 0; transform: translate3d(0, 10px, 0); }
-    to   { opacity: 1; transform: none; }
+    from { opacity: 0; transform: translate3d(28px, 0, 0); }
+    to   { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 .kr-page-in {
-    /* KM-33 — `backwards`, NOT `both`, and the difference is load-bearing.
-       `both` holds the final keyframe forever, and a filled transform — even
-       `transform: none`, which resolves to the identity matrix — makes the
-       element a containing block for every `position: fixed` DESCENDANT. This
-       class lands on <main>, so the fixed bottom sheet was being laid out
-       against main's padding box instead of the viewport: measured 365px wide
-       at y=100 rather than 375 pinned to the bottom. The end state here IS the
-       element's natural state (opacity 1, no transform), so nothing needs
-       holding — `backwards` only pre-applies the `from` frame and lets the
-       element go back to being untransformed the moment it arrives. */
-    animation: kr-page-in 320ms cubic-bezier(.22, 1, .36, 1) backwards;
+    /* KM-33 / B?? — a SMALL slide-in (28px from the right) + fade, so navigation
+       reads as a page sliding in rather than a plain cross-fade.
+       THE HAZARD this lands on: this class is on <main>, and a transform on main
+       makes it a containing block for `position: fixed` DESCENDANTS — a page's
+       own fixed bar would be laid out against main's box during the animation
+       and snap at the end (the old "crack on every navigation"). It is safe here
+       ONLY because the app's page-level fixed elements (Desk's expandable card /
+       drawer scrim / Dex composer) are NOT present during a normal navigation —
+       they appear later on interaction — so there is nothing to mis-anchor while
+       this 28px slide plays, and it ends at identity so nothing snaps. Verified
+       frame-by-frame on a Desk navigation. If a page ever renders a fixed element
+       on first paint, revert this to opacity-only. */
+    animation: kr-page-in 260ms cubic-bezier(.22, 1, .36, 1) backwards;
 }
 
 /* KR-13.1 — THE DEX BOUNDARY OWNS ITS OWN MOTION, and nothing else plays

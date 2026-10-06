@@ -101,4 +101,16 @@
     -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!--
+      PUSH (2026-10-05) · device notifications (FCM via @capacitor/push-
+      notifications). On Android 13+ (this build targets SDK 36) showing a
+      notification needs a RUNTIME permission, and like RECORD_AUDIO above it
+      cannot be requested unless it is declared here — the plugin's own manifest
+      only registers the FCM service, not this permission, so without this line
+      PushNotifications.requestPermissions() returns denied with no dialog. The
+      FCM token itself works regardless; this is purely about being allowed to
+      post the notification to the tray.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

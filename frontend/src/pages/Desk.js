@@ -285,6 +285,15 @@ function DeskRow({ r, first, testid, roomy = false }) {
          holding them; six of those pixels are here, three times over. Desktop
          keeps its 7 — it has the room and the columns are read at arm's
          length. */
+      /* MERGE 2026-10-06 — BOTH SIDES FIXED THE SAME CRUSH. origin/mobile-capacitor
+         put a min-height under the roomy row and let the list SCROLL when even
+         that would not fit. The founder ruled the scroll out by name — "instead
+         of making the floor scrollable list, I would like to go with the scaling
+         down approach... no need to scroll internally, because we have an
+         intention of showing three recent items always" — and this side is what
+         they approved: pills, a measured --desk-row-scale with an 11pt floor,
+         and overflow:hidden so a row can never print over its neighbour. Their
+         floor is already here, as that floor. */
       /* THE ROW IS ITS OWN PILL NOW (2026-10-05), in the sheet only.
          It used to be a line inside one gradient card, separated from its
          neighbours by a hairline, and the draft mark had to fight that: a

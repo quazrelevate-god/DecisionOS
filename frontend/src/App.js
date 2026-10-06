@@ -226,6 +226,18 @@ function NativeBack() {
   return null;
 }
 
+/* B?? — the page-level ErrorBoundary now RESETS on navigation. It only clears
+   its error when `resetKey` changes (ErrorBoundary.jsx), and nothing supplied
+   one — so a screen that threw during render left the whole shell stuck on the
+   "Something broke here" card until a manual reload, even after the user tried
+   to navigate away. Feeding the pathname as resetKey (the follow-up the comment
+   below anticipated) clears the error the moment the route changes. Must sit
+   INSIDE BrowserRouter so useLocation has a router context. */
+function RoutedBoundary({ children, fallback }) {
+  const location = useLocation();
+  return <ErrorBoundary resetKey={location.pathname} fallback={fallback}>{children}</ErrorBoundary>;
+}
+
 function App() {
   // UI-SCALE — the whole app zooms with the screen (see hooks/useUiScale).
   useUiScale();
@@ -240,8 +252,12 @@ function App() {
               ReferenceError in UpdateForm was unmounting the entire
               React tree). If the boundary itself is what needs replacing
               on route change, wrap in a keyed remount at the page level
-              in a follow-up. */}
-          <ErrorBoundary fallback={({ reload }) => (
+              in a follow-up. (Done — RoutedBoundary feeds resetKey.)
+              MERGE 2026-10-06 — and it keeps the fallback. Their side added the
+              route-keyed reset and dropped the shell's own last-resort screen;
+              this side had the screen and no reset. Both matter and neither
+              needs the other gone, so RoutedBoundary forwards the fallback. */}
+          <RoutedBoundary fallback={({ reload }) => (
             /* The last resort: reached only when the shell itself broke, so
                there is no "rest of the app" to promise -- only a reload. */
             <div className="min-h-[calc(100vh/var(--ui-scale,1))] grid place-items-center">
@@ -401,7 +417,7 @@ function App() {
             />
             <Route path="*" element={<NotFound />} />
           </Routes>
-          </ErrorBoundary>
+          </RoutedBoundary>
         </BrowserRouter>
         <Toaster position="top-right" />
       </AuthProvider>

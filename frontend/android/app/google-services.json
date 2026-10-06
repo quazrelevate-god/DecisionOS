@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "147512132139",
+    "project_id": "decisionos-5ddd4",
+    "storage_bucket": "decisionos-5ddd4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:147512132139:android:63d2ebd5a2f2d02f07206e",
+        "android_client_info": {
+          "package_name": "com.decisionos.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCgs298zej_5D_xjhij5YrhdfetzjmdJBs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

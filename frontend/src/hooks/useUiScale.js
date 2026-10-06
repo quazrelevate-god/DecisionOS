@@ -132,11 +132,25 @@ export function useUiScale() {
       meta.setAttribute("content", `width=${Math.floor(deviceWidth() / s)}, viewport-fit=cover`);
     };
 
+    /* MERGE 2026-10-06 — AND A HEIGHT CHANGE IS NOT A SCALE CHANGE. From
+       origin/mobile-capacitor, kept whole because it is a real fix and it
+       composes with the fallback rather than competing: the scale is a pure
+       function of WIDTH, so a soft keyboard (which moves innerHeight only) must
+       not rewrite --ui-scale — writing it re-runs the full-document zoom recalc
+       and reflowed the app mid-transition when a dialog autofocused a field.
+       Comparing the COMPUTED step rather than the raw width also absorbs the
+       few-px innerWidth jitter some Android web views emit with the keyboard;
+       rotation across a step still re-applies.
+       It guards the ZOOM path only — once the viewport fallback is on, `apply`
+       re-asserts the meta and has already returned above. */
+    let lastScale = null;
     const apply = () => {
       raf = 0;
       if (viaViewport) { widenViewport(computeUiScale(deviceWidth())); return; }
 
       const s = computeUiScale(window.innerWidth);
+      if (s.toFixed(1) === lastScale) return;
+      lastScale = s.toFixed(1);
       /* TWO NUMBERS, BECAUSE --ui-scale WAS DOING TWO JOBS. (2026-10-05.)
          The viewport fallback sets --ui-scale to 1, and for everything that
          UNDOES a zoom — viewport units, env() insets, visual-to-CSS pixel

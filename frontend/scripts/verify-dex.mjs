@@ -77,6 +77,34 @@ const until = async (fn, timeout = 25000, step = 250) => {
   }
 };
 
+/* MERGE 2026-10-06 — AND NOW THE DIALOG MOVES, SO WAIT FOR IT TO LAND.
+   origin/mobile-capacitor ("Mobile: fix open/close glitch, smooth transitions")
+   gives every mobile dialog a 220ms opaque slide UP from the bottom — index.css
+   sets --tw-enter-translate-y: 100% on [role="dialog"][data-state="open"] — where
+   the phone previously had NO enter animation at all and the panel simply
+   appeared in place. The reach checks below read the panel's box the instant its
+   step appears, which is now ~20ms into that slide with the foot still a screen
+   below the fold: "Next, Discard and close are whole and in reach" failed at 390
+   and 360 measuring a panel in flight, and nothing about the product was wrong.
+   So nothing is measured while it is still moving. The Web Animations API
+   answers that exactly — a running animation on the element or inside it — and
+   two identical boxes in a row cover the springs (framer-motion) that have no
+   CSS animation to ask about. It is the rule `restingBox` was already written
+   around, applied to the pop-up. The idle loops that never stop (the ripple,
+   spinners) are excluded by name, or this would wait forever. */
+const stillness = (page, sel) => until(() => page.evaluate((s) => {
+  const el = document.querySelector(s);
+  if (!el) return false;
+  const live = el.getAnimations({ subtree: true }).some((a) => a.playState === 'running'
+    && !/ripple|pulse|spin|shimmer|breathe|wave|bounce/i.test(a.animationName || ''));
+  if (live) return false;
+  const r = el.getBoundingClientRect();
+  const key = [r.top, r.left, r.width, r.height].map((n) => Math.round(n)).join(',');
+  const same = window.__stillKey === key;
+  window.__stillKey = key;
+  return same;
+}, sel).catch(() => false), 4000, 120);
+
 const browser = await chromium.launch({
   args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
 });
@@ -114,6 +142,11 @@ async function openDoor(page) {
   const capturing = async () => ((await page.locator('[data-testid="dex-slider-handle"]')
     .getAttribute('aria-label')) || '').toLowerCase().includes('stop');
   if (await capturing()) return;
+  /* GRAB IT WHERE IT IS, NOT WHERE IT WAS. The handle is still springing back
+     to the centre right after a pop-up closes, so a box read the instant the
+     pop-up leaves points at empty track and the press lands on nothing — the
+     drag then does nothing and the capture never starts. */
+  await stillness(page, '[data-testid="dex-slider-handle"]');
   const track = await page.locator('[data-testid="dex-slider"] .kr-slider-well').boundingBox();
   const h = await page.locator('[data-testid="dex-slider-handle"]').boundingBox();
   const cy = h.y + h.height / 2;
@@ -264,10 +297,18 @@ async function wayOut(page, rest) {
   const slider = page.getByTestId('dex-slider');
   const label = (await page.locator('[data-testid="dex-slider-handle"]').getAttribute('aria-label')) || '';
   const back = (await slider.count()) === 1 && !label.toLowerCase().includes('stop');
-  const handle = await page.locator('[data-testid="dex-slider-handle"]').boundingBox().catch(() => null);
-  const track = await page.locator('[data-testid="dex-slider"] .kr-slider-well').boundingBox().catch(() => null);
-  const centred = !!handle && !!track
-    && Math.abs((handle.x + handle.width / 2) - (track.x + track.width / 2)) <= 3;
+  /* THE HANDLE TRAVELS HOME, so wait for it to arrive. It springs back to the
+     centre over a few hundred ms and this read used to catch it in flight —
+     caught after the merge, which lengthened the transitions around it, but the
+     spring was always there. "Centred" is a claim about where it ENDS. */
+  const centres = () => page.evaluate(() => {
+    const h = document.querySelector('[data-testid="dex-slider-handle"]');
+    const t = document.querySelector('[data-testid="dex-slider"] .kr-slider-well');
+    if (!h || !t) return null;
+    const a = h.getBoundingClientRect(); const b = t.getBoundingClientRect();
+    return Math.abs((a.x + a.width / 2) - (b.x + b.width / 2));
+  }).catch(() => null);
+  const centred = await until(async () => { const d = await centres(); return d !== null && d <= 3; }, 4000, 120);
   return { back, same: centred };
 }
 
@@ -314,26 +355,32 @@ const restingBox = async (page) => {
 /** MPWA-01 §5.1 / ASK-43 — every control in `testid` is a 44px target in the
  *  app's own pixels, and is whole, on the glass and uncovered (the point in its
  *  middle IS it). */
-const touchAndFold = (page, testid, viewport) => page.evaluate(([t, vh]) => {
-  const el = document.querySelector(`[data-testid="${t}"]`);
-  if (!el) return false;
-  const btns = [...el.querySelectorAll('button,a')];
-  return btns.length > 0 && btns.every((b) => {
-    if (b.offsetHeight < 44) return false;
+const touchAndFold = async (page, testid, viewport) => {
+  await stillness(page, `[data-testid="${testid}"]`);
+  return page.evaluate(([t, vh]) => {
+    const el = document.querySelector(`[data-testid="${t}"]`);
+    if (!el) return false;
+    const btns = [...el.querySelectorAll('button,a')];
+    return btns.length > 0 && btns.every((b) => {
+      if (b.offsetHeight < 44) return false;
+      const r = b.getBoundingClientRect();
+      if (r.bottom > vh || r.top < 0) return false;
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return !!hit && (b === hit || b.contains(hit));
+    });
+  }, [testid, viewport.height]);
+};
+const onGlass = async (page, testid, viewport) => {
+  await stillness(page, `[data-testid="${testid}"]`);
+  return page.evaluate(([t, vh]) => {
+    const b = document.querySelector(`[data-testid="${t}"]`);
+    if (!b || b.offsetHeight < 44) return false;
     const r = b.getBoundingClientRect();
     if (r.bottom > vh || r.top < 0) return false;
     const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
     return !!hit && (b === hit || b.contains(hit));
-  });
-}, [testid, viewport.height]);
-const onGlass = (page, testid, viewport) => page.evaluate(([t, vh]) => {
-  const b = document.querySelector(`[data-testid="${t}"]`);
-  if (!b || b.offsetHeight < 44) return false;
-  const r = b.getBoundingClientRect();
-  if (r.bottom > vh || r.top < 0) return false;
-  const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-  return !!hit && (b === hit || b.contains(hit));
-}, [testid, viewport.height]);
+  }, [testid, viewport.height]);
+};
 
 async function run(viewport) {
   const w = `${viewport.width}`;

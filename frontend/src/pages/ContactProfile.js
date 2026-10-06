@@ -167,7 +167,26 @@ export default function ContactProfile() {
   });
 
   if (!canView) return <EmptyState title="Restricted" hint="The 360° profile is available to Owner and Finance only." />;
-  if (isLoading) return <div className="text-sm text-muted-foreground py-20 text-center">Loading profile…</div>;
+  // B?? — a SKELETON, not a centered "Loading profile…". Routing here fetches
+  // the profile on mount, so the old bare text filled the whole page empty for a
+  // frame and then snapped to the full layout — the "crack on opening a screen".
+  // A header + card silhouette keeps the page shape stable while data lands.
+  if (isLoading) return (
+    <div className="animate-pulse" aria-hidden="true" data-testid="contact-profile-loading">
+      <div className="h-4 w-28 rounded bg-slate-200/70 mb-5" />
+      <div className="card-brutal p-6 mb-6">
+        <div className="flex items-start gap-4">
+          <div className="h-14 w-14 rounded-full bg-slate-200/70 shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="h-6 w-1/2 rounded-md bg-slate-200/80" />
+            <div className="h-4 w-1/3 rounded bg-slate-200/70" />
+          </div>
+        </div>
+      </div>
+      <div className="h-32 rounded-2xl bg-slate-200/50 mb-6" />
+      <div className="h-40 rounded-2xl bg-slate-200/50" />
+    </div>
+  );
   // MPWA-12i: a dead end is worst on an error path — he arrived from a link and
   // has nowhere to go. E2-13's own CTA, on the surface it missed.
   // `!data?.contact` as well as `error`: the API answers 200 with an empty body

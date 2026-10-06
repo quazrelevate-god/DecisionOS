@@ -1906,6 +1906,19 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
   const expanded = controlled ? open : selfExpanded;
   const setExpanded = controlled ? () => onToggleOpen?.() : setSelfExpanded;
   const toggleCard = () => (controlled ? onToggleOpen?.() : setSelfExpanded((v) => !v));
+  // PERF (2026-10-05) — the drawer tree below is ~600 lines of JSX and the
+  // TaskDetailDialog is its own subtree; both were CONSTRUCTED on every render
+  // of every card (Radix only MOUNTS them when open, but React still builds
+  // the element tree in JS each render). With N cards on My Work that is the
+  // bulk of the transition freeze. These two render-time latches build each
+  // subtree only once its card has actually been opened, and keep it built
+  // afterwards so Radix can still play the close animation on the way out.
+  // Mutating a ref during render is safe here: it is idempotent and only ever
+  // flips false->true. A never-opened card renders neither subtree at all.
+  const drawerEverOpened = useRef(false);
+  if (expanded) drawerEverOpened.current = true;
+  const detailEverOpened = useRef(false);
+  if (detailOpen) detailEverOpened.current = true;
   // MW-20 — is this event really from the card, or did it reach us through
   // the drawer's portal? React bubbles portal events along the COMPONENT
   // tree; `contains` asks the DOM, where the portal is not a descendant.
@@ -2398,7 +2411,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
      it without the tile. `drawerOnly` returns just this; the tile below
      embeds the same element where the Sheet always was. Declared last, so
      everything the drawer reads is already in scope. */
-  const drawer = (
+  const buildDrawer = () => (
     <>
     {/* ASK-15 (2026-09-13): task detail slides in from the right as a
         Sheet, not an inline expand — kept as one drawer holding BOTH the
@@ -3020,6 +3033,9 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       </Dialog>
     </>
   );
+  // PERF — only build the drawer subtree once this card has been opened (or
+  // when the Desk mounts it drawer-only). Never-opened cards skip it entirely.
+  const drawer = (drawerOnly || drawerEverOpened.current) ? buildDrawer() : null;
   if (drawerOnly) return drawer;
 
   return (
@@ -3242,7 +3258,9 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       {drawer}
 
 
-      <TaskDetailDialog t={t} open={detailOpen} onOpenChange={setDetailOpen} onChange={onChange} />
+      {detailEverOpened.current && (
+        <TaskDetailDialog t={t} open={detailOpen} onOpenChange={setDetailOpen} onChange={onChange} />
+      )}
         </div>
       </div>
     </div>

@@ -22,6 +22,8 @@ const DialogClose = DialogPrimitive.Close
 const DialogOverlay = React.forwardRef(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
+    data-dialog-overlay=""
+    data-scrim=""
     className={cn(
       "fixed inset-0 z-50 bg-black/80  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
@@ -32,21 +34,33 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
 const DialogContent = React.forwardRef(({ className, overlayClassName, children, ...props }, ref) => (
   <DialogPortal>
+    {/* The scrim stays in the normal body zoom — it is a full-screen fixed layer
+        that paints fine and must cover the whole viewport, so it must NOT be
+        re-scaled. */}
     <DialogOverlay className={overlayClassName} />
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid w-[calc(100%-1.5rem)] max-w-lg max-h-[calc(100dvh/var(--ui-scale,1)-1.5rem)] overflow-y-auto translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-4 lg:p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-2xl",
-        className
-      )}
-      {...props}>
-      {children}
-      <DialogPrimitive.Close
-        className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
-        <X className="h-4 w-4" />
-        <span className="sr-only">Close</span>
-      </DialogPrimitive.Close>
-    </DialogPrimitive.Content>
+    {/* B?? — the PANEL (only) escapes the body `zoom` the way Radix poppers do
+        (see .ui-scale [data-dialog-scale-root] in index.css). Portalled inside
+        <body>'s zoom, the fixed, centred panel is re-rasterised IN TILES by the
+        webview — cards paint top-down, backdrop a frame late, page shows through
+        for ~2 frames on open. Its own zoom boundary makes it rasterise as one
+        layer (poppers prove it). The wrapper is a full-viewport fixed box so the
+        panel's left/top:50% still centre against the viewport. */}
+    <div data-dialog-scale-root="">
+      <DialogPrimitive.Content
+        ref={ref}
+        className={cn(
+          "fixed left-[50%] top-[50%] z-50 grid w-[calc(100%-1.5rem)] max-w-lg max-h-[calc(100dvh/var(--ui-scale,1)-1.5rem)] overflow-y-auto translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-4 lg:p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-2xl",
+          className
+        )}
+        {...props}>
+        {children}
+        <DialogPrimitive.Close
+          className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close</span>
+        </DialogPrimitive.Close>
+      </DialogPrimitive.Content>
+    </div>
   </DialogPortal>
 ))
 DialogContent.displayName = DialogPrimitive.Content.displayName

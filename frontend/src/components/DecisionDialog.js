@@ -708,16 +708,35 @@ export function DecisionPanel({
     );
   }
   if (!d) {
+    // B?? — a SKELETON, not a blank "Loading…". The decision detail fetches
+    // GET /decisions/{id} on open (no placeholderData), so for the frame before
+    // it answers, `d` is undefined. The old bare "Loading…" filled the whole
+    // full-screen dialog with empty space and then SNAPPED to the full panel —
+    // the "crack on opening a card" the founder reported. A skeleton shaped like
+    // the real header + body cards means nothing blank ever shows and the real
+    // content fades in over the same silhouette instead of jumping in.
     return embedded ? (
-      <p className="p-6 text-sm text-slate-500" data-testid="decision-panel-loading">Loading…</p>
+      <div className="animate-pulse space-y-4 p-6" aria-hidden="true" data-testid="decision-panel-loading">
+        <div className="h-6 w-3/4 rounded-md bg-slate-200/80" />
+        <div className="h-24 rounded-2xl bg-slate-200/60" />
+        <div className="h-40 rounded-2xl bg-slate-200/60" />
+      </div>
     ) : (
-      <div className="p-6">
-        <DialogHeader className="text-left">
+      <>
+        <DialogHeader className="shrink-0 space-y-0 border-b border-slate-900/[0.06] px-5 pb-4 pt-5 text-left lg:px-7 lg:pt-6">
           <DialogTitle className="sr-only">Decision</DialogTitle>
           <DialogDescription className="sr-only">Loading the decision</DialogDescription>
+          <div className="animate-pulse space-y-3" aria-hidden="true" data-testid="decision-panel-loading">
+            <div className="h-6 w-3/4 rounded-md bg-slate-200/80" />
+            <div className="h-4 w-1/2 rounded bg-slate-200/70" />
+          </div>
         </DialogHeader>
-        <p className="py-4 text-sm text-slate-500">Loading…</p>
-      </div>
+        <div className="animate-pulse space-y-4 p-5 lg:px-7" aria-hidden="true">
+          <div className="h-28 rounded-2xl bg-slate-200/60" />
+          <div className="h-24 rounded-2xl bg-slate-200/60" />
+          <div className="h-40 rounded-2xl bg-slate-200/60" />
+        </div>
+      </>
     );
   }
 

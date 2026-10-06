@@ -34,6 +34,17 @@ const platform = () =>
  */
 export async function startPush(go) {
   if (!isNativeApp()) return () => {};
+  /* IOS WAITS FOR AN APNs KEY. (2026-10-06, on the merge, before flashing.)
+     This leaf runs on both platforms, and on iOS it reaches requestPermissions()
+     — which spends the ONE notification prompt iOS ever shows — and then fails:
+     the app is signed with a FREE provisioning profile, which cannot carry the
+     Push Notifications capability, so register() has no `aps-environment`
+     entitlement, and FCM has no APNs key uploaded for it either. The founder
+     would be asked to allow notifications that can never arrive, and a "no" is
+     then only reversible in iOS Settings. Android is end to end and unaffected.
+     DELETE THESE TWO LINES the day the Apple developer account, the APNs key and
+     the FCM upload exist — nothing else in this file is iOS-specific. */
+  if (platform() === "ios") return () => {};
   const { PushNotifications } = await import("@capacitor/push-notifications");
 
   /* Permission first. On Android 13+ and iOS this shows the OS prompt the first

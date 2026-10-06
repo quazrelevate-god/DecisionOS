@@ -1428,7 +1428,14 @@ export default function Desk() {
              fixed tile height) so the space lands IN the tiles, and the grid is
              capped so a tall phone cannot make a numeral float in the middle of
              nothing. Measured on three screens below. */
-          DEX_SLIDER && (deskSheet ? "order-1 min-h-0 max-lg:flex-1 lg:order-none" : "order-1 shrink-0 lg:order-none"))}>
+          /* 2026-10-06 — CONTENT-SIZED AGAIN. The hero grew while the tiles were the
+             only thing in it that could use height; the full Workflows card can
+             use it all by itself, and a stretched hero was CLIPPING it — the
+             card asked for ~260px, the row gave it 200, and the sheet painted
+             over the rest. The hero is exactly as tall as the greeting, the
+             three tiles and the card need; the board takes what is left, as it
+             did before any of this. */
+          DEX_SLIDER && "order-1 shrink-0 lg:order-none")}>
         {/* LEFT column — greeting, the score row, the well on the floor.
             KR-14.2 · MOBILE — display:contents so its children flow into
             the outer column and the KPI strip can slot between them. */}
@@ -1625,7 +1632,15 @@ export default function Desk() {
              the three tiles that can raise an alert dot on the top row, and
              Workflows two-wide beside the quiet money number below. */
           "order-3 grid min-w-0 grid-cols-3 gap-2",
-          deskSheet && "max-lg:flex-1 max-lg:auto-rows-fr max-lg:max-h-[calc(2*var(--desk-kpi-cap)+0.5rem)]",
+          /* 2026-10-06 — THE TWO ROWS ARE NOT EQUAL ANY MORE. auto-rows-fr made
+             them so, which is right when both carry a number and wrong now the
+             second carries the full Workflows card — a split bar, a stuck
+             card, two buttons. The founder's instruction was explicit about
+             which way the trade goes: "you can increase the height however you
+             want... even by reducing the height of the other 3 tiles above,
+             since they have empty space left with no content to show." So the
+             top row is content-sized (floored, never crushed) and the card
+             takes everything else. */
           /* No forced height. The first cut pinned the grid to 14rem with
              auto-rows-fr so the second row could not be taller than the first —
              and the card simply overflowed and vanished behind the black card,
@@ -1699,12 +1714,20 @@ export default function Desk() {
               row, and this sits under them beside the one quiet money number.
               Its numbers come from workflowAttention, which the Workflows page
               can read later without the two disagreeing. */}
+          {/* 2026-10-06 — THE DESKTOP CARD COMES BACK TO THE PHONE. `wide` was
+              the squat two-column arrangement built when this card had to share
+              a short page with a slider; the slider has left and the founder
+              asked for the full one back — the split bar, "1 stuck · 8 late",
+              NEXT UP with the stuck card, Advance and Open Workflows. It needs
+              height, which the three tiles above give back (they were scaled up
+              with nothing to put in the space). */}
           {seesWorkflows && (
           <WorkflowsTile
             attention={wfAttention}
             loading={workflowsQ.isLoading}
-            wide={kpiWide}
-            className={cn(kpiWide ? "col-span-3 lg:col-span-2" : "col-span-2", PHONE_TILE)}
+            onMoved={() => qc.invalidateQueries({ queryKey: ["workflows"] })}
+            wide={false}
+            className={cn("col-span-3 lg:col-span-2", PHONE_TILE)}
           />
           )}
           {seesMoney && !kpiWide && (

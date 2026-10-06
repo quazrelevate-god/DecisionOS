@@ -236,6 +236,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
        is off and this returns early, and a disarm that never ran is how the
        stale flag survived to eat a real press. A touch always disarms. */
     ghostClickRef.current = false;
+    setTouched(true);
     if (disabled || capturing) return;
     /* THE TOUCH IS THE SIGNAL, not the travel. The founder wants the dock's
        destinations gone the instant the knob is pressed — "then only it looks
@@ -288,8 +289,16 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
      thing in between is the only click ever dropped — no timing, and a stale
      flag cannot survive the next touch. */
   const ghostClickRef = React.useRef(false);
+  /* THE RIPPLE WAITS TO BE TOUCHED. (2026-10-06, founder: "hide the ripple
+     effect animation loop and start showing once the user touches the slider
+     button.") It used to breathe at rest on every screen — a loop running all
+     day in the corner of a dock, drawing a canvas frame for nobody. It comes up
+     with the finger and stays for as long as there is something to answer: the
+     drag itself, and then the capture. */
+  const [touched, setTouched] = React.useState(false);
   const onPointerUp = () => {
     onPressChange?.(false);
+    setTouched(false);
     if (!draggingRef.current) return;
     draggingRef.current = false;
     setDragging(false);
@@ -382,7 +391,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
             inset-0 overflow-hidden rounded-[inherit]`, so the pill is the wall
             and nothing can be drawn past it. It breathes at rest and answers
             the microphone through the capture's own meter while one is running. */}
-        {stage && (
+        {stage && (touched || capturing) && (
           <VoiceRipple
             mode="in"
             /* Out of the handle, not into it. The well's own ripple runs inward
@@ -471,7 +480,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          onPointerCancel={() => { onPressChange?.(false); draggingRef.current = false; setDragging(false); settle(); }}
+          onPointerCancel={() => { onPressChange?.(false); setTouched(false); draggingRef.current = false; setDragging(false); settle(); }}
           onKeyDown={onKeyDown}
           /* THREE JOBS, ONE BUTTON. At rest it is the handle. While a capture
              runs it is the send that stops it. In type mode it is the send for

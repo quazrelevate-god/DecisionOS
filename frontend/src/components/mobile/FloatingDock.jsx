@@ -131,7 +131,15 @@ export function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
      `my-1` is on EVERY slot, live or not, so nothing shifts when the plate
      appears — and it keeps the plate a seam clear of the bar's own edge. */
   const cls = cn(
-    "dock-item my-1 flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-[1.125rem] px-0.5",
+    /* 2026-10-06 — THE LIVE PLATE SITS INSIDE THE HANDLE'S HEIGHT. `my-1` was
+       written against a 72px bar, where it left a plate just short of the bar
+       itself; the slider bar is 96px and the same margin made a slab taller
+       than the handle beside it, which the founder read as the selector
+       dominating the control. Capped at 3.5rem — comfortably inside the
+       handle's 5.375rem — and centred, so the four slots still fill the bar for
+       the thumb while only the PLATE is smaller. The touch target is the slot,
+       not the plate, so nothing gets harder to hit. */
+    "dock-item my-auto max-h-14 flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-[1.125rem] px-0.5",
     "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
     /* ASK-42 F — the bar's old material, on the slot: 55% ink over the bar's
        own gradient, with the same warm-white lip the bar wears so the shape

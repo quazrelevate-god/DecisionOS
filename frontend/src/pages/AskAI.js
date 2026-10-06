@@ -10,14 +10,14 @@ import { useState } from "react";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
-import { money } from "../lib/format";
+import { money, humanStage, priorityLabel, taskStatusLabel } from "../lib/format";
+import { roleLabel } from "../lib/departments";
 import { toast } from "sonner";
 import {
   Lock, FileCsv, FileXls, FilePdf,
-  ArrowRight, WarningCircle, LinkSimple,
+  ArrowRight, WarningCircle, LinkSimple, Sparkle, CaretDown,
 } from "@phosphor-icons/react";
-// Epic 2 Sprint 5 (E2-40): persona voice marker on every AI response.
-import { DexBadge } from "../components/common";
+import { Loader } from "../components/common";
 
 /** Openers for a thread with nothing in it yet. */
 /* 2026-10-05 — these answers only render in the Dex room (/brain), which is
@@ -62,52 +62,114 @@ function KpiGrid({ kpis, currency }) {
   );
 }
 
+/* 2026-10-06 (Dex desktop pass) — CELLS IN WORDS. The tables printed stored
+   values: "sales_&_order_management", "in_progress", "todo", "2026-09-22" —
+   and the date wrapped onto two lines at the hyphen. Each column already says
+   what it holds (`type`, and its key); the words come from the same helpers
+   every other screen uses, so Dex says "Doing" where My Work says "Doing". */
+const DEPT_KEYS = new Set(["role", "department", "dept", "assignee_role"]);
+const SLUG = /^[a-z0-9]+(?:_&?_?[a-z0-9]+)+$/;
+
+function dexDate(v) {
+  const iso = String(v || "");
+  if (!/^\d{4}-\d{2}-\d{2}/.test(iso)) return iso || "—";
+  const dt = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(dt.getTime())) return iso;
+  const opts = { day: "numeric", month: "short", timeZone: "UTC" };
+  if (dt.getUTCFullYear() !== new Date().getFullYear()) opts.year = "numeric";
+  return dt.toLocaleDateString(undefined, opts);
+}
+
+function cellText(c, v, currency, roles) {
+  if (v === null || v === undefined || v === "" || v === "-") return "—";
+  if (c.type === "money") return money(v, currency);
+  if (c.type === "number") return typeof v === "number" ? v.toLocaleString() : String(v);
+  if (c.type === "date") return dexDate(v);
+  if (DEPT_KEYS.has(c.key)) return roleLabel(v, roles, "—");
+  if (c.key === "status") return taskStatusLabel(v);
+  if (c.key === "priority") return priorityLabel(v);
+  if (c.key === "stage" || c.key === "type") return humanStage(v);
+  // A team's row carries its department KEY where a person's carries a name
+  // ("export_&_logistics" under Employee / Team). A snake_case value in a text
+  // column is always a stored key — no person, task or company is named so.
+  if (typeof v === "string" && ((roles || []).some((r) => r.key === v) || SLUG.test(v))) return roleLabel(v, roles, v);
+  return String(v);
+}
+
+const FIRST_ROWS = 8;
+
 function DataTable({ table, currency }) {
+  const { tenant } = useAuth();
+  const [all, setAll] = useState(false);
   if (!table?.rows?.length) return null;
   const cols = table.columns || [];
+  const rows = table.rows.slice(0, all ? 100 : FIRST_ROWS);
+  const more = Math.min(table.rows.length, 100) - rows.length;
+  const right = (c) => c.type === "money" || c.type === "number";
   return (
     /* NM-13: the head was a solid indigo bar — §0 reserves the brand fill for
        the one action on a screen, and a table header is furniture. It reads as
        a sunken well now, which is also what a fixed header IS: the surface the
        rows scroll under. */
     <div className="nm-raised overflow-x-auto mb-3" data-testid="brain-table">
-      <table className="w-full text-sm">
+      <table className="w-full text-[13px]">
         <thead>
           <tr className="bg-nm-sunken">
             {cols.map((c) => (
-              <th key={c.key} className="text-left font-medium text-xs px-3 py-2 whitespace-nowrap text-muted-foreground">{c.label}</th>
+              <th key={c.key} className={`font-medium text-xs px-3 py-2 whitespace-nowrap text-muted-foreground ${right(c) ? "text-right" : "text-left"}`}>{c.label}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {table.rows.slice(0, 100).map((r, ri) => (
+          {rows.map((r, ri) => (
             <tr key={`${r[cols[0]?.key] ?? ""}-${ri}`} className={ri % 2 ? "bg-nm-sunken/50" : ""} data-testid={`brain-row-${ri}`}>
-              {cols.map((c) => (
-                <td key={c.key} className="px-3 py-2 align-top border-t border-nm-edge/30">
-                  {c.type === "money" ? money(r[c.key], currency)
-                    : c.key === "on_time"
-                      ? <span className={r[c.key] === "Yes" ? "text-success-600 font-semibold" : "text-danger-600 font-semibold"}>{r[c.key]}</span>
-                      : String(r[c.key] ?? "")}
+              {cols.map((c, ci) => (
+                <td
+                  key={c.key}
+                  className={`px-3 py-2 align-top border-t border-nm-edge/30 ${
+                    c.type === "date" || right(c) ? "whitespace-nowrap tabular-nums" : ""
+                  } ${right(c) ? "text-right" : ""} ${ci === 0 ? "min-w-[12rem] text-foreground" : "text-muted-foreground"}`}
+                >
+                  {c.key === "on_time"
+                    ? <span className={r[c.key] === "Yes" ? "text-success-600 font-semibold" : "text-danger-600 font-semibold"}>{r[c.key]}</span>
+                    : cellText(c, r[c.key], currency, tenant?.roles)}
                 </td>
               ))}
             </tr>
           ))}
         </tbody>
       </table>
-      {table.total_rows > 100 && (
+      {more > 0 && (
+        <button
+          type="button"
+          onClick={() => setAll(true)}
+          data-testid="brain-table-more"
+          className="flex w-full items-center justify-center gap-1.5 border-t border-nm-edge/30 px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        >
+          Show all {Math.min(table.rows.length, 100)} rows <CaretDown size={12} weight="bold" />
+        </button>
+      )}
+      {all && table.total_rows > 100 && (
         <p className="text-xs text-muted-foreground px-3 py-2 border-t border-nm-edge/30">Showing first 100 of {table.total_rows} rows — export for the full set.</p>
       )}
     </div>
   );
 }
 
+/* 2026-10-06 — twenty sources drew twenty chips: a wall between the answer
+   and the questions that follow it. The first few show; the rest are a click. */
+const FIRST_SOURCES = 6;
+
 function Sources({ sources, onGo }) {
+  const [all, setAll] = useState(false);
   if (!sources?.length) return null;
+  const shown = all ? sources : sources.slice(0, FIRST_SOURCES);
+  const rest = sources.length - shown.length;
   return (
     <div className="mb-3" data-testid="brain-sources">
       <p className="label-mono text-muted-foreground text-xs mb-1.5 flex items-center gap-1"><LinkSimple size={13} weight="bold" /> Sources · {sources.length}</p>
       <div className="flex flex-wrap gap-1.5">
-        {sources.map((s, i) => {
+        {shown.map((s, i) => {
           const label = <span className="text-brand-600 uppercase font-semibold">{DEEP_TYPES[s.type] || s.type || "Note"}</span>;
           const title = <span className="truncate max-w-[220px]">{s.title}</span>;
           return s.deep_link ? (
@@ -123,6 +185,16 @@ function Sources({ sources, onGo }) {
             </span>
           );
         })}
+        {rest > 0 && (
+          <button
+            type="button"
+            onClick={() => setAll(true)}
+            data-testid="brain-sources-more"
+            className="inline-flex items-center nm-tile px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            +{rest} more
+          </button>
+        )}
       </div>
     </div>
   );
@@ -216,7 +288,50 @@ function RichText({ text }) {
   );
 }
 
-export function AiAnswer({ m, onGo, onAsk, currency }) {
+/* 2026-10-06 (Dex desktop pass) — WHO IS SPEAKING. Every answer opened with
+   "DEX →" in 10px indigo, glued to the first word of the sentence. A chat says
+   who is talking with a mark beside the message; the text is then only text. */
+export function DexAvatar({ thinking = false }) {
+  return (
+    <span
+      className="grid h-8 w-8 shrink-0 place-items-center rounded-full nm-raised text-primary"
+      aria-hidden="true"
+      data-testid="dex-avatar"
+    >
+      {thinking ? <Loader size={16} className="text-primary" /> : <Sparkle size={15} weight="fill" />}
+    </span>
+  );
+}
+
+function DexTurn({ children }) {
+  return (
+    <div className="flex items-start gap-3">
+      <DexAvatar />
+      <div className="min-w-0 flex-1">
+        <p className="mb-1.5 text-xs font-medium text-muted-foreground">Dex</p>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+export function AiAnswer(props) {
+  return <DexTurn><AnswerBody {...props} /></DexTurn>;
+}
+
+function AnswerBody({ m, onGo, onAsk, currency }) {
+  /* A refusal or a failure (no access, AI switched off, the month's allowance
+     used up) is a notice about Dex, not something Dex found in the records. */
+  if (m.resp?.type === "NOTICE") {
+    return (
+      <div className={`${ROOM_CARD} p-4`} data-testid="brain-notice">
+        <p className="flex items-start gap-2 text-sm">
+          <WarningCircle size={16} weight="bold" className="mt-0.5 shrink-0 text-caution-600" />
+          <span>{m.resp.answer}</span>
+        </p>
+      </div>
+    );
+  }
   if (m.resp?.type === "PERMISSION_DENIED") {
     return (
       <div className={`${ROOM_CARD} p-4 border-l-4 border-l-brand-600`} data-testid="brain-permission-denied">
@@ -243,8 +358,8 @@ export function AiAnswer({ m, onGo, onAsk, currency }) {
   return (
     <div className="space-y-1" data-testid="brain-answer">
       {r.answer && (
-        <div className="text-sm leading-relaxed whitespace-pre-wrap mb-3">
-          <DexBadge inline /><RichText text={r.answer} />
+        <div className="text-[15px] leading-relaxed whitespace-pre-wrap mb-4">
+          <RichText text={r.answer} />
         </div>
       )}
       <KpiGrid kpis={r.kpis} currency={r.currency || currency} />

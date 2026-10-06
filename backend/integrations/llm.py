@@ -29,6 +29,15 @@ def _resolve_prompt_version(task):
         return None
 
 
+
+# 2026-10-06 — OUR OWN REFUSALS ARE NOT PROVIDER FAILURES. guarded_llm raises
+# 402 (the month's AI allowance / budget is used up) and the consent gate 451
+# before any provider is called; the second key and every fallback model meet
+# the same rule, so retrying only tripled the wait before the same refusal.
+def _our_refusal(e) -> bool:
+    return getattr(e, "status_code", None) in (402, 451)
+
+
 class _ResilientChat:
     """Drop-in for LlmChat(api_key=claude_key(), ...) that tries the user's Anthropic
     key first and automatically falls back to the Emergent universal key if the call
@@ -99,6 +108,8 @@ class _ResilientChat:
                     await record_ai_call(**tel, ok=True)
                 return resp
             except Exception as e:
+                if _our_refusal(e):
+                    raise
                 last_err = e
                 if i == 0 and key == anthropic and anthropic:
                     await _record_provider_alert("anthropic", str(e))
@@ -129,6 +140,8 @@ class _ResilientChat:
                     await record_ai_call(**tel, ok=True)
                 return resp
             except Exception as e:
+                if _our_refusal(e):
+                    raise
                 last_err = e
                 logger.warning(f"Fallback model {fb_id} also failed: {e}")
         await record_ai_call(

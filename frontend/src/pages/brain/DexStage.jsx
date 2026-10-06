@@ -31,7 +31,7 @@
  * screen — the answer is. It shrinks to ~55% and the headline goes, so the
  * composer stays put and the thread gets the room.
  */
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   Microphone, Stop, PaperPlaneTilt, Paperclip, Sparkle, NotePencil,
 } from "@phosphor-icons/react";
@@ -141,14 +141,32 @@ function Orb({ levels, recording, thinking, scale = 1 }) {
  * @param {boolean}  compact   a conversation already exists; give it the room
  * @param {string}   status    the line under the orb
  * @param {node}     trailing  quiet page-level actions (Documents, new thread)
+ * @param {node}     suggestions  opener questions, drawn under the composer
+ * @param {boolean}  docked    md+: pin the composer to the bottom of the screen
  */
-export function DexStage({ capture, onAsk, thinking, compact = false, status, trailing, className }) {
+export function DexStage({ capture, onAsk, thinking, compact = false, docked = false, status, trailing, suggestions, className }) {
   const {
     text, setText, sending, recording, recordSecs, levels,
     sendText, startRecording, stopRecording, uploadFile, fileRef, attachments = [],
   } = capture;
 
   const busy = sending || thinking;
+
+  /* 2026-10-06 (Dex desktop pass) — the box grows with what is typed, up to
+     its max-h, instead of scrolling a one-line window over a long question. */
+  const inputRef = useRef(null);
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [text]);
+  // A desktop visitor came here to ask: put the cursor in the box. Not on a
+  // touch screen, where focusing opens the keyboard over the page.
+  useEffect(() => {
+    if (window.matchMedia?.("(min-width: 768px) and (pointer: fine)").matches) inputRef.current?.focus();
+  }, []);
+
   const submit = () => {
     const q = text.trim();
     if (!q || busy) return;
@@ -157,7 +175,17 @@ export function DexStage({ capture, onAsk, thinking, compact = false, status, tr
   };
 
   return (
-    <div className={cn("relative", className)} data-testid="dex-stage">
+    <div
+      className={cn(
+        "relative",
+        /* 2026-10-06 — docked: from md up the composer is the floor of the
+           page and the thread scrolls behind it. The fade is the room's own
+           ground, so text dissolves into it rather than meeting a hard edge. */
+        docked && "md:sticky md:bottom-0 md:z-20 md:-mx-6 md:[background:linear-gradient(to_top,hsl(var(--nm-bg))_62%,hsl(var(--nm-bg)/0))] md:px-6 md:pb-5 md:pt-8",
+        className
+      )}
+      data-testid="dex-stage"
+    >
       {/* The page's own atmosphere. Sits behind content, never takes a
           pointer, and is the reason /brain reads as a different surface
           rather than the same app in a different card. */}
@@ -167,7 +195,7 @@ export function DexStage({ capture, onAsk, thinking, compact = false, status, tr
           the top edge would be lighting empty canvas above the thing it is
           supposed to be lighting. */}
       <div
-        className="pointer-events-none absolute -inset-x-8 inset-y-0 -z-10"
+        className={cn("pointer-events-none absolute -inset-x-8 inset-y-0 -z-10", docked && "md:hidden")}
         aria-hidden="true"
         style={{
           background:
@@ -186,12 +214,14 @@ export function DexStage({ capture, onAsk, thinking, compact = false, status, tr
           compact ? "pt-1 pb-1" : "justify-center min-h-[calc(100vh/var(--ui-scale,1)-16rem)] py-6"
         )}
       >
-        <Orb
-          levels={levels}
-          recording={recording}
-          thinking={busy}
-          scale={compact ? 0.55 : 1}
-        />
+        <div className={cn(compact && "md:hidden")}>
+          <Orb
+            levels={levels}
+            recording={recording}
+            thinking={busy}
+            scale={compact ? 0.55 : 1}
+          />
+        </div>
 
         {!compact && (
           <>
@@ -218,7 +248,7 @@ export function DexStage({ capture, onAsk, thinking, compact = false, status, tr
         <div
           className={cn(
             "w-full max-w-2xl flex items-end gap-1 rounded-cardlg nm-raised p-2",
-            compact ? "mt-4" : "mt-9"
+            compact ? "mt-4 md:mt-0" : "mt-9"
           )}
           data-testid="dex-stage-composer"
         >
@@ -255,6 +285,7 @@ export function DexStage({ capture, onAsk, thinking, compact = false, status, tr
           )}
 
           <textarea
+            ref={inputRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
@@ -305,7 +336,8 @@ export function DexStage({ capture, onAsk, thinking, compact = false, status, tr
           )}
         </div>
 
-        {trailing && <div className="mt-3">{trailing}</div>}
+        {suggestions && <div className="mt-4 flex w-full justify-center">{suggestions}</div>}
+        {trailing && <div className={suggestions ? "mt-4" : "mt-3"}>{trailing}</div>}
       </div>
     </div>
   );

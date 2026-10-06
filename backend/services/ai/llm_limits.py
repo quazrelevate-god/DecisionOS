@@ -174,6 +174,10 @@ async def guarded_llm(coro, *, label: str = "llm",
             # failure doesn't take AI down.
             from fastapi import HTTPException
             if isinstance(_quota_err, HTTPException):
+                # The call is refused, so its coroutine never runs; close it, or
+                # every refusal logs "coroutine ... was never awaited".
+                if asyncio.iscoroutine(coro):
+                    coro.close()
                 raise
             logger.warning(f"[{label}] pre-call gate errored, allowing: {_quota_err}")
 

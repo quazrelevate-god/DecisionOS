@@ -77,6 +77,58 @@ export function buildWrites() {
     // followed by the same id, so that write answers with it too.
     // ASK-33 — every new capture walks the stages again from the start.
     { match: /^\/voice-notes(\/text|\/[^/]+\/submit)?$/, data: () => { dexReads = 0; dexApproved = false; dexDraft = false; return { id: "vn_fixture", status: "queued" }; } },
+    /* 2026-10-07 — AND THE DICTATION HELPER, which the lab did not answer.
+       Ask's audio does not go to /voice-notes: it posts /transcribe and gets
+       the words straight back (routers/voice_notes.transcribe, "{ text }"),
+       and with nothing here that call fell through to the real backend — so
+       the whole Ask path was unreachable in fixture mode and no suite could
+       walk it. Same knob as the capture's words (dos_fixture_transcript). */
+    { match: "/transcribe", data: () => ({ text: dexSaid() }) },
+    /* 2026-10-07 — AND THE ASK ITSELF. Every POST the lab does not know is
+       answered `{ ok: true }` (see resolveFixture), so /ask came back with no
+       `answer`, no `sources` and no `type` — which is indistinguishable, from
+       the phone, from a brain that had nothing to say. Ask was therefore the
+       one path in the app the lab could not walk at all.
+       The three shapes are routers/brain.py's own, read from it rather than
+       invented: ANSWER with typed, deep-linked citations; INSUFFICIENT_DATA
+       with what is missing; PERMISSION_DENIED with the message that names the
+       access and what you may ask instead. sessionStorage "dos_fixture_ask"
+       picks which — default, "thin", "denied". */
+    { match: "/ask", data: () => {
+      let mode = "";
+      try { mode = window.sessionStorage.getItem("dos_fixture_ask") || ""; } catch { mode = ""; }
+      if (mode === "denied") {
+        return {
+          type: "PERMISSION_DENIED",
+          message: "Money is not open to you here. You can ask me about tasks, decisions or workflows.",
+          can_ask: ["tasks", "decisions", "workflows"],
+        };
+      }
+      if (mode === "thin") {
+        return {
+          type: "INSUFFICIENT_DATA",
+          answer: "I couldn't find enough information in your workspace to answer that yet.",
+          missing_information: ["dispatch dates on the October orders"],
+          suggested_questions: ["Which orders are late this week?"],
+          query_context_id: "ctx_fixture",
+        };
+      }
+      return {
+        type: "ANSWER",
+        answer: "Three dispatches are late this week. The Ashok Pumps lot is the oldest at 11 days.",
+        query_context_id: "ctx_fixture",
+        kpis: [],
+        table: null,
+        sources: [
+          { id: "doc_fixture", type: "document", title: "Dispatch policy 2026.pdf", deep_link: "/company-brain?doc=doc_fixture" },
+          { id: "wf_fixture", type: "workflow", title: "Order #4821 — Delhi Retailer", deep_link: "/workflows?id=wf_fixture" },
+        ],
+        applied_filters: {},
+        suggested_questions: ["Which ones are over 7 days?", "Who owns the Ashok Pumps lot?"],
+        export_options: [],
+        currency: "INR",
+      };
+    } },
     // ASK-50 — approving answers with what the server's approve does
     // (services/decision_flow.approve_decision_flow): the decision, now
     // approved, with the task ids it made and the counts. The review card reads

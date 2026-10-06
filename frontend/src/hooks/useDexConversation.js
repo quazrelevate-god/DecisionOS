@@ -267,14 +267,40 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
       const named = landed.join(", ");
       const question = named ? `${text} (about the attached file${landed.length > 1 ? "s" : ""}: ${named})` : text;
       setPendingFiles([]);
-      // Verified shape: { type, answer, missing_information, suggested_questions }.
+      /* Verified against routers/brain.py, not guessed:
+           ANSWER            { answer, sources, suggested_questions, kpis, table,
+                               export_options, query_context_id, currency }
+           INSUFFICIENT_DATA { answer, missing_information, suggested_questions }
+           PERMISSION_DENIED { message, can_ask } — and NO `answer`. */
       const { data } = await api.post("/ask", { question, context_id: ctxId });
       if (data.query_context_id) setCtxId(data.query_context_id);
+      /* A REFUSAL IS AN ANSWER, AND IT HAS ITS OWN FIELD. (2026-10-07, checking
+         the mobile path against the Ask redesign that landed from the other
+         branch.) That work's whole point was that "refusals name the access and
+         what the person can ask" — and this chat read `data.answer`, which a
+         refusal does not carry, so every one of them arrived on the phone as
+         "I don't have an answer for that yet." The person was told nothing,
+         twice over: not what was refused, and not what they could ask instead.
+         `message` already ends with "You can ask me about tasks, decisions or
+         workflows" (services/ai/brain_rbac.closed_message), so the words are
+         complete — they only had to be shown. */
+      if (data.type === "PERMISSION_DENIED") {
+        push({
+          role: "dex",
+          restricted: true,
+          text: data.message || "That is not something you can ask about here.",
+        });
+        return undefined;
+      }
       push({
         role: "dex",
         text: data.answer || "I don't have an answer for that yet.",
         followups: data.suggested_questions,
         missing: data.missing_information,
+        /* The Company Brain's typed, deep-linked citations. They were already
+           in the payload and the phone was dropping them, so an answer drawn
+           from a document arrived with nothing to say where it came from. */
+        sources: data.sources,
       });
       return undefined;
     } catch (e) {

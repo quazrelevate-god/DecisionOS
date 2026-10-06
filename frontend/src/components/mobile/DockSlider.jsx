@@ -251,6 +251,7 @@ function DockMore({ user, onClose }) {
  * scrolls inside itself and the page behind stays visible, which is the whole
  * point of it being the dock that grew rather than a screen that arrived. */
 function DockAskPanel({ chat, onClose, onOpenDecision, children }) {
+  const navigate = useNavigate();
   const { log = [], busy, attaching = false, retry, canRetry, clear, ask } = chat || {};
   const endRef = React.useRef(null);
   const [lightbox, setLightbox] = React.useState(null);
@@ -300,7 +301,10 @@ function DockAskPanel({ chat, onClose, onOpenDecision, children }) {
               m.outcome
                 ? <Outcome key={m.id || i} o={m.outcome} onReview={onOpenDecision}
                     onRetry={() => retry?.()} retryDisabled={!canRetry} />
-                : <Bubble key={m.id || i} m={m} index={i} onOpenFile={openFile} onAsk={(q) => ask?.(q)} />
+                : <Bubble key={m.id || i} m={m} index={i} onOpenFile={openFile} onAsk={(q) => ask?.(q)}
+                    /* Following a citation closes Ask and goes there — the bar
+                       cannot sit open over the page it just sent you to. */
+                    onGo={(to) => { onClose?.(); navigate(to); }} />
             ))}
           </AnimatePresence>
           {busy && !attaching && (

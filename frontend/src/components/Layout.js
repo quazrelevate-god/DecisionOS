@@ -509,6 +509,21 @@ export default function Layout({ children }) {
   }, [qc]);
 
   const draftSinkRef = useRef(null);
+  /* ASK, ON THE BAR, IS ONE PRESS. (2026-10-07, found auditing the mobile path
+     against the Ask work from the other branch.) Stopping a dictation yields
+     TEXT FOR REVIEW rather than a sent question (ASK-32 1.6) — correct when
+     there is a composer to review it in, which is what the FAB and the sheet
+     gave it. The dock has neither: `chat.submit()` is wired to DexFab, and
+     DexFab is not rendered at all on the slider shell. So a question spoken
+     into the bar was transcribed into a draft that nothing could send, and the
+     conversation simply never answered.
+     These two refs close that: the dock's stop marks the capture as one that
+     sends itself, and the transcript — which arrives a moment later, from the
+     hook above this one — goes straight out as the question. The sheet and the
+     FAB keep the review step, because there you can see and edit the words
+     before they go. */
+  const askSendOnTranscript = useRef(false);
+  const askSendRef = useRef(null);
   /* KM-54 — which door Dex was opened by: "ask" or "decide"; null while it is
      closed. ASK-33 Phase 4 — there is no picker any more: the FAB opens "ask",
      and "decide" is set only when the Desk's Dex well hands a decision to the
@@ -521,7 +536,13 @@ export default function Layout({ children }) {
     onCaptured: refreshAfterCapture,
     // Stopping a recording now yields TEXT for review, not a committed capture.
     // ASK-32 1.6 — the held note's id comes back with the words.
-    onTranscript: (text, noteId) => draftSinkRef.current?.(text, noteId),
+    onTranscript: (text, noteId) => {
+      draftSinkRef.current?.(text, noteId);
+      if (askSendOnTranscript.current) {
+        askSendOnTranscript.current = false;
+        askSendRef.current?.(text);
+      }
+    },
     /* Ask-mode audio goes to /transcribe: text back, nothing persisted. Only
        Decide-mode audio becomes a decision. */
     channel: dexChannel === "ask" ? "dictate" : "capture",
@@ -574,6 +595,7 @@ export default function Layout({ children }) {
     ...dexDoors, chat, dex, inline: dexInline && dexOpen,
   }), [dexDoors, chat, dex, dexInline, dexOpen]);
   draftSinkRef.current = chat.setDraftFromVoice;
+  askSendRef.current = chat.ask;
   dexChatRef.current = chat;
   dexReadingRef.current = () => isReading(dex) || chat.busy;
   const [langOpen, setLangOpen] = useState(false);
@@ -1174,7 +1196,14 @@ export default function Layout({ children }) {
           capturing={dockDecide ? dockLive.capturing : !!dex.recording}
           recording={dockDecide ? dockLive.recording : !!dex.recording}
           levelsRef={dockDecide ? dockLive.levelsRef : dex.levelsRef}
-          onStop={() => (dockDecide ? dockStopRef.current?.() : dex.stopRecording())}
+          /* Decide's stop hands over to the capture's own pop-up; Ask's stop is
+             also its send (see askSendOnTranscript above), and with nothing
+             recording the press sends whatever has been dictated already. */
+          onStop={() => {
+            if (dockDecide) { dockStopRef.current?.(); return; }
+            if (dex.recording) { askSendOnTranscript.current = true; dex.stopRecording(); return; }
+            chat.submit();
+          }}
           onAsk={() => { setDexChannel("ask"); setDexOpen(true); setDexInline(true); if (!dex.recording) dex.startRecording(); }}
           onDecide={() => setDockDecide(true)}
           onCloseAsk={() => { setDexOpen(false); setDexChannel(null); setDexInline(false); }}

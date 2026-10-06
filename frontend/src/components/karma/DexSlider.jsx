@@ -404,7 +404,18 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
           the control's geometry, its measurements or its suites changes. */}
       <div
         className={cn("kr-slider-well relative flex w-full overflow-hidden",
-          menu ? "flex-col rounded-[var(--radius-card)]" : "h-[var(--desk-slider-track)]",
+          /* THE FOOT KEEPS THE BAR'S OWN CURVE. (2026-10-06, founder: "the
+             corner radius was changing at the bottom, it's not ergonomically
+             nice… the bottom corner radius should remain the same as how it
+             was in the minimized dock state.") The top two become the card's
+             28px, which is right for a box with a menu in it; the bottom two
+             stay the pill's — half the bar's height — so the part of this
+             container that is still a bar is still shaped like one, and the
+             expansion reads as the bar growing upward rather than as its corners
+             being re-cut underneath your thumb. */
+          menu
+            ? "flex-col rounded-t-[var(--radius-card)] rounded-b-[calc(var(--desk-slider-track)/2)]"
+            : "h-[var(--desk-slider-track)]",
           onInk && "kr-slider-well--ink")}
         data-at={at || undefined}
         data-testid={menu ? "dex-slider-expanded" : undefined}

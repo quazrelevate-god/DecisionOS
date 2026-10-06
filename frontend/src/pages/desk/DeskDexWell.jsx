@@ -53,6 +53,7 @@ import { InsightWell } from "../../components/karma";
 import { VoiceRipple, DESK_RIPPLE } from "../../components/karma/VoiceRipple";
 import { DexWave } from "../../components/mobile/DexWave";
 import { DraftNote } from "../../components/karma/DraftNote";
+import { KeptPill } from "./KeptPill";
 import { DexCapturePopup } from "./DexCapturePopup";
 
 // A capture lands in several caches at once — the same set Layout refreshes
@@ -762,11 +763,29 @@ export function DeskDexWell({ className, style, testid, phone = false, onReview,
   /* J4-03 (JOURNEY-1) — THE WELL SAYS IT KEPT SOMETHING, and PILOT-2 A — it
      offers it back where it can be read: a kept capture opens in the pop-up's
      first step, never in the two-line pill. It is not a decision until sent. */
+  const keptLabel = chat.draftKept?.restored
+    ? "Kept from before — not sent to Dex yet"
+    : "What you said is kept — not sent to Dex yet";
+  /* ON THE PHONE IT IS A PILL YOU CAN FLICK AWAY. (2026-10-06, founder: "the
+     way it displays in the home screen is not quite nice — make it a pop-up
+     floating pill with swipe-gesture closable functionality.") It was a bare
+     line of 12px type with two text buttons, printed across the top of the Desk
+     above the dock: correct, and it read as a stray sentence rather than as the
+     app telling you something. Same words, same two ways out, in the same
+     material the capture's own status pill uses — and a swipe in any direction
+     puts it away.
+     SWIPING IT AWAY IS NOT DISCARDING IT. The words stay kept: the next capture
+     still opens on them, and `Discard` is still the only thing that throws them
+     out. Hiding and deleting must not be the same gesture, least of all the
+     careless one.
+     Desktop keeps the inline note (the well is a real box there, with a place
+     for a line of type; a pill floating over a laptop screen would be the
+     stray object instead). */
   const keptDraft = kept && !popupOpen ? (
-    <DraftNote testid="dex-well-draft" className="mb-1.5"
-      label={chat.draftKept?.restored ? "Kept from before — not sent to Dex yet" : "What you said is kept — not sent to Dex yet"}
-      onOpen={openSaid}
-      onDiscard={discard} />
+    surface === "overlay"
+      ? <KeptPill testid="dex-well-draft" label={keptLabel} onOpen={openSaid} onDiscard={discard} />
+      : <DraftNote testid="dex-well-draft" className="mb-1.5"
+          label={keptLabel} onOpen={openSaid} onDiscard={discard} />
   ) : null;
   const statusKey = phase === "reading" ? "reading" : phase === "ended" ? outcome?.kind : null;
   const capturePill = !popupOpen && statusKey ? (
@@ -775,7 +794,10 @@ export function DeskDexWell({ className, style, testid, phone = false, onReview,
       onClick={() => setPopupOpen(true)}
       data-testid="dex-well-status"
       data-status={statusKey}
-      className="kr-pop mb-1.5 flex min-h-11 w-fit max-w-full items-center gap-2 rounded-pill px-4 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60"
+      /* The same opaque pill as the kept note beside it (KeptPill): these two
+         are the only things that appear in this spot, they appear over the
+         Desk's black sheet, and a 38% white wash on black is a smudge. */
+      className="mb-1.5 flex min-h-11 w-fit max-w-full items-center gap-2 rounded-pill bg-white px-4 text-sm text-slate-900 shadow-[0_6px_20px_rgb(0_0_0/.28)] ring-1 ring-black/[.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60"
     >
       {statusKey === "reading" ? (
         <span aria-hidden="true" className="relative grid h-3 w-3 shrink-0 place-items-center">

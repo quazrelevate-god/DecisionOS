@@ -2,7 +2,7 @@ import * as React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, PresenceContext, motion } from "framer-motion";
 import {
-  Plus, X, Paperclip, Camera, Keyboard, Microphone, Check, Sparkle, WarningCircle,
+  Plus, X, Paperclip, Camera, Keyboard, Microphone, Check, Sparkle, WarningCircle, Lock,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { ENDING_STATUSES, OUTCOME_COPY, isReading, stageLabel } from "@/lib/dexOutcome";
@@ -225,7 +225,7 @@ function SentFile({ file, onOpen }) {
 }
 
 /** One turn in the transcript. */
-export function Bubble({ m, index, onOpenFile, onAsk }) {
+export function Bubble({ m, index, onOpenFile, onAsk, onGo }) {
   const mine = m.role === "user";
   const files = m.files || [];
   return (
@@ -344,7 +344,20 @@ export function Bubble({ m, index, onOpenFile, onAsk }) {
             retryDisabled={m.retryDisabled}
           />
         ) : (
-          <span className="whitespace-pre-wrap">{richText(m.text)}</span>
+          <>
+            {/* RESTRICTED, SAID AS SUCH. The desktop Ask page gives a refusal
+                its own card with a lock on it; here it is one line above the
+                message, because the message itself already names the access and
+                what you can ask instead. Without this a refusal reads like an
+                answer that happens to be about permissions. */}
+            {m.restricted && (
+              <span className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-white/55"
+                data-testid="dex-restricted">
+                <Lock size={10} weight="bold" aria-hidden="true" /> Restricted
+              </span>
+            )}
+            <span className="whitespace-pre-wrap">{richText(m.text)}</span>
+          </>
         )}
         {/* The real /ask payload is {type, answer, missing_information,
             suggested_questions} — verified against the endpoint, not guessed.
@@ -376,6 +389,47 @@ export function Bubble({ m, index, onOpenFile, onAsk }) {
           <p className="mt-2 text-[14px] text-white/45">
             Missing: {m.missing.slice(0, 3).join(" · ")}
           </p>
+        )}
+        {/* WHERE THE ANSWER CAME FROM. (2026-10-07.) The Company Brain hands
+            back typed, deep-linked citations and the phone was dropping them
+            on the floor — so an answer read out of a document looked like
+            something Dex simply knew. Same chips as the desktop Ask page
+            (pages/AskAI's Sources), cut for a bubble: the type in small caps,
+            the title truncated, and the whole chip tappable when the server
+            gave it a deep link. Three, because a bubble is not a bibliography;
+            the full list is on the Ask page. */}
+        {m.sources?.length > 0 && (
+          <div className="mt-2.5 flex flex-wrap gap-1.5" data-testid="dex-sources">
+            {m.sources.slice(0, 3).map((srcItem, i) => {
+              const inner = (
+                <>
+                  <span className="shrink-0 text-[10px] uppercase tracking-[0.12em] text-white/50">
+                    {srcItem.type || "note"}
+                  </span>
+                  <span className="min-w-0 truncate">{srcItem.title}</span>
+                </>
+              );
+              return srcItem.deep_link && onGo ? (
+                <button
+                  key={`${srcItem.id || i}`}
+                  type="button"
+                  onClick={() => onGo(srcItem.deep_link)}
+                  data-testid={`dex-source-${i}`}
+                  className="flex min-w-0 max-w-full items-center gap-1.5 rounded-pill bg-white/10 px-2.5 py-1 text-left text-[13px] text-white/75 hover:bg-white/20"
+                >
+                  {inner}
+                </button>
+              ) : (
+                <span
+                  key={`${srcItem.id || i}`}
+                  data-testid={`dex-source-${i}`}
+                  className="flex min-w-0 max-w-full items-center gap-1.5 rounded-pill bg-white/[.06] px-2.5 py-1 text-[13px] text-white/60"
+                >
+                  {inner}
+                </span>
+              );
+            })}
+          </div>
         )}
       </div>
     </motion.div>
@@ -605,6 +659,9 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                   key={m.id}
                   onOpenFile={openFile}
                   onAsk={(q) => ask?.(q)}
+                  /* A citation is a place: following one closes the sheet, the
+                     way every other link out of this transcript does. */
+                  onGo={(to) => { onClose?.(); navigate(to); }}
                   m={{
                     ...m,
                     /* Only the LAST reading turn is live: an older one from a

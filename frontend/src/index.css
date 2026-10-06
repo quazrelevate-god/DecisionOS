@@ -850,10 +850,16 @@
        measured, so it fires on an iPhone SE (375x667) and a 360x640 Android and
        on nothing the founder has signed off. What it gives back, in the order
        the space is least missed, all of it measured on those two screens:
-         · the supporting line (~20px a row, 60 of the ~85 needed). The title
-           and the amount are what a row is FOR; "Raised by Sunita Rao · You
-           decide" is the part a 4.7" screen can do without, and it is still on
-           the decision itself one tap away.
+       IT COMES IN TWO STAGES, and the words go LAST: stage 1 (data-desk-tight="1")
+       takes only air, stage 2 ("2") is the one that costs a line, and the Desk
+       asks for the second only when the first was not enough. An iPhone 17 in
+       the simulator sits two pixels short of three two-line rows once its status
+       bar and home indicator are out of the 874pt — one flat level answered that
+       by stripping a line of context off every row on a 6.3" phone.
+         · STAGE 2 ONLY — the supporting line (~20px a row). The title and the
+           amount are what a row is FOR; "Raised by Sunita Rao · You decide" is
+           the part a 4.7" screen can do without, and it is still on the decision
+           itself one tap away.
          · the space between the pills, 10px to 6.
          · the Show-all control, from 56px to the 44px touch floor.
          · the KPI tiles' padding and the page's own gaps, 4px each — they are
@@ -861,7 +867,7 @@
            or a label.
        Nothing here is a different design: it is the same Desk with the air
        taken out of it, and one line fewer per row. */
-    :root[data-desk-tight] .kr-desk-row-meta { display: none; }
+    :root[data-desk-tight="2"] .kr-desk-row-meta { display: none; }
     :root[data-desk-tight] .kr-desk-sheet-list { gap: 0.375rem; }
     :root[data-desk-tight] [data-testid="desk-phone-more"] { height: 2.75rem; }
     :root[data-desk-tight] .kr-kpi-tile { padding: 0.5rem; }

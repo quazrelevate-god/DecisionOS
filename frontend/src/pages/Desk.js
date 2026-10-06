@@ -620,7 +620,7 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
      IT IS ONLY EVER SET HERE, never cleared, and a resize clears it before the
      next measurement. Clearing it from the measure would be a loop: tight makes
      it fit, fitting clears tight, clearing stops it fitting. */
-  const [tight, setTight] = useState(false);
+  const [tight, setTight] = useState(0);
   /* AND THE LAST RESORT, WHICH IS STILL NOT CLIPPING. (2026-10-06.)
      Three rows is the design and it holds on every phone from a 4.7" iPhone SE
      up. Below that it stops being arithmetic and starts being physics: a
@@ -657,7 +657,7 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
   const deficit = useRef({ avail: -1, hits: 0, asks: 0 });
   useEffect(() => {
     if (!roomy) return undefined;
-    const onResize = () => { setTight(false); setMaxRows(PHONE_ROWS); setFitTick((n) => n + 1); };
+    const onResize = () => { setTight(0); setMaxRows(PHONE_ROWS); setFitTick((n) => n + 1); };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [roomy]);
@@ -665,7 +665,7 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
      first and the measure below reads the layout it produced. */
   useLayoutEffect(() => {
     const root = document.documentElement;
-    if (tight && roomy && !open) root.setAttribute("data-desk-tight", "");
+    if (tight && roomy && !open) root.setAttribute("data-desk-tight", String(tight));
     else root.removeAttribute("data-desk-tight");
     return () => root.removeAttribute("data-desk-tight");
   }, [tight, roomy, open]);
@@ -690,7 +690,7 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
        large. Read the gap the list is actually drawn with. */
     const gap = parseFloat(getComputedStyle(el).rowGap) || 1;
     if (tight && avail > tightAt.current * 2) {      // the room came back
-      setTight(false); setMaxRows(PHONE_ROWS); return;
+      setTight(0); setMaxRows(PHONE_ROWS); return;
     }
     /* WHAT A ROW NEEDS — not what it was given, and not what it admits to.
        Two readings were tried here and both are wrong in a way worth recording.
@@ -749,7 +749,17 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
       }
       return;
     }
-    if (!tight) { tightAt.current = avail; setTight(true); return; }
+    /* TWO STAGES, AND THE WORDS GO LAST. Stage 1 takes air: the gaps between
+       the pills, the pill's own padding, the KPI tiles' padding, the page's
+       gaps, the Show-all control down to the 44px floor. Stage 2 is the only
+       one that costs information — the supporting line — and it is reached
+       only when stage 1 was not enough.
+       The split is not theoretical: an iPhone 17 in the simulator, with its
+       status bar and home indicator taken out of the 874pt, came up two pixels
+       short of three two-line rows. One flat tight level answered that by
+       dropping "Raised by Sunita Rao · You decide" from every row on a 6.3"
+       phone, to save a gap's worth of space. */
+    if (tight < 2) { if (!tight) tightAt.current = avail; setTight(tight + 1); return; }
     /* Tight too, and still short at the floor: seat ONE fewer row and measure
        again (see maxRows above). One step at a time, never a division — an
        arithmetic guess at how many "would" fit is taken against rows that are

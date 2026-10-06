@@ -47,7 +47,40 @@ export function DockSlider({
 }) {
   const { t } = useTranslation();
   const location = useLocation();
+  const navRef = React.useRef(null);
   const slots = React.useMemo(() => dockSlots(user, t), [user, t]);
+
+  /* TAP ANYWHERE ELSE AND THE MENU PUTS ITSELF AWAY. (2026-10-07, founder: "no
+     need of the X button at the top for closing — when we click outside this
+     more menu, that more menu should collapse.")
+     There is no overlay to catch that tap any more — the menu IS the bar, and
+     the page behind it is live — so the bar listens for a press that starts
+     outside itself. pointerdown rather than click: it closes on the way down,
+     the way a menu should, and a press that ends in a scroll still closes it.
+     The press is STOPPED but not prevented: whatever is under it does not also
+     get actioned (dismissing a menu should not post a form or open a task), and
+     not calling preventDefault leaves the page free to scroll under the finger
+     that just closed it. The dock itself is excluded, so More's own button
+     toggles and the destinations still work. */
+  React.useEffect(() => {
+    if (!moreOpen) return undefined;
+    const away = (e) => {
+      if (navRef.current && navRef.current.contains(e.target)) return;
+      e.stopPropagation();
+      onMore?.();
+      /* AND THE CLICK THAT FOLLOWS IT. Stopping the pointerdown does not stop
+         the click — React listens for that one — so the tap that put the menu
+         away also opened whatever it landed on: measured, a task card's drawer.
+         One click is swallowed, and only if it arrives: a press that turns into
+         a scroll never produces one, so the listener takes itself off after half
+         a second rather than waiting to eat something unrelated. */
+      const swallow = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
+      document.addEventListener("click", swallow, true);
+      setTimeout(() => document.removeEventListener("click", swallow, true), 500);
+    };
+    document.addEventListener("pointerdown", away, true);
+    return () => document.removeEventListener("pointerdown", away, true);
+  }, [moreOpen, onMore]);
   const [pct, setPct] = React.useState(0);
   const [pressed, setPressed] = React.useState(false);
   const onDrag = React.useCallback((p) => setPct(p), []);
@@ -96,6 +129,7 @@ export function DockSlider({
 
   return (
     <nav
+      ref={navRef}
       className="lg:hidden fixed app-dock-left app-dock-right-wide z-[10000] bottom-safe-4"
       data-testid="dock-slider"
       data-mobile-chrome=""
@@ -166,7 +200,7 @@ export function DockSlider({
  * AllAppsPanel's list — one set of destinations, two ways of drawing it — so a
  * page added to the menu appears here without anyone remembering to.
  */
-function DockMore({ user, onClose }) {
+function DockMore({ user, onClose }) {   // onClose: picked a destination
   const { t } = useTranslation();
   const navigate = useNavigate();
   /* The nine, in the order the panel has always had them: the destinations
@@ -191,17 +225,12 @@ function DockMore({ user, onClose }) {
        `menu`), so the black around these pills IS the bar — there is no second
        sheet and nothing is nested in anything. */
     <div className="flex min-h-0 flex-col" data-testid="dock-more-panel">
-      <div className="flex shrink-0 items-center justify-between gap-2 px-3 pt-2.5">
+      {/* NO CLOSE BUTTON. (2026-10-07, founder.) The ways out are the three a
+          bar like this already has: press More again, tap anywhere off the bar,
+          or pick something. A button whose only job is "undo the last tap" was
+          the fourth, and it was the one taking up the most room. */}
+      <div className="flex shrink-0 items-center px-3 pb-0.5 pt-2.5">
         <span className="text-[13px] font-medium text-white/60">{t("bottomnav.more", "More")}</span>
-        <button
-          type="button"
-          onClick={onClose}
-          data-testid="dock-more-close"
-          aria-label="Close the menu"
-          className="grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20"
-        >
-          <X size={16} weight="bold" aria-hidden="true" />
-        </button>
       </div>
 
       {/* Five rows of two, on the dock's own ink — no card between them and it.

@@ -297,11 +297,53 @@ check('Settings is the one utility', tileKeys.filter((k) => k === 'settings').le
 /* Closing it: the same press on More puts the bar back on the slider path; the
    floating panel has Escape. Either way the page is where it was. */
 if (DEX_SLIDER) {
+  /* 2026-10-07 (founder) — THE WAYS OUT ARE THE BAR'S OWN. No close button:
+     press More again, tap anywhere off the bar, or pick something. */
+  check('the menu carries no close button of its own',
+    (await page.locator('[data-testid="dock-more-close"]').count()) === 0);
+  const urlBefore = page.url();
+  await page.mouse.click(Math.round(page.viewportSize().width / 2), 180);   // on the page behind
+  await page.waitForTimeout(700);
+  check('a tap off the bar collapses the menu',
+    (await page.locator('[data-testid="dock-more-panel"]').count()) === 0);
+  /* …and that tap does nothing ELSE. Stopping the pointerdown does not stop the
+     click, and without swallowing it the tap that dismissed the menu also
+     opened whatever it landed on. */
+  check('…and does not act on what it landed on', page.url() === urlBefore,
+    `${urlBefore} -> ${page.url()}`);
+  await page.locator('[data-testid="dock-more"]').click();
+  await page.waitForTimeout(600);
   await page.locator('[data-testid="dock-more"]').click();
   await page.waitForTimeout(700);
   check('pressing More again puts the bar back',
     (await page.locator('[data-testid="dock-more-panel"]').count()) === 0
     && (await page.locator('[data-testid="dex-slider"]').count()) === 1);
+  /* ONE SHAPE IN BOTH STATES. The founder compared the shut bar with the
+     expanded one and read the corners as different; they are the bar's own
+     radius everywhere now — half its height, at every corner, in both. */
+  /* offsetHeight, not the rect: a radius resolves in the element's OWN pixels
+     and the phone draws them at 0.8 (--ui-scale), so comparing "48px" against a
+     77px rect is the visual-vs-CSS mix-up this file warns about elsewhere. */
+  const shut = await page.evaluate(() => {
+    const w = document.querySelector('.kr-slider-well');
+    const cs = getComputedStyle(w);
+    return { h: w.offsetHeight, tl: cs.borderTopLeftRadius, bl: cs.borderBottomLeftRadius };
+  });
+  await page.locator('[data-testid="dock-more"]').click();
+  await page.waitForTimeout(700);
+  const grown = await page.evaluate(() => {
+    const w = document.querySelector('.kr-slider-well');
+    const cs = getComputedStyle(w);
+    return { h: w.offsetHeight, tl: cs.borderTopLeftRadius, bl: cs.borderBottomLeftRadius };
+  });
+  /* The shut bar specifies 9999px, which the browser resolves to half its
+     height; the grown one asks for that number outright, because 9999 on a
+     334px box would clamp to half the WIDTH and draw a lozenge. */
+  check('the expanded bar wears the shut bar\'s corner radius, on every corner',
+    grown.tl === grown.bl && Math.abs(parseFloat(grown.tl) - shut.h / 2) <= 1,
+    `shut ${shut.h}px tall (${shut.tl}) → grown ${grown.tl}`);
+  await page.locator('[data-testid="dock-more"]').click();
+  await page.waitForTimeout(500);
 } else {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(700);

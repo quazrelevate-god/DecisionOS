@@ -404,17 +404,24 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
           the control's geometry, its measurements or its suites changes. */}
       <div
         className={cn("kr-slider-well relative flex w-full overflow-hidden",
-          /* THE FOOT KEEPS THE BAR'S OWN CURVE. (2026-10-06, founder: "the
-             corner radius was changing at the bottom, it's not ergonomically
-             nice… the bottom corner radius should remain the same as how it
-             was in the minimized dock state.") The top two become the card's
-             28px, which is right for a box with a menu in it; the bottom two
-             stay the pill's — half the bar's height — so the part of this
-             container that is still a bar is still shaped like one, and the
-             expansion reads as the bar growing upward rather than as its corners
-             being re-cut underneath your thumb. */
+          /* ALL FOUR CORNERS ARE THE BAR'S OWN. (2026-10-07, founder: "I want the
+             exact corner radius, look-wise, of the rest state of the dock to be
+             applied in the expanded state.")
+             The first cut gave the bottom pair the bar's curve and the top pair
+             the card's 28px. The bottom was then photographically identical to
+             the shut bar — profiled from the rendered pixels, every row from 26
+             to 138 device px above the foot matched to the pixel — and it still
+             looked wrong, because the corner you are comparing is never alone:
+             a 48px arc under a straight side reads smaller than the same arc
+             continuing a semicircular end, and a box with 28 at one end and 48
+             at the other says "two shapes" however right each number is.
+             So the expanded container is the bar's shape, taller: half the
+             bar's height at every corner. 9999px cannot be reused here — on a
+             334px box the browser would clamp it to half the WIDTH and draw a
+             lozenge — so the radius is written as the number the bar resolves
+             to, from the bar's own token. */
           menu
-            ? "flex-col rounded-t-[var(--radius-card)] rounded-b-[calc(var(--desk-slider-track)/2)]"
+            ? "flex-col rounded-[calc(var(--desk-slider-track)/2)]"
             : "h-[var(--desk-slider-track)]",
           onInk && "kr-slider-well--ink")}
         data-at={at || undefined}

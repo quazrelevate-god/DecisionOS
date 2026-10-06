@@ -188,6 +188,14 @@ for (const [w, h] of WIDTHS) {
     [...document.querySelectorAll('[data-testid="dex-slider"] span[aria-hidden="true"]')]
       .filter((e) => /^(Ask|Decide)$/.test(e.textContent.trim()))
       .map((e) => Number(getComputedStyle(e).opacity)));
+  /* …and WHICH word it is, because only one of them may appear at a time now.
+     Keyed by the word rather than by DOM order: in the dock the two labels
+     print on the opposite side from the end they name, and an index would be
+     asserting that swap rather than the rule. */
+  const labelsByWord = () => page.evaluate(() => Object.fromEntries(
+    [...document.querySelectorAll('[data-testid="dex-slider"] span[aria-hidden="true"]')]
+      .filter((e) => /^(Ask|Decide)$/.test(e.textContent.trim()))
+      .map((e) => [e.textContent.trim(), Number(getComputedStyle(e).opacity)])));
 
   /* 2026-10-06 — THE ENDS INVERT IN THE DOCK. On the Desk's old in-sheet
      control they were named at rest and got out of the way as the handle
@@ -199,17 +207,27 @@ for (const [w, h] of WIDTHS) {
 
   await drag(track.x + track.width / 2 + 40, false);     // part way, held
   const mid = await labelOpacity();
+  const midWord = await labelsByWord();
   await page.mouse.move(track.x + track.width - 2, cy, { steps: 8 });
   /* Let the last of the eight moves actually render. Without this the box is
      read somewhere around the sixth step and the handle looks ~29px short of a
      wall it does reach — a measurement artefact, not the control. */
   await page.waitForTimeout(200);
   const far = await labelOpacity();
+  const farWord = await labelsByWord();
   const atEnd = await page.locator('[data-testid="dex-slider-handle"]').boundingBox();
-  check('the words arrive progressively on the approach',
-    mid.every((o) => o > 0.05) && far.every((o) => o > mid[0]),
-    `${rest0[0].toFixed(2)} -> ${mid[0].toFixed(2)} -> ${far[0].toFixed(2)}`);
-  check('…and are fully there by the time it commits', far.every((o) => o >= 0.95));
+  /* 2026-10-06 (founder) — ONE WORD, AND IT IS THE ONE THIS DRAG IS GOING TO.
+     Both used to arrive together, which meant a drag to the right lit "Decide"
+     on the left AND "Ask" on the right — and the word at the end you are
+     travelling toward then says the opposite of what will happen: "people will
+     confuse because we are swiping towards the Ask when we swipe right as the
+     text indicates". The other word is not dimmed, it is absent. */
+  check('the word for where this drag is going arrives progressively',
+    midWord.Decide > 0.05 && farWord.Decide > midWord.Decide,
+    `Decide ${rest0[0].toFixed(2)} -> ${midWord.Decide.toFixed(2)} -> ${farWord.Decide.toFixed(2)}`);
+  check('…and is fully there by the time it commits', farWord.Decide >= 0.95);
+  check('…while the word for the OTHER end never appears',
+    midWord.Ask === 0 && farWord.Ask === 0, `Ask ${midWord.Ask} / ${farWord.Ask}`);
   check('the handle reaches the wall, with nothing held back',
     Math.abs((atEnd.x + atEnd.width) - (track.x + track.width)) <= 1,
     `${Math.round((track.x + track.width) - (atEnd.x + atEnd.width))}px short`);

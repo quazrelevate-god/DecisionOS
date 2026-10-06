@@ -411,13 +411,22 @@ if (DEX_SLIDER) {
   await page.mouse.move(h.x + h.width / 2, cy);
   await page.mouse.down();
   await page.mouse.move(h.x + h.width / 2 - 40, cy, { steps: 6 });
+  /* 2026-10-06 — THE END THAT ARRIVES IS THE ONE THIS DRAG IS GOING TO, and
+     only that one: the founder asked for the other word to be absent rather
+     than dim, so reading "the first label in the DOM" now reads whichever word
+     is deliberately hidden half the time. This drag goes LEFT, which is Ask. */
   const mid = await page.evaluate(() => {
     const items = document.querySelector('[data-testid="dock-slider-items"]');
     const ends = [...document.querySelectorAll('[data-testid="dock-slider"] .kr-slider-well > span')]
-      .filter((e) => /Ask|Decide/.test(e.textContent));
-    return { nav: +getComputedStyle(items).opacity, end: ends.length ? +getComputedStyle(ends[0]).opacity : 0 };
+      .filter((e) => /^(Ask|Decide)$/.test(e.textContent.trim()));
+    const ask = ends.find((e) => e.textContent.trim() === 'Ask');
+    const decide = ends.find((e) => e.textContent.trim() === 'Decide');
+    return { nav: +getComputedStyle(items).opacity,
+      end: ask ? +getComputedStyle(ask).opacity : 0,
+      other: decide ? +getComputedStyle(decide).opacity : 0 };
   });
-  check('the destinations fade as the ends arrive', mid.nav < 1 && mid.end > 0,
+  check('the destinations fade as the end this drag names arrives',
+    mid.nav < 1 && mid.end > 0 && mid.other === 0,
     `nav ${mid.nav.toFixed(2)} · ends ${mid.end.toFixed(2)}`);
   await page.mouse.move(well.x + 2, cy, { steps: 10 });
   await page.mouse.up();

@@ -283,6 +283,16 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
            viewport two columns plus a 20px trough leaves too little for the
            "next up" title, so the trough halves and the floor comes off. */
         "kr-stat nm-tile grid grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] gap-5 p-5",
+        /* 2026-10-06 (founder) — ON A PHONE THE SEPARATOR STEPS LEFT. Down the
+           middle it gave both halves 164px, and the two sides do not need the
+           same: the left is a fixed label, a count and a bar — "it is static in
+           terms of showing characters" — while the right carries a workflow's
+           own title, which is as long as the customer's name. 1 : 1.35 leaves
+           the left column wide enough for "Workflows — need" on one line with
+           room after it (the founder: "don't be so near to the text") and hands
+           the difference to the title beside it. Desktop keeps its even split —
+           there the tile is twice as wide and neither side is short. */
+        "max-lg:grid-cols-[minmax(0,1fr)_1px_minmax(0,1.35fr)]",
         "max-lg:gap-2.5 lg:min-h-[170px]",
         wide && "max-lg:grid-cols-[minmax(0,1fr)_1px_minmax(0,1.45fr)]", className)}
     >

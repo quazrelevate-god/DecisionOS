@@ -33,6 +33,42 @@
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
         <div id="root"></div>
+        <!-- UI-SCALE, BEFORE THE FIRST PAINT. (2026-10-06.)
+             hooks/useUiScale owns this number and everything about it; what it
+             could not do is arrive in time. It runs in a React effect, so the
+             app's first frame is always rasterised at zoom 1 and then re-laid
+             out at 0.8 — which on the Android emulator's WebView left the tiles
+             from that first frame on screen FOREVER: a second greeting and a
+             second row of KPI tiles, frozen, over the live page. Measured on
+             the device: the DOM had one hero and the live sheet repainted under
+             it, while the band in between still showed numbers from an hour
+             before, and a forced repaint would not shift it. It is a compositor
+             that does not invalidate what a body `zoom` change made stale.
+             The app does not need to win that argument — it needs never to
+             paint at the wrong scale in the first place. Setting it here, with
+             the document already parsed and before React has drawn anything,
+             means one rasterisation at the final scale. It also takes out the
+             flash of a too-large page on every cold start, on every platform.
+             THE TABLE IS DUPLICATED ON PURPOSE and is the only duplication:
+             useUiScale's STEPS is the source of truth and this is twelve bytes
+             of it, inline, because an import cannot run before paint. The hook
+             then re-applies the same value (a no-op), owns resize and rotation,
+             and owns the viewport fallback for the WebViews that ignore `zoom`
+             altogether (iOS 26.3.1) — none of which has changed. -->
+        <script>
+            (function () {
+                try {
+                    var w = window.innerWidth;
+                    var s = w >= 2560 ? 1.3 : w >= 1920 ? 1.2 : w >= 1872 ? 1.1
+                        : w >= 1440 ? 1 : w >= 1024 ? 0.9 : 0.8;
+                    var r = document.documentElement;
+                    r.style.setProperty("--ui-scale", String(s));
+                    r.style.setProperty("--ui-density", String(s));
+                    document.body.classList.add("ui-scale");
+                    document.body.style.zoom = String(s);
+                } catch (e) { /* the hook will do it a frame later */ }
+            })();
+        </script>
         <script>
             !(function (t, e) {
                 var o, n, p, r;

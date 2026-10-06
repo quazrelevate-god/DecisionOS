@@ -359,8 +359,20 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
          handle arrives. IN THE DOCK it is the other way round: the bar already
          carries four destinations, so the ends appear as those fade, which is
          the swap the founder asked to happen "simultaneously". One number
-         drives both directions, so they cannot drift apart. */
-      style={{ opacity: behind ? Math.min(1, pct * 1.6) : Math.max(0, 1 - pct * 1.25) }}
+         drives both directions, so they cannot drift apart.
+         AND IN THE DOCK ONLY ONE WORD IS EVER SHOWN. (2026-10-06, founder.)
+         Both faded up together, so a drag to the right lit "Decide" on the left
+         AND "Ask" on the right — and since the gesture is heading right, the
+         word sitting at the end you are travelling toward says the opposite of
+         what is about to happen: "we are swiping towards the Ask when we swipe
+         right as the text indicates". Only the word that NAMES WHERE THIS DRAG
+         IS GOING appears; the other is not faded, it is absent.
+         `names` is which end this label is the name of, which in the dock is
+         the opposite of the side it prints on — that is the swap two commits
+         ago, where the word moved out from under the thumb. */
+      style={{ opacity: behind
+        ? (heading === (side === "ask" ? "decide" : "ask") ? Math.min(1, pct * 1.6) : 0)
+        : Math.max(0, 1 - pct * 1.25) }}
       className={cn(
         /* /70, not /45. Measured on the rendered control: foreground at 45%
            over the well's own wash lands at 2.99:1 for a 12pt label, against

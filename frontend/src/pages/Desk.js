@@ -2074,7 +2074,16 @@ export default function Desk() {
              margin gives those back. It is a constant, not a ratio, so the
              pair stays even on every screen — which is the lock the founder
              asked for and the measurements below confirm. */
-          deskSheet && "max-lg:-mb-2 max-lg:flex max-lg:flex-col max-lg:rounded-b-[3.5rem]",
+          /* 2026-10-06 — AND THE BOTTOM CORNERS GO BACK TO THE CARD'S OWN.
+             The 3.5rem above was cut for the slider that used to sit inside the
+             sheet's foot — an outer radius that was the pill's 48px plus the
+             8px either side of it. The slider left for the dock two commits
+             ago and the reasoning left with it, so the sheet was wearing a
+             56px curve at the bottom against 24px at the top for no object at
+             all. Founder: "all corners should have the same corner radius."
+             Nothing here now: .kr-desk-board's own --radius-tile applies to
+             all four. */
+          deskSheet && "max-lg:-mb-2 max-lg:flex max-lg:flex-col",
           showDecisions && "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]",
           /* PILOT — the card stays its minimal content height on a phone (it does
              NOT grow to fill). The stack is top-aligned, so closing the demo

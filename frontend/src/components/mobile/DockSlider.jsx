@@ -229,7 +229,11 @@ function DockMore({ user, onClose }) {   // onClose: picked a destination
           bar like this already has: press More again, tap anywhere off the bar,
           or pick something. A button whose only job is "undo the last tap" was
           the fourth, and it was the one taking up the most room. */}
-      <div className="flex shrink-0 items-center px-3 pb-0.5 pt-2.5">
+      {/* px-5 pt-3.5, not px-3 pt-2.5: the corner is a 48px arc now (it is the
+          bar's own), and at 12px in and 10px down the label sat inside the
+          sweep — "More" came out with its M clipped on both platforms. At 20
+          and 14 the curve has passed. */}
+      <div className="flex shrink-0 items-center px-5 pb-0.5 pt-3.5">
         <span className="text-[13px] font-medium text-white/60">{t("bottomnav.more", "More")}</span>
       </div>
 

@@ -29,13 +29,15 @@
  * screen, it should only show in other screens except the desk screen."
  */
 import * as React from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { X, DotsThree } from "@phosphor-icons/react";
 import { AnimatePresence } from "framer-motion";
 import { DexSlider } from "../karma/DexSlider";
 import { dockSlots, DockItem } from "./FloatingDock";
 import { Bubble, Outcome } from "./DexChat";
+import { buildTiles, buildUtility } from "./AllAppsPanel";
+import { useBackDismiss } from "@/hooks/useBackDismiss";
 import { cn } from "@/lib/utils";
 
 export function DockSlider({
@@ -99,7 +101,28 @@ export function DockSlider({
       data-mobile-chrome=""
       aria-label={t("nav.primary", "Primary")}
     >
-      {askOpen ? (
+      {moreOpen && !askOpen ? (
+        /* MORE IS THE BAR, GROWN. (2026-10-06, founder.) It used to be a card
+           floating over the page just above the dock; now the dock itself takes
+           the height and the menu is simply what is inside it, the same way Ask
+           grows it into a conversation. The slider stays at the foot, so the
+           destinations and the control never leave — and the same press on More
+           puts it back. */
+        <DockMorePanel user={user} onClose={onMore}>
+          <DexSlider
+            tone="ink"
+            behind={behind}
+            onDrag={onDrag}
+            onPressChange={setPressed}
+            onAsk={onAsk}
+            onDecide={onDecide}
+            capturing={capturing}
+            recording={recording}
+            levelsRef={levelsRef}
+            onStop={onStop}
+          />
+        </DockMorePanel>
+      ) : askOpen ? (
         <DockAskPanel chat={chat} onClose={onCloseAsk} onOpenDecision={onOpenDecision}>
           <DexSlider
             tone="ink"
@@ -127,6 +150,102 @@ export function DockSlider({
         />
       )}
     </nav>
+  );
+}
+
+/* THE BAR, GROWN INTO THE MENU.
+ *
+ * Founder, 2026-10-06: "instead of a separate pop-up card floating, the entire
+ * dock should increase its height, accommodating all the existing five rows of
+ * menus spaciously and compactly… place all the nine menu pills inside it. The
+ * colour of the pills should be white-ish, and no need of an additional card
+ * inside this expanded dock sheet — only the pills."
+ *
+ * So: no Dialog, no backdrop, no second surface. The dock's own ink grows to
+ * fit five rows of two, the pills sit straight on it, and the bar with its
+ * destinations stays at the foot where it was. The menu itself is still
+ * AllAppsPanel's list — one set of destinations, two ways of drawing it — so a
+ * page added to the menu appears here without anyone remembering to.
+ */
+function DockMorePanel({ user, onClose, children }) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  /* The nine, in the order the panel has always had them: the destinations
+     first, Settings last. */
+  const items = React.useMemo(
+    () => [
+      ...buildTiles({ user, t }),
+      /* Settings is the menu's one utility, and it was a full-width strip
+         under the grid in the floating panel. Keeping it full width here is
+         the same distinction and it saves the last row from being a single
+         half-pill with a hole beside it — which reads as a missing item
+         rather than as the end of the list. */
+      ...buildUtility({ user, t }).map((x) => ({ ...x, wide: true })),
+    ],
+    [user, t]
+  );
+  // The Android back gesture closes the menu rather than leaving the page.
+  useBackDismiss(true, (o) => { if (!o) onClose?.(); });
+
+  return (
+    <div
+      className="kr-dock-more flex flex-col overflow-hidden rounded-[var(--radius-card)]"
+      data-testid="dock-more-panel"
+    >
+      <div className="flex shrink-0 items-center justify-between gap-2 px-3 pt-2.5">
+        <span className="text-[13px] font-medium text-white/60">{t("bottomnav.more", "More")}</span>
+        <button
+          type="button"
+          onClick={onClose}
+          data-testid="dock-more-close"
+          aria-label="Close the menu"
+          className="grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20"
+        >
+          <X size={16} weight="bold" aria-hidden="true" />
+        </button>
+      </div>
+
+      {/* Five rows of two, on the dock's own ink — no card between them and it.
+          It scrolls only if a role ever has more than fits, which no role does
+          today; the panel is sized to its content. */}
+      <div className="kr-scroll-quiet min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2">
+        <div className="grid grid-cols-2 gap-2" data-testid="dock-more-grid">
+          {items.map((it) => {
+            const Icon = it.icon;
+            return (
+              <button
+                key={it.key}
+                type="button"
+                data-testid={`allapps-tile-${it.key}`}
+                onClick={() => { onClose?.(); navigate(it.to); }}
+                /* WHITE-ISH, the founder's word: on this ink a light pill is
+                   the thing itself rather than another dark card on a dark bar,
+                   and it is the same white the Desk's own sheet puts its rows
+                   on. Dark type, a tinted icon chip, and the 44px floor the
+                   menu has always kept. */
+                className={cn(
+                  "flex min-h-touch items-center gap-2 rounded-pill bg-white/[.92] px-2.5 py-2 text-left",
+                  it.wide && "col-span-2",
+                  "text-[hsl(var(--kr-ink))] shadow-[0_1px_2px_rgb(0_0_0/.18)]",
+                  "transition-colors duration-150 hover:bg-white",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                )}
+              >
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-pill bg-black/[.07]">
+                  <Icon size={15} weight="bold" aria-hidden="true" />
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[length:var(--text-label)] font-semibold leading-4">
+                  {it.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* The bar, at the foot, exactly where it was before it grew. */}
+      <div className="shrink-0 px-1 pb-1">{children}</div>
+    </div>
   );
 }
 

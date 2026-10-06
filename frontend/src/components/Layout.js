@@ -1178,7 +1178,13 @@ export default function Layout({ children }) {
           onAsk={() => { setDexChannel("ask"); setDexOpen(true); setDexInline(true); if (!dex.recording) dex.startRecording(); }}
           onDecide={() => setDockDecide(true)}
           onCloseAsk={() => { setDexOpen(false); setDexChannel(null); setDexInline(false); }}
-          onMore={() => setAllAppsOpen(true)}
+          /* A TOGGLE, because More is now a state of the bar rather than a card
+             over it: the same press that grew the dock puts it back, which is
+             what a person does when the thing they opened is still under their
+             thumb. (The floating panel below keeps `true` — there the press is
+             caught by its own overlay, and a toggle would close it on the way
+             through.) */
+          onMore={() => setAllAppsOpen((v) => !v)}
           moreOpen={allAppsOpen}
           onOpenDecision={(id) => navigate(`/inbox?decision=${encodeURIComponent(id)}`)}
         />
@@ -1317,8 +1323,13 @@ export default function Layout({ children }) {
           })}
         />
       )}
+      {/* 2026-10-06 — THE FLOATING MENU IS THE OLD DOCK'S. With the slider in
+          the bar, More grows the bar itself (mobile/DockSlider's DockMorePanel)
+          and this card would be a second menu opening behind it. It stays for
+          the path that still has the old dock — the flag off — where there is
+          nothing to grow. */}
       <AllAppsPanel
-        open={allAppsOpen}
+        open={allAppsOpen && !dockIsSlider}
         onClose={() => setAllAppsOpen(false)}
         user={user}
         onSignOut={doLogout}

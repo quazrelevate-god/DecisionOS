@@ -198,113 +198,105 @@ check('active slot differs in colour from inactive', cue.colour !== inactiveColo
 check('active slot still shows its label', cue.label.length > 0, `"${cue.label}"`);
 check('active slot is marked aria-current', cue.current === 'page');
 
-// ------------------------------------------------------- All Apps panel
+// ------------------------------------------------------- the More menu
+/* 2026-10-06 — THE MENU IS THE DOCK NOW, on the slider path. The founder:
+   "instead of a separate pop-up card floating, the entire dock should increase
+   its height… place all the nine menu pills inside it… no need of an additional
+   card inside this expanded dock sheet, only the pills." So the claims change
+   shape: there is no panel to float, no backdrop to be neutral and nothing to
+   dim — there is a bar that got taller. What survives unchanged is everything
+   that was ever about the MENU rather than about the card it came in: the nine
+   destinations, two columns, the 44px floor, nothing that is already in the
+   dock, and Settings as the one utility.
+   The old dock keeps the old panel and the old checks; both paths ship. */
 await page.evaluate(() => window.scrollTo(0, 800));
 await page.waitForTimeout(250);
 const beforeY = await page.evaluate(() => Math.round(window.scrollY));
+const dockShut = await page.locator('[data-testid="dock-slider"], [data-testid="dock"]').first().boundingBox();
 await page.locator('[data-testid="dock-more"]').click();
-await page.waitForSelector('[data-testid="allapps-panel"]', { timeout: 5000 });
+await page.waitForSelector(DEX_SLIDER ? '[data-testid="dock-more-panel"]' : '[data-testid="allapps-panel"]', { timeout: 5000 });
 await page.waitForTimeout(500);
 
-check('panel is not a bottom sheet (floats, inset from edges)', await page.locator('[data-testid="allapps-panel"]').evaluate((el) => {
-  const r = el.getBoundingClientRect();
-  return r.top > 8 && r.bottom < window.innerHeight - 8 && r.left >= 8;
-}));
-const backdrop = await page.locator('[data-testid="allapps-backdrop"]').evaluate((el) => ({
-  bg: getComputedStyle(el).backgroundColor,
-  filter: getComputedStyle(el).backdropFilter,
-}));
-const [br, bg, bb] = backdrop.bg.match(/\d+/g).map(Number);
-check('backdrop is neutral, not tinted', Math.max(br, bg, bb) - Math.min(br, bg, bb) <= 12, backdrop.bg);
-/* KM-8 then KM-9 — NO BLUR, and a slight dim. The founder wants the app still
-   legible behind the menu; a frosted light panel separates itself without the
-   page being blurred to make room for it, and 22% black is what settles the
-   background under it. Asserting a blur here asserted the opposite of the
-   ticket. */
-check('backdrop does not blur the page behind it', !/blur/.test(backdrop.filter), backdrop.filter);
-check('backdrop dims it slightly instead', /0\.22|, 0\.22\)/.test(backdrop.bg) || (br + bg + bb) / 3 < 40, backdrop.bg);
+if (DEX_SLIDER) {
+  const g = await page.evaluate(() => {
+    const nav = document.querySelector('[data-testid="dock-slider"]');
+    const panel = document.querySelector('[data-testid="dock-more-panel"]');
+    const pills = [...panel.querySelectorAll('[data-testid^="allapps-tile-"]')];
+    const box = (e) => { const b = e.getBoundingClientRect(); return { top: Math.round(b.top), bottom: Math.round(b.bottom), h: Math.round(b.height) }; };
+    return {
+      nav: box(nav), panel: box(panel),
+      cols: getComputedStyle(panel.querySelector('[data-testid="dock-more-grid"]')).gridTemplateColumns.split(' ').length,
+      rows: new Set(pills.map((p) => Math.round(p.getBoundingClientRect().top))).size,
+      pills: pills.length,
+      minH: Math.min(...pills.map((p) => p.offsetHeight)),
+      bg: getComputedStyle(pills[0]).backgroundColor,
+      ink: getComputedStyle(pills[0]).color,
+      sliderInside: !!panel.querySelector('[data-testid="dex-slider"]'),
+      cards: [...panel.querySelectorAll('div')].filter((d) => {
+        const cs = getComputedStyle(d);
+        return cs.backgroundColor !== 'rgba(0, 0, 0, 0)' && d.querySelector('[data-testid^="allapps-tile-"]');
+      }).length,
+      floating: document.querySelectorAll('[data-testid="allapps-panel"]').length,
+      backdrop: document.querySelectorAll('[data-testid="allapps-backdrop"]').length,
+      pageScroll: document.documentElement.scrollHeight - window.innerHeight,
+    };
+  });
+  check('More grows the dock rather than floating a card over the page',
+    g.floating === 0 && g.backdrop === 0 && g.panel.bottom === g.nav.bottom,
+    `panel ${g.panel.top}→${g.panel.bottom}, dock ${g.nav.top}→${g.nav.bottom}`);
+  check('…and the dock is taller for it', dockShut && g.nav.h > dockShut.height + 100,
+    `${Math.round(dockShut.height)} → ${g.nav.h}`);
+  check('the nine menu pills are in it, two up in five rows',
+    g.pills === 9 && g.cols === 2 && g.rows === 5, `${g.pills} pills, ${g.cols} cols, ${g.rows} rows`);
+  check('the pills clear the 44px floor', g.minH >= 44, `${g.minH}px`);
+  /* "The colour of the pills should be white-ish": a light fill with dark type
+     on it, which is the pair that makes it a pill on the ink rather than
+     another dark card on a dark bar. */
+  const rgb = g.bg.match(/\d+/g).map(Number);
+  const ink = g.ink.match(/\d+/g).map(Number);
+  check('the pills are white-ish, with dark type on them',
+    Math.min(rgb[0], rgb[1], rgb[2]) >= 230 && Math.max(ink[0], ink[1], ink[2]) <= 80, `${g.bg} on ${g.ink}`);
+  check('no second card between the pills and the dock', g.cards === 0, `${g.cards} card(s)`);
+  check('the bar keeps its destinations at the foot', g.sliderInside);
+  check('the page behind does not scroll', g.pageScroll <= 0, `${g.pageScroll}px`);
+}
 
-check('search is NOT autofocused', await page.evaluate(() =>
-  document.activeElement?.getAttribute('data-testid') !== 'allapps-search'
-), await page.evaluate(() => document.activeElement?.getAttribute('data-testid') || document.activeElement?.tagName));
-
-const panelMaxH = await page.locator('[data-testid="allapps-panel"]').evaluate(
-  (el) => Math.round(el.getBoundingClientRect().height / window.innerHeight * 100)
-);
-check('panel is at most 80vh', panelMaxH <= 80, `${panelMaxH}vh`);
-
-// grid geometry
-/* ASK-42 took Calendar and Notifications out of this panel — the calendar is
-   reached from the Journal's "Events desk" pill now, and the bell lives in the
-   Desk's top bar. The tile this measures is Journal, which is in the same grid
-   and is the destination that replaced it. */
-const tile = await own(page.locator('[data-testid="allapps-tile-journal"]'));
-/* ASK-40 — THE TILES ARE PILLS NOW, not squares: "make the more menu card
-   compact from square to pill by removing the body text… keep the two column
-   grid". So the claim is no longer 88x88; it is that a pill is still a
-   comfortable target, on the 44px floor, and full width of its column. */
-check('tiles clear the 44px floor', tile.h >= 44, `${tile.w}x${tile.h}`);
-// MPWA-12h replaced the four category sections with one bento grid, so the
-// column count is read from that grid rather than from a per-category one.
-const cols = await page.locator('[data-testid="allapps-group-destinations"] > div').evaluate(
-  (el) => getComputedStyle(el).gridTemplateColumns.split(' ').length
-);
-// ASK-38 — "two up, equal, no dense packing", and ASK-40 kept that grid.
-check('2 columns at 390px', cols === 2, `${cols} columns`);
-
-// nothing appears in both the dock and All Apps (§8)
+// the menu's CONTENTS — the same claims on both paths
+const tileKeys = await page.locator('[data-testid^="allapps-tile-"]').evaluateAll((els) =>
+  els.map((e) => e.getAttribute('data-testid').replace('allapps-tile-', '')));
 // MPWA-12c: Work replaced Brief in the dock, so /my-work is now the route
 // that must NOT also have a tile.
 const dockRoutes = ['/inbox', '/my-work', '/finance'];
-const tileKeys = await page.locator('[data-testid^="allapps-tile-"]').evaluateAll((els) =>
-  els.map((e) => e.getAttribute('data-testid').replace('allapps-tile-', ''))
-);
 const overlap = tileKeys.filter((k) => dockRoutes.some((r) => r.slice(1) === k));
-check('no dock destination also has an All Apps tile', overlap.length === 0, overlap.join(', ') || 'none');
-check('Dex has no All Apps tile (it is the FAB)', !tileKeys.includes('dex') && !tileKeys.includes('brain'),
+check('no dock destination also has a menu pill', overlap.length === 0, overlap.join(', ') || 'none');
+check('Dex has no menu pill (it is the control)', !tileKeys.includes('dex') && !tileKeys.includes('brain'),
   tileKeys.join(', '));
-check('Meeting Notes is not in the grid', !tileKeys.some((k) => /meeting/i.test(k)));
-
+check('Meeting Notes is not in the menu', !tileKeys.some((k) => /meeting/i.test(k)));
 /* §8 asked that Send Daily Digest never sit next to Sign out. KM-5 answered it
-   outright: Language, Theme and Sign out left this panel for Settings -> Account
+   outright: Language, Theme and Sign out left this menu for Settings -> Account
    — "a nav menu is a list of PLACES; a theme switch and a session-ending action
-   are neither" — and the digest is not a tile either. Settings is the whole
-   utility strip now, so the two can no longer be neighbours anywhere. The check
-   is kept, pointed at what actually guarantees it. */
-const utilKeys = await page.locator('[data-testid="allapps-utility"] [data-testid^="allapps-tile-"]')
-  .evaluateAll((els) => els.map((e) => e.getAttribute('data-testid').replace('allapps-tile-', '')));
-check('neither Send Daily Digest nor Sign out is in this panel at all',
-  !utilKeys.includes('digest') && !utilKeys.includes('signout')
-  && !tileKeys.includes('digest') && !tileKeys.includes('signout'),
-  `utility: ${utilKeys.join(' | ')}`);
-check('Settings is the utility strip', utilKeys.join(' | ') === 'settings', utilKeys.join(' | '));
+   are neither". Settings is the whole utility now, so the two can no longer be
+   neighbours anywhere. */
+check('neither Send Daily Digest nor Sign out is in the menu at all',
+  !tileKeys.includes('digest') && !tileKeys.includes('signout'), tileKeys.join(' | '));
+check('Settings is the one utility', tileKeys.filter((k) => k === 'settings').length === 1,
+  tileKeys.join(' | '));
 
-// §5.7: search renders only above twelve entries, so with twelve it is absent.
-const tileTotal = await page.locator('[data-testid^="allapps-tile-"]').count();
-const searchShown = (await page.locator('[data-testid="allapps-search"]').count()) > 0;
-check('search appears only when it would earn its row',
-  searchShown === tileTotal > 12, `${tileTotal} entries, search ${searchShown ? 'shown' : 'hidden'}`);
-if (searchShown) {
-  await page.locator('[data-testid="allapps-search"]').fill('cal');
-  await page.waitForTimeout(300);
-  const shown = await page.locator('[data-testid^="allapps-tile-"]').count();
-  check('search filters tiles live', shown === 1, `${shown} tile(s) match "cal"`);
-  await page.locator('[data-testid="allapps-search"]').fill('');
-  await page.waitForTimeout(250);
+/* Closing it: the same press on More puts the bar back on the slider path; the
+   floating panel has Escape. Either way the page is where it was. */
+if (DEX_SLIDER) {
+  await page.locator('[data-testid="dock-more"]').click();
+  await page.waitForTimeout(700);
+  check('pressing More again puts the bar back',
+    (await page.locator('[data-testid="dock-more-panel"]').count()) === 0
+    && (await page.locator('[data-testid="dex-slider"]').count()) === 1);
+} else {
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(700);
+  check('Escape closes the panel', (await page.locator('[data-testid="allapps-panel"]').count()) === 0);
 }
-
-// scroll lock + restore
-const refBefore = await page.evaluate(() => Math.round(document.body.getBoundingClientRect().top));
-await page.mouse.wheel(0, 500);
-await page.waitForTimeout(250);
-const refAfter = await page.evaluate(() => Math.round(document.body.getBoundingClientRect().top));
-check('panel locks background scroll', refBefore === refAfter, `${refBefore} -> ${refAfter}`);
-
-await page.keyboard.press('Escape');
-await page.waitForTimeout(700);
-check('Escape closes the panel', (await page.locator('[data-testid="allapps-panel"]').count()) === 0);
 const afterY = await page.evaluate(() => Math.round(window.scrollY));
-check('panel restores scroll position', Math.abs(afterY - beforeY) <= 2, `${beforeY} -> ${afterY}`);
+check('the menu leaves the page where it was', Math.abs(afterY - beforeY) <= 2, `${beforeY} -> ${afterY}`);
 
 // ------------------------------------------------- 2 taps to every destination
 const DESTINATIONS = [

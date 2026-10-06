@@ -58,7 +58,11 @@ import { useBackDismiss } from "@/hooks/useBackDismiss";
  * person has to work out is dead, so it left with them. Nothing else read it —
  * the search filter matches on `label` only.
  */
-function buildTiles({ user, t }) {
+/* EXPORTED since 2026-10-06: the dock's own More panel (mobile/DockSlider)
+   draws the same menu, and two lists of destinations would drift apart the
+   first time one gained a page. This file still owns what is in the menu; the
+   dock owns how it looks when the bar grows into it. */
+export function buildTiles({ user, t }) {
   const tiles = [
     /* ASK-42 B/C — APPROVALS AND WORKFLOWS ARE THE FIRST ROW. Both were views
        inside My Work, chosen from a dropdown that otherwise lists lenses on the
@@ -123,7 +127,7 @@ function buildTiles({ user, t }) {
   });
 }
 
-function buildUtility({ user, t }) {
+export function buildUtility({ user, t }) {
   /* KM-5 — Language, Theme and Sign out are gone from here and live in
      Settings -> Account (Theme has since left the app altogether — ASK-33). A nav menu is a list of PLACES; a theme switch and a
      session-ending action are neither, and putting Sign out one mis-tap from

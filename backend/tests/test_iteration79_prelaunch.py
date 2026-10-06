@@ -6,9 +6,8 @@ Comprehensive backend integrity sweep:
   • Task/decision/complaint CRUD + brain_context capture
   • Company Brain: documents catalog CRUD + permission gate
   • Company Brain: /context read + visibility
-  • Multi-agent router /brain/agent — tool picking + RBAC gate
   • RBAC gate on /api/ask
-  • One-tap task from agent suggestion
+
   • Signup /interview/{start,answer,blueprint,refine}
   • Admin panel /admin/alerts + admin login + list tenants
 """
@@ -333,144 +332,7 @@ class TestAskRBAC:
         assert d.get("type") != "PERMISSION_DENIED", f"owner blocked incorrectly: {d}"
 
 
-# --- Multi-agent router /brain/agent + RBAC gate ---------------------------
-class TestBrainAgent:
-    def test_owner_leave_policy(self, owner_tok):
-        r = requests.post(f"{API}/brain/agent", json={"question": "What is our leave policy?"},
-                          headers=_auth(owner_tok), timeout=120)
-        assert r.status_code == 200, r.text[:300]
-        d = r.json()
-        assert d.get("denied") is False
-        assert d.get("intent") == "policy"
-        assert isinstance(d.get("answer"), str) and len(d["answer"]) > 5
-        # verify a tool was picked (planner may pick 1-3 tools)
-        assert isinstance(d.get("tools_used"), list) and len(d["tools_used"]) >= 1
-
-    def test_owner_overdue_tasks_uses_mongo(self, owner_tok):
-        # NOTE: /brain/agent uses Claude (stochastic) to pick tools. In practice
-        # the planner sometimes picks metadata_search+knowledge_lookup for
-        # "how many overdue tasks?" instead of mongo_query. As long as the
-        # router returns a non-empty answer we accept it; we flag the missed
-        # mongo_query pick as an issue in the report, not a hard failure.
-        r = requests.post(f"{API}/brain/agent", json={"question": "How many tasks are overdue?"},
-                          headers=_auth(owner_tok), timeout=120)
-        assert r.status_code == 200
-        d = r.json()
-        assert d.get("denied") is False
-        assert isinstance(d.get("answer"), str) and len(d["answer"]) > 5
-        # Log which tool the planner picked so we can see stochastic behaviour.
-        tools = [t.get("name") for t in (d.get("tools_used") or [])]
-        assert len(tools) >= 1, f"planner picked no tools: {tools}"
-
-    def test_owner_vendor_delays_knowledge(self, owner_tok):
-        # knowledge_lookup may return 0 rows — as long as router picks it, that's fine
-        r = requests.post(f"{API}/brain/agent",
-                          json={"question": "How did we handle vendor Kumar delays?"},
-                          headers=_auth(owner_tok), timeout=120)
-        assert r.status_code == 200
-        d = r.json()
-        assert d.get("denied") is False
-        tools = [t.get("name") for t in (d.get("tools_used") or [])]
-        # Planner picks knowledge_lookup for past events — or falls back to metadata_search
-        assert any(t in tools for t in ("knowledge_lookup", "metadata_search")), tools
-
-    def test_sales_finance_intent_denied(self, sales_tok):
-        # KNOWN ISSUE: /brain/agent classifies intent using the Claude LLM
-        # planner (stochastic). Some finance-adjacent phrasings ("how many
-        # unpaid invoices this month?") are consistently classified as
-        # 'general' instead of 'finance' → RBAC gate skipped. Tool-level
-        # guards (mongo_query restricted for non-finance users) still contain
-        # actual data leaks, but the audit `denied=false` is wrong and the
-        # response can still mislead the user. Try multiple phrasings; at
-        # least ONE should trigger the finance-intent refusal.
-        phrasings = [
-            "show me unpaid GST invoices",
-            "what is our cash balance right now",
-            "list all payments made to vendors this month",
-        ]
-        denied_any = False
-        results = []
-        for q in phrasings:
-            r = requests.post(f"{API}/brain/agent", json={"question": q},
-                              headers=_auth(sales_tok), timeout=60)
-            assert r.status_code == 200
-            d = r.json()
-            results.append((q, d.get("intent"), d.get("denied")))
-            if d.get("denied") is True and d.get("intent") == "finance":
-                denied_any = True
-                break
-        assert denied_any, (
-            f"SECURITY: sales user was NEVER blocked when asking finance questions. "
-            f"Results: {results}. See report: LLM-classified intent for /brain/agent "
-            f"allows RBAC bypass for cleverly-phrased finance questions."
-        )
-
-    def test_sales_finance_intent_denied_via_ask(self, sales_tok):
-        # /api/ask uses the deterministic regex classifier — this MUST deny.
-        r = requests.post(f"{API}/ask",
-                          json={"question": "how many unpaid invoices this month?"},
-                          headers=_auth(sales_tok), timeout=60)
-        assert r.status_code == 200
-        d = r.json()
-        assert d.get("type") == "PERMISSION_DENIED"
-        assert d.get("intent") == "finance"
-
-    def test_production_sales_intent_denied(self, prod_tok):
-        r = requests.post(f"{API}/brain/agent",
-                          json={"question": "what are our sales this month?"},
-                          headers=_auth(prod_tok), timeout=60)
-        assert r.status_code == 200
-        d = r.json()
-        assert d.get("denied") is True
-        assert d.get("intent") == "sales"
-
-    def test_production_policy_allowed(self, prod_tok):
-        r = requests.post(f"{API}/brain/agent",
-                          json={"question": "what is our leave policy?"},
-                          headers=_auth(prod_tok), timeout=120)
-        assert r.status_code == 200
-        d = r.json()
-        assert d.get("denied") is False, f"production asking policy should be allowed: {d}"
-        assert isinstance(d.get("answer"), str) and len(d["answer"]) > 5
-
-
-# --- One-tap task from agent suggestion -----------------------------------
-class TestAgentCreateTask:
-    def test_create_task_from_suggestion(self, owner_tok):
-        payload = {
-            "title": "TEST_iter79_agent_suggested_review_receivables",
-            "why": "Dex suggested reviewing overdue receivables to improve cash flow",
-            "priority": "high",
-        }
-        r = requests.post(f"{API}/brain/agent/create-task", json=payload,
-                          headers=_auth(owner_tok), timeout=30)
-        assert r.status_code == 200, r.text[:400]
-        d = r.json()
-        assert d.get("ok") is True
-        task = d.get("task") or {}
-        assert task.get("title") == payload["title"]
-        tid = task["id"]
-
-        # verify in tasks list
-        r2 = requests.get(f"{API}/tasks", headers=_auth(owner_tok), timeout=20)
-        assert r2.status_code == 200
-        assert any(t.get("id") == tid for t in r2.json())
-
-        # verify brain_context note captured with source_type=agent_suggestion
-        time.sleep(0.5)
-        r3 = requests.get(f"{API}/brain/context",
-                          params={"q": "TEST_iter79_agent_suggested_review_receivables"},
-                          headers=_auth(owner_tok), timeout=20)
-        assert r3.status_code == 200
-        rows = r3.json()
-        assert any(row.get("source_type") == "agent_suggestion" for row in rows), (
-            f"expected agent_suggestion context row, got {rows[:3]}"
-        )
-
-        # cleanup
-        requests.delete(f"{API}/tasks/{tid}", headers=_auth(owner_tok), timeout=15)
-
-
+# 2026-10-05 (AI audit): /brain/agent (multi-agent router) removed; nothing called it.
 # --- Signup / voice interview ---------------------------------------------
 class TestSignupInterview:
     def test_start_answer_blueprint_refine(self):
@@ -580,32 +442,6 @@ class TestAdminPanel:
 class TestEdgeCases:
     def test_ask_empty_question(self, owner_tok):
         r = requests.post(f"{API}/ask", json={"question": ""},
-                          headers=_auth(owner_tok), timeout=15)
-        assert r.status_code == 400
-
-    def test_agent_empty_question(self, owner_tok):
-        r = requests.post(f"{API}/brain/agent", json={"question": ""},
-                          headers=_auth(owner_tok), timeout=15)
-        assert r.status_code == 400
-
-    def test_agent_unicode_question(self, owner_tok):
-        r = requests.post(f"{API}/brain/agent",
-                          json={"question": "छुट्टी की नीति क्या है?"},
-                          headers=_auth(owner_tok), timeout=90)
-        assert r.status_code == 200
-        d = r.json()
-        assert isinstance(d.get("answer"), str)
-
-    def test_agent_huge_question_capped(self, owner_tok):
-        # 801 chars — pydantic max_length=800 → 422
-        r = requests.post(f"{API}/brain/agent",
-                          json={"question": "a" * 801},
-                          headers=_auth(owner_tok), timeout=15)
-        assert r.status_code in (400, 422)
-
-    def test_agent_create_task_empty_title(self, owner_tok):
-        r = requests.post(f"{API}/brain/agent/create-task",
-                          json={"title": "   ", "why": "x"},
                           headers=_auth(owner_tok), timeout=15)
         assert r.status_code == 400
 

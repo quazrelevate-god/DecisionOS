@@ -160,9 +160,12 @@ def test_the_reads_the_audit_closed(routes, path, gate):
 
 @pytest.mark.parametrize("method,path", [
     ("POST", "/api/brain/agent"), ("POST", "/api/brain/agent/run"), ("POST", "/api/brain/agent/create-task"),
+    ("POST", "/api/dex/capture"),
 ])
-def test_the_agent_asks_for_ask_as_ask_does(routes, method, path):
-    assert ("perm", "ask") in routes[(method, path)]
+def test_the_unused_agent_doors_are_gone(routes, method, path):
+    """2026-10-05 (AI audit) — no screen called them, and they read more than
+    /ask lets a member read (every open task, any customer's dues)."""
+    assert (method, path) not in routes
     assert ("perm", "ask") in routes[("POST", "/api/ask")]
 
 
@@ -181,7 +184,9 @@ def test_a_transcript_follows_the_recording_rule():
 def test_complaints_follow_the_contact():
     c = be("routers/complaints.py")
     assert "q.update(await complaint_scope(user))" in c
-    assert 'return {"$or": [{"customer_id": {"$in": ids}}, {"created_by": user["id"]}]}' in c
+    # 2026-10-05: the rule moved to services/record_access so Dex follows it too.
+    assert "from services.record_access import complaint_scope" in c
+    assert 'return {"$or": [{"customer_id": {"$in": ids}}, {"created_by": user["id"]}]}' in be("services/record_access.py")
 
 
 def test_what_a_contact_owes_follows_crm_access():
@@ -292,3 +297,14 @@ def test_asking_without_ask_access_says_so():
     b = fe("pages/Brain.js")
     assert 'const canAsk = hasPerm(user, "ask");' in b
     assert "e?.response?.status === 403 ? NO_ASK" in b
+
+
+def test_the_journal_is_for_decision_makers_and_brain_notes_for_brain_readers(routes):
+    """2026-10-06 — the Journal is decision history for the people who approve
+    decisions (was owner-only); Company Brain notes are read with Brain access
+    and changed only by owner + Manage Team (checked in the handler)."""
+    assert ("perm", "decisions_approve") in routes[("GET", "/api/journal")]
+    assert ("perm", "brain") in routes[("GET", "/api/brain/notes")]
+    for method in ("POST", "PATCH", "DELETE"):
+        path = "/api/brain/notes" if method == "POST" else "/api/brain/notes/{note_id}"
+        assert ("perm", "brain") in routes[(method, path)]

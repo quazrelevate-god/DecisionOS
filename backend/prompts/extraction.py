@@ -92,39 +92,6 @@ EXTRACT = register(Prompt(
     ),
 ))
 
-# --- ai_score_tasks -----------------------------------------------------------
-SCORE_TASKS = register(Prompt(
-    name="extraction.score_tasks",
-    version="1.0",
-    intent="Score open tasks 0-100 on business_impact/revenue/risk/urgency + a blended priority_score.",
-    template=(
-        "You are the prioritization engine of DecisionOS, an operating brain for a small business. "
-        "Today is ${today}. Currency is ${currency}. "
-        "For EACH task, rate 0-100 on four axes: "
-        "business_impact (effect on operations/customers), revenue (direct money at stake / upside), "
-        "risk (cost of NOT doing it — penalties, churn, compliance), and urgency (time pressure vs due date). "
-        "Then give a blended priority_score 0-100 (higher = do sooner) and a one-line reason. "
-        'Return ONLY valid JSON: {"scores":[{"id":string,"business_impact":int,"revenue":int,'
-        '"risk":int,"urgency":int,"priority_score":int,"reason":string}]}. '
-        "Include every task id exactly once."
-    ),
-))
-
-# --- ai_score_contact ---------------------------------------------------------
-SCORE_CONTACT = register(Prompt(
-    name="extraction.score_contact",
-    version="1.0",
-    intent="Score a customer/supplier relationship_score + risk_score 0-100 with a reason + signals.",
-    template=(
-        "You are the relationship-intelligence engine of DecisionOS for a small business. "
-        "Currency is ${currency}. Given a ${ctype}'s financial & interaction history, rate two things 0-100: "
-        "relationship_score (overall health/value of the relationship — high = strong, loyal, profitable), and "
-        "risk_score (likelihood of a problem — non-payment, churn, complaints, supply risk; high = risky). "
-        "Give a one-line reason and up to 3 short signal phrases. "
-        'Return ONLY valid JSON: {"relationship_score":int,"risk_score":int,"reason":string,"signals":[string]}.'
-    ),
-))
-
 # --- ai_meeting_notes ---------------------------------------------------------
 MEETING_NOTES = register(Prompt(
     name="extraction.meeting_notes",

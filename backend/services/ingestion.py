@@ -204,34 +204,7 @@ def _norm_company(s: str) -> str:
     return joined.strip()
 
 
-def _purchase_class_sys(expense_cats=None, asset_cats=None) -> str:
-    asset_list = ", ".join(asset_cats) if asset_cats else "Machinery, Equipment, Vehicle, Furniture, IT & Electronics, Building, Other"
-    expense_list = ", ".join(expense_cats) if expense_cats else "Raw Material, Salary & Wages, Rent, Utilities, Logistics & Freight, Marketing, Professional Services, Asset Purchase, Maintenance & Repairs, Taxes & Duties, Office Supplies, Other"
-    return render("documents.purchase_class", asset_list=asset_list, expense_list=expense_list)
-
-
-async def ai_classify_purchase(text: str, expense_categories=None, asset_categories=None) -> dict:
-    """Classify one purchase bill's WHAT-was-bought bucket from its text, using the company's own
-    category lists when provided. Returns
-    {purchase_type, asset_name, inventory_qty, inventory_unit, asset_category, expense_category}. Never raises."""
-    text = (text or "").strip()
-    if not text:
-        return {"purchase_type": "unknown"}
-    try:
-        chat = claude_chat(task="documents.purchase_class", session_id=f"purchase-class-{new_id()}",
-                           system_message=_purchase_class_sys(expense_categories, asset_categories)).with_model(*model_for("documents.purchase_class"))
-        resp = await chat.send_message(UserMessage(text=text[:1500]))
-        d = _extract_json(resp) or {}
-    except Exception as e:  # noqa: BLE001
-        logger.warning(f"ai_classify_purchase failed: {e}")
-        d = {}
-    pt = (d.get("purchase_type") or "").strip().lower()
-    if pt not in ("expense", "asset", "inventory", "unknown"):
-        pt = "unknown"
-    return {"purchase_type": pt, "asset_name": (d.get("asset_name") or "").strip(),
-            "inventory_qty": d.get("inventory_qty"), "inventory_unit": (d.get("inventory_unit") or "").strip(),
-            "asset_category": (d.get("asset_category") or "").strip(),
-            "expense_category": (d.get("expense_category") or "").strip()}
+# 2026-10-06 (AI audit step 5): expense / asset / stock classification is calculated now -- services/calculated.classify_purchase.
 
 
 def _has_unclassified_purchase(records: dict, doc_type: str = "") -> bool:

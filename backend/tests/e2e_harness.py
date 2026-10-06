@@ -30,12 +30,15 @@ _DB_MODULES = [
     "services.voice", "services.captures", "services.whatsapp", "services.ingestion",
     "services.inbox", "services.leave", "services.enrich", "services.notifications",
     "services.ai.generators", "services.ai.brain_context",
+    "services.record_access",  # 2026-10-05: the read rules Dex shares with the screens
+    "routers.brain_notes", "services.ai.brain_embed", "services.ai.brain_retrieval",  # 2026-10-06: Company Brain notes + index + search
+    "services.finance_words", "services.calculated",  # 2026-10-06: calculated finance rules
     "services.decision_flow", "services.captures", "routers.voice_notes", "routers.desk",
     # The follow-up sweep is on the journey too (overdue escalation, D2's
     # due-soon warning) and its module-level db was reaching the production
     # client from inside an isolated test.
     "services.finance_signals",
-    "services.workflows", "services.ai.agent_tools",
+    "services.workflows",
     "routers.access", "routers.tenant_settings",
     "routers.pulse",       # 2026-09-28: the shared-screen watch
     "services.routines",   # 2026-09-21: the sign-up routines
@@ -45,6 +48,9 @@ _DB_MODULES = [
     # read, and the event loop refused before it got that far, but a test that
     # can touch the live database is a test that will.
     "routers.brain",
+    # 2026-10-06: GET /auth/me claims the tenant-setup backfill here. Unbound,
+    # every in-process /me reached the production client from a test.
+    "services.ai.ai_setup",
 ]
 
 # fire-and-forget writers to neutralise: (module, attr, kind) where kind is
@@ -56,6 +62,9 @@ _NEUTRALISE = [
     ("services.notifications", "push_notification", "noop"),
     ("services.enrich", "enrich_decision", "identity"),
     ("services.enrich", "enrich_decisions", "identity_list"),
+    # the background lexicon / operating model / finance categories fill is
+    # three LLM calls; a test's tenant without them must not start it
+    ("services.ai.ai_setup", "_backfill_missing_setup", "noop"),
 ]
 
 

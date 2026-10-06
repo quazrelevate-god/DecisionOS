@@ -32,7 +32,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   UsersThree, BookOpen, Gauge, AirplaneTakeoff, CaretRight,
-  ShieldCheck, FlowArrow, GearSix, AddressBook,
+  ShieldCheck, FlowArrow, GearSix, AddressBook, Books,
 } from "@phosphor-icons/react";
 import { hasPerm } from "@/lib/perms";
 import { INK_PLATE } from "@/components/karma/glass";
@@ -88,7 +88,11 @@ function buildTiles({ user, t }) {
        panel it came from. Same `people` permission it carried either way, so
        nobody gains or loses access by the move — only the number of taps. */
     { key: "crm", to: "/crm", label: t("nav.crm", "CRM"), icon: AddressBook, perm: "people" },
-    { key: "journal", to: "/journal", label: t("nav.journal", "Journal"), icon: BookOpen, ownerOnly: true },
+    /* MERGE 2026-10-06 — both sides added to this list and neither contradicts
+       the other: CRM comes back from the dock (above) while Journal stops being
+       owner-only and the Company Brain arrives. All three stay. */
+    { key: "journal", to: "/journal", label: t("nav.journal", "Journal"), icon: BookOpen, perm: "decisions_approve" },
+    { key: "company-brain", to: "/company-brain", label: t("nav.company_brain", "Company Brain"), icon: Books, perm: "brain" },
     /* GL-02 (JOURNEY-1 J9p-01..03, J10-03) — OPS IS NOT OWNER-ONLY. The page
        behind it has never been: /operating-score is Protected with no
        permission, so anybody signed in may open it, and on a laptop anybody

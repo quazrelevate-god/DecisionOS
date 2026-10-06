@@ -163,9 +163,28 @@ class TestCitesFromHits:
         assert cites == [{
             "id": "d1", "title": "Vendor NDA",
             "source_type": "brain_document",
+            # 2026-10-05: the Sources chip's label and where it opens
+            "type": "document", "deep_link": "/company-brain?doc=d1",   # 2026-10-06: the Brain page
             "kind": "contract", "tags": ["legal"],
             "created_at": "2026-08-01T00:00:00Z",
         }]
+
+    def test_every_memory_source_says_what_it_is_and_where_it_opens(self):
+        from services.ai.brain_retrieval import cites_from_hits
+        rows = [{"id": "c1", "source_type": "decision", "source_id": "d9"},
+                {"id": "c2", "source_type": "workflow", "source_id": "w9", "related_ids": {"workflow_type": "order_management"}},
+                {"id": "c3", "source_type": "task", "source_id": "t9"},
+                {"id": "c4", "source_type": "complaint", "source_id": "k9", "related_ids": {"contact_id": "ct9"}},
+                {"id": "c5", "source_type": "complaint", "source_id": "k8"},
+                {"id": "c6", "source_type": "invoice", "source_id": "i9"},
+                {"id": "c7", "source_type": "meeting", "source_id": "m9"},
+                {"id": "c8"}]
+        got = [(c["type"], c["deep_link"]) for c in cites_from_hits(context_hits=rows)]
+        assert got == [("decision", "/?focus=approval:d9"),
+                       ("workflow", "/my-work?view=workflows&wf=w9&wf_type=order_management"),
+                       ("task", "/my-work?task=t9"),
+                       ("complaint", "/contacts/ct9"), ("complaint", "/crm"),
+                       ("invoice", "/ledger"), ("meeting", None), ("memory", None)]
 
     def test_shapes_context_hit(self):
         from services.ai.brain_retrieval import cites_from_hits
@@ -240,9 +259,8 @@ class TestAskEnrichment:
         assert received == ["vendor delay urgent", "vendor delay urgent"]
 
     def test_retrieve_signature_still_backward_compat(self):
-        """_tool_mongo_query in brain_router.py calls _retrieve(plan, scope)
-        with 2 args — the user param must default to None so that call
-        keeps working."""
+        """The user param must default to None so a two-argument call keeps
+        working (the old agent router made one; 2026-10-05 it is gone)."""
         from routers import brain as ab
         sig = inspect.signature(ab._retrieve)
         params = sig.parameters
@@ -258,56 +276,6 @@ class TestAskEnrichment:
         # empty-Brain path) works unchanged.
         for name in ("knowledge_hits", "document_hits"):
             assert sig.parameters[name].default is None
-
-
-# ===========================================================================
-# routers/brain_router — tools delegate to the shared service
-# ===========================================================================
-class TestAgentToolsUseSharedService:
-    def test_metadata_search_source_calls_shared_service(self):
-        from routers import brain_router as ba
-        src = inspect.getsource(ba._tool_metadata_search)
-        assert "brain_retrieval.search_documents" in src, (
-            "S4-04 regression: _tool_metadata_search must delegate "
-            "to services.ai.brain_retrieval.search_documents"
-        )
-        # And the inline Mongo query it used to build must be gone.
-        assert "db.brain_documents.find(" not in src, (
-            "S4-04 regression: _tool_metadata_search must NOT hit "
-            "db.brain_documents directly anymore — go through the "
-            "shared service so future embedding upgrades land once"
-        )
-
-    def test_knowledge_lookup_source_calls_shared_service(self):
-        from routers import brain_router as ba
-        src = inspect.getsource(ba._tool_knowledge_lookup)
-        assert "brain_retrieval.search_context" in src
-
-    def test_metadata_search_runtime_shape_unchanged(self, monkeypatch):
-        """The tool's public dict shape ({tool, query, count, hits})
-        must not have drifted — Dex's synthesizer reads these keys."""
-        from routers import brain_router as ba
-        from services.ai import brain_retrieval as br
-        async def _fake(**k):
-            return [{"id": "d1", "title": "policy"}]
-        monkeypatch.setattr(br, "search_documents", _fake)
-        out = _run(ba._tool_metadata_search("refund", _u()))
-        assert set(out.keys()) == {"tool", "query", "count", "hits"}
-        assert out["tool"] == "metadata_search"
-        assert out["query"] == "refund"
-        assert out["count"] == 1
-        assert out["hits"] == [{"id": "d1", "title": "policy"}]
-
-    def test_knowledge_lookup_runtime_shape_unchanged(self, monkeypatch):
-        from routers import brain_router as ba
-        from services.ai import brain_retrieval as br
-        async def _fake(**k):
-            return [{"id": "c1", "title": "past"}]
-        monkeypatch.setattr(br, "search_context", _fake)
-        out = _run(ba._tool_knowledge_lookup("vendor", _u()))
-        assert set(out.keys()) == {"tool", "query", "count", "hits"}
-        assert out["tool"] == "knowledge_lookup"
-        assert out["count"] == 1
 
 
 # ===========================================================================

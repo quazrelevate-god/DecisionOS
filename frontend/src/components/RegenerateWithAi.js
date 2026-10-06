@@ -8,7 +8,8 @@ import { Sparkle } from "@phosphor-icons/react";
 // goes, e.g. "your pipelines, stages, task templates and approval gates".
 export function RegenerateWithAi({ onConfirm, busy, replaces, testid }) {
   const [asking, setAsking] = useState(false);
-  const btn = "flex items-center gap-2 border border-nm-edge/40 px-5 py-2 text-sm font-medium rounded-lg hover:bg-accent transition-all disabled:opacity-60";
+  // 2026-10-05 — the glass pill beside each card's ink Save, not a square box.
+  const btn = "flex h-11 items-center gap-2 rounded-pill bg-white/75 px-5 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-900/[0.06] transition-colors hover:bg-white disabled:opacity-60";
 
   if (!asking) {
     return (

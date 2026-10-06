@@ -5,6 +5,7 @@
    edit access, profile, invite link — moved onto the glass design system:
    GlassSelect for role and reporting manager, and a job title, which the
    tree shows under each name. */
+import { AccessSwitch } from "../components/settings/AccessSwitch";
 import { NAV, navEntryOpen } from "../components/Layout";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatPhone, timeAgo } from "../lib/format";
@@ -16,7 +17,7 @@ import OtpBoxes from "../components/auth/OtpBoxes";
 import { PERMISSIONS, PERMISSION_GROUPS, hasPerm, roleDefaultPerms, userPerms } from "../lib/perms";
 import { toast } from "sonner";
 import {
-  AirplaneTakeoff, Briefcase, Camera, ChatText, Check, Copy, EnvelopeSimple, Eye, LinkSimple, MagnifyingGlass,
+  AirplaneTakeoff, Briefcase, Camera, ChatText, Copy, EnvelopeSimple, Eye, LinkSimple, MagnifyingGlass,
   PencilSimple, Phone, Plus, Pulse, ShieldCheck, Trash, User, WhatsappLogo, X,
 } from "@phosphor-icons/react";
 import { PersonAvatar } from "../components/karma/PersonAvatar";
@@ -68,8 +69,6 @@ const NM_RAISED = "bg-[hsl(226_24%_92%)] shadow-[6px_6px_14px_hsl(226_18%_74%),-
 const MEMBER_FIELD = `${DRAWER_FIELD} disabled:cursor-not-allowed disabled:bg-white/40 disabled:text-slate-500`;
 // The access areas are options, not actions, so they are glass like the rest
 // of the form (founder, 2026-09-20).
-const PERM_ON = "bg-white font-semibold text-slate-900 ring-1 ring-inset ring-neutral-900/15 shadow-[0_6px_16px_-10px_hsl(216_30%_25%/0.45),inset_0_1px_0_hsl(0_0%_100%/0.9)]";
-const PERM_OFF = "bg-white/45 font-medium text-slate-600 ring-1 ring-inset ring-slate-900/[0.05] hover:bg-white/75 hover:text-slate-900";
 const NM_ICON_BTN = `grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-700 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 active:shadow-[inset_3px_3px_7px_hsl(226_18%_76%),inset_-3px_-3px_7px_hsl(0_0%_100%/0.95)] ${NM_RAISED}`;
 const COLLAPSE_KEY = "team.folded-branches";
 
@@ -614,7 +613,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                     <span className="font-semibold">Use the {roleName(form.role)} team's access</span>
                     <span className="mt-0.5 block text-xs text-neutral-500">
                       {form.follow_role
-                        ? "When the owner changes this team's access in Settings › Teams, it reaches them too."
+                        ? "When the owner changes this team's access in Settings › Team & access, it reaches them too."
                         : form.permissions.length
                           ? "Their own access, chosen below. Changes to the team won't reach them."
                           : "No access: they can sign in but can't open anything until you tick something."}
@@ -626,7 +625,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                   {PERMISSION_GROUPS.map((g) => (
                     <div key={g.title}>
                       <p className={DRAWER_LABEL}>{g.title}</p>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         {g.items.map((p) => {
                           const on = shownPerms.includes(p.key);
                           // RBAC P0 (2026-09-15) — same rule as the server: someone who isn't
@@ -637,15 +636,14 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                             && !(initial?.permissions || []).includes(p.key)
                             && (selfEdit || !rolePerms.includes(p.key));
                           return (
-                            <button key={p.key} type="button" data-testid={`perm-${p.key}`} aria-pressed={on} disabled={locked || form.follow_role}
-                              title={form.follow_role ? "Set by the team — untick “Use the team’s access” to choose" : locked ? "Only an owner can give access you don't have" : undefined}
-                              onClick={() => togglePerm(p.key)}
-                              className={`flex min-h-11 items-center justify-between gap-2 rounded-2xl px-3.5 py-2 text-left text-[13px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 disabled:cursor-not-allowed disabled:opacity-45 ${on ? PERM_ON : PERM_OFF}`}>
-                              <span>{p.label}</span>
-                              <span aria-hidden="true" className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${on ? "bg-neutral-900 text-white" : "ring-1 ring-inset ring-slate-900/20"}`}>
-                                {on && <Check size={11} weight="bold" />}
-                              </span>
-                            </button>
+                            /* 2026-10-05 — the same switch as Settings › Team & access
+                               (components/settings/AccessSwitch); dimmed when this
+                               person may not give it. */
+                            <div key={p.key} className={locked ? "opacity-45" : undefined}>
+                              <AccessSwitch label={p.label} on={on} onToggle={() => togglePerm(p.key)}
+                                disabled={locked || form.follow_role} testid={`perm-${p.key}`}
+                                title={form.follow_role ? "Set by the team — untick “Use the team’s access” to choose" : locked ? "Only an owner can give access you don't have" : undefined} />
+                            </div>
                           );
                         })}
                       </div>
@@ -659,7 +657,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                       const { visible } = m;
                       return (
                         <span key={m.label} data-testid={`preview-${m.label}`}
-                          className={`${CHIP} ${visible ? "bg-neutral-900 text-white ring-transparent" : `${QUIET_CHIP} line-through opacity-60`}`}>
+                          className={`${CHIP} ${visible ? "bg-primary/10 text-primary ring-primary/20" : `${QUIET_CHIP} line-through opacity-60`}`}>
                           {m.label}
                         </span>
                       );

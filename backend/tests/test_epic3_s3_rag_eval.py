@@ -13,6 +13,7 @@ import services.ai.brain_embed as be
 import services.ai.brain_retrieval as br
 import integrations.qdrant as q
 import integrations.embeddings as emb
+from tests.fake_mongo import FakeDB, consenting_tenant
 
 
 _DIM = 64
@@ -57,6 +58,16 @@ def _wire(monkeypatch):
     monkeypatch.setattr(be, "embed_texts", fake_embed_texts)
     monkeypatch.setattr(be, "embedding_dim", lambda task="default": _DIM)
     monkeypatch.setattr(emb, "embed_query", fake_embed_query)
+    # 2026-10-05: indexing reads consent + the live documents; the relevance floor
+    # is calibrated for real embeddings, not these bag-of-words vectors.
+    fdb = FakeDB()
+    fdb.tenants.docs.append(consenting_tenant("t1"))
+    fdb.brain_documents.docs.extend({"id": d, "tenant_id": "t1", "visibility": "public", "title": d,
+                                     "is_deleted": False} for d in _DOCS)
+    monkeypatch.setattr(be, "db", fdb)
+    monkeypatch.setattr(br, "db", fdb)
+    monkeypatch.setattr(br, "RAG_MIN_SCORE", 0.0)
+    monkeypatch.setattr(br, "RAG_BEST_MARGIN", 1.0)
     q.reset_client()
 
 

@@ -36,6 +36,8 @@ from routers.admin import TENANT_COLLECTIONS
 # drift test fails and forces the deleter to explicitly justify the removal
 # (rather than a silent regression).
 KNOWN_TENANT_SCOPED_COLLECTIONS = {
+    # 2026-10-05: the Company Brain index (Mongo store) + the retired Desk briefing cache
+    "brain_chunks", "brain_index_meta", "desk_narrative_cache",
     # Core workspace records
     "users", "tasks", "decisions", "workflows", "contacts", "capture_drafts",
     # Finance / ledger

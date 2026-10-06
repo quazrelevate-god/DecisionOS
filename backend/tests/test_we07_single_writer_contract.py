@@ -43,10 +43,6 @@ ALLOWED_WRITERS = {
     # stage transition) -- moved here from server.py's boot path in the
     # Epic 8 refactor.
     "bootstrap/lifecycle.py",
-    # scripts/reclassify_purchases.py is a one-shot admin migration and
-    # does not touch stage. It is here in case it ever grows a stage
-    # write; today grepping it hits nothing.
-    "scripts/reclassify_purchases.py",
 }
 
 

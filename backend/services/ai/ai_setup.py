@@ -206,3 +206,65 @@ async def generate_tenant_setup(tenant_id: str, *, industry: str, company_size: 
     }})
     logger.info(f"tenant setup generated for {tenant_id}: {status}")
     return status
+
+
+# --- 2026-10-06 (AI audit step 5): never on a page load ------------------------
+# GET /api/auth/me used to generate a missing lexicon / operating model / finance
+# categories INLINE -- up to three AI calls, one after another, on the request
+# every screen waits for, repeated on every /me until they stuck. Now /me only
+# CLAIMS the job (one worker, at most every 10 minutes, atomically in Mongo) and
+# it runs in the background, filling only what is missing and keeping what is
+# there. The screens already fall back to defaults until it lands.
+_SETUP_TASKS: set = set()
+BACKFILL_COOLDOWN_MIN = 10
+
+
+def setup_missing(tenant: dict) -> list:
+    out = []
+    if not (tenant or {}).get("lexicon"):
+        out.append("lexicon")
+    if not ((tenant or {}).get("operating_model") or {}).get("pipelines"):
+        out.append("operating_model")
+    if not ((tenant or {}).get("finance_categories") or {}).get("expense"):
+        out.append("finance_categories")
+    return out
+
+
+async def claim_setup_backfill(tenant: dict) -> bool:
+    """Schedule the background fill if something is missing and nobody did in the
+    last BACKFILL_COOLDOWN_MIN minutes. Returns whether this call scheduled it."""
+    import asyncio
+    from datetime import datetime, timedelta, timezone
+    if not tenant or not setup_missing(tenant):
+        return False
+    now = datetime.now(timezone.utc)
+    cutoff = (now - timedelta(minutes=BACKFILL_COOLDOWN_MIN)).isoformat()
+    res = await db.tenants.update_one(
+        {"id": tenant["id"], "$or": [{"setup_backfill_at": {"$exists": False}}, {"setup_backfill_at": {"$lt": cutoff}}]},
+        {"$set": {"setup_backfill_at": now.isoformat()}})
+    if not getattr(res, "modified_count", 0):
+        return False
+    task = asyncio.get_running_loop().create_task(_backfill_missing_setup(tenant["id"]))
+    _SETUP_TASKS.add(task)
+    task.add_done_callback(_SETUP_TASKS.discard)
+    return True
+
+
+async def _backfill_missing_setup(tenant_id: str) -> None:
+    from services.ai.generators import ai_generate_finance_categories, ai_generate_lexicon, backfill_operating_model
+    try:
+        t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+        if not t:
+            return
+        set_usage_tenant(tenant_id)          # the AI guard's consent + quota apply
+        args = (t.get("industry"), t.get("company_size"), t.get("roles"), t.get("description") or "")
+        missing = setup_missing(t)
+        if "lexicon" in missing:
+            await db.tenants.update_one({"id": tenant_id}, {"$set": {"lexicon": await ai_generate_lexicon(*args)}})
+        if "operating_model" in missing:
+            await db.tenants.update_one({"id": tenant_id}, {"$set": {"operating_model": await backfill_operating_model(t)}})
+        if "finance_categories" in missing:
+            await db.tenants.update_one({"id": tenant_id}, {"$set": {"finance_categories": await ai_generate_finance_categories(*args)}})
+        logger.info(f"tenant setup backfilled for {tenant_id}: {missing}")
+    except Exception as e:
+        logger.warning(f"tenant setup backfill failed for {tenant_id}: {e}")

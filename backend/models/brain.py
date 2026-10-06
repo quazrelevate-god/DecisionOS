@@ -32,20 +32,3 @@ class PatchInput(BaseModel):
     visibility: Optional[str] = Field(default=None, max_length=40)
     roles_allowed: Optional[str] = Field(default=None, max_length=400)
     summary: Optional[str] = Field(default=None, max_length=800)
-
-
-class AgentRequest(BaseModel):
-    question: str = Field(max_length=800)
-    conversation_id: Optional[str] = Field(default=None, max_length=64)  # E3-12.1 agent memory
-
-
-class SuggestedTaskInput(BaseModel):
-    """Shape returned by the synthesizer's `suggested_tasks` list — plus optional
-    source refs so we can close the loop back into `brain_context`."""
-    title: str = Field(max_length=200)
-    why: str = Field(default="", max_length=500)
-    priority: Optional[str] = Field(default="medium", max_length=20)
-    source_kind: Optional[str] = Field(default=None, max_length=40)   # e.g. "document" / "context"
-    source_ref: Optional[str] = Field(default=None, max_length=64)    # doc_id or context_id
-    source_label: Optional[str] = Field(default=None, max_length=200)
-    question: Optional[str] = Field(default=None, max_length=400)     # what founder asked

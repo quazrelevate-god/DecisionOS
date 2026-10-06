@@ -1102,9 +1102,6 @@ async def logout(request: Request, response: Response):
 
 @router.get("/me")
 async def me(request: Request, response: Response, user: dict = Depends(get_current_user)):
-    # Deferred so this router doesn't import server.py at module load.
-    from services.ai.generators import ai_generate_finance_categories, ai_generate_lexicon, backfill_operating_model
-
     # B27 (2026-09-29) — HAND THE CSRF TOKEN TO A CLIENT THAT CANNOT READ THE
     # COOKIE. Every login path mints one through core.security.set_csrf_cookie,
     # which now echoes it in a header — but a native app that is already signed
@@ -1121,22 +1118,12 @@ async def me(request: Request, response: Response, user: dict = Depends(get_curr
         set_csrf_cookie(response)
 
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
-    if tenant and not tenant.get("lexicon"):
-        # Backfill industry vocabulary once for pre-existing workspaces.
-        lex = await ai_generate_lexicon(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"), tenant.get("description") or "")
-        await db.tenants.update_one({"id": tenant["id"]}, {"$set": {"lexicon": lex}})
-        tenant["lexicon"] = lex
-    if tenant and not (tenant.get("operating_model") or {}).get("pipelines"):
-        # Backfill the industry operating model (pipelines + task categories) once,
-        # preserving any pipeline/category that already has data (non-destructive).
-        om = await backfill_operating_model(tenant)
-        await db.tenants.update_one({"id": tenant["id"]}, {"$set": {"operating_model": om}})
-        tenant["operating_model"] = om
-    if tenant and not (tenant.get("finance_categories") or {}).get("expense"):
-        # Backfill AI-generated, per-company finance categories once for existing workspaces.
-        fc = await ai_generate_finance_categories(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"), tenant.get("description") or "")
-        await db.tenants.update_one({"id": tenant["id"]}, {"$set": {"finance_categories": fc}})
-        tenant["finance_categories"] = fc
+    # 2026-10-06 (AI audit step 5) — never generate on a page load: a missing
+    # lexicon / operating model / finance categories is filled in the background
+    # (services/ai/ai_setup.claim_setup_backfill); the screens use defaults meanwhile.
+    if tenant:
+        from services.ai.ai_setup import claim_setup_backfill
+        await claim_setup_backfill(tenant)
     # ASK-28 TK-08 (plan 6.5): the permissions the server actually applies (own
     # list, else the company's role settings, else role defaults, plus live temp
     # grants), so the screens decide with the same answer as the routes.

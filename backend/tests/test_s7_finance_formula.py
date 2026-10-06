@@ -145,9 +145,11 @@ def test_followup_escalation_ladder_and_idempotency(with_test_db):
 # ---------------------------------------------------------------------------
 def test_net_profit_billed_not_cash_and_mixed_currency_no_fx(with_test_db):
     import routers.ledger as led
+    import services.finance_words as fw   # 2026-10-06: categories read through here now
 
     async def scenario(db):
         restore = _patch(led, db=db)
+        restore_fw = _patch(fw, db=db)
         try:
             tid = "t-s7-13"
             await db.invoices.insert_many([
@@ -163,6 +165,7 @@ def test_net_profit_billed_not_cash_and_mixed_currency_no_fx(with_test_db):
             return (await led.ledger_summary(user={"tenant_id": tid, "role": "owner"}))["totals"]
         finally:
             restore()
+            restore_fw()
 
     totals = with_test_db(scenario)
     # revenue is BILLED (both invoices, unpaid included); mixed INR+USD summed raw (no FX).

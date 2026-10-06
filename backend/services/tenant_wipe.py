@@ -38,6 +38,9 @@ TENANT_COLLECTIONS = [
     "brain_contexts",
     # Audit / ops
     "brain_audit", "usage_events", "wa_events", "files",
+    # 2026-10-05: the Company Brain index (services/ai/brain_embed) and the hidden
+    # Desk briefing cache.
+    "brain_chunks", "brain_index_meta", "desk_narrative_cache",
 ]
 
 
@@ -85,6 +88,26 @@ async def wipe_tenant(tenant_id: str, *, database=None, store=None) -> dict:
             files_deleted += 1
         else:
             files_failed += 1
+
+    # 2026-10-05 — the Company Brain's uploaded files are not in `files`, so they
+    # stayed in object storage after the company was erased (DPDP). Same rule:
+    # objects first, while the rows still say where they are.
+    async for d in db.brain_documents.find({"tenant_id": tenant_id}, {"_id": 0, "storage_path": 1}):
+        path = d.get("storage_path")
+        if not path:
+            continue
+        if await store.delete_object(path):
+            files_deleted += 1
+        else:
+            files_failed += 1
+    # ...and its vectors, wherever the index lives (a Qdrant server keeps them
+    # outside this database).
+    if database is None:
+        try:
+            from services.ai.brain_embed import purge_tenant
+            await purge_tenant(tenant_id)
+        except Exception as e:
+            logger.warning("tenant_wipe: brain index purge failed for %s: %s", tenant_id, e)
 
     removed = {}
     for coll in TENANT_COLLECTIONS:

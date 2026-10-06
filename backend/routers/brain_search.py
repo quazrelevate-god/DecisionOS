@@ -62,7 +62,9 @@ async def brain_search(q: str = "", user: dict = Depends(require_perm("brain")))
     contacts = await db.contacts.find({"tenant_id": tid, "type": {"$in": types},
                                        "$or": [{"name": rx}, {"company": rx}, {"email": rx}, {"phone": rx}, {"notes": rx}]},
                                       {"_id": 0}).sort("created_at", -1).to_list(50) if types else []
-    memory = await db.memory.find({"tenant_id": tid, "text": rx}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    from services.record_access import memory_scope   # 2026-10-06: money notes are Finance's
+    memory = await db.memory.find({"tenant_id": tid, "text": rx, **memory_scope(user)},
+                                  {"_id": 0}).sort("created_at", -1).to_list(50)
 
     # Financial records: department-restricted to Owner / Finance / Ledger roles only.
     if can_finance:

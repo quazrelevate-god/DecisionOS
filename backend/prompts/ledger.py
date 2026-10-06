@@ -4,17 +4,6 @@ $focus / $desc / $typed / $cat_rule / $shape).
 """
 from prompts.base import Prompt, register
 
-EXPENSE_CAT = register(Prompt(
-    name="ledger.expense_cat",
-    version="1.0",
-    intent="Categorize one business expense into exactly one of the tenant's expense categories.",
-    template=(
-        "You categorize a single business expense into EXACTLY one category from this list: "
-        "${cats}. "
-        'Reply with ONLY JSON: {"category": "<one of the categories>"}.'
-    ),
-))
-
 OCR = register(Prompt(
     name="ledger.ocr",
     version="1.0",

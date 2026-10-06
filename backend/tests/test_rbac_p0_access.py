@@ -295,6 +295,12 @@ def test_ai_consent_turns_on_and_off(with_test_db):
 
 
 def test_contacts_crm_complaints_use_people_access():
+    """Access, not the role name. Since 2026-09-24 (JOURNEY-1 J7-04 / J8-01,
+    J14-05) that access is the SIDE of the address book a contact is on --
+    crm_buyers / crm_suppliers, with `people` holding both -- not `people`
+    alone: contacts go through require_crm and the side check, complaints and
+    CRM activity through the contact they are about. The behaviour is driven
+    in tests/test_journey1_crm_two_sides.py; this guards the wiring."""
     import inspect
     import routers.complaints as complaints
     import routers.contacts as contacts
@@ -302,7 +308,8 @@ def test_contacts_crm_complaints_use_people_access():
     for fn in (contacts.create_contact, contacts.update_contact, contacts.delete_contact,
                complaints.create_complaint, complaints.resolve_complaint, crm.log_activity_for_contact):
         src = inspect.getsource(fn)
-        assert 'require_perm("people")' in src and 'require_role("owner", "sales")' not in src, fn.__name__
+        assert 'require_role("owner", "sales")' not in src, fn.__name__
+        assert ("Depends(require_crm)" in src or "may_see_contact(" in src), fn.__name__
 
 
 def test_role_access_editor_reaches_people_who_follow_the_role(with_test_db):
@@ -316,8 +323,11 @@ def test_role_access_editor_reaches_people_who_follow_the_role(with_test_db):
             role_perms = ["inbox", "tasks", "people", "approvals"]
             out = await tenant_settings.update_role_permissions("sales", RolePermissionsInput(permissions=role_perms), user=OWNER)
             assert out["members_updated"] == 0
+            # J14-13: holding `approvals` still means approving what the AI drafted
+            # from a message (captures_approve), split out but never taken away.
+            follows = sorted(role_perms + ["captures_approve"])
             eff = {u["id"]: u["effective_permissions"] for u in await team.list_users(user=OWNER)}
-            assert eff["u-priya"] == sorted(role_perms), "follows the role"
+            assert eff["u-priya"] == follows, "follows the role"
             assert eff["u-anil"] == ["inbox", "tasks"], "own list wins"
 
             out = await tenant_settings.update_role_permissions(
@@ -325,12 +335,12 @@ def test_role_access_editor_reaches_people_who_follow_the_role(with_test_db):
             assert out["members_updated"] == 1
             assert (await db.users.find_one({"id": "u-anil"}))["permissions"] == []
             eff = {u["id"]: u["effective_permissions"] for u in await team.list_users(user=OWNER)}
-            assert eff["u-anil"] == sorted(role_perms)
+            assert eff["u-anil"] == follows
 
             # A member saved with "Use the role's access" (an empty list) follows it too.
             await team.update_user("u-anil", UserUpdateInput(permissions=["inbox"]), user=OWNER)
             await team.update_user("u-anil", UserUpdateInput(permissions=[]), user=OWNER)
             eff = {u["id"]: u["effective_permissions"] for u in await team.list_users(user=OWNER)}
-            assert eff["u-anil"] == sorted(role_perms)
+            assert eff["u-anil"] == follows
             return True
     assert with_test_db(scenario) is True

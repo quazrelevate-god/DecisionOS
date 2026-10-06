@@ -423,24 +423,7 @@ async def compute_employee_stats(tenant_id: str, target: dict, window: Optional[
     }
 
 
-async def ai_work_coach(target: dict, stats: dict, session_id: str) -> dict:
-    system = render("coaching.work_coach")
-    prompt = (f"Employee: {target.get('name')} (role: {target.get('role')})\n"
-              f"Stats: {json.dumps(stats)}\n"
-              "Write the review now.")
-    chat = claude_chat(task="coaching.work_coach", session_id=session_id, system_message=system).with_model(*model_for("coaching.work_coach"))
-    resp = await chat.send_message(UserMessage(text=prompt))
-    try:
-        d = _extract_json(resp)
-    except Exception as e:
-        logger.error(f"AI work coach parse error: {e} :: {redact_pii(resp)[:300]}")
-        d = {}
-    return {
-        "headline": str(d.get("headline") or "")[:200],
-        "strengths": [str(s)[:120] for s in (d.get("strengths") or [])][:4],
-        "improvements": [str(s)[:120] for s in (d.get("improvements") or [])][:3],
-        "recommendation": str(d.get("recommendation") or "")[:240],
-    }
+# 2026-10-06 (AI audit step 5): the work coach review is calculated now -- services/calculated.work_coach.
 
 
 async def _resolve_coach_target(user: dict, user_id: Optional[str]) -> dict:

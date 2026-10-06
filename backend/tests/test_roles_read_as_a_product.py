@@ -44,7 +44,7 @@ def test_the_nav_and_the_preview_share_one_rule():
 
 
 def test_no_screen_says_owners_always_have_everything():
-    for rel in ("components/CompanyDetails.js", "pages/Team.js"):
+    for rel in ("components/settings/TeamsCard.js", "components/CompanyDetails.js", "pages/Team.js"):
         s = src(rel)
         assert "owners always have everything" not in s, rel
     assert "except any area switched off for owners" in src("pages/Team.js")
@@ -54,7 +54,7 @@ def test_no_screen_says_owners_always_have_everything():
 
 def test_a_team_is_shown_by_its_name_not_its_key():
     assert '<span className="label-mono text-muted-foreground shrink-0 hidden sm:inline">{r.key}</span>' \
-        not in src("components/CompanyDetails.js")
+        not in src("components/settings/TeamsCard.js")
 
 
 def test_every_permission_is_in_exactly_one_group():
@@ -67,7 +67,7 @@ def test_every_permission_is_in_exactly_one_group():
 
 
 def test_both_access_editors_are_grouped():
-    assert "PERMISSION_GROUPS.map((g) => (" in src("components/CompanyDetails.js")
+    assert "PERMISSION_GROUPS.map((g) => (" in src("components/settings/TeamsCard.js")  # moved 2026-10-05
     assert "PERMISSION_GROUPS.map((g) => (" in src("pages/Team.js")
 
 

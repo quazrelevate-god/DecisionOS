@@ -9,6 +9,17 @@ import asyncio
 import services.ai.brain_retrieval as br
 import integrations.qdrant as q
 import integrations.embeddings as emb
+from tests.fake_mongo import FakeDB
+
+# 2026-10-05: search_chunks re-checks every hit against the LIVE document.
+_LIVE = FakeDB()
+_LIVE.brain_documents.docs.extend([
+    {"id": "docPub", "tenant_id": "t1", "visibility": "public", "title": "Pub", "is_deleted": False},
+    {"id": "docFin", "tenant_id": "t1", "visibility": "dept", "department": "finance",
+     "roles_allowed": ["finance"], "title": "Fin", "is_deleted": False},
+    {"id": "docPriv", "tenant_id": "t1", "visibility": "private", "roles_allowed": ["ceo"],
+     "uploaded_by": "owner1", "title": "Priv", "is_deleted": False},
+])
 
 
 def _run(c):
@@ -67,6 +78,7 @@ def _search(user, monkeypatch):
     async def fake_q(text, **k):
         return _V
     monkeypatch.setattr(emb, "embed_query", fake_q)
+    monkeypatch.setattr(br, "db", _LIVE)
     return _run(br.search_chunks(user=user, query="anything", limit=10))
 
 
@@ -95,3 +107,34 @@ def test_empty_query_or_tenant_returns_nothing(monkeypatch):
     monkeypatch.setattr(emb, "embed_query", fake_q)
     assert _run(br.search_chunks(user=_owner(), query="   ", limit=5)) == []
     assert _run(br.search_chunks(user={"role": "owner"}, query="x", limit=5)) == []  # no tenant_id
+
+
+# --- 2026-10-05: the live document decides ---------------------------------
+def test_a_deleted_document_is_never_cited(monkeypatch):
+    _index()
+    _LIVE.brain_documents.docs[0]["is_deleted"] = True
+    try:
+        ids = {h["doc_id"] for h in _search(_owner(), monkeypatch)}
+    finally:
+        _LIVE.brain_documents.docs[0]["is_deleted"] = False
+    assert "docPub" not in ids and {"docFin", "docPriv"} <= ids
+
+
+def test_a_visibility_edit_applies_without_re_embedding(monkeypatch):
+    _index()     # chunks were embedded while docPub was public
+    _LIVE.brain_documents.docs[0].update({"visibility": "private", "roles_allowed": ["ceo"]})
+    try:
+        ids = {h["doc_id"] for h in _search(_emp("sales"), monkeypatch)}
+    finally:
+        _LIVE.brain_documents.docs[0].update({"visibility": "public", "roles_allowed": []})
+    assert "docPub" not in ids, "the document's CURRENT visibility rules, not the indexed copy"
+
+
+def test_weak_matches_are_not_evidence(monkeypatch):
+    _index()
+
+    async def far(text, **k):
+        return [0.2, 1.0, 0.0, 0.0]        # cosine ~0.196 with every chunk
+    monkeypatch.setattr(emb, "embed_query", far)
+    monkeypatch.setattr(br, "db", _LIVE)
+    assert _run(br.search_chunks(user=_owner(), query="weather in Chennai", limit=10)) == []

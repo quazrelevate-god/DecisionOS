@@ -20,6 +20,12 @@ pytestmark = pytest.mark.skipif(
     reason="rebinds module-level db globals - single-process only",
 )
 
+# An owner: since the 2026-10-03 RBAC audit a member only counts the pipelines
+# their team has a stage in (services/workflows.workflow_scope), and working
+# that out reads the operating model -- these tests are about the workspace
+# boundary, not the team one, and must not reach any db but the test's.
+OWNER_T1 = {"id": "u1", "tenant_id": "t1", "role": "owner", "permissions": []}
+
 
 def test_each_pipeline_is_counted_for_this_workspace_only(with_test_db):
     async def scenario(db):
@@ -34,7 +40,7 @@ def test_each_pipeline_is_counted_for_this_workspace_only(with_test_db):
                 {"id": "d", "tenant_id": "t2", "type": "distribution"},   # another workspace
                 {"id": "e", "tenant_id": "t2", "type": "production"},
             ])
-            return await wf.workflow_counts(user={"id": "u1", "tenant_id": "t1"})
+            return await wf.workflow_counts(user=OWNER_T1)
         finally:
             wf.db = saved
 
@@ -49,7 +55,7 @@ def test_an_empty_workspace_counts_nothing(with_test_db):
         saved = wf.db
         wf.db = db
         try:
-            return await wf.workflow_counts(user={"id": "u1", "tenant_id": "t-empty"})
+            return await wf.workflow_counts(user={**OWNER_T1, "tenant_id": "t-empty"})
         finally:
             wf.db = saved
     assert with_test_db(scenario) == {}

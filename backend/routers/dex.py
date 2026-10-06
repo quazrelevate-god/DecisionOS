@@ -1,13 +1,6 @@
 """Dex persona endpoints — Sprint 5.
 
 Ships (Sprint 5 partial batch, 2026-08-15):
-  * POST /api/dex/capture          -> E2-41: thin proxy that routes to
-                                       /voice-notes/text (text input) or
-                                       /voice-notes (audio blob upload).
-                                       Gives us one persona-scoped entry
-                                       point for observability + future
-                                       per-tenant rate-limiting at the
-                                       persona level.
   * GET  /api/dex/inflight-count   -> E2-35: how many captures for this
                                        user are still being structured
                                        (pending_review + needs_attention
@@ -15,10 +8,11 @@ Ships (Sprint 5 partial batch, 2026-08-15):
                                        this to render the 'Dex is
                                        structuring N captures right now'
                                        badge on the Dex sub-tabs.
-"""
-from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
+2026-10-05 (AI audit) — POST /api/dex/capture is gone: a proxy to /voice-notes
+that nothing in the app called, kept alive as one more door to the same work.
+"""
+from fastapi import APIRouter, Depends
 
 from core import db, get_current_user
 
@@ -51,58 +45,3 @@ async def dex_inflight_count(user: dict = Depends(get_current_user)):
     n = await db.voice_notes.count_documents(q)
     return {"count": n}
 
-
-@router.post("/capture")
-async def dex_capture(
-    background: BackgroundTasks,
-    text: Optional[str] = Form(None),
-    file: Optional[UploadFile] = File(None),
-    language: str = Form("auto"),
-    file_ids: str = Form(""),
-    user: dict = Depends(get_current_user),
-):
-    """E2-41: unified persona-scoped capture entry point.
-
-    Routes based on input shape:
-      * `text` set + no `file`  -> forward to voice_note_from_text
-      * `file` set (audio mime) -> forward to create_voice_note
-      * `file` set (other mime) -> forward to /files (attachment upload)
-
-    Thin proxy -- no business logic here beyond routing. Kept in its
-    own router so the persona-scoped observability endpoint (dex.usage
-    .captures per tenant) has a natural home to expand into.
-    """
-    # Deferred imports to break the server.py <-> routers.dex cycle
-    # (server.py mounts this router at the bottom).
-    from core.permissions import user_perms
-    from models.voice import TextNoteInput
-    from routers.files import upload_file
-    from routers.voice_notes import create_text_note, create_voice_note
-
-    # ASK-32 1.9 — calling the handlers directly skips their Depends, so the
-    # voice_capture check that guards creating a decision is made here too.
-    ctype = (file.content_type or "").lower() if file else ""
-    makes_decision = bool(text and not file) or ctype.startswith("audio/") or ctype == "application/octet-stream"
-    if makes_decision and "voice_capture" not in user_perms(user):  # 2026-10-03: owners too, unless switched off
-        raise HTTPException(status_code=403, detail="You don't have access to capture decisions.")
-
-    if text and not file:
-        # Text path: same as POST /voice-notes/text
-        inp = TextNoteInput(text=text, language=language or "auto",
-                            file_ids=[x for x in (file_ids or "").split(",") if x.strip()])
-        return await create_text_note(inp, background, user)
-
-    if not file:
-        raise HTTPException(
-            status_code=400,
-            detail="Provide either `text` or `file`.",
-        )
-
-    ctype = (file.content_type or "").lower()
-    if ctype.startswith("audio/") or ctype == "application/octet-stream":
-        # Audio path: same as POST /voice-notes
-        return await create_voice_note(background, file, language, file_ids, user)
-
-    # Everything else (PDF, image, doc, etc.) -> attachment upload path.
-    # Same as POST /files. upload_file signature: (file, kind, user).
-    return await upload_file(file, "attachment", user)

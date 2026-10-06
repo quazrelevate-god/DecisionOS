@@ -163,12 +163,6 @@
 "/api/auth/tenant/transfer-ownership": [
 "POST"
 ],
-"/api/brain/agent": [
-"POST"
-],
-"/api/brain/agent/create-task": [
-"POST"
-],
 "/api/brain/context": [
 "GET"
 ],

@@ -188,11 +188,15 @@ async def save_memory_notes(tenant_id: str, user_id: str, notes, decision_id=Non
     for m in (notes or []):
         if not (m or {}).get("text"):
             continue
-        await db.memory.insert_one({
+        note = {
             "id": new_id(), "tenant_id": tenant_id, "text": m["text"],
             "tag": m.get("tag", "note"), "created_by": user_id, "created_at": now_iso(),
-            "decision_id": decision_id,
-        })
+            "decision_id": decision_id, "visibility": "public", "source": "capture",
+        }
+        await db.memory.insert_one(dict(note))
+        # 2026-10-06: a captured note is a Company Brain note -- searchable by meaning.
+        from services.ai import brain_embed
+        brain_embed.spawn(brain_embed.index_note(note))
         written += 1
     return written
 

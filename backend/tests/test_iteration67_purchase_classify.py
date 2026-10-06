@@ -131,23 +131,5 @@ class TestCommitUnknownGate:
             mongo.invoices.delete_many({"ingestion_id": ing_id})
 
 
-# ------------------------------------------------------------------
-# Reclassify endpoint auth + shape
-# ------------------------------------------------------------------
-class TestReclassifyEndpoint:
-    def test_non_owner_forbidden_sales(self, sales):
-        r = requests.post(f"{API}/ledger/reclassify-purchases", headers=sales["h"], timeout=15)
-        assert r.status_code == 403, f"sales should be 403, got {r.status_code}: {r.text}"
-
-    def test_non_owner_forbidden_finance(self, finance):
-        r = requests.post(f"{API}/ledger/reclassify-purchases", headers=finance["h"], timeout=15)
-        # Finance has ledger permission but is not owner → 403
-        assert r.status_code == 403, f"finance should be 403, got {r.status_code}: {r.text}"
-
-    def test_owner_returns_summary(self, owner):
-        r = requests.post(f"{API}/ledger/reclassify-purchases", headers=owner["h"], timeout=120)
-        assert r.status_code == 200, f"{r.status_code} {r.text}"
-        s = r.json()
-        for k in ("reviewed", "to_asset", "to_inventory", "kept_expense", "unknown", "unchanged"):
-            assert k in s, f"missing {k} in summary {s}"
-            assert isinstance(s[k], int)
+# 2026-10-06: POST /ledger/reclassify-purchases (the "Fix Mis-booked Purchases"
+# re-sync) was removed -- a bill is classified at upload before it can be filed.

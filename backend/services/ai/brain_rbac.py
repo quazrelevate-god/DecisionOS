@@ -1,126 +1,138 @@
-"""Company Brain — Role-Based Access Control (Phase-2).
+"""Who may ask Dex about what — access follows the DATA, not the words.
 
-Shared RBAC utilities used by BOTH `/api/ask` (routers/brain.py) and
-`/api/brain/agent` (routers/brain_router.py) so a random employee cannot ask
-Dex "what are our sales?" and get a real answer regardless of which entry
-point they use.
+2026-10-05 (founder: "hope the ask has the RBAC right… make the ask question
+more reliable, better design"). The gate this replaces decided from the
+question's WORDS and from hard-coded role names: "sales" in the question was a
+"sales" intent, and only a role literally called "sales" could ask it. Real
+companies name their teams ("Sales & Order Management", "Accounts & Buyer
+Payments"), so Priya — in Sales — was refused "what were our sales?", and
+"what is the status of the Bluewave UK order?" (her own order) was refused as
+a finance question because the planner thought "order" meant invoices.
 
-Design:
-  • FAIL CLOSED — any intent outside the caller's grant list is refused
-    with a warm message that names what they CAN ask.
-  • DETERMINISTIC — the allow-list is a static role→intents map (no LLM
-    judgement in the security decision).
-  • BELT & SUSPENDERS — tool-level guards (e.g. mongo_query hiding money
-    columns for non-finance users) still apply on top.
+Now there is one rule per KIND OF RECORD, the same rule its own screen uses:
+
+  tasks, people's workload,      always — trimmed to what the asker may see
+  decisions, leaves                (routers/brain._retrieve, services/record_access)
+  workflows (pipelines)          "workflows" — only the pipelines their team works in
+  contacts (customers/suppliers) any CRM side — only the sides they may open
+  invoices, payments, expenses   "finance"
+  memory (company notes)         "brain"
+
+A question is never refused for the words in it. It is refused only when the
+records it needs are ones the asker cannot open — and then the message says
+which access that takes and what they CAN ask. Money is never shown without
+Finance: money columns are stripped and the answer is told not to state amounts.
 """
 import re
 from typing import Optional
 
+from core.permissions import crm_types, user_perms
 
-INTENTS = (
-    "finance", "sales", "hr", "procurement", "operations",
-    "org_analytics", "policy", "personal", "general",
-)
 
-# Baseline every authenticated user always has access to.
-_BASELINE = {"policy", "personal", "general"}
-
-# Role / permission → additional intent grants (union'd with baseline).
-_ROLE_GRANTS = {
-    "owner":        set(INTENTS),                             # sees everything
-    # One Finance permission since 2026-09-16; "ledger" folded into it.
-    "finance":      {"finance", "procurement", "operations", "org_analytics"},
-    "sales":        {"sales"},
-    "hr":           {"hr", "org_analytics"},
-    "team_manage":  {"hr", "org_analytics"},
-    "operations":   {"operations", "procurement"},
-    "ops":          {"operations", "procurement"},
-    "production":   {"operations", "procurement"},
-    "procurement":  {"procurement"},
+# Kind of record -> (what it is called on screen, the access it takes or None,
+# plural?). Documents are open to every asker: each document carries its own
+# visibility, applied when they are searched (brain_retrieval).
+_AREAS = {
+    "tasks":     ("tasks", None, True),
+    "employees": ("people's workload", None, False),
+    "decisions": ("decisions", None, True),
+    "leaves":    ("leave", None, False),
+    "documents": ("company documents and policies", None, True),
+    "workflows": ("pipelines (Workflows)", "workflows", True),
+    "contacts":  ("customers and suppliers (CRM)", "crm", True),
+    "invoices":  ("invoices, payments and balances (Finance)", "finance", True),
+    "payments":  ("invoices, payments and balances (Finance)", "finance", True),
+    "expenses":  ("expenses (Finance)", "finance", True),
+    "memory":    ("the company memory (Company Brain)", "brain", False),
 }
 
+FINANCE_AREAS = {"invoices", "payments", "expenses"}
 
-def allowed_intents(user: dict) -> set:
-    """Compute the intent categories this specific user may ask about."""
-    from core import user_perms  # local import to avoid cycles
-    allowed = set(_BASELINE)
-    role = (user.get("role") or "").lower()
-    if role in _ROLE_GRANTS:
-        allowed |= _ROLE_GRANTS[role]
-    # user_perms() lets a "manager" role with `team_manage` still get HR access.
-    for p in user_perms(user):
-        if p in _ROLE_GRANTS:
-            allowed |= _ROLE_GRANTS[p]
-    return allowed
+# What the planner may pick instead when its first choice is closed to the
+# asker and the question NAMES something: pipeline cards, then work, then
+# decisions, then contacts — the places a named order, shipment or customer
+# lives outside the ledger.
+REROUTE_ORDER = ("workflows", "tasks", "decisions", "contacts")
 
 
-def refusal_message(user: dict, intent: str) -> str:
-    """Warm, actionable refusal that names what this user CAN ask about."""
+def entity_open(user: dict, entity: str) -> bool:
+    """May this person read this kind of record at all?"""
+    need = (_AREAS.get(entity) or (None, "closed", True))[1]
+    if need is None:
+        return True
+    if need == "crm":
+        return bool(crm_types(user))
+    if need == "closed":
+        return False
+    return need in user_perms(user)
+
+
+def what_you_can_ask(user: dict) -> list:
+    """Plain words for the kinds of records this person can ask about."""
+    out, seen = [], set()
+    for entity in ("tasks", "decisions", "workflows", "contacts", "invoices", "expenses", "leaves", "documents", "memory"):
+        label = _AREAS[entity][0]
+        if entity_open(user, entity) and label not in seen:
+            seen.add(label)
+            out.append(label)
+    return out
+
+
+def closed_message(user: dict, entity: str) -> str:
+    """Why this is refused, in the screen's words, and what they can ask."""
     name = (user.get("name") or "").split()[0] if user.get("name") else "there"
-    allowed = allowed_intents(user)
-    labels = {
-        "finance":       "invoices, payments and cash",
-        "sales":         "your sales pipeline and customer deals",
-        "hr":            "team, hiring, and leaves",
-        "procurement":   "vendors and purchase orders",
-        "operations":    "production, inventory and delivery",
-        "org_analytics": "company-wide metrics",
-        "policy":        "company policies",
-        "personal":      "your own tasks and activity",
-        "general":       "how to use DecisionOS",
-    }
-    can_ask_order = ("finance", "sales", "hr", "procurement", "operations",
-                     "org_analytics", "policy", "personal")
-    can_ask = [labels[i] for i in can_ask_order if i in allowed]
-    if len(can_ask) > 1:
-        fallback = ", ".join(can_ask[:-1]) + f", or {can_ask[-1]}"
-    else:
-        fallback = can_ask[0] if can_ask else "your own tasks and public policies"
-    intent_label = labels.get(intent, "that")
-    return (
-        f"Sorry {name} — questions about {intent_label} aren't part of your access. "
-        f"Ask your workspace owner to grant that role if you need it. "
-        f"For now you can ask me about {fallback}."
-    )
+    label, _need, plural = _AREAS.get(entity) or ("that", None, False)
+    can = what_you_can_ask(user)
+    tail = ""
+    if can:
+        tail = " You can ask me about " + (", ".join(can[:-1]) + f" or {can[-1]}" if len(can) > 1 else can[0]) + "."
+    return (f"Sorry {name} — {label} {'are' if plural else 'is'}n't part of your access, so I can't answer that. "
+            f"Your workspace owner can give you that access.{tail}")
 
 
-# ---------------------------------------------------------------------------
-# Heuristic intent classifier — used by /api/ask which doesn't want a full
-# extra Claude call just for RBAC. Order matters: more specific patterns
-# checked before broader ones. `policy` runs BEFORE hr/finance/etc so that
-# "leave policy" and "expense policy" get classified as policy (a public
-# baseline intent) rather than the private domain the noun belongs to.
-# ---------------------------------------------------------------------------
-_INTENT_PATTERNS = [
-    ("policy",       r"\b(policy|policies|sop|standard operating|filing|filings|contract|nda|compliance rule|regulation|handbook)\b"),
-    ("personal",     r"\b(my (?:task|leave|activity|inbox|approval)|assigned to me|my todo|my work|my own)\b"),
-    # BUG-17: countable nouns carry an optional plural (`s?`) so a non-finance user
-    # asking "list all invoices" / "show me payments" is still caught by the
-    # DETERMINISTIC gate, not left to the LLM-planner belt-and-suspenders.
-    ("hr",           r"\b(hire|hiring|recruit|resign|resignation|onboard|attendance|salary|payroll|appraisals?|holidays?|maternity|paternity|employees?\b|staff|headcount|team members?|managers?|leaves? (of|for) )\b"),
-    ("finance",      r"\b(invoices?|gst|tds|payments?|receivables?|payables?|expenses?|cash|bank|refunds?|revenue|profit|loss(?:es)?|billing|ledger|reconcil|tax(?:es)?|budgets?|paid|unpaid|overdue.*invoices?)\b"),
-    ("sales",        r"\b(sales?|leads?|pipeline|deals?|discounts?|quote|quotation|conversion|customer.*revenue|top customers?|top clients?)\b"),
-    ("procurement",  r"\b(vendors?|suppliers?|purchase orders?|po\b|rfq|procurement|reorder|dealers?)\b"),
-    ("operations",   r"\b(production|inventory|stock|warehouse|delivery|dispatch|logistics|shipments?|quality|defects?|workflows?)\b"),
-    ("org_analytics",r"\b(how (?:is|are).* (?:business|company|going)|kpi|dashboard|company (?:health|metric)|top-level)\b"),
-]
+# A question that ASKS for a money figure. Only these are refused outright when
+# the money records are closed; anything else that names a record is answered
+# from the records the asker can open. "invoice" alone is not here: "who is
+# working on the Bluewave proforma invoice?" is a question about a TASK.
+_MONEY_Q = re.compile(
+    r"\b(how much|owe[sd]?|owing|outstanding|balances?|amounts?|totals?|revenue|turnover|profit|margin|"
+    r"loss(?:es)?|price[sd]?|pricing|cost(?:s|ing)?|spen[dt]|paid|unpaid|payments?|receivables?|payables?|"
+    r"cash|bank|gst|tds|tax(?:es)?|rupees?|rs\.?|inr|lakhs?|crores?|sales figures?|how much did we (?:sell|make))\b"
+    r"|₹", re.I)
 
 
-def classify_intent(question: str, primary_entity: Optional[str] = None) -> str:
-    """Best-guess intent from a natural-language question and (optionally) the
-    /ask planner's `primary_entity`. Returns a value from INTENTS."""
-    q = (question or "").lower()
-    for intent, pat in _INTENT_PATTERNS:
-        if re.search(pat, q):
-            return intent
-    # Entity fallbacks — trust the /ask planner when it identified an entity.
-    entity_map = {
-        "invoice": "finance", "payment": "finance", "expense": "finance",
-        "customer": "sales", "lead": "sales", "deal": "sales",
-        "employee": "hr", "leave": "hr", "attendance": "hr",
-        "vendor": "procurement", "purchase": "procurement",
-        "task": "personal", "activity": "personal", "workflow": "operations",
-    }
-    if primary_entity and primary_entity in entity_map:
-        return entity_map[primary_entity]
-    return "general"
+def asks_for_money(question: str) -> bool:
+    return bool(_MONEY_Q.search(question or ""))
+
+
+# "mine": the asker's own records. "show me …" is NOT mine ("show me all
+# tasks"), so "me" counts only after for/to/on/with.
+_MINE_Q = re.compile(
+    r"\b(my|mine|myself)\b|\b(assigned to|for|on|with|from) me\b|\bi (have|need|own|am|should|must|did)\b"
+    r"|\b(do|should|must|can) i\b", re.I)
+# "my team / my company / my attention / my customers …" is the asker speaking
+# for the business, not asking for their own records: an owner asking "what
+# needs my attention today?" means the company's open work, not tasks
+# assigned to her (live: she was told she had nothing to do).
+_COLLECTIVE_MY = re.compile(
+    r"\bmy (attention|focus|team|teams|company|business|staff|employees|people|workers|workspace|"
+    r"organi[sz]ation|customers?|clients?|buyers?|suppliers?|vendors?|orders?|sales|shop|factory|mill|firm|day|week)\b",
+    re.I)
+
+
+def is_about_me(question: str) -> bool:
+    return bool(_MINE_Q.search(_COLLECTIVE_MY.sub(" ", question or "")))
+
+
+def speaks_for_the_business(question: str) -> bool:
+    return bool(_COLLECTIVE_MY.search(question or ""))
+
+
+def reroute_note(entity_from: str, entity_to: str) -> Optional[str]:
+    """One sentence prepended to an answer that came from other records."""
+    if entity_from == entity_to:
+        return None
+    label, _need, plural = _AREAS.get(entity_from) or ("that", None, False)
+    verb = "are" if plural else "is"
+    source = "the company documents you can read" if entity_to == "documents" else "the records you can open"
+    return f"({label[0].upper() + label[1:]} {verb}n't part of your access — this answer uses {source}.)"

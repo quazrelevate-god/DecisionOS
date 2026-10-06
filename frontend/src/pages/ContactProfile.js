@@ -7,7 +7,7 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import ContactProfileMobile from "./mobile/ContactProfileMobile";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
-import { Chip, EmptyState, DexBadge } from "../components/common";
+import { Chip, EmptyState } from "../components/common";
 import { money, typeLabel, formatPhone } from "../lib/format";
 import { lex } from "../lib/lexicon";
 import { GlassSelect } from "../components/karma/GlassSelect";
@@ -308,14 +308,13 @@ export default function ContactProfile() {
         /* RD-3: this is an OFFER, not a warning — it was picked up by the
            brand-yellow sweep and landed on a caution tint, which told the
            user something was wrong when nothing is. Neutral hairline card;
-           the DexBadge already supplies the only accent it needs. */
+           no Dex badge: the score is a formula, not AI (2026-10-06). */
         <div
           className="border border-border rounded-xl px-4 py-3 mb-8 flex items-center justify-between gap-3 flex-wrap bg-card"
           data-testid="relationship-card"
         >
           <div className="flex items-center gap-2 text-sm">
-            <DexBadge />
-            <span className="text-muted-foreground">Analyze this relationship's health &amp; risk with AI.</span>
+            <span className="text-muted-foreground">Score this relationship's health &amp; risk from its bills, payments and complaints.</span>
           </div>
           <button
             onClick={() => rescore.mutate()}
@@ -323,15 +322,14 @@ export default function ContactProfile() {
             data-testid="rescore-contact-btn"
             className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors disabled:opacity-50"
           >
-            <Sparkle size={14} weight="bold" /> {rescore.isPending ? "Scoring…" : "Score with AI"}
+            <Sparkle size={14} weight="bold" /> {rescore.isPending ? "Scoring…" : "Score"}
           </button>
         </div>
       ) : (
         <div className="card-brutal p-6 mb-8" data-testid="relationship-card">
           <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
             <div className="flex items-center gap-2">
-              <DexBadge />
-              <h2 className="text-sm font-medium">Relationship Intelligence</h2>
+              <h2 className="text-sm font-medium">Relationship score</h2>
             </div>
             <button
               onClick={() => rescore.mutate()}

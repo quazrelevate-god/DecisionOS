@@ -28,9 +28,8 @@ import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { isAiConsentError, aiConsentMessage } from "../lib/aiConsent";
-import { Books, ArrowLeft, Broom, Sparkle } from "@phosphor-icons/react";
+import { Books, Broom, Sparkle } from "@phosphor-icons/react";
 import { AiAnswer, ASK_SUGGESTIONS } from "./AskAI";
-import { DocumentsPanel } from "./BrainDocuments";
 import { useDexCapture } from "../hooks/useDexCapture";
 import { DexStage } from "./brain/DexStage";
 import { useAuth } from "../context/AuthContext";
@@ -62,7 +61,6 @@ export default function Brain() {
   const [log, setLog] = useState([]);
   const [busy, setBusy] = useState(false);
   const [ctxId, setCtxId] = useState(null);
-  const [showDocs, setShowDocs] = useState(false);
   const endRef = useRef(null);
 
   const capture = useDexCapture({
@@ -79,7 +77,6 @@ export default function Brain() {
     }
     const text = String(question || "").trim();
     if (!text) return;
-    setShowDocs(false);
     setLog((l) => [...l, { id: uid(), role: "user", text }]);
     setBusy(true);
     try {
@@ -98,6 +95,13 @@ export default function Brain() {
       setBusy(false);
     }
   }, [ctxId, t, canAsk]);
+
+  // 2026-10-06 — documents live in the Company Brain now; an older link that
+  // asked Dex to show them (?docs=1&doc=<id>) goes there.
+  const focusDoc = searchParams.get("doc");
+  useEffect(() => {
+    if (searchParams.get("docs")) navigate(`/company-brain${focusDoc ? `?doc=${focusDoc}` : ""}`, { replace: true });
+  }, [searchParams, focusDoc, navigate]);
 
   // The header's global search lands here as ?q=…. Ask it once, on arrival.
   const seededRef = useRef(false);
@@ -145,23 +149,22 @@ export default function Brain() {
         capture={capture}
         onAsk={ask}
         thinking={busy}
-        compact={hasThread || showDocs}
+        compact={hasThread}
         trailing={
           /* Quiet page actions. Text-weight on purpose — these are ways OUT of
              the conversation, and nothing here should compete with the send
              button two rows above. */
           <div className="flex items-center gap-1.5" data-testid="brain-actions">
+            {/* 2026-10-06 — the Company Brain is its own page (documents + notes). */}
             <button
               type="button"
-              onClick={() => setShowDocs((v) => !v)}
+              onClick={() => navigate("/company-brain")}
               data-testid="brain-documents-toggle"
-              aria-pressed={showDocs}
               className="inline-flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-xs font-medium text-muted-foreground transition-shadow hover:text-foreground hover:shadow-nm-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             >
-              {showDocs ? <ArrowLeft size={14} weight="bold" /> : <Books size={14} weight="bold" />}
-              {showDocs ? "Back to Dex" : "Documents"}
+              <Books size={14} weight="bold" /> Company Brain
             </button>
-            {log.length > 0 && !showDocs && (
+            {log.length > 0 && (
               <button
                 type="button"
                 onClick={clear}
@@ -189,11 +192,7 @@ export default function Brain() {
         </div>
       )}
 
-      {showDocs ? (
-        <div className="order-1 mb-6 lg:mb-0 lg:mt-6" data-testid="brain-documents">
-          <DocumentsPanel />
-        </div>
-      ) : (
+      {(
         <div className="order-1 mb-6 space-y-5 lg:mb-6 lg:mt-0" data-testid="brain-conversation">
           {log.length === 0 && !busy && canAsk && (
             /* The opener. Four real questions rather than a paragraph about

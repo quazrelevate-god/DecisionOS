@@ -64,23 +64,3 @@ CSV_MAP = register(Prompt(
     ),
 ))
 
-PURCHASE_CLASS = register(Prompt(
-    name="documents.purchase_class",
-    version="1.0",
-    intent="Classify a single purchase bill into expense/asset/inventory + pick a category from the tenant's lists.",
-    template=(
-        "You classify a single business PURCHASE (a bill we received from a supplier) into exactly one bucket. "
-        'Return ONLY JSON: {"purchase_type": one of [expense, asset, inventory, unknown], '
-        '"asset_name": string, "inventory_qty": number, "inventory_unit": string, '
-        '"asset_category": one of [${asset_list}], '
-        '"expense_category": one of [${expense_list}]}. '
-        'Rules: "asset" = capital/fixed goods that last over a year (machinery, equipment, tools, vehicles, '
-        "furniture, computers/IT hardware/networking, buildings) — put the item in asset_name and pick the best asset_category "
-        "from the allowed list (e.g. servers/switches/firewalls/CCTV/computers → an IT/electronics category); "
-        '"inventory" = stock, raw materials, trading goods or components bought to resell or consume in production '
-        "— put quantity in inventory_qty and its unit (kg, pcs, box, litre) in inventory_unit; "
-        '"expense" = everything else (rent, salaries, utilities, transport, services, consumables, subscriptions, taxes) '
-        "— pick the best expense_category from the allowed list. Categories MUST be chosen from the lists above. "
-        'Use "unknown" ONLY when the description is too vague to tell which of the three it is — do NOT guess.'
-    ),
-))

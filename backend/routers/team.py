@@ -1075,7 +1075,7 @@ async def withdraw_leave(leave_id: str, inp: LeaveDecisionInput, user: dict = De
 async def leave_impact(leave_id: str, user: dict = Depends(get_current_user)):
     """AI-driven: for each active task assigned to the person on leave, suggest
     a reassignment/extension/monitor action based on team workload."""
-    from services.leave import ai_leave_impact
+    from services.calculated import leave_impact   # 2026-10-06: rules, not AI
     tid = user["tenant_id"]
     lv = await db.leaves.find_one({"id": leave_id, "tenant_id": tid})
     if not lv:
@@ -1104,7 +1104,8 @@ async def leave_impact(leave_id: str, user: dict = Depends(get_current_user)):
         load = await db.tasks.count_documents(
             {"tenant_id": tid, "assignee_id": u["id"], "status": {"$nin": ["done", "cancelled"]}})
         members.append({"id": u["id"], "name": u["name"], "role": u["role"], "load": load})
-    analysis = await ai_leave_impact(lv["user_name"], from_date, to_date, at_risk, members)
+    person_role = next((u.get("role") for u in users if u["id"] == lv["user_id"]), None)
+    analysis = leave_impact(lv["user_name"], from_date, to_date, at_risk, members, person_role=person_role)
     sug = {s.get("task_id"): s for s in (analysis.get("suggestions") or []) if isinstance(s, dict)}
     valid_ids = {m["id"] for m in members}
     tasks_out = []

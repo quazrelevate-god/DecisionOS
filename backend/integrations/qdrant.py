@@ -60,30 +60,39 @@ def _tenant_filter(tenant_id: str, visibility_allowed=None):
     return models.Filter(must=must)
 
 
-async def ensure_collection(dim: int, *, recreate: bool = False) -> str:
+async def ensure_collection(dim: int, *, recreate: bool = False, collection: str = None) -> str:
     """Create the brain_chunks collection (Cosine, size=dim) if absent + index tenant_id.
     recreate=True drops and rebuilds it (used when the embedding dim changes on a swap)."""
     from qdrant_client import models
+    name = collection or COLLECTION
     c = get_client()
-    exists = await c.collection_exists(COLLECTION)
+    exists = await c.collection_exists(name)
     if exists and recreate:
-        await c.delete_collection(COLLECTION)
+        await c.delete_collection(name)
         exists = False
     if not exists:
-        await c.create_collection(
-            COLLECTION, vectors_config=models.VectorParams(size=dim, distance=models.Distance.COSINE))
+        try:
+            await c.create_collection(
+                name, vectors_config=models.VectorParams(size=dim, distance=models.Distance.COSINE))
+        except Exception as e:
+            # 2026-10-05 — two workers can race to create it; the loser finds it made.
+            if not await c.collection_exists(name):
+                raise
+            logger.debug(f"qdrant: {name} created by another worker ({e})")
+            return name
         # Index tenant_id for fast multi-tenant filtering -- only meaningful on a real
         # server (local/in-memory mode ignores indexes and warns), so skip it there.
         if os.environ.get("QDRANT_URL", "").strip():
             try:
-                await c.create_payload_index(
-                    COLLECTION, field_name="tenant_id", field_schema=models.PayloadSchemaType.KEYWORD)
+                for field in ("tenant_id", "doc_id"):
+                    await c.create_payload_index(
+                        name, field_name=field, field_schema=models.PayloadSchemaType.KEYWORD)
             except Exception as e:  # index is a perf optimization, not correctness
-                logger.debug(f"qdrant tenant_id index: {e}")
-    return COLLECTION
+                logger.debug(f"qdrant payload index: {e}")
+    return name
 
 
-async def upsert_chunks(tenant_id: str, doc_id: str, chunks: list) -> int:
+async def upsert_chunks(tenant_id: str, doc_id: str, chunks: list, collection: str = None) -> int:
     """Upsert a document's chunks. chunks = [{chunk_idx, text, embedding, visibility?, tags?}].
     Deterministic ids -> re-embedding the same doc overwrites, never duplicates. Returns count."""
     from qdrant_client import models
@@ -100,40 +109,46 @@ async def upsert_chunks(tenant_id: str, doc_id: str, chunks: list) -> int:
                         "tags": ch.get("tags") or []})
         points.append(models.PointStruct(
             id=_point_id(tenant_id, doc_id, idx), vector=list(ch["embedding"]), payload=payload))
-    await get_client().upsert(COLLECTION, points=points)
+    await get_client().upsert(collection or COLLECTION, points=points)
     return len(points)
 
 
-async def search(tenant_id: str, query_vector, k: int = 8, visibility_allowed=None) -> list:
+async def search(tenant_id: str, query_vector, k: int = 8, visibility_allowed=None, collection: str = None) -> list:
     """Top-k similar chunks for a tenant. tenant_id is MANDATORY (empty -> no results,
     never a cross-tenant search). visibility_allowed (optional) restricts to those
     visibility values (RBAC). Returns [{score, tenant_id, doc_id, chunk_idx, text, ...}]."""
     if not tenant_id or not query_vector:
         return []
     res = await get_client().query_points(
-        COLLECTION, query=list(query_vector), limit=k,
+        collection or COLLECTION, query=list(query_vector), limit=k,
         query_filter=_tenant_filter(tenant_id, visibility_allowed), with_payload=True)
     return [{"score": p.score, **(p.payload or {})} for p in res.points]
 
 
-async def delete_by_doc(tenant_id: str, doc_id: str) -> None:
+async def delete_by_doc(tenant_id: str, doc_id: str, collection: str = None) -> None:
     """Remove a document's chunks (before re-embedding an updated doc, or on doc delete)."""
     from qdrant_client import models
     if not tenant_id or not doc_id:
         return
-    await get_client().delete(COLLECTION, points_selector=models.Filter(must=[
+    await get_client().delete(collection or COLLECTION, points_selector=models.Filter(must=[
         models.FieldCondition(key="tenant_id", match=models.MatchValue(value=tenant_id)),
         models.FieldCondition(key="doc_id", match=models.MatchValue(value=doc_id))]))
 
 
-async def delete_by_tenant(tenant_id: str) -> None:
+async def delete_by_tenant(tenant_id: str, collection: str = None) -> None:
     """Remove all of a tenant's chunks (tenant deprovisioning)."""
     if not tenant_id:
         return
-    await get_client().delete(COLLECTION, points_selector=_tenant_filter(tenant_id))
+    await get_client().delete(collection or COLLECTION, points_selector=_tenant_filter(tenant_id))
 
 
-async def count(tenant_id=None) -> int:
+async def count(tenant_id=None, collection: str = None) -> int:
     flt = _tenant_filter(tenant_id) if tenant_id else None
-    r = await get_client().count(COLLECTION, count_filter=flt, exact=True)
+    r = await get_client().count(collection or COLLECTION, count_filter=flt, exact=True)
     return r.count
+
+
+async def list_collections() -> list:
+    """Every collection on the server (tenant erasure clears each model's one)."""
+    res = await get_client().get_collections()
+    return [c.name for c in res.collections]

@@ -20,6 +20,12 @@ import {
 import { DexBadge } from "../components/common";
 
 /** Openers for a thread with nothing in it yet. */
+/* 2026-10-05 — these answers only render in the Dex room (/brain), which is
+   always dark. card-brutal is the LIGHT glass card: white at 70% under the
+   room's light-grey text, so every "Restricted" and "Not enough information"
+   message (and the KPI tiles) was near-invisible. A card that follows the room. */
+const ROOM_CARD = "rounded-[1.4rem] bg-white/70 ring-1 ring-inset ring-white/80 backdrop-blur-xl dark:bg-white/[0.06] dark:ring-white/10";
+
 export const ASK_SUGGESTIONS = [
   "What needs my attention today?",
   "Show all tasks completed on time this month",
@@ -31,6 +37,9 @@ const DEEP_TYPES = {
   task: "Task", employee: "Employee", invoice: "Invoice", payment: "Payment",
   expense: "Expense", decision: "Decision", workflow: "Workflow", contact: "Contact",
   leave: "Leave", memory: "Note",
+  // 2026-10-05 — the Company Brain's own sources (documents and the records its
+  // memory describes) arrived with no label and no link.
+  document: "Document", complaint: "Complaint", meeting: "Meeting", note: "Note",
 };
 
 function KpiGrid({ kpis, currency }) {
@@ -40,7 +49,7 @@ function KpiGrid({ kpis, currency }) {
       {kpis.map((k, i) => {
         const isMoney = typeof k.value === "number" && /billed|outstanding|spend|received|paid|total spend|amount/i.test(k.label);
         return (
-          <div key={`${k.label}-${i}`} className="card-brutal p-4" data-testid={`brain-kpi-${i}`}>
+          <div key={`${k.label}-${i}`} className={`${ROOM_CARD} p-4`} data-testid={`brain-kpi-${i}`}>
             <p className="label-mono text-muted-foreground text-xs">{k.label}</p>
             <p className="font-display text-2xl mt-1">
               {isMoney ? money(k.value, currency) : k.value}
@@ -98,14 +107,22 @@ function Sources({ sources, onGo }) {
     <div className="mb-3" data-testid="brain-sources">
       <p className="label-mono text-muted-foreground text-xs mb-1.5 flex items-center gap-1"><LinkSimple size={13} weight="bold" /> Sources · {sources.length}</p>
       <div className="flex flex-wrap gap-1.5">
-        {sources.map((s, i) => (
-          <button key={`${s.id}-${i}`} onClick={() => onGo(s.deep_link)} data-testid={`brain-source-${i}`}
-            title={s.confidence ? `${s.confidence}` : ""}
-            className="inline-flex items-center gap-1 nm-tile px-2 py-1 text-xs hover:bg-accent transition-colors">
-            <span className="text-brand-600 uppercase font-semibold">{DEEP_TYPES[s.type] || s.type}</span>
-            <span className="truncate max-w-[220px]">{s.title}</span>
-          </button>
-        ))}
+        {sources.map((s, i) => {
+          const label = <span className="text-brand-600 uppercase font-semibold">{DEEP_TYPES[s.type] || s.type || "Note"}</span>;
+          const title = <span className="truncate max-w-[220px]">{s.title}</span>;
+          return s.deep_link ? (
+            <button key={`${s.id}-${i}`} onClick={() => onGo(s.deep_link)} data-testid={`brain-source-${i}`}
+              title={s.confidence ? `${s.confidence}` : ""}
+              className="inline-flex items-center gap-1 nm-tile px-2 py-1 text-xs hover:bg-accent transition-colors">
+              {label}{title}
+            </button>
+          ) : (
+            <span key={`${s.id}-${i}`} data-testid={`brain-source-${i}`}
+              className="inline-flex items-center gap-1 nm-tile px-2 py-1 text-xs opacity-80">
+              {label}{title}
+            </span>
+          );
+        })}
       </div>
     </div>
   );
@@ -202,7 +219,7 @@ function RichText({ text }) {
 export function AiAnswer({ m, onGo, onAsk, currency }) {
   if (m.resp?.type === "PERMISSION_DENIED") {
     return (
-      <div className="card-brutal p-4 border-l-4 border-l-brand-600" data-testid="brain-permission-denied">
+      <div className={`${ROOM_CARD} p-4 border-l-4 border-l-brand-600`} data-testid="brain-permission-denied">
         <p className="flex items-center gap-2 font-semibold text-sm"><Lock size={16} weight="bold" className="text-brand-600" /> Restricted</p>
         <p className="text-sm text-muted-foreground mt-1">{m.resp.message}</p>
       </div>
@@ -210,7 +227,7 @@ export function AiAnswer({ m, onGo, onAsk, currency }) {
   }
   if (m.resp?.type === "INSUFFICIENT_DATA") {
     return (
-      <div className="card-brutal p-4 border-l-4 border-l-caution-500" data-testid="brain-insufficient">
+      <div className={`${ROOM_CARD} p-4 border-l-4 border-l-caution-500`} data-testid="brain-insufficient">
         <p className="flex items-center gap-2 font-semibold text-sm"><WarningCircle size={16} weight="bold" className="text-caution-600" /> Not enough information</p>
         <p className="text-sm text-muted-foreground mt-1">{m.resp.answer}</p>
         {(m.resp.missing_information || []).length > 0 && (

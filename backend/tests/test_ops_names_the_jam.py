@@ -44,6 +44,15 @@ PIPELINE = {"key": "orders", "label": "Orders", "stage_days": None, "stages": [
 ]}
 
 
+def _yesterday_ist() -> str:
+    """A day inside every stage's two-day allowance, whenever this runs. The
+    hard-coded 2026-09-28 was "yesterday" on the day the test was written and a
+    genuine jam a week later."""
+    from datetime import timedelta
+    from shared.workdays import today_ist
+    return (today_ist() - timedelta(days=1)).isoformat()
+
+
 def _card(cid, stage, entered, title, counterparty=None):
     """A card that entered `stage` on `entered` and has not moved since."""
     return {
@@ -77,7 +86,7 @@ def test_the_worst_jam_comes_first_and_says_who_is_holding_it(with_test_db):
         await db.workflows.insert_many([
             _card("slow", "sampling", "2026-09-01", "Bluewave 5,000 polos", "Bluewave Apparel"),
             _card("slower", "inquiry", "2026-08-01", "Target check 200 shirts"),
-            _card("fresh", "inquiry", "2026-09-28", "Just raised"),
+            _card("fresh", "inquiry", _yesterday_ist(), "Just raised"),
         ])
         await db.tasks.insert_one({
             "id": "t1", "tenant_id": T, "workflow_id": "slow", "stage_key": "sampling",

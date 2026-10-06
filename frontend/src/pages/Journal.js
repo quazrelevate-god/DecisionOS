@@ -162,10 +162,10 @@ function DayEntries({ day, onOpen }) {
         </div>
       )}
 
-      {/* A note is prose, and prose has a measure. Full width it ran to 1,603px
-          on a 1920 screen with the text stopping two thirds of the way across
-          an empty card. Capped on desktop only; the phone's is already 358. */}
-      {day.notes.length > 0 && (
+      {/* 2026-10-06 — company notes are the Company Brain's (/company-brain);
+          the Journal is decision history. The block stays for an older API that
+          still sends notes. */}
+      {(day.notes || []).length > 0 && (
         <div className="kr-bento divide-y divide-nm-edge/40 rounded-cardlg lg:max-w-3xl" data-testid={`journal-notes-${day.date}`}>
           {day.notes.map((n) => (
             <div key={n.id} className="flex items-start gap-3 p-3.5">
@@ -250,7 +250,7 @@ export default function Journal() {
 
   return (
     <div data-testid="journal-page">
-      <PageHeader eyebrow="Your decision diary" title="CEO Journal" />
+      <PageHeader eyebrow="What was decided, and what came of it" title="Decision Journal" />
 
       {/* ASK-34 C2 · THE DESKTOP FRAME — A RAIL AND A FEED.
           The page was ONE full-width column at every size, so at 1920 the day
@@ -282,7 +282,7 @@ export default function Journal() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             data-testid="journal-search-input"
-            placeholder="Search decisions & notes…"
+            placeholder="Search decisions…"
             className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-sm outline-none"
           />
         </div>

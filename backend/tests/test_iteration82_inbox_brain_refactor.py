@@ -468,18 +468,6 @@ class TestBrainRBAC:
             f"sales access to finance leaked: type={body.get('type')} body={str(body)[:400]}"
         )
 
-    def test_sales_denied_on_finance_question_agent(self, sales_token):
-        """Sales user via /api/brain/agent → denied=True + intent classified as finance."""
-        r = requests.post(f"{BASE_URL}/api/brain/agent",
-                          json={"question": "how many unpaid invoices do we have this month?"},
-                          headers=_h(sales_token), timeout=120)
-        assert r.status_code == 200, r.text
-        body = r.json()
-        # Must be blocked at RBAC gate
-        assert body.get("denied") is True, (
-            f"sales access to finance intent leaked via /brain/agent: {body}"
-        )
-
     def test_owner_finance_allowed(self, owner_token):
         """Owner has all intents — finance query should work end-to-end."""
         r = _ask(owner_token, "what invoices are unpaid")

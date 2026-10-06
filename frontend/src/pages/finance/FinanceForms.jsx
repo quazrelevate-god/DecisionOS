@@ -136,7 +136,8 @@ export function AddExpenseDialog({ open, onOpenChange, categories = [], onDone }
     try {
       const { data } = await api.post("/expenses/suggest-category", { text });
       set("category", data.category);
-      toast.success(t("finance.ai_suggests", { category: data.category }));
+      // 2026-10-06 — calculated from the company's own bills; say what decided it.
+      toast.success(t("finance.ai_suggests", { category: data.category }), data.reason ? { description: data.reason } : undefined);
     } catch {
       toast.error(t("finance.could_not_create"));
     } finally {
@@ -147,8 +148,8 @@ export function AddExpenseDialog({ open, onOpenChange, categories = [], onDone }
     if (!f.title.trim() && !f.amount && !file) return toast.error(t("finance.need_expense"));
     setBusy(true);
     try {
-      await api.post("/expenses/with-file", formData(f, file));
-      toast.success(file ? t("finance.added_bill") : t("finance.expense_added"));
+      const res = await api.post("/expenses/with-file", formData(f, file));
+      toast.success(!file ? t("finance.expense_added") : res?.data?.bill_read === false ? t("finance.bill_not_read") : t("finance.added_bill"));
       cancel();
       onDone();
     } catch (e) {
@@ -234,8 +235,8 @@ export function AddAssetDialog({ open, onOpenChange, categories = [], onDone }) 
     if (!f.name.trim() && !file) return toast.error(t("finance.need_asset"));
     setBusy(true);
     try {
-      await api.post("/assets/with-file", formData(f, file));
-      toast.success(file ? t("finance.asset_added_bill") : t("finance.asset_added"));
+      const res = await api.post("/assets/with-file", formData(f, file));
+      toast.success(!file ? t("finance.asset_added") : res?.data?.bill_read === false ? t("finance.bill_not_read") : t("finance.asset_added_bill"));
       cancel();
       onDone();
     } catch (e) {
@@ -312,8 +313,8 @@ export function AddInventoryDialog({ open, onOpenChange, cur, onDone }) {
     if (!f.item.trim() && !file) return toast.error(t("finance.need_item"));
     setBusy(true);
     try {
-      await api.post("/inventory/with-file", formData(f, file));
-      toast.success(file ? t("finance.inv_added_bill") : t("finance.inv_added"));
+      const res = await api.post("/inventory/with-file", formData(f, file));
+      toast.success(!file ? t("finance.inv_added") : res?.data?.bill_read === false ? t("finance.bill_not_read") : t("finance.inv_added_bill"));
       cancel();
       onDone();
     } catch (e) {

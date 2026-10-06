@@ -120,7 +120,7 @@ from services.inbox import add_inbox_item  # noqa: E402,F401
 # (Epic 8 Sprint 4). Re-exported below so deferred `from server import ai_*`
 # call sites keep resolving.
 from services.ai.extraction import (  # noqa: E402
-    ai_extract, ai_score_tasks, ai_score_contact,
+    ai_extract,
     ai_meeting_notes, ai_execution_plan, ai_step_assist,
 )
 
@@ -163,10 +163,10 @@ from services.vision import (  # noqa: E402
 # services/ingestion.py (Epic 8 Sprint 4). Re-exported so deferred `from server
 # import ...` call sites keep resolving.
 from services.ingestion import (  # noqa: E402
-    ai_extract_document, ai_map_spreadsheet, ai_classify_purchase,
+    ai_extract_document, ai_map_spreadsheet,
     commit_ingestion_records, _classify_ingestion, _find_duplicate_invoice,
     _has_unclassified_purchase, _normalise_records, _norm_company,
-    _tenant_currency, _tenant_name, _purchase_class_sys, DOC_MIME,
+    _tenant_currency, _tenant_name, DOC_MIME,
 )
 # WhatsApp infra + inbound pipeline moved to services/whatsapp.py (Epic 8
 # Sprint 4). Re-exported so deferred `from server import ...` resolves
@@ -215,7 +215,7 @@ from services.otp import (  # noqa: E402,F401
 from services.meetings import process_meeting  # noqa: E402
 from services.operating_score import (  # noqa: E402
     _company_operating_view, _self_operating_view, compute_employee_stats,
-    ai_work_coach, _resolve_coach_target, _score_execution, _score_sales,
+    _resolve_coach_target, _score_execution, _score_sales,
     _score_employees, _clamp100, _is_open_task,
 )
 
@@ -333,7 +333,7 @@ from services.files import (  # noqa: E402
     _store_file, _file_public, _analyze_reference_file, _read_reference_text,
     ATTACH_ALLOWED_EXT, ATTACH_MAX_BYTES,
 )
-from services.leave import _resolve_leave_approver, _create_leave, ai_leave_impact  # noqa: E402
+from services.leave import _resolve_leave_approver, _create_leave  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -344,7 +344,7 @@ from services.leave import _resolve_leave_approver, _create_leave, ai_leave_impa
 # models/team.py. Keep the following still-referenced-inline pieces in this module:
 #   • LeaveApproverMapInput + PATCH /tenant/leave-approvers (settings surface)
 #   • _resolve_leave_approver + _create_leave (called from voice / inbox / capture flows)
-#   • ai_leave_impact (deferred-imported by routers/team.py:leave_impact)
+#   • leave impact is calculated now (services/calculated.leave_impact)
 from models.team import LEAVE_TYPES, ABSENCE_REASONS  # noqa: F401
 
 

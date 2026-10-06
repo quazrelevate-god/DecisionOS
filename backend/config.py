@@ -263,8 +263,7 @@ VISION_MODEL = MODELS[DEFAULT_VISION_MODEL]
 # back to the per-kind default.
 MODEL_ROUTES = {
     # extraction / structuring (text)
-    "extraction.extract": "claude-sonnet", "extraction.score_tasks": "claude-sonnet",
-    "extraction.score_contact": "claude-sonnet", "extraction.meeting_notes": "claude-sonnet",
+    "extraction.extract": "claude-sonnet", "extraction.meeting_notes": "claude-sonnet",
     "extraction.execution_plan": "claude-sonnet", "extraction.step_assist": "claude-sonnet",
     "extraction.clarify": "claude-sonnet",
     # onboarding generators + wizard (text)
@@ -274,15 +273,12 @@ MODEL_ROUTES = {
     "onboarding.web_intel": "claude-sonnet", "onboarding.interview": "claude-sonnet",
     "onboarding.blueprint": "claude-sonnet",
     # captures / coaching / people (text)
-    "captures.triage": "claude-sonnet", "coaching.work_coach": "claude-sonnet",
-    "coaching.leave_impact": "claude-sonnet", "coaching.file_reference": "claude-sonnet",
+    "captures.triage": "claude-sonnet", "coaching.file_reference": "claude-sonnet",
     # company brain (text)
     "brain.planner": "claude-sonnet", "brain.answer": "claude-sonnet",
-    "brain.agent_planner": "claude-sonnet", "brain.agent_synth": "claude-sonnet",
     # finance / ledger (text)
-    "ledger.expense_cat": "claude-sonnet", "ledger.analysis": "claude-sonnet",
+    "ledger.analysis": "claude-sonnet",
     "ledger.ask": "claude-sonnet", "documents.csv_map": "claude-sonnet",
-    "documents.purchase_class": "claude-sonnet",
     # vision / OCR (Gemini) -- BUG-16: repointed off deprecated gemini-2.5-flash
     "documents.doc_extract": "gemini-flash-3", "vision.read_image": "gemini-flash-3",
     "ledger.ocr": "gemini-flash-3",

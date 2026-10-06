@@ -18,7 +18,6 @@ from services.ingestion import (
     ai_extract_document, ai_map_spreadsheet, combine_sheets, _normalise_records, commit_ingestion_records,
     _classify_ingestion, _tenant_currency, _tenant_name, DOC_MIME,
 )
-from services.ai.extraction import ai_score_contact
 
 router = APIRouter(prefix="/api")
 
@@ -306,7 +305,9 @@ async def rescore_contact(contact_id: str, user: dict = Depends(require_perm("fi
         "invoice_count": len(invoices), "payment_count": len(payments),
     }
     currency = await _tenant_currency(tid)
-    scores = await ai_score_contact(c, metrics, currency, session_id=f"contact-{contact_id}")
+    # 2026-10-06 — a formula over the books and complaints (services/calculated), not AI.
+    from services.calculated import score_contact
+    scores = score_contact(c, metrics, currency)
     if scores:
         scores["scored_at"] = now_iso()
         await db.contacts.update_one({"id": contact_id}, {"$set": {"ai_relationship": scores}})

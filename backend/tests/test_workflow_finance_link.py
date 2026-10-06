@@ -226,12 +226,11 @@ class TestCreateExpenseAcceptsNewFields:
         class _FakeCol:
             insert_one = staticmethod(fake_insert)
         monkeypatch.setattr(ledger, "db", type("D", (), {"expenses": _FakeCol()})())
-        # Bypass get_finance_categories and _write_brain and create_asset
+        # Bypass get_finance_categories and create_asset
         async def fake_cats(_tid):
             return {"expense": ["Raw Material", "Other"], "asset": ["Machinery", "Other"]}
         monkeypatch.setattr(ledger, "get_finance_categories", fake_cats)
         async def noop(*a, **k): return None
-        monkeypatch.setattr(ledger, "_write_brain", noop)
         monkeypatch.setattr(ledger, "create_asset", noop)
         async def fake_currency(_tid): return "INR"
         monkeypatch.setattr(ledger, "_currency", fake_currency)
@@ -264,7 +263,6 @@ class TestCreateExpenseAcceptsNewFields:
             return {"expense": ["Other"], "asset": ["Other"]}
         monkeypatch.setattr(ledger, "get_finance_categories", fake_cats)
         async def noop(*a, **k): return None
-        monkeypatch.setattr(ledger, "_write_brain", noop)
         monkeypatch.setattr(ledger, "create_asset", noop)
         async def fake_currency(_tid): return "INR"
         monkeypatch.setattr(ledger, "_currency", fake_currency)

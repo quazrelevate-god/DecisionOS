@@ -31,6 +31,12 @@ import pytest
 
 _BACKEND = Path(__file__).resolve().parent.parent
 
+# 2026-10-05 — the Company Brain index lives in MongoDB when no Qdrant server is
+# configured (services/ai/brain_embed). Tests that never set up a test database
+# would write it to the REAL one, so every test starts on the in-memory store;
+# a test that wants the Mongo store sets it, on its own isolated database.
+os.environ.setdefault("BRAIN_VECTOR_STORE", "memory")
+
 # A test DB name never collides with the dev DB and is easy to spot + sweep.
 TEST_DB_PREFIX = "dos_test_"
 DEV_DB_NAME = "founder-os-58"  # the one database tests must NEVER use

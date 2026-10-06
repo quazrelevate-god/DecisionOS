@@ -346,6 +346,12 @@ async def query_context(
     is_privileged = user.get("role") == "owner" or "team_manage" in user_perms(user)
     if not is_privileged:
         filt.setdefault("$and", []).append(_visibility_filter(user))
+    # 2026-10-05 (AI audit) — and every non-owner only sees rows about records
+    # they may open (services/record_access.readable_context_rows): approvals,
+    # workflow moves, meetings and complaints were written "public". Over-fetch
+    # so a dropped row does not shrink the answer.
+    from services.record_access import readable_context_rows
+    want, fetch = limit, (limit if user.get("role") == "owner" else limit * 3)
 
     if q:
         # Primary path — ranked full-text search.
@@ -354,15 +360,17 @@ async def query_context(
             rows = await db.brain_context.find(
                 text_filt,
                 {"_id": 0, "score": {"$meta": "textScore"}},
-            ).sort([("score", {"$meta": "textScore"})]).limit(limit).to_list(limit)
+            ).sort([("score", {"$meta": "textScore"})]).limit(fetch).to_list(fetch)
             if rows:
-                return rows
+                return (await readable_context_rows(user, rows))[:want]
         except Exception as e:
             logger.warning(f"brain_context text search fallback: {e}")
         # Fallback — regex on title / why so we still return something when the
         # text index hasn't caught up (e.g. immediately after a fresh insert).
-        filt["$or"] = [{"title": {"$regex": q, "$options": "i"}},
-                       {"why":   {"$regex": q, "$options": "i"}}]
+        # 2026-10-05 — escaped: the words are the asker's, not a pattern.
+        rq = re.escape(q)
+        filt["$or"] = [{"title": {"$regex": rq, "$options": "i"}},
+                       {"why":   {"$regex": rq, "$options": "i"}}]
 
-    rows = await db.brain_context.find(filt, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
-    return rows
+    rows = await db.brain_context.find(filt, {"_id": 0}).sort("created_at", -1).limit(fetch).to_list(fetch)
+    return (await readable_context_rows(user, rows))[:want]

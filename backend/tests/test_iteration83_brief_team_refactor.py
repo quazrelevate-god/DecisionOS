@@ -854,7 +854,7 @@ class TestImportBootSanity:
         import importlib
         homes = {
             "services.whatsapp": ("_norm_phone", "_mask_phone"),
-            "services.leave": ("_create_leave", "ai_leave_impact", "_resolve_leave_approver"),
+            "services.leave": ("_create_leave", "_resolve_leave_approver"),   # leave impact: services/calculated
             "services.finance_signals": ("run_followup", "_overdue_receivables",
                                          "_bills_due_or_overdue", "_unmatched_payments",
                                          "_inv_remaining", "_pay_remaining_amt"),

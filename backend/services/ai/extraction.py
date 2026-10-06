@@ -129,79 +129,10 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
     return clean
 
 
-async def ai_score_tasks(tasks: list, currency: str, session_id: str) -> dict:
-    """Score open tasks on 4 axes (0-100) + a blended priority score. Returns {task_id: scores}."""
-    if not tasks:
-        return {}
-    today = datetime.now(timezone.utc).date().isoformat()
-    lines = []
-    for t in tasks:
-        lines.append({
-            "id": t["id"], "title": t.get("title", ""), "description": (t.get("description") or "")[:200],
-            "priority": t.get("priority", "medium"), "due_date": (t.get("due_date") or "")[:10],
-            "assignee_role": t.get("assignee_role") or "unassigned", "status": t.get("status"),
-        })
-    system = render("extraction.score_tasks", today=today, currency=currency)
-    prompt = "Tasks:\n" + json.dumps(lines, ensure_ascii=False) + "\nScore them now."
-    chat = claude_chat(task="extraction.score_tasks", session_id=session_id, system_message=system).with_model(*model_for("extraction.score_tasks"))
-    resp = await chat.send_message(UserMessage(text=prompt))
-    out = {}
-    try:
-        data = _extract_json(resp)
-        for s in data.get("scores", []):
-            tid = s.get("id")
-            if not tid:
-                continue
-            def clamp(v):
-                try:
-                    return max(0, min(100, int(round(float(v)))))
-                except Exception:
-                    return 0
-            out[tid] = {
-                "business_impact": clamp(s.get("business_impact")),
-                "revenue": clamp(s.get("revenue")),
-                "risk": clamp(s.get("risk")),
-                "urgency": clamp(s.get("urgency")),
-                "priority_score": clamp(s.get("priority_score")),
-                "reason": str(s.get("reason") or "")[:200],
-            }
-    except Exception as e:
-        logger.error(f"AI score parse error: {e} :: {redact_pii(resp)[:300]}")
-    return out
+# 2026-10-06 (AI audit step 5): task priority scoring is calculated now -- services/calculated.score_tasks.
 
 
-async def ai_score_contact(contact: dict, metrics: dict, currency: str, session_id: str) -> dict:
-    """Score a customer/supplier relationship. Returns {relationship_score, risk_score, reason, signals}."""
-    ctype = contact.get("type") or "customer"
-    payload = {
-        "name": contact.get("name"), "type": ctype,
-        "status": contact.get("status"), "tags": contact.get("tags"),
-        "outstanding": metrics.get("outstanding"), "total_billed": metrics.get("total_billed"),
-        "total_paid": metrics.get("total_paid"), "last_payment": metrics.get("last_payment"),
-        "open_complaints": metrics.get("open_complaints"),
-        "pending_deliveries": metrics.get("pending_deliveries"),
-        "invoice_count": metrics.get("invoice_count"), "payment_count": metrics.get("payment_count"),
-    }
-    system = render("extraction.score_contact", currency=currency, ctype=ctype)
-    prompt = json.dumps(payload, ensure_ascii=False, default=str) + "\nScore this relationship now."
-    chat = claude_chat(task="extraction.score_contact", session_id=session_id, system_message=system).with_model(*model_for("extraction.score_contact"))
-    resp = await chat.send_message(UserMessage(text=prompt))
-    def clamp(v):
-        try:
-            return max(0, min(100, int(round(float(v)))))
-        except Exception:
-            return 0
-    try:
-        d = _extract_json(resp)
-        return {
-            "relationship_score": clamp(d.get("relationship_score")),
-            "risk_score": clamp(d.get("risk_score")),
-            "reason": str(d.get("reason") or "")[:200],
-            "signals": [str(s)[:60] for s in (d.get("signals") or [])][:3],
-        }
-    except Exception as e:
-        logger.error(f"AI contact score parse error: {e} :: {redact_pii(resp)[:300]}")
-        return {}
+# 2026-10-06 (AI audit step 5): the contact relationship score is calculated now -- services/calculated.score_contact.
 
 
 async def ai_meeting_notes(transcript: str, members: list, session_id: str) -> dict:

@@ -1141,10 +1141,17 @@
 :root {
     --touch-min: calc(2.75rem / var(--ui-density, 1));
 
-    --sa-top:    calc(env(safe-area-inset-top, 0px)    / var(--ui-scale, 1));
-    --sa-bottom: calc(env(safe-area-inset-bottom, 0px) / var(--ui-scale, 1));
-    --sa-left:   calc(env(safe-area-inset-left, 0px)   / var(--ui-scale, 1));
-    --sa-right:  calc(env(safe-area-inset-right, 0px)  / var(--ui-scale, 1));
+    /* SAFE-AREA (2026-10-07) — env(safe-area-inset-*) is correct on iOS and
+       stock Android, but some OEM WebViews (Xiaomi HyperOS) drop it to 0 after
+       the app is resumed, so content crossed the status bar on the 2nd+ entry.
+       MainActivity injects the REAL native insets as --android-sa-* on every
+       resume; max() takes whichever is larger, so the correct inset wins on
+       every device and every entry. --android-sa-* is 0 where it is not set
+       (iOS, browsers), leaving env() in charge there. */
+    --sa-top:    calc(max(env(safe-area-inset-top, 0px),    var(--android-sa-top, 0px))    / var(--ui-scale, 1));
+    --sa-bottom: calc(max(env(safe-area-inset-bottom, 0px), var(--android-sa-bottom, 0px)) / var(--ui-scale, 1));
+    --sa-left:   calc(max(env(safe-area-inset-left, 0px),   var(--android-sa-left, 0px))   / var(--ui-scale, 1));
+    --sa-right:  calc(max(env(safe-area-inset-right, 0px),  var(--android-sa-right, 0px))  / var(--ui-scale, 1));
 }
 
 /* Radix poppers (dropdown menus, popovers, tooltips) position their wrapper

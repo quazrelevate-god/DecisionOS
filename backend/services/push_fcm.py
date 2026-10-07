@@ -96,20 +96,22 @@ def _parse_service_account(raw: str) -> dict:
     Raises ``ValueError`` with a specific, loggable reason — the caller turns
     that into a clear log line and disables push rather than crashing.
     """
-    text = raw.strip()
-    # Tolerate a value accidentally wrapped in quotes (a very common dashboard
-    # paste: FIREBASE_SERVICE_ACCOUNT="{...}"). Strip one matching outer pair.
+    # Drop a UTF-8 BOM (a common artifact of pasting out of a file — it is the
+    # "char 0" that breaks json.loads), surrounding whitespace, and one matching
+    # outer quote pair (FIREBASE_SERVICE_ACCOUNT="{...}").
+    text = raw.strip().lstrip("﻿").strip()
     if len(text) >= 2 and text[0] == text[-1] and text[0] in ("'", '"'):
-        text = text[1:-1].strip()
+        text = text[1:-1].strip().lstrip("﻿").strip()
     # Base64 payloads never start with '{'; raw JSON always does.
     if not text.startswith("{"):
-        # Be lenient: a base64 blob pasted into a dashboard is often line-wrapped
-        # or carries stray whitespace/newlines, which validate=True would reject.
-        # Remove all whitespace and decode without validation.
+        # Treat it as base64-of-JSON. A pasted blob is often line-wrapped, so
+        # drop whitespace first; then decode STRICTLY, so a value that is really
+        # mangled JSON fails with a clear "not base64" message instead of being
+        # silently decoded to garbage and then reported as "invalid JSON".
         try:
-            text = base64.b64decode("".join(text.split())).decode("utf-8")
+            text = base64.b64decode("".join(text.split()), validate=True).decode("utf-8")
         except (binascii.Error, ValueError, UnicodeDecodeError) as e:
-            raise ValueError(f"not JSON, and not valid base64 either ({e})")
+            raise ValueError(f"not JSON (after BOM/quote strip), and not valid base64 either ({e})")
     try:
         data = json.loads(text)
     except json.JSONDecodeError as e:

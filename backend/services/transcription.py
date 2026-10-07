@@ -71,6 +71,10 @@ async def transcribe_audio_full(path: str, language: str = "auto") -> dict:
 async def _transcribe_audio_full_local(path: str, language: str = "auto") -> dict:
     """Internal: expects `path` to be a local filesystem path. Runs the STT
     provider fallback chain via the integrations.stt adapter."""
+    # 2026-10-07 (AB-05) — AI off means off: this provider call is outside
+    # guarded_llm, so it asks the consent gate itself (451 when refused).
+    from services.ai.llm_limits import require_ai_allowed
+    await require_ai_allowed()
     if get_ai_key("sarvam"):
         # 1) REST (fast, <30s)
         try:

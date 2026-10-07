@@ -10,6 +10,8 @@ ingestion, transcription, notifications; nothing imports it back.
 import os
 import re
 
+from fastapi import HTTPException
+
 from core import db, logger, new_id, now_iso, set_usage_tenant, tenant_role_keys
 # Graph API transport moved to integrations/whatsapp.py (Epic 8 Sprint 6);
 # imported here + re-exported so `from services.whatsapp import wa_token, ...`
@@ -376,6 +378,21 @@ async def process_whatsapp_message(message: dict):
                 await send_wa_reply(sender, f"🎙️ Voice note received{lang_tag} — your message is being reviewed by the right team before action.")
         else:
             await update_wa_event(ev_id, status="ignored", reason=f"Unsupported message type: {mtype}")
+    except HTTPException as e:
+        # 2026-10-07 (AB-05) — a refusal is an answer, not an error: "try again"
+        # cannot help when the company has switched AI off or used its allowance.
+        if e.status_code == 451:
+            await update_wa_event(ev_id, status="ignored", reason="AI is off for this company")
+            await send_wa_reply(sender, "AI is switched off for your company, so this can't be read. "
+                                        "Your owner can turn it on in Settings, or add it in the app.")
+        elif e.status_code == 402:
+            await update_wa_event(ev_id, status="ignored", reason="AI allowance used up for this month")
+            await send_wa_reply(sender, "Your company's AI allowance for this month is used up, so this can't be "
+                                        "read now. Please add it in the app.")
+        else:
+            await update_wa_event(ev_id, status="error", reason=str(e.detail)[:200])
+            logger.exception("process_whatsapp_message failed")
+            await send_wa_reply(sender, "Sorry, I couldn't process that. Please try again.")
     except Exception as e:
         await update_wa_event(ev_id, status="error", reason=str(e)[:200])
         logger.exception("process_whatsapp_message failed")

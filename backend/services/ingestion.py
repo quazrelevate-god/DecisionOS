@@ -42,6 +42,10 @@ def _normalise_records(data: dict) -> dict:
 
 
 async def ai_extract_document(file_path: str, mime_type: str, session_id: str, currency: str = "INR", company: str = "") -> dict:
+    # 2026-10-07 (AB-05) — AI off means off: this provider call is outside
+    # guarded_llm, so it asks the consent gate itself (451 when refused).
+    from services.ai.llm_limits import require_ai_allowed
+    await require_ai_allowed()
     system = _DOC_SYSTEM.replace("{currency}", currency).replace("{company}", company or "our company")
     user_text = "Extract the structured JSON from this document now."
     resp = None

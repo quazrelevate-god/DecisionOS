@@ -219,6 +219,10 @@ async def ai_extract_ledger_file(file_path: str, mime_type: str, kind: str, curr
         cat_rule = f'The "category" MUST be exactly one of: [{", ".join(categories)}]. Pick the closest fit. '
     system = render("ledger.ocr", desc=desc, currency=currency,
                     typed=json.dumps(typed_clean), cat_rule=cat_rule, shape=shape)
+    # 2026-10-07 (AB-05) — AI off means off: this provider call is outside
+    # guarded_llm, so it asks the consent gate itself (451 when refused).
+    from services.ai.llm_limits import require_ai_allowed
+    await require_ai_allowed()
     resp = None
     _t0 = time.perf_counter()
     _eng, _ti, _to = None, 0, 0
@@ -923,6 +927,13 @@ async def _read_attachment(file: Optional[UploadFile], kind: str, tenant_id: str
             attachment["read"] = bool(ai) and any(v not in (None, "", 0) for k, v in (ai or {}).items() if k not in typed or not typed.get(k))
         except Exception as e:  # noqa: BLE001
             attachment["read"] = False
+            # 2026-10-07 (AB-05) — say WHY it was not read when the reason is a
+            # refusal, so the owner is not told to "check the details" of a bill
+            # nobody was allowed to read.
+            if getattr(e, "status_code", None) == 451:
+                attachment["read_note"] = "Added — AI is switched off, so the bill wasn't read. Fill in the details yourself."
+            elif getattr(e, "status_code", None) == 402:
+                attachment["read_note"] = "Added — this month's AI allowance is used up, so the bill wasn't read. Fill in the details yourself."
             logger.warning(f"Ledger {kind} OCR failed, using typed values: {e}")
         finally:
             try:
@@ -958,7 +969,7 @@ async def add_expense_with_file(
     await log_activity(user["tenant_id"], user["id"], "expense_added", f"Added expense '{doc['title']}'", "expense", doc["id"])
     if held:
         await _tell_the_owners(user["tenant_id"], user, doc)
-    return {**doc, "bill_read": bool(_att and _att.get("read"))}
+    return {**doc, "bill_read": bool(_att and _att.get("read")), "bill_note": (_att or {}).get("read_note")}
 
 
 @router.patch("/expenses/{eid}")
@@ -1028,7 +1039,7 @@ async def add_asset_with_file(
         raise HTTPException(status_code=400, detail="Add an asset name or attach a readable bill")
     doc = await create_asset(user["tenant_id"], user["id"], data, source="manual", write_brain=True)
     await log_activity(user["tenant_id"], user["id"], "asset_added", f"Added asset '{doc['name']}'", "asset", doc["id"])
-    return {**doc, "bill_read": bool(_att and _att.get("read"))}
+    return {**doc, "bill_read": bool(_att and _att.get("read")), "bill_note": (_att or {}).get("read_note")}
 
 
 @router.patch("/assets/{aid}")
@@ -1085,7 +1096,7 @@ async def add_inventory_with_file(
         raise HTTPException(status_code=400, detail="Add an item name or attach a readable bill")
     doc = await create_inventory(user["tenant_id"], user["id"], data, source="manual", write_brain=True)
     await log_activity(user["tenant_id"], user["id"], "inventory_added", f"Added inventory '{doc['item']}'", "inventory", doc["id"])
-    return {**doc, "bill_read": bool(_att and _att.get("read"))}
+    return {**doc, "bill_read": bool(_att and _att.get("read")), "bill_note": (_att or {}).get("read_note")}
 
 
 @router.patch("/inventory/{iid}")
@@ -1306,7 +1317,7 @@ async def add_revenue_with_file(
     doc = await create_income(user["tenant_id"], user["id"], data, source="manual")
     await log_activity(user["tenant_id"], user["id"], "income_added",
                        f"Recorded income '{doc.get('title') or doc.get('contact_name') or 'Sale'}'", "invoice", doc["id"])
-    return {**doc, "bill_read": bool(_att and _att.get("read"))}
+    return {**doc, "bill_read": bool(_att and _att.get("read")), "bill_note": (_att or {}).get("read_note")}
 
 
 @router.delete("/revenue/invoice/{iid}")

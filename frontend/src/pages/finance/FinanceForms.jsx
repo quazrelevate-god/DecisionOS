@@ -149,7 +149,7 @@ export function AddExpenseDialog({ open, onOpenChange, categories = [], onDone }
     setBusy(true);
     try {
       const res = await api.post("/expenses/with-file", formData(f, file));
-      toast.success(!file ? t("finance.expense_added") : res?.data?.bill_read === false ? t("finance.bill_not_read") : t("finance.added_bill"));
+      toast.success(!file ? t("finance.expense_added") : res?.data?.bill_read === false ? (res.data.bill_note || t("finance.bill_not_read")) : t("finance.added_bill"));
       cancel();
       onDone();
     } catch (e) {
@@ -236,7 +236,7 @@ export function AddAssetDialog({ open, onOpenChange, categories = [], onDone }) 
     setBusy(true);
     try {
       const res = await api.post("/assets/with-file", formData(f, file));
-      toast.success(!file ? t("finance.asset_added") : res?.data?.bill_read === false ? t("finance.bill_not_read") : t("finance.asset_added_bill"));
+      toast.success(!file ? t("finance.asset_added") : res?.data?.bill_read === false ? (res.data.bill_note || t("finance.bill_not_read")) : t("finance.asset_added_bill"));
       cancel();
       onDone();
     } catch (e) {
@@ -314,7 +314,7 @@ export function AddInventoryDialog({ open, onOpenChange, cur, onDone }) {
     setBusy(true);
     try {
       const res = await api.post("/inventory/with-file", formData(f, file));
-      toast.success(!file ? t("finance.inv_added") : res?.data?.bill_read === false ? t("finance.bill_not_read") : t("finance.inv_added_bill"));
+      toast.success(!file ? t("finance.inv_added") : res?.data?.bill_read === false ? (res.data.bill_note || t("finance.bill_not_read")) : t("finance.inv_added_bill"));
       cancel();
       onDone();
     } catch (e) {

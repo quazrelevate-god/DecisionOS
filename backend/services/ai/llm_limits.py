@@ -193,6 +193,37 @@ async def guarded_llm(coro, *, label: str = "llm",
             raise
 
 
+async def require_ai_allowed(tenant_id: str | None = None) -> None:
+    """2026-10-07 (AB-05) — "AI off" must stop EVERY AI call, not only Claude's.
+
+    guarded_llm checks the company's AI consent before each Claude call. Four
+    other providers were called without it: Gemini (bill / document / image
+    reading on the company's own key), Sarvam / OpenAI / Whisper speech-to-text
+    (voice notes, WhatsApp audio) and OpenAI embeddings (Company Brain search).
+    So a company that switched AI off still sent bills, voices and questions to
+    them. Every one of those entry points now calls this first.
+
+    Same rules as guarded_llm: the company is the one named, else the request's
+    (core._ctx_tenant); with no company at all (the pre-signup interview) there
+    is no consent to check. Refusal is the same 451 the app already turns into
+    "AI is switched off". A failure to READ the consent fails open, as
+    guarded_llm does, so a database blip does not take every reader down.
+    """
+    from fastapi import HTTPException
+    try:
+        from core import _ctx_tenant, db
+        tid = tenant_id or _ctx_tenant.get()
+        if not tid:
+            return
+        tenant = await db.tenants.find_one({"id": tid}, {"_id": 0, "ai_consent": 1})
+        from services.ai_consent import require_ai_consent
+        require_ai_consent(tenant or {})
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"AI consent check errored, allowing: {e}")
+
+
 def config_snapshot() -> dict:
     """Return the currently-active LLM limits (for health endpoints /
     admin dashboards). Read-only."""

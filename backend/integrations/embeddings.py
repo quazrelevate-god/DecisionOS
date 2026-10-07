@@ -52,6 +52,10 @@ async def embed_texts(texts, *, input_type: str = "document", task: str = "defau
     provider, model_id, _dim = embed_model_for(task)
     cleaned = _clean(list(texts))
     tid = tenant_id or _ctx_tenant.get()
+    # 2026-10-07 (AB-05) — indexing already waited for consent; a QUESTION was
+    # still embedded (sent to the provider) on every Ask, AI off or not.
+    from services.ai.llm_limits import require_ai_allowed
+    await require_ai_allowed(tid)
     t0 = time.perf_counter()
     try:
         if provider == "openai":

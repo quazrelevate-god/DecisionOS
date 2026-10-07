@@ -24,6 +24,10 @@ _IMAGE_READ_SYSTEM = render("vision.read_image")  # prompt in prompts/vision.py
 
 async def ai_read_image_general(file_path: str, mime_type: str, session_id: str) -> str:
     """Read ANY image/PDF into plain text (business cards, notes, lists, screenshots, documents)."""
+    # 2026-10-07 (AB-05) — AI off means off: this provider call is outside
+    # guarded_llm, so it asks the consent gate itself (451 when refused).
+    from services.ai.llm_limits import require_ai_allowed
+    await require_ai_allowed()
     user_text = "Read this file and output all of its content as plain text."
     _t0 = time.perf_counter()
     if get_gemini_client() is not None:

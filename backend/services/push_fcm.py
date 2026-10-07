@@ -97,10 +97,17 @@ def _parse_service_account(raw: str) -> dict:
     that into a clear log line and disables push rather than crashing.
     """
     text = raw.strip()
+    # Tolerate a value accidentally wrapped in quotes (a very common dashboard
+    # paste: FIREBASE_SERVICE_ACCOUNT="{...}"). Strip one matching outer pair.
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in ("'", '"'):
+        text = text[1:-1].strip()
     # Base64 payloads never start with '{'; raw JSON always does.
     if not text.startswith("{"):
+        # Be lenient: a base64 blob pasted into a dashboard is often line-wrapped
+        # or carries stray whitespace/newlines, which validate=True would reject.
+        # Remove all whitespace and decode without validation.
         try:
-            text = base64.b64decode(text, validate=True).decode("utf-8")
+            text = base64.b64decode("".join(text.split())).decode("utf-8")
         except (binascii.Error, ValueError, UnicodeDecodeError) as e:
             raise ValueError(f"not JSON, and not valid base64 either ({e})")
     try:

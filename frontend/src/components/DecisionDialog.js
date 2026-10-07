@@ -629,16 +629,19 @@ export function DecisionPanel({
             <CheckCircle size={16} weight="bold" aria-hidden="true" className="shrink-0" />
             {approveM.isPending ? "Approving…" : "Approve"}
           </button>
-          {!!decisionId && (
+          {/* Offered on the way IN only, like the dialog's own: a decision that
+              is already a draft has nothing useful to say here, and "Not a
+              draft" was the phone's copy of the line the founder struck. */}
+          {!!decisionId && !(isDraft && !onSaveDraft) && (
             <button
               type="button"
-              onClick={() => draftM.mutate(!isDraft)}
+              onClick={() => draftM.mutate(true)}
               disabled={busy}
               /* The testid the Dex suites look for, kept. */
               data-testid="desk-dex-later"
               className={`flex h-14 min-w-0 flex-1 items-center justify-center rounded-pill px-4 text-sm font-medium text-slate-800 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 disabled:opacity-60 lg:h-12 ${GLASS_PILL}`}
             >
-              {draftM.isPending ? "Saving…" : isDraft && !onSaveDraft ? "Not a draft" : "Save as draft"}
+              {draftM.isPending ? "Saving…" : "Save as draft"}
             </button>
           )}
           <button
@@ -705,16 +708,35 @@ export function DecisionPanel({
     );
   }
   if (!d) {
+    // B?? — a SKELETON, not a blank "Loading…". The decision detail fetches
+    // GET /decisions/{id} on open (no placeholderData), so for the frame before
+    // it answers, `d` is undefined. The old bare "Loading…" filled the whole
+    // full-screen dialog with empty space and then SNAPPED to the full panel —
+    // the "crack on opening a card" the founder reported. A skeleton shaped like
+    // the real header + body cards means nothing blank ever shows and the real
+    // content fades in over the same silhouette instead of jumping in.
     return embedded ? (
-      <p className="p-6 text-sm text-slate-500" data-testid="decision-panel-loading">Loading…</p>
+      <div className="animate-pulse space-y-4 p-6" aria-hidden="true" data-testid="decision-panel-loading">
+        <div className="h-6 w-3/4 rounded-md bg-slate-200/80" />
+        <div className="h-24 rounded-2xl bg-slate-200/60" />
+        <div className="h-40 rounded-2xl bg-slate-200/60" />
+      </div>
     ) : (
-      <div className="p-6">
-        <DialogHeader className="text-left">
+      <>
+        <DialogHeader className="shrink-0 space-y-0 border-b border-slate-900/[0.06] px-5 pb-4 pt-5 text-left lg:px-7 lg:pt-6">
           <DialogTitle className="sr-only">Decision</DialogTitle>
           <DialogDescription className="sr-only">Loading the decision</DialogDescription>
+          <div className="animate-pulse space-y-3" aria-hidden="true" data-testid="decision-panel-loading">
+            <div className="h-6 w-3/4 rounded-md bg-slate-200/80" />
+            <div className="h-4 w-1/2 rounded bg-slate-200/70" />
+          </div>
         </DialogHeader>
-        <p className="py-4 text-sm text-slate-500">Loading…</p>
-      </div>
+        <div className="animate-pulse space-y-4 p-5 lg:px-7" aria-hidden="true">
+          <div className="h-28 rounded-2xl bg-slate-200/60" />
+          <div className="h-24 rounded-2xl bg-slate-200/60" />
+          <div className="h-40 rounded-2xl bg-slate-200/60" />
+        </div>
+      </>
     );
   }
 
@@ -921,15 +943,25 @@ export function DecisionPanel({
                           it from the ones that arrived overnight. Below the
                           two, because it is not a decision: it is the note
                           that they have been here. */}
+                      {/* 2026-10-05 — AND IT IS ONLY OFFERED ON THE WAY IN.
+                          Opening a decision that is ALREADY a draft used to put
+                          "Not a draft any more" under Approve and Reject, which
+                          the founder read as noise and they were right: by then
+                          the only answers that matter are the two above it, and
+                          both clear the draft flag themselves. Saving one is a
+                          thing you do to a decision you are leaving; un-saving
+                          it is not a thing anybody came here to do. */}
+                      {!isDraft && (
                       <button
                         type="button"
-                        onClick={() => draftM.mutate(!isDraft)}
+                        onClick={() => draftM.mutate(true)}
                         disabled={busy}
                         data-testid="decision-save-draft"
                         className="mt-2.5 flex h-11 w-full items-center justify-center rounded-pill px-5 text-sm font-medium text-slate-600 transition-colors hover:bg-white hover:text-slate-900 disabled:opacity-60"
                       >
-                        {draftM.isPending ? "Saving…" : isDraft ? "Not a draft any more" : "Save as draft — decide later"}
+                        {draftM.isPending ? "Saving…" : "Save as draft — decide later"}
                       </button>
+                      )}
                       {confirmReject && (
                         <p className="mt-3 text-xs text-rose-700" data-testid="decision-reject-warning">
                           {proposing

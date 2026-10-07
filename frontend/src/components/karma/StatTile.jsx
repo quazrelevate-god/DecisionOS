@@ -95,8 +95,21 @@ export function StatTile({
           TinySpark (72px) made it worse. Four 6px bars beside a 36px number is
           texture, not information; the number is the point, and dropping the
           chart is the only fix that holds no matter how long the string gets. */}
-      <div className="mt-auto flex items-end justify-between gap-3 pt-3 lg:pt-4">
-        <BigNumeral text={value} size="md" accent={urgent && !glass} countUp={countUp} />
+      {/* 2026-10-06 — `mt-auto` PUSHES, and a tile that grows then has a hole
+          in it: label at the top, numeral on the floor, nothing between. That
+          is the 199px void's smaller cousin and it arrived the moment the KPI
+          grid started stretching into the room the slider left.
+          Below lg the numeral rides up with `my-auto` instead, so it sits in
+          the middle of whatever height the tile is given and a taller tile
+          reads as a bigger tile rather than an emptier one. Desktop keeps the
+          push, where the rows are equal by construction and the floor is the
+          alignment that matters. */}
+      <div className="max-lg:my-auto lg:mt-auto flex items-end justify-between gap-3 pt-3 lg:pt-4">
+        {/* …and it is BIGGER on the phone now, which is the other half of the
+            founder's "increase the scale and size": a tile with more room
+            should say its number louder, not just sit in more white. */}
+        <BigNumeral text={value} size="md" className="max-lg:text-[2.75rem] max-lg:leading-none"
+          accent={urgent && !glass} countUp={countUp} />
         {viz && <span className={cn("hidden shrink-0 pb-0.5 lg:block", glass ? "text-white" : "text-foreground")}>{viz}</span>}
       </div>
 

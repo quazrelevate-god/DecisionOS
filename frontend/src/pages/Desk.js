@@ -24,7 +24,7 @@
 //
 // Deep-link contract preserved: /inbox?decision=<id> redirects to the
 // decision page (KM-28).
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
@@ -63,6 +63,9 @@ import { StaleStamp } from "../components/mobile/StaleStamp";
 // ASK-33 — the well on the left column's floor is Dex's Decide door. It owns
 // the capture hooks and hosts the repurposed InsightWell container itself.
 import { DeskDexWell } from "./desk/DeskDexWell";
+// DEX-SLIDER Part 1 — the phone Desk's new order sits behind this.
+import { DEX_SLIDER } from "../lib/flags";
+import { useDexDoors } from "../components/mobile/DexDoors";
 // 2026-09-14, founder — the Task approvals column opens My Work's task
 // drawer HERE, on the Desk, instead of sending the founder to My Work.
 import { TaskCard } from "./MyWork";
@@ -95,7 +98,34 @@ const POP_SEAM = 10;
    bar floats on a 16px inset below it, so the gap the eye sees is never this
    number alone; on a 6.1" screen the other four pixels are the difference
    between three rows that fit and three rows that make the page scroll. */
-const DOCK_SEAM = 4;
+/* DEX-SLIDER Part 1 — DEAD, and kept so the next person does not go looking
+   for the measurement it implies. Nothing reads it: the card's resting height
+   is --desk-phone-body, which is three rows, their separators and the show-all
+   slot and has no dock term in it at all; and the POP measurement takes the
+   dock's live top off getBoundingClientRect, so it stays correct now the card
+   sits above the slider instead of above the bar. The reorder needed no change
+   here, which is worth saying rather than leaving a constant that suggests it
+   did.
+const DOCK_SEAM = 4; */
+
+/* THE PHONE'S SCALE FOR THE DESK TILES, in one place.
+   The desktop tiles are used verbatim on the phone now (one grid, one set of
+   behaviours, one set of routes); all that changes is how much air they carry.
+   `cn` is tailwind-merge, so these simply win over the tile's own p-4 and
+   min-h — no !important, no fork of the component, and `lg:` is untouched so
+   desktop keeps every pixel it had. max-lg: only — this app allows xs and lg
+   breakpoints inside .app-shell and nothing between. */
+/* 2026-10-06 — THE TILES TAKE THE SLIDER'S ROOM. Removing the control from the
+   sheet left the page with six rems and nowhere for them to go but black under
+   three rows; the founder's call was to spend them here — "the empty space we
+   can cover it by increasing the scale and size of the workflow tile and any
+   other tile of the KPI grid."
+   A FLOOR, not a stretch. The hero was given `flex-1` once before and it put a
+   199px void between the tiles and the card, because a capped tile cannot
+   absorb what a growing parent hands it; this grows the tile ITSELF, so the
+   space is spent on the thing the founder wanted bigger and the board takes
+   what is left. --desk-kpi-floor is the number, in one place. */
+const PHONE_TILE = "kr-kpi-tile max-lg:min-h-[var(--desk-kpi-floor)] max-lg:p-3 max-lg:rounded-[1.25rem]";
 /* ASK-35 1.4 — the inner card's material, lifted from the recipe the desktop
    top nav shelf is cut from (INK_PILL / .kr-navplate::before) so the two stay
    the same black. Only the fill and the lit top edge: INK_PILL's drop shadow
@@ -188,7 +218,13 @@ function OpenButton({ onClick, label }) {
       title="Open"
       /* On the black board: a white-glass circle, no blur (nothing behind it
          to blur), lit a step on hover. */
-      className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/[.10] text-white/80 transition-colors hover:bg-white/[.20] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+      /* kr-desk-row-open — IT SCALES WITH THE ROW (2026-10-06). h-8 alone is a
+         32px floor under a row whose type bends: on a 375x667 the titles came
+         down to 11pt and the rows still would not fit, because this circle held
+         them open and the leftover was taken out of the text, which clipped. In
+         the sheet it is sized off --desk-row-scale like everything else in the
+         pill (index.css); elsewhere it stays exactly 32. */
+      className="kr-desk-row-open grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/[.10] text-white/80 transition-colors hover:bg-white/[.20] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
     >
       <ArrowSquareOut size={14} weight="bold" aria-hidden="true" />
     </button>
@@ -218,7 +254,19 @@ function OpenButton({ onClick, label }) {
    `data-row` is what both containers measure a row's height with; the testid
    pattern is the caller's, so desk-decisions-row-<id> means the same element in
    either one. */
-function DeskRow({ r, first, testid }) {
+/* `roomy` — the sheet proposal. There the card is the height of the sheet
+   rather than the height of three rows, so the rows share that height instead
+   of sitting at the top of it with black underneath. The row grows, and its
+   type grows with it: a 56px row carrying 15px text reads as a short row that
+   has been stretched, not as a bigger row.
+   AND IT HAS A CEILING. Sharing the height is only sane while there are three
+   rows to share it. With two on a 440pt phone each row took 170 real pixels and
+   the title floated in the middle of a cavern — measured, sparse fixture. The
+   cap is 6.5rem, which is above what three rows ask for at 390 (so the full
+   case is untouched) and well under what two ask for. What the cap refuses goes
+   back to the sheet as black, which is the honest answer: there is less to show,
+   and a row the size of a card does not change that. */
+function DeskRow({ r, first, testid, roomy = false }) {
   return (
     <div
       data-row=""
@@ -243,7 +291,29 @@ function DeskRow({ r, first, testid }) {
          holding them; six of those pixels are here, three times over. Desktop
          keeps its 7 — it has the room and the columns are read at arm's
          length. */
-      className={`flex cursor-pointer items-center justify-between gap-3 max-lg:py-1 py-[7px] ${first ? "" : "border-t border-white/[.14]"} ${
+      /* MERGE 2026-10-06 — BOTH SIDES FIXED THE SAME CRUSH. origin/mobile-capacitor
+         put a min-height under the roomy row and let the list SCROLL when even
+         that would not fit. The founder ruled the scroll out by name — "instead
+         of making the floor scrollable list, I would like to go with the scaling
+         down approach... no need to scroll internally, because we have an
+         intention of showing three recent items always" — and this side is what
+         they approved: pills, a measured --desk-row-scale with an 11pt floor,
+         and overflow:hidden so a row can never print over its neighbour. Their
+         floor is already here, as that floor. */
+      /* THE ROW IS ITS OWN PILL NOW (2026-10-05), in the sheet only.
+         It used to be a line inside one gradient card, separated from its
+         neighbours by a hairline, and the draft mark had to fight that: a
+         -mx-2 bleed, a left bar, a ring and a glow, all to lift a row off a
+         surface it was part of. The founder's call is simpler and better —
+         drop the card, give each row its own flat container with real space
+         between them, and let COLOUR say what the row is. The draft mark then
+         costs nothing: it is just this pill, painted.
+         `data-tone` is the priority band and `data-draft` overrides it; both
+         are read in index.css, where the hues live beside the Watch cards'
+         so the two cannot drift. */
+      data-tone={roomy ? (r.priority || "low") : undefined}
+      className={`flex cursor-pointer items-center justify-between gap-3 ${roomy ? "kr-desk-pill kr-desk-row-roomy min-h-0 flex-1 overflow-hidden" : `max-lg:py-1 py-[7px] ${first ? "" : "border-t border-white/[.14]"}`} ${
+        roomy ? "" :
         /* ASK-42 E — THE MARK IS LOUDER. It was a 2px bar and a 5% white wash,
            which on near-black is a shade of the same black: the founder could
            see it only once they knew where to look. It is the SAME grammar,
@@ -268,10 +338,16 @@ function DeskRow({ r, first, testid }) {
             "Show all" by design (ASK-42), and a row that can double in height
             is a different card. Both carry the full title as a tooltip. */}
         <p title={r.title}
-          className={`truncate text-[15px] font-medium leading-5 tracking-[-0.006em] lg:whitespace-normal lg:line-clamp-2 ${r.deferred ? "text-white" : "text-neutral-300"}`}>{r.title}</p>
+          /* In the sheet the pill owns the ink: a draft is painted solid
+             white and needs dark type on it, which a Tailwind colour here
+             could only fight. index.css sets both cases together. */
+          className={`truncate ${roomy ? "kr-desk-row-title" : `text-[15px] leading-5 ${r.deferred ? "text-white" : "text-neutral-300"}`} font-medium tracking-[-0.006em] lg:whitespace-normal lg:line-clamp-2 lg:text-[15px] lg:leading-5`}>{r.title}</p>
         {(r.meta || r.deferred) && (
-          <p title={r.meta || undefined} className="truncate text-xs leading-4 text-neutral-500">
-            {r.deferred && <span className="font-medium text-neutral-300">Draft</span>}
+          /* text-sm + neutral-400, measured: the supporting line was 12px
+             (9.6pt after --ui-scale) at 3.87:1 on the board's own ink, against
+             an 11pt floor and a 4.5:1 requirement. 14px is 11.2pt. */
+          <p title={r.meta || undefined} className={`truncate ${roomy ? "kr-desk-row-meta lg:text-sm lg:leading-5" : "text-sm leading-5 text-neutral-400"}`}>
+            {r.deferred && <span className={`font-medium ${roomy ? "kr-desk-row-draftword" : "text-neutral-300"}`}>Draft</span>}
             {r.deferred && r.meta ? " · " : ""}
             {r.meta}
           </p>
@@ -281,7 +357,7 @@ function DeskRow({ r, first, testid }) {
           cross that used to sit between them are gone; the row is the link and
           the window it opens is where a decision is taken. */}
       <span className="flex shrink-0 items-center gap-2.5">
-        {r.amount && <span className="font-mono text-[13px] leading-5 text-neutral-400">{r.amount}</span>}
+        {r.amount && <span className={`font-mono ${roomy ? "kr-desk-row-amount text-[15px] leading-6 lg:text-sm lg:leading-5" : "text-sm leading-5 text-neutral-300"}`}>{r.amount}</span>}
         <OpenButton onClick={(e) => { e.stopPropagation(); r.onOpen(); }} label={`Open: ${r.title}`} />
       </span>
     </div>
@@ -506,9 +582,193 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
    only moment the content's real height can be read. Tied together, the
    measurement read the height of three rows and the card grew to exactly the
    size it already was. */
-function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, open, scrolls, onToggleExpanded, children }) {
+function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, open, scrolls, onToggleExpanded, roomy = false, children }) {
   const { t } = useTranslation();
   const showAll = open;
+
+  /* THE ROWS SCALE TO THE ROOM THEY ARE GIVEN. (2026-10-05.)
+     The founder's call for short screens: keep three rows, never scroll inside
+     the card, and let the type come down until they fit.
+     MEASURED, NOT GUESSED FROM THE VIEWPORT. A formula on innerHeight would
+     have been shorter and would have been wrong, because the thing that eats
+     this space is not always the screen: it is the safe areas, the dock, the
+     slider's locked band and — on the device this started on — the app's own
+     zoom failing to apply. Reading clientHeight against scrollHeight catches
+     every one of those for the same three lines.
+     The reset to 1 before measuring is what keeps it from walking: scrollHeight
+     is read at full size every pass, so the answer does not depend on the
+     answer we gave last time. */
+  const listRef = useRef(null);
+  const [fitTick, setFitTick] = useState(0);
+  /* TIGHT — THE ONE SCREEN SIZE WHERE SCALING IS NOT ENOUGH. (2026-10-06.)
+     Founder: the rows "should never overlap or compressed in any situation".
+     Below the 11pt floor the old measure simply stopped and let `overflow:
+     hidden` cut the rows in half — three 23px slivers of sliced type on a
+     375x667 (iPhone SE), three 14px ones at 360x640. Measured, not guessed:
+     three two-line pills, their gaps and the Show-all control need ~216px of
+     the sheet and an SE gives the card 132.
+     So when the floor is about to be broken the card asks the PAGE for room
+     instead of cutting its contents — the founder's own words, "either it
+     should expand or contract its height and everything associated with it to
+     show three recent lists". `data-desk-tight` on <html> is that request, and
+     index.css answers it where the space actually is: the supporting line goes,
+     the gaps and the KPI tiles tighten, the Show-all control comes down to the
+     44px floor. It is MEASURED, so it fires on the screens that need it and on
+     no others — and it is immune to the two coordinate systems the phone can be
+     in (CSS zoom, or the widened viewport fallback), which a height media query
+     is not: the same SE reports 667px in one and 834 in the other.
+     IT IS ONLY EVER SET HERE, never cleared, and a resize clears it before the
+     next measurement. Clearing it from the measure would be a loop: tight makes
+     it fit, fitting clears tight, clearing stops it fitting. */
+  const [tight, setTight] = useState(0);
+  /* AND THE LAST RESORT, WHICH IS STILL NOT CLIPPING. (2026-10-06.)
+     Three rows is the design and it holds on every phone from a 4.7" iPhone SE
+     up. Below that it stops being arithmetic and starts being physics: a
+     360x640 Android gives the list 103px, and three rows at the 11pt floor —
+     already stripped of their supporting line, their padding halved and their
+     open circle shrunk — need 129. The founder's two rules meet there and only
+     one of them can hold, so this keeps the one they have just restated twice:
+     the rows are never compressed. As many WHOLE rows as the card can seat,
+     and "Show all 30" — which is already the way to the rest, and is on screen
+     — carries what is left. Reset on resize with `tight`, so a rotation or a
+     keyboard asks the question again from a clean layout. */
+  const [maxRows, setMaxRows] = useState(PHONE_ROWS);
+  /* The card height that asked for tight, so the card can give it back. The
+     measure runs while the page is still filling in — the Desk lays out once
+     with the query layer in flight — and a card that is briefly 40px tall asks
+     for tight on evidence that is gone a moment later. Nothing cleared it then
+     but a resize, so a 440x956 phone with room to spare was drawing the
+     tight Desk. TWICE the room, because the release has to be out of reach of
+     tight's OWN gain or it oscillates: tight hands the card back about a
+     quarter of its height (83px to 105px at 360x640, measured), and a release
+     at 1.25x sat exactly on that line — clear, shrink, re-enter, repeat, until
+     the page stopped rendering at all. Nothing short of a different layout
+     doubles the card. */
+  const tightAt = useRef(0);
+  /* ONE READING IS NOT EVIDENCE. Every false tight so far came from a layout
+     that was still moving: the Desk lays out once with the query layer in
+     flight, a tab switch re-flows the card a frame before its new rows are
+     measured, and in those frames the list is briefly a fraction of its height.
+     Acting on that gave a 390x844 phone the tight Desk on two of its three
+     tabs. So a shortfall has to be seen TWICE at the same card height before
+     anything is taken away from the page — the second look is asked for on the
+     next frame, and a layout that is still settling never gives the same
+     number twice. Capped, so a pathological page cannot spin here. */
+  const deficit = useRef({ avail: -1, hits: 0, asks: 0 });
+  useEffect(() => {
+    if (!roomy) return undefined;
+    const onResize = () => { setTight(0); setMaxRows(PHONE_ROWS); setFitTick((n) => n + 1); };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [roomy]);
+  /* Declared BEFORE the measure so that within one commit the attribute lands
+     first and the measure below reads the layout it produced. */
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    if (tight && roomy && !open) root.setAttribute("data-desk-tight", String(tight));
+    else root.removeAttribute("data-desk-tight");
+    return () => root.removeAttribute("data-desk-tight");
+  }, [tight, roomy, open]);
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    if (!roomy || open) { el.style.removeProperty("--desk-row-scale"); return; }
+    el.style.setProperty("--desk-row-scale", "1");
+    /* ASK THE ROWS, NOT THE BOX. The list's own scrollHeight never exceeds its
+       clientHeight here and never will: the rows are `flex-1 min-h-0`, so a
+       short container does not overflow, it SQUEEZES them — 19px boxes around
+       45px of words. The deficit is invisible from the outside and has to be
+       read off each row's content height instead. */
+    const kids = el.querySelectorAll("[data-row]");
+    if (!kids.length) return;
+    const avail = el.clientHeight;
+    if (!avail) return;
+    /* THE GAPS ARE PART OF WHAT HAS TO FIT. This added one pixel per seam —
+       true of the hairline the rows used to be separated by, and wrong since
+       they became pills with `gap-2.5` (10px) between them: the measure was
+       short by ~18px on every phone and the rows were scaled one notch too
+       large. Read the gap the list is actually drawn with. */
+    const gap = parseFloat(getComputedStyle(el).rowGap) || 1;
+    if (tight && avail > tightAt.current * 2) {      // the room came back
+      setTight(0); setMaxRows(PHONE_ROWS); return;
+    }
+    /* WHAT A ROW NEEDS — not what it was given, and not what it admits to.
+       Two readings were tried here and both are wrong in a way worth recording.
+       scrollHeight under-reports: the rows are `flex-1`, so a short card
+       SQUEEZES them, and a squeezed box clamps its own scrollHeight (31px
+       reported against 34 needed at 360x640), which hid exactly the deficit
+       this measure exists to find. offsetHeight over-reports in the other
+       direction: a row GROWS to fill a tall card, so on a 440x956 the sum came
+       back as the whole card and the measure concluded, every pass, that the
+       rows did not fit the space they were comfortably filling — scaling down
+       until it hit the floor and asked for a tight layout on the roomiest
+       phone there is.
+       Reading the tallest CHILD instead has the same fault one level down: a
+       Watch card's inner row is stretched by `align-items: stretch`, so it is
+       as tall as the card it is in, grown and all.
+       So the rows are asked directly: taken out of the sharing for one reflow
+       (`flex: 0 0 auto`), each one draws at exactly its content height, and
+       that is the number. Restored before this effect returns, so nothing is
+       ever painted in the measured state. Two reflows a pass, at most three
+       passes, on resize and on new data. */
+    const need = () => {
+      kids.forEach((k) => { k.style.flex = "0 0 auto"; });
+      let n = 0;
+      kids.forEach((k) => { n += k.offsetHeight; });
+      kids.forEach((k) => { k.style.flex = ""; });
+      return n + (kids.length - 1) * gap;
+    };
+    const DESK_ROW_SCALE_FLOOR = 0.8;                     // 11pt, see index.css
+    /* IT CONVERGES, IT DOES NOT ESTIMATE. One pass of avail/needed assumes a
+       row's height is proportional to the scale, and it is not quite: the gap
+       between the pills does not scale, and until this commit neither did the
+       open circle. So the single estimate always under-corrected, and the rows
+       at 375x667 were left ~6px short of their content with `overflow: hidden`
+       taking the difference out of the type. Applying the ratio and READING
+       AGAIN costs two reflows in an effect that runs on resize and on new data,
+       and it lands on the real answer rather than near it. */
+    let s = 1;
+    for (let pass = 0; pass < 3; pass += 1) {
+      const needed = need();
+      if (needed <= avail) return;                        // fits at this scale
+      s = Math.max(DESK_ROW_SCALE_FLOOR, s * (avail / needed));
+      el.style.setProperty("--desk-row-scale", s.toFixed(3));
+      if (s <= DESK_ROW_SCALE_FLOOR) break;
+    }
+    /* Still short at the floor: the type has gone as small as it is allowed to
+       and the card must be given room instead of cutting its contents. */
+    if (need() <= avail) { deficit.current = { avail: -1, hits: 0, asks: 0 }; return; }
+    /* Short — but only act on it once the same card height says so twice. */
+    const d = deficit.current;
+    if (d.avail !== avail) { deficit.current = { avail, hits: 1, asks: d.asks }; }
+    else d.hits += 1;
+    if (deficit.current.hits < 2) {
+      if (deficit.current.asks < 6) {
+        deficit.current.asks += 1;
+        requestAnimationFrame(() => setFitTick((n) => n + 1));
+      }
+      return;
+    }
+    /* TWO STAGES, AND THE WORDS GO LAST. Stage 1 takes air: the gaps between
+       the pills, the pill's own padding, the KPI tiles' padding, the page's
+       gaps, the Show-all control down to the 44px floor. Stage 2 is the only
+       one that costs information — the supporting line — and it is reached
+       only when stage 1 was not enough.
+       The split is not theoretical: an iPhone 17 in the simulator, with its
+       status bar and home indicator taken out of the 874pt, came up two pixels
+       short of three two-line rows. One flat tight level answered that by
+       dropping "Raised by Sunita Rao · You decide" from every row on a 6.3"
+       phone, to save a gap's worth of space. */
+    if (tight < 2) { if (!tight) tightAt.current = avail; setTight(tight + 1); return; }
+    /* Tight too, and still short at the floor: seat ONE fewer row and measure
+       again (see maxRows above). One step at a time, never a division — an
+       arithmetic guess at how many "would" fit is taken against rows that are
+       currently squeezed, and it overshot on the first cut: a 375x667 that
+       seats three dropped to two and a 360x640 to one. Stepping down converges
+       on the real answer in at most two more passes and cannot overshoot,
+       because every pass is a fresh measurement of what is actually drawn. */
+    if (s <= DESK_ROW_SCALE_FLOOR && maxRows > 1) setMaxRows(maxRows - 1);
+  }, [roomy, open, rows, loading, fitTick, tight, maxRows]);
 
   /* ASK-35 1.1 — THREE, AND THEN A CONTROL: the Desk's job on a phone is to say
      what is waiting, not to show it all.
@@ -528,7 +788,7 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
      what knows where the card has to grow to. A card cannot own a state the
      page has to act on. */
   // ASK-42 A — three, always (see the measure above); "Show all" is the rest.
-  const shown = showAll ? rows : rows.slice(0, PHONE_ROWS);
+  const shown = showAll ? rows : rows.slice(0, maxRows);
   const hidden = rows.length - shown.length;
 
   return (
@@ -589,12 +849,31 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
           the whole list in that one frame and then sizes the card to it, which
           a fixed height would have clipped to three rows again. */}
       <div
-        className={cn(PHONE_CARD_INK, "mt-1.5 min-h-0 rounded-tile p-2.5",
-          scrolls ? "flex flex-1 flex-col" : !open && "flex flex-col")}
-        style={!open ? { height: "calc(var(--desk-phone-body) + 1.25rem)" } : undefined}
+        /* NO CARD UNDER THE ROWS IN THE SHEET (2026-10-05, founder). The
+           gradient plate was a second black box inside a black box, and once
+           each row carries its own container it is drawing a border around
+           nothing. The sheet's own ink is the ground now, and the padding goes
+           with it — the pills bring their own. */
+        className={cn(!roomy && PHONE_CARD_INK, "mt-1.5 min-h-0 rounded-tile",
+          roomy ? "px-0.5" : "p-2.5",
+          scrolls ? "flex flex-1 flex-col" : !open && "flex flex-col",
+          roomy && !open && "flex-1")}
+        /* ROOMY RELEASES THE FIXED HEIGHT. --desk-phone-body pins the body to
+           three rows and the show-all slot, which is exactly right when the
+           card hugs its content and the slack below is the sheet's black. In
+           the sheet proposal the slack is the thing being removed: the card
+           takes the sheet's height and the rows share it. */
+        style={!open && !roomy ? { height: "calc(var(--desk-phone-body) + 1.25rem)" } : undefined}
         data-testid={`${testid}-card`}
       >
-        <div className={scrolls ? "kr-scroll-quiet min-h-0 flex-1 overflow-y-auto" : !open ? "flex min-h-0 flex-1 flex-col" : undefined}>
+        {/* gap-2 in the sheet: the pills are separate objects now, and the
+            space between them is what says so. */}
+        <div ref={listRef} className={cn(
+          scrolls ? "kr-scroll-quiet min-h-0 flex-1 overflow-y-auto" : !open ? "flex min-h-0 flex-1 flex-col" : undefined,
+          /* kr-desk-sheet-list — the one handle index.css needs to tighten the
+             space between the pills when the card is tight (see data-desk-tight
+             above); the gap itself stays Tailwind's. */
+          roomy && !open && "kr-desk-sheet-list gap-2.5")}>
         {children || (
           <>
             {loading && (
@@ -610,7 +889,7 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
               <div className="m-auto py-3 text-center text-sm text-neutral-500" data-testid={`${testid}-empty`}>{empty}</div>
             )}
             {!loading && shown.map((r, i) => (
-              <DeskRow key={r.id} r={r} first={i === 0} testid={`desk-${tab}`} />
+              <DeskRow key={r.id} r={r} first={i === 0} roomy={roomy} testid={`desk-${tab}`} />
             ))}
           </>
         )}
@@ -628,8 +907,17 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
             unambiguous about. */}
         {/* ASK-49 — and when there is nothing more to show, its SPACE stays:
             an empty slot the same 48px, so a tab with two rows is not shorter
-            than a tab with thirty. */}
-        {!children && !open && (loading || !(hidden > 0 || showAll)) && (
+            than a tab with thirty.
+            NOT IN THE SHEET (2026-10-05, founder). That reservation exists to
+            stop the card changing HEIGHT with its contents, which matters only
+            while the card hugs them. In the sheet the card is flex-1 — its
+            height is the sheet's whichever tab is open — so holding 44px back
+            for a control that is not there buys nothing and spends the one
+            thing the rows are short of. The founder spotted it as the gap
+            above the slider: "that space is left for the show more drop down
+            but since it's only three in the row we can utilize that remaining
+            space to increase the pill height". */}
+        {!children && !open && !roomy && (loading || !(hidden > 0 || showAll)) && (
           <div aria-hidden="true" className="mt-1 h-11 shrink-0" data-testid="desk-phone-more-slot" />
         )}
         {!children && !loading && (hidden > 0 || showAll) && (
@@ -638,7 +926,7 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
             data-testid="desk-phone-more"
             onClick={onToggleExpanded}
             aria-expanded={showAll}
-            className="mt-1 flex h-11 w-full shrink-0 items-center justify-center gap-1 text-[13px] font-medium text-white/70 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-0"
+            className="mt-1 flex h-11 max-lg:h-14 w-full shrink-0 items-center justify-center gap-1 text-[13px] max-lg:text-sm font-medium text-white/70 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-0"
           >
             {showAll ? t("desk.show_fewer", "Show fewer") : t("desk.show_all", { count: rows.length, defaultValue: `Show all ${rows.length}` })}
             <CaretDown size={12} weight="bold" aria-hidden="true" className={showAll ? "rotate-180" : ""} />
@@ -661,6 +949,19 @@ function StackCard({ tone, title, count, line, tail, loading, empty, to, testid 
     <Link
       to={to}
       data-testid={testid}
+      /* data-row — THE SHEET'S FIT MEASURE COUNTS THESE TOO (2026-10-06).
+         PhoneTabCard sizes the sheet's rows by asking every [data-row] in the
+         list how much height its content needs; Watch's cards carried no such
+         mark, so on a short screen the three rows in the other tabs were
+         scaled to fit and these were left at full size to overflow the card.
+         One attribute puts them under the same rule. Inert off the sheet: the
+         measure only runs on the phone's roomy card. */
+      data-row=""
+      /* min-h-0 is the DESKTOP's: there the three cards share one column and
+         must be allowed to shrink. In the phone's sheet the list's own rule
+         (.kr-desk-sheet-list [data-row], index.css) overrides it with a
+         min-content floor, which is what stops a row being squeezed under its
+         own words — see that rule for why it has to exist at all. */
       className={`kr-glass kr-lift ${TONE[tone]} flex min-h-0 flex-1 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70`}
     >
       {/* ASK-43 — ON A PHONE THIS CARD IS A ROW. Watch's three feeds sat at
@@ -675,12 +976,19 @@ function StackCard({ tone, title, count, line, tail, loading, empty, to, testid 
         <div className="flex min-w-0 flex-col gap-1 max-lg:gap-0.5">
           <div className="flex min-w-0 items-center gap-2 max-lg:gap-1.5">
             <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full bg-[hsl(var(--kr-glass-from))] max-lg:h-2 max-lg:w-2" />
-            <h3 className="text-base font-medium tracking-[-0.006em] text-white/85 max-lg:text-[15px] max-lg:leading-5">{title}</h3>
+            {/* kr-desk-row-title/meta below lg (2026-10-06): the SAME two rules
+                the sheet's pills are written against, so Watch's cards and the
+                Decisions rows are one typeface at one size and bend by the same
+                --desk-row-scale when a short screen needs them smaller. The
+                max-lg sizes these used to carry were a copy of DeskRow's taken
+                before the sheet existed, and the two had since drifted apart —
+                15/12 here against 17/15 there. Desktop (lg:) is untouched. */}
+            <h3 className="kr-desk-row-title text-base font-medium tracking-[-0.006em] text-white/85 lg:text-base lg:leading-6">{title}</h3>
             <CountPill n={count} onInk />
           </div>
           {loading
             ? <div className="ds-skeleton h-4 w-2/3 rounded-control" aria-hidden="true" />
-            : <p className="truncate text-sm text-neutral-300 max-lg:text-xs max-lg:leading-4">
+            : <p className="kr-desk-row-meta truncate text-sm text-neutral-300 lg:text-sm lg:leading-5">
                 {line
                   ? <>{line}{tail && <span className="text-neutral-500"> &middot; {tail}</span>}</>
                   : <span className="text-neutral-500">{empty}</span>}
@@ -732,6 +1040,38 @@ export default function Desk() {
   // E2-66: deep-link from a decision-focused nudge notification.
   const [searchParams] = useSearchParams();
   const focusDecisionId = searchParams.get("decision");
+  /* THE PHONE'S KPI GRID, approved 2026-10-02 and no longer a proposal.
+     The founder saw the Desk on their own iPhone 13 mini: "Spend, this month"
+     was a tall, almost empty tile whose own label had truncated to "Spend,
+     this…", and Workflows was carrying a stacked pair of buttons in two thirds
+     of a row. Dropping Spend frees a column; Workflows takes it and comes down
+     to the top row's height, with its two moves as a tick and an arrow.
+     Judged in /design-lab at three device sizes before it shipped — the lab's
+     comparison still renders both, and ?kpi=wide is kept so "what ships" and
+     "what was proposed" can still be put side by side there.
+     DESKTOP IS UNTOUCHED: it has the width for five tiles and the room for the
+     tall card, and neither of the founder's complaints exists there. */
+  const kpiWide = isMobile || searchParams.get("kpi") === "wide";
+  /* THE SHEET IS THE PHONE'S DESK (approved 2026-10-02).
+     Today the phone's Desk is three stacked blocks: the black sheet, then the
+     slider, then the dock. The founder wants two: the sheet becomes the
+     primary container and runs all the way down to the dock, with the slider
+     sitting ON it rather than beside it.
+     What does NOT change is the gradient card's width — it keeps the three rows
+     and the "Show all"; the sheet grows around it and the rows grow inside it.
+
+     ?desk=sheet survives so /design-lab can still put the two side by side, and
+     so the old arrangement is one flag away rather than one revert away.
+     DESKTOP NEVER READS THIS: there is no slider up there and no sheet to put
+     one on.
+
+     IT BELONGS TO THE SLIDER, hence the DEX_SLIDER in the condition. Written as
+     `isMobile ||` first, which silently took the Dex WELL off the flag-off
+     phone entirely: the well renders in the branch this arrangement replaces,
+     and the control the sheet carries only exists when the flag is on. The
+     flag's promise is that turning it off puts the product back exactly as it
+     was, and for one build it did not. verify:dex caught it. */
+  const deskSheet = (isMobile && DEX_SLIDER) || searchParams.get("desk") === "sheet";
   // KM-28 — ?decision=<id> redirects to the page rather than raising the
   // modal behind the Desk, so a notification and a tap land in the same place.
   // ?decision=<id> (notifications, pasted links) opens the same popup over
@@ -804,6 +1144,46 @@ export default function Desk() {
      feed and the task list the KPI tiles read, so the row leaves the column
      the moment it is signed off. */
   const qc = useQueryClient();
+  // DEX-SLIDER Part 2 — Ask lives in Layout; the slider reaches it from here.
+  const doors = useDexDoors();
+
+  /* ASK AND DECIDE LEFT THIS PAGE (2026-10-06). Both now live on the one
+     control the app has everywhere — the dock, which is the slider (see
+     components/mobile/DockSlider). The founder: "remove the slider container
+     from the home screen desk and make this dock change universal." So the
+     Desk is a Desk again: a greeting, a score, the KPI grid and the sheet of
+     decisions, with nothing here that talks to Dex. */
+  /* DEX-SLIDER Part 3 — the slider's right end. useBackDismiss is what makes
+     the Android back button and the iOS edge swipe close it: it puts a marker
+     entry on history while the door is open, and both gestures pop that. One
+     behaviour, described once. */
+  /* DEX-SLIDER — THE SLIDER'S RIPPLE BORROWS THE CAPTURE'S METER. The door
+     (DeskDexWell, mounted below) owns the microphone; a second useDexCapture
+     here would be a second MediaRecorder on the same device. So the door hands
+     its reader up and the slider calls it per animation frame. Both halves are
+     stable so neither the door nor the slider re-renders for this, and the
+     reader is a ref read — KM-60's rule that the meter never touches state
+     above the component that owns it still holds. */
+  /* DEX-SLIDER (2026-10-02) — THE SLIDER IS THE RECORDING SURFACE. DeskDexWell
+     still owns the microphone, the conversation, the one-at-a-time guard and
+     the pop-up; it just does not draw any more. It publishes that state here
+     and the slider draws it. `recording` has to be React state because the
+     track's contents change with it; the loudness does not, and stays a ref
+     reader so the meter never re-renders anything (KM-60). */
+  const dexStopRef = useRef(null);
+  const [dexLive, setDexLive] = useState({ recording: false, capturing: false, levelsRef: null });
+  const dexMeterRef = useRef(null);
+  const onDexMeter = useCallback((c) => {
+    dexMeterRef.current = c.readLevel;
+    dexStopRef.current = c.stop;
+    setDexLive((prev) => (
+      prev.recording === c.recording && prev.capturing === c.capturing && prev.levelsRef === c.levelsRef
+        ? prev
+        : { recording: c.recording, capturing: c.capturing, levelsRef: c.levelsRef }
+    ));
+  }, []);
+  const dexMeter = useCallback(() => (dexMeterRef.current ? dexMeterRef.current() : 0), []);
+  const dexStop = useCallback(() => dexStopRef.current?.(), []);
   /* JOURNEY-1 J13 — on a slow line the phone's saved copy stands in for the
      server after 3 s (service-worker.js), and the Desk used to show those
      numbers as if they were live. Now it says when they are from. */
@@ -1003,7 +1383,7 @@ export default function Desk() {
       <span className="inline-flex items-center justify-center gap-1.5">
         {label}
         {n > 0 && (phoneTab === key ? (
-          <span className="grid h-5 min-w-[1.25rem] place-items-center rounded-full bg-white/25 px-1 text-[11px] font-semibold tabular-nums text-white">
+          <span className="grid h-5 max-lg:h-6 min-w-[1.25rem] place-items-center rounded-full bg-white/25 px-1 text-[11px] max-lg:text-[14px] font-semibold tabular-nums text-white">
             {n}
           </span>
         ) : (
@@ -1038,6 +1418,12 @@ export default function Desk() {
     onOpen: () => setOpenDecisionId(c.target_id),
     // PILOT-2 B — read, then saved as a draft. The row says so, on any device.
     deferred: isDraft(c, draftMarks),
+    /* The band the sheet's pill is tinted by (2026-10-05). Computed on the
+       server as the highest priority among the tasks this decision proposes —
+       work the founder can already see and set in the review card — so the
+       colour is never something the Desk guessed on its own. Falls back to
+       low, which is also what a decision proposing nothing reads as. */
+    priority: c.priority || "low",
   }));
   /* ASK-41 1 — the row opens the task; TaskCard's drawer is where it is
      approved or rejected. Its approval block carries both, and the reject there
@@ -1105,6 +1491,9 @@ export default function Desk() {
            every phone, shrinking only on the very shortest. Nothing grows into
            the freed space; the top-aligned stack just slides up when the demo
            banner closes. */
+        /* DEX-SLIDER — untouched. With the flag ON the slider takes this
+           slot and the well is not rendered at all; with it OFF this is the
+           17rem well exactly where it has always been. */
         ? "min-h-[13rem] h-[17rem] flex flex-col"
         : "order-4 min-h-[128px] max-lg:flex max-lg:flex-col lg:order-none lg:min-h-0 lg:flex-1"
     )}
@@ -1152,6 +1541,14 @@ export default function Desk() {
       data-cached={cachedAt ? "true" : undefined}
       className={cn(
         "flex flex-col gap-3 lg:gap-6 lg:min-h-0 lg:flex-1",
+        /* DEX-SLIDER Part 1 (capped) — WHERE THE SLACK GOES, and it is the
+           brief that decides, not taste. The card sits DIRECTLY on the slider
+           and the slider directly on the dock, so no gap is allowed between
+           those three. Capping the tiles means the space has to land
+           somewhere, and the only seam left is between the tiles and the card.
+           Spreading it evenly (justify-between) was tried and rejected: it put
+           ~105px between the card and the slider, which is exactly the
+           adjacency the brief forbids. */
         /* ASK-42 A — h-full, not a copy of the shell's arithmetic. This was
            `100svh - env(safe-area-inset-top) - 1.5rem`: the viewport, less what
            the shell puts above <main>, guessed from here. It was right until
@@ -1185,7 +1582,40 @@ export default function Desk() {
           the well, so eight pixels each is 24 handed to the sheet — and on a
           6.1" screen with a 47px notch inset and a 34px home indicator, 24px is
           what a row of the list costs. Desktop is untouched. */}
-      <div className="kr-hero flex flex-col gap-3 lg:grid lg:shrink-0 lg:grid-cols-[minmax(0,29fr)_minmax(0,45fr)] lg:gap-20">
+      <div className={cn("kr-hero flex flex-col gap-3 lg:grid lg:shrink-0 lg:grid-cols-[minmax(0,29fr)_minmax(0,45fr)] lg:gap-20",
+          /* DEX-SLIDER Part 1 — THE TILES TAKE THE SLACK. The slider gives back
+             about 150px that the 17rem well was holding. Rather than type a new
+             tile height (which would be right on one phone and wrong on the
+             next), the hero takes the leftover and the tile row grows inside
+             it, floored at its own resting height so the shortest phones never
+             crush it. lg is untouched. */
+          /* …AND THAT WAS WRONG, on a real iPhone (2026-10-01). `flex-1` on the
+             hero meant the hero ate every spare pixel, and since the tiles are
+             capped the space had nowhere to go but into a 199px void between
+             the tiles and the black card — measured at 390x844. The founder saw
+             it immediately and rearranged the screen by hand.
+             The slack belongs to the BOARD: it is a list, it is the one block
+             that can use height, and giving it the leftover makes all three
+             seams the page's single gap instead of one 199px hole and two
+             33px ones. The hero is now exactly as tall as the greeting, the
+             score and the tiles need. */
+          /* 2026-10-06 — AND NOW IT GROWS AGAIN, with the thing that made it
+             wrong last time removed. The slider left the sheet and the founder
+             put its room into the tiles: "cover it by increasing the scale and
+             size of the workflow tile and any other tile of the KPI grid." The
+             199px void happened because a growing hero handed space to tiles
+             that could not take it; the grid stretches now (auto-rows-fr, no
+             fixed tile height) so the space lands IN the tiles, and the grid is
+             capped so a tall phone cannot make a numeral float in the middle of
+             nothing. Measured on three screens below. */
+          /* 2026-10-06 — CONTENT-SIZED AGAIN. The hero grew while the tiles were the
+             only thing in it that could use height; the full Workflows card can
+             use it all by itself, and a stretched hero was CLIPPING it — the
+             card asked for ~260px, the row gave it 200, and the sheet painted
+             over the rest. The hero is exactly as tall as the greeting, the
+             three tiles and the card need; the board takes what is left, as it
+             did before any of this. */
+          DEX_SLIDER && "order-1 shrink-0 lg:order-none")}>
         {/* LEFT column — greeting, the score row, the well on the floor.
             KR-14.2 · MOBILE — display:contents so its children flow into
             the outer column and the KPI strip can slot between them. */}
@@ -1210,7 +1640,7 @@ export default function Desk() {
                 lands inside the two lines rather than in an ellipsis. Two lines
                 at 22 is 56px against the score's 60, so it still cannot make
                 this row taller than the score does. */}
-            <h1 className="min-w-0 font-display text-xl leading-tight lg:text-[34px] lg:font-light lg:leading-[1.15]" data-testid="desk-brief-greeting">
+            <h1 className="min-w-0 font-display text-[1.65rem] leading-[1.15] lg:text-[34px] lg:font-light lg:leading-[1.15]" data-testid="desk-brief-greeting">
               {gi === -1
                 ? <span className="block truncate">{greeting || " "}</span>
                 : <>
@@ -1260,10 +1690,10 @@ export default function Desk() {
               aria-label="Operating score — open the score page"
               className="flex shrink-0 items-center gap-3 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 lg:hidden">
               <div className="flex items-baseline">
-                <span className="font-display text-6xl leading-none">{scoreReady ? shownScore : "—"}</span>
+                <span className="font-display text-[4.5rem] leading-none">{scoreReady ? shownScore : "—"}</span>
                 {scoreReady && <span className="ml-1 text-sm text-muted-foreground">/100</span>}
               </div>
-              <ArcGauge value={scoreReady ? shownScore : null} size={110} className="w-24 shrink-0 text-foreground" />
+              <ArcGauge value={scoreReady ? shownScore : null} size={132} className="w-28 shrink-0 text-foreground" />
             </Link>
           </div>
 
@@ -1335,72 +1765,27 @@ export default function Desk() {
           {!isMobile && dexWell}
         </div>
 
-        {/* KR-14.20 · MOBILE — the KPIs are four rounded rectangles in a
-            2×2 grid. Each card: label on the LEFT, icon + numeral aligned
-            to the RIGHT. Score-mix and Spend are dropped per the founder;
-            the four kept are Delayed, Complaints, Overdue and — ASK-52 —
-            Workflows, which took Net profit's place. */}
-        {/* ASK-35 2.3 — the pane grows over this now, so it fades with the
-            greeting above it. Anything it covers fades; anything it does not,
-            does not. */}
-        <div
-          className="order-3 grid grid-cols-2 gap-2 lg:hidden"
-         
-          data-testid="desk-kpi-strip"
-        >
-          {[
-            { icon: Timer, label: t("desk.delayed", "Delayed"),
-              value: shown(m.counters ? m.counters.delayed : m.work?.overdue, m.failed?.summary && m.failed?.tasks),
-              urgent: (m.counters?.delayed ?? m.work?.overdue ?? 0) > 0,
-              to: "/my-work?filter=overdue", testid: "kpi-delayed-m" },
-            ...(seesComplaints ? [{ icon: ChatCircleText, label: t("desk.complaints", "Complaints"),
-              value: shown(m.complaints?.value, m.failed?.summary),
-              urgent: (m.complaints?.new_7d || 0) > 0,
-              to: "/crm", testid: "kpi-complaints-m" }] : []),
-            ...(seesMoney ? [{ icon: HandCoins, label: t("desk.overdue", "Overdue"),
-              value: m.cash ? inrCompact(m.cash.overdue) : shown(null, m.failed?.summary),
-              urgent: (m.cash?.overdue || 0) > 0,
-              to: "/finance?tab=revenue&filter=overdue", testid: "kpi-collect-m" }] : []),
-            /* ASK-52 · the fourth pill is the boards, not the ledger. It
-               carries the desktop card's headline number and nothing else
-               the card carries: how many cards need attention, out of how
-               many are running — the same workflowAttention() the tile
-               reads, so the phone and the desktop cannot disagree. The
-               you/stuck/late split, the Next up card and its move stay on
-               the desktop: a pill has no room for them, and no room for a
-               button inside something that is itself a link. Net profit
-               keeps its home on /finance, where this pill used to go.
-               RETIRED TESTID: kpi-profit-m (no test referenced it). */
-            ...(seesWorkflows ? [{ icon: FlowArrow, label: "Workflows",
-              value: workflowsQ.isError && !workflowsQ.data ? "—"
-                : workflowsQ.isLoading ? "…" : String(wfAttention.needAttention),
-              sub: workflowsQ.isLoading || (workflowsQ.isError && !workflowsQ.data) ? null : `/${wfAttention.total}`,
-              urgent: wfAttention.needAttention > 0,
-              to: "/workflows", testid: "kpi-workflows-m" }] : []),
-          ].map((k) => (
-            /* ASK-42 A — p-2.5 below lg (p-3 from lg up): 4px off each tile is
-               8px off the strip, and the strip is two rows deep. */
-            <Link key={k.testid} to={k.to} data-testid={k.testid}
-              className="flex min-w-0 items-center justify-between gap-2 rounded-[1.1rem] bg-white/75 p-2 lg:p-3 ring-1 ring-inset ring-white/80 shadow-[0_8px_22px_-14px_hsl(150_15%_20%/0.3)] backdrop-blur-xl">
-              <p className="min-w-0 truncate text-xs font-medium text-foreground/80">{k.label}</p>
-              <span className="flex shrink-0 items-center gap-1.5">
-                <k.icon size={13} weight="regular" aria-hidden="true" className="text-muted-foreground" />
-                {/* The number, and — where a pill has one — the total it
-                    is out of, in the desktop tile's own shape. */}
-                <span className="inline-flex items-baseline">
-                  <span className={`font-display text-base leading-none tabular-nums ${k.urgent ? "text-kr-accent" : ""}`}>
-                    {k.value}
-                  </span>
-                  {k.sub && (
-                    <span className="ml-0.5 text-[11px] font-medium leading-none tabular-nums text-muted-foreground">
-                      {k.sub}
-                    </span>
-                  )}
-                </span>
-              </span>
-            </Link>
-          ))}
-        </div>
+        {/* KR-14.20 / ASK-42 / ASK-52 — THE FOUR PHONE PILLS ARE GONE
+            (2026-10-01). They were a 2x2 of label-left / number-right
+            rectangles: a reduction of the desktop tiles rather than the tiles
+            themselves, so the two could and did drift — the pills carried no
+            icon chip, no alert dot, no sparkline, no Workflows "next up" and a
+            different set of five. The founder asked for the desktop grid
+            itself on the phone, scaled to fit, with the same behaviour and the
+            same routing. That is what is below: ONE grid for both, which is
+            also the only way they cannot disagree again.
+            RETIRED TESTIDS: kpi-delayed-m, kpi-complaints-m, kpi-collect-m,
+            kpi-workflows-m and desk-kpi-strip. Nothing in any suite referenced
+            the four pills; desk-kpi-strip was measured by verify:slider and is
+            re-homed to desk-kpi-grid in this same commit. The desktop testids
+            (kpi-delayed, kpi-complaints, kpi-collect, kpi-workflows, kpi-spend)
+            now answer on both. */}
+        {/* MERGE 2026-10-04 — the branch we merged still carried the four
+            phone pills (desk-kpi-strip, kpi-*-m). They are not coming back:
+            they were retired above on purpose and the grid below is the
+            design the founder approved. Taken from that side instead: the
+            seesWorkflows gate on the Workflows card, which is an RBAC fix,
+            not a layout one. */}
 
         {/* RIGHT — the 3×2 grid. Six honest tiles; Score mix is the glass one.
             KR-8.6 · 3 columns from lg, 12px gutters, auto-rows-fr so the two
@@ -1409,8 +1794,56 @@ export default function Desk() {
             column got shorter (the numeral, the gauge and the well all took a
             step down); the tiles follow, they are not sized on their own. */}
         {/* ASK-52 — still three columns and two rows; the second row is the
-            two-wide Workflows card plus one tile. */}
-        <div className="order-3 hidden min-w-0 grid-cols-2 gap-3 lg:order-none lg:grid lg:auto-rows-fr lg:grid-cols-3" data-testid="desk-kpi-grid">
+            two-wide Workflows card plus one tile.
+            ASK-INLINE — AND IT FOLDS AWAY WHILE ASK IS OPEN. The founder set
+            the ceiling of the chat at the greeting and the score: "the KPI grid
+            will become removed and the black sheet will increase its height
+            until the entire KPI grid area... so below the greeting and score
+            the screen of the black sheet will start". Unmounted rather than
+            hidden, so the sheet's flex-1 simply takes the room — no height to
+            animate and nothing left measuring itself behind the chat. */}
+        <div className={cn(
+          /* ONE GRID, BOTH SIZES. Three columns on a phone as well as on
+             desktop — which sounds wrong until you remember --ui-scale: the
+             app runs at zoom .8, so a 390px phone is a 487px CSS viewport and
+             a third of it is ~154px. StatTile's own notes size its phone
+             layout for 133.5px, so these columns are wider than the ones it
+             was already built for. The arrangement is the desktop's unchanged:
+             the three tiles that can raise an alert dot on the top row, and
+             Workflows two-wide beside the quiet money number below. */
+          "order-3 grid min-w-0 grid-cols-3 gap-2",
+          /* 2026-10-06 — THE TWO ROWS ARE NOT EQUAL ANY MORE. auto-rows-fr made
+             them so, which is right when both carry a number and wrong now the
+             second carries the full Workflows card — a split bar, a stuck
+             card, two buttons. The founder's instruction was explicit about
+             which way the trade goes: "you can increase the height however you
+             want... even by reducing the height of the other 3 tiles above,
+             since they have empty space left with no content to show." So the
+             top row is content-sized (floored, never crushed) and the card
+             takes everything else. */
+          /* No forced height. The first cut pinned the grid to 14rem with
+             auto-rows-fr so the second row could not be taller than the first —
+             and the card simply overflowed and vanished behind the black card,
+             because the TALL arrangement does not fit in half of that. It is a
+             different arrangement now (WorkflowsTile `wide`), short by
+             construction, so the honest thing is to let it be its own height
+             and MEASURE how close the two rows come. The lab prints both. */
+          /* auto-rows-fr IS DESKTOP'S, deliberately. There the grid's floor has
+             to land on the well's floor, so equal rows are the point. On the
+             phone equal rows are the problem: StatTile pushes its numeral down
+             with mt-auto, so a stretched row puts the label at the top, the
+             number at the bottom and a hole between them — 143px tall tiles
+             full of nothing, which is the complaint this grid was brought in to
+             answer. Content-sized rows here; the slack belongs to the card.
+             2026-10-06 — AND NOW THE SLACK BELONGS TO THE GRID. Removing the
+             slider from the sheet gave the page back six rems, and the founder
+             wants them here rather than as black under the three rows: "the
+             empty space we can cover it by increasing the scale and size of the
+             workflow tile and any other tile of the KPI grid." So below lg the
+             grid takes a share of what is left and its rows stretch into it,
+             capped (--desk-kpi-cap) so a sparse Desk cannot make a 200px tile
+             with a number floating in the middle of it. */
+          "lg:order-none lg:auto-rows-fr lg:gap-3")} data-testid="desk-kpi-grid">
           <StatTile
             icon={Timer}
             label="Delayed"
@@ -1421,6 +1854,7 @@ export default function Desk() {
             to="/my-work?filter=overdue"
             countUp
             testid="kpi-delayed"
+            className={PHONE_TILE}
           />
           {seesComplaints && (
           <StatTile
@@ -1430,10 +1864,16 @@ export default function Desk() {
             urgent={(m.complaints?.new_7d || 0) > 0}
             alert={m.complaints?.new_7d > 0 ? m.complaints.new_7d : false}
             viz={m.complaints ? <CircleDots count={m.complaints.new_7d} /> : null}
-            meaning={m.complaints?.new_7d > 0 ? `${m.complaints.new_7d} new this week` : undefined}
+            /* NO "n new this week". It was the only `meaning` line in the grid,
+               and StatTile prints that under the numeral — so this one tile's
+               number sat a line higher than the other four and the row read as
+               misaligned. The alert dot on its chip already says there is
+               something new; the count belongs on /crm, where you can act on
+               it. Only this tile changes. */
             to="/crm"
             countUp
             testid="kpi-complaints"
+            className={PHONE_TILE}
           />
           )}
           {seesMoney && (
@@ -1445,6 +1885,7 @@ export default function Desk() {
             urgent={(m.cash?.overdue || 0) > 0}
             to="/finance?tab=revenue&filter=overdue"
             testid="kpi-collect"
+            className={PHONE_TILE}
           />
           )}
           {/* ASK-52 — THE WORKFLOWS CARD, TWO CELLS WIDE, where Weakest and Net
@@ -1453,14 +1894,23 @@ export default function Desk() {
               row, and this sits under them beside the one quiet money number.
               Its numbers come from workflowAttention, which the Workflows page
               can read later without the two disagreeing. */}
+          {/* 2026-10-06 — THE DESKTOP CARD COMES BACK TO THE PHONE. `wide` was
+              the squat two-column arrangement built when this card had to share
+              a short page with a slider; the slider has left and the founder
+              asked for the full one back — the split bar, "1 stuck · 8 late",
+              NEXT UP with the stuck card, Advance and Open Workflows. It needs
+              height, which the three tiles above give back (they were scaled up
+              with nothing to put in the space). */}
           {seesWorkflows && (
           <WorkflowsTile
             attention={wfAttention}
             loading={workflowsQ.isLoading}
-            className="lg:col-span-2"
+            onMoved={() => qc.invalidateQueries({ queryKey: ["workflows"] })}
+            wide={false}
+            className={cn("col-span-3 lg:col-span-2", PHONE_TILE)}
           />
           )}
-          {seesMoney && (
+          {seesMoney && !kpiWide && (
           <StatTile
             icon={Receipt}
             label="Spend, this month"
@@ -1470,6 +1920,7 @@ export default function Desk() {
               : null}
             to="/finance"
             testid="kpi-spend"
+            className={PHONE_TILE}
           />
           )}
         </div>
@@ -1505,7 +1956,24 @@ export default function Desk() {
           card is the last thing above the dock. Only the ORDER changes: the
           well still takes whatever height is left over (flex-1) and the card
           is still the fixed three rows it has been since ASK-46. */}
-      {isMobile && dexWell}
+      {/* THE DESK'S OWN DECIDE WELL IS GONE (2026-10-06). The slider left this
+          page, so `decideOpen` could never be set again — but the component was
+          still mounted, and DeskDexWell owns a useDexCapture. With Layout
+          mounting one for the dock's right end there were TWO recorders on the
+          screen, and the microphone went to neither: the well published
+          recording:false for the whole capture, so the handle's stop toggled
+          the mic ON instead of handing over to the pop-up. verify:slider and
+          verify:dex both stopped at exactly that step, and both passed at the
+          commit before. One well, in Layout, where the control now is. */}
+      {/* DEX-SLIDER Part 2's slider is gone (2026-10-06) — the dock carries it
+          on every page now. The WELL is not: it is the other branch of the
+          flag and renders exactly as it always has when DEX_SLIDER is off. */}
+      {isMobile && !deskSheet && !DEX_SLIDER && dexWell}
+      {/* DEX-SLIDER Part 3 — the door the right end opens. The SAME component
+          the well is, in its overlay surface: same capture hook, same pop-up
+          handover, same one-at-a-time guard. Mounted whenever the slider is,
+          so the capture machinery and a kept draft survive the door being
+          shut, exactly as they survive leaving the well. */}
 
       {/* ASK-47 — NOTHING ELSE MOVES. The card goes `position: fixed` when it
           pops, which takes it out of the page's column; this holds its place at
@@ -1575,6 +2043,47 @@ export default function Desk() {
         } : undefined}
         className={cn(
           "kr-desk-board grid gap-5 lg:-mx-3 lg:-mb-2 lg:min-h-0 lg:flex-1 lg:gap-0 lg:grid-rows-[minmax(0,1fr)]",
+          /* DEX-SLIDER Part 1 — the card and the Dex control swap places on a
+             phone: the card sits directly on the slider, the slider directly
+             on the dock. Order only — the card is the same card, the same
+             three rows, the same pop. lg keeps its own order entirely. */
+          /* DEX-SLIDER (2026-10-01) — the board takes the slack now. See the
+             hero's note: it used to be `shrink-0` while the hero grew, which
+             is what opened the void above it. */
+          DEX_SLIDER && "order-2 min-h-0 flex-1 lg:order-none lg:flex-none",
+          /* The sheet proposal: a flex column rather than a grid below lg, so
+             the card can sit at the top at its own height and the control at
+             the floor, and `mb-1` is the seam the slider used to carry — the
+             sheet now runs to the dock.
+             THE BOTTOM CORNERS FOLLOW THE SLIDER, which is the thing now
+             sitting in them. Nested rounded shapes only look right when the
+             outer radius is the inner one PLUS the gap between them — 48px of
+             pill on the slider, 8px of side padding, which is 3.5rem. The top
+             corners are untouched: nothing has changed up there, and a sheet
+             with two different radii top and bottom is correct here because
+             the two ends are doing different jobs. */
+          /* THE FOOT OF THE SHEET SITS AS CLOSE TO THE DOCK AS THE KPIs SIT TO
+             ITS HEAD. (2026-10-05.) Founder: "the space between the dock and
+             the black sheet is quite high and not even with the space between
+             the black sheet and the KPI grid at the top."
+             Measured, both in visual px: 10 above, 19 below. Above is the
+             column's own `gap-3`; below is --dock-clear's 100px of foot
+             padding, which reserves room for a dock that is 4.5rem tall and
+             sits 0.75rem off the floor — generous by 11.75 CSS px once the
+             sheet runs to the dock rather than stopping short of it. The
+             margin gives those back. It is a constant, not a ratio, so the
+             pair stays even on every screen — which is the lock the founder
+             asked for and the measurements below confirm. */
+          /* 2026-10-06 — AND THE BOTTOM CORNERS GO BACK TO THE CARD'S OWN.
+             The 3.5rem above was cut for the slider that used to sit inside the
+             sheet's foot — an outer radius that was the pill's 48px plus the
+             8px either side of it. The slider left for the dock two commits
+             ago and the reasoning left with it, so the sheet was wearing a
+             56px curve at the bottom against 24px at the top for no object at
+             all. Founder: "all corners should have the same corner radius."
+             Nothing here now: .kr-desk-board's own --radius-tile applies to
+             all four. */
+          deskSheet && "max-lg:-mb-2 max-lg:flex max-lg:flex-col",
           showDecisions && "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]",
           /* PILOT — the card stays its minimal content height on a phone (it does
              NOT grow to fill). The stack is top-aligned, so closing the demo
@@ -1587,6 +2096,7 @@ export default function Desk() {
         {isMobile && (
         <PhoneTabCard
           tone={phoneTab === "decisions" ? "needs" : phoneTab === "approvals" ? "flag" : "today"}
+          roomy={deskSheet}
           testid="desk-phone-card"
           tabs={phoneTabs}
           tab={phoneTab}
@@ -1603,7 +2113,17 @@ export default function Desk() {
           {/* Watch is three feeds, not a list of rows: they keep the cards they
               already had, which are links to the pages that hold the detail. */}
           {phoneTab === "watch" ? (
-            <div className="flex flex-col gap-2.5" data-testid="desk-watch">
+            /* 2026-10-06 (founder) — WATCH FILLS THE CARD, LIKE THE OTHER TWO
+               TABS. This was a plain `flex flex-col`: it hugged its three
+               cards at their content height (42px each) and left ~190px of
+               black under them at 390x844, while Decisions beside it drew
+               83px pills down to the floor of the same box. Switching tabs
+               changed the scale of the whole sheet.
+               `min-h-0 flex-1` is all it takes — the cards are already
+               `flex min-h-0 flex-1` (StackCard), so with a parent that has a
+               height to give they share it exactly the way DeskRow's pills do,
+               and the two tabs measure the same. */
+            <div className="flex min-h-0 flex-1 flex-col gap-2.5" data-testid="desk-watch">
               <StackCard
                 tone="today"
                 title="Due today"
@@ -1649,6 +2169,12 @@ export default function Desk() {
         </PhoneTabCard>
         )}
 
+        {/* THE CONTROL, ON THE SHEET. `mt-auto` is what puts it at the sheet's
+            floor rather than directly under the card: the board is a flex
+            column in this variant, the card keeps its content height at the
+            top, and the slack between them belongs to the sheet. */}
+        {/* The slider that used to sit here is gone (2026-10-06): one Dex
+            control, and it is the dock. */}
         {!isMobile && showDecisions && (
           <DeskCard
             tone="needs"

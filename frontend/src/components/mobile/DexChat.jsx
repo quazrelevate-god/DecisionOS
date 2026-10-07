@@ -2,7 +2,7 @@ import * as React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, PresenceContext, motion } from "framer-motion";
 import {
-  Plus, X, Paperclip, Camera, Keyboard, Microphone, Check, Sparkle, WarningCircle,
+  Plus, X, Paperclip, Camera, Keyboard, Microphone, Check, Sparkle, WarningCircle, Lock,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { ENDING_STATUSES, OUTCOME_COPY, isReading, stageLabel } from "@/lib/dexOutcome";
@@ -76,7 +76,7 @@ const ACTION = "flex h-11 items-center rounded-pill px-4 text-sm focus-visible:o
 const ACTION_MAIN = cn(ACTION, "h-14 min-h-touch-lg px-6 bg-[#fff] font-semibold text-kr-ink");
 const ACTION_QUIET = cn(ACTION, "bg-white/10 font-medium text-white hover:bg-white/20");
 
-function Outcome({ o, onReview, onRetry, onDismiss, retryDisabled }) {
+export function Outcome({ o, onReview, onRetry, onDismiss, retryDisabled }) {
   if (o.kind === "ready") {
     return (
       <div data-testid="dex-outcome-ready">
@@ -144,7 +144,7 @@ function Outcome({ o, onReview, onRetry, onDismiss, retryDisabled }) {
    a filename is not a preview of a photograph); everything else shows the
    paperclip and its name. The object URL is revoked on unmount — these are
    megabyte-sized blobs and the sheet can hold several. */
-function AttachedChip({ file, onRemove, disabled }) {
+export function AttachedChip({ file, onRemove, disabled }) {
   const isImage = !!file.file && (file.type || "").startsWith("image/");
   const [src, setSrc] = React.useState(null);
   React.useEffect(() => {
@@ -153,22 +153,34 @@ function AttachedChip({ file, onRemove, disabled }) {
     setSrc(url);
     return () => URL.revokeObjectURL(url);
   }, [isImage, file.file]);
+  /* SQUARE, AND BIG ENOUGH TO BE A PREVIEW. It was a 24px circle, which is a
+     bullet, not a preview of a photograph of a delivery note — and a circle
+     crops the corners off the one thing it is meant to show. 40px square with
+     the control radius.
+     WHILE IT UPLOADS it is blank and pulsing, the ordinary thing every app
+     does. The founder's objection was to the transcript saying "Thinking…"
+     over an upload, which is not what is happening; this is what is happening,
+     drawn where it happens. */
+  const uploading = !!file.uploading;
   return (
-    <li className="flex h-8 max-w-[11rem] items-center gap-1.5 rounded-pill bg-white/15 pl-1 pr-0.5 text-[11px] text-white/85">
-      {src
-        ? <img src={src} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />
+    <li className="flex h-12 max-w-[13rem] items-center gap-2 rounded-[1.1rem] bg-white/15 p-1 pr-1 text-[14px] text-white/85">
+      {uploading
+        ? <span className="ds-skeleton h-10 w-10 shrink-0 rounded-control" aria-hidden="true" />
+        : src
+        ? <img src={src} alt="" className="h-10 w-10 shrink-0 rounded-control object-cover" />
         : (
-          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white/10">
-            <Paperclip size={11} weight="bold" aria-hidden="true" />
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-control bg-white/10">
+            <Paperclip size={14} weight="bold" aria-hidden="true" />
           </span>
         )}
-      <span className="min-w-0 truncate" title={file.name}>{file.name}</span>
+      <span className={cn("min-w-0 truncate", uploading && "text-white/55")}
+            title={file.name}>{uploading ? "Uploading…" : file.name}</span>
       {/* 24px drawn; the app's touch rule gives the button 44px below lg and
           the row's own height keeps it from colliding with the chip beside it. */}
       <button
         type="button"
         onClick={onRemove}
-        disabled={disabled}
+        disabled={disabled || uploading}
         aria-label={`Remove ${file.name}`}
         className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-white/60 hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-40"
       >
@@ -178,17 +190,62 @@ function AttachedChip({ file, onRemove, disabled }) {
   );
 }
 
+/** A file that went out with a message: a thumbnail above the bubble, on the
+ *  bubble's own side, opening full size when pressed. */
+function SentFile({ file, onOpen }) {
+  const isImage = !!file.file && (file.type || "").startsWith("image/");
+  const [src, setSrc] = React.useState(null);
+  React.useEffect(() => {
+    if (!isImage || !file.file) return undefined;
+    const url = URL.createObjectURL(file.file);
+    setSrc(url);
+    return () => URL.revokeObjectURL(url);
+  }, [isImage, file.file]);
+  const body = src
+    ? <img src={src} alt={file.name} className="h-full w-full object-cover" />
+    : (
+      <span className="grid h-full w-full place-items-center bg-white/10 px-2 text-center text-[11px] text-white/80">
+        <Paperclip size={16} weight="bold" aria-hidden="true" />
+      </span>
+    );
+  if (!src) {
+    return <span className="h-20 w-20 overflow-hidden rounded-[1.1rem] ring-1 ring-white/20" title={file.name}>{body}</span>;
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(src, file.name)}
+      data-testid="dex-sent-file"
+      aria-label={`Open ${file.name}`}
+      className="h-20 w-20 overflow-hidden rounded-[1.1rem] ring-1 ring-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+    >
+      {body}
+    </button>
+  );
+}
+
 /** One turn in the transcript. */
-function Bubble({ m, index }) {
+export function Bubble({ m, index, onOpenFile, onAsk, onGo }) {
   const mine = m.role === "user";
+  const files = m.files || [];
   return (
     <motion.div
       layout
       initial={{ opacity: 0, y: 14, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ ...SPRING, delay: Math.min(index * 0.02, 0.1) }}
-      className={cn("flex w-full", mine ? "justify-end" : "justify-start")}
+      className={cn("flex w-full flex-col gap-1.5", mine ? "items-end" : "items-start")}
     >
+      {/* ABOVE THE MESSAGE, ON ITS SIDE. The file was part of the question, so
+          it stays with the question — it used to disappear the moment the
+          message went, leaving Dex answering about something that was no longer
+          on screen. Right-aligned to the bubble's own edge, which is what makes
+          the two read as one turn rather than as two. */}
+      {files.length > 0 && (
+        <div className={cn("flex max-w-[85%] flex-wrap gap-1.5", mine ? "justify-end" : "justify-start")}>
+          {files.map((f) => <SentFile key={f.id} file={f} onOpen={onOpenFile} />)}
+        </div>
+      )}
       <div
         className={cn(
           "max-w-[85%] rounded-3xl px-4 py-3 text-sm leading-relaxed",
@@ -287,7 +344,20 @@ function Bubble({ m, index }) {
             retryDisabled={m.retryDisabled}
           />
         ) : (
-          <span className="whitespace-pre-wrap">{richText(m.text)}</span>
+          <>
+            {/* RESTRICTED, SAID AS SUCH. The desktop Ask page gives a refusal
+                its own card with a lock on it; here it is one line above the
+                message, because the message itself already names the access and
+                what you can ask instead. Without this a refusal reads like an
+                answer that happens to be about permissions. */}
+            {m.restricted && (
+              <span className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-white/55"
+                data-testid="dex-restricted">
+                <Lock size={10} weight="bold" aria-hidden="true" /> Restricted
+              </span>
+            )}
+            <span className="whitespace-pre-wrap">{richText(m.text)}</span>
+          </>
         )}
         {/* The real /ask payload is {type, answer, missing_information,
             suggested_questions} — verified against the endpoint, not guessed.
@@ -299,8 +369,16 @@ function Bubble({ m, index }) {
               <button
                 key={i}
                 type="button"
-                onClick={() => m.onAsk?.(q)}
-                className="rounded-pill bg-white/10 px-2.5 py-1 text-left text-[11px] text-white/75 hover:bg-white/20"
+                /* 2026-10-05 — A PROP, NOT A FIELD ON THE MESSAGE.
+                   It used to read `m.onAsk`, which the SHEET set by spreading
+                   it onto every turn — so the follow-ups worked there and were
+                   dead everywhere else. The Desk's new inline transcript hands
+                   the raw message straight to Bubble, so every chip in it
+                   called undefined, which is the "static clickable button" the
+                   founder hit. Passing the handler in makes it the renderer's
+                   job, and there is now one way to do it rather than two. */
+                onClick={() => onAsk?.(q)}
+                className="rounded-pill bg-white/10 px-2.5 py-1 text-left text-[14px] text-white/75 hover:bg-white/20"
               >
                 {q}
               </button>
@@ -308,9 +386,50 @@ function Bubble({ m, index }) {
           </div>
         )}
         {m.missing?.length > 0 && (
-          <p className="mt-2 text-[11px] text-white/45">
+          <p className="mt-2 text-[14px] text-white/45">
             Missing: {m.missing.slice(0, 3).join(" · ")}
           </p>
+        )}
+        {/* WHERE THE ANSWER CAME FROM. (2026-10-07.) The Company Brain hands
+            back typed, deep-linked citations and the phone was dropping them
+            on the floor — so an answer read out of a document looked like
+            something Dex simply knew. Same chips as the desktop Ask page
+            (pages/AskAI's Sources), cut for a bubble: the type in small caps,
+            the title truncated, and the whole chip tappable when the server
+            gave it a deep link. Three, because a bubble is not a bibliography;
+            the full list is on the Ask page. */}
+        {m.sources?.length > 0 && (
+          <div className="mt-2.5 flex flex-wrap gap-1.5" data-testid="dex-sources">
+            {m.sources.slice(0, 3).map((srcItem, i) => {
+              const inner = (
+                <>
+                  <span className="shrink-0 text-[10px] uppercase tracking-[0.12em] text-white/50">
+                    {srcItem.type || "note"}
+                  </span>
+                  <span className="min-w-0 truncate">{srcItem.title}</span>
+                </>
+              );
+              return srcItem.deep_link && onGo ? (
+                <button
+                  key={`${srcItem.id || i}`}
+                  type="button"
+                  onClick={() => onGo(srcItem.deep_link)}
+                  data-testid={`dex-source-${i}`}
+                  className="flex min-w-0 max-w-full items-center gap-1.5 rounded-pill bg-white/10 px-2.5 py-1 text-left text-[13px] text-white/75 hover:bg-white/20"
+                >
+                  {inner}
+                </button>
+              ) : (
+                <span
+                  key={`${srcItem.id || i}`}
+                  data-testid={`dex-source-${i}`}
+                  className="flex min-w-0 max-w-full items-center gap-1.5 rounded-pill bg-white/[.06] px-2.5 py-1 text-[13px] text-white/60"
+                >
+                  {inner}
+                </span>
+              );
+            })}
+          </div>
         )}
       </div>
     </motion.div>
@@ -323,7 +442,13 @@ function Bubble({ m, index }) {
  * @param {object}   dex     the shared useDexCapture instance from Layout
  */
 export function DexChat({ open, onClose, dex, chat, channel }) {
-  const { log, busy, mode, setMode, ask, attach, removeFile, retry, canRetry, pendingFiles = [] } = chat;
+  const { log, busy, mode, setMode, ask, attach, removeFile, retry, canRetry, pendingFiles = [], attaching = false, clear } = chat;
+  /* A SENT IMAGE OPENS FULL SIZE. An 80px thumbnail is enough to recognise a
+     photograph of a delivery note and not enough to read one. Local object URL,
+     so there is no fetch and nothing to fail. */
+  const [lightbox, setLightbox] = React.useState(null);
+  const openFile = React.useCallback((src, name) => setLightbox({ src, name }), []);
+  React.useEffect(() => { if (!open) setLightbox(null); }, [open]);
   const navigate = useNavigate();
   /* ASK-33 Phase 4 — Review opens the decision the way the phone already opens
      one: /inbox?decision=<id>, which the Desk raises in DecisionDialog, as it
@@ -361,6 +486,19 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
     setStages((s) => (s.includes(stage) ? s : [...s, stage]));
   }, [stage]);
   React.useEffect(() => { if (!reading) setStages([]); }, [reading]);
+
+  /* ESCAPE CLOSES IT. modality.md › Best practices: a modal view needs an
+     obvious way out, and on every Apple platform Escape is one of them. This
+     sheet is a motion.div rather than a Radix dialog, so it never had the
+     handler every other overlay in the app gets for free — pressed, nothing
+     happened at all. It matters on an iPad with a keyboard and on the web
+     build, and it costs four lines. */
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); onClose?.(); } };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
   // Read at render: the forge is not drawn at all under prefers-reduced-motion,
   // and the stage text stands alone.
   const reduceMotion = typeof window !== "undefined"
@@ -401,13 +539,40 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
           {/* Tapping the dimmed page behind closes — the standard way out of a
               sheet, kept because the X is at the top and thumbs are at the
               bottom. */}
-          <button
-            type="button"
-            aria-label="Close Dex"
+          {/* aria-hidden, not just tabIndex -1. VoiceOver still announced this
+              as a 390x844 "Close Dex" button sitting over the whole screen —
+              the first and largest thing in the rotor for a sheet whose real
+              controls are the X and the composer. Tapping the dimmed page still
+              closes; the X carries the accessible name. */}
+          <div
+            aria-hidden="true"
             onClick={onClose}
             className="absolute inset-0 h-full w-full cursor-default"
-            tabIndex={-1}
           />
+
+          {lightbox && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={lightbox.name}
+              data-testid="dex-lightbox"
+              onClick={() => setLightbox(null)}
+              className="absolute inset-0 z-20 grid place-items-center bg-black/80 p-4 backdrop-blur-md"
+            >
+              <img src={lightbox.src} alt={lightbox.name}
+                   className="max-h-full max-w-full rounded-[1.25rem] object-contain" />
+              <button
+                type="button"
+                aria-label="Close image"
+                data-testid="dex-lightbox-close"
+                onClick={(e) => { e.stopPropagation(); setLightbox(null); }}
+                className="kr-pop absolute right-4 grid h-14 w-14 place-items-center rounded-full"
+                style={{ top: "calc(var(--sa-top) + 0.75rem)" }}
+              >
+                <X size={18} weight="bold" />
+              </button>
+            </div>
+          )}
 
           <div className="relative flex min-h-0 flex-1 flex-col pt-safe">
             <div className="flex items-center justify-between px-4 py-3">
@@ -421,20 +586,41 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
               <span className="flex items-center gap-2 text-sm font-semibold text-white drop-shadow">
                 <Sparkle size={14} weight="fill" className="text-[hsl(var(--kr-gold))]" /> Dex
                 {channel && (
-                  <span className="rounded-pill bg-white/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/85">
+                  <span className="rounded-pill bg-white/15 px-2 py-0.5 text-[14px] font-semibold uppercase tracking-[0.08em] text-white/85">
                     {channel === "decide" ? "Decide" : "Ask"}
                   </span>
                 )}
               </span>
+              <div className="flex items-center gap-2">
+              {/* CLEAR, LEFT OF THE CLOSE. The transcript used to survive until
+                  the app was force-quit, which is not a way out of anything.
+                  A pill rather than a circle because it carries a word, and the
+                  same height as the X beside it so the two read as one pair.
+                  Only offered when there is something to clear. */}
+              {log.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => clear?.()}
+                  data-testid="dex-chat-clear"
+                  aria-label="Clear this conversation"
+                  className="kr-pop grid h-14 place-items-center rounded-pill px-5 text-sm font-medium"
+                >
+                  Clear
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onClose}
                 data-testid="dex-chat-close"
                 aria-label="Close"
-                className="kr-pop grid h-10 w-10 place-items-center rounded-full"
+                /* h-14: 40 CSS px is 32 REAL px once --ui-scale's 0.8 lands,
+                   against accessibility.md's 44x44 pt default for iOS. This
+                   sheet has room, so it takes the default. */
+                className="kr-pop grid h-14 w-14 place-items-center rounded-full"
               >
                 <X size={18} weight="bold" />
               </button>
+              </div>
             </div>
 
             {/* Transcript. Bottom-anchored so the newest turn sits just above
@@ -452,23 +638,30 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                 screen changes. */}
             <PresenceContext.Provider value={null}>
             <div className="flex min-h-0 flex-1 flex-col justify-end gap-2.5 overflow-y-auto px-4 pb-3">
-              {log.length === 0 && (
+              {/* NO EMPTY-STATE COPY IN ASK. The founder's call: "Ask about
+                  anything in your workspace / Dex answers from your data.
+                  Nothing is created." is a thing you read once and then read
+                  again every single time you open the sheet. The header already
+                  says ASK, and the composer says what to do with it. Decide
+                  keeps its line, because what that door does to a decision
+                  (lines up tasks, creates nothing until approved) is a promise
+                  worth repeating. */}
+              {log.length === 0 && channel === "decide" && (
                 <div className="pb-6 text-center">
-                  <p className="text-sm text-white/70 drop-shadow">
-                    {channel === "decide"
-                      ? "Say or type the decision."
-                      : "Ask about anything in your workspace."}
-                  </p>
-                  <p className="mt-1 text-xs text-white/45">
-                    {channel === "decide"
-                      ? "Dex lines up the tasks for approval. Nothing is created until it's approved."
-                      : "Dex answers from your data. Nothing is created."}
+                  <p className="text-sm text-white/70 drop-shadow">Say or type the decision.</p>
+                  <p className="mt-1 text-sm text-white/70">
+                    Dex lines up the tasks for approval. Nothing is created until it&rsquo;s approved.
                   </p>
                 </div>
               )}
               {log.map((m, i) => (
                 <Bubble
                   key={m.id}
+                  onOpenFile={openFile}
+                  onAsk={(q) => ask?.(q)}
+                  /* A citation is a place: following one closes the sheet, the
+                     way every other link out of this transcript does. */
+                  onGo={(to) => { onClose?.(); navigate(to); }}
                   m={{
                     ...m,
                     /* Only the LAST reading turn is live: an older one from a
@@ -478,7 +671,9 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                     reading: m.reading && reading && i === log.length - 1,
                     stages: ["sending", ...stages],
                     reduceMotion,
-                    onAsk: ask,
+                    /* onAsk is a PROP now (see Bubble) rather than a field
+                       smuggled through the message, so the Desk's inline
+                       transcript can hand in its own. */
                     onReview,
                     onDismiss: onClose,
                     onRetry: () => retry(m.outcome?.retry, m.id),
@@ -487,7 +682,12 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                   index={i}
                 />
               ))}
-              {busy && <Bubble m={{ role: "dex", text: "Thinking…", pending: true }} index={log.length} />}
+              {/* NOT WHILE A FILE IS GOING UP. `attach` raises the same `busy`
+                  that a question does, so the transcript used to answer an
+                  upload with "Thinking…" — Dex is not thinking about anything
+                  yet, and the founder is watching the wrong thing. The chip
+                  above says what is actually happening. */}
+              {busy && !attaching && <Bubble onOpenFile={openFile} m={{ role: "dex", text: "Thinking…", pending: true }} index={log.length} />}
               <div ref={endRef} />
             </div>
             </PresenceContext.Provider>
@@ -576,7 +776,7 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                 aria-label={plusOpen ? "Hide options" : "More ways to talk to Dex"}
                 aria-expanded={plusOpen}
                 onClick={() => setPlusOpen((v) => !v)}
-                className="app-plus-on-fab kr-frost grid h-11 w-11 place-items-center rounded-full"
+                className="app-plus-on-fab kr-frost grid h-14 w-14 place-items-center rounded-full"
               >
                 <motion.span animate={{ rotate: plusOpen ? 45 : 0 }} transition={SPRING} className="grid place-items-center">
                   <Plus size={19} weight="bold" />

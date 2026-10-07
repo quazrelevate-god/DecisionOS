@@ -32,7 +32,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   UsersThree, BookOpen, Gauge, AirplaneTakeoff, CaretRight,
-  ShieldCheck, FlowArrow, GearSix, Books,
+  ShieldCheck, FlowArrow, GearSix, AddressBook, Books,
 } from "@phosphor-icons/react";
 import { hasPerm } from "@/lib/perms";
 import { INK_PLATE } from "@/components/karma/glass";
@@ -58,7 +58,11 @@ import { useBackDismiss } from "@/hooks/useBackDismiss";
  * person has to work out is dead, so it left with them. Nothing else read it —
  * the search filter matches on `label` only.
  */
-function buildTiles({ user, t }) {
+/* EXPORTED since 2026-10-06: the dock's own More panel (mobile/DockSlider)
+   draws the same menu, and two lists of destinations would drift apart the
+   first time one gained a page. This file still owns what is in the menu; the
+   dock owns how it looks when the bar grows into it. */
+export function buildTiles({ user, t }) {
   const tiles = [
     /* ASK-42 B/C — APPROVALS AND WORKFLOWS ARE THE FIRST ROW. Both were views
        inside My Work, chosen from a dropdown that otherwise lists lenses on the
@@ -82,7 +86,15 @@ function buildTiles({ user, t }) {
       perm: "approvals",
     },
     { key: "workflows", to: "/workflows", label: t("nav.workflows", "Workflows"), icon: FlowArrow, perm: "workflows" },
-    // 2026-10-06: the decision makers' history (was owner-only) and the Company Brain.
+    /* 2026-10-06 — CRM COMES BACK UP HERE. ASK-38 brought it DOWN to the dock
+       because "the rest of More is genuinely occasional and CRM is not"; the
+       dock now spends that slot on the slider's own More, so CRM returns to the
+       panel it came from. Same `people` permission it carried either way, so
+       nobody gains or loses access by the move — only the number of taps. */
+    { key: "crm", to: "/crm", label: t("nav.crm", "CRM"), icon: AddressBook, perm: "people" },
+    /* MERGE 2026-10-06 — both sides added to this list and neither contradicts
+       the other: CRM comes back from the dock (above) while Journal stops being
+       owner-only and the Company Brain arrives. All three stay. */
     { key: "journal", to: "/journal", label: t("nav.journal", "Journal"), icon: BookOpen, perm: "decisions_approve" },
     { key: "company-brain", to: "/company-brain", label: t("nav.company_brain", "Company Brain"), icon: Books, perm: "brain" },
     /* GL-02 (JOURNEY-1 J9p-01..03, J10-03) — OPS IS NOT OWNER-ONLY. The page
@@ -115,7 +127,7 @@ function buildTiles({ user, t }) {
   });
 }
 
-function buildUtility({ user, t }) {
+export function buildUtility({ user, t }) {
   /* KM-5 — Language, Theme and Sign out are gone from here and live in
      Settings -> Account (Theme has since left the app altogether — ASK-33). A nav menu is a list of PLACES; a theme switch and a
      session-ending action are neither, and putting Sign out one mis-tap from

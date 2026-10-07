@@ -37,7 +37,7 @@ import { useBackDismiss } from "@/hooks/useBackDismiss";
 // decision sheet must not capture scrollY 0 (the pinned value) and reset the
 // outer sheet's position when it closes.
 // ---------------------------------------------------------------------------
-const lockState = { depth: 0, y: 0, prev: null, lastY: 0, tracking: false, scrollerTop: 0, lastScrollerTop: null, holdTop: null };
+const lockState = { depth: 0, y: 0, prev: null, lastY: 0, tracking: false, scrollerTop: 0, lastScrollerTop: null, holdTop: null, lockedPath: null, settleRaf: 0 };
 
 // Why we track scroll ourselves instead of reading window.scrollY at lock time:
 // React runs child effects before parent effects, so Radix's RemoveScroll (a
@@ -97,6 +97,11 @@ function appScroller() {
 
 function lockBodyScroll() {
   if (lockState.depth++ > 0) return;
+  // B?? — remember the route we locked on, and kill any scroll-restore loop
+  // still running from a previous unlock, so a re-lock after navigation can't
+  // have two settle() timelines fighting over one page.
+  if (lockState.settleRaf) { cancelAnimationFrame(lockState.settleRaf); lockState.settleRaf = 0; }
+  lockState.lockedPath = typeof window !== "undefined" ? window.location.pathname : null;
   const scroller = appScroller();
   if (scroller) {
     lockState.scroller = scroller;
@@ -133,14 +138,26 @@ function lockBodyScroll() {
 function unlockBodyScroll() {
   if (--lockState.depth > 0) return;
   lockState.depth = 0;
+  // B?? — did the route change while this surface was open? If so the surface
+  // closed AS PART OF a navigation (closed-then-pushed, or the Android Back
+  // gesture popping history), and the user is looking at a NEW page. Restoring
+  // the old page's scroll offset onto it — especially via the 40-frame settle
+  // loop below — yanks the freshly-mounted screen, which was the "crack on
+  // open" glitch. So on navigation we still fully un-freeze (un-pin the body /
+  // re-enable the scroller), but skip restoring the old scroll POSITION.
+  const navigated =
+    lockState.lockedPath != null &&
+    typeof window !== "undefined" &&
+    lockState.lockedPath !== window.location.pathname;
+  lockState.lockedPath = null;
   if (lockState.scroller) {
     const s = lockState.scroller;
     if (lockState.holdTop) s.removeEventListener("scroll", lockState.holdTop);
     s.style.removeProperty("overflow-y");
     if (lockState.prevOverflow) s.style.setProperty("overflow-y", lockState.prevOverflow);
     // Put the page back where it was read from, the same promise the body pin
-    // above keeps with its scrollTo.
-    s.scrollTop = lockState.scrollerTop;
+    // above keeps with its scrollTo — but only on a same-page close.
+    if (!navigated) s.scrollTop = lockState.scrollerTop;
     lockState.scroller = null;
     lockState.holdTop = null;
     return;
@@ -152,17 +169,21 @@ function unlockBodyScroll() {
     if (prev[p]) body.style.setProperty(p, prev[p]);
   }
 
-  // Radix keeps its own `body { overflow: hidden }` until the sheet's exit
-  // animation finishes, and while that is set the document's max scroll is
-  // clamped — a single scrollTo lands at ~38px instead of 900. Re-apply for a
-  // few frames until it takes, then stop. Bounded, so a page that genuinely
-  // cannot reach `y` (content got shorter) settles instead of spinning.
+  // Same-page close only: Radix keeps its own `body { overflow: hidden }` until
+  // the sheet's exit animation finishes, and while that is set the document's
+  // max scroll is clamped — a single scrollTo lands at ~38px instead of 900.
+  // Re-apply for a few frames until it takes, then stop. Bounded, so a page that
+  // genuinely cannot reach `y` (content got shorter) settles instead of
+  // spinning. On a navigation we skip this entirely — the new page owns its
+  // scroll position.
+  if (navigated) return;
   const y = lockState.y;
   let tries = 0;
   const settle = () => {
+    lockState.settleRaf = 0;
     window.scrollTo(0, y);
     if (Math.abs(window.scrollY - y) <= 2 || tries++ > 40) return;
-    requestAnimationFrame(settle);
+    lockState.settleRaf = requestAnimationFrame(settle);
   };
   settle();
 }
@@ -281,10 +302,17 @@ export function BottomSheet({
                 </DialogPrimitive.Description>
               )}
             </div>
+            {/* 2026-10-05 — THE SHEET'S X IS THE APP'S X NOW. This was the one
+                survivor of the pre-neumorphic kit: a flat rounded-SQUARE on
+                hover:bg-accent, wearing the theme's blue focus ring, sitting on
+                top of a decision card built entirely out of kr-pop. The founder
+                photographed it. Same material and same shape as the Ask sheet's
+                close (DexChat) so the two cannot drift again; the ring goes
+                with it, since kr-pop carries its own pressed state. */}
             <DialogPrimitive.Close
               data-testid={`${testId}-close`}
               aria-label="Close"
-              className="shrink-0 grid place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="kr-pop shrink-0 grid place-items-center rounded-full text-foreground/70 focus-visible:outline-none"
               style={{ minHeight: "var(--control-h-sm)", minWidth: "var(--control-h-sm)" }}
             >
               <X size={22} weight="bold" />

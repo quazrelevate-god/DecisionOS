@@ -1,7 +1,57 @@
-# B33 · Push notifications — what it takes, and why there is no code yet
+# B33 · Push notifications — what it takes
 
 **For:** Yokesh (backend) + whoever holds the Google account
 **From:** B33, the Android bug report · **Date:** 2026-09-29
+
+---
+
+## UPDATE 2026-10-05 — now IMPLEMENTED (Android), switch-on pending
+
+The code below is written and verified on the emulator. What the original ask
+said needs doing first (a Firebase project + `google-services.json`) is done:
+the project is `decisionos-5ddd4`, the file is at
+`frontend/android/app/google-services.json` (package `com.decisionos.app`).
+
+**What was built (all guarded — the app behaves exactly as today until switched on):**
+
+- **Client** — `@capacitor/push-notifications@8.1.3` installed; new leaf
+  `frontend/src/lib/native/push.js` (asks permission on sign-in, registers,
+  POSTs the token to `/api/devices`, routes a tapped notification via
+  `notifLink()`); mounted in `hooks/useNativeBack.js`; token cleared on
+  sign-out in `context/AuthContext.js`; `POST_NOTIFICATIONS` declared in the
+  Android manifest (the plugin does not).
+- **Server** — `routers/devices.py` (`POST`/`DELETE /api/devices`, stored in a
+  `device_tokens` collection, one row per install); `services/push_fcm.py`
+  (firebase-admin sender, prunes dead tokens, **no-op without a credential**);
+  a fan-out call added to the single choke-point
+  `services.notifications.push_notification()`, so **every** notification type
+  already in the product (all the Work status-changes, approvals, leave,
+  decisions, finance) becomes a device push; `firebase-admin==6.5.0` in
+  requirements.
+
+**Verified on a fresh release install (emulator with Google Play Services):**
+builds clean with the plugin + firebase-messaging + google-services; Firebase
+initialises at runtime (`FirebaseApp initialization successful`); the
+notification-permission prompt shows and grants; no crash. The FCM token value
+is not observable in a release webview, and the backend sender is still off, so
+storage + delivery verify once the two switch-on steps below are done.
+
+**To switch it on (the only things left, both needing credentials I can't create):**
+
+1. **Backend credential** — generate a Firebase **service-account key** and set
+   it on Railway as `FIREBASE_SERVICE_ACCOUNT` (the JSON, inline). Secret —
+   env only, never the repo. Then `pip install -r requirements.txt` picks up
+   firebase-admin, and **deploy** so `/api/devices` exists and the sender runs.
+2. **iOS** — still untouched: needs an Apple Developer account, an APNs key
+   uploaded to the same Firebase project, `GoogleService-Info.plist` in the iOS
+   project, the Push + Background-Modes capabilities, and a real iPhone to test.
+
+**Decisions still open from the original ask:** permission is currently asked on
+first sign-in (not "after the first approval" as suggested below); no quiet-hours
+suppression yet; push currently mirrors *every* notification (not the tight
+three-event v1 below). All easy to narrow later.
+
+---
 
 ## Where this stands
 

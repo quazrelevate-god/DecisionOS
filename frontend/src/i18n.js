@@ -25,6 +25,13 @@ const resources = {
       bottomnav: { desk: "Desk", brief: "Brief", work: "Work", crm: "CRM", brain: "Dex",
         money: "Money", more: "More" },
       desk: {
+      slider: {
+        ask: "Ask",
+        decide: "Decide",
+        handle: "Slide left to ask Dex, right to record a decision",
+        atAsk: "Release to ask Dex",
+        atDecide: "Release to record a decision",
+      },
         delayed: "Delayed tasks", complaints: "Complaints", overdue: "To collect", workflows: "Workflows",
         decisions: "Decisions", approvals: "Approvals", watch: "Watch",
         show_all: "Show all {{count}}", show_fewer: "Show fewer",
@@ -162,6 +169,13 @@ const resources = {
       bottomnav: { desk: "डेस्क", brief: "ब्रीफ़", work: "काम", crm: "सीआरएम", brain: "डेक्स",
         money: "पैसा", more: "और" },
       desk: {
+      slider: {
+        ask: "पूछें",
+        decide: "फ़ैसला",
+        handle: "डेक्स से पूछने के लिए बाएँ खिसकाएँ, फ़ैसला दर्ज करने के लिए दाएँ",
+        atAsk: "डेक्स से पूछने के लिए छोड़ें",
+        atDecide: "फ़ैसला दर्ज करने के लिए छोड़ें",
+      },
         delayed: "देरी वाले कार्य", complaints: "शिकायतें", overdue: "वसूली बाकी", workflows: "वर्कफ़्लो",
         decisions: "निर्णय", approvals: "मंज़ूरियाँ", watch: "नज़र",
         show_all: "सभी {{count}} दिखाएँ", show_fewer: "कम दिखाएँ",
@@ -285,6 +299,13 @@ const resources = {
       bottomnav: { desk: "மேசை", brief: "சுருக்கம்", work: "வேலை", crm: "CRM", brain: "டெக்ஸ்",
         money: "பணம்", more: "மேலும்" },
       desk: {
+      slider: {
+        ask: "கேளுங்கள்",
+        decide: "முடிவு",
+        handle: "டெக்ஸிடம் கேட்க இடதுபுறம் இழுக்கவும், முடிவைப் பதிவு செய்ய வலதுபுறம்",
+        atAsk: "டெக்ஸிடம் கேட்க விடுங்கள்",
+        atDecide: "முடிவைப் பதிவு செய்ய விடுங்கள்",
+      },
         delayed: "தாமத பணிகள்", complaints: "புகார்கள்", overdue: "வசூலிக்க", workflows: "பணிப்பாய்வு",
         decisions: "முடிவுகள்", approvals: "ஒப்புதல்கள்", watch: "கவனிப்பு",
         show_all: "அனைத்து {{count}} காட்டு", show_fewer: "குறைவாகக் காட்டு",

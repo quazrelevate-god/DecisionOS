@@ -33,7 +33,7 @@
 // Decisions column, and opening it again shows where it got to.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, X, WarningCircle, File as FileGlyph } from "@phosphor-icons/react";
+import { Check, File as FileGlyph, Paperclip, WarningCircle, X } from "@phosphor-icons/react";
 import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "../../components/ui/dialog";
 import { DecisionPanel } from "../../components/DecisionDialog";
@@ -44,6 +44,13 @@ import { DexForgeFit } from "../onboarding/DexForge";
 
 const STEP_COPY = {
   said: { n: 1, title: "What you said", hint: "Read it through, change anything Dex heard wrong, then press Next." },
+  /* ASK (2026-10-05) — the same card, one step. A question is not a decision:
+     there is no reading and no "what Dex made" to follow, so the progress rail
+     is hidden and Next says Send, because that is what it does. The founder
+     asked for THIS card rather than the one I had invented — "keep the same UI
+     design used for the pop-up card in the decide section for transcription
+     view" — so Ask borrows it rather than growing a second one. */
+  ask: { n: 1, title: "What you said", hint: "Read it through, change anything Dex heard wrong, then send it." },
   reading: { n: 2, title: "Dex is reading it", hint: "Working out the decision, the tasks and who does them." },
   made: { n: 3, title: "What Dex made", hint: "Everything this decision creates, before anything is created." },
   nothing: { n: 3, title: OUTCOME_COPY.nothing, hint: "Dex read it and found nothing to decide." },
@@ -175,6 +182,7 @@ const FOOT = "shrink-0 border-t border-slate-900/[0.06] px-5 pt-3 pb-[calc(0.75r
 export function DexCapturePopup({
   open, onClose, phone = false, step = "said",
   text = "", onText, transcribing = false, files = [], onRemoveFile, busy = false, onNext, onDiscard,
+  onAttach, attaching = false,
   sentText = "", stages = [],
   decisionId = null, userId, onSaveDraft,
   outcome = null, onRetry,
@@ -191,7 +199,7 @@ export function DexCapturePopup({
      Every other step lands on the close. */
   const focusIn = (e) => {
     e.preventDefault();
-    if (step === "said" && !phone && fieldRef.current) {
+    if ((step === "said" || step === "ask") && !phone && fieldRef.current) {
       const el = fieldRef.current;
       el.focus();
       el.setSelectionRange(el.value.length, el.value.length);
@@ -244,12 +252,16 @@ export function DexCapturePopup({
     <div className="flex shrink-0 items-start gap-4 border-b border-slate-900/[0.06] px-5 pb-4 pt-5 lg:px-7 lg:pt-6">
       <div className="min-w-0 flex-1">
         <div className="mb-2 flex items-center gap-2" data-testid="dex-popup-progress">
+          {step !== "ask" && (
           <ol className="flex items-center gap-1" aria-hidden="true">
             {[1, 2, 3].map((n) => (
               <li key={n} className={cn("h-1 w-6 rounded-full", n <= copy.n ? "bg-slate-900" : "bg-slate-900/15")} />
             ))}
           </ol>
-          <span className="text-xs font-medium text-slate-500">Step {copy.n} of 3</span>
+          )}
+          {step !== "ask" && (
+            <span className="text-xs font-medium text-slate-500">Step {copy.n} of 3</span>
+          )}
         </div>
         <DialogTitle className="text-left text-[22px] font-semibold leading-tight tracking-tight text-slate-900" data-testid="dex-popup-title">
           {copy.title}
@@ -265,7 +277,7 @@ export function DexCapturePopup({
 
   let body = null;
   let foot = null;
-  if (step === "said") {
+  if (step === "said" || step === "ask") {
     body = (
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 py-4 lg:px-7 lg:py-5">
         {/* .nm-field — the app's own field, with its own focus ring. Six lines
@@ -280,7 +292,13 @@ export function DexCapturePopup({
           rows={phone ? 2 : 6}
           aria-label="What you said"
           data-testid="dex-popup-transcript"
-          placeholder={transcribing ? "Transcribing what you said…" : "Nothing came through. Type what you decided, or close this and speak again."}
+          /* The empty-state copy names the thing being written: a decision in
+             Decide, a question in Ask. Same card, two jobs. */
+          placeholder={transcribing
+            ? "Transcribing what you said…"
+            : step === "ask"
+              ? "Nothing came through. Type what you want to ask, or close this and speak again."
+              : "Nothing came through. Type what you decided, or close this and speak again."}
           className={cn(
             "nm-field block w-full resize-none px-4 py-3 text-[15px] leading-6 text-slate-800 focus:outline-none lg:text-base lg:leading-7",
             // Phone: grows to the words (measured), capped so a very long one
@@ -303,9 +321,35 @@ export function DexCapturePopup({
     );
     foot = (
       <div className={cn(FOOT, "flex gap-2.5 lg:justify-end")}>
+        {/* ATTACH, HERE AND NOT BEFORE. On the phone the recording surface used
+            to carry a paperclip, which meant picking a file before you had said
+            what it was for. The founder's call is that a file belongs to a
+            decision you have already made — so it is offered beside the words,
+            at the one moment you can see what you are attaching it to. It is
+            only rendered where a caller supplies the handler, so the desktop
+            well (whose own floor still has one) is unchanged. */}
+        {onAttach && (
+          <button
+            type="button"
+            onClick={onAttach}
+            disabled={busy || attaching}
+            data-testid="dex-popup-attach"
+            aria-label="Attach a file"
+            title="Attach a file"
+            /* h-14 / lg:h-12 — the same heights glassBtn and inkBtn carry, so
+               the three sit on one line. It was h-11, which is 44px against
+               their 56 and read as a smaller button that had been dropped in
+               rather than one of the row. Square, not stretched: `flex-1` is
+               what makes Discard and Next share the width, and a paperclip has
+               no business taking a third of the row. */
+            className={cn(glassBtn, "w-14 flex-none p-0 lg:mr-auto lg:w-12")}
+          >
+            <Paperclip size={18} weight="bold" aria-hidden="true" />
+          </button>
+        )}
         <button type="button" onClick={onDiscard} data-testid="dex-popup-discard" className={glassBtn}>Discard</button>
         <button type="button" onClick={onNext} disabled={!canNext} data-testid="dex-popup-next" className={inkBtn}>
-          {busy ? "Sending…" : "Next"}
+          {busy ? "Sending…" : step === "ask" ? "Send" : "Next"}
         </button>
       </div>
     );

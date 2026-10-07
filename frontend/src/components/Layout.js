@@ -47,10 +47,17 @@ import WelcomeMemberCard from "./auth/WelcomeMemberCard";
 // MPWA-03: mobile navigation is the floating dock + All Apps panel. The
 // edge-to-edge tab bar and the hamburger drawer are both gone below lg.
 import { FloatingDock } from "./mobile/FloatingDock";
+// DEX-SLIDER Part 1 — the Desk trades its Ask circle for the slider's left end.
+import { DEX_SLIDER } from "../lib/flags";
 import { AllAppsPanel } from "./mobile/AllAppsPanel";
 import { DexFab } from "./mobile/DexFab";
 import { DexChat } from "./mobile/DexChat";
 import { HeaderSlotContext } from "./mobile/HeaderSlot";
+import { DockSlider } from "./mobile/DockSlider";
+import { DeskDexWell } from "../pages/desk/DeskDexWell";
+import { saveAsDraft } from "../lib/decisionDrafts";
+// DEX-SLIDER Part 2 — the Desk's slider opens Ask, which lives up here.
+import { DexDoorsContext } from "./mobile/DexDoors";
 import { useDexConversation } from "../hooks/useDexConversation";
 import { isReading } from "../lib/dexOutcome";
 import { toastDexOutcome } from "../lib/dexOutcomeToast";
@@ -281,6 +288,25 @@ export default function Layout({ children }) {
   // branch are gone, and index.js clears any saved "dark". This class now
   // belongs to the Dex room alone.
   const dexRoute = location.pathname.startsWith("/brain") || location.pathname.startsWith("/dex");
+  /* DEX-SLIDER Part 1 — the Desk, and only the Desk. The slider's left end IS
+     Ask there, so a second way in beside the bar is one too many; every other
+     phone page keeps the circle, because asking about the page you are on is
+     the whole point of it. /inbox is the Desk's route (App.js); "/" and "/app"
+     resolve to it or to /my-work, so they are not it. */
+  const deskHasSlider = DEX_SLIDER && location.pathname.startsWith("/inbox");
+
+  /* The doors handed down to the page. Ask is exactly what the circle opened —
+     same sheet, same channel, same conversation — so the slider is a second
+     way to the same room and not a second room. Memoised so a page that reads
+     it does not re-render on every tick of Layout's own state. */
+  const dexDoors = useMemo(() => ({
+    openAsk: () => { setDexChannel("ask"); setDexOpen(true); setDexInline(false); },
+    /* The Desk's own door: same channel, same conversation, drawn in its sheet.
+       `chat` and `dex` ride along because the page cannot reach Layout's state
+       any other way, and the whole point is that it is not a second copy. */
+    openAskInline: () => { setDexChannel("ask"); setDexOpen(true); setDexInline(true); },
+    closeAsk: () => { setDexOpen(false); setDexChannel(null); setDexInline(false); },
+  }), []);
   const wantDark = dexRoute;
   const lastDark = useRef(null);
   useEffect(() => {
@@ -358,6 +384,16 @@ export default function Layout({ children }) {
   // MPWA-03 mobile navigation state.
   const [allAppsOpen, setAllAppsOpen] = useState(false);
   const [dexOpen, setDexOpen] = useState(false);
+  /* ASK-INLINE (2026-10-05) — the same conversation, hosted by the Desk.
+     The founder's redesign puts Ask inside the Desk's black sheet rather than
+     in a sheet of its own: the board clears, the KPI grid folds away and the
+     transcript takes the space, with the slider below it as the composer.
+     What must NOT change is that there is ONE conversation. Layout still owns
+     it — the dock, the FAB and the Desk have always shared a single `chat`,
+     and two would mean a founder's question going to a transcript they are not
+     looking at. So this flag only decides WHERE it is drawn: `true` and the
+     overlay sheet stands down because the Desk is already drawing it. */
+  const [dexInline, setDexInline] = useState(false);
   /* KM-25 — the mobile shell stops being a document that scrolls and becomes a
      frame: a top region that does not move, and a scroller under it. The slot
      is state rather than a ref because a page's header portals into it and has
@@ -365,6 +401,46 @@ export default function Layout({ children }) {
      ASK-35 1.5 — what it no longer is: a wordmark row that folds away. */
   const [headerSlot, setHeaderSlot] = useState(null);
   const isMobileShell = useIsMobile();
+  /* 2026-10-06 — AND EVERY OTHER ROOM GETS THE SLIDER TOO, as the dock itself.
+     The founder's point was that Dex looked like two different features: a
+     slider on the Desk and the old circle in the corner everywhere else. So
+     off the Desk the bar IS the control (DockSlider), the circle is gone, and
+     the only place that still runs the original dock is the Desk, which has
+     its own slider on its own sheet and is explicitly out of scope. */
+  /* 2026-10-06 — UNIVERSAL, the Desk included. The founder: "remove the slider
+     container from the home screen desk and make this dock change universal...
+     keep this centred slider button for the desk screen also." So there is one
+     Dex control in the product again — this bar — and the Desk's sheet goes
+     back to being a list of decisions. */
+  const dockIsSlider = DEX_SLIDER && isMobileShell;
+  /* Decide, off the Desk. The right end of the bar hands over to the SAME
+     component the Desk uses in its overlay form — one capture, one review, one
+     decision pipeline, rather than a second implementation that would drift. */
+  const [dockDecide, setDockDecide] = useState(false);
+  /* THE BAR HAS TO SEE THE CAPTURE, or Decide looks dead. (2026-10-06 —
+     founder: "no ask and no decide function is responding, only the slide
+     function is there.")
+     They were half right and the half matters: swiping right DID mount the
+     well and start the microphone — it just started it somewhere the bar could
+     not see, so there was no waveform, no send, and no way to stop what was
+     already recording. The Desk solved this long ago by having the well
+     publish its meter back to the slider; this is the same wire, to the same
+     control, now that the control is the dock. */
+  const [dockLive, setDockLive] = useState({ recording: false, capturing: false, levelsRef: null });
+  const dockStopRef = useRef(null);
+  const onDockMeter = useCallback((c) => {
+    dockStopRef.current = c.stop;
+    setDockLive({ recording: !!c.recording, capturing: !!c.capturing, levelsRef: c.levelsRef });
+  }, []);
+  /* The page reserves room against --dock-h, and the slider bar is taller than
+     the one it replaces. Published on <html> so the CSS can switch the token
+     without every consumer learning which bar is up. */
+  useEffect(() => {
+    const root = document.documentElement;
+    if (dockIsSlider) root.dataset.dockSlider = "1"; else delete root.dataset.dockSlider;
+    return () => { delete root.dataset.dockSlider; };
+  }, [dockIsSlider]);
+  useEffect(() => { if (!dockIsSlider) setDockDecide(false); }, [dockIsSlider]);
   // ASK-42 D — the Desk is the one room with a top bar; several rules below
   // ask the same question, so it is asked once.
   const onInbox = location.pathname.startsWith("/inbox");
@@ -433,6 +509,21 @@ export default function Layout({ children }) {
   }, [qc]);
 
   const draftSinkRef = useRef(null);
+  /* ASK, ON THE BAR, IS ONE PRESS. (2026-10-07, found auditing the mobile path
+     against the Ask work from the other branch.) Stopping a dictation yields
+     TEXT FOR REVIEW rather than a sent question (ASK-32 1.6) — correct when
+     there is a composer to review it in, which is what the FAB and the sheet
+     gave it. The dock has neither: `chat.submit()` is wired to DexFab, and
+     DexFab is not rendered at all on the slider shell. So a question spoken
+     into the bar was transcribed into a draft that nothing could send, and the
+     conversation simply never answered.
+     These two refs close that: the dock's stop marks the capture as one that
+     sends itself, and the transcript — which arrives a moment later, from the
+     hook above this one — goes straight out as the question. The sheet and the
+     FAB keep the review step, because there you can see and edit the words
+     before they go. */
+  const askSendOnTranscript = useRef(false);
+  const askSendRef = useRef(null);
   /* KM-54 — which door Dex was opened by: "ask" or "decide"; null while it is
      closed. ASK-33 Phase 4 — there is no picker any more: the FAB opens "ask",
      and "decide" is set only when the Desk's Dex well hands a decision to the
@@ -445,7 +536,13 @@ export default function Layout({ children }) {
     onCaptured: refreshAfterCapture,
     // Stopping a recording now yields TEXT for review, not a committed capture.
     // ASK-32 1.6 — the held note's id comes back with the words.
-    onTranscript: (text, noteId) => draftSinkRef.current?.(text, noteId),
+    onTranscript: (text, noteId) => {
+      draftSinkRef.current?.(text, noteId);
+      if (askSendOnTranscript.current) {
+        askSendOnTranscript.current = false;
+        askSendRef.current?.(text);
+      }
+    },
     /* Ask-mode audio goes to /transcribe: text back, nothing persisted. Only
        Decide-mode audio becomes a decision. */
     channel: dexChannel === "ask" ? "dictate" : "capture",
@@ -490,7 +587,15 @@ export default function Layout({ children }) {
     userId: user?.id,
     onEnding: onDexEnding,
   });
+  /* The value the Desk actually receives. Re-made when the conversation ticks,
+     unlike `dexDoors` above, which is memoised once because a page that only
+     opens a door must not re-render on every word Dex says. Declared HERE, not
+     beside the doors, because `chat` does not exist until this line. */
+  const dexDeskHost = useMemo(() => ({
+    ...dexDoors, chat, dex, inline: dexInline && dexOpen,
+  }), [dexDoors, chat, dex, dexInline, dexOpen]);
   draftSinkRef.current = chat.setDraftFromVoice;
+  askSendRef.current = chat.ask;
   dexChatRef.current = chat;
   dexReadingRef.current = () => isReading(dex) || chat.busy;
   const [langOpen, setLangOpen] = useState(false);
@@ -648,6 +753,7 @@ export default function Layout({ children }) {
      with the theme instead of snapping — see .app-sky::before. */
   return (
     <HeaderSlotContext.Provider value={isMobileShell ? headerSlot : null}>
+    <DexDoorsContext.Provider value={isMobileShell ? dexDeskHost : null}>
     {/* ASK-43 — the phone's shell divides by the scale too. Viewport units are
         not divided by CSS zoom, so at 0.8 a bare 100dvh paints at 80% of the
         screen and the app stops short of the bottom; the desktop half of this
@@ -970,7 +1076,12 @@ export default function Layout({ children }) {
                 to="/notifications"
                 data-testid="desk-topbar-bell"
                 aria-label={bellCount > 0 ? `Notifications, ${bellCount} need you` : "Notifications"}
-                className="relative -my-1.5 -mr-2 grid h-11 w-11 place-items-center rounded-full text-foreground/60 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
+                /* h-14 below lg: 44 CSS px is 35 REAL px under --ui-scale's 0.8, and the
+                   bell is the only control in the top bar — there is nothing
+                   beside it to crowd. accessibility.md › Offer sufficiently
+                   sized controls. Desktop keeps 44 CSS, which is already 44pt
+                   there. */
+                className="relative -my-1.5 -mr-2 grid h-11 w-11 max-lg:h-14 max-lg:w-14 place-items-center rounded-full text-foreground/60 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
               >
                 <Bell size={18} weight="regular" aria-hidden="true" />
                 {bellCount > 0 && (
@@ -1071,7 +1182,48 @@ export default function Layout({ children }) {
           A floating pill detached from the edges (lists scroll *under* it,
           which is what `pb-dock` on main pays for), plus Dex as a separate
           64px circle on the same baseline. Desktop keeps its sidebar. */}
+      {dockIsSlider ? (
+        /* THE BAR IS THE CONTROL. Ask opens INSIDE it (the panel grows to half
+           the screen and then scrolls); Decide hands over to the same capture
+           and review card the Desk uses, through DeskDexWell's overlay, so
+           there is one Decide in the product rather than two. */
+        <DockSlider
+          user={user}
+          chat={chat}
+          askOpen={dexOpen && dexInline}
+          /* Decide's capture belongs to the well; Ask's is Layout's own. The
+             bar shows whichever is live, and its handle stops that one. */
+          capturing={dockDecide ? dockLive.capturing : !!dex.recording}
+          recording={dockDecide ? dockLive.recording : !!dex.recording}
+          levelsRef={dockDecide ? dockLive.levelsRef : dex.levelsRef}
+          /* Decide's stop hands over to the capture's own pop-up; Ask's stop is
+             also its send (see askSendOnTranscript above), and with nothing
+             recording the press sends whatever has been dictated already. */
+          onStop={() => {
+            if (dockDecide) { dockStopRef.current?.(); return; }
+            if (dex.recording) { askSendOnTranscript.current = true; dex.stopRecording(); return; }
+            chat.submit();
+          }}
+          onAsk={() => { setDexChannel("ask"); setDexOpen(true); setDexInline(true); if (!dex.recording) dex.startRecording(); }}
+          onDecide={() => setDockDecide(true)}
+          onCloseAsk={() => { setDexOpen(false); setDexChannel(null); setDexInline(false); }}
+          /* A TOGGLE, because More is now a state of the bar rather than a card
+             over it: the same press that grew the dock puts it back, which is
+             what a person does when the thing they opened is still under their
+             thumb. (The floating panel below keeps `true` — there the press is
+             caught by its own overlay, and a toggle would close it on the way
+             through.) */
+          onMore={() => setAllAppsOpen((v) => !v)}
+          moreOpen={allAppsOpen}
+          onOpenDecision={(id) => navigate(`/inbox?decision=${encodeURIComponent(id)}`)}
+        />
+      ) : (
       <FloatingDock
+        /* With no circle beside it the bar centres itself (index.css,
+           .app-dock-right-wide). Everywhere else the anchoring is untouched. */
+        /* …and the dock gives the width back when the circle returns, or the
+           two would overlap on the one screen that has both. */
+        wide={deskHasSlider && (!dexOpen || dexInline)}
         user={user}
         onMore={() => setAllAppsOpen(true)}
         moreOpen={allAppsOpen}
@@ -1085,15 +1237,19 @@ export default function Layout({ children }) {
            the panel; that tile has left for the Desk's top bar, so the number
            on More now counts something nothing inside More can show. The bell
            on /inbox carries it. */
-        dexActive={dexOpen}
+        /* ASK-INLINE — the dock knows nothing about a conversation the Desk
+           is hosting. Left as it was, the shared draft reached its own field
+           and the founder got two composers echoing each other, one in the
+           slider and one in the dock. These four are the whole of that leak. */
+        dexActive={dexOpen && !dexInline}
         dexLevels={dex.levels}
         /* KM-60 — the live meter, read on the wave's own animation frame.
            `dexLevels` stays for the state-shaped API; this is what actually
            drives the motion, and it costs Layout no renders. */
         dexLevelsRef={dex.levelsRef}
-        dexMode={chat.mode}
+        dexMode={dexInline ? "voice" : chat.mode}
         dexWaveState={dex.recording ? "listening" : chat.busy ? "thinking" : "idle"}
-        dexDraft={chat.draft}
+        dexDraft={dexInline ? "" : chat.draft}
         onDexDraft={chat.setDraft}
         onDexSubmit={chat.submit}
         /* KM-53 — the gap between "stop" and the transcript coming back.
@@ -1101,10 +1257,11 @@ export default function Layout({ children }) {
            narrows it to the window where there is genuinely nothing to show,
            so the placeholder never sits on top of text that has already
            arrived. */
-        dexTranscribing={!!dex.sending && !chat.draft}
+        dexTranscribing={!dexInline && !!dex.sending && !chat.draft}
         /* ASK-33.1 — which Dex the bar is serving, for its placeholder. */
         dexChannel={dexChannel}
       />
+      )}
       {/* KM-11 — the vignette. Rendered always so it can transition rather
           than pop in, and gated by a data attribute. Sits below the dock's
           z-index so the bar stays fully lit while the edges fall away. */}
@@ -1116,6 +1273,31 @@ export default function Layout({ children }) {
           sheet was only a receipt; DexChat is a transcript you can ask into,
           type into and attach to, so there is something worth opening. Voice
           still starts one tap in, from the mic inside it. */}
+      {/* DEX-SLIDER Part 1 — NOT ON THE DESK. The slider's left end opens the
+          same Ask sheet, so the circle would be a second door to one room.
+          It is removed from this page only — `deskHasSlider` is false on My
+          Work, Finance, CRM and the rest, where the circle is exactly as it
+          was. With the flag off it is everywhere again, Desk included.
+
+          …BUT IT COMES BACK THE MOMENT THE SHEET IS OPEN, and missing that is
+          what broke Ask when it was opened from the slider. This circle has TWO
+          jobs: shut, it is the door into Ask; open, it IS the composer's
+          mic/send button, because KM-26 made the dock and this circle the Ask
+          sheet's composer rather than drawing a second bar over them. The
+          slider replaced the first job only. Removing the circle outright took
+          the send button with it, so Ask opened on the Desk as a bar with
+          nowhere to press — and only on the Desk, which is exactly the shape
+          of the report. `dexOpen` is the whole fix. */}
+      {/* ASK-INLINE — and NOT while the Desk's slider is the composer. The
+          dock grows a mic and a field whenever Ask is open, which is right when
+          Ask is a sheet over the page and wrong when the slider below the
+          transcript is already carrying both. Two composers on one screen is
+          the bug the founder called out the first time, arriving from the
+          other side. */}
+      {/* 2026-10-06 — and NOT where the dock is the slider: "remove the dex
+          button entirely in other pages". The circle now exists only on a
+          phone whose shell has neither slider, which is the flag-off path. */}
+      {!dockIsSlider && (!deskHasSlider || (dexOpen && !dexInline)) && (
       <DexFab
         /* ASK-33 Phase 4 — closed, the FAB opens Dex in ASK: one tap, no
            picker, no scrim (KM-54's two doors collapsed; see DexFab.jsx). Open,
@@ -1130,8 +1312,53 @@ export default function Layout({ children }) {
         onStop={() => dex.stopRecording()}
         intent={dexOpen ? chat.fabIntent : "sparkle"}
       />
+      )}
+      {/* DECIDE, OFF THE DESK. The same well the Desk opens from its own
+          slider's right end, in the surface that draws no screen of its own —
+          just the capture and its review card. It mounts only while open, so
+          a page that never swipes right never pays for it. */}
+      {/* MOUNTED, NOT MOUNTED-ON-DEMAND. (2026-10-06 — the second bug in this
+          change, and the one the suites caught.) Rendering it only while
+          `dockDecide` was true meant the component appeared with `open` already
+          true, and its auto-start fired before its capture hook had settled:
+          the microphone never began, the well published recording:false for the
+          whole capture, and the handle's stop toggled the mic ON instead of
+          handing over to the pop-up. The Desk always kept this mounted and
+          toggled `open`, which is the transition the auto-start is written
+          against — so that is what it gets. */}
+      {dockIsSlider && (
+        <DeskDexWell
+          surface="overlay"
+          open={dockDecide}
+          phone
+          onMeter={onDockMeter}
+          /* WHERE THE CAPTURE'S STATUS PILL LANDS. The well renders it into
+             whatever container it is given, and it used to be given the Desk's
+             own column — so moving the well to Layout left "Dex is reading…"
+             and "Decision ready" with no place in the layout at all, drawn
+             behind the bar. It floats just above the bar now, on every page,
+             which is also where it belongs once Decide can be started from
+             anywhere. --dock-h follows whichever bar is up. */
+          className="fixed inset-x-3 z-[10050] mx-auto max-w-md"
+          style={{ bottom: "calc(var(--dock-bottom) + var(--dock-h, 4.5rem) + 0.75rem)" }}
+          onClose={() => { setDockDecide(false); setDockLive({ recording: false, capturing: false, levelsRef: null }); }}
+          onReview={(id) => { setDockDecide(false); navigate(`/inbox?decision=${encodeURIComponent(id)}`); }}
+          /* "Save as draft — decide later", which the Desk used to wire and I
+             did not: without it the pop-up's third answer was a button that
+             did nothing. verify:dex caught it by watching for the POST. */
+          onLater={(id) => saveAsDraft(id).then((ok) => {
+            qc.invalidateQueries({ queryKey: ["desk"] });
+            return ok;
+          })}
+        />
+      )}
+      {/* 2026-10-06 — THE FLOATING MENU IS THE OLD DOCK'S. With the slider in
+          the bar, More grows the bar itself (mobile/DockSlider's DockMorePanel)
+          and this card would be a second menu opening behind it. It stays for
+          the path that still has the old dock — the flag off — where there is
+          nothing to grow. */}
       <AllAppsPanel
-        open={allAppsOpen}
+        open={allAppsOpen && !dockIsSlider}
         onClose={() => setAllAppsOpen(false)}
         user={user}
         onSignOut={doLogout}
@@ -1156,7 +1383,7 @@ export default function Layout({ children }) {
           a door opened earlier. ASK-33 Phase 4: the next tap on the FAB opens
           Ask; Decide is reached from the Desk's Dex well. */}
       <DexChat
-        open={dexOpen}
+        open={dexOpen && !dexInline}
         onClose={() => { setDexOpen(false); setDexChannel(null); }}
         dex={dex}
         chat={chat}
@@ -1175,6 +1402,7 @@ export default function Layout({ children }) {
         </div>
       </BottomSheet>
     </div>
+    </DexDoorsContext.Provider>
     </HeaderSlotContext.Provider>
   );
 }

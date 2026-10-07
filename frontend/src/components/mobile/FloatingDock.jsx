@@ -60,6 +60,12 @@ export function dockSlots(user, t = (k, d) => d) {
     ? { to: "/crm", label: t("nav.crm", "CRM"), icon: AddressBook, testid: "dock-crm" }
     : null;
 
+  /* 2026-10-06 — THE FOURTH SLOT IS MORE NOW, not CRM. The slider took the
+     middle of the bar and left four places; the founder's call was that More
+     earns one of them and CRM goes back to the panel it came from (ASK-38
+     brought it down; this sends it back). `more` is not a destination — the
+     caller gives it the handler — so it carries no `to` and the dock renders
+     it as a button. */
   const slots = [desk, work, money, crm].filter(Boolean);
   // If a permission collapse duplicated My Work, drop the repeat rather than
   // showing the same destination twice — §8: nothing appears in two places.
@@ -67,7 +73,7 @@ export function dockSlots(user, t = (k, d) => d) {
   return slots.filter((s) => (seen.has(s.to) ? false : seen.add(s.to)));
 }
 
-function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
+export function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
   /* KM-49 — THE SELECTED SLOT IS FLAT, and it is an INDICATOR rather than a
      treatment of the whole slot. Founder: "the neumorphic styled option is not
      nice in the bottom fab bar so make it a usual materialistic flat style menu
@@ -125,7 +131,15 @@ function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
      `my-1` is on EVERY slot, live or not, so nothing shifts when the plate
      appears — and it keeps the plate a seam clear of the bar's own edge. */
   const cls = cn(
-    "dock-item my-1 flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-[1.125rem] px-0.5",
+    /* 2026-10-06 — THE LIVE PLATE SITS INSIDE THE HANDLE'S HEIGHT. `my-1` was
+       written against a 72px bar, where it left a plate just short of the bar
+       itself; the slider bar is 96px and the same margin made a slab taller
+       than the handle beside it, which the founder read as the selector
+       dominating the control. Capped at 3.5rem — comfortably inside the
+       handle's 5.375rem — and centred, so the four slots still fill the bar for
+       the thumb while only the PLATE is smaller. The touch target is the slot,
+       not the plate, so nothing gets harder to hit. */
+    "dock-item my-auto max-h-14 flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-[1.125rem] px-0.5",
     "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
     /* ASK-42 F — the bar's old material, on the slot: 55% ink over the bar's
        own gradient, with the same warm-white lip the bar wears so the shape
@@ -160,8 +174,7 @@ function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
 export function FloatingDock({
   user, onMore, moreOpen = false,
   dexActive = false, dexLevels = [], dexLevelsRef, dexMode = "voice", dexWaveState = "idle",
-  dexDraft = "", onDexDraft, onDexSubmit, dexTranscribing = false, dexChannel = null,
-}) {
+  dexDraft = "", onDexDraft, onDexSubmit, dexTranscribing = false, dexChannel = null, wide }) {
   const { t } = useTranslation();
   const location = useLocation();
   const slots = React.useMemo(() => dockSlots(user, t), [user, t]);
@@ -200,7 +213,12 @@ export function FloatingDock({
       // MPWA-14: `app-dock-left` anchors to the centred shell's left edge, so on
       // a wide display the pill hugs the column instead of the viewport corner.
       // On a phone the offset collapses to the original 1rem.
-      className="lg:hidden fixed app-dock-left app-dock-right z-[10000] bottom-safe-4"
+      /* DEX-SLIDER Part 1 — `wide` is for the one page with no Ask circle
+         beside the bar (the Desk, once the slider owns Ask). It swaps the
+         right anchor for the left one's expression so the pill centres.
+         Everywhere else this prop is absent and nothing moves. */
+      className={cn("lg:hidden fixed app-dock-left z-[10000] bottom-safe-4",
+        wide ? "app-dock-right-wide" : "app-dock-right")}
       data-testid="floating-dock"
       data-mobile-chrome=""
       aria-label={t("nav.primary", "Primary")}

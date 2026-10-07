@@ -116,7 +116,7 @@ const DECISIONS = [
     created_at: daysAgo(6), due_date: dateAhead(1),
     proposed_tasks: [
       { title: 'Raise PO with Surat Spinners', assignee_id: 'u_prod' },
-      { title: 'Block ₹4,80,000 against Diwali run', assignee_id: 'u_fin' },
+      { title: 'Block ₹4,80,000 against Diwali run', assignee_id: 'u_fin', priority: 'high' },
       { title: 'Confirm dispatch slot with transporter', assignee_id: 'u_store' },
     ],
   },
@@ -138,7 +138,7 @@ const DECISIONS = [
     created_at: daysAgo(3), due_date: dateAhead(6),
     proposed_tasks: [
       { title: 'Shortlist 3 candidates', assignee_id: 'u_prod' },
-      { title: 'Confirm salary band with Finance', assignee_id: 'u_fin' },
+      { title: 'Confirm salary band with Finance', assignee_id: 'u_fin', priority: 'medium' },
     ],
   },
   {
@@ -376,8 +376,21 @@ function cardsNeedsDecision() {
     const proposed = (d.proposed_tasks || []).length;
     const parts = [`Waiting ${waiting} day${waiting !== 1 ? 's' : ''}`, `From ${byId(d.created_by).name || 'Unknown'}`];
     if (proposed) parts.push(`Unblocks ${proposed} task${proposed !== 1 ? 's' : ''}`);
+    /* 2026-10-05 — the band the Desk's row is tinted by, built the same way
+       the server builds it (routers/desk.py): the HIGHEST priority among the
+       tasks this decision proposes, and `low` when it proposes none. The
+       fixture carries priorities on proposed tasks already, so this is the
+       real rule rather than a sprinkle of colour for the screenshot. */
+    const RANK = { low: 0, medium: 1, high: 2 };
+    const bands = (d.proposed_tasks || [])
+      .map((t) => t.priority)
+      .filter((b) => b in RANK);          // only a priority somebody SET counts
+    const priority = bands.length
+      ? bands.reduce((a, b) => (RANK[b] > RANK[a] ? b : a))
+      : 'low';
     return {
       id: d.id, kind: 'decision', title: d.title, context_line: parts.join(' · '),
+      priority,
       amount: d.amount, amount_formatted: fmtAmountLikeBackend(d.amount),
       cta: 'review', target_id: d.id, target_kind: 'decision',
       waiting_days: waiting, from_name: byId(d.created_by).name,
@@ -1014,7 +1027,16 @@ function resolve(method, path, q, body = {}) {
   ] };
   if (p === '/brain/export') return { url: null, message: 'Export not available in fixtures' };
   if (seg[1] === 'brain' && seg[2] === 'documents' && seg[3]) return OK;
-  if (p === '/ask') return { answer: 'Krishna Garments owes ₹4,00,000 and is 31 days late. Priya has chased twice with no answer.', sources: [{ id: 'i_1', title: 'Invoice SBT/25-26/0412' }] };
+  /* 2026-10-05 — the real /ask answers {type, answer, missing_information,
+     suggested_questions}; the fixture only ever sent `answer`, so the
+     follow-up chips a thin answer hands back were never exercised by any
+     suite — which is how they stayed decorative long enough for the founder
+     to find them. They are part of the contract now. */
+  if (p === '/ask') return { type: 'answer',
+    answer: 'Krishna Garments owes ₹4,00,000 and is 31 days late. Priya has chased twice with no answer.',
+    missing_information: [],
+    suggested_questions: ['How much is overdue in total?', 'Who else is past 30 days?'],
+    sources: [{ id: 'i_1', title: 'Invoice SBT/25-26/0412' }] };
 
   // --- misc screens ---
   if (p === '/calendar') return CALENDAR;

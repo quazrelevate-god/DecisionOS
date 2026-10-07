@@ -21,30 +21,57 @@
  * demo tenant gets the flag on the next boot (bootstrap/seed.py). A real
  * workspace never has it, and this renders nothing.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Eye } from "@phosphor-icons/react";
 import { useAuth } from "../context/AuthContext";
 
 export function DemoWorkspaceBanner() {
   const { tenant, logout } = useAuth();
-  // B20.1 — the eye hides the banner for THIS session (per tenant). It comes
-  // back on a fresh launch on purpose: the point is you never permanently
-  // forget you are looking at demo data, not your own.
-  const hideKey = `demo-banner-hidden:${tenant?.id || tenant?.name || "demo"}`;
+  // 2026-10-05 (founder request) — the banner shows only on the FIRST entry
+  // into the demo and then stays gone. Persisted in localStorage (per demo
+  // tenant) so it survives app restarts, unlike the old per-session hide. The
+  // eye still removes it immediately within this first session.
+  //   This reverses B20.1 — before, it returned on every launch so you never
+  //   forgot you were in demo data; by request it now appears once and no more.
+  //   Mounted once in the persistent Layout shell, so it stays visible for the
+  //   whole first session and is marked seen for the next launch.
+  const seenKey = `demo-banner-seen:${tenant?.id || tenant?.name || "demo"}`;
   const [hidden, setHidden] = useState(() => {
-    try { return sessionStorage.getItem(hideKey) === "1"; } catch { return false; }
+    try { return localStorage.getItem(seenKey) === "1"; } catch { return false; }
   });
+  // Mark it seen as soon as it is shown once, so the NEXT launch hides it even
+  // if the person never taps the eye. We do NOT flip `hidden` here, so it stays
+  // visible for this first session.
+  useEffect(() => {
+    if (tenant?.is_demo && !hidden) {
+      try { localStorage.setItem(seenKey, "1"); } catch { /* private mode */ }
+    }
+  }, [tenant?.is_demo, hidden, seenKey]);
   if (!tenant?.is_demo || hidden) return null;
   const dismiss = () => {
     setHidden(true);
-    try { sessionStorage.setItem(hideKey, "1"); } catch { /* private mode */ }
+    try { localStorage.setItem(seenKey, "1"); } catch { /* private mode */ }
   };
   return (
     <div
       data-testid="demo-banner"
       role="status"
-      className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-neutral-900 px-4 py-2 text-center text-[13px] leading-snug text-white [padding-top:calc(0.5rem+var(--sa-top))] lg:[padding-top:0.5rem]"
+      /* A LAYER, NOT A ROW. (2026-10-05, founder.)
+         This was the first child of the app shell — a flex column that is
+         exactly one screen tall and clips what will not fit — so every pixel
+         the banner took came straight out of the page under it. On a phone
+         that is three lines of type plus the notch inset, and the founder
+         watched it crush the Desk: "that banner makes the UI squeeze and
+         cramp, breaking the entire UI. Make the banner pop out as another
+         over-the-top layer so it won't disturb the existing components in the
+         background."
+         Fixed takes it out of the flow entirely, so the page behind is laid
+         out as though it were not there — which it is not, the moment the eye
+         is tapped. z-[400] puts it over the page and the header while leaving
+         dialogs (9500) and the dock (10000) above it: a notice must not sit on
+         top of the thing it interrupted you to let you do. */
+      className="fixed inset-x-0 top-0 z-[400] flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-neutral-900 px-4 py-2 text-center text-[13px] leading-snug text-white [padding-top:calc(0.5rem+var(--sa-top))] lg:[padding-top:0.5rem]"
     >
       <span className="inline-flex items-center gap-1.5">
         <button

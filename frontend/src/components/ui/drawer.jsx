@@ -20,6 +20,8 @@ const DrawerClose = DrawerPrimitive.Close
 const DrawerOverlay = React.forwardRef(({ className, ...props }, ref) => (
   <DrawerPrimitive.Overlay
     ref={ref}
+    /* data-scrim: a closing scrim takes no presses — see [data-scrim][data-state="closed"] in index.css. */
+    data-scrim=""
     className={cn("fixed inset-0 z-50 bg-black/80", className)}
     {...props} />
 ))

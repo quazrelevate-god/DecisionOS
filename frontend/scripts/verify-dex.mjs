@@ -42,6 +42,16 @@
  */
 import { chromium } from 'playwright';
 import { signIn } from './lib/auth.mjs';
+/* DEX-SLIDER Part 5 — on a phone the well's testids moved BEHIND A DOOR.
+ *
+ * Nothing here was deleted and nothing was renamed: the ripple, the keyboard,
+ * the attach circle, the kept-capture note and the status are the same nodes,
+ * rendered on the overlay surface instead of in the well (DeskDexWell
+ * `surface`). So every check below still means what it meant — the suite just
+ * has to open the door first, the way a person now does. Desktop never has a
+ * door, and with the flag off the phone has none either; `door` is that
+ * difference and the only one. */
+import { DEX_SLIDER } from '../src/lib/flags.js';
 
 const BASE = process.env.AUDIT_BASE || 'http://localhost:3000';
 const READY = /^Decision ready for Sunita Rao · 2 tasks, 1 workflow$/;
@@ -67,6 +77,34 @@ const until = async (fn, timeout = 25000, step = 250) => {
   }
 };
 
+/* MERGE 2026-10-06 — AND NOW THE DIALOG MOVES, SO WAIT FOR IT TO LAND.
+   origin/mobile-capacitor ("Mobile: fix open/close glitch, smooth transitions")
+   gives every mobile dialog a 220ms opaque slide UP from the bottom — index.css
+   sets --tw-enter-translate-y: 100% on [role="dialog"][data-state="open"] — where
+   the phone previously had NO enter animation at all and the panel simply
+   appeared in place. The reach checks below read the panel's box the instant its
+   step appears, which is now ~20ms into that slide with the foot still a screen
+   below the fold: "Next, Discard and close are whole and in reach" failed at 390
+   and 360 measuring a panel in flight, and nothing about the product was wrong.
+   So nothing is measured while it is still moving. The Web Animations API
+   answers that exactly — a running animation on the element or inside it — and
+   two identical boxes in a row cover the springs (framer-motion) that have no
+   CSS animation to ask about. It is the rule `restingBox` was already written
+   around, applied to the pop-up. The idle loops that never stop (the ripple,
+   spinners) are excluded by name, or this would wait forever. */
+const stillness = (page, sel) => until(() => page.evaluate((s) => {
+  const el = document.querySelector(s);
+  if (!el) return false;
+  const live = el.getAnimations({ subtree: true }).some((a) => a.playState === 'running'
+    && !/ripple|pulse|spin|shimmer|breathe|wave|bounce/i.test(a.animationName || ''));
+  if (live) return false;
+  const r = el.getBoundingClientRect();
+  const key = [r.top, r.left, r.width, r.height].map((n) => Math.round(n)).join(',');
+  const same = window.__stillKey === key;
+  window.__stillKey = key;
+  return same;
+}, sel).catch(() => false), 4000, 120);
+
 const browser = await chromium.launch({
   args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
 });
@@ -82,10 +120,49 @@ async function open(viewport) {
   return { ctx, page, errors, signedIn };
 }
 
+/* Is Dex behind the slider's door on this viewport? */
+const behindDoor = (page) => DEX_SLIDER && page.viewportSize().width < 1024;
+
+/** The box the well's own checks measure: the well, or the door it moved into. */
+/** The control that stops a recording: the well's mic, or — on the slider —
+ *  the handle, which parks at the stop and becomes the send. */
+const stopControl = (page) => page.getByTestId(behindDoor(page) ? 'dex-slider-handle' : 'voice-ripple-mic');
+
+/** Start a capture the way a person does: the full drag right, released at the
+ *  stop. Short of the stop nothing happens by design, so this cannot be a
+ *  gentle nudge.
+ *
+ *  THE DOOR IS GONE (2026-10-02). There is no full screen any more — the
+ *  slider's own track becomes the recording surface, the handle parks at the
+ *  stop and turns into a send, and the whole capture happens in the control.
+ *  So "open the door" is now "put the track into capture", and the thing to
+ *  wait for is the handle's own label changing. No-op off the slider. */
+async function openDoor(page) {
+  if (!behindDoor(page)) return;
+  const capturing = async () => ((await page.locator('[data-testid="dex-slider-handle"]')
+    .getAttribute('aria-label')) || '').toLowerCase().includes('stop');
+  if (await capturing()) return;
+  /* GRAB IT WHERE IT IS, NOT WHERE IT WAS. The handle is still springing back
+     to the centre right after a pop-up closes, so a box read the instant the
+     pop-up leaves points at empty track and the press lands on nothing — the
+     drag then does nothing and the capture never starts. */
+  await stillness(page, '[data-testid="dex-slider-handle"]');
+  const track = await page.locator('[data-testid="dex-slider"] .kr-slider-well').boundingBox();
+  const h = await page.locator('[data-testid="dex-slider-handle"]').boundingBox();
+  const cy = h.y + h.height / 2;
+  await page.mouse.move(h.x + h.width / 2, cy);
+  await page.mouse.down();
+  await page.mouse.move(track.x + track.width - 2, cy, { steps: 16 });
+  await page.mouse.up();
+  await until(capturing, 8000);
+  await page.waitForTimeout(300);
+}
+
 async function gotoDesk(page) {
   await page.goto(`${BASE}/inbox?fixture=busy`, { waitUntil: 'domcontentloaded' });
-  await page.getByTestId('desk-insight').waitFor({ timeout: 20000 });
+  await page.getByTestId(behindDoor(page) ? 'dex-slider' : 'desk-insight').waitFor({ timeout: 20000 });
   await page.waitForTimeout(1200);
+  await openDoor(page);
 }
 
 const setEnding = (page, v) => page.evaluate((x) => {
@@ -111,24 +188,92 @@ const toasts = (page, text) => page.locator('[data-sonner-toast]').filter({ hasT
 const composerIn = (page) =>
   page.locator('[data-testid="desk-dex-composer"], [data-testid="desk-dex-floating"]');
 
+/** A field to type a capture into, on whichever surface this is.
+ *
+ *  THE WELL still works the way it always did: press the keyboard and a
+ *  composer opens in the well's floor.
+ *
+ *  THE SLIDER has no keyboard — the track is the recording surface and it
+ *  carries exactly one control, the handle. Typing a decision there is: start a
+ *  capture, stop it straight away, and type into the pop-up's transcript, which
+ *  is empty when nothing was said. So "a field" on that surface IS the pop-up's
+ *  transcript, and if one is already open this hands that back rather than
+ *  starting a second capture underneath it.
+ */
 async function openField(page) {
-  if ((await composerIn(page).count()) === 0) {
+  /* ALREADY SOMEWHERE TO TYPE? Hand it back. This has to come first: section C
+     attaches a file from the pop-up and then types, and starting a fresh
+     capture under an open pop-up means clicking a handle that is behind it. */
+  if (await page.getByTestId('dex-popup-transcript').count()) {
+    return page.getByTestId('dex-popup-transcript');
+  }
+  if (await composerIn(page).count()) return composerIn(page).first().locator('textarea');
+
+  /* A KEPT CAPTURE OWNS THE NEXT PRESS: `kept` is draft text with no field
+     open, and the surface then offers those words back in the pop-up rather
+     than opening an empty one. That is the state after a REFUSED send
+     (9959478). Clear them when the suite wants a fresh field; a person would
+     press the same Discard. It lives on the DESK now, so it is dealt with
+     before anything covers it. */
+  {
+    const d = page.getByTestId('dex-well-draft-discard');
+    if (await d.count()) { await d.click(); await page.waitForTimeout(300); }
+  }
+
+  if (!behindDoor(page)) {
     await page.getByTestId('desk-dex-keyboard').click();
     await composerIn(page).first().waitFor({ timeout: 4000 });
+    return composerIn(page).first().locator('textarea');
+  }
+
+  await openDoor(page);
+  await stopControl(page).click();
+  /* WHICHEVER ARRIVES. Normally the drag starts a capture and stopping lands in
+     the pop-up's transcript. But when Dex is still reading the last note the
+     capture is refused outright (ASK-33.1) and the handle goes home, so there
+     is nothing to stop and nothing opens — waiting only for the transcript
+     would make this suite assert a guard it does not mean to test here. */
+  await until(async () =>
+    (await page.getByTestId('dex-popup-transcript').count()) > 0
+    || (await composerIn(page).count()) > 0, 8000);
+  if (await page.getByTestId('dex-popup-transcript').count()) {
+    return page.getByTestId('dex-popup-transcript');
   }
   return composerIn(page).first().locator('textarea');
 }
+
+/** Start a recording, whichever surface this is. The slider starts one with
+ *  the drag itself; the well needs the mic pressed. */
+async function micPress(page) {
+  await openDoor(page);
+  if (behindDoor(page)) return;        // the drag itself started it
+  await page.getByTestId('voice-ripple-mic').click();
+}
+
+/** Be on the Desk. Nothing to step out of any more — the capture happens in
+ *  the track and the Desk was never covered — but the places that mean "be on
+ *  the Desk now" still say so, and this reads as a deliberate retirement
+ *  rather than as something forgotten. */
+async function toDesk(page) {}
+
 async function typeAndSend(page, words) {
   const input = await openField(page);
   await input.fill(words);
+  /* Enter sends from the composer; the pop-up's first step sends with Next,
+     which is the button beside the field the words are already in. */
+  if (behindDoor(page) && (await page.getByTestId('dex-popup-transcript').count())) {
+    await page.getByTestId('dex-popup-next').click();
+    return;
+  }
   await input.press('Enter');
 }
 
 /* The well's box, in CSS px. PILOT-2 A — the well is the door and nothing
    else, so the assertion across every step is that nothing about it moves. */
-const geometry = (page) => page.evaluate(() => {
+const geometry = (page) => page.evaluate((sel) => {
   const T = (s) => { const e = document.querySelector(s); return e ? Math.round(e.getBoundingClientRect().top) : null; };
-  const well = document.querySelector('[data-testid="desk-insight"]');
+  const well = document.querySelector(sel);
+  if (!well) return null;                       // the door is shut: see wayOut
   const box = well.getBoundingClientRect();
   return {
     wellTop: Math.round(box.top), wellHeight: Math.round(box.height),
@@ -136,32 +281,106 @@ const geometry = (page) => page.evaluate(() => {
     floorTop: T('[data-testid="desk-dex-keyboard"]'),
     ripple: !!document.querySelector('[data-testid="desk-dex-ripple"]'),
   };
-});
-const sameBox = (a, b) => a.wellTop === b.wellTop && a.wellHeight === b.wellHeight && a.floorTop === b.floorTop;
+}, '[data-testid="desk-insight"]');   // the well's own box; the slider has wayOut
+/* WHAT "GIVES THE WELL BACK" MEANS ON EACH SURFACE.
+   In the well it is literal: the pop-up goes and the ripple is in the box it
+   was always in, unmoved. Behind the door it cannot be, because the door shuts
+   itself when the pop-up takes over — so the claim becomes the one that is
+   actually worth making there: the pop-up is gone, you are back on the Desk
+   with the slider at rest, and the way back in still works. Both are "nothing
+   is stranded and nothing moved"; only the surface differs. */
+async function wayOut(page, rest) {
+  if (!behindDoor(page)) {
+    const g = await restingBox(page);
+    return { back: g?.ripple === true, same: sameBox(g, rest) };
+  }
+  const slider = page.getByTestId('dex-slider');
+  const label = (await page.locator('[data-testid="dex-slider-handle"]').getAttribute('aria-label')) || '';
+  const back = (await slider.count()) === 1 && !label.toLowerCase().includes('stop');
+  /* THE HANDLE TRAVELS HOME, so wait for it to arrive. It springs back to the
+     centre over a few hundred ms and this read used to catch it in flight —
+     caught after the merge, which lengthened the transitions around it, but the
+     spring was always there. "Centred" is a claim about where it ENDS. */
+  const centres = () => page.evaluate(() => {
+    const h = document.querySelector('[data-testid="dex-slider-handle"]');
+    const t = document.querySelector('[data-testid="dex-slider"] .kr-slider-well');
+    if (!h || !t) return null;
+    const a = h.getBoundingClientRect(); const b = t.getBoundingClientRect();
+    return Math.abs((a.x + a.width / 2) - (b.x + b.width / 2));
+  }).catch(() => null);
+  const centred = await until(async () => { const d = await centres(); return d !== null && d <= 3; }, 4000, 120);
+  return { back, same: centred };
+}
+
+const sameBox = (a, b) => !!a && !!b && a.wellTop === b.wellTop && a.wellHeight === b.wellHeight && a.floorTop === b.floorTop;
+
+/* MEASURE IT WHEN IT HAS STOPPED MOVING. The well animates back as a pop-up
+   closes, and reading its box the instant the pop-up node leaves the DOM caught
+   it mid-transition: "the same box it has been throughout" and "unmoved" failed
+   roughly one run in three, only at 1440, only straight after a close, and
+   never for a reason that existed in the product. Two identical reads in a row
+   is the honest wait — a fixed sleep would just be a longer guess. */
+const restingBox = async (page) => {
+  /* THREE reads at 200ms, not two at 100. The two-read rule caught a plateau:
+     the Desk lays out once with the query layer still loading, holds that for
+     a moment, and only then — when the Workflows tile fills — does the hero
+     shrink and the well drop into its real place. The baseline was being taken
+     during that plateau, so "the well has not moved" compared a loading layout
+     against a loaded one and failed with a 91px delta, about one run in four.
+     Probed at 1440 directly: the well is 387/97 both before the pop-up opens
+     and after, so the product does not move and this is purely when the suite
+     chooses to look. */
+  /* WAIT FOR THE DATA, THEN FOR THE PIXELS. Settling alone was not enough: the
+     Desk lays out with the query layer still in flight and HOLDS that layout
+     long enough to look settled, so three stable reads could still land on a
+     loading page. The Workflows tile's count is the honest signal that the
+     Desk's data has arrived — it renders "…" until it has — and the hero's
+     height depends on that tile. After it, settle as before. */
+  await until(async () => {
+    const t = await page.getByTestId('kpi-workflows-count').textContent().catch(() => null);
+    return !!t && t.trim() !== '…';
+  }, 15000);
+  let last = await geometry(page);
+  let stable = 0;
+  for (let i = 0; i < 40; i += 1) {
+    await page.waitForTimeout(200);
+    const now = await geometry(page);
+    stable = sameBox(now, last) ? stable + 1 : 0;
+    last = now;
+    if (stable >= 2) return now;
+  }
+  return last;
+};
 
 /** MPWA-01 §5.1 / ASK-43 — every control in `testid` is a 44px target in the
  *  app's own pixels, and is whole, on the glass and uncovered (the point in its
  *  middle IS it). */
-const touchAndFold = (page, testid, viewport) => page.evaluate(([t, vh]) => {
-  const el = document.querySelector(`[data-testid="${t}"]`);
-  if (!el) return false;
-  const btns = [...el.querySelectorAll('button,a')];
-  return btns.length > 0 && btns.every((b) => {
-    if (b.offsetHeight < 44) return false;
+const touchAndFold = async (page, testid, viewport) => {
+  await stillness(page, `[data-testid="${testid}"]`);
+  return page.evaluate(([t, vh]) => {
+    const el = document.querySelector(`[data-testid="${t}"]`);
+    if (!el) return false;
+    const btns = [...el.querySelectorAll('button,a')];
+    return btns.length > 0 && btns.every((b) => {
+      if (b.offsetHeight < 44) return false;
+      const r = b.getBoundingClientRect();
+      if (r.bottom > vh || r.top < 0) return false;
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return !!hit && (b === hit || b.contains(hit));
+    });
+  }, [testid, viewport.height]);
+};
+const onGlass = async (page, testid, viewport) => {
+  await stillness(page, `[data-testid="${testid}"]`);
+  return page.evaluate(([t, vh]) => {
+    const b = document.querySelector(`[data-testid="${t}"]`);
+    if (!b || b.offsetHeight < 44) return false;
     const r = b.getBoundingClientRect();
     if (r.bottom > vh || r.top < 0) return false;
     const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
     return !!hit && (b === hit || b.contains(hit));
-  });
-}, [testid, viewport.height]);
-const onGlass = (page, testid, viewport) => page.evaluate(([t, vh]) => {
-  const b = document.querySelector(`[data-testid="${t}"]`);
-  if (!b || b.offsetHeight < 44) return false;
-  const r = b.getBoundingClientRect();
-  if (r.bottom > vh || r.top < 0) return false;
-  const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-  return !!hit && (b === hit || b.contains(hit));
-}, [testid, viewport.height]);
+  }, [testid, viewport.height]);
+};
 
 async function run(viewport) {
   const w = `${viewport.width}`;
@@ -169,16 +388,25 @@ async function run(viewport) {
   const { ctx, page, errors, signedIn } = await open(viewport);
   check(`${w}: signed in`, signedIn);
   const mic = page.getByTestId('voice-ripple-mic');
-  const rest = await geometry(page);
-  check(`${w}: the well opens on the ripple, not a form`, rest.ripple === true);
+  const rest = behindDoor(page) ? null : await restingBox(page);
+  /* On the slider there is no well to open and no ripple to open it on: the
+     Desk rests with a slider at its centre and nothing is capturing. That is
+     the same claim — the Desk does not greet you with a form. */
+  check(`${w}: the Desk rests on the control, not a form`,
+    behindDoor(page)
+      ? (await page.getByTestId('dex-slider').count()) === 1
+        && (await page.getByTestId('desk-dex-composer').count()) === 0
+      : rest.ripple === true);
 
   // ----------------------------------------------- A · SPOKEN, READY, APPROVED
   await setEnding(page, null);
   await setSaid(page, LONG);
-  await mic.click();
+  await micPress(page);
   await page.waitForTimeout(1500);
-  check(`${w} A: the ripple records`, (await mic.getAttribute('aria-pressed')) === 'true');
-  await mic.click();
+  check(`${w} A: the ripple records`, behindDoor(page)
+    ? ((await page.locator('[data-testid="dex-slider-handle"]').getAttribute('aria-label')) || '').toLowerCase().includes('stop')
+    : (await mic.getAttribute('aria-pressed')) === 'true');
+  await stopControl(page).click();
   check(`${w} A: stopping opens the pop-up on step 1`, await atStep(page, 'said', 4000));
   const field = page.getByTestId('dex-popup-transcript');
   await until(async () => (await field.inputValue()).length > 100, 20000);
@@ -193,8 +421,10 @@ async function run(viewport) {
   check(`${w} A: it can be edited`, !(await field.evaluate((el) => el.readOnly || el.disabled)));
   check(`${w} A: Next, Discard and close are whole and in reach`,
     await onGlass(page, 'dex-popup-next', viewport) && await onGlass(page, 'dex-popup-discard', viewport) && await onGlass(page, 'dex-popup-close', viewport));
-  const at1 = await geometry(page);
-  check(`${w} A: the well has not moved`, sameBox(at1, rest), `${rest.wellTop}/${rest.wellHeight} -> ${at1.wellTop}/${at1.wellHeight}`);
+  if (!behindDoor(page)) {
+    const at1 = await geometry(page);
+    check(`${w} A: the well has not moved`, sameBox(at1, rest), `${rest.wellTop}/${rest.wellHeight} -> ${at1.wellTop}/${at1.wellHeight}`);
+  }
 
   await page.getByTestId('dex-popup-next').click();
   check(`${w} A: Next goes to step 2 in the same pop-up`, await atStep(page, 'reading', 4000) && (await popup(page).count()) === 1);
@@ -230,14 +460,17 @@ async function run(viewport) {
   check(`${w} A: Approve issues it`, await until(async () => (await toasts(page, 'Approved').count()) > 0, 8000));
   check(`${w} A: … and the foot becomes Done`, await until(async () => (await page.getByTestId('decision-panel-done').count()) === 1, 8000));
   await page.getByTestId('decision-panel-done').click({ timeout: 5000 }).catch(() => page.getByTestId('dex-popup-close').click());
-  check(`${w} D: Done gives the well back to the ripple`, await popupGone(page) && (await geometry(page)).ripple === true);
-  check(`${w} D: … the same box it has been throughout`, sameBox(await geometry(page), rest));
+  { const o = await popupGone(page) && await wayOut(page, rest);
+    check(`${w} D: Done gives the well back to the ripple`, o && o.back);
+    check(`${w} D: … the same box it has been throughout`, o && o.same); }
   await gotoDesk(page);
 
   // ---------------------------------------------------- B · NOTHING TO DECIDE
   await setEnding(page, 'nothing');
   await typeAndSend(page, 'How much profit did we make this month?');
-  check(`${w} B: a typed capture skips step 1`, await atStep(page, 'reading', 4000));
+  check(behindDoor(page)
+    ? `${w} B: a typed capture is typed IN step 1 and sent from it`
+    : `${w} B: a typed capture skips step 1`, await atStep(page, 'reading', 4000));
   check(`${w} B: NOTHING TO DECIDE is the pop-up's last step`, await atStep(page, 'nothing'));
   const nothing = page.getByTestId('dex-outcome-nothing');
   const nothingText = clip(await nothing.textContent().catch(() => ''), 200);
@@ -247,17 +480,34 @@ async function run(viewport) {
   check(`${w} B: not styled as an error`, (await nothing.getAttribute('role')) !== 'alert' && (await nothing.locator('svg').count()) === 0);
   check(`${w} B: its control is in reach`, await onGlass(page, 'dex-popup-gotit', viewport));
   await page.getByTestId('dex-popup-gotit').click();
-  check(`${w} D: "Got it" gives the well back`, await popupGone(page) && (await geometry(page)).ripple === true);
-  check(`${w} D: … unmoved`, sameBox(await geometry(page), rest));
+  { const o = await popupGone(page) && await wayOut(page, rest);
+    check(`${w} D: "Got it" gives the well back`, o && o.back);
+    check(`${w} D: … unmoved`, o && o.same); }
 
   // ------------------------------------------- C · FAILED, with a file attached
   await setEnding(page, 'consent');
-  const [chooser] = await Promise.all([
-    page.waitForEvent('filechooser', { timeout: 5000 }),
-    page.getByTestId('desk-dex-attach').click(),
-  ]);
+  /* ATTACH MOVED INTO THE POP-UP on the slider (2026-10-02): you attach to a
+     decision after you have said it, not before. So the file is chosen from the
+     words, which means getting to step 1 first. The well is unchanged. */
+  let chooser;
+  if (behindDoor(page)) {
+    await openDoor(page);
+    await stopControl(page).click();
+    await page.getByTestId('dex-popup-attach').waitFor({ timeout: 10000 });
+    [chooser] = await Promise.all([
+      page.waitForEvent('filechooser', { timeout: 5000 }),
+      page.getByTestId('dex-popup-attach').click(),
+    ]);
+  } else {
+    [chooser] = await Promise.all([
+      page.waitForEvent('filechooser', { timeout: 5000 }),
+      page.getByTestId('desk-dex-attach').click(),
+    ]);
+  }
   await chooser.setFiles({ name: 'indigo-po.png', mimeType: 'image/png', buffer: PNG });
-  const chips = page.getByTestId('desk-insight').locator('ul[aria-label="Attached files"] li');
+  /* The chips follow the paperclip: in the well on desktop, in the door on a
+     phone, because that is the surface whose floor you pressed. */
+  const chips = page.locator('ul[aria-label="Attached files"] li');
   await chips.first().waitFor({ timeout: 8000 }).catch(() => {});
   check(`${w} C: the file is attached in the well`, (await chips.count()) === 1);
   await typeAndSend(page, 'Tell Suresh to ship the indigo lot before Friday');
@@ -282,7 +532,7 @@ async function run(viewport) {
   check(`${w} C: Retry reads it again, in the same pop-up`, await atStep(page, 'reading', 6000));
   check(`${w} C: the re-sent capture reaches its own ending`, await atStep(page, 'failed'));
   await page.getByTestId('dex-popup-notnow').click();
-  check(`${w} D: "Not now" gives the well back too`, await popupGone(page) && (await geometry(page)).ripple === true);
+  check(`${w} D: "Not now" gives the well back too`, await popupGone(page) && (await wayOut(page, rest)).back);
   await gotoDesk(page);
 
   // ------------------------- E · closing is not cancelling; one note at a time
@@ -293,17 +543,25 @@ async function run(viewport) {
   check(`${w} E: the pop-up closes while Dex reads`, await popupGone(page));
   check(`${w} E: … and the well says it is still reading`,
     (await page.getByTestId('dex-well-status').getAttribute('data-status').catch(() => null)) === 'reading');
-  await typeAndSend(page, 'Ask Priya to book the Tirupur truck for Thursday');
-  await page.waitForTimeout(800);
+  /* THE SECOND CAPTURE IS A DRAG on the slider, because that is what starting
+     one is there — there is no field to type into until a capture exists. The
+     refusal has to be the same either way: plain words, and nothing opened. */
+  if (behindDoor(page)) {
+    await openDoor(page);
+  } else {
+    await typeAndSend(page, 'Ask Priya to book the Tirupur truck for Thursday');
+  }
+  await page.waitForTimeout(1200);
   check(`${w} E: a second capture meanwhile is refused in plain words`,
     (await toasts(page, 'Dex is still reading your last one').count()) >= 1 && (await popup(page).count()) === 0);
   check(`${w} E: the first still reaches its ending`,
     await until(async () => (await page.getByTestId('dex-well-status').getAttribute('data-status').catch(() => null)) === 'ready'));
   check(`${w} E: … and says so, since the pop-up was closed`, (await toasts(page, 'Decision ready').count()) >= 1);
+  await toDesk(page);
   await page.getByTestId('dex-well-status').click();
   check(`${w} E: opening it again shows where it got to`, await atStep(page, 'made', 5000));
   await page.getByTestId('desk-dex-later').click();
-  check(`${w} D: Save as draft gives the well back`, await popupGone(page) && (await geometry(page)).ripple === true);
+  check(`${w} D: Save as draft gives the well back`, await popupGone(page) && (await wayOut(page, rest)).back);
   /* 2026-09-27 — ON THE DECISION, NOT IN THIS BROWSER. The mark was a list of
      ids in localStorage when PILOT-2 B shipped the rename; it is a field on the
      decision now (POST /decisions/:id/draft, lib/decisionDrafts), so that it
@@ -312,9 +570,10 @@ async function run(viewport) {
   check(`${w} D: … and marks the decision a draft, on the decision`,
     await until(async () => (await page.evaluate(() => (window.__DOS_FIXTURE_CALLS || [])
       .some((c) => c.method === 'POST' && /\/decisions\/dec_fixture\/draft$/.test(c.url)))), 6000));
-  const typed = await openField(page);
-  await typed.fill('Ask Priya to book the Tirupur truck for Thursday');
-  await typed.press('Enter');
+  /* typeAndSend, not a hand-rolled fill-and-Enter: Enter sends from the
+     composer but the pop-up's first step sends with Next, and this is the one
+     place that still spelled it out itself. */
+  await typeAndSend(page, 'Ask Priya to book the Tirupur truck for Thursday');
   check(`${w} E: and the next send goes through once it has`, await atStep(page, 'reading', 8000));
   check(`${w} F: no decide path opened the sheet, all run long`, (await sheet(page).count()) === 0);
   await atStep(page, 'made');
@@ -323,20 +582,25 @@ async function run(viewport) {
 
   // ----------------------------------------- G · the words are kept, not lost
   await setSaid(page, LONG);
-  await mic.click();
+  await micPress(page);
   await page.waitForTimeout(1200);
-  await mic.click();
+  await stopControl(page).click();
   await atStep(page, 'said', 4000);
   await until(async () => (await field.inputValue()).length > 100, 20000);
   await page.getByTestId('dex-popup-close').click();
   await popupGone(page);
+  await toDesk(page);
   const note = page.getByTestId('dex-well-draft');
   check(`${w} G: closed on step 1, the well says the words are kept`, await note.isVisible().catch(() => false));
   check(`${w} G: … and offers them back, not in its pill`,
     (await page.getByTestId('dex-well-draft-open').count()) === 1 && (await page.getByTestId('desk-dex-composer').count()) === 0);
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.getByTestId('desk-insight').waitFor({ timeout: 20000 });
+  await page.getByTestId(behindDoor(page) ? 'dex-slider' : 'desk-insight').waitFor({ timeout: 20000 });
   await page.waitForTimeout(1200);
+  /* NO openDoor here, deliberately. A reload closes the door, and the kept
+     words are offered on the DESK now rather than inside it — which is the
+     point of moving that note out: closing the door must never be able to hide
+     unsent words. */
   check(`${w} G: they survive a reload`, /Kept from before/.test(await note.textContent().catch(() => '')));
   await page.getByTestId('dex-well-draft-open').click();
   check(`${w} G: Open brings step 1 back with them`,
@@ -346,13 +610,49 @@ async function run(viewport) {
 
   // ------------------------------------------------- F · the sheet is Ask-only
   if (phone) {
-    await page.getByTestId('dex-fab').click();
-    await sheet(page).waitFor({ timeout: 8000 }).catch(() => {});
-    await page.waitForTimeout(700);
-    check(`${w} F: the FAB still opens the sheet in one tap`, (await sheet(page).count()) === 1);
-    check(`${w} F: … and it is ASK`, /\bAsk\b/i.test(await sheet(page).innerText().catch(() => '')),
-      clip(await sheet(page).innerText().catch(() => ''), 60));
-    await page.getByTestId('dex-chat-close').click();
+    /* ONE TAP, OR ONE DRAG. The Ask circle was the Desk's way into the sheet;
+       with the slider it is the track's left end, and the circle is gone from
+       this page on purpose (it is still beside the dock everywhere else —
+       verify:nav measures it there). What is being asserted is unchanged: the
+       way in from the Desk opens the ASK sheet, and no decide path did. */
+    if (DEX_SLIDER) {
+      check(`${w} F: the Desk has no Ask circle while the slider is there`,
+        (await page.getByTestId('dex-fab').count()) === 0);
+      /* Nothing to dismiss before the left drag any more — the capture lives in
+         the track, and the track is where this drag starts. */
+      const track = await page.locator('[data-testid="dex-slider"] .kr-slider-well').boundingBox();
+      const h = await page.locator('[data-testid="dex-slider-handle"]').boundingBox();
+      const cy = h.y + h.height / 2;
+      await page.mouse.move(h.x + h.width / 2, cy);
+      await page.mouse.down();
+      await page.mouse.move(track.x + 2, cy, { steps: 16 });
+      await page.mouse.up();
+    } else {
+      await page.getByTestId('dex-fab').click();
+    }
+    /* 2026-10-06 — ASK OPENS IN THE BAR, on every page. The Desk's in-sheet
+       chat is gone with the Desk's slider: there is one control and one place
+       the conversation appears, which is the dock grown into a panel. From the
+       FAB (flag off) it is still the sheet over the page. */
+    if (DEX_SLIDER) {
+      const pane = page.getByTestId('dock-ask-panel');
+      await pane.waitFor({ timeout: 8000 }).catch(() => {});
+      await page.waitForTimeout(500);
+      check(`${w} F: the slider's left end opens Ask in the dock`, (await pane.count()) === 1);
+      check(`${w} F: … and it is ASK`, /\bAsk\b/i.test(await pane.innerText().catch(() => '')),
+        clip(await pane.innerText().catch(() => ''), 60));
+      check(`${w} F: … and no sheet was raised over the page`, (await sheet(page).count()) === 0);
+      check(`${w} F: … and the composer is the slider, not a plus menu`,
+        (await page.getByTestId('dex-slider-plus').count()) === 0);
+      await page.getByTestId('dock-ask-close').click();
+    } else {
+      await sheet(page).waitFor({ timeout: 8000 }).catch(() => {});
+      await page.waitForTimeout(700);
+      check(`${w} F: the FAB still opens the sheet in one tap`, (await sheet(page).count()) === 1);
+      check(`${w} F: … and it is ASK`, /\bAsk\b/i.test(await sheet(page).innerText().catch(() => '')),
+        clip(await sheet(page).innerText().catch(() => ''), 60));
+      await page.getByTestId('dex-chat-close').click();
+    }
   }
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

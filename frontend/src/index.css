@@ -138,7 +138,7 @@
            390px phone (488 own px against a 448 cap) and put 20px gutters down
            both sides of a screen that had none. 28rem / 0.8 = 35rem of own
            pixels = the same 28rem on the glass. */
-        --app-shell: calc(28rem / var(--ui-scale, 1));
+        --app-shell: calc(28rem / var(--ui-density, 1));
 
         /* HOW FAR THE CENTRED SHELL'S EDGE IS FROM THE VIEWPORT'S — signed, so
            it goes NEGATIVE once the viewport is narrower than the cap. The
@@ -232,7 +232,7 @@
        not mine to invent. Landscape is already the desktop layout and untouched. */
     @media (min-width: 768px) and (max-width: 1023.98px) {
         :root {
-            --app-shell: calc(40rem / var(--ui-scale, 1));
+            --app-shell: calc(40rem / var(--ui-density, 1));
         }
     }
 
@@ -468,6 +468,23 @@
         min-height: 0;
     }
 
+    /* 2026-10-06 — the THIRD documented exception, and the narrowest. The open
+       circle at the end of a Desk sheet row (.kr-desk-row-open, inside
+       .kr-desk-row-roomy only) is a second way into something the WHOLE ROW
+       already does: DeskRow's root is the link, its onClick is the same
+       r.onOpen, and it is full width and never under 44px tall. So the floor
+       here was not protecting a thumb — it was setting the row's height. A
+       pill whose type had already bent to 11pt on a 360x640 still could not
+       fit, because this one 44px circle held it open, and `overflow: hidden`
+       then took the difference out of the circle (3px off its foot, measured).
+       It is sized off --desk-row-scale with the rest of the row instead; 24px
+       at the floor, inside a 44px-tall row that is itself the target. Outside
+       the sheet the circle is untouched and keeps the floor. */
+    .kr-desk-row-roomy .kr-desk-row-open {
+        min-height: 0;
+        min-width: 0;
+    }
+
     /* A control that opted into a taller tier keeps it. */
     .min-h-touch-md { min-height: var(--control-h-md) !important; }
     .min-h-touch-lg { min-height: var(--control-h-lg) !important; }
@@ -547,8 +564,37 @@
     button.dock-item { min-height: 3.25rem; min-width: var(--dock-item-min, 3.25rem); }
 }
 
-/* The dock in MPWA-03 floats this far above the home indicator. */
-.bottom-safe-4 { bottom: calc(1rem + var(--sa-bottom)); }
+/* HOW FAR THE DOCK FLOATS ABOVE THE HOME INDICATOR, as one number, because
+   three things are tied to it: the bar, the Dex circle beside it (which derives
+   its own offset from this so the pair stays centred), and the undo snackbar
+   that has to clear both.
+
+   1rem -> 0. On an iPhone 13 mini the gap under the bar measured 47pt: 34 of
+   mandatory home-indicator inset, and 13 the app was adding on top of it. The
+   founder could see it from across the room, and they are right — a floating
+   bar should clear the indicator and stop there, not clear it twice.
+   34pt IS THE FLOOR for a bar like this one. Below it the pill starts covering
+   the strip the system owns for swipe-up-to-home, which is both a gesture
+   conflict and the one placement rule Apple is unambiguous about. A native tab
+   bar looks closer to the edge because its BACKGROUND runs to the edge while
+   its content sits above the indicator; a w-fit floating pill has no
+   background down there to run. */
+:root {
+    --dock-lift: 0rem;
+    --dock-floor: 0.5rem;
+    /* THE ONE EXPRESSION, resolved once. Everything that has to clear the dock
+       reads this variable instead of rebuilding the max() — partly so the lift
+       is a single number to turn, and partly because postcss-calc will not
+       parse a max() nested inside a calc() and fails the production build on
+       it. An opaque var() inside calc() it passes through happily. */
+    --dock-bottom: max(0.5rem, calc(var(--dock-lift) + var(--sa-bottom)));
+}
+/* max(), because --sa-bottom is 0 wherever there is no home indicator — an
+   older iPhone with a home button, Android without gesture navigation, and the
+   browser PWA. With the lift at 0 that put the bar flush against the bottom
+   edge with nothing under it at all. The indicator IS the breathing room where
+   there is one; --dock-floor is the breathing room where there is not. */
+.bottom-safe-4 { bottom: var(--dock-bottom); }
 
 /* ---------------------------------------------------------------------------
    MPWA-14 — the centred app shell (Instagram-style column).
@@ -584,6 +630,15 @@
     .app-dock-right {
         right: max(calc(1rem + 4.75rem), calc(var(--app-shell-gap) + 1rem + 4.75rem));
     }
+    /* DEX-SLIDER Part 1 — the dock with NO Ask circle beside it. On the Desk
+       the circle has gone (the slider's left end is Ask now), so the 4.75rem
+       the bar was holding back for it is dead space and the pill sits off
+       centre. This is the same expression as .app-dock-left, so the two edges
+       match and the bar centres itself. Every other phone page keeps
+       .app-dock-right and keeps the circle. */
+    .app-dock-right-wide {
+        right: max(1rem, calc(var(--app-shell-gap) + 1rem));
+    }
     .app-fab-right {
         right: max(1rem, calc(var(--app-shell-gap) + 1rem));
     }
@@ -605,14 +660,23 @@
        stay paired at every width the shell can take — not only on a phone,
        where it happens to collapse to zero. */
     .app-plus-on-fab {
-        margin-right: max(0.625rem, calc(var(--app-shell-gap) + 0.625rem));
+        /* DERIVED, NOT TYPED. The plus has to sit on the FAB's centre line, and
+           the two are different sizes — 3.5rem against the FAB's 4rem — so the
+           plus's inset is the FAB's plus half the difference:
+             1rem (.app-fab-right) + (4rem - 3.5rem) / 2 = 1.25rem
+           …less the 1rem of px-4 its own row already carries, which leaves
+           0.25rem. It was 0.625rem, and the plus sat 5 real pixels left of the
+           FAB — measured, not guessed, and visible once you look for it. */
+        margin-right: max(0.25rem, calc(var(--app-shell-gap) + 0.25rem));
     }
 }
 
 /* Under 360px the FAB shrinks to 3.75rem, so its centre moves 2px inward. */
 @media (max-width: 359px) {
+    /* Under 360 the FAB is 3.75rem, so the half-difference is 0.125rem and the
+       inset works out at 1rem + 0.125 - 1 = 0.125rem. */
     .app-plus-on-fab {
-        margin-right: max(0.5rem, calc(var(--app-shell-gap) + 0.5rem));
+        margin-right: max(0.125rem, calc(var(--app-shell-gap) + 0.125rem));
     }
 }
 @media (min-width: 481px) and (max-width: 1023.98px) {
@@ -629,7 +693,15 @@
 /* ASK-33 Phase 5 — plus the height of a Dex failure notice docked above the
    dock, while one is up (components/mobile/DexFailureNotice sets the variable),
    so whatever it sits over can still be scrolled clear of it. */
-.pb-dock { padding-bottom: calc(7.5rem + var(--sa-bottom) + var(--dex-notice-space, 0px)); }
+/* THE BAR'S OWN HEIGHT, as a number the page can reserve against. (2026-10-06.)
+   It was written out as 4.5rem and 7.5rem in the two rules that keep content
+   off the dock — fine while there was one dock, wrong the moment the slider
+   became the bar off the Desk and brought the slider's 6rem with it. The undo
+   snackbar landed 13px INSIDE it, which verify:kit caught by measuring the bar
+   rather than trusting the constant. */
+:root { --dock-h: 4.5rem; }
+:root[data-dock-slider="1"] { --dock-h: var(--desk-slider-track, 6rem); }
+.pb-dock { padding-bottom: calc(var(--dock-h) + 3rem + var(--sa-bottom) + var(--dex-notice-space, 0px)); }
 
 /* ASK-46 · --dock-clear — the floor a page keeps clear when something of its
    own has to sit JUST above the bar rather than scroll safely past it. The
@@ -639,7 +711,7 @@
    at the bar, it should clear it. One expression each, both here, so a page
    picks the one it means instead of inventing a number. */
 :root {
-    --dock-clear: calc(4.5rem + 1rem + 0.75rem + var(--sa-bottom));
+    --dock-clear: calc(var(--dock-h) + 1rem + 0.75rem + var(--sa-bottom));
 }
 
 /* ASK-49 · THE PHONE'S BLACK CARD IS ONE HEIGHT, WHATEVER IS IN IT.
@@ -666,8 +738,260 @@
    box grows with the type it is holding. The hairlines stay in px because a
    hairline is a hairline. */
 :root {
+    /* DEX-SLIDER Part 1 — the Dex control's height on a phone once it is a
+       slider rather than a well. The well was a fixed 17rem because it held a
+       ripple that wanted a square; the slider holds a 56px handle on a track
+       with a word at each end, and 7rem is that plus its own padding with the
+       labels on their own line. The leftover goes to the KPI tiles. */
+    /* DEX-SLIDER — the slider's own two heights, after the founder saw it on
+       an iPhone. The track was 3.25rem inside a 7rem slot, so the slot's own
+       padding drew a 33px gap above the slider and 34px below it that read as
+       uneven spacing rather than as a control. The slot hugs the track now and
+       the seam between blocks is the page's, once, for every block.
+       The track is taller because the founder asked for a control that is
+       easy to hit, and then asked for more again once they had it on the
+       phone: 6rem of track carrying a 3.5rem handle is 44 REAL pixels of
+       handle once --ui-scale's 0.8 has been applied, where the old 2.75rem
+       handle was 35 and only cleared the floor on paper. The extra height is
+       also what gives the ripple somewhere to happen — a 52px channel had no
+       room for a wave to be read in. */
+    --desk-slider-track: 6rem;
+    --desk-slider-h: var(--desk-slider-track);
+    /* The floor under those tiles: their own resting content height. 6rem,
+       not the 4.8125 first written here — that was the measured 77px read off
+       a rect, and rects are VISUAL pixels while a rem is a CSS pixel, which
+       the phone's own zoom: 0.8 separates by 1.25. The floor was a quarter
+       short and never binding. 96 CSS px is the real resting height. */
+    --desk-kpi-floor: 6rem;
+    /* And the ceiling, the founder's call after seeing it uncapped. Left to
+       fill, the row took 228px at 390x844 — not the 128 the slider gave back,
+       because the hero also swallowed gaps that used to sit between it and the
+       well — and each tile became a 150px box with its label and numeral at
+       the foot of a lot of nothing. 9rem is half as much again as resting:
+       enough that the tiles read as having grown, not enough to look stretched.
+       What is left over stays as breathing room between the tiles and the
+       card, which is where a gap belongs if there is going to be one. */
+    /* 2026-10-06 — RAISED, because the slider left the sheet and the founder
+       put its six rems here. 9rem was the ceiling when the grid was sharing a
+       page with a control; with that control gone the tiles are what fills the
+       gap, and 12rem is as far as a tile can grow before the numeral starts
+       floating in the middle of it again (the complaint --desk-kpi-cap was
+       written to answer in the first place). */
+    --desk-kpi-cap: 12rem;
     --desk-phone-row: calc(2.75rem + 2 * 0.25rem);
     --desk-phone-body: calc(3 * var(--desk-phone-row) + 2px + 4px + 2.75rem);
+
+    /* THREE ROWS, ALWAYS — THE TYPE BENDS INSTEAD. (2026-10-05.)
+       Founder, on short phones: "instead of making the floor scrollable list,
+       I would like to go with the scaling down approach. Scale until
+       everything fits spaciously and tight enough. No need to scroll
+       internally, because we have an intention of showing three recent items
+       always, no matter the phone screen size."
+       So the sheet's rows are written against this one number and Desk.js
+       measures it: 1 wherever three rows already fit (the 6.1" and up, which
+       is every screen the founder has signed off, so they are untouched), and
+       below 1 only where they would not.
+       THE FLOOR IS 0.8 AND IT IS NOT A TASTE DECISION. The title is 17 CSS px
+       inside a tree the app zooms to 0.8, so it is drawn at 13.6 real points;
+       accessibility.md puts the iOS minimum at 11pt, which is reached at
+       exactly 11 / (17 x 0.8) = 0.808. Past that the rows would be small
+       before they were short, so the scale stops and the titles truncate —
+       which they already do — rather than shrinking out of legibility. */
+    --desk-row-scale: 1;
+}
+
+/* The sheet's rows, written against --desk-row-scale. Tailwind cannot express
+   a calc() against a custom property in an arbitrary value without stringly
+   duplication at three call sites, and these three rules are read together
+   anyway: a row's height, its title and its supporting line all shrink by the
+   same number or the row stops looking like itself.
+   `overflow: hidden` is the part that is NOT about scaling and matters most:
+   the row is `flex-1 min-h-0`, so a container shorter than its content will
+   push it below its own text — which is exactly how the founder's Android 6.1"
+   screenshot came to have three titles printed on top of one another. Clipping
+   a row is ugly; a row printing over its neighbour is unreadable.
+   Scoped under the breakpoint on purpose: these are plain class selectors in
+   an UNLAYERED sheet, so they outrank Tailwind's `lg:text-[15px]` on the same
+   element (an unlayered rule beats @layer utilities whatever the specificity).
+   The sheet is a phone surface and never renders at lg, but the row's desktop
+   sizes are still written on it, and silently winning that fight is how a
+   phone fix turns up on a laptop a month later. */
+@media (max-width: 1023.98px) {
+    .kr-desk-row-roomy {
+        padding-block: calc(0.5rem * var(--desk-row-scale));
+        /* NO CEILING IN THE SHEET ANY MORE. (2026-10-06, founder: the three
+           rows should be "utilizing the entire space for it… either it should
+           expand or contract its height".) 6.5rem capped a pill at 104px, which
+           is right at 390x844 where three of them plus the Show-all control
+           just fill the card — and wrong on anything taller: at 440x956 three
+           capped pills left 143px of black under them, the same hole Watch had.
+           The pills are `flex-1`, so with the cap gone they share whatever the
+           card is and the card is always full, at every phone size. The floor
+           is still a floor: `overflow: hidden` stays, because a row that is
+           given LESS than its content must clip rather than print over its
+           neighbour (an Android 6.1" screenshot of three titles on top of one
+           another is why that line exists) — and data-desk-tight below is what
+           now keeps the rows from ever getting there. */
+        overflow: hidden;
+    }
+    .kr-desk-row-title {
+        font-size: calc(17px * var(--desk-row-scale));
+        line-height: calc(1.5rem * var(--desk-row-scale));
+    }
+    .kr-desk-row-meta {
+        font-size: calc(15px * var(--desk-row-scale));
+        line-height: calc(1.5rem * var(--desk-row-scale));
+    }
+
+    /* TIGHT — WHAT A SHORT SCREEN GIVES UP SO THREE ROWS STAY WHOLE.
+       (2026-10-06, founder: the rows "should never overlap or compressed in any
+       situation".) Desk.js sets data-desk-tight on <html> when, and only when,
+       three rows and their gaps cannot fit the card even at the 11pt floor —
+       measured, so it fires on an iPhone SE (375x667) and a 360x640 Android and
+       on nothing the founder has signed off. What it gives back, in the order
+       the space is least missed, all of it measured on those two screens:
+       IT COMES IN TWO STAGES, and the words go LAST: stage 1 (data-desk-tight="1")
+       takes only air, stage 2 ("2") is the one that costs a line, and the Desk
+       asks for the second only when the first was not enough. An iPhone 17 in
+       the simulator sits two pixels short of three two-line rows once its status
+       bar and home indicator are out of the 874pt — one flat level answered that
+       by stripping a line of context off every row on a 6.3" phone.
+         · STAGE 2 ONLY — the supporting line (~20px a row). The title and the
+           amount are what a row is FOR; "Raised by Sunita Rao · You decide" is
+           the part a 4.7" screen can do without, and it is still on the decision
+           itself one tap away.
+         · the space between the pills, 10px to 6.
+         · the Show-all control, from 56px to the 44px touch floor.
+         · the KPI tiles' padding and the page's own gaps, 4px each — they are
+           content-sized, so this is the only room up there that is not a number
+           or a label.
+       Nothing here is a different design: it is the same Desk with the air
+       taken out of it, and one line fewer per row. */
+    :root[data-desk-tight="2"] .kr-desk-row-meta { display: none; }
+    :root[data-desk-tight] .kr-desk-sheet-list { gap: 0.375rem; }
+    :root[data-desk-tight] [data-testid="desk-phone-more"] { height: 2.75rem; }
+    :root[data-desk-tight] .kr-kpi-tile { padding: 0.5rem; }
+    :root[data-desk-tight] [data-testid="desk-page"] { gap: 0.5rem; }
+    :root[data-desk-tight] .kr-desk-row-roomy { padding-block: calc(0.25rem * var(--desk-row-scale)); }
+
+    /* A ROW IS NEVER SHORTER THAN WHAT IS IN IT. (2026-10-06.)
+       The pills and the Watch cards are `flex-1` in a flex column, so the
+       browser is free to shrink them — and because they also carry
+       `overflow: hidden`, their AUTOMATIC minimum size is zero rather than
+       their content (css-flexbox-1 §4.5: a box with overflow other than
+       visible has no content-based minimum). That is the whole mechanism
+       behind every compressed row the founder has reported: a 14px pill around
+       38px of words, clipped, with the next row's title starting where this
+       one's was cut off. An explicit min-content floor takes the choice away —
+       the row keeps its height, the overflow lands on the LIST, and the fit
+       measurement in Desk.js can see it and scale the type until it is gone.
+       On [data-row] rather than on the pill, so Watch's cards are held to the
+       same rule by the same line. */
+    .kr-desk-sheet-list [data-row] { min-height: min-content; }
+
+    /* THE OPEN CIRCLE BENDS WITH THE ROW IT IS IN. A fixed 32px control inside
+       a row whose type scales is a floor the scale cannot reach past: at
+       375x667 the titles were already at the 11pt floor and the rows still did
+       not fit, so `overflow: hidden` took the difference out of the words. In
+       the sheet it is 2rem at full size — exactly what it was — and smaller
+       only as the row around it gets smaller. 1.5rem at the 0.8 floor is 24px,
+       which is under the 44px touch floor on its own; the ROW is the touch
+       target (it is a link, and its own height is well over 44), and this
+       circle is the second way into the same thing, which is why shrinking it
+       costs nothing a thumb can feel. Untouched off the sheet. */
+    .kr-desk-row-roomy .kr-desk-row-open {
+        height: calc(2rem * var(--desk-row-scale));
+        width: calc(2rem * var(--desk-row-scale));
+    }
+
+    /* THE DECISION ROW AS ITS OWN PILL. (2026-10-05, founder.)
+       "Remove the inside gradient black card inside the black sheet for the
+       row list; instead use individual pill type containers for all the three
+       rows with a fair amount of spacing in between them, and the container
+       pill shouldn't be neumorphic, instead flat, and the colour subtle just
+       like how it's shown in the watch section."
+       So this is the Watch cards' recipe (.kr-glass + the .kr-desk--* tones)
+       with everything the sheet does not need taken out: no backdrop blur
+       (there is nothing behind it but flat ink — the same finding KM-35 made
+       for those four), no lift, no inset highlight. A wash and a hairline.
+       THE HUES ARE THE DESK'S OWN, deliberately: fire for high and needs for
+       medium are the exact pairs the Watch cards carry, so a colour means the
+       same thing in both halves of this screen. Low is the hue drained out
+       rather than a new grey, so the three read as one family. */
+    .kr-desk-pill {
+        --kr-row-from: 0 0% 72%;
+        --kr-row-to:   0 0% 44%;
+        border-radius: 1.15rem;
+        padding-inline: 0.875rem;
+        background: linear-gradient(145deg,
+            hsl(var(--kr-row-from) / .12),
+            hsl(var(--kr-row-to) / .06));
+        border: 1px solid hsl(0 0% 100% / .10);
+        box-shadow: none;                       /* flat — not neumorphic */
+    }
+    .kr-desk-pill[data-tone="high"]   { --kr-row-from: 6 78% 52%;   --kr-row-to: 348 55% 26%; }
+    .kr-desk-pill[data-tone="medium"] { --kr-row-from: 33 92% 56%;  --kr-row-to: 16 82% 36%; }
+    .kr-desk-pill[data-tone="low"]    { --kr-row-from: 0 0% 72%;    --kr-row-to: 0 0% 44%; }
+
+    /* A DRAFT IS THE ONE THING PAINTED SOLID. The founder: amber already
+       means draft here, and amber is also the medium band — so the draft stops
+       using a hue at all and takes white, "full solid white, not as a stroke",
+       and nothing else in this list is solid. That makes the distinction
+       structural rather than chromatic: priority is a tint, a draft is a
+       filled pill, and the two cannot be confused even in one glance. */
+    .kr-desk-pill[data-deferred="true"] {
+        background: hsl(0 0% 100%);
+        border-color: hsl(0 0% 100%);
+    }
+
+    /* The type follows the ground it is printed on. On the tinted pills that
+       is the dark sheet; on a solid white draft it is ink, or none of it would
+       be readable at all. Measured on white: title 16.1:1, meta 7.0:1. */
+    .kr-desk-row-title     { color: hsl(0 0% 83%); }
+    .kr-desk-row-meta      { color: hsl(0 0% 64%); }
+    .kr-desk-row-amount    { color: hsl(0 0% 83%); }
+    .kr-desk-row-draftword { color: hsl(0 0% 83%); }
+    .kr-desk-pill[data-deferred="true"] .kr-desk-row-title     { color: hsl(0 0% 9%); }
+    .kr-desk-pill[data-deferred="true"] .kr-desk-row-meta      { color: hsl(0 0% 36%); }
+    .kr-desk-pill[data-deferred="true"] .kr-desk-row-amount    { color: hsl(0 0% 9%); }
+    .kr-desk-pill[data-deferred="true"] .kr-desk-row-draftword { color: hsl(0 0% 20%); }
+    /* …and so does the open control, which is a white-on-black glass circle
+       everywhere else in this list and would vanish entirely on a white pill. */
+    .kr-desk-pill[data-deferred="true"] button {
+        background: hsl(0 0% 9% / .08);
+        color: hsl(0 0% 20%);
+    }
+    .kr-desk-pill[data-deferred="true"] button:hover {
+        background: hsl(0 0% 9% / .16);
+        color: hsl(0 0% 9%);
+    }
+}
+
+/* THE DOCK, GROWN INTO A CONVERSATION (2026-10-06).
+   Ask on every page but the Desk turns the bar into the chat. Half the screen
+   is the ceiling the founder chose — "about half the screen, then scroll" —
+   so the room behind stays visible and this reads as the dock growing rather
+   than a screen arriving. The height is the content's until it reaches that
+   line; `max-height` plus a scrolling transcript inside is what makes the
+   growth dynamic without any measuring in JS.
+   The material is the dock's own, because it IS the dock: the same frosted
+   ink, rim and shadow the bar carries, so nothing changes hands mid-gesture. */
+/* (There is no .kr-dock-more. The first cut of the More menu gave it this
+   material — a second surface with the bar nested inside it, which is exactly
+   what the founder sent back: "there is another sheet appeared, and in that
+   sheet the dock was there as a cutout inside it." The menu has no material of
+   its own now; it is drawn inside the dock's own well, which grows to hold it.
+   See DexSlider's `menu` prop.) */
+
+.kr-dock-chat {
+    max-height: calc(50dvh / var(--ui-scale, 1));
+    background: hsl(0 0% 7% / .92);
+    -webkit-backdrop-filter: blur(22px) saturate(1.2);
+    backdrop-filter: blur(22px) saturate(1.2);
+    border: 1px solid hsl(40 30% 92% / .28);
+    box-shadow: 0 8px 32px rgb(0 0 0 / .35),
+                inset 0 1px 0 hsl(40 40% 96% / .22),
+                0 0 20px -4px hsl(40 35% 92% / .30);
 }
 
 /* Mobile PWA (2026-09-14) — the dock, the Dex button, their pickers, the
@@ -677,12 +1001,109 @@
    task drawer's last actions, the filter sheet's Done. More (AllAppsPanel)
    grows out of the dock and marks itself data-keeps-chrome, so it keeps it. */
 @media (max-width: 1023.98px) {
+    /* The dock/FAB/vignette sit at z-10000, ABOVE the dialog, so they are
+       hidden INSTANTLY while a dialog is open. (An earlier version faded them
+       out over 180ms — but because they sit above the dialog, during that fade
+       they ghosted on top of the dialog's own bottom action bar, which was half
+       of the "crack" on opening a card. Instant hide, no transition.) */
     body:has([role="dialog"][data-state="open"]:not([data-keeps-chrome])) [data-mobile-chrome],
     body:has([role="alertdialog"][data-state="open"]) [data-mobile-chrome] {
         opacity: 0 !important;
         visibility: hidden;
         pointer-events: none;
     }
+    /* (An earlier build HID the page behind the dialog to mask a one-frame late
+       paint. That root cause is now fixed by [data-dialog-scale-root] giving the
+       dialog its own zoom raster layer, so the page no longer needs hiding — and
+       it must stay VISIBLE for the backdrop blur to have something to frost.) */
+}
+
+/* B?? — MOBILE DIALOGS APPEAR INSTANTLY (no enter/exit animation), because
+   ANY opacity animation cross-fades. The shared DialogContent
+   (components/ui/dialog.jsx) ships the shadcn/tailwindcss-animate enter
+   (zoom-in-95 + slide + fade-in-0). On the app's near-full-screen mobile
+   sheets (task detail max-w-2xl/90vh in MyWork, the New buyer/supplier sheet in
+   CRM) that enter animated OPACITY from 0, so for its duration the panel was
+   translucent: the page behind showed THROUGH the dialog and the (above-dialog)
+   dock ghosted over the dialog's bottom action bar — the "crack when a card or
+   dialog opens" the founder reported, confirmed on slow-motion capture. A fade
+   cannot fix a fade. So on mobile the dialog is opaque from the first frame: it
+   covers the page immediately, nothing shows through, nothing to cross-fade.
+   Desktop (≥lg) keeps the original zoom. Scoped to the dialog/alertdialog panels
+   only — popovers, menus and dropdowns keep their own animations. The scrim
+   overlay keeps its own fade (it only dims; it never caused the ghosting). */
+@media (max-width: 1023.98px) {
+    /* B?? — the dialog ANIMATES again (smooth), but only its TRANSFORM, never
+       its opacity. The panel is pinned opaque in BOTH states, so the shadcn
+       enter/exit (zoom-in-95 + slide, duration-200) plays as an opaque
+       scale/settle with no translucent cross-fade that could reveal the page.
+       The scrim (data-dialog-overlay) keeps its own fade — it only dims. The
+       panel no longer tile-glitches because [data-dialog-scale-root] now gives
+       it its own zoom layer (see that rule), so this animation is finally
+       smooth AND clean. (Earlier this block killed the animation and forced
+       the panel full-screen; both are removed now — rounded sheets, animated.) */
+    [role="dialog"][data-state="open"],
+    [role="dialog"][data-state="closed"],
+    [role="alertdialog"][data-state="open"],
+    [role="alertdialog"][data-state="closed"] {
+        opacity: 1 !important;
+        /* B?? — the panel is on its own GPU layer (will-change) so it rasterises
+           as ONE texture — no half-rendered/bleed on open — AND it is a CARD that
+           PULLS UP from the bottom: a pure vertical slide (no scale, no fade),
+           opaque the whole way, which reads as a sheet sliding up. 220ms, snappy.
+           (A blurred backdrop used to sit behind this; it was the biggest cause of
+           open/close lag, so it is gone — see [data-dialog-overlay] below.) */
+        will-change: transform;
+        -webkit-backface-visibility: hidden;
+        backface-visibility: hidden;
+        --tw-enter-translate-x: 0 !important;
+        --tw-enter-translate-y: 100% !important;
+        --tw-enter-scale: 1 !important;
+        --tw-exit-translate-x: 0 !important;
+        --tw-exit-translate-y: 100% !important;
+        --tw-exit-scale: 1 !important;
+        animation-duration: 220ms !important;
+        animation-timing-function: cubic-bezier(.33, 1, .68, 1) !important;
+    }
+
+    /* B?? — FLAT scrim, NO backdrop-filter. A full-viewport `backdrop-filter:
+       blur()` re-blurred the whole page every composited frame of the fade, both
+       ways, on every dialog — the single biggest source of open/close lag
+       (measured ~80% janky frames, GPU-bound). A plain semi-opaque veil fades in
+       just as smoothly for free. Soft and non-black. */
+    [data-dialog-overlay] {
+        background-color: hsl(222 22% 26% / 0.42) !important;
+        -webkit-backdrop-filter: none !important;
+        backdrop-filter: none !important;
+        animation-duration: 220ms !important;
+        animation-timing-function: cubic-bezier(.33, 1, .68, 1) !important;
+    }
+}
+
+/* A SCRIM ON ITS WAY OUT IS NOT A SCRIM — IT WAS EATING THE NEXT TAP.
+   (2026-10-06, found by verify:dex on the merge, then measured on the page.)
+   Radix keeps a closing overlay mounted for the length of its own fade-out and
+   only then unmounts it, and the panel inside it goes first. So for ~400ms after
+   a card closes there is nothing on screen but a full-viewport `fixed inset-0
+   z-50` layer at pointer-events: auto — and the first press after closing a
+   card landed on THAT, not on the thing under the finger.
+   Measured, not reasoned: a pointerdown on the dock's slider handle 5727ms into
+   a run reported its target as `DIV.fixed inset-0 z-50 bg-black/…` with NO
+   [role=dialog] left in the document; the overlay was removed at 5930ms. The
+   drag that press began therefore never happened. On a phone this is exactly
+   the founder's "I need to press twice" — reported for the slider, present on
+   every screen in the app, after every dialog.
+   The window got wide enough to catch because origin/mobile-capacitor gave the
+   mobile scrim its own 220ms ease-out, but nothing about the cause is new or
+   mobile-only: a layer that is fading out must not take presses, at any width.
+   Radix marks it for us — data-state="closed" IS "on the way out" — and the
+   panel gets the same treatment, since a card in its exit animation should not
+   be collecting clicks either. */
+[data-scrim][data-state="closed"],
+[data-dialog-overlay][data-state="closed"],
+[role="dialog"][data-state="closed"],
+[role="alertdialog"][data-state="closed"] {
+    pointer-events: none !important;
 }
 
 /* UI-SCALE · .ui-scale — the app scales with the screen. hooks/useUiScale
@@ -718,7 +1139,7 @@
    on --control-h-sm: lifting the global floor would widen every small control
    on every phone screen by a quarter, which is a change nobody asked for. */
 :root {
-    --touch-min: calc(2.75rem / var(--ui-scale, 1));
+    --touch-min: calc(2.75rem / var(--ui-density, 1));
 
     --sa-top:    calc(env(safe-area-inset-top, 0px)    / var(--ui-scale, 1));
     --sa-bottom: calc(env(safe-area-inset-bottom, 0px) / var(--ui-scale, 1));
@@ -738,6 +1159,35 @@
    dropdowns too (the view picker, the pipeline picker, every GlassSelect). */
 .ui-scale [data-radix-popper-content-wrapper] { zoom: calc(1 / var(--ui-scale, 1)); }
 .ui-scale [data-radix-popper-content-wrapper] > * { zoom: var(--ui-scale, 1); }
+
+/* B?? — DIALOGS ESCAPE THE BODY ZOOM, exactly like the poppers above. A
+   portalled dialog (components/ui/dialog.jsx) lives inside <body>'s `zoom`;
+   the webview then re-rasterises its fixed, centred panel IN TILES, so the
+   cards paint top-down and the opaque backdrop lands a frame late and the page
+   shows through for ~2 frames on open. Wrapping the overlay + panel in
+   [data-dialog-scale-root] and cancelling the zoom there gives the subtree its
+   OWN raster layer (no tiling under the parent zoom); the child puts the zoom
+   back, so the sheet is still drawn at the page's 0.8 scale. Net-neutral, and a
+   no-op at scale 1.0 (desktop). This is the root-cause fix for the open/close
+   glitch — poppers have never shown it because they already do this. */
+.ui-scale [data-dialog-scale-root] {
+    /* Full-viewport fixed box. It is a child of the 0.8-zoomed <body>; its own
+       zoom 1/0.8 makes its CUMULATIVE zoom 1.0, so `inset:0` is exactly the
+       viewport. That gives the fixed panel inside a correct containing block to
+       centre against (left/top:50% = screen centre), while the boundary still
+       makes the panel rasterise as its own layer. */
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    pointer-events: none;
+    zoom: calc(1 / var(--ui-scale, 1));
+}
+.ui-scale [data-dialog-scale-root] > * {
+    /* Put the page scale back on the panel so it is drawn at 0.8 like everything
+       else; re-enable pointer events the wrapper turned off. */
+    zoom: var(--ui-scale, 1);
+    pointer-events: auto;
+}
 
 @layer base {
     /* ASK-43 — TEXT AUTOSIZING OFF. WebKit inflates font sizes when it decides
@@ -2269,21 +2719,23 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
 }
 
 @keyframes kr-page-in {
-    from { opacity: 0; transform: translate3d(0, 10px, 0); }
-    to   { opacity: 1; transform: none; }
+    from { opacity: 0; transform: translate3d(28px, 0, 0); }
+    to   { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 .kr-page-in {
-    /* KM-33 — `backwards`, NOT `both`, and the difference is load-bearing.
-       `both` holds the final keyframe forever, and a filled transform — even
-       `transform: none`, which resolves to the identity matrix — makes the
-       element a containing block for every `position: fixed` DESCENDANT. This
-       class lands on <main>, so the fixed bottom sheet was being laid out
-       against main's padding box instead of the viewport: measured 365px wide
-       at y=100 rather than 375 pinned to the bottom. The end state here IS the
-       element's natural state (opacity 1, no transform), so nothing needs
-       holding — `backwards` only pre-applies the `from` frame and lets the
-       element go back to being untransformed the moment it arrives. */
-    animation: kr-page-in 320ms cubic-bezier(.22, 1, .36, 1) backwards;
+    /* KM-33 / B?? — a SMALL slide-in (28px from the right) + fade, so navigation
+       reads as a page sliding in rather than a plain cross-fade.
+       THE HAZARD this lands on: this class is on <main>, and a transform on main
+       makes it a containing block for `position: fixed` DESCENDANTS — a page's
+       own fixed bar would be laid out against main's box during the animation
+       and snap at the end (the old "crack on every navigation"). It is safe here
+       ONLY because the app's page-level fixed elements (Desk's expandable card /
+       drawer scrim / Dex composer) are NOT present during a normal navigation —
+       they appear later on interaction — so there is nothing to mis-anchor while
+       this 28px slide plays, and it ends at identity so nothing snaps. Verified
+       frame-by-frame on a Desk navigation. If a page ever renders a fixed element
+       on first paint, revert this to opacity-only. */
+    animation: kr-page-in 260ms cubic-bezier(.22, 1, .36, 1) backwards;
 }
 
 /* KR-13.1 — THE DEX BOUNDARY OWNS ITS OWN MOTION, and nothing else plays
@@ -3339,6 +3791,143 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         position: relative;
         border-radius: var(--radius-tile);
     }
+
+    /* DEX-SLIDER — THE SLIDER SITS IN A WELL, not on a field. The founder's
+       rearrangement puts the control inside the app's own concave surface, and
+       this is .kr-well__pane's recipe verbatim — the same 7px/14px inset pair,
+       dark from the top-left and light from the bottom-right — cut as a pill
+       and given the sunk phone wash so the handle reads as sitting IN a channel
+       rather than on a bar. Nothing new is invented; the well already knew how
+       to look pressed. */
+    /* THE DESK'S FIVE TILES ARE FLAT. .nm-tile ends in
+       `border border-nm-edge/40`, which on the Desk drew a grey rule round
+       every tile — the founder's note, and they are right: the tiles already
+       separate themselves from the page, so the border was a second, weaker
+       answer to a question already answered. My first cut swapped it for the
+       raised half of the app's neumorphic pair; the founder's call on seeing
+       that was flat — no hairline AND no shadow. So the tile is its fill, its
+       radius and nothing else, and it reads against the page by being lighter
+       than it. `box-shadow: none` rather than simply omitting one, because
+       .kr-stat (WorkflowsTile) brings its own and this has to beat it.
+       Scoped to this class rather than cut from .nm-tile, which some 180 call
+       sites across /my-work, /crm, /team and /finance rely on and which I have
+       no way to look at from here. */
+    .kr-kpi-tile {
+        border: 0;
+        box-shadow: none;
+    }
+
+    /* THE DECISION DOOR'S VOICE RINGS. Deliberately NOT the neumorphic wave:
+       that recipe draws a light ridge and a dark one, which needs an opaque
+       surface to be read against, and this screen is a blur over the Desk by
+       design — the founder's own report was that it looked smeared. A plain
+       circle, a hairline, expanding past the edge of the screen.
+       `--mw-gain` is written per frame from the live microphone meter, so the
+       reach and the brightness both answer the room; at rest it still breathes,
+       because a recording screen that looks frozen looks broken. */
+    .kr-mic-waves {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 0;
+        height: 0;
+        pointer-events: none;
+    }
+    .kr-mic-waves > i {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 7.5rem;
+        height: 7.5rem;
+        margin: -3.75rem 0 0 -3.75rem;
+        border-radius: 9999px;
+        border: 1.5px solid hsl(0 0% 100% / .9);
+        opacity: 0;
+        animation: kr-mic-ring 2.8s cubic-bezier(.22, 1, .36, 1) infinite;
+    }
+    @keyframes kr-mic-ring {
+        0%   { transform: scale(1);   opacity: 0; }
+        12%  { opacity: calc(.42 * var(--mw-gain, 1)); }
+        100% { transform: scale(calc(3.2 + 2.6 * var(--mw-gain, 1))); opacity: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .kr-mic-waves > i { animation: none; opacity: 0; }
+    }
+
+    /* THE SLIDER'S KNOB, to the founder's own button.png: a raised disc with a
+       dish pressed into its face. Both halves of the app's neumorphic pair in
+       one control — lit from the top-left and shadowed from the bottom-right on
+       the outside, and the reverse on the inside, which is what makes the
+       centre read as sunk rather than merely darker. The glyph sits in the
+       dish, which is why it needs the stacking context. */
+    .kr-slider-knob {
+        position: relative;
+        isolation: isolate;
+        background: linear-gradient(145deg, hsl(0 0% 100%), hsl(220 14% 92%));
+        /* NO OUTER SHADOW. The neumorphic pair puts a dark glow at the
+           bottom-right and a white one at the top-left, and on this control the
+           founder's call is that both go: inside the knob the dish still reads
+           as pressed, but the disc itself sits flat on the track rather than
+           hovering over it with a halo. The track is already a channel; a
+           shadow was a second answer to "this sits in something". */
+        box-shadow: none;
+    }
+    .kr-slider-knob::after {
+        content: "";
+        position: absolute;
+        inset: 17%;
+        border-radius: 9999px;
+        background: linear-gradient(145deg, hsl(220 14% 91%), hsl(0 0% 100%));
+        box-shadow:
+            inset 4px 4px 9px hsl(230 22% 34% / .17),
+            inset -4px -4px 8px hsl(0 0% 100% / .92);
+        z-index: -1;
+    }
+    .kr-slider-knob:active { transform-origin: center; }
+
+    .kr-slider-well {
+        position: relative;
+        border-radius: 9999px;
+        border: 0;
+        background: linear-gradient(160deg,
+            hsl(0 0% 100% / .34),
+            hsl(0 0% 100% / .20));
+        backdrop-filter: blur(22px) saturate(1.6);
+        -webkit-backdrop-filter: blur(22px) saturate(1.6);
+        box-shadow:
+            inset 7px 7px 14px hsl(230 22% 34% / .20),
+            inset -7px -7px 14px hsl(0 0% 100% / .62);
+    }
+
+    /* THE SAME CHANNEL, CUT INTO INK — and it has to come AFTER the rule above,
+       because the two are equally specific and the later one wins. Written
+       before it the first time, which is why the pill stayed grey however the
+       colours were tuned.
+       The first cut of this lifted a white wash over the black, which read as a
+       mid-grey pill LYING ON the sheet rather than a channel cut INTO it — the
+       founder's words, and they were right: a lighter fill is the opposite of
+       pressed. So the ground is the sheet's own ink, the same hsl, and the pair
+       of inset shadows is the one .kr-desk-board already uses to look pressed
+       in black: 10px/22px of full black from the top-left, an 8px/18px 14%
+       white catch from the bottom-right. The well IS the sheet, with a groove
+       in it, and nothing is added on top — which is why no fill shows.
+       The blur goes with it: the board is opaque, so there is nothing behind
+       this to see through and a backdrop-filter could only pull in light that
+       is not there. */
+    .kr-slider-well--ink {
+        background: hsl(240 4% 9%);
+        box-shadow:
+            inset 10px 10px 22px hsl(0 0% 0% / 1),
+            inset -8px -8px 18px hsl(0 0% 100% / .14);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
+    /* THE SLIDER'S RIPPLE IS VoiceRipple NOW, not CSS. The first cut here was
+       three expanding rings on a keyframe; the founder could not see them at
+       all, and handed over the lab's own config instead — so the control runs
+       the app's real wave material, decoratively, and this recipe is gone
+       rather than left behind to rot. See components/karma/DexSlider.jsx. */
 
     .kr-well__pane {
         position: relative;

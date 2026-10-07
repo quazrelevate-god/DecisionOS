@@ -1906,6 +1906,19 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
   const expanded = controlled ? open : selfExpanded;
   const setExpanded = controlled ? () => onToggleOpen?.() : setSelfExpanded;
   const toggleCard = () => (controlled ? onToggleOpen?.() : setSelfExpanded((v) => !v));
+  // PERF (2026-10-05) — the drawer tree below is ~600 lines of JSX and the
+  // TaskDetailDialog is its own subtree; both were CONSTRUCTED on every render
+  // of every card (Radix only MOUNTS them when open, but React still builds
+  // the element tree in JS each render). With N cards on My Work that is the
+  // bulk of the transition freeze. These two render-time latches build each
+  // subtree only once its card has actually been opened, and keep it built
+  // afterwards so Radix can still play the close animation on the way out.
+  // Mutating a ref during render is safe here: it is idempotent and only ever
+  // flips false->true. A never-opened card renders neither subtree at all.
+  const drawerEverOpened = useRef(false);
+  if (expanded) drawerEverOpened.current = true;
+  const detailEverOpened = useRef(false);
+  if (detailOpen) detailEverOpened.current = true;
   // MW-20 — is this event really from the card, or did it reach us through
   // the drawer's portal? React bubbles portal events along the COMPONENT
   // tree; `contains` asks the DOM, where the portal is not a descendant.
@@ -2398,7 +2411,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
      it without the tile. `drawerOnly` returns just this; the tile below
      embeds the same element where the Sheet always was. Declared last, so
      everything the drawer reads is already in scope. */
-  const drawer = (
+  const buildDrawer = () => (
     <>
     {/* ASK-15 (2026-09-13): task detail slides in from the right as a
         Sheet, not an inline expand — kept as one drawer holding BOTH the
@@ -3020,6 +3033,9 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       </Dialog>
     </>
   );
+  // PERF — only build the drawer subtree once this card has been opened (or
+  // when the Desk mounts it drawer-only). Never-opened cards skip it entirely.
+  const drawer = (drawerOnly || drawerEverOpened.current) ? buildDrawer() : null;
   if (drawerOnly) return drawer;
 
   return (
@@ -3242,7 +3258,9 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       {drawer}
 
 
-      <TaskDetailDialog t={t} open={detailOpen} onOpenChange={setDetailOpen} onChange={onChange} />
+      {detailEverOpened.current && (
+        <TaskDetailDialog t={t} open={detailOpen} onOpenChange={setDetailOpen} onChange={onChange} />
+      )}
         </div>
       </div>
     </div>
@@ -4974,28 +4992,17 @@ export default function MyWork({ only = null }) {
               openReassign={() => { setBulkAssigneeId(""); setBulkAssigneeRole(""); setBulkReassignOpen(true); }}
             />
           )}
-          {/* PILOT-1 C — tasks made before a date was required, counted, one
-              tap from the list that holds them. Nothing is dated for anyone:
-              each card's own "No due date · Set" is where a date is chosen. */}
-          {(() => {
-            const undated = countWith({ status: "no_date" });
-            if (!undated || filters.status === "no_date" || showingCompleted) return null;
-            return (
-              <div data-testid="mywork-no-date-notice" role="status"
-                className="mb-3 flex min-w-0 items-center justify-between gap-3 rounded-2xl bg-badge-pending py-1 pl-4 pr-1 text-sm text-badge-pending-fg ring-1 ring-inset ring-badge-pending-line">
-                <span className="flex min-w-0 items-center gap-2">
-                  <CalendarBlank size={15} weight="bold" aria-hidden="true" className="shrink-0" />
-                  <span className="min-w-0">
-                    {undated} {undated === 1 ? "task has" : "tasks have"} no due date, so {undated === 1 ? "it won't" : "they won't"} show as due or late.
-                  </span>
-                </span>
-                <button type="button" onClick={() => setStatusFilter("no_date")} data-testid="mywork-no-date-show"
-                  className="flex min-h-11 shrink-0 items-center rounded-pill px-4 font-semibold underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40">
-                  Show them
-                </button>
-              </div>
-            );
-          })()}
+          {/* PILOT-1 C's undated notice is GONE (2026-10-05, founder): a strip
+              across the top of every list saying how many tasks had no date,
+              with a "Show them" that set the filter.
+              It was saying globally what each card already says locally — every
+              undated card carries its own "No due date · Set", which is also
+              the only place a date can actually be chosen — so the strip cost a
+              row of the list on every screen to repeat a fact the rows beneath
+              it were already making. The "no_date" status filter stays in the
+              filter sheet for anyone who wants exactly that list.
+              RETIRED TESTIDS: mywork-no-date-notice, mywork-no-date-show.
+              Neither was referenced by any suite. */}
           {(() => {
             const cardProps = (t) => ({
               onChange: refresh,

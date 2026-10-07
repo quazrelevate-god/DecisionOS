@@ -39,19 +39,21 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PaperPlaneRight, Paperclip, X, Check, File as FileGlyph, Keyboard } from "@phosphor-icons/react";
+import { PaperPlaneRight, Paperclip, X, Check, File as FileGlyph, Keyboard, Microphone } from "@phosphor-icons/react";
 import { useAuth } from "../../context/AuthContext";
 import { captureOutcome, failureReason, isReading, OUTCOME_COPY } from "../../lib/dexOutcome";
 import { toastDexOutcome } from "../../lib/dexOutcomeToast";
 import { hasPerm } from "../../lib/perms";
 import { cn } from "../../lib/utils";
 import { useDexCapture } from "../../hooks/useDexCapture";
+import { enableProximity, disableProximity } from "../../lib/native/proximity";
 import { useDexConversation } from "../../hooks/useDexConversation";
 import { InsightWell } from "../../components/karma";
 // ASK-47 — the ripple the founder signed off in the lab, now the mic.
 import { VoiceRipple, DESK_RIPPLE } from "../../components/karma/VoiceRipple";
 import { DexWave } from "../../components/mobile/DexWave";
 import { DraftNote } from "../../components/karma/DraftNote";
+import { KeptPill } from "./KeptPill";
 import { DexCapturePopup } from "./DexCapturePopup";
 
 // A capture lands in several caches at once — the same set Layout refreshes
@@ -75,6 +77,14 @@ const STATUS_LINE = {
    lg, as the old Chase-it pill and Brain circle were; below lg the app's own
    touch rule (index.css, --control-h-sm) lifts every button to 44px (MPWA-01
    §5.1). */
+/* DOOR_CIRCLE — the same circle, at the platform's default target.
+   accessibility.md › Offer sufficiently sized controls puts iOS at 44x44 pt
+   default, 28x28 pt minimum. CIRCLE is h-10 = 40 CSS px, and --ui-scale's 0.8
+   makes that 32 REAL pixels: over the minimum, well under the default, on a
+   full screen that has nothing else competing for the room. 3.5rem lands at
+   44.8. Only the door takes it; the well's floor is a packed row and changing
+   it there is a separate decision with its own layout to re-measure. */
+const DOOR_CIRCLE = "h-14 w-14";
 const CIRCLE =
   "kr-pop relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60 disabled:opacity-40";
 
@@ -151,7 +161,20 @@ function useKeyboardInset(active) {
  *                              in the Desk's DecisionDialog (a late toast for an
  *                              older one)
  */
-export function DeskDexWell({ className, testid, phone = false, onReview, onLater }) {
+/* DEX-SLIDER Part 3 — `surface` is the only thing the slider's door changes.
+ *
+ * "well"    the box on the Desk, exactly as it has always been.
+ * "overlay" the full screen the slider's right end opens: the same mic, the
+ *           same ripple, the same attach and keyboard, the same kept draft —
+ *           and the same handover to DexCapturePopup at the same moment.
+ *
+ * It is a presentation, deliberately, not a second implementation. Everything
+ * below this line — the capture hook, the conversation, the one-at-a-time
+ * guard, the refusal, the draft that survives a reload, the pop-up — is shared
+ * code reached by both, so the door cannot drift from the well it replaces.
+ */
+export function DeskDexWell({ className, style, testid, phone = false, onReview, onLater,
+                              surface = "well", open = false, onClose, onMeter }) {
   const { user } = useAuth();
   // The gate every Dex capture surface uses (DexFab, DexCaptureBar).
   const canCapture = hasPerm(user, "voice_capture");
@@ -242,11 +265,32 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
      keyboard leaves, then scrolling. Desktop keeps the in-card two-line field. */
   const floating = phone && fieldOpen;
   const kb = useKeyboardInset(floating);
+  /* DEX-SLIDER Part 5 — the composer has to clear whatever it was opened from.
+     The door shipped in Part 3 with this wrong. On the Desk the composer floats
+     over the page at 60/70; opened from the full-screen door, which is itself at
+     9500, those same numbers put it BEHIND the door's own backdrop, so pressing
+     the keyboard looked like it did nothing — the field was there, under a blur.
+     Only verify:slider found it, because the check that existed counted the
+     composer in the DOM rather than asking whether you could see it.
+     Both pairs keep the two relationships that matter: the scrim 10 under the
+     bar, and both of them UNDER THE DOCK (10000), which is how it already
+     behaves on the Desk and not something the door should change. */
+  const composerZ = surface === "overlay" ? 9560 : 60;
   const roomAbove = kb.avail || (typeof window !== "undefined" ? window.innerHeight : 640);
   const growCap = Math.max(120, Math.round(roomAbove * 0.4));
 
-  /* ASK-33 Phase 5 — the in-card field grows to two lines, no further. While
-     floating it grows to the text (measured), capped at growCap then scrolls. */
+  /* THE FIELD GROWS WITH THE SENTENCE. (2026-10-05 — was two lines.)
+     Founder: "the text box is not dynamically increasing its height based on
+     the number of text lines, instead it's going in an infinite line in a
+     single row." It was wrapping all along — a textarea always does — but the
+     BOX was pinned to two lines and the rest scrolled out of sight, so one row
+     of visible words is all you ever got.
+     IN_CARD_LINES is the ceiling, not the height: the field is one line until
+     there are two, and it only scrolls once the text passes the ceiling. Five
+     is what fits above the Desk's own card without the composer eating it.
+     While floating (the keyboard is up) it keeps growCap, which is measured
+     against the room the keyboard left rather than guessed. */
+  const IN_CARD_LINES = 5;
   const fieldRef = useRef(null);
   useLayoutEffect(() => {
     const el = fieldRef.current;
@@ -255,7 +299,7 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
     const line = parseFloat(cs.lineHeight) || 20;
     const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
     el.style.height = "auto";
-    const max = floating ? growCap : Math.round(line * 2 + pad);
+    const max = floating ? growCap : Math.round(line * IN_CARD_LINES + pad);
     el.style.height = `${Math.min(el.scrollHeight, max)}px`;
     el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
   }, [chat.draft, recording, fieldOpen, floating, growCap]);
@@ -536,15 +580,20 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
   // gave it, whatever phone that turns out to be.
   const wellRef = useRef(null);
   const [rippleSize, setRippleSize] = useState(220);
+  const overlayRef = useRef(null);
   useEffect(() => {
     if (!phone) return undefined;
-    const el = wellRef.current;
+    const el = surface === "overlay" ? overlayRef.current : wellRef.current;
     if (!el || typeof ResizeObserver === "undefined") return undefined;
     const fit = () => {
       const room = Math.min(el.offsetWidth - 40, el.offsetHeight - 128);
       setRippleSize((s) => {
-        // Never bigger than 300, never smaller than a 44px hub can live in.
-        const next = Math.max(88, Math.min(300, Math.round(room)));
+        /* The well caps at 300 because that is all its box can hold. The
+           overlay has the screen, and the brief asks for the ripple to run out
+           across the whole of it — so the cap is the room itself, with the same
+           88px floor so a 44px hub always has somewhere to live. */
+        const ceiling = surface === "overlay" ? Math.max(88, Math.round(room)) : 300;
+        const next = Math.max(88, Math.min(ceiling, Math.round(room)));
         return Math.abs(next - s) > 2 ? next : s;
       });
     };
@@ -552,9 +601,155 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
     ro.observe(el);
     fit();
     return () => ro.disconnect();
-  }, [phone]);
+  }, [phone, surface, open]);
 
   const rippleDisabled = !canCapture || (!recording && (dex.sending || chat.busy));
+
+  /* THE DOOR STANDS ASIDE THE MOMENT THE CAPTURE HAS SOMEWHERE ELSE TO GO —
+     and it does it by NOT DRAWING, not by closing.
+     First cut closed it: `popupOpen` became true, an effect called onClose, and
+     Desk flipped the state useBackDismiss owns. That worked in Chromium — a
+     probe watched the pop-up sit there at step 1 for eight seconds with the
+     door gone — and failed on the founder's iPhone, where stopping the mic
+     made everything vanish and the words came back ten seconds later as a kept
+     draft, meaning the pop-up had been dismissed as it mounted. Closing the
+     door runs useBackDismiss's teardown, which calls history.back(); doing that
+     in the same tick as a Radix dialog mounting is a race, and WKWebView loses
+     it. I could not reproduce it to prove the mechanism, so the fix removes the
+     race rather than arguing with it.
+     So while the pop-up is up the door simply renders nothing — no state
+     change, no history, nothing to race — and the door is only truly closed
+     once the pop-up is gone, in a tick where no dialog is mounting. */
+  /* THE DOOR OPENS LISTENING (2026-10-01, founder).
+     It deliberately did not, and the note said why: "a screen that is already
+     listening the moment it appears startles people." The founder has used it
+     and disagrees — reaching the decision screen already costs a full drag, and
+     having to find the mic afterwards makes that drag feel like it did nothing.
+     So the drag IS the press.
+     It starts only from a clean slate: nothing already recording, nothing being
+     transcribed or sent, no kept words waiting to be read back, and the capture
+     gate open. Each of those would otherwise have opened the pop-up or shown a
+     refusal instead, and starting a recording over them is the bug this guard
+     exists to prevent (ASK-33.1). onMic is reused rather than reimplemented so
+     there is still one description of what pressing the mic means. */
+  const recordingRef = useRef(false);
+  recordingRef.current = recording;
+  const armedRef = useRef(false);
+  useEffect(() => {
+    if (surface !== "overlay") return;
+    if (!open) { armedRef.current = false; return; }
+    if (armedRef.current) return;
+    armedRef.current = true;
+    /* STRAIGHT THROUGH onMic, GUARDS AND ALL. The first cut tested the guards
+       here and returned quietly when one failed — which on the slider meant a
+       drag right while Dex was still reading did NOTHING AT ALL: no capture, no
+       refusal, a handle parked against a dead track. onMic already knows every
+       one of these rules and says so out loud (ASK-33.1's "Dex is still reading
+       your last one", the kept-words hand-off, the capture gate), so it is the
+       one description of what starting a capture means and this just calls it.
+       And if nothing started, the control goes home rather than sitting parked
+       on a recording that is not happening. */
+    const t = setTimeout(() => {
+      onMic();
+      setTimeout(() => {
+        if (!recordingRef.current && !popupOpenRef.current) onClose?.();
+      }, 500);
+    }, 120);
+    return () => clearTimeout(t);
+    /* [surface, open] AND NOTHING ELSE, deliberately. Written without a
+       dependency list first, which meant it re-ran on every render — and since
+       this well re-renders constantly while a capture is live, each run's
+       cleanup cancelled the pending start before the 260ms was up. The door
+       opened silent and the check caught it. The guards above read the state as
+       it is at the moment the door opens, which is exactly when the decision
+       needs taking. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [surface, open]);
+
+  /* CLOSING THE DOOR STOPS THE MIC. It never had to before, because recording
+     only ever began with a deliberate press and whoever pressed it would press
+     it again. Now the door starts listening by itself, so X or the back gesture
+     could leave a microphone running behind a screen that is gone — which is
+     the worst thing an auto-start can do.
+     Stopping is not discarding, which is this component's rule throughout
+     (ASK-33): the words finish transcribing and land as a kept draft that the
+     Desk offers back. Nothing is sent, and nothing is lost. */
+  useEffect(() => {
+    if (surface !== "overlay") return;
+    if (!open && recording) dex.stopRecording();
+  }, [surface, open, recording, dex]);
+
+  const handedOver = useRef(false);
+  useEffect(() => {
+    if (surface !== "overlay") return;
+    if (open && popupOpen) { handedOver.current = true; return; }
+    if (!popupOpen && handedOver.current) { handedOver.current = false; onClose?.(); }
+  }, [surface, open, popupOpen, onClose]);
+
+  /* DEX-SLIDER Part 4 — THE PHONE AT YOUR EAR. Monitoring runs for exactly one
+     state: this is the decision door, it is open, and it is recording. Every
+     other combination is off, which is why the condition is written as one
+     expression rather than as an enable here and a disable in four places — a
+     phone left with a dark screen because a path was missed is the worst thing
+     this feature can do, and a missed path is the only way it happens.
+     The cleanup runs on unmount, on the door closing, on recording stopping
+     and on a failed capture, because all four change this expression. */
+  const atEar = surface === "overlay" && open && recording;
+  useEffect(() => {
+    if (!atEar) return undefined;
+    let live = true;
+    enableProximity().then((on) => { if (!live && on) disableProximity(); });
+    return () => { live = false; disableProximity(); };
+  }, [atEar]);
+
+  /* …AND THE SCREEN COMES BACK IF THE APP GOES AWAY. Backgrounding does not
+     unmount this, so the effect above would hold monitoring while the founder
+     is in another app. Recording itself is left alone: the brief asks for
+     nothing to stop on its own, and it does not. */
+  useEffect(() => {
+    if (!atEar || typeof document === "undefined") return undefined;
+    const onHide = () => { if (document.hidden) disableProximity(); else enableProximity(); };
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
+  }, [atEar]);
+
+  /* The door's rings read the same meter, per frame, through a CSS variable —
+     never React state. KM-60's rule: a meter write that goes through React
+     re-renders this well, its pop-up and everything above it ~18 times a
+     second, and the only thing that needs to know is one element's style. */
+  const waveRef = useRef(null);
+  useEffect(() => {
+    if (!recording) return undefined;
+    let raf = 0, gain = 0.5;
+    const tick = () => {
+      const el = waveRef.current;
+      if (el) {
+        const lvl = Math.max(0, Math.min(1, readLevel() || 0));
+        gain += ((0.45 + lvl * 1.3) - gain) * 0.16;   // eased, so a spike cannot strobe
+        el.style.setProperty("--mw-gain", gain.toFixed(3));
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [recording, readLevel]);
+
+  /* The Desk's slider draws its ripple off THIS capture's meter — the one the
+     page already owns. A second useDexCapture would be a second MediaRecorder
+     on the same microphone, so the reader is handed up instead. It is a ref
+     reader and stable, so the slider can call it every frame and nothing above
+     it re-renders. */
+  const stopRef = useRef(null);
+  stopRef.current = () => onMic();
+  useEffect(() => {
+    onMeter?.({
+      readLevel,
+      levelsRef: dex.levelsRef,
+      recording,
+      capturing: surface === "overlay" && open,
+      stop: () => stopRef.current?.(),
+    });
+  }, [onMeter, readLevel, dex.levelsRef, recording, surface, open]);
 
   /* The top of the pane: what is going to be sent, what was kept, and — once
      the pop-up has been closed on a capture — where that capture got to. */
@@ -568,11 +763,29 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
   /* J4-03 (JOURNEY-1) — THE WELL SAYS IT KEPT SOMETHING, and PILOT-2 A — it
      offers it back where it can be read: a kept capture opens in the pop-up's
      first step, never in the two-line pill. It is not a decision until sent. */
+  const keptLabel = chat.draftKept?.restored
+    ? "Kept from before — not sent to Dex yet"
+    : "What you said is kept — not sent to Dex yet";
+  /* ON THE PHONE IT IS A PILL YOU CAN FLICK AWAY. (2026-10-06, founder: "the
+     way it displays in the home screen is not quite nice — make it a pop-up
+     floating pill with swipe-gesture closable functionality.") It was a bare
+     line of 12px type with two text buttons, printed across the top of the Desk
+     above the dock: correct, and it read as a stray sentence rather than as the
+     app telling you something. Same words, same two ways out, in the same
+     material the capture's own status pill uses — and a swipe in any direction
+     puts it away.
+     SWIPING IT AWAY IS NOT DISCARDING IT. The words stay kept: the next capture
+     still opens on them, and `Discard` is still the only thing that throws them
+     out. Hiding and deleting must not be the same gesture, least of all the
+     careless one.
+     Desktop keeps the inline note (the well is a real box there, with a place
+     for a line of type; a pill floating over a laptop screen would be the
+     stray object instead). */
   const keptDraft = kept && !popupOpen ? (
-    <DraftNote testid="dex-well-draft" className="mb-1.5"
-      label={chat.draftKept?.restored ? "Kept from before — not sent to Dex yet" : "What you said is kept — not sent to Dex yet"}
-      onOpen={openSaid}
-      onDiscard={discard} />
+    surface === "overlay"
+      ? <KeptPill testid="dex-well-draft" label={keptLabel} onOpen={openSaid} onDiscard={discard} />
+      : <DraftNote testid="dex-well-draft" className="mb-1.5"
+          label={keptLabel} onOpen={openSaid} onDiscard={discard} />
   ) : null;
   const statusKey = phase === "reading" ? "reading" : phase === "ended" ? outcome?.kind : null;
   const capturePill = !popupOpen && statusKey ? (
@@ -581,7 +794,10 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
       onClick={() => setPopupOpen(true)}
       data-testid="dex-well-status"
       data-status={statusKey}
-      className="kr-pop mb-1.5 flex min-h-11 w-fit max-w-full items-center gap-2 rounded-pill px-4 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60"
+      /* The same opaque pill as the kept note beside it (KeptPill): these two
+         are the only things that appear in this spot, they appear over the
+         Desk's black sheet, and a 38% white wash on black is a smudge. */
+      className="mb-1.5 flex min-h-11 w-fit max-w-full items-center gap-2 rounded-pill bg-white px-4 text-sm text-slate-900 shadow-[0_6px_20px_rgb(0_0_0/.28)] ring-1 ring-black/[.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60"
     >
       {statusKey === "reading" ? (
         <span aria-hidden="true" className="relative grid h-3 w-3 shrink-0 place-items-center">
@@ -598,11 +814,78 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
   const top = (capturePill || keptDraft || attachments)
     ? <div className="relative z-10">{capturePill}{keptDraft}{attachments}</div>
     : null;
+  /* THE DOOR SPLITS `top` IN TWO, along the line of what each piece is about.
+     The attached files belong to the door: you press its paperclip, so the
+     chips have to appear where you are looking. The "still reading / ready"
+     pill and the kept-capture note are about the DESK — they outlive the door,
+     which shuts itself the moment the pop-up takes over — so they stay on the
+     page, where closing the door can never hide unsent words. */
+  const doorTop = attachments
+    ? <div className="relative z-10">{attachments}</div> : null;
+  const deskTop = (capturePill || keptDraft)
+    ? <div className="relative z-10">{capturePill}{keptDraft}</div> : null;
 
-  /* THE RIPPLE IS THE INVITATION, on both surfaces. It runs off the capture the
-     page already owns — useDexCapture's meter through `readLevel` — rather than
-     opening a second stream onto the same microphone. At rest it breathes;
-     while it is listening it answers the room. */
+  /* THE DOOR HAS NO RIPPLE. Reported from the iPhone: over a blurred, dimmed
+     Desk the waves read as smeared artefacts rather than as an invitation —
+     the effect needs an opaque surface behind it to be legible, and the door
+     deliberately has none. So the door gets the mic and nothing else, and the
+     ripple moves to the one place on the phone that DOES have a solid surface
+     for it: inside the slider's own well (DexSlider), where it loops subtly
+     and answers the room through this same meter.
+
+     It keeps `desk-dex-ripple` and `voice-ripple-mic`. Those name the capture's
+     target, not the animation, and every suite and every habit presses them. */
+  const doorMic = (
+    <div className="relative grid min-h-0 flex-1 place-items-center" data-testid="desk-dex-ripple">
+      {/* THE VOICE, AS CIRCLES. Plain expanding rings on the dimmed Desk, sized
+          to run off the screen rather than stop politely short of it, and no
+          neumorphic ridge anywhere near them — that recipe needs an opaque
+          surface to be read against and this one is deliberately a blur. They
+          exist only while the mic is live, and their reach answers the meter,
+          so a loud sentence pushes further than a quiet one. */}
+      {recording && (
+        <span ref={waveRef} aria-hidden="true" className="kr-mic-waves">
+          <i style={{ animationDelay: "0s" }} />
+          <i style={{ animationDelay: "0.7s" }} />
+          <i style={{ animationDelay: "1.4s" }} />
+          <i style={{ animationDelay: "2.1s" }} />
+        </span>
+      )}
+      <button
+        type="button"
+        data-testid="voice-ripple-mic"
+        aria-pressed={recording}
+        aria-label={micLabel}
+        disabled={rippleDisabled}
+        onClick={onMic}
+        className={cn(
+          "relative grid place-items-center rounded-full transition-transform duration-200",
+          "h-[7.5rem] w-[7.5rem] disabled:opacity-40",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
+          /* PRESSED, NOT A RED SQUARE. A filled stop glyph in the alert colour
+             read as a warning on a screen where nothing is wrong — and in this
+             app the alert colour means money or a deadline at risk. The button
+             is the same microphone throughout; listening, it is held down. The
+             state is still announced properly through aria-pressed, which is
+             what a screen reader reads, not the glyph. */
+          recording ? "kr-pressed scale-[0.97]" : "kr-pop"
+        )}
+      >
+        <Microphone
+          size={44}
+          weight={recording ? "fill" : "regular"}
+          aria-hidden="true"
+          className={recording ? "text-foreground/90" : "text-foreground"}
+        />
+      </button>
+    </div>
+  );
+
+  /* THE RIPPLE IS THE INVITATION in the WELL — the flag-off Desk and desktop,
+     both of which are opaque. It runs off the capture the page already owns —
+     useDexCapture's meter through `readLevel` — rather than opening a second
+     stream onto the same microphone. At rest it breathes; while it is
+     listening it answers the room. */
   const body = phone ? (
     <div className="grid min-h-0 flex-1 place-items-center" data-testid="desk-dex-ripple">
       <VoiceRipple
@@ -643,8 +926,18 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
      every size (2026-09-21). */
   const floorTitle = (
     <div className="pointer-events-none min-w-0 flex-1 px-2 text-center">
-      <span className="block text-xs font-semibold tracking-wide text-foreground/75">Dex</span>
-      <span className="mt-0.5 block truncate text-[13px] leading-snug text-foreground/70">
+      {/* max-lg: 14px / 15px, not 12 / 13. accessibility.md › Use recommended
+         defaults puts the iOS minimum at 11 pt; --ui-scale's 0.8 turned 12px
+         into 9.6pt and 13px into 10.4pt, both under it. These land at 11.2
+         and 12.
+         BELOW lg ONLY, and that qualifier is the whole point: this floor is
+         SHARED with the desktop well, where --ui-scale is 1 and 12px is
+         already 12pt. Bumping it unscoped made the well's floor taller, which
+         made the hero taller, which took 91px off the well — caught by
+         verify:dex's "the well has not moved" at 1440, flag off. Desktop is
+         not in this audit's scope and does not move. */}
+      <span className="block text-xs font-semibold tracking-wide text-foreground/75 max-lg:text-sm">Dex</span>
+      <span className="mt-0.5 block truncate text-[13px] leading-snug text-foreground/70 max-lg:text-[15px]">
         {!canCapture ? "Ask an owner to turn on capture."
           : transcribing ? "Transcribing what you said…"
           : "Tell Dex what you decided."}
@@ -732,13 +1025,25 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
         data-intent={fieldOpen && chat.draft.trim() ? "send" : "type"}
         onClick={() => {
           if (fieldOpen && chat.draft.trim()) { send(); return; }
+          /* "I'd rather type" WHILE THE DOOR IS LISTENING. The door now opens
+             recording, so without this the typing fallback is unreachable on
+             the one screen that needs it — the button is disabled for the whole
+             life of the recording. Pressing it stops, and what you said arrives
+             in the pop-up's first step as editable text. That is the typing
+             surface, and it arrives with a head start instead of empty. */
+          if (recording) { onMic(); return; }
           if (kept) { openSaid(); return; }
           setTyping(true);
           requestAnimationFrame(() => fieldRef.current?.focus());
         }}
-        disabled={!canCapture || chat.busy || recording}
-        aria-label={fieldOpen && chat.draft.trim() ? "Send to Dex" : "Type instead"}
-        title={fieldOpen && chat.draft.trim() ? "Send to Dex" : "Type instead"}
+        /* The well keeps its old rule — it does not start on its own, so a live
+           recording there means the founder pressed the mic and the keyboard
+           has nothing to offer. The door does start on its own, so it must. */
+        disabled={!canCapture || chat.busy || (recording && surface !== "overlay")}
+        aria-label={fieldOpen && chat.draft.trim() ? "Send to Dex"
+          : recording ? "Stop and type instead" : "Type instead"}
+        title={fieldOpen && chat.draft.trim() ? "Send to Dex"
+          : recording ? "Stop and type instead" : "Type instead"}
         className={CIRCLE}
       >
         {fieldOpen && chat.draft.trim()
@@ -757,8 +1062,65 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
     : phase === "ended" ? (ENDING_STEP[outcome?.kind] || "slow")
     : "said";
 
+  /* DEX-SLIDER Part 3 · THE FULL-SCREEN DOOR.
+   *
+   * Everything behind it is blurred and dimmed — no part of the Desk reads
+   * through sharply. The mic is the centre and the ripple runs out from it
+   * across the screen; nothing else is in the middle, no stage text and no
+   * card, because the one thing being asked for here is a sentence spoken out
+   * loud.
+   *
+   * Attach sits bottom left and the keyboard bottom right — the SAME two
+   * controls the well's floor carries, the same handlers and the same testids,
+   * because they are literally the same `floor`. The keyboard is a backup path
+   * and does not need to be prominent; it only needs to work.
+   *
+   * `top` is the well's own top row, so a kept capture appears here exactly as
+   * it does in the well, with the same Discard. The slider shows nothing about
+   * drafts, by design — this screen is where they live.
+   *
+   * RECORDING DOES NOT START ON OPEN. onMic is the only thing that starts it,
+   * as in the well. A screen that is already listening the moment it appears
+   * startles people.
+   */
+  /* THE DOOR IS GONE (2026-10-02, founder). It was a full screen: the Desk
+     blurred and dimmed behind a centred mic, with attach and a keyboard in the
+     bottom corners. Their redesign retires the whole thing. The slider's own
+     track becomes the recording surface — the same move the dock already makes
+     for Ask, where the bar you already have turns into Dex rather than a second
+     bar being drawn over it (KM-26). So this surface now renders NOTHING of its
+     own: it owns the microphone, the conversation, the guards and the pop-up,
+     and hands its state up to DexSlider, which draws.
+     `surface="overlay"` is kept as the name of that arrangement rather than
+     renamed, because it is still what tells this component it is not the well.
+
+     WHAT WENT WITH THE SCREEN, deliberately:
+     · the mic button — the slider's handle is the control, and pressing it
+       stops and sends.
+     · attach and the keyboard — the founder's call, and the reasoning is good:
+       you attach to a decision AFTER you have said it, not while you are
+       speaking. Attach moved into the pop-up, where the words already are.
+     · the blur — there is nothing to dim, because nothing is covered. */
+
+  /* WHAT THE DESK KEEPS WHILE THE DOOR IS SHUT. `top` is the kept-capture note
+     and the "Dex is still reading / ready" pill — both of them statements about
+     the page, not about the recording screen. Rendering them only inside the
+     door would mean that closing it (which now happens by itself the moment the
+     pop-up takes over) silently hid the one affordance that offers unsent words
+     back. So on the overlay surface they render inline on the Desk instead, and
+     the door carries the mic alone. */
   return (
     <>
+      {/* The file input lives in the well's floor, which this surface no longer
+          renders — so it needs its own. One input either way; the pop-up's
+          attach button is what presses this one. */}
+      {surface === "overlay" && (
+        <input ref={fileInputRef} type="file" className="hidden" tabIndex={-1} onChange={onPickFile} />
+      )}
+      {surface === "overlay" && deskTop
+        ? <div className={cn("relative z-20 order-3 shrink-0 px-1 lg:hidden", className)} style={style} data-testid={testid}>{deskTop}</div>
+        : null}
+      {surface === "overlay" ? null : (
       <InsightWell
         compact
         label={null}
@@ -772,6 +1134,7 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
            `kr-well--sunk` below lg: a dimmer wash and a deeper press. */
         paneClassName={cn("max-lg:flex-1 max-lg:p-3", phone && "kr-well--sunk")}
       />
+      )}
       <DexCapturePopup
         open={popupOpen && phase !== "idle"}
         onClose={closePopup}
@@ -792,6 +1155,11 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
         onSaveDraft={saveDraft}
         outcome={outcome}
         onRetry={onRetry}
+        /* ATTACH AFTER SPEAKING, NOT BEFORE. It used to sit on the recording
+           screen's floor, which meant choosing a file before you had said what
+           it was for. The founder moved it here, beside the words. */
+        onAttach={surface === "overlay" ? () => fileInputRef.current?.click() : undefined}
+        attaching={attaching}
       />
       {/* PILOT — THE FLOATING COMPOSER. On a phone, while the field is open, the
           text field and its send sit 20px above the keyboard (kb.bottom), out of
@@ -806,11 +1174,11 @@ export function DeskDexWell({ className, testid, phone = false, onReview, onLate
           data-testid="desk-dex-floating-scrim"
           onClick={() => { setTyping(false); setPillDraft(false); }}
           className="fixed inset-0 bg-slate-900/25 backdrop-blur-md"
-          style={{ zIndex: 60 }}
+          style={{ zIndex: composerZ }}
         />
         <div
           data-testid="desk-dex-floating"
-          style={{ position: "fixed", left: 0, right: 0, bottom: kb.bottom, zIndex: 70 }}
+          style={{ position: "fixed", left: 0, right: 0, bottom: kb.bottom, zIndex: composerZ + 10 }}
           className="px-3"
         >
           <div className="kr-pop mx-auto flex max-w-[34rem] items-end gap-2 rounded-[1.6rem] p-2">

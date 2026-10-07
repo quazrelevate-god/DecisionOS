@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import { DeviceMobile, Export, Plus, X } from "@phosphor-icons/react";
 import { BottomSheet } from "./BottomSheet";
 import { useIsMobile } from "../../hooks/useIsMobile";
+import { isNativeApp } from "../../lib/native/back";
 import { sessionCount, installDismissed, dismissInstall } from "@/serviceWorkerRegistration";
 
 const MIN_SESSIONS = 3;
@@ -37,6 +38,13 @@ export function InstallPrompt() {
   const isMobile = useIsMobile();
 
   React.useEffect(() => {
+    /* ALREADY THE APP. (2026-10-06, seen on the iOS simulator.) Inside the
+       Capacitor build neither display-mode: standalone nor navigator.standalone
+       is true, and the iOS branch below needs no event to fire — so the native
+       app offered to add itself to the home screen, in a bar that sat over the
+       Desk's third row. isNativeApp() is the same gate every other native leaf
+       in this app uses (lib/native/back). */
+    if (isNativeApp()) return undefined;
     // Already installed, already said no, or too early — stay out of the way.
     if (isStandalone() || installDismissed() || sessionCount() < MIN_SESSIONS) return undefined;
 

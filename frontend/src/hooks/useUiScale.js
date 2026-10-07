@@ -75,11 +75,112 @@ export function computeUiScale(width) {
 export function useUiScale() {
   useEffect(() => {
     const root = document.documentElement;
+    const meta = document.querySelector('meta[name="viewport"]');
+    const metaWas = meta ? meta.getAttribute("content") : null;
     document.body.classList.add("ui-scale");
     let raf = 0;
+    let viaViewport = false;
+
+    /* ZOOM IS NOT AVAILABLE EVERYWHERE, AND THE APP MUST NOT NEED IT.
+       (2026-10-05, measured on two phones running the same binary.)
+         iPhone 13 mini, iOS 27    — zoom honoured, page correct.
+         iPhone 13,      iOS 26.3.1 — zoom IGNORED. Every box 1.25x, 1055px of
+                                      page in an 844px window, the dock alone
+                                      still because it is fixed.
+       On the older one the device reported `--ui-scale 0.8`, `body.zoom 0.8`
+       AND an inline `0.8`, measured an effective scale of 1, and answered
+       `currentCSSZoom: unsupported` — a WebKit from before CSS `zoom` was
+       standardised. It accepts the declaration, reports it back, and does not
+       lay out by it. There is no way to set it that fixes that, so the app
+       stops depending on it.
+       THE FALLBACK IS THE OLDEST TRICK THERE IS: hand the page a wider layout
+       viewport and let the browser fit it to the glass. `width=488` on a 390pt
+       screen is drawn at 390/488 = 0.8 — the same result, through page scale,
+       which every web view has always implemented.
+       And then --ui-scale becomes 1, which is not a lie but the point: every
+       compensation in this app (--sa-* over the scale, 100dvh over the scale,
+       DexSlider's visual-to-CSS conversion) exists to undo a zoom, and with
+       the viewport pre-scaled there is nothing to undo. One divides by 1 and
+       they all come out right.
+       WHICH PATH RUNS IS MEASURED, NEVER SNIFFED. A 100px ruler read back
+       through getBoundingClientRect says what actually happened; no version
+       test, no UA string, and a web view that gains zoom later simply keeps
+       the fast path. */
+    const deviceWidth = () => {
+      /* screen.width is the glass, and does NOT move when we rewrite the
+         viewport meta — innerWidth does, which would make this compound. */
+      const w = window.screen && window.screen.width;
+      return typeof w === "number" && w > 64 ? w : window.innerWidth;
+    };
+
+    const effectiveScale = () => {
+      const ruler = document.createElement("div");
+      ruler.style.cssText = "position:absolute;top:-9999px;left:0;width:100px;height:1px;pointer-events:none";
+      document.body.appendChild(ruler);
+      const got = ruler.getBoundingClientRect().width / 100;
+      ruler.remove();
+      return got;
+    };
+
+    const widenViewport = (s) => {
+      if (!meta) return;
+      /* FLOOR, not round. The browser fits this width to the glass, so asking
+         for 488 on a 390pt screen scales by 390/488 = 0.7992 and the page ends
+         a rounded pixel TALLER than the window — one stray pixel of scroll on
+         a page whose whole point is not to scroll. Flooring always asks for
+         slightly less than the exact 487.5, so the fit rounds the other way. */
+      meta.setAttribute("content", `width=${Math.floor(deviceWidth() / s)}, viewport-fit=cover`);
+    };
+
+    /* MERGE 2026-10-06 — AND A HEIGHT CHANGE IS NOT A SCALE CHANGE. From
+       origin/mobile-capacitor, kept whole because it is a real fix and it
+       composes with the fallback rather than competing: the scale is a pure
+       function of WIDTH, so a soft keyboard (which moves innerHeight only) must
+       not rewrite --ui-scale — writing it re-runs the full-document zoom recalc
+       and reflowed the app mid-transition when a dialog autofocused a field.
+       Comparing the COMPUTED step rather than the raw width also absorbs the
+       few-px innerWidth jitter some Android web views emit with the keyboard;
+       rotation across a step still re-applies.
+       It guards the ZOOM path only — once the viewport fallback is on, `apply`
+       re-asserts the meta and has already returned above. */
+    let lastScale = null;
     const apply = () => {
       raf = 0;
-      root.style.setProperty("--ui-scale", computeUiScale(window.innerWidth).toFixed(1));
+      if (viaViewport) { widenViewport(computeUiScale(deviceWidth())); return; }
+
+      const s = computeUiScale(window.innerWidth);
+      if (s.toFixed(1) === lastScale) return;
+      lastScale = s.toFixed(1);
+      /* TWO NUMBERS, BECAUSE --ui-scale WAS DOING TWO JOBS. (2026-10-05.)
+         The viewport fallback sets --ui-scale to 1, and for everything that
+         UNDOES a zoom — viewport units, env() insets, visual-to-CSS pixel
+         conversion — that is exactly right: a pre-scaled viewport has nothing
+         to undo. But a handful of rules were never compensations at all. They
+         convert a DESIGN width given on the glass into the page's own pixels:
+         `--app-shell: 28rem / scale` means "28rem as the eye sees it". Divided
+         by 1 instead of 0.8 the shell came out 448 own px inside a 487 own px
+         viewport and put ~20px gutters down both sides of every page — which
+         is the precise bug the note above --app-shell was already written
+         about, returning by another door.
+         So --ui-density is the scale the design is drawn at, always, in both
+         modes; --ui-scale stays what must be divided OUT, which the fallback
+         correctly makes 1. */
+      root.style.setProperty("--ui-density", s.toFixed(1));
+      root.style.setProperty("--ui-scale", s.toFixed(1));
+      try { document.body.style.zoom = String(s); } catch (e) { /* no zoom here */ }
+
+      /* Only below the desktop tree: the viewport meta is a phone mechanism
+         and a desktop browser ignores it, so there would be nothing to fall
+         back TO. A laptop whose web view lacked zoom would simply run at 1,
+         which is what it did before any of this existed. */
+      if (s === 1 || window.innerWidth >= LG) return;
+      if (Math.abs(effectiveScale() - s) <= 0.01) return;   // zoom landed; done
+
+      viaViewport = true;
+      document.body.classList.remove("ui-scale");
+      try { document.body.style.zoom = ""; } catch (e) { /* never had one */ }
+      root.style.setProperty("--ui-scale", "1");
+      widenViewport(s);
     };
     const onResize = () => { if (!raf) raf = requestAnimationFrame(apply); };
     apply();
@@ -88,6 +189,8 @@ export function useUiScale() {
       window.removeEventListener("resize", onResize);
       if (raf) cancelAnimationFrame(raf);
       root.style.removeProperty("--ui-scale");
+      try { document.body.style.zoom = ""; } catch (e) { /* never had one */ }
+      if (meta && metaWas !== null) meta.setAttribute("content", metaWas);
       document.body.classList.remove("ui-scale");
     };
   }, []);

@@ -136,12 +136,13 @@ def _is_dead_token(exc) -> bool:
     )
 
 
-def _send_sync(tokens, title, body, data) -> list:
-    """Blocking FCM send (run off the event loop). Returns dead tokens."""
+def _send_sync(tokens, title, body, data):
+    """Blocking FCM send (run off the event loop). Returns (sent, dead_tokens)."""
     from firebase_admin import messaging
 
     payload = {k: str(v) for k, v in (data or {}).items() if v is not None}
     dead = []
+    sent = 0
     for i in range(0, len(tokens), _CHUNK):
         chunk = tokens[i:i + _CHUNK]
         msg = messaging.MulticastMessage(
@@ -152,9 +153,11 @@ def _send_sync(tokens, title, body, data) -> list:
         )
         resp = messaging.send_each_for_multicast(msg)
         for tok, r in zip(chunk, resp.responses):
-            if not r.success and r.exception is not None and _is_dead_token(r.exception):
+            if r.success:
+                sent += 1
+            elif r.exception is not None and _is_dead_token(r.exception):
                 dead.append(tok)
-    return dead
+    return sent, dead
 
 
 async def send_push_to_users(tenant_id, user_ids, title, body, data=None) -> None:
@@ -173,12 +176,15 @@ async def send_push_to_users(tenant_id, user_ids, title, body, data=None) -> Non
     ).to_list(2000)
     tokens = sorted({r["token"] for r in rows if r.get("token")})
     if not tokens:
+        logger.info(f"[push] '{title}': {len(ids)} recipient(s) but no registered device — nothing to send")
         return
     try:
-        dead = await asyncio.to_thread(_send_sync, tokens, title, body, data)
+        sent, dead = await asyncio.to_thread(_send_sync, tokens, title, body, data)
     except Exception as e:  # network, quota — the in-app row already landed
         logger.warning(f"[push] send failed: {e}")
         return
+    logger.info(
+        f"[push] '{title}' -> sent {sent}/{len(tokens)} to {len(ids)} user(s); pruned {len(dead)}"
+    )
     if dead:
         await db.device_tokens.delete_many({"token": {"$in": dead}})
-        logger.info(f"[push] pruned {len(dead)} dead device token(s)")

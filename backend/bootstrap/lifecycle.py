@@ -1105,6 +1105,21 @@ async def _bootstrap():
                 logger.info("Migration applied: migrate_local_disk_uploads_to_obj_store_v1")
         except Exception as e:
             logger.exception(f"local-disk uploads migration: {e}")  # S5-05
+        # Audit B-02 (2026-10-08): a task's department is one of the
+        # company's teams. Moves existing tasks off the old, separately
+        # generated category keys onto the team each one means. Once.
+        try:
+            from services.task_departments import migrate_task_types_to_teams
+            _dres = await _apply_migration(
+                db,
+                "task_types_follow_teams_v1",
+                migrate_task_types_to_teams,
+                description="Audit B-02: task departments are the company's teams",
+            )
+            if _dres == "applied":
+                logger.info("Migration applied: task_types_follow_teams_v1")
+        except Exception as e:
+            logger.exception(f"task_types_follow_teams migration: {e}")
         await fixup_demo_tenant()
         await write_test_credentials()
         logger.info("Bootstrap complete.")

@@ -22,7 +22,9 @@ def _fe(*parts):
 
 def test_entering_goes_to_the_desk():
     signup = _fe("pages", "Signup.js")
-    assert 'navigate("/brief")' in signup
+    # Audit A-16: "Enter and bring my team in first" lands on Add member;
+    # the ordinary press still goes to the Desk.
+    assert 'navigate(then === "team" ? "/team?add=1" : "/brief");' in signup
     app = _fe("App.js")
     assert '<Route path="/brief" element={<Navigate to="/inbox?scope=morning" replace />} />' in app
 

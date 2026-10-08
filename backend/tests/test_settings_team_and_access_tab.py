@@ -151,9 +151,12 @@ def test_one_pipeline_is_open_at_a_time():
 
 
 def test_a_task_category_shows_its_whole_name():
+    # Audit B-02 (2026-10-08): the category chips are gone from Operations —
+    # a task's department is one of the teams, named in Team & access, which
+    # shows the whole name. What is left here is the pointer to it.
     s = src("components/OperatingModelEditor.js")
     assert "bg-transparent text-sm w-28" not in s
-    assert "style={{ width: `${Math.min(Math.max((c.label || \"\").length, 6), 30) + 1}ch` }}" in s
+    assert 'data-testid="op-departments-note"' in s and "/settings?tab=team" in s
 
 
 def test_the_audit_log_fits_a_phone():

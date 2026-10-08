@@ -595,7 +595,10 @@ async def process_voice_note(note_id: str, hold: bool = False):
         troles = await tenant_role_keys(tenant_id)
         members = await db.users.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(200)
         om = await tenant_operating_model(tenant_id)
-        cat_keys = {c["key"] for c in om["task_categories"]}
+        # Audit B-02: the departments Dex files work under are the teams.
+        from services.task_departments import tenant_task_categories
+        cats = await tenant_task_categories(db, tenant_id)
+        cat_keys = {c["key"] for c in cats}
         # Read any attached reference files so the AI factors them into the decision.
         ref_ids = note.get("reference_file_ids") or []
         extra_context = ""
@@ -609,7 +612,7 @@ async def process_voice_note(note_id: str, hold: bool = False):
                         chunks.append(txt)
             extra_context = "\n\n".join(chunks)
         extracted = await ai_extract(transcript or "", session_id=f"extract-{note_id}", allowed_roles=sorted(troles),
-                                     members=members, pipelines=om["pipelines"], task_categories=om["task_categories"],
+                                     members=members, pipelines=om["pipelines"], task_categories=cats,
                                      extra_context=extra_context)
         # The AI never answered (provider down, rate limit, bad key, consent
         # revoked mid-flight): that is a failure with a reason, not a capture

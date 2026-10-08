@@ -13,7 +13,10 @@ const inp = "w-full rounded-2xl bg-white/80 px-3 py-2 text-sm text-slate-800 rin
 // three labels were a dead output; pipeline labels are edited via the
 // Operating Model editor (Operations tab) which is the single source of
 // truth per Epic 5 spec.
-const TT_KEYS = ["operational", "sales", "purchase", "production", "finance", "hr"];
+// Audit B-02 (2026-10-08): the six "task type / department labels" are gone
+// from this card too. Nothing read them (a dead output, like the workflow
+// labels above), and next to the teams they were a second department list
+// with different names. Departments are the teams: Settings › Team & access.
 
 function Row({ label, hint, value, onChange, testid }) {
   return (
@@ -33,7 +36,6 @@ export function BusinessVocabulary() {
 
   const setField = (k, v) => setForm((s) => ({ ...s, [k]: v }));
   // WE-02: setWf removed alongside the workflow-vocab editor block.
-  const setTt = (k, v) => setForm((s) => ({ ...s, task_types: { ...s.task_types, [k]: v } }));
 
   const save = async () => {
     setSaving(true);
@@ -86,14 +88,6 @@ export function BusinessVocabulary() {
              Pipeline labels + stages are edited via the Operating Model
              editor (see OperatingModelEditor.js). */}
 
-        <div>
-          <p className="label-mono text-muted-foreground mb-2">Task type / department labels</p>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {TT_KEYS.map((k) => (
-              <Row key={k} label={k} testid={`vocab-tt-${k}`} value={form.task_types[k]} onChange={(v) => setTt(k, v)} />
-            ))}
-          </div>
-        </div>
       </div>
 
       <div className="mt-6 flex flex-wrap gap-3">
@@ -102,7 +96,7 @@ export function BusinessVocabulary() {
           <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Vocabulary"}
         </button>
         <RegenerateWithAi onConfirm={regenerate} busy={regen} testid="vocab-regenerate"
-          replaces="your customer, vendor and task-type words" />
+          replaces="your customer and vendor words" />
       </div>
     </div>
   );

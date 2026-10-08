@@ -393,7 +393,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
     }
   };
 
-  const confirmAndRegister = async () => {
+  const confirmAndRegister = async (then) => {
     if (!bp || stage === "registering") return;
     setStage("registering"); setError(""); setTakenEmail(false); setPhoneIssue(false);
     try {
@@ -464,7 +464,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
          open it. The routines that screen offered are not lost — My Work's
          RoutinesNudge asks for them in the app, where a founder can answer
          with their company in front of them. */
-      onEnter();
+      onEnter(then);
     } catch (e) {
       const detail = e.response?.data?.detail;
       /* 2026-09-17 — a founder whose first press was lost (the proxy giving up
@@ -1009,6 +1009,15 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                   disabled={refining} data-testid="build-confirm-button"
                   className="kr-pop flex h-14 items-center gap-2 rounded-pill bg-kr-ink px-8 font-medium text-white disabled:opacity-50">
                   Looks good — Enter DecisionOS <ArrowRight size={18} weight="bold" />
+                </button>
+                {/* Audit A-16 (2026-10-08) — the teams above are empty until
+                    someone is in them, and nothing after sign-up asked for
+                    anybody. The same press, landing on Add member instead of
+                    the Desk; the Desk keeps asking until someone is added. */}
+                <button type="button" onClick={(e) => { e.stopPropagation(); confirmAndRegister("team"); }}
+                  disabled={refining || stage === "registering"} data-testid="build-confirm-team-button"
+                  className="text-sm font-medium text-foreground underline underline-offset-4 disabled:opacity-50">
+                  Enter and bring my team in first
                 </button>
                 {/* J2-12 (JOURNEY-1) — THE CONSENT IS ASKED WHERE IT IS GIVEN.
                     The server records this press as the AI-processing consent

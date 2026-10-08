@@ -193,11 +193,16 @@ export default function Signup() {
         // Reopen at the first answer that is missing. 2026-09-20 — no password
         // step for anyone now, so nothing in this scan is "never saved": a
         // resumed signup lands on the first answer that is genuinely blank.
+        // Audit A-01 (2026-10-08): scanned in the ORDER THE WIZARD ASKS
+        // (BasicsFlow's STEPS). The scan used to start at company_name, so a
+        // reload on a blank "And your name?" reopened on the company step,
+        // past the question nobody had answered. A known founder is never
+        // asked their name (it is on their account), so it isn't a gap.
         const order = (known
-          ? ["company_name", "name", "phone", "team_size"]        // support_email may be skipped
-          : ["company_name", "name", "phone", "email", "team_size"]);
+          ? ["phone", "company_name", "team_size"]                 // support_email may be skipped
+          : ["phone", "name", "company_name", "email", "team_size"]);
         const firstGap = order.find((k) => !String(saved[k] || "").trim());
-        setBasicsStart(firstGap || order[0]);
+        setBasicsStart(firstGap || "company_name");
         setResumed(true);
 
         /* B05 — AND COME BACK TO WHERE THEY WERE, not to the first question.
@@ -250,10 +255,11 @@ export default function Signup() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading]);
 
-  const enterApp = () => {
+  // Audit A-16: "team" — they chose to add their people first.
+  const enterApp = (then) => {
     clearDraft();
     localStorage.setItem("dos_welcome", (form.name || "").trim().split(/\s+/)[0] || "1");
-    navigate("/brief");
+    navigate(then === "team" ? "/team?add=1" : "/brief");
   };
 
   /* `relative isolate` on the root is load-bearing, not decoration. The art

@@ -10,6 +10,7 @@ import { NAV, navEntryOpen } from "../components/Layout";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatPhone, timeAgo } from "../lib/format";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { normIndianMobile, displayIndianMobile } from "../lib/phone";
@@ -176,7 +177,7 @@ function previewMenus(perms) {
 /* Add a member, or edit one (`initial`). `defaultRole` pre-sets the team when
    the dialog opens from that team's branch; `defaultManagerId` pre-sets
    "Reports to" when it opens from a node in the desktop tree. */
-function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOptions, onSaved, onInvite, members = [], inviteAfterSave = false, basicOnly = false }) {
+function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOptions, onSaved, onInvite, members = [], inviteAfterSave = false, basicOnly = false, autoOpen = false }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const { user: me, refreshMe } = useAuth();
@@ -318,6 +319,14 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
       setForm(blankForm());
     }
   };
+  /* Audit A-16 (2026-10-08) — /team?add=1 (the Desk's "Bring your team in"
+     card) opens this straight away, once the team list it needs is in. */
+  const autoOpened = useRef(false);
+  useEffect(() => {
+    if (!autoOpen || autoOpened.current || !roleOptions.length) return;
+    autoOpened.current = true;
+    openChange(true);
+  }, [autoOpen, roleOptions.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setRole = (role) => setForm((f) => ({
     ...f, role,
@@ -864,6 +873,16 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
     enabled: canManageTeam,
   });
 
+  // Audit A-16: ?add=1 opens Add member on arrival, then leaves the URL.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [addOnArrival] = useState(() => searchParams.get("add") === "1");
+  useEffect(() => {
+    if (searchParams.get("add") !== "1") return;
+    const next = new URLSearchParams(searchParams);
+    next.delete("add");
+    setSearchParams(next, { replace: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["users"] });
     qc.invalidateQueries({ queryKey: ["tenant-plan"] });   // the seat count moves with the team
@@ -1100,7 +1119,7 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
             </span>
           )}
           {canManageTeam && (
-            <MemberDialog roleOptions={roleOptions} members={members} onSaved={refresh} onInvite={setInvite}
+            <MemberDialog roleOptions={roleOptions} members={members} onSaved={refresh} onInvite={setInvite} autoOpen={addOnArrival}
               trigger={
                 <button type="button" data-testid="add-user-button"
                   className={`flex h-12 shrink-0 items-center gap-2 rounded-pill px-5 text-sm font-medium ${INK_PILL}`}>

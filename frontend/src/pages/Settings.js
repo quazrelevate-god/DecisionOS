@@ -11,6 +11,7 @@ import { BusinessVocabulary } from "../components/BusinessVocabulary";
 // 2026-10-05 — teams and their access get a tab of their own; task templates
 // move to Operations. Both were sections at the bottom of Company Details.
 import { TeamsCard } from "../components/settings/TeamsCard";
+import { PlanCard } from "../components/settings/PlanCard";
 import { TaskTemplatesCard } from "../components/settings/TaskTemplatesCard";
 import { AccessSwitch } from "../components/settings/AccessSwitch";
 import { OperatingModelEditor } from "../components/OperatingModelEditor";
@@ -439,38 +440,6 @@ function EscalationCard() {
       <button type="button" onClick={save} disabled={busy} data-testid="escalation-save" className={`${INK} mt-4`}>
         {busy ? "Saving…" : "Save overdue work"}
       </button>
-    </div>
-  );
-}
-
-/* RBAC P2 (2026-09-16) — Workspace tab, owner only: what the backend already
-   had but no screen showed. */
-function PlanSeatsCard() {
-  const [p] = useLoad("/tenant/plan");
-  const limit = p?.seat_limit;
-  const pct = limit ? Math.min(100, Math.round(((p?.seats_used || 0) / limit) * 100)) : 0;
-  const name = p?.key ? p.key.charAt(0).toUpperCase() + p.key.slice(1) : "";
-  return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="settings-plan-card">
-      <h2 className="text-base font-medium">Plan and seats</h2>
-      {!p ? <div className="ds-skeleton mt-4 h-12 rounded-xl" aria-hidden="true" />
-        : p.error ? <p className="mt-3 text-sm text-muted-foreground">Couldn&rsquo;t load your plan.</p> : (
-        <div className="mt-3 space-y-3">
-          <p className="text-sm"><span className="font-semibold" data-testid="plan-name">{name}</span>
-            {p.trial_ends_at && <span className="text-muted-foreground"> · {p.trial_expired ? "trial ended" : `trial ends ${dayLabel(p.trial_ends_at)}`}</span>}
-          </p>
-          <div>
-            <p className="text-sm tabular-nums" data-testid="plan-seats">
-              {p.seats_used} {limit ? `of ${limit}` : ""} seat{p.seats_used === 1 && !limit ? "" : "s"} used{limit ? "" : " · no seat limit"}
-            </p>
-            {limit ? (
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-900/[0.07]" aria-hidden="true">
-                <div className={`h-full rounded-full ${pct >= 90 ? "bg-rose-500" : "bg-neutral-900"}`} style={{ width: `${pct}%` }} />
-              </div>
-            ) : null}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -1033,7 +1002,12 @@ export default function Settings() {
   // is a small one worth having (matches the Finance tab pattern).
   const [searchParams, setSearchParams] = useSearchParams();
   const urlTab = searchParams.get("tab");
-  const initialTab = urlTab && VALID_TAB_KEYS.has(urlTab) ? urlTab : "business";
+  // Audit D-01 (2026-10-08): the URL may only pick a tab this person can
+  // open. ?tab=workspace for a member used to ping-pong between the sync
+  // effect (back to the URL's tab) and the owner guard (back to Business)
+  // until React gave up with "Maximum update depth exceeded".
+  const tabAllowed = (key) => VALID_TAB_KEYS.has(key) && (key !== "workspace" || user?.role === "owner");
+  const initialTab = urlTab && tabAllowed(urlTab) ? urlTab : "business";
   const [tab, setTab] = useState(initialTab);
   const selectTab = (key) => {
     setTab(key);
@@ -1044,10 +1018,10 @@ export default function Settings() {
   // Keep local state in sync when the URL changes from outside (back /
   // forward buttons, external deep-link).
   useEffect(() => {
-    if (urlTab && VALID_TAB_KEYS.has(urlTab) && urlTab !== tab) {
+    if (urlTab && tabAllowed(urlTab) && urlTab !== tab) {
       setTab(urlTab);
     }
-  }, [urlTab, tab]);
+  }, [urlTab, tab, user]); // eslint-disable-line react-hooks/exhaustive-deps
   // A link like /settings?tab=business#ai-consent lands on that card.
   useEffect(() => {
     const id = window.location.hash.slice(1);
@@ -1163,7 +1137,7 @@ export default function Settings() {
 
         {tab === "workspace" && user?.role === "owner" && (
           <>
-            <Section id="settings-s-plan" label="Plan and seats"><PlanSeatsCard /></Section>
+            <Section id="settings-s-plan" label="Plan and seats"><PlanCard /></Section>
             <Section id="settings-s-keys" label="AI and WhatsApp keys"><AiKeysCard /></Section>
             <Section id="settings-s-audit" label="Audit log"><AuditLogCard /></Section>
           </>

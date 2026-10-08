@@ -62,6 +62,15 @@ def _month_start_iso() -> str:
     return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
 
 
+def next_reset_date(now: Optional[datetime] = None) -> str:
+    """The day the monthly allowances start again: the 1st of next month
+    (UTC), as YYYY-MM-DD. Audit B-04 (2026-10-08) — the owner was only told
+    this once the AI had already stopped."""
+    now = now or datetime.now(timezone.utc)
+    year, month = (now.year + 1, 1) if now.month == 12 else (now.year, now.month + 1)
+    return f"{year:04d}-{month:02d}-01"
+
+
 async def aggregate_usage(
     db,
     tenant_id: str,

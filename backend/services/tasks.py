@@ -69,11 +69,14 @@ def status_change_clears_waiting(t: dict, new_status: str) -> dict:
 
 
 def _derive_task_type(t: dict) -> str:
-    # Any stored category key (dynamic per tenant) passes through; else fall back to role, else 'other'.
+    # A stored department passes through; else the team it was given to, else 'other'.
+    # Audit B-02 (2026-10-08): departments ARE the teams, so a stage task or a
+    # routine handed to a team belongs to that team's tab. This used to accept
+    # only four built-in role names, which no AI-built company has.
     if t.get("task_type"):
         return t["task_type"]
     r = t.get("assignee_role")
-    if r in ("sales", "finance", "production", "purchase"):
+    if r and r != "owner":
         return r
     return "other"
 

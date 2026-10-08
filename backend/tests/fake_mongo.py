@@ -173,6 +173,15 @@ class FakeCollection:
     async def count_documents(self, flt=None):
         return sum(1 for d in self.docs if matches(d, flt))
 
+    async def distinct(self, key, flt=None):
+        out = []
+        for d in self.docs:
+            if matches(d, flt):
+                v, present = _get(d, key)
+                if present and v not in out:
+                    out.append(v)
+        return out
+
 
 class FakeDB:
     def __init__(self):

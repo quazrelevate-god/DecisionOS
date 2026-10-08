@@ -7,6 +7,7 @@ helpers (ai_generate_*, backfill_operating_model, normalize_finance_categories)
 and a few shared models stay in server; services are deferred-imported.
 """
 import re
+from datetime import datetime, timezone
 from services.tenant_ai_keys import TENANT_PUBLIC
 from typing import Optional
 
@@ -588,7 +589,33 @@ async def get_tenant_plan(user: dict = Depends(get_current_user)):
     )
     ep["seats_used"] = len(taken)
     ep["seats_invited"] = sum(1 for m in taken if m.get("status") == STATUS_PENDING)
+    # Audit B-04 (2026-10-08) — the card that shows the plan also shows the
+    # month's AI allowance (used / cap / when it starts again), how long the
+    # trial has left, and whether upgrading online is switched on. The owner
+    # used to learn the allowance existed when Dex stopped answering.
+    from services.quotas import quota_status, next_reset_date
+    ai = await quota_status(db, tenant, "llm_tokens_total")
+    ep["ai_allowance"] = {
+        "used": ai.get("usage", 0), "cap": ai.get("cap"), "percent": ai.get("percent", 0),
+        "over": bool(ai.get("over")), "resets_on": next_reset_date(),
+    }
+    ep["trial_days_left"] = _days_left(ep.get("trial_ends_at")) if ep.get("key") == "trial" else None
+    from config import BILLING_LANDING_URL, RAZORPAY_KEY_ID
+    ep["billing_configured"] = bool(BILLING_LANDING_URL and RAZORPAY_KEY_ID)
     return ep
+
+
+def _days_left(ends_at) -> Optional[int]:
+    """Whole days until a trial ends (0 on the last day, negative after)."""
+    if not ends_at:
+        return None
+    try:
+        end = datetime.fromisoformat(str(ends_at).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=timezone.utc)
+    return (end.date() - datetime.now(timezone.utc).date()).days
 
 
 # FIX-005-A (S3-03): per-tenant AI key endpoints.

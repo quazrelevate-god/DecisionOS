@@ -291,7 +291,11 @@ async def run_finance_actions(tenant_id: str):
             "id": tid, "tenant_id": tenant_id, "title": title, "description": desc,
             "assignee_role": assignee_role, "assignee_id": assignee_id, "priority": priority,
             "status": "todo", "due_date": due, "decision_id": None,
-            "source": "finance", "task_type": "finance", "op_category": None,
+            "source": "finance",
+            # Audit B-02: filed under the team doing it (Accounts), not a
+            # built-in "finance" key no AI-built company has as a team.
+            "task_type": assignee_role if assignee_role and assignee_role != "owner" else "finance",
+            "op_category": None,
             "finance_ref": {"invoice_id": inv["id"], "invoice_type": inv.get("type")},
             "progress": 0, "created_by": "system", "created_at": now_iso(),
             "updated_at": now_iso(), "last_action": "Auto-created from Finance",

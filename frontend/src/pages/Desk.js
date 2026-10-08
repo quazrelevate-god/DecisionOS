@@ -63,6 +63,7 @@ import { StaleStamp } from "../components/mobile/StaleStamp";
 // ASK-33 — the well on the left column's floor is Dex's Decide door. It owns
 // the capture hooks and hosts the repurposed InsightWell container itself.
 import { DeskDexWell } from "./desk/DeskDexWell";
+import { TeamNudge } from "./desk/TeamNudge";
 // DEX-SLIDER Part 1 — the phone Desk's new order sits behind this.
 import { DEX_SLIDER } from "../lib/flags";
 import { useDexDoors } from "../components/mobile/DexDoors";
@@ -1596,6 +1597,8 @@ export default function Desk() {
           offline={typeof navigator !== "undefined" && navigator.onLine === false}
           onRetry={() => qc.invalidateQueries()} className="shrink-0" data-testid="desk-stale" />
       )}
+      {/* Audit A-16 — until the first person is added, for whoever can add them. */}
+      <TeamNudge className="shrink-0" />
       {/* ── LIGHT ZONE ───────────────────────────────────────────────── */}
       {/* KR-8.6 — the split and the gaps are MEASURED off the reference:
           36 / 56 with a wide 8% trough between. */}

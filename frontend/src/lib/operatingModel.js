@@ -21,15 +21,27 @@ export const DEFAULT_OPERATING_MODEL = {
   ],
 };
 
+/* Audit B-02 (2026-10-08) — A TASK'S DEPARTMENT IS ONE OF THE TEAMS.
+   The New Task "Department" list and My Work's tabs used to read a third list
+   (operating_model.task_categories: "Buyer Coordination", "Quality Control"…)
+   that sign-up generated separately from the teams, with different names.
+   They read the teams now (Settings › Team & access), the same list work is
+   routed by, so there is one list an owner edits. The owner is a person, not
+   a department. A company with no teams yet keeps the generic six. */
+export function teamCategories(tenant) {
+  const roles = Array.isArray(tenant?.roles) ? tenant.roles : [];
+  const seen = new Set();
+  return roles
+    .filter((r) => r?.key && r.key !== "owner" && !seen.has(r.key) && seen.add(r.key))
+    .map((r) => ({ key: r.key, label: r.label || r.key }));
+}
+
 export function opModel(tenant) {
   const om = tenant?.operating_model;
+  const teams = teamCategories(tenant);
+  const task_categories = teams.length ? teams : DEFAULT_OPERATING_MODEL.task_categories;
   if (om && Array.isArray(om.pipelines) && om.pipelines.length) {
-    return {
-      pipelines: om.pipelines,
-      task_categories: Array.isArray(om.task_categories) && om.task_categories.length
-        ? om.task_categories
-        : DEFAULT_OPERATING_MODEL.task_categories,
-    };
+    return { pipelines: om.pipelines, task_categories };
   }
-  return DEFAULT_OPERATING_MODEL;
+  return { ...DEFAULT_OPERATING_MODEL, task_categories };
 }

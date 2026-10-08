@@ -207,14 +207,6 @@ export function OperatingModelEditor() {
     setModel((m) => ({ ...m, pipelines: m.pipelines.filter((_, x) => x !== i) }));
   };
 
-  const setCat = (i, label) => setModel((m) => {
-    const task_categories = [...m.task_categories];
-    task_categories[i] = { ...task_categories[i], label };
-    return { ...m, task_categories };
-  });
-  const addCat = () => setModel((m) => ({ ...m, task_categories: [...m.task_categories, { _uid: uid(), key: "", label: "" }] }));
-  const delCat = (i) => setModel((m) => ({ ...m, task_categories: m.task_categories.filter((_, x) => x !== i) }));
-
   // WE-04: payload now carries stage tasks/approval/side_effects. The
   // backend normalize_operating_model (WE-03) validates + caps these,
   // so the frontend just strips empty rows before sending.
@@ -247,7 +239,8 @@ export function OperatingModelEditor() {
               .map((se) => ({ kind: se.kind, params: se.params || {} })),
           })),
       })),
-    task_categories: model.task_categories.filter((c) => c.label.trim()).map((c) => ({ key: c.key || undefined, label: c.label.trim() })),
+    // B-02: categories are no longer edited here; what is stored goes back unchanged.
+    task_categories: tenant?.operating_model?.task_categories || [],
   });
 
   const save = async () => {
@@ -479,21 +472,13 @@ export function OperatingModelEditor() {
         <Plus size={14} weight="bold" /> Add pipeline
       </button>
 
-      <p className="label-mono text-muted-foreground mt-6 mb-2">Task categories</p>
-      <div className="flex flex-wrap gap-2">
-        {model.task_categories.map((c, i) => (
-          <div key={c._uid} className="flex items-center gap-1 rounded-xl bg-white/70 py-1 pl-2 pr-1 ring-1 ring-inset ring-slate-900/[0.06]" data-testid={`op-cat-${i}`}>
-            {/* 2026-10-05 — sized to the name (a fixed w-28 cut "Order Management" to "Order Managen" on every screen). */}
-            <input className="min-w-0 max-w-[15rem] bg-transparent text-sm focus:outline-none" aria-label="Task category name"
-              style={{ width: `${Math.min(Math.max((c.label || "").length, 6), 30) + 1}ch` }}
-              value={c.label} onChange={(e) => setCat(i, e.target.value)} />
-            <button onClick={() => delCat(i)} title="Delete category" aria-label="Delete category" className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:text-kr-accent"><Trash size={13} weight="bold" /></button>
-          </div>
-        ))}
-        <button onClick={addCat} data-testid="op-add-cat" className="flex items-center gap-1 text-sm font-semibold text-slate-900 hover:underline px-2 py-1">
-          <Plus size={13} weight="bold" /> Add category
-        </button>
-      </div>
+      {/* Audit B-02 (2026-10-08) — no separate "task categories" list here
+          any more. A task's department is one of the company's teams, so the
+          one list to edit is Team & access; this says where it went. */}
+      <p className="mt-6 text-sm text-muted-foreground" data-testid="op-departments-note">
+        Task departments are your teams — add or rename them in{" "}
+        <a href="/settings?tab=team" className="font-medium text-foreground underline underline-offset-2">Team &amp; access</a>.
+      </p>
 
       <div className="mt-6 flex flex-wrap gap-3">
         <button onClick={save} disabled={saving} data-testid="op-save"

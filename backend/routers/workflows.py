@@ -286,7 +286,7 @@ async def get_workflow(workflow_id: str, user: dict = Depends(require_perm("work
     Same access as the board list it belongs to.
     """
     await _in_my_pipelines(user, workflow_id)  # 2026-10-03: the team that owns a stage
-    from services.workflow_engine import _load_pipeline, check_stage_ready
+    from services.workflow_engine import _load_pipeline, check_stage_ready, approval_waived
     wf = await db.workflows.find_one(
         {"id": workflow_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not wf:
@@ -333,6 +333,9 @@ async def get_workflow(workflow_id: str, user: dict = Depends(require_perm("work
                 "role": appr_spec.get("role"),
                 "required": bool(appr_spec.get("required")),
                 "given": [a for a in approvals if (a or {}).get("stage_key") == key],
+                # Audit B-03: only above a value -- and whether THIS card is under it.
+                "above": appr_spec.get("above"),
+                "waived": approval_waived(appr_spec, wf),
             } if appr_spec else None),
         })
     wf["stages_detail"] = detail

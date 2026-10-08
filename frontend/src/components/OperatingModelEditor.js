@@ -68,6 +68,7 @@ function withUids(om) {
         approval: s.approval ? {
           role: s.approval.role || "",
           required: s.approval.required !== false,
+          above: s.approval.above ?? "",          // audit B-03
         } : null,
         side_effects: (s.side_effects || []).map((se) => ({
           _uid: uid(),
@@ -237,7 +238,8 @@ export function OperatingModelEditor() {
                 evidence_required: !!t.evidence_required,
               })),
             approval: s.approval && s.approval.role
-              ? { role: s.approval.role, required: !!s.approval.required }
+              ? { role: s.approval.role, required: !!s.approval.required,
+                  ...(Number(s.approval.above) > 0 ? { above: Number(s.approval.above) } : {}) }
               : null,
             side_effects: (s.side_effects || [])
               .filter((se) => se.kind)
@@ -420,6 +422,18 @@ export function OperatingModelEditor() {
                         <input type="checkbox" className="h-4 w-4" checked={s.approval.required !== false}
                           onChange={(e) => setStageApproval(pi, si, { required: e.target.checked })} />
                         required
+                      </label>
+                    )}
+                    {/* Audit B-03 (2026-10-09) — only above a value: a card worth
+                        less leaves without the sign-off; one with no value waits. */}
+                    {s.approval?.role && (
+                      <label className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground"
+                        title="Leave empty to need it for every card">
+                        only above ₹
+                        <input type="number" min="0" inputMode="numeric" data-testid={`op-stage-approval-above-${pi}-${si}`}
+                          className="kr-pressed h-8 w-28 rounded-pill px-2.5 text-[11px] text-foreground"
+                          placeholder="any value" value={s.approval.above ?? ""}
+                          onChange={(e) => setStageApproval(pi, si, { above: e.target.value })} />
                       </label>
                     )}
                   </div>

@@ -6,7 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { roleLabel } from "../lib/departments";
 import { hasPerm } from "../lib/perms";
 import { PageHeader, StickyHeader, EmptyState, LoadFailed } from "../components/common";
-import { timeAgo } from "../lib/format";
+import { timeAgo, dayRange } from "../lib/format";
 import { GlassSelect } from "../components/karma/GlassSelect";
 import { GlassDateField } from "../components/karma/GlassDateField";
 import { toast } from "sonner";
@@ -61,7 +61,8 @@ export const canWithdraw = (lv, today = new Date().toISOString().slice(0, 10)) =
 const LEAVE_SECONDARY = `flex h-11 items-center gap-1.5 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`;
 const inp = "w-full nm-field px-3 py-2 text-sm";
 export const typeLabel = (k) => LEAVE_TYPES.find((t) => t.key === k)?.label || k;
-const fmtRange = (lv) => lv.from_date === lv.to_date ? lv.from_date : `${lv.from_date} → ${lv.to_date}`;
+// Audit D-04: "15–16 Oct", not "2026-10-15 → 2026-10-16".
+const fmtRange = (lv) => dayRange(lv.from_date, lv.to_date);
 
 /* 2026-09-19 — exported: My Work's desktop toolbar opens this same form.
    `triggerClassName` lets a host dress the button in its own material. */

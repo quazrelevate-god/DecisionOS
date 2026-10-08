@@ -88,6 +88,26 @@ export function fullTime(iso) {
    columns still carry.
    Date-only strings are pinned to UTC on purpose: "2026-09-22" parsed as local
    time is midnight, and west of Greenwich that prints as the 21st. */
+/* Audit D-04 (2026-10-09) — a leave's days as people say them: "15 Oct",
+   "15–16 Oct", "30 Oct – 2 Nov", and the year only when it changes or is not
+   this one. The Leave page printed "2026-10-15 → 2026-10-16". */
+export function dayRange(from, to) {
+  const a = String(from || "").slice(0, 10);
+  const b = String(to || a).slice(0, 10);
+  if (!a) return "";
+  const da = new Date(`${a}T00:00:00`);
+  const db = new Date(`${b}T00:00:00`);
+  if (Number.isNaN(da.getTime())) return a;
+  const thisYear = new Date().getFullYear();
+  const yr = (d) => (d.getFullYear() !== thisYear || da.getFullYear() !== db.getFullYear() ? ` ${d.getFullYear()}` : "");
+  const mon = (d) => d.toLocaleDateString("en-IN", { month: "short" });
+  if (a === b || Number.isNaN(db.getTime())) return `${da.getDate()} ${mon(da)}${yr(da)}`;
+  if (da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth()) {
+    return `${da.getDate()}–${db.getDate()} ${mon(db)}${yr(db)}`;
+  }
+  return `${da.getDate()} ${mon(da)}${yr(da)} – ${db.getDate()} ${mon(db)}${yr(db)}`;
+}
+
 export function shortDate(value) {
   if (!value) return "";
   const iso = String(value);

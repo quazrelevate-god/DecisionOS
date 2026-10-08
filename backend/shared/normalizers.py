@@ -180,7 +180,16 @@ def _norm_stage_approval(a) -> Optional[dict]:
     role = _slugify_key(str(a.get("role") or ""))[:40]
     if not role:
         return None
-    return {"role": role, "required": bool(a.get("required", True))}
+    out = {"role": role, "required": bool(a.get("required", True))}
+    # Audit B-03 (2026-10-09): only above a value. "Dispatch needs the owner
+    # for orders over 5 lakh" -- below it the card leaves without the sign-off.
+    try:
+        above = float(a.get("above")) if a.get("above") not in (None, "") else 0
+    except (TypeError, ValueError):
+        above = 0
+    if above > 0:
+        out["above"] = round(above, 2)
+    return out
 
 
 def _norm_stage_side_effect(se: dict) -> Optional[dict]:

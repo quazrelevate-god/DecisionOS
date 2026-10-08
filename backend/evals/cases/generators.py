@@ -107,3 +107,26 @@ register(EvalCase(
     ],
     note="Approval rules: every rule accounted for; only the company's own team/stage keys survive.",
 ))
+
+
+# Audit B-03 (2026-10-09): a sign-off before work LEAVES a stage, only above a value.
+_AR_PIPES_QC = [{"key": "order_fulfillment", "label": "Order Fulfillment",
+                 "stages": [{"key": "in_production", "label": "In Production"},
+                            {"key": "quality_check", "label": "Quality Check"},
+                            {"key": "dispatched", "label": "Dispatched"}]}]
+
+register(EvalCase(
+    task="generators.approval_rules", name="sign_off_after_a_stage_above_a_value",
+    fn=structure_approval_rules,
+    kwargs={"rules": [{"name": "Big orders after QC",
+                       "description": "Any order over 2 lakh needs my OK after quality check before it is dispatched"}],
+            "teams": _AR_TEAMS, "pipelines": _AR_PIPES_QC},
+    golden="""{"actions": [{"rule": "Big orders after QC", "kind": "stage_signoff", "pipeline": "order_fulfillment",
+                            "stage": "quality_check", "team": "owner", "above": 200000}]}""",
+    checks=[
+        predicate("a stage sign-off by the owner on the QC stage, above 2 lakh", lambda r: any(
+            a["kind"] == "stage_signoff" and a["stage"] == "quality_check" and a["team"] == "owner"
+            and a.get("above") == 200000 for a in r)),
+    ],
+    note="B-03: 'over 2 lakh needs my OK after QC' is a value gate on leaving QC, not a note.",
+))

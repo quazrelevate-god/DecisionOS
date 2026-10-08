@@ -21,6 +21,9 @@ written:
   owner_stage      pipeline.approval_stage = stage (owner only, as before)
   leave_approver   tenant.leave_approver_teams = {"*" or team: approver team}
                    (services/leave resolves it to a member of that team)
+  stage_signoff    pipeline.stages[stage].approval = {role, required, above}
+                   (audit B-03, 2026-10-09: a sign-off before work LEAVES a
+                   stage, optionally only for cards above a value)
   money_threshold  tenant.high_value_threshold = amount,
                    tenant.require_owner_signoff = True
   note             kept, shown to the owner as "noted — not a setting yet"
@@ -36,7 +39,7 @@ from core import _extract_json, claude_chat, db, logger, model_for, new_id, now_
 from emergentintegrations.llm.chat import UserMessage
 from prompts import render
 
-KINDS = ("stage_limit", "owner_stage", "leave_approver", "money_threshold", "note")
+KINDS = ("stage_limit", "owner_stage", "stage_signoff", "leave_approver", "money_threshold", "note")
 
 
 def _money(v) -> Optional[float]:
@@ -75,6 +78,17 @@ def validate_actions(raw: Any, *, rules: List[dict], teams: List[dict], pipeline
                 if a.get("team") not in team_keys or not up_to:
                     continue
                 item.update(team=a["team"], up_to=up_to)
+            out.append(item)
+        elif k == "stage_signoff":
+            if a.get("pipeline") not in stages or a.get("stage") not in stages[a.get("pipeline")]:
+                continue
+            team = a.get("team") or "owner"
+            if team != "owner" and team not in team_keys:
+                continue
+            item = {"rule": rule, "kind": k, "pipeline": a["pipeline"], "stage": a["stage"], "team": team}
+            above = _money(a.get("above"))
+            if above:
+                item["above"] = above
             out.append(item)
         elif k == "leave_approver":
             if a.get("team") not in team_keys:
@@ -138,6 +152,12 @@ def describe(action: dict, teams: List[dict], pipelines: List[dict]) -> str:
             return f"Only you can move work into {where}."
         return (f"{_label(teams, action['team'])} can move work into {where} up to "
                 f"₹{_inr(action['up_to'])}; above that it comes to you.")
+    if k == "stage_signoff":
+        p = next((x for x in pipelines if x.get("key") == action["pipeline"]), {})
+        where = f"{p.get('label') or action['pipeline']} › {_label(p.get('stages') or [], action['stage'])}"
+        who = "you sign" if action["team"] == "owner" else f"{_label(teams, action['team'])} signs"
+        over = f" — for work over ₹{_inr(action['above'])}" if action.get("above") else ""
+        return f"Before work leaves {where}, {who} off{over}."
     if k == "leave_approver":
         who = _label(teams, action["team"])
         scope = "every team" if "*" in action["for_teams"] else ", ".join(_label(teams, t) for t in action["for_teams"])
@@ -154,6 +174,18 @@ def apply_to_pipelines(pipelines: List[dict], actions: List[dict]) -> bool:
     Returns True when anything changed."""
     changed = False
     for a in actions:
+        if a.get("kind") == "stage_signoff":
+            for p in pipelines:
+                if p.get("key") != a.get("pipeline"):
+                    continue
+                for st in p.get("stages") or []:
+                    if isinstance(st, dict) and st.get("key") == a["stage"]:
+                        gate = {"role": a["team"], "required": True}
+                        if a.get("above"):
+                            gate["above"] = a["above"]
+                        st["approval"] = gate
+                        changed = True
+            continue
         if a.get("kind") not in ("stage_limit", "owner_stage"):
             continue
         for p in pipelines:

@@ -14,6 +14,27 @@ from core import model_for
 from prompts import render
 
 
+_MON = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def day_range(start: str, end: str = "") -> str:
+    """Audit D-04 (2026-10-09): "15 Oct", "15–16 Oct", "30 Oct – 2 Nov" -- the
+    messages said "2026-10-15 → 2026-10-16". The year is added when the range
+    crosses one."""
+    from datetime import date
+    try:
+        a = date.fromisoformat(str(start)[:10])
+        b = date.fromisoformat(str(end or start)[:10])
+    except ValueError:
+        return str(start or "") + (f" to {end}" if end and end != start else "")
+    yr = (lambda d: f" {d.year}") if a.year != b.year else (lambda d: "")
+    if a == b:
+        return f"{a.day} {_MON[a.month - 1]}"
+    if (a.year, a.month) == (b.year, b.month):
+        return f"{a.day}–{b.day} {_MON[b.month - 1]}"
+    return f"{a.day} {_MON[a.month - 1]}{yr(a)} – {b.day} {_MON[b.month - 1]}{yr(b)}"
+
+
 async def _resolve_leave_approver(tenant_id: str, requester: dict):
     """Who signs off this person's leave — reporting manager → department/role
     mapping → an owner — and NEVER the requester themselves.
@@ -50,6 +71,14 @@ async def _resolve_leave_approver(tenant_id: str, requester: dict):
         m = await _team_leave_approver(tenant_id, team, rid)
         if m:
             return m["id"], m.get("name")
+    # Audit D-04 (2026-10-09) — BEFORE THE OWNER, THE PEOPLE WHO CAN. With no
+    # manager set and no rule from sign-up, every request went to the owner,
+    # though a team lead (or an HR team, which starts able to approve leave --
+    # shared/roles.starting_perms) was right there. Own team first, then a team
+    # named for HR/people, then anyone else who holds leave approval.
+    m = await _any_leave_approver(tenant_id, requester)
+    if m:
+        return m["id"], m.get("name")
     # The owner fallback — but never the requester (a co-owner in a multi-owner
     # company must not have their own request routed back to them).
     owner = await db.users.find_one(
@@ -97,8 +126,7 @@ async def _set_cover(tenant_id: str, lv: dict) -> None:
         }}})
     await push_notification(
         tenant_id, [delegate], 2,
-        f"{lv.get('user_name')} is on leave {lv['from_date']}"
-        + (f" to {lv['to_date']}" if lv["to_date"] != lv["from_date"] else "")
+        f"{lv.get('user_name')} is on leave {day_range(lv['from_date'], lv['to_date'])}"
         + ". Their approvals come to you until they are back.",
         entity_type="leave", entity_id=lv["id"], ntype="handoff",
         title="Covering approvals", sender=lv.get("user_name"))
@@ -149,7 +177,7 @@ async def _create_leave(tenant_id, requester, leave_type, from_date, to_date, da
     if auto_approved:
         await _set_cover(tenant_id, doc)      # ASK-5: recorded leave is approved leave
     label = "Emergency absence" if is_emergency else f"{leave_type.title()} leave"
-    span = doc["from_date"] + (f" → {doc['to_date']}" if doc["to_date"] != doc["from_date"] else "")
+    span = day_range(doc["from_date"], doc["to_date"])      # audit D-04
     if auto_approved:
         # Nobody to ask; just record it — it lands on the calendar / "on leave
         # today" like any approved leave, without a self-approval step.
@@ -168,6 +196,36 @@ async def _create_leave(tenant_id, requester, leave_type, from_date, to_date, da
 # 2026-10-06 (AI audit step 5): leave impact is calculated now -- services/calculated.leave_impact.
 
 
+
+
+async def _any_leave_approver(tenant_id: str, requester: dict):
+    """A non-owner member who can approve leave: the requester's own team first,
+    then a team named for HR / people, then anyone. None when nobody can."""
+    from services.auth.membership import list_memberships_for_tenant, members_effective_perms, LIVE_STATUSES
+    from shared.roles import _PEOPLE_WORDS, _words
+    rid = requester["id"]
+    rows = [m for m in await list_memberships_for_tenant(db, tenant_id, statuses=LIVE_STATUSES)
+            if m.get("user_id") != rid and m.get("role") not in (None, "", "owner")]
+    if not rows:
+        return None
+    team_of = {m["user_id"]: m.get("role") for m in rows}
+    people = await db.users.find({"id": {"$in": list(team_of)}, "tenant_id": tenant_id},
+                                 {"_id": 0, "id": 1, "name": 1, "role": 1, "permissions": 1}).sort("name", 1).to_list(200)
+    perms = await members_effective_perms(db, tenant_id, people)
+    able = [p for p in people if "leave_approve" in (perms.get(p["id"]) or set())]
+    if not able:
+        return None
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "roles": 1}) or {}
+    label = {r.get("key"): r.get("label") or r.get("key") for r in (t.get("roles") or []) if isinstance(r, dict)}
+
+    def rank(p):
+        team = team_of.get(p["id"])
+        if team == requester.get("role"):
+            return 0
+        if _words(f"{team or ''} {label.get(team, '')}") & _PEOPLE_WORDS:
+            return 1
+        return 2
+    return sorted(able, key=rank)[0]
 
 
 async def _team_leave_approver(tenant_id: str, team: str, requester_id: str):

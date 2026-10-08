@@ -125,7 +125,9 @@ FINANCE_CATEGORIES = register(Prompt(
 # in the user message); anything with no setting behind it is a "note".
 APPROVAL_RULES = register(Prompt(
     name="generators.approval_rules",
-    version="1.1",
+    # 1.2 (2026-10-09, audit B-03): a sign-off before work LEAVES a stage,
+    # optionally only above a value ("orders over 2 lakh need my OK after QC").
+    version="1.2",
     intent="Turn the founder's interview approval rules into enforceable settings (stage limits, owner-only stages, leave approver team, money threshold) or notes.",
     template=(
         "You turn a founder's approval rules, said in their sign-up interview, into DecisionOS settings. "
@@ -136,6 +138,10 @@ APPROVAL_RULES = register(Prompt(
         "(e.g. 'sales can confirm orders up to 5 lakh, above that the owner' -> the order pipeline's confirmation stage, the sales team, 500000). "
         "{\"rule\": rule name, \"kind\": \"owner_stage\", \"pipeline\": pipeline key, \"stage\": stage key} "
         "-- only the owner may move work into that stage, whatever the value. "
+        "{\"rule\": rule name, \"kind\": \"stage_signoff\", \"pipeline\": pipeline key, \"stage\": stage key, "
+        "\"team\": team key or \"owner\", \"above\": number or null} "
+        "-- before work LEAVES that stage, that team (or the owner) signs off; with above, only for cards worth more than it "
+        "(e.g. 'any order over 2 lakh needs my OK after quality check' -> the order pipeline's quality stage, owner, 200000). "
         "{\"rule\": rule name, \"kind\": \"leave_approver\", \"team\": team key, \"for_teams\": [\"*\"] or [team keys]} "
         "-- that team approves leave (\"*\" = for every other team). "
         "{\"rule\": rule name, \"kind\": \"money_threshold\", \"amount\": number} "

@@ -257,6 +257,24 @@ async def on_stage_enter(
 
 
 # ---------------------------------------------------------------------------
+# Audit B-03 (2026-10-09): an approval gate can apply only ABOVE a value.
+# The gate was yes/no per stage, so "sign-off only for orders over 5 lakh"
+# could not be said: every card waited, or none did. With `above`, a card whose
+# value is at or under it leaves without the sign-off; a card with NO value
+# still waits (we cannot tell which side of the line it is on).
+# ---------------------------------------------------------------------------
+def approval_waived(appr_spec: Optional[dict], wf: dict) -> bool:
+    above = (appr_spec or {}).get("above")
+    if not above:
+        return False
+    value = wf.get("amount")
+    try:
+        return value is not None and float(value) <= float(above)
+    except (TypeError, ValueError):
+        return False
+
+
+# ---------------------------------------------------------------------------
 # check_stage_ready -- ALL stage tasks done AND all required approvals present
 # ---------------------------------------------------------------------------
 async def check_stage_ready(tenant_id: str, workflow_id: str) -> dict:
@@ -290,14 +308,20 @@ async def check_stage_ready(tenant_id: str, workflow_id: str) -> dict:
     pipeline = await _load_pipeline(tenant_id, wf.get("type") or "")
     stage_obj = _stage_object(pipeline, stage_key) if pipeline else None
     appr_spec = (stage_obj or {}).get("approval") or None
-    if appr_spec and appr_spec.get("required"):
+    if appr_spec and appr_spec.get("required") and not approval_waived(appr_spec, wf):
         already = any(
             (a or {}).get("stage_key") == stage_key
             for a in (wf.get("approvals") or [])
         )
         if not already:
+            reason = f"awaiting {appr_spec.get('role')} approval"
+            if appr_spec.get("above"):
+                from services.invoicing import _money
+                cap = "₹" + _money(float(appr_spec["above"]), "INR")[:-3]
+                reason += (f" (needed above {cap})" if wf.get("amount") is not None
+                           else f" (needed above {cap}; add the value to the card if it is less)")
             return {"ready": False,
-                    "reason": f"awaiting {appr_spec.get('role')} approval",
+                    "reason": reason,
                     "open_task_ids": [], "missing_approval": True}
 
     return {"ready": True, "reason": "ok",

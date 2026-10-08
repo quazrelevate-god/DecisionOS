@@ -293,7 +293,9 @@ function StageBlock({ stage, card, members, user, tenant, canEdit, onApprove, ap
   const current = stage.state === "current";
   const complete = stage.state === "done";
   const gate = stage.approval;
-  const gateOpen = gate?.required && !(gate.given || []).length;
+  // Audit B-03: a gate that applies only above a value is not open for a card under it.
+  const gateOpen = gate?.required && !gate.waived && !(gate.given || []).length;
+  const over = Number(gate?.above) > 0 ? money(gate.above, tenant?.currency || "INR") : "";
   const canApprove = user?.role === "owner" || user?.role === gate?.role;
   const overdueHere = (stage.tasks || []).filter(isOverdue).length;
 
@@ -340,7 +342,10 @@ function StageBlock({ stage, card, members, user, tenant, canEdit, onApprove, ap
           <SealCheck size={14} weight="bold" aria-hidden="true" className="shrink-0" />
           {gateOpen ? (
             <>
-              <span className="min-w-0 flex-1">Needs {deptName(tenant, gate.role)} sign-off before it can leave this stage</span>
+              <span className="min-w-0 flex-1">
+                Needs {deptName(tenant, gate.role)} sign-off before it can leave this stage
+                {over ? (card?.amount != null ? ` — it is over ${over}` : ` — it has no value yet; work over ${over} needs it`) : ""}
+              </span>
               {current && canApprove && (
                 <button type="button" onClick={onApprove} disabled={approving}
                   data-testid={`wf-approve-stage-${stage.key}`}
@@ -349,6 +354,10 @@ function StageBlock({ stage, card, members, user, tenant, canEdit, onApprove, ap
                 </button>
               )}
             </>
+          ) : gate.waived && !(gate.given || []).length ? (
+            <span className="min-w-0 flex-1" data-testid={`wf-stage-approval-waived-${stage.key}`}>
+              No sign-off needed — {deptName(tenant, gate.role)} signs off only on work over {over}
+            </span>
           ) : (
             <span className="min-w-0 flex-1">
               Approved by {(gate.given || []).map((a) => a.actor_name || "someone").join(", ")}

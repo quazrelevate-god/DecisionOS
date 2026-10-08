@@ -33,6 +33,15 @@ export function withRules(pipelines, actions, ruleNames) {
   const keep = ruleNames ? new Set(ruleNames) : null;
   const out = (pipelines || []).map((p) => ({ ...p }));
   for (const a of actions || []) {
+    // Audit B-03: a sign-off before work leaves a stage (optionally above a value).
+    if (a.kind === "stage_signoff") {
+      if (keep && !keep.has(a.rule)) continue;
+      const p = out.find((x) => x.key === a.pipeline);
+      if (!p) continue;
+      p.stages = (p.stages || []).map((s) => (s.key === a.stage
+        ? { ...s, approval: { role: a.team, required: true, ...(a.above ? { above: a.above } : {}) } } : s));
+      continue;
+    }
     if (a.kind !== "stage_limit" && a.kind !== "owner_stage") continue;
     if (keep && !keep.has(a.rule)) continue;
     const p = out.find((x) => x.key === a.pipeline);
@@ -125,7 +134,10 @@ function Station({ stage, index, pipeline, selected, onSelect, teamLabel, still,
           </span>
         )}
         {gate && !signOff && (
-          <span className="mt-1.5 inline-block text-[11px] text-slate-500">{teamLabel(gate)} approves before it moves on</span>
+          <span className="mt-1.5 inline-block text-[11px] text-slate-500">
+            {teamLabel(gate)} {gate === "owner" ? "approve" : "approves"} before it moves on
+            {Number(stage.approval?.above) > 0 ? ` — over ${inrShort(stage.approval.above)}` : ""}
+          </span>
         )}
       </button>
     </Tag>

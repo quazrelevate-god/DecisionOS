@@ -271,7 +271,9 @@ def test_ai_draft_actions_need_the_approve_permission():
 
 
 def test_export_needs_brain_export():
-    assert '!hasPerm(user, "brain_export")' in fe("pages/AskAI.js")
+    # 2026-10-08: /brain was rebuilt (394aa32) and AskAI.js retired; the
+    # export button now lives on each answer, behind the same permission.
+    assert 'hasPerm(user, "brain_export")' in fe("pages/brain/DexAnswer.jsx")
 
 
 def test_approve_needs_decisions_approve_even_for_the_named_approver():

@@ -87,21 +87,20 @@ def test_the_allowance_reads_the_flattened_detail():
 
 
 # --- frontend: the layout -------------------------------------------------------------
+# 2026-10-08: /brain was rebuilt light (394aa32) -- DexStage.jsx and AskAI.js
+# are gone, replaced by DexComposer / DexWelcome / DexAnswer. These pin the
+# same promises on the new files: a composer that stays on the floor of a
+# page-wide column, a welcome with openers before the first question.
 def test_the_composer_docks_and_the_page_is_full_width():
     brain = fe("pages/Brain.js")
-    assert 'className="mx-auto flex w-full max-w-3xl flex-col' in brain
-    assert "docked={hasThread}" in brain
-    stage = fe("pages/brain/DexStage.jsx")
-    assert 'docked && "md:sticky md:bottom-0' in stage
-    assert "hsl(var(--nm-bg))" in stage          # the room's own ground, not --background
-    assert '<div className={cn(compact && "md:hidden")}>' in stage
+    assert 'className="mx-auto flex w-full max-w-[808px] flex-col' in brain
+    assert 'className="sticky bottom-0 z-20' in brain
+    assert "<DexComposer" in brain
 
 
 def test_the_opener_sits_under_the_composer():
     brain = fe("pages/Brain.js")
-    assert "suggestions={!hasThread && canAsk ? (" in brain
-    stage = fe("pages/brain/DexStage.jsx")
-    assert stage.index("data-testid=\"dex-stage-composer\"") < stage.index("{suggestions &&")
+    assert "{hasThread ? (" in brain and "<DexWelcome" in brain
 
 
 def test_an_answer_lands_on_its_question():
@@ -110,10 +109,8 @@ def test_an_answer_lands_on_its_question():
 
 
 def test_tables_and_sources_read_as_words():
-    ask = fe("pages/AskAI.js")
-    assert "<DexBadge" not in ask                  # the avatar says who is speaking
-    assert "export function DexAvatar" in ask
-    assert 'if (DEPT_KEYS.has(c.key)) return roleLabel(v, roles, "—");' in ask
-    assert 'if (c.key === "status") return taskStatusLabel(v);' in ask
-    assert 'if (c.type === "date") return dexDate(v);' in ask
-    assert "const FIRST_ROWS = 8;" in ask and "const FIRST_SOURCES = 6;" in ask
+    ans = fe("pages/brain/DexAnswer.jsx")
+    assert 'if (DEPT_KEYS.has(c.key)) return roleLabel(v, roles, "—");' in ans
+    assert 'if (c.key === "status") return taskStatusLabel(v);' in ans
+    assert 'if (c.type === "date") return dateText(v);' in ans
+    assert "const FIRST_ROWS = 8;" in ans

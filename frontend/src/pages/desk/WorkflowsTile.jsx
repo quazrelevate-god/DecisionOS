@@ -41,10 +41,20 @@ const PARTS = [
    both — equal, and no taller than the platform's 44pt target once --ui-scale's
    0.8 lands — with the padding tightened so the pill hugs its label instead of
    sprawling, and the label itself kept on one line with room either side. */
+/* DEX-R1 audit (2026-10-08) — 13px is 10.4pt once the phone's 0.8 lands,
+   under HIG's 11pt floor; 15px is 12pt. Desktop keeps 13. */
 const ACTION_PILL =
   "flex h-10 max-lg:h-[3.5rem] w-full shrink-0 items-center justify-center gap-1.5 rounded-pill px-2.5 lg:px-4 "
-  + "text-center text-[13px] font-medium leading-tight "
+  + "text-center text-[13px] max-lg:text-[15px] font-medium leading-tight "
   + "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline";
+
+/* THE TWO PILLS' TWO WEIGHTS. HIG (buttons › Style): the prominent style goes
+   to the most likely action, and style — not size — says which one that is.
+   They were the other way round: the way OUT ("Open Workflows") wore the ink
+   and the move you can make here wore white. Same shape and size as before, so
+   they still read as the founder's pair; only the emphasis moved to the act. */
+const PILL_INK = "bg-[hsl(var(--kr-action-bg,var(--kr-ink)))] text-[hsl(var(--kr-action-fg,0_0%_100%))]";
+const PILL_QUIET = "kr-pop text-foreground";
 
 /* THE WIDE ARRANGEMENT'S TWO MOVES ARE CIRCLES, not pills — the founder's
    call, and the arithmetic is on their side. Two pills were taking 220 CSS px
@@ -108,17 +118,19 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
   });
 
   const parts = PARTS.map((p) => ({ ...p, n: attention?.[p.key] || 0 })).filter((p) => p.n > 0);
+  // Is there a move to make here? Then it is the prominent pill, not the link.
+  const hasMove = !loading && !quiet && !!nextUp?.actionLabel;
 
   /* The one link on the tile, to the boards. 2026-09-21, founder — a named
      pill, not a bare circle: "Open Workflows", the same shape, width and
-     height as the move above it, in the ink the circle wore, so the two read
-     as a pair — the move you can make here, and the way to the boards. */
+     height as the move above it, so the two read as a pair — the move you can
+     make here, and the way to the boards. It wears the ink only when there is
+     no move to make; then it IS the most likely action. */
   const openBoards = (
     <Link
       to="/workflows"
       data-testid={`${testid}-open`}
-      className={cn(ACTION_PILL,
-        "bg-[hsl(var(--kr-action-bg,var(--kr-ink)))] text-[hsl(var(--kr-action-fg,0_0%_100%))]")}
+      className={cn(ACTION_PILL, hasMove ? PILL_QUIET : PILL_INK)}
     >
       {/* The arrow is desktop's. In a 130px column it was the 14px that pushed
           "Open Workflows" onto a second line while Approve sat on one — the
@@ -326,9 +338,15 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
                   <span key={p.key} className={p.bar} style={{ width: `${(p.n / needAttention) * 100}%` }} />
                 ))}
               </span>
-              <span className="mt-1.5 block whitespace-nowrap text-[11px] leading-none text-muted-foreground">
+              {/* 11px was 8.8pt on a phone. 14px is the 11pt floor; and if the
+                  three parts ever outgrow the column they wrap between parts,
+                  never inside one ("1 / stuck"). */}
+              {/* On a phone the bar fills the column, so its legend starts
+                  where the bar starts (layout › align to scan); desktop's
+                  140px bar sits right, and its legend with it. */}
+              <span className="mt-1.5 flex flex-wrap justify-start gap-x-1 text-[14px] leading-[18px] text-muted-foreground lg:justify-end lg:text-[12px] lg:leading-none">
                 {parts.map((p, i) => (
-                  <span key={p.key}>{i > 0 ? " · " : ""}{p.n} {p.label}</span>
+                  <span key={p.key} className="whitespace-nowrap">{i > 0 ? "· " : ""}{p.n} {p.label}</span>
                 ))}
               </span>
             </span>
@@ -366,8 +384,10 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
                 own line, and min-w-0 + truncate means even a longer reason can
                 only ever use the width it has. */}
             <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1">
-              <p className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Next up</p>
-              <span className={cn(CHIP, "min-w-0 max-w-full truncate", REASON_CHIP[nextUp.reason] || REASON_CHIP.you)}
+              {/* Eyebrow and chip were 11px — 8.8pt on a phone, the smallest
+                  type on the Desk. Both now clear the 11pt floor there. */}
+              <p className="shrink-0 text-[14px] font-semibold uppercase tracking-[0.12em] text-slate-500 lg:text-[12px]">Next up</p>
+              <span className={cn(CHIP, "min-w-0 max-w-full truncate max-lg:py-1 max-lg:text-[14px]", REASON_CHIP[nextUp.reason] || REASON_CHIP.you)}
                     title={nextUp.reasonLabel} data-testid={`${testid}-next-reason`}>
                 {nextUp.reasonLabel}
               </span>
@@ -381,7 +401,7 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
             <p className="mt-1.5 line-clamp-2 text-sm font-medium text-foreground" title={nextUp.title} data-testid={`${testid}-next-title`}>
               {nextUp.title}
             </p>
-            <p className="mt-1 truncate text-xs text-muted-foreground" title={`${nextUp.stage}${nextUp.note ? ` · ${nextUp.note}` : ""}`}>
+            <p className="mt-1 truncate text-[14px] text-muted-foreground lg:text-xs" title={`${nextUp.stage}${nextUp.note ? ` · ${nextUp.note}` : ""}`}>
               {nextUp.stage}{nextUp.note ? ` · ${nextUp.note}` : ""}
             </p>
           </>
@@ -401,7 +421,7 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
               disabled={busy || move.isPending}
               onClick={() => { setBusy(true); move.mutate(); }}
               title={nextUp.actionLabel}
-              className={cn(ACTION_PILL, "kr-pop text-foreground disabled:opacity-50")}
+              className={cn(ACTION_PILL, PILL_INK, "disabled:opacity-50")}
             >
               {move.isPending ? "Moving…" : nextUp.actionLabel}
             </button>

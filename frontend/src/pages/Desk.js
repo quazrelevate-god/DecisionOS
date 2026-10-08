@@ -226,7 +226,12 @@ function OpenButton({ onClick, label }) {
          pill (index.css); elsewhere it stays exactly 32. */
       className="kr-desk-row-open grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/[.10] text-white/80 transition-colors hover:bg-white/[.20] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
     >
-      <ArrowSquareOut size={14} weight="bold" aria-hidden="true" />
+      {/* DEX-R1 audit — on a phone a box-and-arrow means "this leaves the
+          app", and this opens the decision right here. A chevron is the
+          platform's mark for a row that opens its detail. Desktop keeps the
+          window glyph: there it really does open a window. */}
+      <CaretRight size={14} weight="bold" aria-hidden="true" className="lg:hidden" />
+      <ArrowSquareOut size={14} weight="bold" aria-hidden="true" className="hidden lg:block" />
     </button>
   );
 }
@@ -655,9 +660,19 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
      next frame, and a layout that is still settling never gives the same
      number twice. Capped, so a pathological page cannot spin here. */
   const deficit = useRef({ avail: -1, hits: 0, asks: 0 });
+  /* DEX-R1 audit (2026-10-08) — ONE TYPE ACROSS THE TABS. Each tab fits its
+     own rows, so on a 360x640 Decisions and Approvals (six rows, so a Show all
+     under them) came down to the 11pt floor while Watch, with three cards and
+     nothing under them, stayed at full size: 13.6px beside 17px in one
+     control, depending on which tab you tapped (verify:slider's own check).
+     Each tab still measures what IT needs; the sheet then draws every tab at
+     the smallest scale any tab has needed, so switching tabs never changes the
+     size of the words. Kept per tab, not as a running minimum, so a tab whose
+     list shrinks gives its room back; cleared on resize with the rest. */
+  const tabScales = useRef({});
   useEffect(() => {
     if (!roomy) return undefined;
-    const onResize = () => { setTight(0); setMaxRows(PHONE_ROWS); setFitTick((n) => n + 1); };
+    const onResize = () => { tabScales.current = {}; setTight(0); setMaxRows(PHONE_ROWS); setFitTick((n) => n + 1); };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [roomy]);
@@ -727,17 +742,24 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
        taking the difference out of the type. Applying the ratio and READING
        AGAIN costs two reflows in an effect that runs on resize and on new data,
        and it lands on the real answer rather than near it. */
+    /* This tab fits at `own`; draw it at the smallest scale any tab needs. A
+       smaller scale than the one that fits always still fits. */
+    const settle = (own) => {
+      tabScales.current[tab] = own;
+      const shared = Math.min(...Object.values(tabScales.current));
+      if (shared < own) el.style.setProperty("--desk-row-scale", shared.toFixed(3));
+    };
     let s = 1;
     for (let pass = 0; pass < 3; pass += 1) {
       const needed = need();
-      if (needed <= avail) return;                        // fits at this scale
+      if (needed <= avail) { settle(s); return; }         // fits at this scale
       s = Math.max(DESK_ROW_SCALE_FLOOR, s * (avail / needed));
       el.style.setProperty("--desk-row-scale", s.toFixed(3));
       if (s <= DESK_ROW_SCALE_FLOOR) break;
     }
     /* Still short at the floor: the type has gone as small as it is allowed to
        and the card must be given room instead of cutting its contents. */
-    if (need() <= avail) { deficit.current = { avail: -1, hits: 0, asks: 0 }; return; }
+    if (need() <= avail) { deficit.current = { avail: -1, hits: 0, asks: 0 }; settle(s); return; }
     /* Short — but only act on it once the same card height says so twice. */
     const d = deficit.current;
     if (d.avail !== avail) { deficit.current = { avail, hits: 1, asks: d.asks }; }
@@ -768,7 +790,7 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
        on the real answer in at most two more passes and cannot overshoot,
        because every pass is a fresh measurement of what is actually drawn. */
     if (s <= DESK_ROW_SCALE_FLOOR && maxRows > 1) setMaxRows(maxRows - 1);
-  }, [roomy, open, rows, loading, fitTick, tight, maxRows]);
+  }, [roomy, open, rows, loading, fitTick, tight, maxRows, tab]);
 
   /* ASK-35 1.1 — THREE, AND THEN A CONTROL: the Desk's job on a phone is to say
      what is waiting, not to show it all.
@@ -1540,7 +1562,7 @@ export default function Desk() {
       data-phone-expanded={phoneExpanded ? "true" : undefined}
       data-cached={cachedAt ? "true" : undefined}
       className={cn(
-        "flex flex-col gap-3 lg:gap-6 lg:min-h-0 lg:flex-1",
+        "flex flex-col gap-2.5 lg:gap-6 lg:min-h-0 lg:flex-1",
         /* DEX-SLIDER Part 1 (capped) — WHERE THE SLACK GOES, and it is the
            brief that decides, not taste. The card sits DIRECTLY on the slider
            and the slider directly on the dock, so no gap is allowed between
@@ -1582,7 +1604,7 @@ export default function Desk() {
           the well, so eight pixels each is 24 handed to the sheet — and on a
           6.1" screen with a 47px notch inset and a 34px home indicator, 24px is
           what a row of the list costs. Desktop is untouched. */}
-      <div className={cn("kr-hero flex flex-col gap-3 lg:grid lg:shrink-0 lg:grid-cols-[minmax(0,29fr)_minmax(0,45fr)] lg:gap-20",
+      <div className={cn("kr-hero flex flex-col gap-2.5 lg:grid lg:shrink-0 lg:grid-cols-[minmax(0,29fr)_minmax(0,45fr)] lg:gap-20",
           /* DEX-SLIDER Part 1 — THE TILES TAKE THE SLACK. The slider gives back
              about 150px that the 17rem well was holding. Rather than type a new
              tile height (which would be right on one phone and wrong on the
@@ -1689,11 +1711,17 @@ export default function Desk() {
             <Link to="/operating-score" data-testid="desk-score-link-phone"
               aria-label="Operating score — open the score page"
               className="flex shrink-0 items-center gap-3 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 lg:hidden">
+              {/* DEX-R1 audit (2026-10-08) — THE SCORE STOPS OUT-SHOUTING THE
+                  GREETING. At 4.5rem it was 57.6pt on screen beside a 21pt
+                  greeting: the loudest thing on the Desk, louder than the
+                  decisions the Desk exists for. 3.5rem is 44.8pt — still the
+                  hero's figure, now in proportion with its sentence, and the
+                  hero row comes down to the greeting's own height. */}
               <div className="flex items-baseline">
-                <span className="font-display text-[4.5rem] leading-none">{scoreReady ? shownScore : "—"}</span>
+                <span className="font-display text-[3.5rem] leading-none">{scoreReady ? shownScore : "—"}</span>
                 {scoreReady && <span className="ml-1 text-sm text-muted-foreground">/100</span>}
               </div>
-              <ArcGauge value={scoreReady ? shownScore : null} size={132} className="w-28 shrink-0 text-foreground" />
+              <ArcGauge value={scoreReady ? shownScore : null} size={132} className="w-24 shrink-0 text-foreground" />
             </Link>
           </div>
 
@@ -1811,7 +1839,13 @@ export default function Desk() {
              was already built for. The arrangement is the desktop's unchanged:
              the three tiles that can raise an alert dot on the top row, and
              Workflows two-wide beside the quiet money number below. */
-          "order-3 grid min-w-0 grid-cols-3 gap-2",
+          /* DEX-R1 audit (2026-10-08) — ONE RHYTHM. The phone Desk had two
+             gaps: 8px inside this grid (6.4pt on screen) and 12px between the
+             blocks (9.6pt), so the tiles sat closer to each other than to the
+             card under them for no reason anyone chose. Everything is 10px now
+             (8pt) — the page gap comes down by the same 2px this goes up, so the
+             Desk is exactly as tall as it was and the sheet keeps its rows. */
+          "order-3 grid min-w-0 grid-cols-3 gap-2.5",
           /* 2026-10-06 — THE TWO ROWS ARE NOT EQUAL ANY MORE. auto-rows-fr made
              them so, which is right when both carry a number and wrong now the
              second carries the full Workflows card — a split bar, a stuck

@@ -238,10 +238,14 @@ export function AuthProvider({ children }) {
   // more than one. Without it the API answers 409 and asks.
   // inviteToken: a member's first sign-in comes through their invite link
   // (2026-09-19) — until then their number opens nothing on its own.
-  const loginWithOtp = async (phone, code, tenantId, inviteToken) => {
+  const loginWithOtp = async (phone, code, tenantId, inviteToken, pickToken) => {
     const { data } = await api.post("/auth/otp/verify", {
       phone, code, ...(tenantId ? { tenant_id: tenantId } : {}), ...(inviteToken ? { invite_token: inviteToken } : {}),
+      ...(pickToken ? { pick_token: pickToken } : {}),
     });
+    // Audit A-03: a number in several companies is answered with the list
+    // (after the code was checked), not a session. The caller asks which one.
+    if (data?.choose) return data;
     persist(data);
     return data;
   };

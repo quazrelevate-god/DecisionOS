@@ -222,6 +222,43 @@ def _has_unclassified_purchase(records: dict, doc_type: str = "") -> bool:
     return False
 
 
+def _num(v):
+    try:
+        return None if v is None or v == "" else round(float(v), 2)
+    except (TypeError, ValueError):
+        return None
+
+
+def bill_gst(inv: dict, buyer_registered: bool) -> dict:
+    """The GST on a read bill (audit F-05, 2026-10-08).
+
+    Reads what the model returned and keeps it only if it adds up: taxable
+    value + tax must come to the bill's total (a rupee or 1% of rounding
+    allowed), else the split is dropped rather than trusted. Input tax credit
+    is the bill's GST when OUR company is GST-registered and the supplier's
+    GSTIN is on the bill -- the two conditions a claim needs. The bill's
+    `amount` (what we owe) is never changed here."""
+    from shared.tax_id import clean_tax_id, tax_id_problem
+    gstin = clean_tax_id(inv.get("gstin"))
+    if gstin and (tax_id_problem(gstin) or not gstin[:2].isdigit()):
+        gstin = ""
+    amount = _num(inv.get("amount")) or 0.0
+    cgst, sgst, igst = _num(inv.get("cgst")), _num(inv.get("sgst")), _num(inv.get("igst"))
+    tax = _num(inv.get("tax_total"))
+    if tax is None and any(x for x in (cgst, sgst, igst)):
+        tax = round(sum(x for x in (cgst, sgst, igst) if x), 2)
+    taxable = _num(inv.get("taxable_value"))
+    if taxable is None and tax:
+        taxable = round(amount - tax, 2)
+    adds_up = bool(tax) and taxable is not None and abs((taxable + tax) - amount) <= max(1.0, amount * 0.01)
+    if not adds_up:
+        return {"gstin": gstin, "taxable_value": None, "cgst": None, "sgst": None, "igst": None,
+                "tax_total": None, "input_tax_credit": 0.0}
+    itc = tax if (buyer_registered and gstin) else 0.0
+    return {"gstin": gstin, "taxable_value": taxable, "cgst": cgst, "sgst": sgst, "igst": igst,
+            "tax_total": tax, "input_tax_credit": round(itc, 2)}
+
+
 async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, ingestion_id: str, source: str) -> dict:
     from routers.ledger import create_expense, create_asset, create_inventory, guess_asset_category
     from models.contacts import CONTACT_TYPES
@@ -233,6 +270,18 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
             detail="Please classify each purchase bill as Expense, Asset, or Inventory before filing.")
     created = {"contacts": 0, "invoices": 0, "payments": 0, "tasks": 0, "expenses": 0, "assets": 0, "inventory": 0}
     currency = await _tenant_currency(tenant_id)
+    # Audit F-05: input credit needs OUR company to be GST-registered.
+    from shared.tax_id import clean_tax_id, tax_id_problem
+    _own_gst = clean_tax_id(((await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "gst": 1})) or {}).get("gst"))
+    buyer_registered = bool(_own_gst) and not tax_id_problem(_own_gst) and _own_gst[:2].isdigit()
+
+    async def _fill_tax_id(contact_id: str, tax_id: str):
+        """A supplier's GSTIN read off a bill fills an EMPTY tax id; it never
+        overwrites one somebody typed."""
+        tax_id = clean_tax_id(tax_id)
+        if contact_id and tax_id and not tax_id_problem(tax_id):
+            await db.contacts.update_one({"id": contact_id, "tenant_id": tenant_id, "tax_id": {"$in": ["", None]}},
+                                         {"$set": {"tax_id": tax_id}})
     own_norm = _norm_company(await _tenant_name(tenant_id))
     troles = await tenant_role_keys(tenant_id)
     followup_role = "finance" if "finance" in troles else ("sales" if "sales" in troles else None)
@@ -277,13 +326,15 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
             {"tenant_id": tenant_id, "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}}, {"_id": 0, "id": 1})
         if existing:
             name_to_id[key] = existing["id"]
+            await _fill_tax_id(existing["id"], c.get("tax_id"))
             continue
         cid = new_id()
         await db.contacts.insert_one({
             "id": cid, "tenant_id": tenant_id, "type": ctype, "name": name,
             "company": c.get("company", "") or "", "phone": c.get("phone", "") or "",
             "email": c.get("email", "") or "", "address": c.get("address", "") or "",
-            "tax_id": c.get("tax_id", "") or "", "tags": ["imported"], "status": "active",
+            "tax_id": "" if tax_id_problem(c.get("tax_id")) else clean_tax_id(c.get("tax_id")),
+            "tags": ["imported"], "status": "active",
             "assigned_id": None, "notes": "", "created_by": user_id, "created_at": now_iso(),
             "source": source, "ingestion_id": ingestion_id,
         })
@@ -299,6 +350,9 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
         except (TypeError, ValueError):
             amount = 0.0
         inv_id = new_id()
+        gst = bill_gst(inv, buyer_registered and itype == "purchase_bill")
+        if gst["gstin"]:
+            await _fill_tax_id(cid, gst["gstin"])
         purchase_type = (inv.get("purchase_type") or "").strip().lower()
         if itype == "purchase_bill" and purchase_type not in ("expense", "asset", "inventory"):
             # No silent fallback: an unclassified purchase must be reviewed & classified by a human first.
@@ -313,6 +367,9 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
             "amount": amount, "currency": inv.get("currency") or currency,
             "status": "unpaid", "line_items": inv.get("line_items") if isinstance(inv.get("line_items"), list) else [],
             "purchase_type": purchase_type if itype == "purchase_bill" else "",
+            # Audit F-05: the GST as read (and only if it adds up), and the
+            # input credit a purchase bill gives a GST-registered company.
+            **gst,
             "source": source, "ingestion_id": ingestion_id, "created_by": user_id, "created_at": now_iso(),
         })
         created["invoices"] += 1
@@ -353,7 +410,10 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
                 await create_inventory(tenant_id, user_id, {
                     "item": (li_text[:60] or f"Stock from {vend}").strip(),
                     "quantity": qty, "unit": (inv.get("inventory_unit") or "unit").strip(),
-                    "unit_cost": round(amount / qty, 2) if qty else amount,
+                    # Audit F-05: GST we can claim back is not what the stock
+                    # cost. ₹336/kg was the price WITH 5% GST; it is the price
+                    # without it when the credit is ours to claim.
+                    "unit_cost": round((amount - gst["input_tax_credit"]) / qty, 2) if qty else amount - gst["input_tax_credit"],
                     "currency": inv_cur, "vendor_name": vend,
                     "notes": f"From bill {inv.get('number') or ''}".strip(),
                 }, source=source)

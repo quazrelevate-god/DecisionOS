@@ -66,7 +66,7 @@ import {
   AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
 } from "../components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../components/ui/dropdown-menu";
-import { StickyHeader, LoadFailed } from "../components/common";
+import { StickyHeader, LoadFailed, Loader } from "../components/common";
 import {
   DRAWER_FIELD, GLASS_MENU, GLASS_MENU_ITEM, INK_PILL,
 } from "../components/karma/glass";
@@ -1020,8 +1020,15 @@ export default function Workflows() {
                                swaps an outset shadow list for an inset one on
                                press and those do not interpolate. */
                             className="kr-pop mt-3 flex h-10 w-full items-center justify-center gap-1.5 rounded-pill text-xs font-medium disabled:opacity-50">
+                            {/* Audit C-09 (2026-10-08) — a move takes a few seconds (the
+                                stage's work is laid out on the way); the button said
+                                nothing while it ran, so it was pressed again. */}
+                            {busyId === w.id ? (
+                              <><Loader size={14} label="Moving" testid={`advance-workflow-busy-${w.id}`} /> Moving to {labelOf(nextKey)}…</>
+                            ) : (<>
                             {t("workflows.advance")} to {labelOf(nextKey)}
                             <ArrowRight size={12} weight="bold" aria-hidden="true" className="kr-arrow transition-transform duration-200" />
+                            </>)}
                           </button>
                         ) : (
                           <p className="mt-3 flex items-center justify-center gap-1.5 rounded-control bg-kr-ink py-2 text-xs font-semibold text-white">

@@ -100,7 +100,9 @@ def test_a_spent_code_unlocks_resend_at_once():
 def test_a_number_that_cannot_be_an_account_is_not_offered_a_company():
     s = _src("pages/Login.js")
     assert 'import { normIndianMobile } from "../lib/phone";' in s
-    assert "err.response?.status === 404 && !normIndianMobile(otpPhone)" in s
+    # Since A-03 the server says nothing about unknown numbers, so the format
+    # is checked before asking it.
+    assert "if (!normIndianMobile(otpPhone)) {" in s
 
 
 # 5 ───────────────────────────────────────────────────────────────────────────

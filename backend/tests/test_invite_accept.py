@@ -223,15 +223,19 @@ def test_invite_link_keeps_the_otp_cooldown_without_dead_ending(with_test_db):
             second = await aotp.invite_start("tok-invite")
             row2 = await db.otp_codes.find_one({"phone": PHONE}, {"_id": 0})
             n = await db.otp_codes.count_documents({"phone": PHONE})
-            # the code from the FIRST send still works
-            await aotp.verify_otp(OtpVerifyInput(phone=PHONE, code=CODE, invite_token="tok-invite"), Response())
-            return (first.get("phone"), second.get("phone"), second.get("name"),
+            # the code from the FIRST send still works -- and the device sends no
+            # number at all: the invite names it (audit D-03)
+            await aotp.verify_otp(OtpVerifyInput(code=CODE, invite_token="tok-invite"), Response())
+            return (first.get("phone"), second.get("phone_masked"), second.get("name"),
                     row1["created_at"] == row2["created_at"], n)
         finally:
             restore()
 
     p1, p2, name, same_code, n = with_test_db(scenario)
-    assert p1 == PHONE and p2 == PHONE, "a re-tap still hands the device the number to verify"
+    # Audit D-03 (2026-10-08): the link is forwarded on WhatsApp, so the full
+    # number never leaves in the answer -- only its last four digits.
+    assert p1 is None, "the full number is not handed to whoever holds the link"
+    assert p2.startswith("••••") and p2.endswith(PHONE[-4:]), "a re-tap shows the masked number"
     assert name == "Asha", "and the welcome it renders"
     assert same_code, "no second SMS inside the cooldown - the live code stands"
     assert n == 1, "one OTP row for the invite, not one per tap"

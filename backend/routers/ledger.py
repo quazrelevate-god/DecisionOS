@@ -1437,6 +1437,10 @@ async def ledger_summary(user: dict = Depends(require_ledger)):
             "net_profit": round(revenue_billed - _operating - stock_used, 2),
             "payables_outstanding": round(payables_outstanding, 2),
             "open_bill_count": sum(1 for b in bills if b.get("status") != "paid" and _remaining(b) > 0.01),
+            # Audit F-05 (2026-10-08): GST on purchase bills the company can
+            # claim back (its GSTIN in Settings, the supplier's on the bill).
+            "gst_input_credit": round(total_in_base([b for b in bills if _num(b.get("input_tax_credit"))],
+                                                    currency, lambda b: b.get("input_tax_credit")), 2),
             # Foreign-currency invoices / bills with no exchange rate yet: NOT in
             # the figures above; the page asks for their rate.
             "needs_rate": _needs_rate(sales + unpaid_bills + expenses_raw, currency, lambda d: d.get("amount")),

@@ -48,6 +48,9 @@ OPEN_TO_EVERY_MEMBER = {
     "/api/announcements/active": "platform notices", "/api/billing/plans": "price list",
     "/api/billing/status": "plan state", "/api/tenant/plan": "plan state", "/api/tenant/usage": "quota meters",
     "/api/tenant/ai-consent": "whether AI is on", "/api/tenant/ai-setup/status": "setup health",
+    # Audit B-12 (2026-10-09): the company logo printed on every invoice it sends;
+    # members already see the company card it sits on.
+    "/api/tenant/invoice-logo": "the company's invoice logo (public on its invoices)",
     "/api/whatsapp/status": "configured or not, no messages",
     # narrowed to the caller inside the handler
     "/api/tasks": "task_list_query", "/api/tasks/{task_id}": "_can_work_task etc.",

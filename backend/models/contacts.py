@@ -37,6 +37,9 @@ class ContactInput(BaseModel):
     notes: Optional[str] = ""
     birthday: Optional[str] = ""
     lifecycle_stage: Optional[str] = ""  # E2-03
+    # Audit C-05 (2026-10-08): "Add anyway" after being told one by this name
+    # already exists (two firms can share a name).
+    allow_duplicate: bool = False
 
 
 class ContactUpdateInput(BaseModel):

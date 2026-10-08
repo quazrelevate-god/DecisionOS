@@ -19,7 +19,14 @@ EXTRACT = register(Prompt(
     # by team", 0 tasks, waiting for an owner's approval. This channel is where
     # an owner records what they DECIDED; a report on how things are going is
     # not a decision, and the prompt now says so with examples.
-    version="1.2",
+    # 1.3 (2026-10-08, audit C-13) — the deadline the person SAID. "Rahul to
+    # send the pro-forma by Friday", said on a Thursday, became a task due the
+    # following Monday: the model was never told what day it was, so it could
+    # not count to Friday, returned no date, and the card's stage date filled
+    # the gap. Today's date now rides with every transcript, the task carries
+    # the date itself ("due_on") beside the day count, and a task with no
+    # deadline stays undated for the reviewer instead of being guessed.
+    version="1.3",
     intent="Convert a founder's spoken/written directive into structured decisions/tasks/workflow_events/reminders/meeting_events/memory_notes JSON.",
     template=(
         "You are the extraction engine of DecisionOS, an operating brain for small businesses. "
@@ -31,7 +38,8 @@ EXTRACT = register(Prompt(
         '"tasks": [{"title": string, "description": string, "assignee_role": one of [${roles_str}], '
         '"assignee_name": string (a specific team member\'s name if one is explicitly mentioned, else empty), '
         '"task_category": one of [${cat_keys_str}] (the department this task belongs to), '
-        '"priority": one of [low,medium,high], "due_in_days": integer or null}], '
+        '"priority": one of [low,medium,high], "due_in_days": integer or null, '
+        '"due_on": "YYYY-MM-DD" or null}], '
         '"workflow_events": [{"type": one of [${pipe_keys_str}], "title": string, "detail": string, "counterparty": string, "amount": number or null}], '
         '"reminders": [{"title": string, "due_in_days": integer or null}], '
         '"meeting_events": [{"title": string, "when": string, "due_in_days": integer or null}], '
@@ -83,7 +91,12 @@ EXTRACT = register(Prompt(
         "onboard each user, etc.) are handled later inside that task's AI execution guide, so keep them OUT of separate tasks. "
         "Only create multiple tasks when the work genuinely goes to DIFFERENT people/roles, or is a clearly separate deliverable "
         'for the same person that cannot be part of the same guided checklist. Put the fuller scope in the task\'s "description". '
-        "Pick assignee_role ONLY from the provided role list. Infer sensible owners and due dates. If nothing applies, use empty arrays. "
+        "Pick assignee_role ONLY from the provided role list. Infer sensible owners. If nothing applies, use empty arrays. "
+        "\n\nDUE DATES. Today's date and weekday are given with the transcript. When the directive gives a task a "
+        "deadline ('by Friday', 'tomorrow', 'on the 15th', 'before month end', 'next Tuesday'), set \"due_on\" to that "
+        "calendar date as YYYY-MM-DD and \"due_in_days\" to the days from today to it (today = 0; 'by Friday' said on a "
+        "Thursday = 1; 'next Tuesday' is the coming Tuesday). A weekday always means the NEXT one on or after today. "
+        "When no deadline is said for a task, set both to null — never invent one; the owner sets it when they review. "
         "\n\nPLAIN, FINISHED WORDS. Every string you return is shown to a business owner exactly as you write it. "
         "NEVER leave a placeholder or a template slot in the text — no '[current period]', '[amount]', '[vendor name]', "
         "'[date]', 'TBD', 'XXX'. If you know the value, write it ('for September', 'Rs 85,000'). If you do not, leave "

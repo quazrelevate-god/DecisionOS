@@ -40,6 +40,28 @@ def match_member_by_name(members: list, name: str):
     return best
 
 
+def task_due_date(t: dict, now=None):
+    """The day a task is due, from what the person said (audit C-13, 2026-10-08).
+
+    The model now returns the date itself ("due_on", told today's date) beside
+    the day count. The date wins when it is a real day from today up to a year
+    out; otherwise the count; otherwise None — no deadline was said, and the
+    reviewer is asked for one rather than given a guess."""
+    from shared.due import IST
+    base = (now or datetime.now(timezone.utc)).astimezone(IST).date()
+    raw = str(t.get("due_on") or "").strip()[:10]
+    if raw:
+        try:
+            d = datetime.strptime(raw, "%Y-%m-%d").date()
+            if 0 <= (d - base).days <= 366:
+                return d.isoformat()
+        except ValueError:
+            pass
+    if isinstance(t.get("due_in_days"), int) and not isinstance(t.get("due_in_days"), bool) and 0 <= t["due_in_days"] <= 366:
+        return due_day(t["due_in_days"], now)   # a day, not an instant (shared/due.py)
+    return None
+
+
 _WEEKDAYS = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6}
 
 
@@ -271,9 +293,7 @@ async def build_proposal(tenant_id, extracted, troles, members, cat_keys, pipeli
             # Smart assignment: distribute role-level tasks to the least-loaded member.
             assignee_id = await pick_least_loaded_member(tenant_id, role)
             how = "load" if assignee_id else "team"
-        due = None
-        if isinstance(t.get("due_in_days"), int):
-            due = due_day(t["due_in_days"], now)   # a day, not an instant (shared/due.py)
+        due = task_due_date(t, now)
         tasks.append({
             "key": new_id(), "title": t.get("title") or "Untitled task",
             "description": t.get("description", ""), "assignee_id": assignee_id,

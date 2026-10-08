@@ -475,6 +475,12 @@ export default function Signup() {
             {consented && phase === "interview" && (
               <VoiceInterview
                 profile={interviewProfile}
+                resumeSession={sessionId}
+                onSession={(sid, lang) => {
+                  // Saved the moment it starts, so a reload resumes it (audit A-10).
+                  setSessionId(sid); setLanguageCode(lang || "en-IN");
+                  saveStep("progress", { phase: "interview", session_id: sid, language_code: lang || "en-IN" });
+                }}
                 /* KM-62 — Back at the interview's first question returns here
                    rather than being inert. Not offered from the reveal screen:
                    VoiceInterview posts /interview/start on mount, so stepping
@@ -482,7 +488,9 @@ export default function Signup() {
                    answer already given. The reveal has its own way to change
                    things — "Missing something? Tell Dex" edits the draft in
                    place, which is the safe version of the same intent. */
-                onBack={() => goTo("website")}
+                /* Back from question one is a change of plan (a different
+                   industry, say): drop that interview so a new one starts. */
+                onBack={() => { setSessionId(null); goTo("website", { sessionId: "" }); }}
                 onComplete={(sid, lang) => { setSessionId(sid); setLanguageCode(lang || "en-IN"); goTo("build", { sessionId: sid, languageCode: lang || "en-IN" }); }}
                 onSkip={(sid, lang) => { setSessionId(sid); setLanguageCode(lang || "en-IN"); goTo("build", { sessionId: sid, languageCode: lang || "en-IN" }); }}
               />

@@ -1076,7 +1076,14 @@ export function DecisionPanel({
                                 <input type="date" value={(t.due_date || "").slice(0, 10)} disabled={editBusy}
                                   onChange={(e) => editTask(t.key, { due_date: e.target.value })}
                                   aria-label={`Due date for ${t.title}`} data-testid={`decision-task-due-${t.key}`}
-                                  className={`h-9 rounded-pill px-3 text-xs text-slate-700 ${GLASS_PILL}`} />
+                                  /* Audit C-13 — no deadline was said, so none is guessed:
+                                     the empty date is flagged like an empty "who". */
+                                  className={`h-9 rounded-pill px-3 text-xs ${t.due_date ? `text-slate-700 ${GLASS_PILL}` : "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200"}`} />
+                                {!t.due_date && (
+                                  <span className="text-[11px] font-medium text-amber-800" data-testid={`decision-task-no-date-${t.key}`}>
+                                    No date yet — set one
+                                  </span>
+                                )}
                                 <button type="button" onClick={() => removeItem("tasks", t.key)} disabled={editBusy}
                                   aria-label={`Remove ${t.title}`} data-testid={`decision-task-remove-${t.key}`}
                                   className={GLASS_ICON_BTN}>
@@ -1089,7 +1096,7 @@ export function DecisionPanel({
                                 {t.assignee_name ? `Goes to ${t.assignee_name}`
                                   : t.assignee_role ? `Goes to the ${deptName(tenant, t.assignee_role)} team`
                                   : "Unassigned"}
-                                {t.due_date ? ` · due ${new Date(t.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : ""}
+                                {t.due_date ? ` · due ${new Date(t.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : proposing ? " · no date yet" : ""}
                                 {t.priority && t.priority !== "medium" ? ` · ${t.priority} priority` : ""}
                               </p>
                             )}

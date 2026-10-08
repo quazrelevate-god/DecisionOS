@@ -7,7 +7,7 @@ surface request bodies.
 """
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class RoleItem(BaseModel):
@@ -44,6 +44,14 @@ class TenantUpdateInput(BaseModel):
     upi_id: Optional[str] = None
     invoice_prefix: Optional[str] = None
     invoice_terms: Optional[str] = None
+    # Audit B-12 (2026-10-08): the two defaults an invoice asks for every time.
+    payment_terms_days: Optional[int] = Field(default=None, ge=0, le=365)   # due = date + N
+    default_gst_rate: Optional[float] = None                                # one of invoicing.GST_RATES
+
+
+class InvoiceLogoInput(BaseModel):
+    """Audit B-12: the company logo on its invoices, as a data URL (PNG/JPEG)."""
+    data_url: str = Field(..., max_length=400_000)
 
 
 class InviteInput(BaseModel):

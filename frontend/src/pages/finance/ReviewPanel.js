@@ -290,7 +290,19 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
                   <Field label="Party" value={inv.contact_name} onChange={(v) => setItem("invoices", i, "contact_name", v)} />
                   <Field label="Amount" value={inv.amount} onChange={(v) => setItem("invoices", i, "amount", v)} />
                   <Field label="Due date" value={inv.due_date} onChange={(v) => setItem("invoices", i, "due_date", v)} />
+                  {/* Audit F-05 — the GSTIN and tax read off the document, to check
+                      before filing (the GSTIN also fills the supplier's record). */}
+                  <Field label="GSTIN" value={inv.gstin || ""} onChange={(v) => setItem("invoices", i, "gstin", v)} />
                   <RemoveButton onClick={() => removeItem("invoices", i)} testid={`remove-invoice-${i}`} label="Remove invoice" />
+                  {Number(inv.tax_total) > 0 && (
+                    <p className="col-span-full text-xs text-slate-600" data-testid={`review-invoice-gst-${i}`}>
+                      GST {Number(inv.tax_total).toLocaleString("en-IN")}
+                      {Number(inv.igst) > 0 ? ` (IGST ${Number(inv.igst).toLocaleString("en-IN")})`
+                        : Number(inv.cgst) > 0 ? ` (CGST ${Number(inv.cgst).toLocaleString("en-IN")} + SGST ${Number(inv.sgst || 0).toLocaleString("en-IN")})` : ""}
+                      {inv.taxable_value != null ? ` on ${Number(inv.taxable_value).toLocaleString("en-IN")}` : ""}
+                      {isPurchase ? " · claimable as input credit when your GSTIN is in Settings" : ""}
+                    </p>
+                  )}
                 </div>
               );
             })}

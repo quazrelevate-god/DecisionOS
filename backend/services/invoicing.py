@@ -246,6 +246,20 @@ def invoice_pdf(inv: Dict[str, Any], seller: Dict[str, Any]) -> bytes:
     head = Table([[Paragraph("<br/>".join(seller_lines), norm), Paragraph("<br/>".join(meta), norm)]],
                  colWidths=[110 * mm, 72 * mm])
     head.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("ALIGN", (1, 0), (1, 0), "RIGHT")]))
+    # Audit B-12 (2026-10-08): the company's logo above its name, kept to its
+    # own proportions inside 40 x 18 mm. A picture that will not draw is left out.
+    if seller.get("logo_bytes"):
+        try:
+            from reportlab.lib.utils import ImageReader
+            from reportlab.platypus import Image as RLImage
+            img = ImageReader(io.BytesIO(seller["logo_bytes"]))
+            w, h = img.getSize()
+            scale = min((40 * mm) / w, (18 * mm) / h)
+            logo = RLImage(io.BytesIO(seller["logo_bytes"]), width=w * scale, height=h * scale)
+            logo.hAlign = "LEFT"
+            el += [logo, Spacer(1, 3 * mm)]
+        except Exception:
+            pass
     el += [head, Spacer(1, 6 * mm)]
 
     buyer = ["<b>Bill to</b>", f"<b>{esc(inv.get('contact_name') or '-')}</b>"]

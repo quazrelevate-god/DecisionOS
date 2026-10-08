@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
@@ -48,9 +49,78 @@ const GST_STATES = ["Andaman and Nicobar Islands", "Andhra Pradesh", "Arunachal 
   "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Puducherry", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
   "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"];
 
+/* Audit B-12 (2026-10-08) — the logo printed at the top of the company's
+   invoices. A PNG or JPG under 250 KB, kept apart from the company record. */
+function InvoiceLogo({ canManage, has, onChanged }) {
+  const qc = useQueryClient();
+  const logoQ = useQuery({ queryKey: ["invoice-logo"], enabled: has, retry: false,
+    queryFn: () => api.get("/tenant/invoice-logo").then((r) => r.data.data_url) });
+  const [busy, setBusy] = useState(false);
+  const pick = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!/^image\/(png|jpeg)$/.test(file.type)) { toast.error("Upload the logo as a PNG or JPG picture."); return; }
+    if (file.size > 250000) { toast.error("Keep the logo under 250 KB."); return; }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      setBusy(true);
+      try {
+        await api.put("/tenant/invoice-logo", { data_url: reader.result });
+        await onChanged?.();
+        qc.invalidateQueries({ queryKey: ["invoice-logo"] });
+        toast.success("Logo saved — it prints on your invoices");
+      } catch (err) {
+        toast.error(formatApiError(err.response?.data?.detail) || "Couldn't save the logo");
+      } finally { setBusy(false); }
+    };
+    reader.readAsDataURL(file);
+  };
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await api.delete("/tenant/invoice-logo");
+      await onChanged?.();
+      qc.removeQueries({ queryKey: ["invoice-logo"] });
+      toast.success("Logo removed");
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || "Couldn't remove the logo");
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="sm:col-span-2" data-testid="company-invoice-logo">
+      <p className={FIELD_LABEL}>Logo on invoices</p>
+      <div className="mt-1 flex flex-wrap items-center gap-3">
+        {has && logoQ.data ? (
+          <img src={logoQ.data} alt="Your invoice logo" className="h-12 max-w-[10rem] rounded-lg bg-white object-contain p-1 ring-1 ring-slate-900/10"
+            data-testid="company-invoice-logo-preview" />
+        ) : (
+          <span className="text-xs text-muted-foreground">{has ? "Loading…" : "No logo yet"}</span>
+        )}
+        {canManage && (
+          <>
+            <label className={`kr-pop inline-flex h-9 cursor-pointer items-center rounded-pill px-4 text-xs font-medium ${busy ? "pointer-events-none opacity-50" : ""}`}>
+              {has ? "Change logo" : "Upload logo"}
+              <input type="file" accept="image/png,image/jpeg" className="sr-only" onChange={pick} data-testid="company-invoice-logo-input" />
+            </label>
+            {has && (
+              <button type="button" onClick={remove} disabled={busy} data-testid="company-invoice-logo-remove"
+                className="text-xs font-semibold text-slate-600 underline underline-offset-2 disabled:opacity-50">Remove</button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function CompanyDetails() {
   const { tenant, user, refreshTenant } = useAuth();
   const canManage = hasPerm(user, "team_manage");
+  const qc = useQueryClient();
+  // The next number the invoice builder will use (and the GST rates it offers).
+  const nextQ = useQuery({ queryKey: ["invoice-next-number"], retry: false,
+    queryFn: () => api.get("/invoices/next-number").then((r) => r.data) });
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({});
   const [products, setProducts] = useState([]);
@@ -65,6 +135,8 @@ export function CompanyDetails() {
       phone: tenant.phone || "", region: tenant.region || "", gst: tenant.gst || "",
       support_email: tenant.support_email || "", branches: tenant.branches || "",
       ...Object.fromEntries(INVOICE_FIELDS.map((f) => [f.key, tenant[f.key] || ""])),
+      payment_terms_days: tenant.payment_terms_days ?? "",
+      default_gst_rate: tenant.default_gst_rate ?? "",
     });
     setProducts((tenant.products || []).map((p) => ({ name: p.name || "", description: p.description || "", _key: uid() })));
   }, [tenant]);
@@ -84,10 +156,15 @@ export function CompanyDetails() {
     }
     setSaving(true);
     try {
+      const { payment_terms_days: terms, default_gst_rate: rate, ...rest } = form;
       await api.patch("/tenant", {
-        ...form,
+        ...rest,
+        // Audit B-12: numbers, and left alone when blank.
+        ...(String(terms ?? "").trim() !== "" ? { payment_terms_days: Number(terms) } : {}),
+        ...(String(rate ?? "").trim() !== "" ? { default_gst_rate: Number(rate) } : {}),
         products: products.filter((p) => p.name.trim()).map(({ _key, ...r }) => r),
       });
+      qc.invalidateQueries({ queryKey: ["invoice-next-number"] });
       dirty.current.company = false;
       await refreshTenant();
       toast.success("Company details saved");
@@ -129,6 +206,27 @@ export function CompanyDetails() {
           </div>
         ))}
         <datalist id="gst-states">{GST_STATES.map((s) => <option key={s} value={s} />)}</datalist>
+        {/* Audit B-12 (2026-10-08) — the two things every invoice asked for again. */}
+        <div>
+          <label htmlFor="company-field-payment_terms_days" className={FIELD_LABEL}>Payment terms (days to pay)</label>
+          <input id="company-field-payment_terms_days" data-testid="company-field-payment_terms_days" type="number" min="0" max="365"
+            inputMode="numeric" className={`${DRAWER_FIELD} mt-1`} value={form.payment_terms_days ?? ""} disabled={!canManage}
+            onChange={(e) => setField("payment_terms_days", e.target.value)} placeholder={canManage ? "e.g. 30" : "—"} />
+        </div>
+        <div>
+          <label htmlFor="company-field-default_gst_rate" className={FIELD_LABEL}>Usual GST rate</label>
+          <select id="company-field-default_gst_rate" data-testid="company-field-default_gst_rate" className={`${DRAWER_FIELD} mt-1`}
+            value={form.default_gst_rate ?? ""} disabled={!canManage} onChange={(e) => setField("default_gst_rate", e.target.value)}>
+            <option value="">Not set</option>
+            {(nextQ.data?.gst_rates || [0, 0.25, 3, 5, 12, 18, 28]).map((r) => <option key={r} value={r}>{r}%</option>)}
+          </select>
+        </div>
+        {nextQ.data?.number && (
+          <p className="text-xs text-muted-foreground sm:col-span-2" data-testid="company-next-invoice-number">
+            Your next invoice will be numbered <strong>{nextQ.data.number}</strong> (prefix / financial year April–March / running number).
+          </p>
+        )}
+        <InvoiceLogo canManage={canManage} has={!!tenant?.has_invoice_logo} onChanged={refreshTenant} />
       </div>
 
       {canManage && tenant?.id && (

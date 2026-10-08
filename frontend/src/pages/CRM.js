@@ -449,6 +449,9 @@ export function CrmContactDialog({ type, contact, onClose, onSaved, users, label
     editing ? contactForm(contact) : blankContact(type || "customer"),
   );
   const [busy, setBusy] = useState(false);
+  // Audit C-05 (2026-10-08): one by this name already exists -- {id, name}.
+  const [twin, setTwin] = useState(null);
+  const navigateTo = useNavigate();
   const cancel = () => { draft.discard(); onClose(); };
 
   /* J15 (founder) — DELETING A CONTACT. There was no way to: something added
@@ -504,7 +507,7 @@ export function CrmContactDialog({ type, contact, onClose, onSaved, users, label
   const typeName = labels[form.type] || "Contact";
   const Icon = TYPE_META[form.type]?.icon || AddressBook;
 
-  const save = async () => {
+  const save = async (opts = {}) => {
     if (!form.name.trim()) { toast.error("Name is required"); return; }
     setBusy(true);
     try {
@@ -516,13 +519,18 @@ export function CrmContactDialog({ type, contact, onClose, onSaved, users, label
         lifecycle_stage: form.lifecycle_stage || "",
       };
       if (editing) await api.patch(`/contacts/${contact.id}`, payload);
-      else await api.post("/contacts", { ...payload, birthday: "" });
+      else await api.post("/contacts", { ...payload, birthday: "", ...(opts.anyway ? { allow_duplicate: true } : {}) });
       toast.success(editing ? `${form.name.trim()} saved` : `${typeName} added`);
       draft.discard();
       onSaved();
       onClose();
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Save failed");
+      const d = e.response?.data?.detail;
+      // Audit C-05: the same name twice -- say so here, with the way to it.
+      // (lib/api flattens a {code, message} refusal; the object is on detail_full.)
+      const full = e.response?.data?.detail_full || d;
+      if (e.response?.status === 409 && full?.code === "duplicate_contact") setTwin({ id: full.contact_id, name: full.name });
+      else toast.error(formatApiError(d) || "Save failed");
     } finally {
       setBusy(false);
     }
@@ -568,7 +576,8 @@ export function CrmContactDialog({ type, contact, onClose, onSaved, users, label
           <FormSection label="Who they are">
             <Field label="Name" htmlFor="crm-contact-name" required>
               <input id="crm-contact-name" data-testid="crm-contact-name" autoFocus className={FIELD}
-                placeholder={form.type === "vendor" ? "e.g. Surat Yarn Mills" : "e.g. Anand Fabrics"} value={form.name} onChange={set("name")} />
+                placeholder={form.type === "vendor" ? "e.g. Surat Yarn Mills" : "e.g. Anand Fabrics"} value={form.name}
+                onChange={(e) => { setTwin(null); set("name")(e); }} />
             </Field>
             <Field label="Company" htmlFor="crm-contact-company">
               <input id="crm-contact-company" data-testid="crm-contact-company" className={FIELD}
@@ -672,11 +681,23 @@ export function CrmContactDialog({ type, contact, onClose, onSaved, users, label
               <Warning size={15} weight="bold" aria-hidden="true" /> Log complaint
             </button>
           )}
+          {twin && (
+            <div className="mr-auto flex flex-wrap items-center gap-2 rounded-2xl bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-inset ring-amber-200"
+              data-testid="crm-contact-duplicate" role="alert">
+              <span>There&rsquo;s already one called <strong>{twin.name}</strong>.</span>
+              <button type="button" data-testid="crm-contact-duplicate-open"
+                onClick={() => { draft.discard(); onClose(); navigateTo(`/contacts/${twin.id}`); }}
+                className="font-semibold underline underline-offset-2">Open it</button>
+              <button type="button" data-testid="crm-contact-duplicate-anyway" disabled={busy}
+                onClick={() => { setTwin(null); save({ anyway: true }); }}
+                className="font-semibold underline underline-offset-2">Add anyway</button>
+            </div>
+          )}
           <button type="button" onClick={cancel} disabled={busy} data-testid="crm-contact-cancel"
             className={`h-11 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}>
             Cancel
           </button>
-          <button type="button" onClick={save} disabled={busy} data-testid="crm-contact-save"
+          <button type="button" onClick={() => save()} disabled={busy} data-testid="crm-contact-save"
             className={`h-11 rounded-pill px-6 text-sm font-medium disabled:opacity-50 ${INK_PILL}`}>
             {editing ? (busy ? "Saving…" : "Save changes") : busy ? "Adding…" : `Add ${typeName.toLowerCase()}`}
           </button>

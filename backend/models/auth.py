@@ -166,8 +166,12 @@ class OtpRequestInput(BaseModel):
 
 
 class OtpVerifyInput(BaseModel):
-    phone: str
-    code: str
+    # Optional with an invite (audit D-03): the number is read from the invite.
+    phone: str = Field(default="", max_length=40)
+    code: str = Field(default="", max_length=12)
+    # Audit A-03: after the code for a many-company number was read back, the
+    # chosen company is opened with this (minted by verify, ten minutes).
+    pick_token: Optional[str] = Field(default=None, max_length=2000)
     # 2026-09-19 — a member's FIRST sign-in comes through their invite link.
     # Until then their number opens nothing by itself (see routers/auth_otp.py).
     invite_token: Optional[str] = Field(default=None, max_length=128)

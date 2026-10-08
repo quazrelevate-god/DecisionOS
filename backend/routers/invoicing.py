@@ -93,6 +93,20 @@ async def record_invoice_payment(iid: str, inp: RecordPaymentInput, user: dict =
 
 
 # --- F-03: a GST / export invoice ------------------------------------------------------
+def _terms_due(date: str, days) -> str:
+    """The invoice date plus the company's payment terms, or "" without terms."""
+    from datetime import date as _d, timedelta
+    if days is None:
+        return ""
+    try:
+        n = int(days)
+        if n < 0:
+            return ""
+        return (_d.fromisoformat(str(date)[:10]) + timedelta(days=n)).isoformat()
+    except (TypeError, ValueError):
+        return ""
+
+
 async def _next_number(tid: str, tenant: dict, on: Optional[str] = None) -> str:
     prefix = (tenant.get("invoice_prefix") or invoicing.default_prefix(tenant.get("name") or "")).strip().strip("/")
     fy = invoicing.financial_year(on)
@@ -108,14 +122,18 @@ async def _next_number(tid: str, tenant: dict, on: Optional[str] = None) -> str:
 async def next_invoice_number(user: dict = Depends(require_ledger)):
     tid = user["tenant_id"]
     t = await db.tenants.find_one({"id": tid}, {"_id": 0, "name": 1, "invoice_prefix": 1, "state": 1,
-                                                "gst": 1, "address": 1, "currency": 1})
+                                                "gst": 1, "address": 1, "currency": 1,
+                                                "payment_terms_days": 1, "default_gst_rate": 1})
     t = t or {}
     fx = (await db.tenants.find_one({"id": tid}, {"_id": 0, "fx_last": 1}) or {}).get("fx_last") or {}
     return {"number": await _next_number(tid, t), "seller_state": t.get("state") or "",
             "fx_last": fx,
             "seller_ready": bool(t.get("gst") and t.get("address") and t.get("state")),
             "currency": t.get("currency") or "INR",
-            "states": list(invoicing.STATES) + [invoicing.EXPORT], "gst_rates": list(invoicing.GST_RATES)}
+            "states": list(invoicing.STATES) + [invoicing.EXPORT], "gst_rates": list(invoicing.GST_RATES),
+            # Audit B-12: the company's defaults for a new invoice.
+            "payment_terms_days": t.get("payment_terms_days"),
+            "default_gst_rate": t.get("default_gst_rate")}
 
 
 @router.post("/invoices/gst")
@@ -151,7 +169,8 @@ async def create_gst_invoice(inp: GstInvoiceInput, user: dict = Depends(require_
         "number": number, "contact_id": inp.contact_id, "contact_name": cust,
         "customer_gstin": gstin, "customer_address": (inp.customer_address or "").strip()[:400],
         "place_of_supply": pos, "title": first + (f" + {more} more" if more else ""),
-        "date": date, "due_date": _day(inp.due_date) if inp.due_date else "",
+        # Audit B-12: no due date typed -> the company's payment terms set one.
+        "date": date, "due_date": _day(inp.due_date) if inp.due_date else _terms_due(date, tenant.get("payment_terms_days")),
         "currency": currency, "status": "unpaid", "amount_paid": 0,
         "purchase_type": "", "notes": (inp.notes or "").strip()[:1000],
         "source": "invoice_builder", "created_by": user["id"], "created_at": now_iso(),
@@ -230,6 +249,14 @@ async def invoice_pdf(iid: str, user: dict = Depends(require_ledger)):
                                                      "phone": 1, "support_email": 1, "bank_name": 1,
                                                      "bank_account": 1, "bank_ifsc": 1, "upi_id": 1,
                                                      "invoice_terms": 1}) or {}
+    # Audit B-12: the company's logo at the top, when it has one.
+    logo = await db.tenant_assets.find_one({"tenant_id": tid, "kind": "invoice_logo"}, {"_id": 0, "data": 1})
+    if logo and logo.get("data"):
+        import base64
+        try:
+            seller["logo_bytes"] = base64.b64decode(logo["data"])
+        except Exception:
+            pass
     pdf = invoicing.invoice_pdf(inv, seller)
     name = re.sub(r"[^A-Za-z0-9_-]+", "-", inv.get("number") or "invoice").strip("-") or "invoice"
     return Response(pdf, media_type="application/pdf",

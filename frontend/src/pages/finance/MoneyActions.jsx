@@ -188,6 +188,9 @@ export function InvoiceRowActions({ inv, onPay, onSetRate }) {
 }
 
 const BLANK_LINE = { description: "", hsn: "", qty: "1", unit: "pcs", rate: "", gst_rate: "5" };
+// A new line takes the company's default GST rate when it has set one (audit B-12).
+const blankLine = (meta) => ({ ...BLANK_LINE,
+  ...(meta?.default_gst_rate != null ? { gst_rate: String(meta.default_gst_rate) } : {}) });
 const CURRENCIES = ["INR", "USD", "GBP", "EUR", "AED", "SGD"];
 
 function calc(lines, sellerState, place, currency) {
@@ -216,10 +219,15 @@ export function InvoiceBuilderDialog({ open, onOpenChange, onDone }) {
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!open || !meta || f) return;
+    /* Audit B-12 (2026-10-08) — the company's own defaults (Settings › Company
+       details › On your invoices): its usual GST rate on every new line, and a
+       due date from its payment terms. Both stay editable here. */
+    const terms = Number.isInteger(meta.payment_terms_days) ? meta.payment_terms_days : null;
+    const due = terms == null ? "" : new Date(Date.now() + terms * 86400000).toISOString().slice(0, 10);
     setF({
       customer_name: "", contact_id: "", customer_gstin: "", customer_address: "",
       place_of_supply: meta.seller_state || "", currency: meta.currency || "INR",
-      number: meta.number, date: today(), due_date: "", notes: "", items: [{ ...BLANK_LINE }],
+      number: meta.number, date: today(), due_date: due, notes: "", items: [{ ...blankLine(meta) }],
       fx_rate: "",
     });
   }, [open, meta, f]);
@@ -348,7 +356,7 @@ export function InvoiceBuilderDialog({ open, onOpenChange, onDone }) {
                   </button>
                 </div>
               ))}
-              <button type="button" onClick={() => setF((s) => ({ ...s, items: [...s.items, { ...BLANK_LINE }] }))}
+              <button type="button" onClick={() => setF((s) => ({ ...s, items: [...s.items, { ...blankLine(meta) }] }))}
                 data-testid="invoice-add-line" className="inline-flex items-center gap-1 text-sm font-semibold text-slate-700 hover:underline">
                 <Plus size={13} weight="bold" aria-hidden="true" /> Add a line
               </button>

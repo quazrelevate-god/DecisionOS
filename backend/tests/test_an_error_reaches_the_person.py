@@ -195,7 +195,8 @@ def test_the_session_toast_was_already_right_and_is_still_there():
 def test_where_they_were_is_remembered_and_handed_back():
     assert "RETURN_TO_KEY" in AUTH and "export function takeReturnTo()" in AUTH
     assert "sessionStorage" in AUTH, "the tab that was thrown out, not every tab"
-    assert LOGIN.count('navigate(takeReturnTo() || "/", { replace: true })') == 3
+    # password, demo, code -- and (audit A-03, 2026-10-09) picking a company after the code
+    assert LOGIN.count('navigate(takeReturnTo() || "/", { replace: true })') == 4
 
 
 def test_the_return_is_read_once():

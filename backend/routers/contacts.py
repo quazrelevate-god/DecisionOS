@@ -73,6 +73,26 @@ async def create_contact(inp: ContactInput, user: dict = Depends(require_crm)):
     if inp.type not in CONTACT_TYPES:
         raise HTTPException(status_code=400, detail="Invalid contact type")
     _refuse_other_side(user, inp.type)
+    # Audit C-06 (2026-10-08): "ABC123" was taken as a GSTIN.
+    from shared.tax_id import tax_id_problem, clean_tax_id
+    _tax_problem = tax_id_problem(inp.tax_id)
+    if _tax_problem:
+        raise HTTPException(status_code=400, detail=_tax_problem)
+    # Audit C-05: the same buyer added twice ("Northwind Apparel" x2) with no
+    # word. Same name (case and spacing ignored), same side: say so, offer it.
+    if not inp.allow_duplicate:
+        import re as _re
+        _name = " ".join((inp.name or "").split())
+        if _name:
+            twin = await db.contacts.find_one(
+                {"tenant_id": user["tenant_id"], "type": inp.type,
+                 "name": {"$regex": "^\\s*" + _re.escape(_name).replace("\\ ", "\\s+") + "\\s*$", "$options": "i"}},
+                {"_id": 0, "id": 1, "name": 1})
+            if twin:
+                raise HTTPException(status_code=409, detail={
+                    "code": "duplicate_contact", "contact_id": twin["id"], "name": twin["name"],
+                    "message": f"There's already one called {twin['name']}.",
+                })
     status = inp.status if inp.status in CONTACT_STATUS else "lead"
     cid = new_id()
     # E2-03: accept lifecycle_stage from the union of customer +
@@ -83,7 +103,7 @@ async def create_contact(inp: ContactInput, user: dict = Depends(require_crm)):
     doc = {
         "id": cid, "tenant_id": user["tenant_id"], "type": inp.type, "name": inp.name,
         "company": inp.company or "", "phone": inp.phone or "", "email": inp.email or "",
-        "address": inp.address or "", "tax_id": inp.tax_id or "", "tags": inp.tags or [],
+        "address": inp.address or "", "tax_id": clean_tax_id(inp.tax_id), "tags": inp.tags or [],
         "status": status, "assigned_id": inp.assigned_id, "notes": inp.notes or "",
         "birthday": inp.birthday or "", "lifecycle_stage": stage,
         "created_by": user["id"], "created_at": now_iso(),
@@ -104,6 +124,12 @@ async def update_contact(contact_id: str, inp: ContactUpdateInput, user: dict = 
     if inp.type is not None:
         _refuse_other_side(user, inp.type)
     updates = {k: v for k, v in inp.model_dump().items() if v is not None}
+    if "tax_id" in updates:
+        from shared.tax_id import tax_id_problem, clean_tax_id
+        _tax_problem = tax_id_problem(updates["tax_id"])
+        if _tax_problem:
+            raise HTTPException(status_code=400, detail=_tax_problem)
+        updates["tax_id"] = clean_tax_id(updates["tax_id"])
     if "type" in updates and updates["type"] not in CONTACT_TYPES:
         updates.pop("type")
     if "status" in updates and updates["status"] not in CONTACT_STATUS:

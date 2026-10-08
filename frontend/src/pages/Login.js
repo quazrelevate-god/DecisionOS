@@ -72,6 +72,8 @@ export default function Login() {
   // was never coming.
   const [otpTenant, setOtpTenant] = useState(_opened.get("tenant") || null);
   const [otpChoices, setOtpChoices] = useState(null);
+  // Audit A-03: proof the code was read back, for picking a company after it.
+  const [pickToken, setPickToken] = useState("");
   const [resendIn, setResendIn] = useState(0);
   const [invite, setInvite] = useState(null);
   /* B09 / B26 (2026-09-29) — an invite link has three states, and this screen
@@ -132,7 +134,9 @@ export default function Login() {
         const { data } = await api.get(`/auth/invite/${token}`);
         setInvite({ ...data, token });
         const start = await api.post(`/auth/invite/${token}/start`);
-        setOtpPhone(start.data.phone);
+        // Audit D-03: the invite answers with the masked number only; verify reads
+        // the real one from the invite, so this is just what the screen shows.
+        setOtpPhone(start.data.phone_masked || "");
         // The invite already names the workspace; carry it to verify.
         setOtpTenant(start.data.tenant_id || null);
         setOtpSent(true);
@@ -183,6 +187,14 @@ export default function Login() {
       finally { setBusy(false); }
       return;
     }
+    /* Audit A-03 — the server now answers every well-formed number alike
+       (it no longer says "no account"), so a number that cannot be an account
+       is caught here: accounts are Indian mobiles. */
+    if (!normIndianMobile(otpPhone)) {
+      setError("Enter a 10-digit Indian mobile number");
+      setBusy(false);
+      return;
+    }
     try {
       const { data } = await api.post("/auth/otp/request", { phone: otpPhone, ...(tenant ? { tenant_id: tenant } : {}) });
       if (data.ambiguous) {
@@ -190,13 +202,13 @@ export default function Login() {
         setOtpChoices(data.choices || []);
         return;
       }
-      setOtpChoices(null);
+      setOtpChoices(null); setPickToken("");
       setOtpTenant(data.tenant_id || tenant || null);
       setOtpSent(true);
       startResendTimer();
       const dev = devOtpFrom(data);
       if (dev) { toast.info(`Dev OTP: ${dev} (auto-filled)`); setOtpCode(dev); }
-      else toast.success("OTP sent to your mobile");
+      else toast.success(data.detail || "We've texted you a code");
     } catch (err) {
       const detail = formatApiError(err.response?.data?.detail) || "Failed";
       /* 2026-10-08 — "Change", then the same number again inside 30 seconds:
@@ -211,20 +223,26 @@ export default function Login() {
         setOtpSent(true);
         setResendIn(Number(wait[1]) || 30);
         toast.info("We sent you a code a moment ago — enter that one");
-      } else if (err.response?.status === 404 && !normIndianMobile(otpPhone)) {
-        /* 2026-10-08 — sign-in matches on the last ten digits, so 0000000000
-           or a US number came back "No account" with "Start a new company with
-           this number" under it — and sign-up then refused the same number.
-           Accounts are Indian mobiles; say that instead. */
-        setError("Enter a 10-digit Indian mobile number");
       } else setError(detail);
     }
     finally { setBusy(false); }
   };
-  /* The server's two refusals for a number it does not hold (auth_otp.py):
-     "No account is registered with this mobile number" and "This number is not
-     registered in the selected workspace". Matched on the words they share. */
+  /* The server's refusal for a company this number is not in (auth_otp.py).
+     Since audit A-03 it no longer says "no account" for an unknown number. */
   const unknownNumber = /not registered|no account is registered/i.test(error || "");
+
+  /* Audit A-03 — the second half of a many-company sign-in: the code was read
+     back and the companies are on screen; open the one they pick. */
+  const pickCompany = async (tenantId) => {
+    setError(""); setBusy(true);
+    try {
+      await loginWithOtp(otpPhone, "", tenantId, null, pickToken);
+      navigate(takeReturnTo() || "/", { replace: true });
+    } catch (err) {
+      setError(formatApiError(err.response?.data?.detail) || "Failed");
+      setOtpChoices(null); setPickToken(""); setResendIn(0);
+    } finally { setBusy(false); }
+  };
   const submitOtp = async (e, typedCode) => {
     /* B30 makes the event optional — six digits submits without one.
        MOBILE-2 keeps `replace`: the sign-in screen must not sit behind the
@@ -236,7 +254,11 @@ export default function Login() {
        "Incorrect OTP" -- only the dev auto-fill (which uses the button) got in. */
     e?.preventDefault?.(); setError(""); setBusy(true);
     const code = typeof typedCode === "string" ? typedCode : otpCode;
-    try { await loginWithOtp(otpPhone, code, otpTenant, invite?.token); navigate(takeReturnTo() || "/", { replace: true }); }
+    try {
+      const res = await loginWithOtp(otpPhone, code, otpTenant, invite?.token);
+      if (res?.choose) { setOtpChoices(res.choose); setPickToken(res.pick_token || ""); return; }
+      navigate(takeReturnTo() || "/", { replace: true });
+    }
     catch (err) {
       const detail = formatApiError(err.response?.data?.detail) || "Failed";
       /* 2026-10-08 — five wrong codes, or a code left past five minutes, and
@@ -509,10 +531,29 @@ export default function Login() {
                         here, and letting somebody edit it offered a change the
                         screen could not honour. */}
                     {!inviteToken && (
-                      <button type="button" onClick={() => { setOtpSent(false); setOtpCode(""); setError(""); setResendIn(0); setOtpTenant(null); setOtpChoices(null); }} data-testid="otp-change-number"
+                      <button type="button" onClick={() => { setOtpSent(false); setOtpCode(""); setError(""); setResendIn(0); setOtpTenant(null); setOtpChoices(null); setPickToken(""); }} data-testid="otp-change-number"
                         className="text-xs font-semibold uppercase text-foreground/70 underline-offset-2 hover:text-foreground hover:underline whitespace-nowrap ml-2 shrink-0">Change</button>
                     )}
                   </div>
+                  {/* Audit A-03 — a number in several companies: the code was
+                      right, and only now are its companies shown. */}
+                  {otpChoices && pickToken ? (
+                    <div className="space-y-2" data-testid="otp-workspace-picker">
+                      <p className="text-sm text-muted-foreground">
+                        This number is in more than one workspace. Which one are you signing in to?
+                      </p>
+                      {otpChoices.map((c) => (
+                        <button key={c.tenant_id} type="button" disabled={busy}
+                          onClick={() => pickCompany(c.tenant_id)}
+                          data-testid={`otp-workspace-${c.tenant_id}`}
+                          className="kr-pop flex w-full items-center justify-between rounded-pill px-4 py-3 text-left text-sm disabled:opacity-50">
+                          <span className="font-semibold">{c.tenant_name || "Workspace"}</span>
+                          {c.user_name && <span className="text-xs text-muted-foreground">as {c.user_name}</span>}
+                        </button>
+                      ))}
+                      {error && <p data-testid="auth-error" className="text-sm text-danger-600 font-semibold">{error}</p>}
+                    </div>
+                  ) : (<>
                   <div>
                     <label className={labelCls}>Enter 6-digit code</label>
                     <div className="mt-2">
@@ -543,6 +584,20 @@ export default function Login() {
                       <button type="button" onClick={requestOtp} disabled={busy} data-testid="otp-resend" className="font-semibold text-foreground/80 underline-offset-2 hover:text-foreground hover:underline">Didn't get it? Resend OTP</button>
                     )}
                   </div>
+                  {/* Audit A-03 — the server no longer says "no account", so
+                      the way to a new company (or back to an unfinished
+                      sign-up) is offered here, where a new person ends up. */}
+                  {!inviteToken && (
+                    <p className="text-center text-xs text-muted-foreground" data-testid="otp-new-here">
+                      {currentDraft() ? "Didn't finish signing up? " : "New to DecisionOS? "}
+                      <button type="button" data-testid="otp-start-company-from-code"
+                        onClick={() => navigate(currentDraft() ? "/signup" : `/signup?phone=${encodeURIComponent(otpPhone)}`)}
+                        className="font-semibold text-foreground/80 underline underline-offset-2 hover:text-foreground">
+                        {currentDraft() ? "Finish setting up your company" : "Start a company with this number"}
+                      </button>
+                    </p>
+                  )}
+                  </>)}
                 </>
               )}
             </form>

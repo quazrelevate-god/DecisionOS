@@ -47,7 +47,12 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
         roles_str=roles_str, cat_keys_str=cat_keys_str, pipe_keys_str=pipe_keys_str,
         members_line=members_line, pipe_desc=pipe_desc, cat_desc=cat_desc,
     )
-    prompt = f"Founder directive transcript:\n\"\"\"\n{transcript}\n\"\"\"\n"
+    # Audit C-13 (2026-10-08): the day it is, so "by Friday" can become a date.
+    from shared.due import IST
+    _today = datetime.now(timezone.utc).astimezone(IST)
+    prompt = (f"Today is {_today.strftime('%A')}, {_today.day} {_today.strftime('%B %Y')} "
+              f"({_today.date().isoformat()}, India).\n")
+    prompt += f"Founder directive transcript:\n\"\"\"\n{transcript}\n\"\"\"\n"
     if extra_context:
         # E3-08.1: attached content is UNTRUSTED third-party text -- neutralize + delimit it and
         # arm the system prompt with the injection guard so it's read as data, not instructions.

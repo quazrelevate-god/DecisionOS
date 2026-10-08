@@ -129,8 +129,10 @@ def test_otp_cooldown_is_per_tenant_scoped(with_test_db):
 
 
 # ---------------------------------------------------------------------------
-# Multi-tenant ambiguity: NO OTP is sent and NO tenant is leaked until the
-# caller disambiguates; verify without a tenant hint is a 409.
+# Audit A-03 (2026-10-08): a number in several workspaces names NONE of them
+# until its code is read back. It used to list them (and the person's name) to
+# anyone who typed the number. Now: one code, then the list, then a short-lived
+# pick token opens the chosen one. A forged or foreign pick token opens nothing.
 # ---------------------------------------------------------------------------
 def test_ambiguous_phone_no_leak(with_test_db):
     async def scenario(db):
@@ -139,19 +141,52 @@ def test_ambiguous_phone_no_leak(with_test_db):
             await _seed_member(db, uid="a1", tenant_id="tA", tenant_name="Alpha", phone="9991110000")
             await _seed_member(db, uid="b1", tenant_id="tB", tenant_name="Beta", phone="9991110000")
             resp = await aotp.request_otp(OtpRequestInput(phone="9991110000"))   # no tenant hint
-            rows_after_request = await db.otp_codes.count_documents({"phone": "9991110000"})
+            rows = await db.otp_codes.find({"phone": "9991110000"}, {"_id": 0, "tenant_id": 1}).to_list(10)
+            chosen = await aotp.verify_otp(OtpVerifyInput(phone="9991110000", code=CODE), Response())
             try:
-                await aotp.verify_otp(OtpVerifyInput(phone="9991110000", code=CODE), Response()); vstatus = None
+                await aotp.verify_otp(OtpVerifyInput(phone="9991110000", tenant_id="tB",
+                                                     pick_token="forged"), Response()); forged = None
             except HTTPException as e:
-                vstatus = e.status_code
-            return resp.get("ambiguous"), len(resp.get("choices") or []), rows_after_request, vstatus
+                forged = e.status_code
+            opened = await aotp.verify_otp(OtpVerifyInput(phone="9991110000", tenant_id="tB",
+                                                          pick_token=chosen["pick_token"]), Response())
+            return resp, [r["tenant_id"] for r in rows], chosen, forged, opened
         finally:
             restore()
 
-    ambiguous, n_choices, rows, vstatus = with_test_db(scenario)
-    assert ambiguous is True and n_choices == 2, "an ambiguous phone returns the workspace choices"
-    assert rows == 0, "NO OTP is sent for an ambiguous phone (no 'you're in workspace X' leak)"
-    assert vstatus == 409, "verifying without a tenant hint on an ambiguous phone is refused (409)"
+    resp, scopes, chosen, forged, opened = with_test_db(scenario)
+    assert resp.get("sent") is True and "choices" not in resp and "ambiguous" not in resp, \
+        "the request names no workspace"
+    assert "Alpha" not in str(resp) and "Beta" not in str(resp)
+    assert scopes == [aotp.ANY_COMPANY], "ONE code for the number, not one per workspace"
+    assert sorted(c["tenant_name"] for c in chosen["choose"]) == ["Alpha", "Beta"], \
+        "the workspaces are shown only after the code was right"
+    assert chosen.get("pick_token") and "token" not in chosen, "no session until one is picked"
+    assert forged == 401, "a forged pick token opens nothing"
+    assert opened["user"]["tenant_id"] == "tB", "the picked workspace opens"
+
+
+def test_an_unknown_number_hears_what_a_known_one_hears(with_test_db):
+    async def scenario(db):
+        restore = _patch(db)
+        try:
+            await _seed_member(db, uid="k1", tenant_id="tK", tenant_name="Known Co", phone="9991112222")
+            known = await aotp.request_otp(OtpRequestInput(phone="9991112222"))
+            unknown = await aotp.request_otp(OtpRequestInput(phone="9991113333"))
+            sent_rows = await db.otp_codes.count_documents({"phone": "9991113333"})
+            try:
+                await aotp.verify_otp(OtpVerifyInput(phone="9991113333", code="123456"), Response()); status = None
+            except HTTPException as e:
+                status = (e.status_code, e.detail)
+            return known, unknown, sent_rows, status
+        finally:
+            restore()
+
+    known, unknown, sent_rows, status = with_test_db(scenario)
+    strip = lambda r: {k: v for k, v in r.items() if k not in ("dev_otp", "dev_mode")}
+    assert strip(known) == strip(unknown), "same answer whether or not the number has an account"
+    assert sent_rows == 0, "nothing is texted to a number with no account"
+    assert status == (401, "Incorrect OTP"), "and a code for it is just a wrong code"
 
 
 # ---------------------------------------------------------------------------

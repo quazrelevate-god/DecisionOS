@@ -70,6 +70,13 @@ export function OverviewTab({ summary, revenue, expenses, assets, inventory, per
             trendLabel={`${tile.label}, ${tile.neutral ? "running total" : "per interval"} over ${trendSpan}`} />
         ))}
       </div>
+      {/* Audit F-05 (2026-10-08) — GST on supplier bills is not a cost when it
+          can be claimed back; it is kept out of stock cost and shown here. */}
+      {(totals.gst_input_credit || 0) > 0 && (
+        <p className="text-xs text-slate-600" data-testid="overview-gst-input-credit">
+          GST you can claim back on supplier bills (input credit): <strong>{f(totals.gst_input_credit)}</strong>
+        </p>
+      )}
       {/* Audit 2026-10-08 — foreign invoices with no exchange rate are not in these figures. */}
       <NeedsRateNote rows={totals.needs_rate} testid="overview-needs-rate" />
       {m.truncated && p.days && (

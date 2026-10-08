@@ -51,6 +51,62 @@ async def _split_three(choices):
     return await split_by_membership(db, choices)
 
 
+# --- Audit A-03 (2026-10-08): the sign-in page says nothing about a number to
+# somebody who cannot read its texts. -----------------------------------------
+# It used to: "No account is registered with this mobile number" for a
+# stranger's number and a code for a customer's, and for a number in two
+# companies it listed both companies and the person's name before any code.
+# Anyone could type numbers and learn who uses DecisionOS, where, and under
+# what name. Now an unknown number gets the same answer as a known one (no code
+# goes out), a number in several companies is texted ONE code, and the
+# companies are shown only after that code is read back -- to the person
+# holding the phone.
+ANY_COMPANY = "login:any"          # the OTP scope for "which company comes after"
+SENT = "If this number has an account, we've texted it a code."
+_PICK_PURPOSE = "login_pick"
+_PICK_TTL_S = 600
+
+
+def _pick_key():
+    import hashlib
+    from config import JWT_SECRET
+    return hashlib.sha256(f"{JWT_SECRET}|{_PICK_PURPOSE}".encode()).hexdigest()
+
+
+def _issue_pick_token(norm: str) -> str:
+    """'This browser read a code texted to `norm`' -- good for ten minutes, for
+    choosing which of its companies to open, and for nothing else."""
+    import jwt
+    from datetime import timedelta
+    from config import JWT_ALGORITHM
+    now = datetime.now(timezone.utc)
+    return jwt.encode({"sub": norm, "purpose": _PICK_PURPOSE, "iat": now,
+                       "exp": now + timedelta(seconds=_PICK_TTL_S)}, _pick_key(), algorithm=JWT_ALGORITHM)
+
+
+def _read_pick_token(token) -> str:
+    import jwt
+    from config import JWT_ALGORITHM
+    if not token or not isinstance(token, str):
+        return ""
+    try:
+        payload = jwt.decode(token, _pick_key(), algorithms=[JWT_ALGORITHM])
+    except Exception:
+        return ""
+    sub = payload.get("sub")
+    return sub if payload.get("purpose") == _PICK_PURPOSE and isinstance(sub, str) else ""
+
+
+def _sent(resp: dict) -> dict:
+    """One shape for every 'code sent' answer: no company id rides along, so a
+    one-company number, a many-company number and an unknown one look alike."""
+    out = {"sent": True, "detail": SENT}
+    if resp.get("dev_otp"):          # a test backend only (DEV_OTP_IN_RESPONSE)
+        out["dev_mode"] = True
+        out["dev_otp"] = resp["dev_otp"]
+    return out
+
+
 @router.post("/auth/otp/request")
 async def request_otp(inp: OtpRequestInput):
     norm = _norm_phone(inp.phone)
@@ -63,7 +119,8 @@ async def request_otp(inp: OtpRequestInput):
     from services.auth.phone import find_tenant_choices_for_phone
     choices = await find_tenant_choices_for_phone(db, norm)
     if not choices:
-        raise HTTPException(status_code=404, detail="No account is registered with this mobile number")
+        # Audit A-03: the same answer as a real number. Nothing is sent.
+        return {"sent": True, "detail": SENT}
     # Invited but not yet in: only the invite link opens those (see INVITE_FIRST).
     # Removed or suspended: told so, and no code is sent (JOURNEY-1).
     live, pending, gone = await _split_three(choices)
@@ -85,25 +142,12 @@ async def request_otp(inp: OtpRequestInput):
         raise HTTPException(status_code=403, detail=INVITE_FIRST if pending or not gone else _no_longer(gone))
     choices = live
     if len(choices) == 1:
-        # Single-tenant fast path: keeps backward compat with every
-        # existing OTP client that doesn't know about tenant_id yet.
-        return await _issue_otp(norm, inp.phone, tenant_id=choices[0]["tenant_id"])
-    # Multi-tenant collision: the caller must disambiguate. We do NOT
-    # send an OTP — sending one and picking a tenant at verify would
-    # leak "you're registered in workspace X" (workspace_name is a
-    # low-sensitivity leak but still avoidable) and would let the
-    # attacker learn the workspace list of an arbitrary phone.
-    # HTTP 200 with an ambiguity payload keeps the flow simple; the
-    # frontend just re-POSTs with tenant_id filled in.
-    return {
-        "ambiguous": True,
-        "detail": "This number is registered in multiple workspaces. Choose one to continue.",
-        "choices": [
-            {"tenant_id": c["tenant_id"], "tenant_name": c["tenant_name"],
-             "user_name": c["user_name"]}
-            for c in choices
-        ],
-    }
+        return _sent(await _issue_otp(norm, inp.phone, tenant_id=choices[0]["tenant_id"]))
+    # Several companies: ONE code, and the list comes after it is read back
+    # (verify answers {"choose": [...], "pick_token"}). Listing them here,
+    # before any code, handed the company names and the person's name to
+    # anyone who typed the number (audit A-03).
+    return _sent(await _issue_otp(norm, inp.phone, tenant_id=ANY_COMPANY))
 
 
 def _mask_phone(phone: str) -> str:
@@ -153,14 +197,28 @@ async def invite_start(token: str):
             raise
         resp = {"sent": True, "dev_mode": False, "tenant_id": user["tenant_id"],
                 "detail": "We've already texted you a code — check your messages."}
-    resp["phone"] = phone  # returned so the invitee's device can verify
+    # Audit D-03 (2026-10-08): the MASKED number only. This returned the full
+    # number to anyone holding the link — and the link is made to be forwarded
+    # on WhatsApp. Verify reads the number from the invite itself now.
+    resp.pop("phone", None)
+    resp["phone_masked"] = _mask_phone(phone)
     resp["name"] = user.get("name")
     return resp
 
 
 @router.post("/auth/otp/verify")
 async def verify_otp(inp: OtpVerifyInput, response: Response):
-    norm = _norm_phone(inp.phone)
+    # Audit D-03: an invite names its own member, so the number comes from it
+    # (the invite page is never given the full number to send back).
+    invite_user = None
+    if inp.invite_token:
+        invite_user = await db.users.find_one(
+            {"invite_token": inp.invite_token, "wa_phone_obsolete": {"$ne": True}}, {"_id": 0})
+        if not invite_user:
+            raise HTTPException(status_code=400, detail="This invite link is invalid or has already been used")
+        norm = invite_user.get("phone_norm") or _norm_phone(invite_user.get("phone", ""))
+    else:
+        norm = _norm_phone(inp.phone)
     if len(norm) < 10:
         raise HTTPException(status_code=400, detail="Enter a valid mobile number")
     # FIX-003-A (S2-03): resolve which tenant the OTP was issued for
@@ -170,15 +228,10 @@ async def verify_otp(inp: OtpVerifyInput, response: Response):
     from services.auth.phone import find_tenant_choices_for_phone
     choices = await find_tenant_choices_for_phone(db, norm)
     if not choices:
-        raise HTTPException(status_code=404, detail="Account not found")
-    invite_user = None
-    if inp.invite_token:
+        # Audit A-03: a number with no account hears what a wrong code hears.
+        raise HTTPException(status_code=401, detail="Incorrect OTP")
+    if invite_user:
         # The invite link names its own workspace and member.
-        invite_user = await db.users.find_one(
-            {"invite_token": inp.invite_token, "phone_norm": norm, "wa_phone_obsolete": {"$ne": True}},
-            {"_id": 0})
-        if not invite_user:
-            raise HTTPException(status_code=400, detail="This invite link is invalid or has already been used")
         _exp = invite_user.get("invite_expires_at")
         if _exp and datetime.now(timezone.utc) > datetime.fromisoformat(_exp):
             raise HTTPException(status_code=410, detail="This invite link has expired — ask your admin to resend")
@@ -194,8 +247,18 @@ async def verify_otp(inp: OtpVerifyInput, response: Response):
         if inp.tenant_id and any(c["tenant_id"] == inp.tenant_id for c in pending):
             raise HTTPException(status_code=403, detail=INVITE_FIRST)
         choices = live
+    picked_by_proof = False
     if invite_user:
         target = choices[0]
+    elif inp.pick_token and inp.tenant_id:
+        # The second half of a many-company sign-in: the code was read back a
+        # moment ago (pick token); now open the company they chose.
+        if _read_pick_token(inp.pick_token) != norm:
+            raise HTTPException(status_code=401, detail="That took too long — send yourself a new code.")
+        target = next((c for c in choices if c["tenant_id"] == inp.tenant_id), None)
+        if not target:
+            raise HTTPException(status_code=404, detail="Account not found in the selected workspace")
+        picked_by_proof = True
     elif inp.tenant_id:
         target = next((c for c in choices if c["tenant_id"] == inp.tenant_id), None)
         if not target:
@@ -203,27 +266,20 @@ async def verify_otp(inp: OtpVerifyInput, response: Response):
     elif len(choices) == 1:
         target = choices[0]
     else:
-        # Multi-tenant match with no tenant hint — same ambiguity as
-        # /request, surface it the same way so the frontend can pick.
-        # 409 (not 400) because the request was well-formed; the state
-        # of the world is what forces disambiguation.
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "code": "ambiguous_tenant",
-                "message": "This number is registered in multiple workspaces. Include tenant_id in the request.",
-                "choices": [
-                    {"tenant_id": c["tenant_id"], "tenant_name": c["tenant_name"],
-                     "user_name": c["user_name"]}
-                    for c in choices
-                ],
-            },
-        )
+        # Several companies and none named: the one code sent for them all is
+        # checked, and only THEN are the companies shown (audit A-03).
+        await consume_otp(norm, ANY_COMPANY, inp.code)
+        return {
+            "choose": [{"tenant_id": c["tenant_id"], "tenant_name": c["tenant_name"],
+                        "user_name": c["user_name"]} for c in choices],
+            "pick_token": _issue_pick_token(norm),
+        }
     tenant_id = target["tenant_id"]
     # The code check lives in services.otp so the one other place that has to
     # prove "this really is you" — changing your own sign-in email with no
     # password to confirm it — asks in exactly the same way (2026-09-16).
-    await consume_otp(norm, tenant_id, inp.code)
+    if not picked_by_proof:
+        await consume_otp(norm, tenant_id, inp.code)
     # FIX-003-A: fetch the exact user in the chosen tenant. Even if
     # target["user_id"] is populated from the choices list, re-fetch
     # so we get the full user record (roles, name, avatar, etc.) and

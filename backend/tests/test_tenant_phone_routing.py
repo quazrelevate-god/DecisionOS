@@ -378,9 +378,12 @@ class TestOtpHandlerContract:
         assert "consume_otp(norm, tenant_id" in src, (
             "verify_otp must check the code for the tenant it just resolved"
         )
-        # Explicit 409 for cross-tenant ambiguity.
-        assert 'status_code=409' in src
-        assert '"ambiguous_tenant"' in src
+        # Audit A-03: several workspaces and none named -> the shared code is
+        # checked, THEN the list is returned with a pick token (no more 409
+        # listing the workspaces to whoever asked).
+        assert 'consume_otp(norm, ANY_COMPANY, inp.code)' in src
+        assert '"choose"' in src and '"pick_token"' in src
+        assert '"ambiguous_tenant"' not in src
 
         checker = inspect.getsource(consume_otp)
         assert 'key = {"phone": norm, "tenant_id": tenant_id}' in checker, (
@@ -395,8 +398,9 @@ class TestOtpHandlerContract:
         import inspect
         import server
         src = inspect.getsource(_shim_request_otp)
-        assert '"ambiguous": True' in src
-        assert '"choices"' in src
+        # Audit A-03: no workspace list before a code -- one code for them all.
+        assert '"ambiguous": True' not in src
+        assert 'tenant_id=ANY_COMPANY' in src
         # And the single-tenant fast path is preserved.
         assert 'len(choices) == 1' in src
 

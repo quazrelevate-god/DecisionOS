@@ -253,10 +253,12 @@ def test_a_number_live_elsewhere_still_signs_in_there_while_this_invite_waits(wi
                                          "role": "sales", "status": "active", "permissions": []})
         await _add("Priya", "9820070002")
         sent = await aotp.request_otp(OtpRequestInput(phone="9820070002"))
-        return sent
-    sent = _run(with_test_db, body)
-    assert sent.get("tenant_id") == OTHER and not sent.get("ambiguous"), \
-        "no picker offering the workspace they haven't joined yet"
+        rows = await db.otp_codes.find({"phone": "9820070002"}, {"_id": 0, "tenant_id": 1}).to_list(10)
+        return sent, [r["tenant_id"] for r in rows]
+    sent, scopes = _run(with_test_db, body)
+    # Audit A-03: the answer names no company; the code is for the one they're in.
+    assert sent.get("sent") is True and not sent.get("ambiguous") and "tenant_id" not in sent
+    assert scopes == [OTHER], "no picker offering the workspace they haven't joined yet"
 
 
 # ---------------------------------------------------------------------------

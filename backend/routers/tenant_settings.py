@@ -18,7 +18,7 @@ from core import (
     DEFAULT_ROLES, now_iso, log_activity, normalize_lexicon, normalize_operating_model,
     tenant_role_keys,
 )
-from models.tenant import TenantUpdateInput, InviteInput
+from models.tenant import TenantUpdateInput, InviteInput, InvoiceLogoInput
 from services.ai.generators import (
     ai_generate_lexicon, backfill_operating_model, normalize_finance_categories,
 )
@@ -286,6 +286,14 @@ async def update_tenant(inp: TenantUpdateInput, user: dict = Depends(require_per
         v = getattr(inp, f)
         if v is not None:
             updates[f] = v.strip() if isinstance(v, str) else v
+    # Audit B-12 (2026-10-08): invoice defaults.
+    if inp.payment_terms_days is not None:
+        updates["payment_terms_days"] = int(inp.payment_terms_days)
+    if inp.default_gst_rate is not None:
+        from services.invoicing import GST_RATES
+        if float(inp.default_gst_rate) not in [float(r) for r in GST_RATES]:
+            raise HTTPException(status_code=400, detail="Pick a GST rate: " + ", ".join(f"{r:g}%" for r in GST_RATES))
+        updates["default_gst_rate"] = float(inp.default_gst_rate)
     if inp.currency is not None:
         updates["currency"] = inp.currency.strip().upper()
     if inp.products is not None:
@@ -295,6 +303,58 @@ async def update_tenant(inp: TenantUpdateInput, user: dict = Depends(require_per
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": updates})
     await log_activity(user["tenant_id"], user["id"], "company_updated", f"{user['name']} updated company details")
     return await db.tenants.find_one({"id": user["tenant_id"]}, TENANT_PUBLIC)
+
+
+# --- Audit B-12 (2026-10-08): the logo on the company's invoices --------------
+# Kept in its own collection, not on the tenant: the tenant document rides on
+# every /auth/me, and a picture there would be downloaded on every page load.
+_LOGO_TYPES = {"image/png", "image/jpeg"}
+_LOGO_MAX = 250_000   # bytes, decoded
+
+
+def _decode_logo(data_url: str):
+    import base64
+    import re as _re
+    m = _re.fullmatch(r"data:(image/(?:png|jpeg));base64,([A-Za-z0-9+/=\s]+)", (data_url or "").strip())
+    if not m or m.group(1) not in _LOGO_TYPES:
+        raise HTTPException(status_code=400, detail="Upload the logo as a PNG or JPG picture.")
+    try:
+        raw = base64.b64decode(m.group(2), validate=False)
+    except Exception:
+        raise HTTPException(status_code=400, detail="That picture couldn't be read. Try another file.")
+    if len(raw) > _LOGO_MAX:
+        raise HTTPException(status_code=400, detail="Keep the logo under 250 KB.")
+    sig_ok = raw.startswith(b"\x89PNG") if m.group(1) == "image/png" else raw.startswith(b"\xff\xd8")
+    if not sig_ok:
+        raise HTTPException(status_code=400, detail="Upload the logo as a PNG or JPG picture.")
+    return m.group(1), raw
+
+
+@router.put("/tenant/invoice-logo")
+async def put_invoice_logo(inp: InvoiceLogoInput, user: dict = Depends(require_perm("team_manage"))):
+    ctype, raw = _decode_logo(inp.data_url)
+    import base64
+    await db.tenant_assets.update_one(
+        {"tenant_id": user["tenant_id"], "kind": "invoice_logo"},
+        {"$set": {"tenant_id": user["tenant_id"], "kind": "invoice_logo", "content_type": ctype,
+                  "data": base64.b64encode(raw).decode(), "updated_at": now_iso()}}, upsert=True)
+    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"has_invoice_logo": True}})
+    return {"ok": True}
+
+
+@router.get("/tenant/invoice-logo")
+async def get_invoice_logo(user: dict = Depends(get_current_user)):
+    row = await db.tenant_assets.find_one({"tenant_id": user["tenant_id"], "kind": "invoice_logo"}, {"_id": 0})
+    if not row:
+        raise HTTPException(status_code=404, detail="No logo yet")
+    return {"data_url": f"data:{row['content_type']};base64,{row['data']}"}
+
+
+@router.delete("/tenant/invoice-logo")
+async def delete_invoice_logo(user: dict = Depends(require_perm("team_manage"))):
+    await db.tenant_assets.delete_many({"tenant_id": user["tenant_id"], "kind": "invoice_logo"})
+    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"has_invoice_logo": False}})
+    return {"ok": True}
 
 
 

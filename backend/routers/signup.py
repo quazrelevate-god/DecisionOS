@@ -512,10 +512,34 @@ async def interview_start(inp: InterviewStartInput, request: Request):
         industry=industry,
     )
     session["pending_q"] = question
+    session["pending_why"] = OPENER_WHY.get(lang, OPENER_WHY["en-IN"])
     await db.signup_sessions.insert_one(session)
     return {"session_id": session["id"], "question": question,
             "why": OPENER_WHY.get(lang, OPENER_WHY["en-IN"]),
             "index": 1, "max": MAX_QUESTIONS, "language_code": lang}
+
+
+@router.get("/interview/{session_id}")
+async def interview_state(session_id: str, request: Request):
+    """Where an interview is, so a reload picks it up (audit A-10, 2026-10-08).
+
+    Reloading at question 3 went back to the language picker and started a NEW
+    session at question 1: the answers were on the server and nothing asked for
+    them. Shaped like /interview/answer so the client feeds it into the same
+    state. The answers themselves are NOT returned (docs/ONBOARDING_RESUME_ASK.md):
+    the client only needs the next question."""
+    await _guard_signup_endpoint(request, "interview_state")
+    s = await db.signup_sessions.find_one({"id": session_id}, {"_id": 0})
+    if not s:
+        raise HTTPException(status_code=404, detail="Interview session not found")
+    qa = s.get("qa") or []
+    lang = _norm_lang(s.get("language_code") or "en-IN")
+    if s.get("status") == "done" or not s.get("pending_q"):
+        return {"session_id": s["id"], "complete": True, "done": True, "index": len(qa),
+                "max": MAX_QUESTIONS, "language_code": lang}
+    return {"session_id": s["id"], "complete": False, "done": False, "question": s["pending_q"],
+            "why": s.get("pending_why") or "", "index": len(qa) + 1, "max": MAX_QUESTIONS,
+            "language_code": lang}
 
 
 @router.post("/interview/back")
@@ -565,7 +589,9 @@ async def interview_answer(inp: InterviewAnswerInput, request: Request):
         await db.signup_sessions.update_one({"id": s["id"]}, {"$set": {"qa": qa, "pending_q": None, "language_code": lang, "status": "done"}})
         return {"done": True, "index": len(qa), "max": MAX_QUESTIONS, "language_code": lang}
     question = (data.get("question") or "").strip() or "What part of the business slips through the cracks most often when things get busy?"
-    await db.signup_sessions.update_one({"id": s["id"]}, {"$set": {"qa": qa, "pending_q": question, "language_code": lang}})
+    await db.signup_sessions.update_one({"id": s["id"]}, {"$set": {"qa": qa, "pending_q": question,
+                                                                  "pending_why": (data.get("why") or "").strip(),
+                                                                  "language_code": lang}})
     return {"done": False, "question": question, "why": (data.get("why") or "").strip(),
             "index": len(qa) + 1, "max": MAX_QUESTIONS, "language_code": lang}
 

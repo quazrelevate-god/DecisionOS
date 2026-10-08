@@ -1,6 +1,6 @@
 {
-  "count": 376,
-  "sha": "33aa026a3091dfcaed57333753800547405b38c08fa7d1d1c2f164cb4f3f6ff1",
+  "count": 380,
+  "sha": "3fd9526b37ebc31d05b3445bee054d0d00e1d88c997f38c5d83e06790f2f858e",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -29,6 +29,7 @@
     "DELETE /api/tasks/{task_id}/execution-plan",
     "DELETE /api/tenant/ai-consent",
     "DELETE /api/tenant/ai-keys/{provider}",
+    "DELETE /api/tenant/invoice-logo",
     "DELETE /api/tenant/roles/{key}",
     "DELETE /api/users/{uid}/temp-grant/{perm}",
     "DELETE /api/users/{user_id}/avatar",
@@ -141,6 +142,7 @@
     "GET /api/pulse",
     "GET /api/revenue",
     "GET /api/routines/setup",
+    "GET /api/signup/interview/{session_id}",
     "GET /api/stock-used",
     "GET /api/support/tickets",
     "GET /api/support/tickets/{ticket_id}",
@@ -151,6 +153,7 @@
     "GET /api/tenant/ai-keys",
     "GET /api/tenant/ai-setup/status",
     "GET /api/tenant/approval-rules",
+    "GET /api/tenant/invoice-logo",
     "GET /api/tenant/plan",
     "GET /api/tenant/usage",
     "GET /api/users",
@@ -382,6 +385,7 @@
     "PUT /api/admin/ai-keys",
     "PUT /api/admin/tenants/{tenant_id}/retention",
     "PUT /api/tenant/ai-keys",
+    "PUT /api/tenant/invoice-logo",
     "PUT /api/tenant/owner-exclusions"
   ]
 }

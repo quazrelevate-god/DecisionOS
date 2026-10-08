@@ -148,7 +148,12 @@ function useTypewriter(text, durationMs) {
   return shown;
 }
 
-export function VoiceInterview({ profile, onComplete, onSkip, onBack }) {
+/* Audit A-10 (2026-10-08) — `resumeSession`: an interview already under way
+   (the draft kept its id). Reloading at question 3 used to open the language
+   picker and start again at question 1; the answers were on the server and
+   nothing asked for them. `onSession` tells the page the id the moment a new
+   interview starts, so the draft holds it before the first answer. */
+export function VoiceInterview({ profile, onComplete, onSkip, onBack, resumeSession, onSession }) {
   const [session, setSession] = useState(null);
   const [question, setQuestion] = useState("");
   const [why, setWhy] = useState("");
@@ -221,12 +226,33 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack }) {
 
   const setLangBoth = (code) => { setLang(code); langRef.current = code; };
 
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (!resumeSession || resumed.current) return;
+    resumed.current = true;
+    setPhase("starting");
+    (async () => {
+      try {
+        const { data } = await api.get(`/signup/interview/${resumeSession}`);
+        setLangBoth(data.language_code || "en-IN");
+        setSession(resumeSession);
+        if (data.complete) { onComplete(resumeSession, data.language_code || "en-IN"); return; }
+        await presentQuestion(data, data.language_code);
+      } catch {
+        setPhase("pick");   // gone or expired: start a fresh one
+      }
+    })();
+    // Once, on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const startInterview = async (code) => {
     setLangBoth(code);
     setPhase("starting");
     try {
       const { data } = await api.post("/signup/interview/start", { ...profile, language_code: code });
       setSession(data.session_id);
+      onSession?.(data.session_id, code);
       await presentQuestion(data, code);
     } catch {
       toast.error("The interviewer is unavailable — building from what we have");

@@ -6,6 +6,9 @@ from pydantic import BaseModel, Field
 
 class EmailCheckInput(BaseModel):
     email: str = Field(max_length=200)
+    # 2026-10-08 -- the founder's confirmed-mobile proof, when they have one:
+    # lets the answer say "taken -- by YOU" (a company they already created).
+    phone_token: Optional[str] = Field(default="", max_length=2000)
 
 
 class WebsiteIntelInput(BaseModel):

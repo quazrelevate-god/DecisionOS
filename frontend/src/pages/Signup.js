@@ -17,7 +17,7 @@ import { WebsiteIntel } from "./onboarding/WebsiteIntel";
 import { VoiceInterview } from "./onboarding/VoiceInterview";
 import { BuildReveal } from "./onboarding/BuildReveal";
 import { SignupConsent } from "./onboarding/SignupConsent";
-import { TERMS_VERSION, getSignupConsent, giveSignupConsent } from "../lib/legal";
+import { TERMS_VERSION, getSignupConsent, giveSignupConsent, clearSignupConsent } from "../lib/legal";
 
 const PHASES = [
   { key: "basics", label: "Basics" },
@@ -130,6 +130,11 @@ export default function Signup() {
     saveStep("progress", { phase: next, session_id: sid || "", language_code: lang || "" });
   };
 
+  /* 2026-10-08 — Back from the consent or website screen is one step back:
+     the last question (team size). It reopened the wizard on question one, the
+     mobile number, so Back meant walking every answer through again. */
+  const backToBasics = () => { setBasicsStart("team_size"); setResumed(false); goTo("basics"); };
+
   const interviewProfile = world && {
     company_name: form.company_name, founder_name: form.name, team_size: form.team_size,
     industry: world.industry, business_model: world.business_model,
@@ -208,7 +213,10 @@ export default function Signup() {
           ? ["phone", "company_name", "team_size"]                 // support_email may be skipped
           : ["phone", "name", "company_name", "email", "team_size"]);
         const firstGap = order.find((k) => !String(saved[k] || "").trim());
-        setBasicsStart(firstGap || "company_name");
+        /* 2026-10-08 — and with nothing missing, the LAST question (team
+           size, one tap to carry on), not the third: every answer is there, so
+           re-walking company and email asked them to re-confirm all of it. */
+        setBasicsStart(firstGap || "team_size");
         setResumed(true);
 
         /* B05 — AND COME BACK TO WHERE THEY WERE, not to the first question.
@@ -261,11 +269,11 @@ export default function Signup() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading]);
 
-  // Audit A-16: "team" — they chose to add their people first.
-  const enterApp = (then) => {
+  const enterApp = () => {
     clearDraft();
+    clearSignupConsent();   // this signup's agreement is on the account now
     localStorage.setItem("dos_welcome", (form.name || "").trim().split(/\s+/)[0] || "1");
-    navigate(then === "team" ? "/team?add=1" : "/brief");
+    navigate("/brief");
   };
 
   /* `relative isolate` on the root is load-bearing, not decoration. The art
@@ -458,10 +466,10 @@ export default function Signup() {
             {phase !== "basics" && !consented && (
               <SignupConsent
                 onAgree={() => { giveSignupConsent(); setConsented(true); }}
-                onBack={() => goTo("basics")} />
+                onBack={backToBasics} />
             )}
             {consented && phase === "website" && (
-              <WebsiteIntel companyName={form.company_name.trim()} onBack={() => goTo("basics")}
+              <WebsiteIntel companyName={form.company_name.trim()} onBack={backToBasics} saved={world}
                 onDone={(w) => { setWorld(w); goTo("interview", { world: w }); }} />
             )}
             {consented && phase === "interview" && (

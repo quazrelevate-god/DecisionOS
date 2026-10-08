@@ -340,6 +340,8 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
   // stage: 'building' → 'preview' (refine) → 'registering' → the app
   const [stage, setStage] = useState(savedBlueprint ? "preview" : "building");
   const [bp, setBp] = useState(savedBlueprint || null);   // may be regenerated
+  // 2026-10-08 — this founder already created this company (see the email check).
+  const [alreadyMine, setAlreadyMine] = useState("");
   // Audit 2026-10-08 — the pipelines, designed from the interview for the review.
   const [flow, setFlow] = useState(null);
   const [flowState, setFlowState] = useState("idle");      // idle | loading | ready | failed
@@ -492,32 +494,18 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
     }
   };
 
-  const confirmAndRegister = async (then) => {
+  const confirmAndRegister = async () => {
     if (!bp || stage === "registering") return;
     setStage("registering"); setError(""); setTakenEmail(false); setPhoneIssue(false);
     try {
-      // 2026-09-17 — ask once more, right before the long call: the email was
-      // checked back on the sign-in step and a founder can spend minutes in the
-      // interview. Cheap, and it turns "Couldn't create your workspace" into a
-      // sentence that says what to do.
-      // A second company brings no address of its own — there is nothing to
-      // check, and register identifies the founder by the confirmed mobile.
-      try {
-        if (payload.identity_known) throw new Error("second company — no address to check");
-        const { data: avail } = await api.post("/signup/check-email", { email: payload.email });
-        if (avail && avail.available === false) {
-          setTakenEmail(true);
-          setError("This email already has a workspace. Sign in instead, or use a different address — everything you have built is kept either way.");
-          setStage("preview");
-          return;
-        }
-      } catch (e) {
-        /* Still not fatal — register decides, and it decides correctly. But it
-           is no longer SILENT: if this is the check that cannot run, the
-           founder should learn it here rather than from a failure after the
-           long call. register's own answer replaces this line either way. */
-        console.debug("email re-check did not answer — register decides", e);
-      }
+      /* 2026-10-08 — NO EMAIL PRE-CHECK HERE ANY MORE. It asked /check-email
+         first and stopped on "taken" -- which is exactly the founder whose
+         first press DID create the company (the answer was lost, or they
+         closed the tab) coming back to finish: the screen said "This email
+         already has a workspace" and sent them to a sign-in page. Register
+         itself recognises them (same confirmed mobile, same company) and signs
+         them straight into what they built; anyone else gets its
+         email_registered answer, handled below with the same two doors. */
       const products = (bp.products || payload.products || []).filter((p) => (p.name || "").trim());
       /* 2026-09-29 — NAME THE DRAFT, SO REGISTER CAN CLOSE IT. Found walking
          signup in the browser: the workspace was created and the draft it came
@@ -544,6 +532,11 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
         phone: payload.phone, phone_token: payload.phone_token,
         // the company's own contact address (support, receipts) — not a sign-in
         ...(payload.support_email ? { support_email: payload.support_email } : {}),
+        /* 2026-10-08 — the Terms the founder ticked on the consent step. The
+           payload carried it and this list of fields left it out, so the
+           agreement was never recorded and the first thing inside the app was
+           the same Terms again ("Before you carry on"). */
+        ...(payload.terms_version ? { terms_version: payload.terms_version } : {}),
         industry: payload.industry || "General", description: payload.description,
         company_size: payload.company_size, currency: "INR",
         business_scale: { employees: payload.company_size },
@@ -570,7 +563,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
          open it. The routines that screen offered are not lost — My Work's
          RoutinesNudge asks for them in the app, where a founder can answer
          with their company in front of them. */
-      onEnter(then);
+      onEnter();
     } catch (e) {
       const detail = e.response?.data?.detail;
       /* 2026-09-17 — a founder whose first press was lost (the proxy giving up
@@ -621,8 +614,13 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
     (async () => {
       if (!payload?.email) return;
       try {
-        const { data } = await api.post("/signup/check-email", { email: payload.email });
+        const { data } = await api.post("/signup/check-email", {
+          email: payload.email, ...(payload.phone_token ? { phone_token: payload.phone_token } : {}) });
         if (!live || !data || data.available !== false) return;
+        /* 2026-10-08 — taken by THEM: they created this company already (the
+           first press went through; the answer did not come back, or they
+           closed the tab). Not an error -- Enter signs them straight in. */
+        if (data.yours) { setAlreadyMine(data.company || payload.company_name || "your company"); return; }
         setTakenEmail(true);
         setError("This email already has a workspace. Sign in instead, or use a different address — everything you have built is kept either way.");
       } catch (e) {
@@ -716,7 +714,10 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
   // length-gated), so this stays as the one place that lights up again if the
   // field ever comes back, rather than being deleted and re-derived later.
   const deptItems = bp?.departments || [];
-  const taskItems = (bp?.operational_tasks || []).map((t) => t.title).filter(Boolean).slice(0, 8);
+  /* 2026-10-08 — every task, not the first eight. A task the founder added
+     through "Tell Dex" lands at the end, so it was the ninth: the tile counted
+     it, the list did not show it, and the "new" glow had nothing to light. */
+  const taskItems = (bp?.operational_tasks || []).map((t) => t.title).filter(Boolean);
   const pillStagger = pillStaggerFor(deptItems.length + taskItems.length);
   // `still` means "paint the end state now": either the founder skipped, or
   // they have asked the OS not to animate. Every motion prop below reads it.
@@ -1140,7 +1141,8 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                        the blueprint, so they return to this screen with the
                        same OS they just built. */
                     <div className="mt-3 flex flex-wrap items-center gap-2.5">
-                      <Link to="/login" data-testid="build-error-signin"
+                      <Link to={payload?.phone ? `/login?phone=${encodeURIComponent(String(payload.phone).replace(/\D/g, "").slice(-10))}` : "/login"}
+                        data-testid="build-error-signin"
                         className="inline-flex h-10 items-center rounded-pill bg-kr-ink px-5 text-sm font-medium text-white">
                         Sign in instead
                       </Link>
@@ -1156,6 +1158,11 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
               )}
 
               <div className="flex flex-col items-start gap-3">
+                {alreadyMine && (
+                  <p data-testid="build-already-created" className="max-w-xl rounded-2xl bg-emerald-50/90 px-4 py-3 text-sm text-emerald-900 ring-1 ring-inset ring-emerald-100">
+                    You already created <strong className="font-semibold">{alreadyMine}</strong> — it's ready. Press the button below to go in.
+                  </p>
+                )}
                 {/* Excluded from the skip handler above: pressing this means
                     "let me in", not "stop the animation". It is never disabled
                     while the sequence runs. */}
@@ -1164,15 +1171,9 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                   className="kr-pop flex h-14 items-center gap-2 rounded-pill bg-kr-ink px-8 font-medium text-white disabled:opacity-50">
                   Looks good — Enter DecisionOS <ArrowRight size={18} weight="bold" />
                 </button>
-                {/* Audit A-16 (2026-10-08) — the teams above are empty until
-                    someone is in them, and nothing after sign-up asked for
-                    anybody. The same press, landing on Add member instead of
-                    the Desk; the Desk keeps asking until someone is added. */}
-                <button type="button" onClick={(e) => { e.stopPropagation(); confirmAndRegister("team"); }}
-                  disabled={refining || stage === "registering"} data-testid="build-confirm-team-button"
-                  className="text-sm font-medium text-foreground underline underline-offset-4 disabled:opacity-50">
-                  Enter and bring my team in first
-                </button>
+                {/* 2026-10-08 (Yokesh) — no "bring my team in first" here. Signing up
+                    is for the founder; they go straight in and invite people from
+                    inside (the Desk's "Bring your team in" card, Team › Add member). */}
                 {/* J2-12 (JOURNEY-1) — the server records this press as the
                     workspace's AI-processing consent (routers/auth.py). Since
                     2026-10-08 (Play audit C4) the founder has already agreed,

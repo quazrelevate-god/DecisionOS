@@ -8,7 +8,7 @@
  * It cannot be dismissed — the only other way out is signing out.
  */
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "./ui/dialog";
 import api, { formatApiError } from "../lib/api";
@@ -18,8 +18,14 @@ import { TERMS_VERSION, termsAccepted } from "../lib/legal";
 export default function TermsGate() {
   const { user, refreshMe, logout } = useAuth();
   const [busy, setBusy] = useState(false);
+  const navigate = useNavigate();
 
   if (!user || termsAccepted(user)) return null;
+
+  /* 2026-10-08 — Sign out here ended the session and stayed put: the page
+     under this screen went blank and nothing on it could be clicked until a
+     reload. Every other Sign out in the app goes to the sign-in page. */
+  const signOut = async () => { await logout(); navigate("/login", { replace: true }); };
 
   const agree = async () => {
     setBusy(true);
@@ -57,7 +63,7 @@ export default function TermsGate() {
           className="flex h-12 w-full items-center justify-center rounded-full bg-neutral-900 text-sm font-medium text-white disabled:opacity-50">
           {busy ? "Saving…" : "I agree"}
         </button>
-        <button type="button" onClick={logout} data-testid="terms-gate-signout"
+        <button type="button" onClick={signOut} data-testid="terms-gate-signout"
           className="text-center text-xs font-semibold text-slate-600 underline underline-offset-2">
           Sign out
         </button>

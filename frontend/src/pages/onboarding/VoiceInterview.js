@@ -64,7 +64,9 @@ const LangChip = ({ value, onChange, disabled }) => {
 };
 
 // Step 0 — the founder picks the interview language before Dex starts.
-const LanguagePick = ({ onPick, onSkip }) => (
+// 2026-10-08 — with a Back: this screen had only "Skip", so a founder who
+// wanted to fix their industry from here had no way to it but the browser.
+const LanguagePick = ({ onPick, onSkip, onBack }) => (
   <div className="kr-well mx-auto w-full max-w-2xl" data-testid="signup-lang-pick">
    <div className="kr-well__pane rounded-[1.75rem] p-6 sm:p-9">
     <p className="mb-3 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
@@ -90,7 +92,13 @@ const LanguagePick = ({ onPick, onSkip }) => (
         </motion.button>
       ))}
     </div>
-    <div className="mt-7">
+    <div className="mt-7 flex flex-wrap items-center gap-3">
+      {onBack && (
+        <button onClick={onBack} data-testid="lang-pick-back"
+          className="kr-pop flex h-10 items-center gap-1 rounded-pill px-4 text-xs font-medium">
+          <CaretLeft size={12} weight="bold" /> Back
+        </button>
+      )}
       <button onClick={onSkip} data-testid="interview-skip"
         className="kr-pop flex h-10 items-center rounded-pill px-5 text-xs font-medium text-muted-foreground">
         Skip the interview — build from what you have
@@ -295,7 +303,8 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack }) {
   const typedQuestion = useTypewriter(question, audioMs);
 
   if (phase === "pick") {
-    return <LanguagePick onPick={startInterview} onSkip={() => { stopAudio(); onSkip(null, langRef.current); }} />;
+    return <LanguagePick onPick={startInterview} onBack={onBack ? () => { stopAudio(); onBack(); } : undefined}
+      onSkip={() => { stopAudio(); onSkip(null, langRef.current); }} />;
   }
 
   return (

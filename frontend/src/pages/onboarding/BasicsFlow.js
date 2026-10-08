@@ -168,6 +168,10 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
      moment the code is confirmed: {workspaces, pending_invites, name}. Null
      until then; a founder whose number is new never sees this panel. */
   const [existing, setExisting] = useState(null);
+  /* 2026-10-08 — what the number reached, kept after Back. Back then Continue
+     on the same confirmed number skipped this panel (no second code is asked
+     for) and walked a returning founder into a fresh signup instead. */
+  const existingSeen = useRef(null);
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
   // The mobile step's second half: the number a code was texted to (""
@@ -219,7 +223,16 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
       setResendIn(30);
       if (devOtpFrom(data)) toast.info(`Dev OTP: ${devOtpFrom(data)} (auto-filled)`);
     } catch (e) {
-      setError(formatApiError(e.response?.data?.detail) || "Couldn't text a code. Try again in a moment.");
+      const detail = formatApiError(e.response?.data?.detail) || "Couldn't text a code. Try again in a moment.";
+      /* 2026-10-08 — Back from the code, then "Text me a code" again inside
+         30 seconds: the server keeps the code it just sent ("Please wait 17s…")
+         and this stayed on the number with nowhere to type it. Go to the boxes
+         and count down the resend, as the sign-in page does. */
+      const wait = e.response?.status === 429 && /please wait (\d+)s/i.exec(detail);
+      if (wait) {
+        setCodeFor(norm); setCode(""); setResendIn(Number(wait[1]) || 30);
+        toast.info("We sent you a code a moment ago — enter that one");
+      } else setError(detail);
     } finally {
       setSending(false);
     }
@@ -244,13 +257,22 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
       const runs = data.workspaces || [];
       const invited = data.pending_invites || [];
       if (runs.length || invited.length) {
-        setExisting({ workspaces: runs, pending_invites: invited, name: data.name || "", whole });
+        const found = { workspaces: runs, pending_invites: invited, name: data.name || "", whole };
+        existingSeen.current = found;
+        setExisting(found);
         return;
       }
       next(whole);
     } catch (e) {
       setCode("");
-      setError(formatApiError(e.response?.data?.detail) || "That code didn't work. Try again.");
+      const detail = formatApiError(e.response?.data?.detail) || "That code didn't work. Try again.";
+      // 2026-10-08 — a spent or expired code: say so and offer a new one now (Login.js).
+      const spent = /request an otp first|request a new|expired/i.test(detail);
+      setError(spent ? "That code can't be used any more — send yourself a new one below." : detail);
+      if (spent) setResendIn(0);
+      // The boxes were disabled while the code was checked, so the caret left
+      // them; put it back in the first one for the next try (Login.js does too).
+      requestAnimationFrame(() => document.querySelector('[data-testid="otp-box-0"]')?.focus());
     } finally {
       setSending(false);
     }
@@ -320,7 +342,11 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
     if (err) { setError(err); return; }
     if (step.confirmByCode) {
       const norm = normIndianMobile(v);
-      if (alreadyConfirmed(norm)) { next({ ...form, [step.key]: displayIndianMobile(norm) }); return; }
+      if (alreadyConfirmed(norm)) {
+        const seen = existingSeen.current;
+        if (seen && seen.whole.phone_verified_norm === norm) { setExisting(seen); return; }
+        next({ ...form, [step.key]: displayIndianMobile(norm) }); return;
+      }
       await sendCode(norm);
       return;
     }
@@ -369,6 +395,7 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
   };
   const createAnother = () => {
     const { whole, name } = existing;
+    existingSeen.current = null;   // chosen: a new company on this number
     const known = { known: true, name: name || form.name };
     onIdentity?.(known);
     setExisting(null);
@@ -550,6 +577,16 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
 
           {error && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} data-testid="signup-basics-error"
             className="mt-3 text-sm font-semibold text-danger-600">{error}</motion.p>}
+          {/* 2026-10-08 — "sign in instead" said where to go and gave no way
+              there: on a phone the header's Sign in is hidden, and the one under
+              the first question is gone by this step. The number is carried. */}
+          {/already runs a company here/.test(error || "") && (
+            <Link to={`/login?phone=${encodeURIComponent(form.phone_verified_norm || normIndianMobile(form.phone || ""))}`}
+              data-testid="signup-email-taken-signin"
+              className="mt-2 inline-block text-sm font-semibold text-foreground underline underline-offset-2">
+              Sign in instead
+            </Link>
+          )}
 
           {step.type !== "chips" && !existing && !(step.confirmByCode && codeFor) && (
             <div className="mt-8 flex items-center gap-4">
@@ -580,7 +617,10 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
         </motion.div>
       </AnimatePresence>
 
-      {idx > 0 && (
+      {/* 2026-10-08 — and on "you already run this" after the first question:
+          back() already knew that panel returns to the number, but the button
+          only showed from the second step, so a mistyped number had no way back. */}
+      {(idx > 0 || existing) && (
         <button onClick={back} data-testid="signup-basics-back"
           className="kr-pop mt-8 flex h-9 items-center gap-1.5 rounded-pill px-4 text-xs font-medium text-muted-foreground">
           <ArrowLeft size={14} weight="bold" /> Back

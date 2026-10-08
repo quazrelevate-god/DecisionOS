@@ -194,11 +194,14 @@ def test_the_desk_asks_until_someone_is_added():
     assert "<TeamNudge" in _src("pages/Desk.js")
 
 
-def test_sign_up_can_land_on_add_member():
+def test_sign_up_goes_straight_in_and_the_team_is_invited_from_inside():
+    # 2026-10-08 (Yokesh): no "bring my team in first" at the end of sign-up;
+    # the founder enters and invites from the Desk card / Team.
     s = _src("pages/Signup.js")
-    assert 'navigate(then === "team" ? "/team?add=1" : "/brief");' in s
+    assert "/team?add=1" not in s
     reveal = _src("pages/onboarding/BuildReveal.js")
-    assert 'confirmAndRegister("team")' in reveal and "onEnter(then);" in reveal
+    assert 'confirmAndRegister("team")' not in reveal and "Enter and bring my team in first" not in reveal
+    assert 'to="/team?add=1"' in _src("pages/desk/TeamNudge.jsx")
 
 
 def test_team_page_opens_add_member_from_the_link():

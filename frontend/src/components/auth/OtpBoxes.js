@@ -19,34 +19,71 @@
  *    so the founder's thumb does the same thing on every keyboard.
  * 3. THE BOXES DID NOT SAY WHAT THEY WERE. Six unlabelled inputs read as six
  *    unrelated fields to a screen reader.
+ *
+ * 2026-10-08 · THE RIGHT CODE, TYPED, WAS SENT WRONG ("Incorrect OTP").
+ * Founders typed the code from their SMS correctly and were told it was
+ * wrong — reproduced on the sign-in page by typing 422812 into empty boxes:
+ * the server received a different code and answered 401. Two causes:
+ *   a. Each keystroke rebuilt the code from `digits`, a copy taken at the last
+ *      render. A thumb (or a keyboard) delivering the next digit before React
+ *      re-rendered wrote it onto that stale copy, so the digit before it was
+ *      lost — and the six-digit auto-submit fired on a scrambled code.
+ *   b. The code was stored with its gaps squeezed out (`["4","","2"]` became
+ *      "42"), so a digit typed after an empty box slid into the wrong place.
+ * The boxes now keep their own six cells, updated synchronously through a ref
+ * on every keystroke (never from a render-time copy), and each cell keeps its
+ * position. `value` from the parent still wins when it changes from outside
+ * (a pasted code, the dev auto-fill, the screen clearing a refused code).
  */
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+
+const toCells = (v) => String(v || "").replace(/\D/g, "").slice(0, 6).split("").concat(Array(6).fill("")).slice(0, 6);
 
 export default function OtpBoxes({ value, onChange, disabled, testid = "otp-boxes" }) {
   const refs = useRef([]);
-  const digits = value.split("").concat(Array(6).fill("")).slice(0, 6);
+  const [cells, setCells] = useState(() => toCells(value));
+  const cellsRef = useRef(cells);           // the latest cells, ahead of any render
 
+  // The parent changed the code itself (paste handled upstream, dev auto-fill,
+  // a refused code cleared): take it. Our own edits come back equal and are ignored.
+  useEffect(() => {
+    if ((value || "") !== cellsRef.current.join("")) {
+      const c = toCells(value);
+      cellsRef.current = c;
+      setCells(c);
+    }
+  }, [value]);
+
+  const commit = (next) => {
+    cellsRef.current = next;
+    setCells(next);
+    onChange(next.join(""));
+  };
   const setAt = (i, d) => {
-    const next = digits.slice();
+    const next = cellsRef.current.slice();
     next[i] = d;
-    onChange(next.join("").replace(/\D/g, "").slice(0, 6));
+    commit(next);
   };
 
   const handleChange = (i) => (e) => {
-    const d = e.target.value.replace(/\D/g, "");
+    const cur = cellsRef.current;
+    let d = e.target.value.replace(/\D/g, "");
     /* B18 — an empty value is a DELETION, and on the keyboards that do not
        send a Backspace keydown it is the only signal we get. */
     if (!d) {
-      if (digits[i]) setAt(i, "");
+      if (cur[i]) setAt(i, "");
       else if (i > 0) { setAt(i - 1, ""); refs.current[i - 1]?.focus(); }
       return;
     }
+    // A digit typed into a box that already held one (the selection did not
+    // take, as when focus moves fast): keep the NEW digit, not both.
+    if (d.length === 2 && cur[i] && d.includes(cur[i])) d = d.replace(cur[i], "");
     if (d.length > 1) {
       // pasted / multi-char: fill from current box
       const chars = d.slice(0, 6 - i).split("");
-      const next = digits.slice();
+      const next = cur.slice();
       chars.forEach((c, k) => { next[i + k] = c; });
-      onChange(next.join("").replace(/\D/g, "").slice(0, 6));
+      commit(next);
       const focusIdx = Math.min(i + chars.length, 5);
       refs.current[focusIdx]?.focus();
       return;
@@ -56,8 +93,10 @@ export default function OtpBoxes({ value, onChange, disabled, testid = "otp-boxe
   };
 
   const handleKeyDown = (i) => (e) => {
+    const cur = cellsRef.current;
     if (e.key === "Backspace") {
-      if (digits[i]) setAt(i, "");
+      e.preventDefault();               // the cells are ours; the input's own delete would race them
+      if (cur[i]) setAt(i, "");
       else if (i > 0) { setAt(i - 1, ""); refs.current[i - 1]?.focus(); }
     } else if (e.key === "ArrowLeft" && i > 0) refs.current[i - 1]?.focus();
     else if (e.key === "ArrowRight" && i < 5) refs.current[i + 1]?.focus();
@@ -65,7 +104,7 @@ export default function OtpBoxes({ value, onChange, disabled, testid = "otp-boxe
 
   return (
     <div className="flex gap-2 justify-between" data-testid={testid}>
-      {digits.map((d, i) => (
+      {cells.map((d, i) => (
         <input
           key={`otp-${i}`}
           ref={(el) => (refs.current[i] = el)}

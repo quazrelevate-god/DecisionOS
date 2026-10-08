@@ -248,8 +248,23 @@ async def check_email(inp: EmailCheckInput, request: Request):
     # (S0-07, not shipped) makes enumeration economically infeasible.
     await _guard_signup_endpoint(request, "check_email")
     email = inp.email.strip().lower()
-    taken = bool(email) and bool(await db.users.find_one({"email": email}, {"_id": 1}))
-    return {"available": not taken}
+    owner = await db.users.find_one({"email": email}, {"_id": 0, "phone_norm": 1, "tenant_id": 1}) if email else None
+    if not owner:
+        return {"available": True}
+    # 2026-10-08 -- "taken" is usually the founder THEMSELVES: their first
+    # press created the company and the answer never arrived (or they closed
+    # the tab). With their confirmed-mobile proof, say so -- the screen then
+    # offers to finish (register signs them straight in) instead of an error.
+    # Only the holder of a fresh proof for THAT number learns this.
+    mine = False
+    if inp.phone_token:
+        from services.auth.phone_proof import read_phone_proof
+        norm = read_phone_proof(inp.phone_token)
+        mine = bool(norm) and norm == (owner.get("phone_norm") or "")
+    if mine:
+        t = await db.tenants.find_one({"id": owner.get("tenant_id")}, {"_id": 0, "name": 1})
+        return {"available": False, "yours": True, "company": (t or {}).get("name") or ""}
+    return {"available": False}
 
 
 # --------------------------------------------------------------------------

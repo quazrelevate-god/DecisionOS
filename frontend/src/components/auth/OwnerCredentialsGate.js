@@ -8,6 +8,7 @@
  * owner without it would be the one account nobody can recover by email.
  */
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "../ui/dialog";
 import api, { formatApiError } from "../../lib/api";
@@ -48,8 +49,12 @@ export default function OwnerCredentialsGate() {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const navigate = useNavigate();
 
   if (!needsOwnerCredentials(user)) return null;
+
+  // 2026-10-08 — to the sign-in page, as every other Sign out does (TermsGate.js).
+  const signOut = async () => { await logout(); navigate("/login", { replace: true }); };
 
   const save = async (e) => {
     e.preventDefault();
@@ -108,7 +113,7 @@ export default function OwnerCredentialsGate() {
             {busy ? "Saving…" : "Save and continue"}
           </button>
         </form>
-        <button type="button" onClick={logout} data-testid="owner-credentials-signout"
+        <button type="button" onClick={signOut} data-testid="owner-credentials-signout"
           className="text-center text-xs font-semibold text-slate-600 underline underline-offset-2">
           Sign out and do this later
         </button>

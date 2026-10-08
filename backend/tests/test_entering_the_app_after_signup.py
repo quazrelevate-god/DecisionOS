@@ -22,9 +22,8 @@ def _fe(*parts):
 
 def test_entering_goes_to_the_desk():
     signup = _fe("pages", "Signup.js")
-    # Audit A-16: "Enter and bring my team in first" lands on Add member;
-    # the ordinary press still goes to the Desk.
-    assert 'navigate(then === "team" ? "/team?add=1" : "/brief");' in signup
+    # 2026-10-08 (Yokesh): no team step at the end of sign-up -- straight in.
+    assert 'navigate("/brief");' in signup and "/team?add=1" not in signup
     app = _fe("App.js")
     assert '<Route path="/brief" element={<Navigate to="/inbox?scope=morning" replace />} />' in app
 
@@ -44,4 +43,7 @@ def test_nothing_else_raises_that_pane():
     import subprocess
     out = subprocess.run(["git", "grep", "-l", "dos_welcome", "--", "frontend/src"],
                          cwd=str(FE.parents[1]), capture_output=True, text=True).stdout.split()
-    assert sorted(Path(p).name for p in out) == ["Signup.js", "WelcomeOverlay.js"]
+    # AuthContext only CLEARS it on sign-out (2026-10-08), so it cannot raise the pane.
+    assert sorted(Path(p).name for p in out) == ["AuthContext.js", "Signup.js", "WelcomeOverlay.js"]
+    auth = _fe("context", "AuthContext.js")
+    assert 'localStorage.removeItem("dos_welcome")' in auth and 'setItem("dos_welcome"' not in auth

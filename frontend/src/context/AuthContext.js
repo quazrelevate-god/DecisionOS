@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import api, { SESSION_LOST_EVENT } from "../lib/api";
 import { setViewerIsOwner } from "../lib/aiConsent";
+import { clearSignupConsent } from "../lib/legal";
 import { carryOverLocalDrafts } from "../lib/decisionDrafts";
 import { clearAllDrafts } from "../lib/drafts";
 /* PUSH (2026-10-05) — a device token is per-install; drop THIS device's on
@@ -288,6 +289,13 @@ export function AuthProvider({ children }) {
        name him, and they go with him. */
     clearAllDrafts();
     forgetPersonOnDevice(user);
+    /* 2026-10-08 — the one-time "Welcome, <name>" screen leaves with them too.
+       A founder who signed up and signed out before seeing it left the flag
+       behind, and the next person to sign in on this device was greeted with
+       their name, full-screen, over a Desk they could not click. */
+    try { localStorage.removeItem("dos_welcome"); } catch (e) { /* storage unavailable */ }
+    // And a signup agreement left in this tab is not the next person's.
+    clearSignupConsent();
     /* PUSH — tell the backend to stop sending to this device, like the drafts
        above: local/outbound side first, before the session ends. Guarded and
        best-effort (no-op in a browser), so it never delays a sign-out. */

@@ -22,12 +22,13 @@
  * workspace never has it, and this renders nothing.
  */
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Eye } from "@phosphor-icons/react";
 import { useAuth } from "../context/AuthContext";
 
 export function DemoWorkspaceBanner() {
   const { tenant, logout } = useAuth();
+  const navigate = useNavigate();
   // 2026-10-05 (founder request) — the banner shows only on the FIRST entry
   // into the demo and then stays gone. Persisted in localStorage (per demo
   // tenant) so it survives app restarts, unlike the old per-session hide. The
@@ -96,7 +97,8 @@ export function DemoWorkspaceBanner() {
         </Link>
         <button
           type="button"
-          onClick={() => logout()}
+          /* 2026-10-08 — to the sign-in page, as every other Sign out does (TermsGate.js). */
+          onClick={async () => { await logout(); navigate("/login", { replace: true }); }}
           data-testid="demo-banner-leave"
           className="inline-flex min-h-touch items-center text-white/70 underline underline-offset-4 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 lg:min-h-0"
         >

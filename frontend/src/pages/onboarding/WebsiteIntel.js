@@ -33,13 +33,16 @@ const Eyebrow = ({ children }) => (
   <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{children}</p>
 );
 
-export function WebsiteIntel({ companyName, onDone, onBack }) {
+/* 2026-10-08 — `saved`: what this step answered last time (the founder came
+   Back from the interview). It used to open blank, so the industry and the
+   website they had just given were asked for again. */
+export function WebsiteIntel({ companyName, onDone, onBack, saved }) {
   const [stage, setStage] = useState("ask"); // ask | scanning | confirm | manual
-  const [url, setUrl] = useState("");
+  const [url, setUrl] = useState(saved?.website_url || "");
   const [scanLine, setScanLine] = useState(0);
   const [intel, setIntel] = useState(null);
-  const [industry, setIndustry] = useState("");
-  const [model, setModel] = useState("");
+  const [industry, setIndustry] = useState(saved?.industry || "");
+  const [model, setModel] = useState(saved?.business_model || "");
   const scanTimer = useRef(null);
   // Why the scan gave up, or "" when the founder chose manual themselves.
   const [failure, setFailure] = useState("");

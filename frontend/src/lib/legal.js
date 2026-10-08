@@ -30,4 +30,13 @@ export function giveSignupConsent() {
   try { window.sessionStorage.setItem(KEY, AI_CONSENT_VERSION); } catch { /* memory copy still holds */ }
 }
 
+/* 2026-10-08 — and it ends with the signup. It outlived it: the next person to
+   sign up in the same tab (after a sign-out) skipped the consent step and was
+   recorded as having agreed to the Terms. Cleared when signup finishes and on
+   sign-out. */
+export function clearSignupConsent() {
+  signupConsent = null;
+  try { window.sessionStorage.removeItem(KEY); } catch { /* nothing stored */ }
+}
+
 export const termsAccepted = (user) => user?.terms_accepted?.version === TERMS_VERSION;

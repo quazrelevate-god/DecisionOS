@@ -9,6 +9,8 @@ import { DeviceMobile, ArrowRight, ArrowLeft } from "@phosphor-icons/react";
 import { toast } from "sonner";
 // B11 — the dev OTP is ignored by a production build (lib/devOtp).
 import { devOtpFrom } from "../lib/devOtp";
+import { currentDraft } from "../lib/onboardingDraft";
+import { normIndianMobile } from "../lib/phone";
 
 // KM-66 — the demo takes the whole card, not a corner of it. The default
 // state is the sign-in form; a single professional invitation ("Try
@@ -195,22 +197,56 @@ export default function Login() {
       const dev = devOtpFrom(data);
       if (dev) { toast.info(`Dev OTP: ${dev} (auto-filled)`); setOtpCode(dev); }
       else toast.success("OTP sent to your mobile");
-    } catch (err) { setError(formatApiError(err.response?.data?.detail) || "Failed"); }
+    } catch (err) {
+      const detail = formatApiError(err.response?.data?.detail) || "Failed";
+      /* 2026-10-08 — "Change", then the same number again inside 30 seconds:
+         the server refuses a second code ("Please wait 17s…") because the first
+         one is still on its way and still good. The page showed that as an
+         error and stayed on the number, with nowhere to type the code that had
+         arrived. Go to the code boxes instead and count down the resend. */
+      const wait = err.response?.status === 429 && /please wait (\d+)s/i.exec(detail);
+      if (wait) {
+        setOtpChoices(null);
+        setOtpTenant(tenant || null);
+        setOtpSent(true);
+        setResendIn(Number(wait[1]) || 30);
+        toast.info("We sent you a code a moment ago — enter that one");
+      } else if (err.response?.status === 404 && !normIndianMobile(otpPhone)) {
+        /* 2026-10-08 — sign-in matches on the last ten digits, so 0000000000
+           or a US number came back "No account" with "Start a new company with
+           this number" under it — and sign-up then refused the same number.
+           Accounts are Indian mobiles; say that instead. */
+        setError("Enter a 10-digit Indian mobile number");
+      } else setError(detail);
+    }
     finally { setBusy(false); }
   };
   /* The server's two refusals for a number it does not hold (auth_otp.py):
      "No account is registered with this mobile number" and "This number is not
      registered in the selected workspace". Matched on the words they share. */
   const unknownNumber = /not registered|no account is registered/i.test(error || "");
-  const submitOtp = async (e) => {
+  const submitOtp = async (e, typedCode) => {
     /* B30 makes the event optional — six digits submits without one.
        MOBILE-2 keeps `replace`: the sign-in screen must not sit behind the
        Desk, where the phone's Back gesture would show it to somebody who has
-       just signed in. B18 adds the clearing of a refused code. */
+       just signed in. B18 adds the clearing of a refused code.
+       2026-10-08 — `typedCode`: the sixth digit submits the code AS TYPED.
+       This read `otpCode` from state, which had not caught up yet, so every
+       code typed by hand went to the server one digit short and came back
+       "Incorrect OTP" -- only the dev auto-fill (which uses the button) got in. */
     e?.preventDefault?.(); setError(""); setBusy(true);
-    try { await loginWithOtp(otpPhone, otpCode, otpTenant, invite?.token); navigate(takeReturnTo() || "/", { replace: true }); }
+    const code = typeof typedCode === "string" ? typedCode : otpCode;
+    try { await loginWithOtp(otpPhone, code, otpTenant, invite?.token); navigate(takeReturnTo() || "/", { replace: true }); }
     catch (err) {
-      setError(formatApiError(err.response?.data?.detail) || "Failed");
+      const detail = formatApiError(err.response?.data?.detail) || "Failed";
+      /* 2026-10-08 — five wrong codes, or a code left past five minutes, and
+         the server throws the code away ("Too many attempts. Request a new
+         OTP", then "Request an OTP first"). The resend link stayed behind its
+         30-second countdown all the same, so the only thing on screen to do
+         was wait. The code is gone: say so, and offer the new one now. */
+      const spent = /request an otp first|request a new|expired/i.test(detail);
+      setError(spent ? "That code can't be used any more — send yourself a new one below." : detail);
+      if (spent) setResendIn(0);
       /* B18 (2026-09-29) — A REFUSED CODE WAS LEFT IN THE BOXES. The founder
          then had to clear six of them by hand before they could try the one
          their phone had just received, on the screen where they are already
@@ -352,6 +388,19 @@ export default function Login() {
               <input data-testid="login-password-input" type="password" autoComplete="current-password"
                 className={inputCls} placeholder="Password" value={form.password} onChange={set("password")} required />
               {error && <p data-testid="auth-error" className="text-sm text-danger-600 font-semibold">{error}</p>}
+              {/* 2026-10-08 — everyone who signed up on this app signed up with
+                  their mobile, and has no password. The email they type here is
+                  real, so "Invalid email or password" reads as a wrong password;
+                  the way in is the other tab. */}
+              {error && (
+                <p className="text-xs text-muted-foreground" data-testid="login-password-mobile-hint">
+                  Signed up with your mobile number? There&rsquo;s no password on that account &mdash;{" "}
+                  <button type="button" onClick={() => { setLoginTab("otp"); setError(""); }} data-testid="login-use-mobile"
+                    className="font-semibold text-foreground/80 underline underline-offset-2 hover:text-foreground">
+                    sign in with a mobile code
+                  </button>.
+                </p>
+              )}
               <button type="submit" disabled={busy} data-testid="auth-submit-button" className="kr-lift flex h-12 w-full items-center justify-center rounded-pill bg-kr-ink text-sm font-medium text-white disabled:opacity-50">{busy ? "…" : "Sign in"}</button>
               {/* 2026-09-17 — where a person looks for it: under the password
                   they just failed to remember. */}
@@ -425,12 +474,20 @@ export default function Login() {
                       line of small print. Somebody standing at a locked door
                       is told where the open one is, with their number carried
                       across so they do not type it twice. */}
+                  {/* 2026-10-08 — a sign-up left half-way has no account yet, so this
+                      number is "not registered". If this browser holds that sign-up,
+                      the way forward is to finish it, not to start a new one. */}
                   {unknownNumber && !inviteToken && (
                     <button type="button" data-testid="otp-start-company"
-                      onClick={() => navigate(`/signup?phone=${encodeURIComponent(otpPhone)}`)}
+                      onClick={() => navigate(currentDraft() ? "/signup" : `/signup?phone=${encodeURIComponent(otpPhone)}`)}
                       className="kr-pop flex h-12 w-full items-center justify-center rounded-pill px-4 text-sm font-medium">
-                      Start a new company with this number
+                      {currentDraft() ? "Finish setting up your company" : "Start a new company with this number"}
                     </button>
+                  )}
+                  {unknownNumber && !inviteToken && currentDraft() && (
+                    <p className="text-center text-xs text-muted-foreground" data-testid="otp-unfinished-signup">
+                      You started signing up and didn't finish, so there's no account to sign in to yet — your answers are kept.
+                    </p>
                   )}
                   {/* While the workspaces are on screen they ARE the buttons:
                       a Send OTP beside them would only ask the question again. */}
@@ -471,7 +528,7 @@ export default function Login() {
                         onChange={(v) => {
                           setOtpCode(v);
                           if (error) setError("");
-                          if (v.length === 6 && !busy) submitOtp();
+                          if (v.length === 6 && !busy) submitOtp(null, v);
                         }} />
                     </div>
                   </div>

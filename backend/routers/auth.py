@@ -178,6 +178,10 @@ async def register(inp: RegisterInput, request: Request, response: Response,
         # without touching the request path.
         inp = RegisterInput(**{k: v for k, v in raw.items() if v is not None})
 
+    # 2026-10-08 — stored as typed, "  Signup Tester  " greeted the founder
+    # with the spaces in and named the workspace with them.
+    inp.company_name = (inp.company_name or "").strip()
+    inp.name = (inp.name or "").strip()
     if not inp.company_name or not inp.name:
         raise HTTPException(status_code=400, detail="Company name and your name are required")
 
@@ -713,7 +717,12 @@ async def login(inp: LoginInput, request: Request, response: Response):
             headers={"Retry-After": str(retry_after)},
         )
     user = await db.users.find_one({"email": email})
-    if not user or not verify_password(inp.password, user["password_hash"]):
+    # 2026-10-08 — a founder who signed up by mobile has NO password_hash at
+    # all. Reading it with [] raised KeyError and the Email & Password tab
+    # answered a 500 to the very people most likely to try it. No password is
+    # a wrong password: same 401, same counter, same audit row.
+    stored_hash = (user or {}).get("password_hash")
+    if not user or not stored_hash or not verify_password(inp.password, stored_hash):
         # FIX-006-D (S0-07): increment the counter, then audit.
         await _login_record_failure(ident)
         # FIX-004-F (RBAC-20): audit-log login failure so brute-force

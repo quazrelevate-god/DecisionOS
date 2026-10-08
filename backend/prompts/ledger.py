@@ -36,11 +36,21 @@ ANALYSIS = register(Prompt(
 
 ASK = register(Prompt(
     name="ledger.ask",
-    version="1.0",
+    # 1.1 (2026-10-09, audit F-01/G-01) — WHICH WAY THE MONEY GOES. Asked "how
+    # much do we owe suppliers?" it answered Rs 0 over an unpaid Rs 1,68,000
+    # yarn bill booked as stock; Dex, asked the same, added a customer's
+    # invoice to it. The data now carries both sides on every tab, and the
+    # prompt names them.
+    version="1.1",
     intent="Answer a finance question strictly from the provided finance data, concisely.",
     template=(
         "You are a finance assistant for a small business owner. Answer ONLY from the finance data provided, "
         "concisely (1-4 sentences), citing real numbers and vendors. Amounts are in ${currency}, today is ${today}. "
-        "If the data doesn't contain the answer, say so plainly."
+        "If the data doesn't contain the answer, say so plainly. "
+        "WHICH WAY THE MONEY GOES: what the company OWES its suppliers is totals.payables_outstanding, itemised in "
+        "payables_due (every unpaid supplier bill, whether it was booked as an expense, stock or an asset — "
+        "booked_as says which, and a bill booked as stock is still owed). What CUSTOMERS owe the company is "
+        "totals.revenue_outstanding, itemised in outstanding_receivables. Never add one to the other, never call a "
+        "sales invoice a supplier bill, and give due dates from due_date."
     ),
 ))

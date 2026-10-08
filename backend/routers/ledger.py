@@ -1466,7 +1466,7 @@ _SCOPE_FOCUS = {
 }
 
 
-async def _finance_context(tid: str, scope: str) -> dict:
+async def _finance_context(tid: str, scope: str, both_ways: bool = False) -> dict:
     currency = await _currency(tid)
     expenses_raw = await db.expenses.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(2000)
     expenses = as_base_rows(expenses_raw, currency)      # audit: one currency per total
@@ -1538,7 +1538,9 @@ async def _finance_context(tid: str, scope: str) -> dict:
         "by_category": _top(by_cat), "by_vendor": _top(by_vendor),
         "by_month": [{"month": m, "amount": round(by_month[m], 2)} for m in sorted(by_month)[-6:]],
     }
-    if scope in ("expenses", "brief", "overview"):
+    # Audit F-01 (2026-10-09): a QUESTION can be about either side whatever tab
+    # it is asked from, so /ledger/ask gets both lists (both_ways).
+    if scope in ("expenses", "brief", "overview") or both_ways:
         ctx["top_unpaid"] = sorted(unpaid, key=lambda x: -x["amount"])[:12]
         # Supplier bills not yet paid -- what the company owes, and when.
         ctx["payables_due"] = sorted(
@@ -1553,7 +1555,7 @@ async def _finance_context(tid: str, scope: str) -> dict:
     if scope in ("inventory", "brief"):
         ctx["inventory"] = [{"item": i.get("item"), "qty": _num(i.get("quantity")), "unit": i.get("unit"),
                              "value": _num(i.get("value")), "vendor": i.get("vendor_name")} for i in inventory[:30]]
-    if scope in ("revenue", "brief"):
+    if scope in ("revenue", "brief") or both_ways:
         ctx["top_customers"] = _top(by_customer)
         ctx["outstanding_receivables"] = sorted(unpaid_sales, key=lambda x: -x["amount"])[:12]
     return ctx
@@ -1696,15 +1698,21 @@ async def ledger_ask(inp: LedgerAskInput, user: dict = Depends(require_ledger)):
     if not q:
         raise HTTPException(status_code=400, detail="Ask a question")
     scope = inp.scope if inp.scope in SCOPES else "brief"
-    ctx = await _finance_context(user["tenant_id"], scope)
-    system = render("ledger.ask", currency=ctx['currency'], today=ctx['today'])
+    ctx = await _finance_context(user["tenant_id"], scope, both_ways=True)
     try:
-        chat = claude_chat(task="ledger.ask", session_id=f"ledger-ask-{user['tenant_id']}-{new_id()}", system_message=system).with_model(*model_for("ledger.ask"))
-        resp = await chat.send_message(UserMessage(text=f"Finance data:\n{json.dumps(ctx)}\n\nQuestion: {q}"))
-        answer = (resp or "").strip()
+        return await answer_finance_question(ctx, q, session_id=f"ledger-ask-{user['tenant_id']}-{new_id()}")
     except HTTPException:
         raise   # 2026-09-26: a deliberate refusal (451 consent) is not "AI is busy"
     except Exception as e:  # noqa: BLE001
         logger.warning(f"Ledger ask failed: {e}")
         raise HTTPException(status_code=502, detail="AI is busy, please try again")
+
+
+async def answer_finance_question(ctx: dict, question: str, session_id: str = "ledger-ask") -> dict:
+    """The Finance "Ask AI" answer from a finance context. Split out 2026-10-09
+    so the golden set can run it (evals/cases/finance.py, audit F-01)."""
+    system = render("ledger.ask", currency=ctx['currency'], today=ctx['today'])
+    chat = claude_chat(task="ledger.ask", session_id=session_id, system_message=system).with_model(*model_for("ledger.ask"))
+    resp = await chat.send_message(UserMessage(text=f"Finance data:\n{json.dumps(ctx)}\n\nQuestion: {question}"))
+    answer = (resp or "").strip()
     return {"answer": answer or "I couldn't find an answer in your finance data."}

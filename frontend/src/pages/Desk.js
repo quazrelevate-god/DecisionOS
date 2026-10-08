@@ -671,9 +671,11 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
      size of the words. Kept per tab, not as a running minimum, so a tab whose
      list shrinks gives its room back; cleared on resize with the rest. */
   const tabScales = useRef({});
+  // A-42: how many times tight has been given back at this screen size.
+  const released = useRef(0);
   useEffect(() => {
     if (!roomy) return undefined;
-    const onResize = () => { tabScales.current = {}; setTight(0); setMaxRows(PHONE_ROWS); setFitTick((n) => n + 1); };
+    const onResize = () => { tabScales.current = {}; released.current = 0; setTight(0); setMaxRows(PHONE_ROWS); setFitTick((n) => n + 1); };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [roomy]);
@@ -705,7 +707,17 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
        short by ~18px on every phone and the rows were scaled one notch too
        large. Read the gap the list is actually drawn with. */
     const gap = parseFloat(getComputedStyle(el).rowGap) || 1;
-    if (tight && avail > tightAt.current * 2) {      // the room came back
+    /* A-42 (2026-10-09) — GIVEN BACK ONCE. At 840x602 with decisions waiting the
+       card had 9px untight and 45px tight: 45 is more than twice 9, so the room
+       "came back", tight was released, the card fell to 9px, asked again — and
+       because the deficit still remembered two readings at 9px it asked in the
+       same commit, forever: "Maximum update depth exceeded", and the Desk did
+       not render. The release is for a reading taken while the page was still
+       filling in; it happens at most once per screen size (a resize resets it),
+       and after it a shortfall has to be seen afresh, on new frames. */
+    if (tight && avail > tightAt.current * 2 && released.current < 1) {      // the room came back
+      released.current += 1;
+      deficit.current = { avail: -1, hits: 0, asks: deficit.current.asks };
       setTight(0); setMaxRows(PHONE_ROWS); return;
     }
     /* WHAT A ROW NEEDS — not what it was given, and not what it admits to.

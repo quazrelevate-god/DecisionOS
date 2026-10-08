@@ -142,6 +142,28 @@ async def _plan(question: str, prev: Optional[dict], lang) -> dict:
     return _refine_plan(plan, question)
 
 
+# --- Audit G-01 (2026-10-09): WHICH WAY THE MONEY GOES -------------------------
+# "What do we owe suppliers, and when is it due?" was answered "2 outstanding
+# supplier invoices totalling Rs 13,18,000": the invoices entity holds BOTH
+# directions, nothing in the plan said which one was asked about, and the
+# Outstanding figure added a customer's Rs 11,50,000 (money owed TO us) to the
+# Rs 1,68,000 yarn bill. The side is read from the question by code, not left
+# to the planner, and when a question names neither the two are never summed.
+_SUPPLIER_SIDE = re.compile(
+    r"\b(suppliers?|vendors?|payables?|creditors?|purchase bills?|bills? to pay|to pay\b|"
+    r"(?:do |did |does |will )?we owe|we have to pay|owe (?:to )?(?:our )?(?:suppliers?|vendors?)|"
+    r"pay(?:ing)? (?:our )?(?:suppliers?|vendors?))", re.I)
+_CUSTOMER_SIDE = re.compile(
+    r"\b(customers?|buyers?|clients?|receivables?|debtors?|sales invoices?|owes? us|owed to us|"
+    r"owing us|to collect|collect(?:ion|ions)?\b|they owe|money (?:is |that is )?(?:coming )?in\b)", re.I)
+
+
+def money_side(question: str) -> str:
+    """'supplier', 'customer', or '' when the question names neither (or both)."""
+    s, c = bool(_SUPPLIER_SIDE.search(question or "")), bool(_CUSTOMER_SIDE.search(question or ""))
+    return "supplier" if s and not c else "customer" if c and not s else ""
+
+
 _OPEN_TASK_STATUSES = ("todo", "in_progress", "waiting", "review", "blocked")
 _WHO_WORKS = re.compile(
     r"\b(who(?:'s| is| are)? (?:working on|handling|doing|assigned to|responsible for)"
@@ -174,6 +196,15 @@ def _refine_plan(plan: dict, question: str) -> dict:
     if plan.get("primary_entity") in FINANCE_ENTITIES and _WHO_WORKS.search(question or ""):
         plan["primary_entity"] = "tasks"
         plan["needs_finance"] = False
+    # Audit G-01: which side of the books a money question is about.
+    side = money_side(question)
+    if side:
+        plan["money_side"] = side
+        # "What do we owe suppliers?" is the unpaid PURCHASE BILLS -- a bill
+        # booked as stock is not an expense row, so the expenses entity misses it.
+        if side == "supplier" and plan.get("primary_entity") == "expenses" and re.search(
+                r"\b(owe|owed|owing|due|payable|unpaid|outstanding|to pay)\b", ql):
+            plan["primary_entity"] = "invoices"
     # "pending" is not a task status; it means still open.
     if plan.get("primary_entity") == "tasks" and plan.get("status") == "pending":
         plan["status"] = "open"
@@ -642,26 +673,46 @@ async def _compute_invoices(ctx, plan, recs):
     st = plan.get("status")
     if st in ("paid", "unpaid", "partial"):
         filtered = [i for i in filtered if i.get("status") == st]
+    # Audit G-01: only the side the question is about.
+    side = plan.get("money_side") or ""
+    if side == "supplier":
+        filtered = [i for i in filtered if i.get("type") == "purchase_bill"]
+    elif side == "customer":
+        filtered = [i for i in filtered if i.get("type") != "purchase_bill"]
     # Audit 2026-10-08: totals in the company's currency (a foreign invoice
     # with no exchange rate is left out, never counted at face value).
     from shared.money import total_in_base
     base = await _currency(ctx["tid"])
+    _left = lambda i: _num(i.get("amount")) - _num(i.get("amount_paid"))   # noqa: E731
+    _open = [i for i in filtered if i.get("status") != "paid"]
     billed = total_in_base(filtered, base, lambda i: i.get("amount"))
-    outstanding = total_in_base([i for i in filtered if i.get("status") != "paid"], base,
-                                lambda i: _num(i.get("amount")) - _num(i.get("amount_paid")))
+    owed_to_us = total_in_base([i for i in _open if i.get("type") != "purchase_bill"], base, _left)
+    we_owe = total_in_base([i for i in _open if i.get("type") == "purchase_bill"], base, _left)
     for i in filtered[:300]:
         rows.append({"number": i.get("number") or "-", "party": i.get("contact_name") or "-",
                      "currency": i.get("currency") or base,
-                     "type": "Sales" if i.get("type") == "sales_invoice" else "Purchase",
+                     # Audit G-01: say which way the money goes, not "Sales"/"Purchase".
+                     "type": "Supplier bill (we owe)" if i.get("type") == "purchase_bill" else "Sales invoice (owed to us)",
                      "amount": round(_num(i.get("amount")), 2), "paid": round(_num(i.get("amount_paid")), 2),
                      "outstanding": round(_num(i.get("amount")) - _num(i.get("amount_paid")), 2),
                      "status": i.get("status"), "due": (i.get("due_date") or "")[:10]})
         cites.append({"type": "invoice", "title": f"{i.get('number') or 'Invoice'} · {i.get('contact_name') or ''}".strip(),
                       "id": i["id"], "deep_link": _deep_link("invoices", i), "date": (i.get("date") or "")[:10],
                       "confidence": "VERIFIED"})
-    kpis = [{"label": "Invoices", "value": len(filtered)},
-            {"label": "Billed", "value": round(billed, 2)},
-            {"label": "Outstanding", "value": round(outstanding, 2)}]
+    # Audit G-01: never one "Outstanding" across both directions -- what
+    # customers owe us and what we owe suppliers are separate figures.
+    if side == "supplier":
+        kpis = [{"label": "Supplier bills", "value": len(filtered)},
+                {"label": "Billed to us", "value": round(billed, 2)},
+                {"label": "We owe suppliers", "value": round(we_owe, 2)}]
+    elif side == "customer":
+        kpis = [{"label": "Sales invoices", "value": len(filtered)},
+                {"label": "Billed", "value": round(billed, 2)},
+                {"label": "Customers owe us", "value": round(owed_to_us, 2)}]
+    else:
+        kpis = [{"label": "Invoices & bills", "value": len(filtered)},
+                {"label": "Customers owe us", "value": round(owed_to_us, 2)},
+                {"label": "We owe suppliers", "value": round(we_owe, 2)}]
     columns = [{"key": "number", "label": "Number", "type": "text"},
                {"key": "party", "label": "Party", "type": "text"},
                {"key": "type", "label": "Type", "type": "text"},

@@ -41,6 +41,12 @@ class RegisterInput(BaseModel):
     roles: Optional[List[RoleItem]] = None
     products: Optional[List[ProductItem]] = None
     os_blueprint: Optional[dict] = None
+    # Audit 2026-10-08: the pipelines the founder SAW on the review screen
+    # (POST /signup/interview/flow) and the approval rules laid onto them.
+    # Taken as they are -- normalized and validated -- instead of a second AI
+    # design after register that could differ from what was shown.
+    operating_model: Optional[dict] = None
+    approval_actions: Optional[list] = None
     # FIX-001-D: optional draft_id to source wizard data from server-side
     # draft (prevents "user typed 7 steps then /register 500'd and lost
     # everything"). Client-provided values still win over draft values.

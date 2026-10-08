@@ -642,10 +642,16 @@ async def _compute_invoices(ctx, plan, recs):
     st = plan.get("status")
     if st in ("paid", "unpaid", "partial"):
         filtered = [i for i in filtered if i.get("status") == st]
-    billed = sum(_num(i.get("amount")) for i in filtered)
-    outstanding = sum(_num(i.get("amount")) - _num(i.get("amount_paid")) for i in filtered if i.get("status") != "paid")
+    # Audit 2026-10-08: totals in the company's currency (a foreign invoice
+    # with no exchange rate is left out, never counted at face value).
+    from shared.money import total_in_base
+    base = await _currency(ctx["tid"])
+    billed = total_in_base(filtered, base, lambda i: i.get("amount"))
+    outstanding = total_in_base([i for i in filtered if i.get("status") != "paid"], base,
+                                lambda i: _num(i.get("amount")) - _num(i.get("amount_paid")))
     for i in filtered[:300]:
         rows.append({"number": i.get("number") or "-", "party": i.get("contact_name") or "-",
+                     "currency": i.get("currency") or base,
                      "type": "Sales" if i.get("type") == "sales_invoice" else "Purchase",
                      "amount": round(_num(i.get("amount")), 2), "paid": round(_num(i.get("amount_paid")), 2),
                      "outstanding": round(_num(i.get("amount")) - _num(i.get("amount_paid")), 2),

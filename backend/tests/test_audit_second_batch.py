@@ -46,7 +46,8 @@ def books(monkeypatch):
                             "category": "Raw Materials"})
     d.inventory.docs.append({"id": "i1", "tenant_id": "t1", "item": "Cotton yarn", "quantity": 500, "unit": "kg",
                              "unit_cost": 336, "value": 168000, "currency": "INR"})
-    for mod in (inv, led):
+    import services.finance_words as fw
+    for mod in (inv, led, fw):
         monkeypatch.setattr(mod, "db", d)
     monkeypatch.setattr(inv, "log_activity", _noop)
     return d

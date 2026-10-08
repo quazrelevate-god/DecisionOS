@@ -22,7 +22,7 @@ import {
   AttachmentLink, CARD, EmptyNote, FIELD, LoadError, SMALL_INK, SMALL_PILL, SourceTag, TONE_CHIP, Tag, fmt,
 } from "./financeKit";
 import { latestEntryAt, daysSince, isInvoiceOverdue, overdueDays } from "./ledgerMath";
-import { BillsToPayPanel, InvoiceRowActions } from "./MoneyActions";
+import { BillsToPayPanel, InvoiceRowActions, NeedsRateNote } from "./MoneyActions";
 // J2-07 — the Date columns printed the stored "2026-09-22". shortDate reads it
 // back as a day ("22 Sep 2026"); the tables still SORT on the raw value.
 import { shortDate } from "../../lib/format";
@@ -199,7 +199,7 @@ const SORTS = [
   { value: "overdue", label: "Oldest awaiting" },
 ];
 
-export function RevenueTab({ data, loading, error, cur, onDelete, onChange, onPay, initialFilter = "all" }) {
+export function RevenueTab({ data, loading, error, cur, onDelete, onChange, onPay, onSetRate, initialFilter = "all" }) {
   const f = fmt(cur);
   const tt = data?.totals || {};
   const invoices = useMemo(() => data?.invoices || [], [data]);
@@ -231,7 +231,8 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, onPa
     else if (sortKey === "overdue") sorted.sort((a, b) => (daysSince(b.date) || 0) - (daysSince(a.date) || 0));
     return sorted;
   }, [invoices, statusFilter, sortKey]);
-  const filteredTotal = filtered.reduce((sum, s) => sum + (s.amount || 0), 0);
+  // Audit 2026-10-08: in the company's currency; no-rate foreign invoices left out.
+  const filteredTotal = filtered.reduce((sum, s) => sum + (("amount_base" in s ? s.amount_base : s.amount) || 0), 0);
 
   if (loading) {
     return (
@@ -284,12 +285,21 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, onPa
         </span>
       ) },
     { key: "amount", head: "Amount", role: "amount", align: "right", tdClass: "font-semibold tabular-nums text-slate-900",
-      cell: (s) => f(s.amount) },
+      // Audit 2026-10-08: an invoice in another currency shows its own amount,
+      // and its value in the company's currency (or that it has no rate yet).
+      cell: (s) => (s.currency && s.currency !== cur ? (
+        <span className="inline-flex flex-col items-end">
+          <span>{fmt(s.currency)(s.amount)}</span>
+          <span className="text-[11px] font-normal text-slate-500" data-testid={`revenue-base-${s.id}`}>
+            {s.amount_base != null ? `≈ ${f(s.amount_base)}` : "no rate yet"}
+          </span>
+        </span>
+      ) : f(s.amount)) },
     { key: "act", head: <span className="sr-only">Actions</span>, role: "action", align: "right",
       // Audit F-02/F-03: record a payment on it, or download it as a PDF.
       cell: (s) => (
         <span className="inline-flex items-center justify-end gap-1">
-          <InvoiceRowActions inv={{ ...s, currency: s.currency || cur }} onPay={onPay} />
+          <InvoiceRowActions inv={{ ...s, currency: s.currency || cur }} onPay={onPay} onSetRate={onSetRate} />
           <DeleteButton onClick={() => onDelete("invoice", s.id)} testid={`revenue-invoice-delete-${s.id}`} label="Delete invoice" />
         </span>
       ) },
@@ -301,7 +311,8 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, onPa
     { key: "method", head: "Method", role: "meta", tdClass: "text-slate-600", value: (p) => p.method, cell: (p) => p.method || "—" },
     { key: "ref", head: "Reference", role: "meta", tdClass: "text-slate-600",
       value: (p) => p.reference || p.invoice_number, cell: (p) => p.reference || p.invoice_number || "—" },
-    { key: "amount", head: "Amount", role: "amount", align: "right", tdClass: "font-semibold tabular-nums text-slate-900", cell: (p) => f(p.amount) },
+    { key: "amount", head: "Amount", role: "amount", align: "right", tdClass: "font-semibold tabular-nums text-slate-900",
+      cell: (p) => (p.currency && p.currency !== cur ? fmt(p.currency)(p.amount) : f(p.amount)) },
     { key: "act", head: <span className="sr-only">Actions</span>, role: "action", align: "right",
       cell: (p) => <DeleteButton onClick={() => onDelete("payment", p.id)} testid={`revenue-payment-delete-${p.id}`} label="Delete payment" /> },
   ];
@@ -316,6 +327,8 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, onPa
         <MoneyTile icon={WarningCircle} tone={overdueCount > 0 ? "rose" : "slate"} label="Outstanding" value={f(tt.outstanding || 0)}
           note={overdueCount > 0 ? `${overdueCount} overdue` : "Nothing overdue"} testid="kpi-outstanding" />
       </div>
+
+      <NeedsRateNote rows={tt.needs_rate} testid="revenue-needs-rate" />
 
       {overdueCount > 0 && (
         <button type="button" onClick={() => setStatusFilter("overdue")} data-testid="revenue-overdue-callout"
@@ -424,7 +437,7 @@ function CommittedPanel({ rows, cur, testid = "payables-committed" }) {
   );
 }
 
-export function ExpensesTab({ rows, loading, error, payables, cur, onDelete, onChange, onPay }) {
+export function ExpensesTab({ rows, loading, error, payables, cur, onDelete, onChange, onPay, onSetRate, needsRate }) {
   const { t } = useTranslation();
   const f = fmt(cur);
   const { user } = useAuth();
@@ -455,9 +468,25 @@ export function ExpensesTab({ rows, loading, error, payables, cur, onDelete, onC
         </Tag>
         )
       ) },
-    { key: "amount", head: t("finance.c_amount"), role: "amount", align: "right", tdClass: "font-semibold tabular-nums text-slate-900", cell: (e) => f(e.amount) },
+    // Audit 2026-10-08 — a bill in another currency shows its own amount and
+    // its value in the company's currency (or "no rate yet" and Set rate).
+    { key: "amount", head: t("finance.c_amount"), role: "amount", align: "right", tdClass: "font-semibold tabular-nums text-slate-900",
+      cell: (e) => (e.currency && e.currency !== cur ? (
+        <span className="inline-flex flex-col items-end">
+          <span>{fmt(e.currency)(e.amount)}</span>
+          <span className="text-[11px] font-normal text-slate-500" data-testid={`expense-base-${e.id}`}>
+            {e.amount_base != null ? `≈ ${f(e.amount_base)}` : "no rate yet"}
+          </span>
+        </span>
+      ) : f(e.amount)) },
     { key: "act", head: <span className="sr-only">Actions</span>, role: "action", align: "right",
-      cell: (e) => (
+      cell: (e) => ("amount_base" in e && e.amount_base == null && onSetRate ? (
+        <span className="flex items-center justify-end gap-1.5">
+          <button type="button" className={SMALL_PILL} data-testid={`expense-rate-${e.id}`}
+            onClick={() => onSetRate({ ...e, kind: "expense" })}>Set rate</button>
+          <DeleteButton onClick={() => onDelete(e.id)} testid={`expense-delete-${e.id}`} label="Delete expense" />
+        </span>
+      ) : (
         e.approval_status === "pending" && canApprove ? (
           <span className="flex items-center justify-end gap-1.5">
             <button type="button" className={SMALL_INK} data-testid={`expense-approve-${e.id}`}
@@ -466,10 +495,11 @@ export function ExpensesTab({ rows, loading, error, payables, cur, onDelete, onC
               onClick={() => decide(e, false)}>Reject</button>
           </span>
         ) : <DeleteButton onClick={() => onDelete(e.id)} testid={`expense-delete-${e.id}`} label="Delete expense" />
-      ) },
+      )) },
   ];
   return (
     <div className="space-y-5">
+      <NeedsRateNote rows={needsRate} testid="expenses-needs-rate" />
       {/* Audit F-02 — the supplier bills still unpaid, with a way to pay them. */}
       <BillsToPayPanel bills={payables?.open_invoices} total={payables?.totals?.payable_outstanding || 0} cur={cur} onPay={onPay} />
       <CommittedPanel rows={payables?.committed} cur={cur} />

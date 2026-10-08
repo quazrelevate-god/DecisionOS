@@ -161,9 +161,16 @@ async def _cash_flow_status(tid: str) -> dict:
     query: real field is `match_status ∈ {unmatched, partial}` (not
     the boolean `matched` the old code checked, which never existed)."""
     from services.finance_signals import _inv_remaining, _overdue_receivables, _unmatched_payments
-    overdue_rows, unmatched_rows = await asyncio.gather(
-        _overdue_receivables(tid), _unmatched_payments(tid))
-    overdue_receivables = round(sum(_inv_remaining(r) for r in overdue_rows), 2)
+    # The company's currency is read in the same side-by-side batch: totals are
+    # in it (audit 2026-10-08), and desk_summary's briefing uses it too.
+    overdue_rows, unmatched_rows, tenant_row = await asyncio.gather(
+        _overdue_receivables(tid), _unmatched_payments(tid),
+        db.tenants.find_one({"id": tid}, {"_id": 0, "currency": 1}))
+    currency = (tenant_row or {}).get("currency") or "INR"
+    # Audit 2026-10-08: in the company's currency; a foreign invoice with no
+    # exchange rate yet is left out rather than counted at face value.
+    from shared.money import total_in_base
+    overdue_receivables = total_in_base(overdue_rows, currency, _inv_remaining)
     # Unmatched INBOUND payments only (out payments live on a separate
     # workflow; inbound is what the owner "needs to match to reconcile").
     unmatched_count = sum(1 for p in unmatched_rows if p.get("direction") == "in")
@@ -172,6 +179,7 @@ async def _cash_flow_status(tid: str) -> dict:
         "clear": clear,
         "overdue_receivables_amount": overdue_receivables,
         "unmatched_payments": unmatched_count,
+        "currency": currency,
     }
 
 
@@ -285,25 +293,24 @@ async def desk_summary(user: dict = Depends(get_current_user)):
     # database connection) for ~7 s against a remote database while the Desk
     # loaded, and the member's first save queued behind it.
     (delayed, completed_yday, pending_decisions, cash, weekly_completion,
-     complaints, tenant_row) = await asyncio.gather(
+     complaints) = await asyncio.gather(
         _delayed_count(tid, user),
         _completed_yesterday(tid, user),
         _pending_decisions_for(tid, user),
+        # JOURNEY-1 — also brings the company's currency, for the briefing's
+        # money words (read inside it, side by side with its own counts).
         _cash_flow_status(tid),
         _weekly_completion_rate(tid, user),
         _complaints_trend(tid),
-        # JOURNEY-1 — the company's currency, for the briefing's money words.
-        db.tenants.find_one({"id": tid}, {"_id": 0, "currency": 1}),
     )
 
     from core.permissions import user_perms
-    tenant_row = tenant_row or {}
     narrative = _narrative(
         delayed=delayed, completed_yday=completed_yday,
         pending_decisions=pending_decisions, cash=cash,
         is_owner=is_owner,
         sees_money="finance" in user_perms(user),
-        currency=tenant_row.get("currency") or "INR",
+        currency=cash.get("currency") or "INR",
     )
 
     # Shortcuts: which top-of-Desk quick-links to render.

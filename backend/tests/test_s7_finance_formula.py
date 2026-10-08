@@ -168,12 +168,15 @@ def test_net_profit_billed_not_cash_and_mixed_currency_no_fx(with_test_db):
             restore_fw()
 
     totals = with_test_db(scenario)
-    # revenue is BILLED (both invoices, unpaid included); mixed INR+USD summed raw (no FX).
-    assert totals["revenue_billed"] == 1100
+    # revenue is BILLED (unpaid included). Audit 2026-10-08: the USD invoice has
+    # no exchange rate, so it is NOT summed raw as 100 rupees any more -- it is
+    # left out of the rupee totals and listed for its rate.
+    assert totals["revenue_billed"] == 1000
+    assert totals["needs_rate"] == [{"currency": "USD", "count": 1, "amount": 100.0}]
     # expenses is ALL spend, not just the paid one.
     assert totals["total_spend"] == 500
     # net_profit = billed revenue - all expenses (accrual, not cash).
-    assert totals["net_profit"] == 600
+    assert totals["net_profit"] == 500
 
 
 # ---------------------------------------------------------------------------

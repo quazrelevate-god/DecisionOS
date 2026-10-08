@@ -43,7 +43,7 @@ import ReviewPanel from "./finance/ReviewPanel";
 import { AddRecordControl, AddRecordDialogs } from "./finance/FinanceForms";
 import { OverviewTab } from "./finance/FinanceOverview";
 import { AssetsTab, ExpensesTab, InventoryTab, RevenueTab } from "./finance/FinanceRecords";
-import { RecordPaymentDialog, UseStockDialog } from "./finance/MoneyActions";
+import { RecordPaymentDialog, SetRateDialog, UseStockDialog } from "./finance/MoneyActions";
 import { CARD, FIELD, LoadError } from "./finance/financeKit";
 import { LIST_LIMIT, PERIODS, periodOf } from "./finance/ledgerMath";
 
@@ -318,6 +318,7 @@ export default function Ledger() {
   // Audit F-02 / F-04: the invoice or bill being paid, the stock being used.
   const [paying, setPaying] = useState(null);
   const [usingStock, setUsingStock] = useState(null);
+  const [settingRate, setSettingRate] = useState(null);   // audit: a foreign invoice's exchange rate
 
   const invalidate = () => ["ledger-summary", "expenses", "assets", "inventory", "revenue", "payables"]
     .forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
@@ -405,11 +406,13 @@ export default function Ledger() {
       )}
       {tab === "revenue" && (
         <RevenueTab key={filterParam} data={revenueQ.data} loading={revenueQ.isLoading} error={revenueQ.isError}
-          cur={cur} onDelete={delRevenue} onChange={invalidate} onPay={setPaying} initialFilter={filterParam} />
+          cur={cur} onDelete={delRevenue} onChange={invalidate} onPay={setPaying} onSetRate={setSettingRate}
+          initialFilter={filterParam} />
       )}
       {tab === "expenses" && (
         <ExpensesTab rows={expensesQ.data || []} loading={expensesQ.isLoading} error={expensesQ.isError} payables={payablesQ.data}
-          cur={cur} onDelete={(id) => del("expenses", id)} onChange={invalidate} onPay={setPaying} />
+          cur={cur} onDelete={(id) => del("expenses", id)} onChange={invalidate} onPay={setPaying}
+          onSetRate={setSettingRate} needsRate={summary?.totals?.needs_rate} />
       )}
       {tab === "assets" && (
         <AssetsTab rows={assetsQ.data || []} loading={assetsQ.isLoading} error={assetsQ.isError} cur={cur} onDelete={(id) => del("assets", id)} />
@@ -424,6 +427,7 @@ export default function Ledger() {
         assetCategories={summary?.asset_categories || []} cur={cur} onDone={invalidate} />
       <RecordPaymentDialog invoice={paying} onOpenChange={(o) => !o && setPaying(null)} onDone={invalidate} />
       <UseStockDialog item={usingStock} onOpenChange={(o) => !o && setUsingStock(null)} onDone={invalidate} />
+      <SetRateDialog invoice={settingRate} home={cur} onOpenChange={(o) => !o && setSettingRate(null)} onDone={invalidate} />
     </div>
   );
 }

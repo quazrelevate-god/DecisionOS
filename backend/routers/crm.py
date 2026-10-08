@@ -65,14 +65,18 @@ async def outstanding_by_contact(user: dict = Depends(get_current_user)):
 
     out: dict = {}
     today = datetime.now(timezone.utc).date()
+    from shared.money import in_base
+    base = ((await db.tenants.find_one({"id": tid}, {"_id": 0, "currency": 1})) or {}).get("currency") or "INR"
 
     async for inv in db.invoices.find(
         {"tenant_id": tid, "status": {"$ne": "paid"}},
         {"_id": 0, "type": 1, "contact_id": 1, "contact_name": 1,
-         "amount": 1, "amount_paid": 1, "due_date": 1, "date": 1},
+         "amount": 1, "amount_paid": 1, "due_date": 1, "date": 1, "currency": 1, "fx_rate": 1},
     ):
-        remaining = _remaining(inv)
-        if remaining <= 0.01:
+        # Audit 2026-10-08: the pill sums in the company's currency; a foreign
+        # invoice with no exchange rate yet is not added in at face value.
+        remaining = in_base(_remaining(inv), inv, base)
+        if remaining is None or remaining <= 0.01:
             continue
         cid = inv.get("contact_id")
         if not cid:

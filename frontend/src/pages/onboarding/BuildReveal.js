@@ -2,7 +2,7 @@ import { createElement, forwardRef, useCallback, useEffect, useRef, useState } f
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
-  ArrowRight, Sparkle, Stop, PaperPlaneRight, PencilSimple,
+  ArrowRight, Sparkle, Stop, PaperPlaneRight, PencilSimple, ShieldCheck, X,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import api, { formatApiError } from "../../lib/api";
@@ -13,6 +13,7 @@ import { CountUp } from "../../components/karma";
 // ASK-36 5 — the app's one loading animation.
 import { Loader } from "../../components/common";
 import { currentDraft } from "../../lib/onboardingDraft";
+import { PipelineFlow, withRules } from "../../components/workflow/PipelineFlow";
 
 // What Dex is "doing" while the real AI build runs (30-60s). Loops until done.
 const WAIT_LINES = [
@@ -179,6 +180,100 @@ function CountTile({ c, index, landed, settled, still, glow }) {
 /* A section of pills, one per row, left-aligned and sized to their content.
    `w-fit` is what stops them stretching to the column; the stack is what stops
    them wrapping into a cluster. */
+/* Audit A-11 (2026-10-08) — WHO SIGNS OFF, BEFORE THE FOUNDER ENTERS.
+   The interview asks who approves what, and this screen used to hide the
+   answer ("free-text approval rules are no longer shown — nothing enforced
+   them"). They are enforced now: after Enter, each rule becomes a setting
+   where the app has one — a team that confirms orders up to a value, the team
+   that approves leave, the amount above which spending comes to the owner —
+   and the rest are kept as notes (services/ai/approval_rules.py). So the
+   founder sees them here, in their own words, and can take one out; "Tell
+   Dex" below adds or corrects one, like any other part of the plan. */
+function ApprovalRules({ rules, onRemove, still, startAt }) {
+  const list = (rules || []).filter((r) => r && (r.name || r.description)).slice(0, 10);
+  if (list.length === 0) return null;
+  return (
+    <Rise still={still} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: startAt, duration: 0.34 }}
+      className="bg-white/60 backdrop-blur-3xl border border-white/55 shadow-[0_10px_32px_-12px_hsl(230_18%_15%/0.35)] rounded-[1.75rem] p-5 sm:p-6"
+      data-testid="build-approval-rules">
+      <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+        <ShieldCheck size={13} weight="bold" aria-hidden="true" /> Who signs off — from your answers
+      </p>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Each becomes a setting where DecisionOS has one: who confirms orders up to what value, who approves
+        leave, and when spending comes to you. Anything else is kept as a note. You can change them any time
+        in Settings › Operations.
+      </p>
+      <ul className="space-y-2">
+        {list.map((r, i) => (
+          <li key={`${r.name}-${i}`} data-testid="build-approval-rule"
+            className="flex items-start gap-3 rounded-2xl bg-white/70 px-3.5 py-2.5 ring-1 ring-inset ring-slate-900/[0.05]">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-foreground">{r.name}</p>
+              {r.description && <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{r.description}</p>}
+            </div>
+            {onRemove && (
+              <button type="button" onClick={() => onRemove(i)} data-testid="build-approval-rule-remove"
+                aria-label={`Leave out “${r.name}”`} title="Leave this one out"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-white hover:text-foreground">
+                <X size={13} weight="bold" aria-hidden="true" />
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Rise>
+  );
+}
+
+/* Audit 2026-10-08 — HOW WORK MOVES, BEFORE THE FOUNDER ENTERS.
+   The pipelines (how an order goes from enquiry to shipped, who owns each
+   step, the work at each step, where the owner signs off) used to be designed
+   only AFTER Enter, and never shown here. They are designed now from the
+   interview (POST /signup/interview/flow) and drawn as a route; register takes
+   exactly these. While Dex lays them out, the route is sketched in grey. */
+const FLOW_POLL_MS = 3000;
+const FLOW_GIVE_UP_MS = 3 * 60 * 1000;
+
+function WorkFlowSection({ flow, state, teams, ruleNames, onRetry, still, startAt }) {
+  const pipelines = flow ? withRules(flow.operating_model?.pipelines, flow.approval_actions, ruleNames) : [];
+  return (
+    <Rise still={still} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: startAt, duration: 0.34 }}
+      className="bg-white/60 backdrop-blur-3xl border border-white/55 shadow-[0_10px_32px_-12px_hsl(230_18%_15%/0.35)] rounded-[1.75rem] p-5 sm:p-6"
+      data-testid="build-workflow">
+      <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">How work moves</p>
+      <p className="mb-4 text-xs text-muted-foreground">
+        Every order, purchase and hire moves through steps like these. Each step has a team that owns it and the
+        work it needs — Dex hands that work out as a card arrives. Tap a step to see it.
+      </p>
+      {state === "ready" && pipelines.length ? (
+        <PipelineFlow pipelines={pipelines} teams={teams} still={still} testid="build-pipeline-flow" />
+      ) : state === "failed" ? (
+        <p className="text-sm text-muted-foreground" data-testid="build-workflow-failed">
+          Couldn't lay these out just now — they'll be set up as you enter, and you can see them in Settings › Operations.{" "}
+          <button type="button" onClick={onRetry} className="font-medium text-foreground underline underline-offset-2">Try again</button>
+        </p>
+      ) : (
+        <div aria-busy="true" data-testid="build-workflow-loading">
+          <div className="flex items-start">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="relative flex flex-1 flex-col items-center">
+                {i < 4 && <span aria-hidden="true" className="absolute left-1/2 top-[15px] h-px w-full bg-slate-900/10" />}
+                <span className="ds-skeleton relative z-[1] h-8 w-8 rounded-full" />
+                <span className="ds-skeleton mt-3 h-3 w-16 rounded" />
+                <span className="ds-skeleton mt-2 h-3 w-12 rounded" />
+              </div>
+            ))}
+          </div>
+          <p className="mt-4 text-xs text-muted-foreground">Dex is laying out how an order moves through your teams…</p>
+        </div>
+      )}
+    </Rise>
+  );
+}
+
 function PillSection({ label, items, tint, testid, startAt, stagger, still, newKeys, firstNewRef }) {
   const strs = (items || []).map(itemText).filter(Boolean).slice(0, 10);
   if (strs.length === 0) return null;
@@ -245,6 +340,10 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
   // stage: 'building' → 'preview' (refine) → 'registering' → the app
   const [stage, setStage] = useState(savedBlueprint ? "preview" : "building");
   const [bp, setBp] = useState(savedBlueprint || null);   // may be regenerated
+  // Audit 2026-10-08 — the pipelines, designed from the interview for the review.
+  const [flow, setFlow] = useState(null);
+  const [flowState, setFlowState] = useState("idle");      // idle | loading | ready | failed
+  const [flowTry, setFlowTry] = useState(0);
   const [welcome, setWelcome] = useState(savedBlueprint?.welcome_line || "");
   const [error, setError] = useState("");
   // The email turned out to be taken: the way forward is signing in, not retrying.
@@ -456,6 +555,13 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
           operational_tasks: bp.operational_tasks || [],
           approval_rules: bp.approval_rules || [],
         },
+        // Audit 2026-10-08 — the pipelines the founder just saw, and the rules
+        // laid onto them; the server re-checks both before using them.
+        ...(flowState === "ready" && flow?.operating_model ? {
+          operating_model: flow.operating_model,
+          approval_actions: (flow.approval_actions || []).filter((a) =>
+            (bp.approval_rules || []).some((r) => r.name === a.rule)),
+        } : {}),
       });
       /* J1-04 / J2-03 (JOURNEY-1) — ONE CONFIRM SCREEN. Pressing "Looks good
          — Enter DecisionOS" used to build the company and then show a second
@@ -566,10 +672,41 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
   // source of truth for pipelines, and it's generated at register time (not at
   // preview). So a "Workflows" stat here is always 0 — drop it and show the
   // three categories the blueprint actually produces.
+  /* HOW WORK MOVES is designed in the background on the server, from the
+     moment the plan exists (it takes 20-40 s, longer than a request may stay
+     open behind the production proxy). The screen asks for it and, while it is
+     still being designed, asks again every few seconds -- short requests, so
+     no slow network or proxy can cut it off. A refine changes the teams or the
+     rules and starts a new design. */
+  const flowSig = bp ? JSON.stringify([(bp.departments || []).map((d) => d.key),
+    (bp.approval_rules || []).map((r) => r.name)]) : "";
+  useEffect(() => {
+    if (!sessionId || !bp || !(bp.departments || []).length) return undefined;
+    let live = true;
+    let timer = null;
+    const started = Date.now();
+    setFlowState("loading");
+    const ask = async (retry) => {
+      try {
+        const { data } = await api.post(`/signup/interview/flow${retry ? "?retry=1" : ""}`, { session_id: sessionId });
+        if (!live) return;
+        if (data.status === "ready") { setFlow(data); setFlowState("ready"); return; }
+        if (data.status === "failed" || Date.now() - started > FLOW_GIVE_UP_MS) { setFlowState("failed"); return; }
+        timer = setTimeout(() => ask(false), FLOW_POLL_MS);       // still designing
+      } catch (e) {
+        if (live) setFlowState("failed");
+      }
+    };
+    ask(flowTry > 0);
+    return () => { live = false; clearTimeout(timer); };
+  }, [sessionId, flowSig, flowTry]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const counts = bp ? [
     { n: (bp.departments || []).length, label: "Teams" },
     { n: (bp.operational_tasks || []).length, label: "Recurring tasks" },
-    // RBAC P1 (2026-09-15): free-text approval rules are no longer shown — nothing enforced them.
+    // RBAC P1 (2026-09-15) hid the approval rules because nothing enforced
+    // them. They are enforced now (audit B-01) and shown below in their own
+    // section (A-11), not as a count.
   ] : [];
 
   // Kept reading `bp.workflows` deliberately, and it is expected to be empty:
@@ -869,6 +1006,23 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                 stagger={pillStagger} still={still}
                 newKeys={newKeys} firstNewRef={firstNewRef} />
             </div>
+
+            {/* Audit 2026-10-08 — how work moves, before the founder enters. */}
+            {sessionId && (
+              <WorkFlowSection flow={flow} state={flowState} teams={bp?.departments} still={still}
+                ruleNames={(bp?.approval_rules || []).map((r) => r.name)}
+                onRetry={() => setFlowTry((n) => n + 1)}
+                startAt={CHOREO.sectionsAt + (deptItems.length + taskItems.length) * pillStagger + CHOREO.betweenSections} />
+            )}
+
+            {/* Audit A-11 — the approval rules, before the founder enters. */}
+            <ApprovalRules rules={bp?.approval_rules} still={still}
+              startAt={CHOREO.sectionsAt + (deptItems.length + taskItems.length) * pillStagger + CHOREO.betweenSections}
+              onRemove={stage === "preview" ? (i) => {
+                const next = { ...bp, approval_rules: (bp.approval_rules || []).filter((_, x) => x !== i) };
+                setBp(next);
+                onBlueprint?.(next);
+              } : undefined} />
 
             {/* Deliberately dead: WE-02 retired workflow_templates and the
                 blueprint stopped returning workflows. Kept because it is the

@@ -239,8 +239,11 @@ async def contact_profile(contact_id: str, user: dict = Depends(require_perm("fi
     direct_expenses = [e for e in expenses if e.get("invoice_id") not in billed_ids]
     total_expensed = sum(float(e.get("amount") or 0) for e in direct_expenses)
 
-    total_billed = sum(float(i.get("amount") or 0) for i in invoices) + total_expensed
-    total_paid = sum(float(p.get("amount") or 0) for p in payments)
+    # Audit 2026-10-08: in the company's currency (no rate yet = left out).
+    from shared.money import total_in_base
+    _base = ((await db.tenants.find_one({"id": tid}, {"_id": 0, "currency": 1})) or {}).get("currency") or "INR"
+    total_billed = total_in_base(invoices, _base, lambda i: i.get("amount")) + total_expensed
+    total_paid = total_in_base(payments, _base, lambda p: p.get("amount"))
     outstanding = round(total_billed - total_paid, 2)
     last_payment = payments[0].get("date") if payments else None
 
@@ -288,12 +291,14 @@ async def rescore_contact(contact_id: str, user: dict = Depends(require_perm("fi
     name = c.get("name") or ""
     name_rx = {"$regex": f"^{re.escape(name)}$", "$options": "i"}
     match_party = {"tenant_id": tid, "$or": [{"contact_id": contact_id}, {"contact_name": name_rx}]}
-    invoices = await db.invoices.find(match_party, {"_id": 0, "amount": 1}).to_list(500)
-    payments = await db.payments.find(match_party, {"_id": 0, "amount": 1, "date": 1}).sort("created_at", -1).to_list(500)
+    invoices = await db.invoices.find(match_party, {"_id": 0, "amount": 1, "currency": 1, "fx_rate": 1}).to_list(500)
+    payments = await db.payments.find(match_party, {"_id": 0, "amount": 1, "date": 1, "currency": 1, "fx_rate": 1}).sort("created_at", -1).to_list(500)
     complaints = await db.complaints.find({"tenant_id": tid, "customer_id": contact_id}, {"_id": 0, "status": 1}).to_list(200)
     workflows = await db.workflows.find({"tenant_id": tid, "contact_id": contact_id}, {"_id": 0, "stage": 1}).to_list(200)
-    total_billed = sum(float(i.get("amount") or 0) for i in invoices)
-    total_paid = sum(float(p.get("amount") or 0) for p in payments)
+    from shared.money import total_in_base
+    _base = ((await db.tenants.find_one({"id": tid}, {"_id": 0, "currency": 1})) or {}).get("currency") or "INR"
+    total_billed = total_in_base(invoices, _base, lambda i: i.get("amount"))
+    total_paid = total_in_base(payments, _base, lambda p: p.get("amount"))
     # FIX-001-F: dynamic terminal stages per tenant.
     from services.workflows import tenant_terminal_stages
     _term_stages_rs = set(await tenant_terminal_stages(tid))

@@ -12,10 +12,13 @@
 //         invoice in the buyer's currency with no GST; and downloadInvoicePdf.
 //   F-04  UseStockDialog — stock taken out for an order. Profit counts stock
 //         when it is USED (the cost of what was sold), never when it is bought.
+//   FX    SetRateDialog / NeedsRateNote — a GBP 160 export invoice was added to
+//         Revenue as Rs 160. A foreign invoice carries its exchange rate; one
+//         without a rate is left out of the totals and the page asks for it.
 import { useEffect, useId, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FilePdf, HandCoins, Package, Plus, Receipt, Trash } from "@phosphor-icons/react";
+import { ArrowsLeftRight, FilePdf, HandCoins, Package, Plus, Receipt, Trash, WarningCircle } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import api, { formatApiError } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
@@ -125,14 +128,19 @@ export function BillsToPayPanel({ bills, total, cur, onPay }) {
         {bills.map((b) => (
           <li key={b.id} data-testid={`bill-${b.id}`}
             className="flex flex-wrap items-center gap-2.5 rounded-2xl bg-white/70 p-3 ring-1 ring-inset ring-slate-900/[0.05]">
-            <span className="text-sm font-semibold tabular-nums text-slate-900">{f(b.balance)}</span>
+            <span className="text-sm font-semibold tabular-nums text-slate-900">
+              {fmt(b.currency || cur)(b.balance)}
+              {b.currency && b.currency !== cur && b.balance_base != null && (
+                <span className="ml-1 text-xs font-normal text-slate-500">≈ {f(b.balance_base)}</span>
+              )}
+            </span>
             <span className="min-w-0 flex-1 truncate text-xs text-slate-500">
               {b.contact_name || b.title || "Supplier"}{b.number ? ` · #${b.number}` : ""}
               {b.due_date ? ` · due ${shortDate(b.due_date)}` : b.date ? ` · ${shortDate(b.date)}` : ""}
             </span>
             {b.balance < b.amount - 0.01 && <Tag tone="warn">part paid</Tag>}
             <button type="button" className={SMALL_INK} data-testid={`bill-pay-${b.id}`}
-              onClick={() => onPay({ ...b, type: "purchase_bill", currency: cur })}>Record payment</button>
+              onClick={() => onPay({ ...b, type: "purchase_bill", currency: b.currency || cur })}>Record payment</button>
           </li>
         ))}
       </ul>
@@ -157,10 +165,15 @@ export async function downloadInvoicePdf(inv) {
   }
 }
 
-export function InvoiceRowActions({ inv, onPay }) {
+export function InvoiceRowActions({ inv, onPay, onSetRate }) {
   const due = inv.balance ?? balanceOf(inv);
+  const needsRate = "amount_base" in inv && inv.amount_base == null;
   return (
     <span className="inline-flex items-center gap-1">
+      {needsRate && onSetRate && (
+        <button type="button" className={SMALL_PILL} data-testid={`revenue-rate-${inv.id}`}
+          onClick={() => onSetRate(inv)}>Set rate</button>
+      )}
       {inv.status !== "paid" && due > 0.01 && inv.status !== "draft" && (
         <button type="button" className={SMALL_PILL} data-testid={`revenue-pay-${inv.id}`}
           onClick={() => onPay({ ...inv, type: "sales_invoice" })}>Record payment</button>
@@ -207,6 +220,7 @@ export function InvoiceBuilderDialog({ open, onOpenChange, onDone }) {
       customer_name: "", contact_id: "", customer_gstin: "", customer_address: "",
       place_of_supply: meta.seller_state || "", currency: meta.currency || "INR",
       number: meta.number, date: today(), due_date: "", notes: "", items: [{ ...BLANK_LINE }],
+      fx_rate: "",
     });
   }, [open, meta, f]);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
@@ -223,15 +237,21 @@ export function InvoiceBuilderDialog({ open, onOpenChange, onDone }) {
   if (!open) return null;
   const sums = f ? calc(f.items, meta?.seller_state, f.place_of_supply, f.currency) : null;
   const money = fmt(f?.currency || "INR");
+  // Audit 2026-10-08: an invoice in another currency carries its exchange rate.
+  const home = (tenant?.currency || "INR").toUpperCase();
+  const foreign = !!f && f.currency !== home;
+  const rate = foreign ? (Number(f.fx_rate) || Number(meta?.fx_last?.[f.currency]) || 0) : 1;
 
   const save = async () => {
     if (!f.customer_name.trim()) return toast.error(`Add the ${L.customer_singular.toLowerCase()}'s name`);
     const items = f.items.filter((l) => l.description.trim() && Number(l.qty) > 0);
     if (!items.length) return toast.error("Add at least one line: what you sold, how many and the rate");
+    if (foreign && !(rate > 0)) return toast.error(`Add the exchange rate: 1 ${f.currency} = how many ${home}?`);
     setBusy(true);
     try {
       const { data } = await api.post("/invoices/gst", {
         ...f, contact_id: f.contact_id || null, due_date: f.due_date || null,
+        fx_rate: foreign ? rate : null,
         items: items.map((l) => ({ ...l, qty: Number(l.qty), rate: Number(l.rate) || 0, gst_rate: Number(l.gst_rate) || 0 })),
       });
       toast.success(`Invoice ${data.number} raised — ${money(data.amount)}`, {
@@ -287,6 +307,13 @@ export function InvoiceBuilderDialog({ open, onOpenChange, onDone }) {
                 <input id={`${uid}-no`} data-testid="invoice-number" className={FIELD} value={f.number} onChange={(e) => set("number", e.target.value)} />
               </Field>
             </div>
+            {foreign && (
+              <Field label={`Exchange rate — 1 ${f.currency} = how many ${home}`} htmlFor={`${uid}-fx`}>
+                <input id={`${uid}-fx`} data-testid="invoice-fx-rate" type="number" inputMode="decimal" className={FIELD}
+                  value={f.fx_rate || (meta?.fx_last?.[f.currency] ?? "")} placeholder="e.g. 107.50"
+                  onChange={(e) => set("fx_rate", e.target.value)} />
+              </Field>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <Field label="Date" htmlFor={`${uid}-date`}>
                 <input id={`${uid}-date`} type="date" className={FIELD} value={f.date} onChange={(e) => set("date", e.target.value)} />
@@ -342,6 +369,11 @@ export function InvoiceBuilderDialog({ open, onOpenChange, onDone }) {
               <div className="flex justify-between border-t border-slate-900/10 pt-1 font-semibold text-slate-900">
                 <dt>Total</dt><dd data-testid="invoice-total">{money(sums.total)}</dd>
               </div>
+              {foreign && rate > 0 && (
+                <div className="flex justify-between text-slate-500">
+                  <dt>In {home}</dt><dd data-testid="invoice-total-home">{fmt(home)(sums.total * rate)}</dd>
+                </div>
+              )}
             </dl>
             <Field label="Notes on the invoice (optional)" htmlFor={`${uid}-notes`}>
               <textarea id={`${uid}-notes`} rows={2} className={AREA} value={f.notes} onChange={(e) => set("notes", e.target.value)}
@@ -410,5 +442,65 @@ export function UseStockDialog({ item, onOpenChange, onDone }) {
           saveLabel="Use stock" busyLabel="Saving…" />
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ------------------------------------------------------------------ FX ---- */
+/** `invoice` may also be an expense ({kind: "expense"}); the rate is saved on whichever it is. */
+export function SetRateDialog({ invoice, home = "INR", onOpenChange, onDone }) {
+  const uid = useId();
+  const [rate, setRate] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (invoice) setRate(invoice.fx_rate ? String(invoice.fx_rate) : ""); }, [invoice]);
+  const cur = invoice?.currency || "";
+  const n = Number(rate) || 0;
+  const save = async () => {
+    if (!(n > 0)) return toast.error(`Enter how many ${home} one ${cur} was worth`);
+    setBusy(true);
+    try {
+      const path = invoice.kind === "expense" ? `/expenses/${invoice.id}/fx-rate` : `/invoices/${invoice.id}/fx-rate`;
+      const { data } = await api.patch(path, { fx_rate: n });
+      toast.success(`Counted as ${fmt(home)(data.amount_base)} in your totals`);
+      onOpenChange(false);
+      onDone?.();
+    } catch (e) {
+      toast.error(errText(e, "Couldn't save the rate"));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog open={!!invoice} onOpenChange={(o) => !o && onOpenChange(false)}>
+      <DialogContent className={cn(SHEET_CONTENT, "max-w-md")} data-testid="set-rate-dialog">
+        <SheetHead icon={ArrowsLeftRight} title="Exchange rate"
+          description={invoice ? `${invoice.number ? `#${invoice.number} · ` : ""}${invoice.contact_name || invoice.vendor_name || invoice.title || ""} · ${fmt(cur)(invoice.amount)}` : ""}
+          onClose={() => onOpenChange(false)} />
+        <div className="space-y-3 px-6 pb-5">
+          <Field label={`1 ${cur} = how many ${home}`} htmlFor={`${uid}-rate`}>
+            <input id={`${uid}-rate`} data-testid="set-rate-input" type="number" inputMode="decimal" className={FIELD}
+              value={rate} onChange={(e) => setRate(e.target.value)} placeholder="e.g. 107.50" />
+          </Field>
+          <p className="text-sm text-slate-600" aria-live="polite">
+            {n > 0
+              ? <>This {invoice?.kind === "expense" ? "expense" : "invoice"} will count as <span className="font-semibold text-slate-900">{fmt(home)((invoice?.amount || 0) * n)}</span> in your totals.</>
+              : `Until it has a rate, this ${invoice?.kind === "expense" ? "expense" : "invoice"} is left out of your totals — never counted at face value.`}
+          </p>
+        </div>
+        <SheetFoot onCancel={() => onOpenChange(false)} onSave={save} busy={busy} testid="set-rate-save"
+          saveLabel="Save rate" busyLabel="Saving…" />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Invoices left out of the totals because they have no exchange rate yet. */
+export function NeedsRateNote({ rows, testid = "needs-rate-note" }) {
+  if (!rows || rows.length === 0) return null;
+  const parts = rows.map((r) => `${r.count} in ${r.currency} (${fmt(r.currency)(r.amount)})`);
+  return (
+    <p className="flex items-start gap-2 rounded-[1.25rem] bg-amber-50/90 px-4 py-3 text-sm text-amber-900 ring-1 ring-inset ring-amber-100" data-testid={testid}>
+      <WarningCircle size={18} weight="bold" aria-hidden="true" className="mt-px shrink-0" />
+      <span>Not in these totals: {parts.join(", ")} — no exchange rate yet. Press “Set rate” on it (Revenue or Expenses).</span>
+    </p>
   );
 }

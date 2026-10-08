@@ -9,6 +9,7 @@ Powers the conversational founder onboarding:
 
 No auth required — these run BEFORE the account exists. Inputs are length-capped.
 """
+import asyncio
 import os
 import re
 
@@ -591,6 +592,13 @@ async def interview_blueprint(inp: InterviewSessionInput, request: Request):
     await db.signup_sessions.update_one(
         {"id": s["id"]}, {"$set": {"status": "blueprint_ready", "blueprint": result}}
     )
+    # 2026-10-08: and start laying out how work moves, so the review screen
+    # usually finds it ready (see _design_flow below).
+    if result.get("departments"):
+        try:
+            await _start_flow_design(s["id"], _flow_signature(result))
+        except Exception as e:  # noqa: BLE001 -- the review screen can start it itself
+            logger.error(f"could not start the flow design: {e}")
     return result
 
 
@@ -618,6 +626,127 @@ async def interview_refine(inp: InterviewRefineInput, request: Request):
         InterviewSessionInput(session_id=s["id"], language_code=inp.language_code),
         request,
     )
+
+
+# --------------------------------------------------------------------------
+# Audit 2026-10-08 — HOW WORK MOVES, SHOWN BEFORE THE FOUNDER ENTERS.
+#
+# The review screen showed teams and recurring tasks; the pipelines — how an
+# order actually moves from enquiry to shipped, which team owns each step,
+# what work each step needs, where the owner signs off — were only designed
+# AFTER the founder pressed Enter, by a call that never heard the interview.
+# This designs them here, from the interview itself, and lays the founder's
+# approval rules onto them ("Sales confirms up to 5 lakh" on the
+# confirmation step). What is shown is what the company gets: register takes
+# this operating model and these rule actions as they are
+# (services/ai/ai_setup.generate_tenant_setup), with no second AI pass.
+# --------------------------------------------------------------------------
+def _flow_signature(bp: dict) -> str:
+    import hashlib
+    import json as _json
+    key = {"d": [d.get("key") for d in (bp.get("departments") or [])],
+           "r": [(r.get("name"), r.get("description")) for r in (bp.get("approval_rules") or [])]}
+    return hashlib.sha1(_json.dumps(key, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+
+
+def _interview_context(s: dict) -> str:
+    """What the business does and how it runs, in the founder's words."""
+    parts = [(s.get("description") or "").strip(), (s.get("website_summary") or "").strip()]
+    qa = [f"Q: {x.get('q')}\nA: {x.get('a')}" for x in (s.get("qa") or []) if (x.get("a") or "").strip()]
+    if qa:
+        parts.append("How they run it, from the interview:\n" + "\n".join(qa))
+    return "\n\n".join(p for p in parts if p)[:4000]
+
+
+# THE DESIGN RUNS IN THE BACKGROUND, NEVER INSIDE A REQUEST (2026-10-08).
+# Two model calls (the pipelines, then the rules on them) take 20-40 s, and
+# the production proxy cuts any request at about 60 s -- so a design held
+# inside one request could be lost on a slow day however long the browser was
+# willing to wait. It starts the moment the plan exists (interview_blueprint,
+# and so every refine) and its state lives on the session:
+#     flow = {sig, status: designing | ready | failed, started_at, ...result}
+# POST /interview/flow only reads that state (a cheap read the review screen
+# repeats every few seconds) and starts a design when none is running for the
+# current plan -- the only part that passes the AI rate gate.
+_FLOW_STALE_SECONDS = 180          # a design "running" longer than this died with its worker
+_flow_jobs: set = set()            # strong refs: a fire-and-forget task must not be collected
+
+
+async def _design_flow(session_id: str, sig: str) -> None:
+    from services.ai.generators import ai_generate_operating_model
+    from services.ai.approval_rules import describe, structure_approval_rules
+    try:
+        s = await db.signup_sessions.find_one({"id": session_id}, {"_id": 0})
+        bp = (s or {}).get("blueprint") or {}
+        teams = bp.get("departments") or []
+        om = await ai_generate_operating_model(s.get("industry") or "General", s.get("team_size") or "",
+                                               teams, _interview_context(s))
+        if not (om.get("pipelines") or []):
+            raise ValueError("no pipelines designed")
+        actions = await structure_approval_rules(bp.get("approval_rules") or [], teams, om.get("pipelines") or [])
+        # The model is kept WITHOUT the rules laid on: the screen lays on the
+        # ones still listed (a founder can take one out), and register re-checks
+        # them against the company's real teams and stages before applying.
+        said = [{"rule": a["rule"], "kind": a["kind"], "became": describe(a, teams, om.get("pipelines") or [])}
+                for a in actions if a["kind"] != "note"]
+        result = {"sig": sig, "status": "ready", "operating_model": om,
+                  "approval_actions": actions, "rules_said": said}
+    except Exception as e:  # noqa: BLE001 -- the screen offers "Try again"; Enter still works
+        logger.error(f"signup flow design failed for {session_id}: {e}")
+        result = {"sig": sig, "status": "failed"}
+    # Only if the plan has not changed underneath it (a refine starts its own).
+    await db.signup_sessions.update_one({"id": session_id, "flow.sig": sig}, {"$set": {"flow": result}})
+
+
+async def _start_flow_design(session_id: str, sig: str) -> None:
+    from datetime import datetime as _dt, timezone as _tz
+    await db.signup_sessions.update_one(
+        {"id": session_id},
+        {"$set": {"flow": {"sig": sig, "status": "designing", "started_at": _dt.now(_tz.utc).isoformat()}}})
+    task = asyncio.create_task(_design_flow(session_id, sig))
+    _flow_jobs.add(task)
+    task.add_done_callback(_flow_jobs.discard)
+
+
+def _flow_state(flow: dict, sig: str) -> str:
+    """'ready' | 'failed' | 'designing' | 'none' (nothing for THIS plan, or a design that died)."""
+    if not flow or flow.get("sig") != sig:
+        return "none"
+    st = flow.get("status") or ("ready" if flow.get("operating_model") else "none")
+    if st == "designing":
+        from datetime import datetime as _dt, timezone as _tz
+        try:
+            age = (_dt.now(_tz.utc) - _dt.fromisoformat(flow.get("started_at"))).total_seconds()
+        except (TypeError, ValueError):
+            age = _FLOW_STALE_SECONDS + 1
+        if age > _FLOW_STALE_SECONDS:
+            return "none"
+    return st
+
+
+@router.post("/interview/flow")
+async def interview_flow(inp: InterviewSessionInput, request: Request):
+    """The pipelines for the review screen: {status} while designing, and the
+    design itself once it is ready. ?retry=1 after a failure starts again."""
+    s = await db.signup_sessions.find_one({"id": inp.session_id}, {"_id": 0})
+    if not s:
+        raise HTTPException(status_code=404, detail="Interview session not found")
+    bp = s.get("blueprint") or {}
+    if not bp.get("departments"):
+        raise HTTPException(status_code=409, detail="Build the plan first.")
+    sig = _flow_signature(bp)
+    flow = s.get("flow") or {}
+    state = _flow_state(flow, sig)
+    if state == "ready":
+        return {"status": "ready", **{k: flow[k] for k in ("operating_model", "approval_actions", "rules_said")}}
+    if state == "designing":
+        return {"status": "designing"}
+    if state == "failed" and request.query_params.get("retry") != "1":
+        return {"status": "failed"}
+    # Starting a design is the AI call: the same gate as the blueprint.
+    await _guard_signup_endpoint(request, "interview_flow")
+    await _start_flow_design(s["id"], sig)
+    return {"status": "designing"}
 
 
 # --------------------------------------------------------------------------

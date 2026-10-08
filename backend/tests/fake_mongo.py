@@ -95,6 +95,10 @@ class _Cursor:
         self.rows = self.rows[:n] if n else self.rows
         return self
 
+    def skip(self, n):
+        self.rows = self.rows[n:] if n else self.rows
+        return self
+
     async def to_list(self, n=None):
         return self.rows[:n] if n else list(self.rows)
 

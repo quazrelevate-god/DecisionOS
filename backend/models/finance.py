@@ -112,6 +112,13 @@ class GstInvoiceInput(BaseModel):
     due_date: Optional[str] = None
     items: List[InvoiceLineInput] = []
     notes: Optional[str] = ""
+    # Company currency per one unit of `currency` ("1 GBP = 107.50"); needed
+    # when the invoice is not in the company's currency.
+    fx_rate: Optional[float] = None
+
+
+class FxRateInput(BaseModel):
+    fx_rate: float
 
 
 class StockUseInput(BaseModel):

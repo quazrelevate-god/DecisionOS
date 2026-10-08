@@ -13,6 +13,7 @@ import { BusinessVocabulary } from "../components/BusinessVocabulary";
 import { TeamsCard } from "../components/settings/TeamsCard";
 import { PlanCard } from "../components/settings/PlanCard";
 import { InterviewRulesCard } from "../components/settings/InterviewRulesCard";
+import { WorkFlowCard } from "../components/settings/WorkFlowCard";
 import { TaskTemplatesCard } from "../components/settings/TaskTemplatesCard";
 import { AccessSwitch } from "../components/settings/AccessSwitch";
 import { OperatingModelEditor } from "../components/OperatingModelEditor";
@@ -1121,6 +1122,8 @@ export default function Settings() {
 
         {tab === "operations" && (
           <>
+            {/* Audit 2026-10-08 — the pipelines drawn as a route, as at sign-up. */}
+            <Section id="settings-s-workflow" label="How work moves"><WorkFlowCard /></Section>
             {/* Audit B-01 — what the sign-up interview's approval rules became. */}
             <Section id="settings-s-interview-rules" label="Approvals from sign-up"><InterviewRulesCard /></Section>
             <Section id="settings-s-model" label="Operating model"><OperatingModelEditor /></Section>

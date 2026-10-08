@@ -132,13 +132,25 @@ export function change(cur, prev) {
   return { pct, direction: pct > 0 ? "up" : pct < 0 ? "down" : "flat" };
 }
 
+/** An invoice's / payment's amount in the company's currency, or null when it
+ *  is in another currency with no exchange rate yet. Rows from an older server
+ *  carry no amount_base: they are taken at face value, as before. */
+export const baseOf = (d) => (d && "amount_base" in d ? (d.amount_base == null ? null : num(d.amount_base)) : num(d?.amount));
+
 export function financeMetrics({ summary, revenue, expenses, assets, inventory, period, now = Date.now() }) {
   const p = periodOf(period);
   const rows = {
-    billed: (revenue?.invoices || []).map((i) => ({ t: timeOf(i.date, i.created_at), v: num(i.amount) })),
-    received: (revenue?.payments || []).map((x) => ({ t: timeOf(x.date, x.created_at), v: num(x.amount) })),
-    spend: (expenses || []).map((e) => ({
-      t: timeOf(e.date, e.created_at), v: num(e.amount),
+    /* Audit 2026-10-08 — in the company's currency. An export invoice of
+       GBP 160 was counted as Rs 160; the server now sends amount_base (null
+       when no exchange rate has been given yet, and then it is left out). */
+    billed: (revenue?.invoices || []).filter((i) => baseOf(i) != null)
+      .map((i) => ({ t: timeOf(i.date, i.created_at), v: baseOf(i) })),
+    received: (revenue?.payments || []).filter((x) => baseOf(x) != null)
+      .map((x) => ({ t: timeOf(x.date, x.created_at), v: baseOf(x) })),
+    // Audit 2026-10-08 — in the company's currency; a bill in another
+    // currency with no exchange rate yet is left out, never added at face value.
+    spend: (expenses || []).filter((e) => baseOf(e) != null).map((e) => ({
+      t: timeOf(e.date, e.created_at), v: baseOf(e),
       category: categoryName(e.category), vendor: vendorName(e.vendor_name),
       // J2-06: whether this one is the cost of RUNNING the place, or stock
       // and equipment — money out, but not money gone. Same rule as the

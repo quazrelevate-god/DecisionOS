@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 
 from core import db, log_activity, new_id, now_iso
-from models.finance import GstInvoiceInput, RecordPaymentInput, StockUseInput
+from models.finance import FxRateInput, GstInvoiceInput, RecordPaymentInput, StockUseInput
 from routers.ledger import (
     _apply_payment_to_invoice, _currency, _num, _remaining, require_ledger,
 )
@@ -67,6 +67,8 @@ async def record_invoice_payment(iid: str, inp: RecordPaymentInput, user: dict =
         "contact_id": inv.get("contact_id"), "contact_name": inv.get("contact_name") or "",
         "invoice_number": inv.get("number") or "", "invoice_id": None,
         "currency": inv.get("currency") or await _currency(tid),
+        # Same rate as the invoice it pays, so it counts in the company's currency.
+        "fx_rate": inv.get("fx_rate"),
         "applied": 0, "applications": [], "match_status": "unmatched",
         "source": "manual", "created_by": user["id"], "created_at": now_iso(),
     }
@@ -108,7 +110,9 @@ async def next_invoice_number(user: dict = Depends(require_ledger)):
     t = await db.tenants.find_one({"id": tid}, {"_id": 0, "name": 1, "invoice_prefix": 1, "state": 1,
                                                 "gst": 1, "address": 1, "currency": 1})
     t = t or {}
+    fx = (await db.tenants.find_one({"id": tid}, {"_id": 0, "fx_last": 1}) or {}).get("fx_last") or {}
     return {"number": await _next_number(tid, t), "seller_state": t.get("state") or "",
+            "fx_last": fx,
             "seller_ready": bool(t.get("gst") and t.get("address") and t.get("state")),
             "currency": t.get("currency") or "INR",
             "states": list(invoicing.STATES) + [invoicing.EXPORT], "gst_rates": list(invoicing.GST_RATES)}
@@ -127,6 +131,12 @@ async def create_gst_invoice(inp: GstInvoiceInput, user: dict = Depends(require_
                                      place_of_supply=pos, currency=currency)
     if not calc["line_items"]:
         raise HTTPException(status_code=400, detail="Add at least one line: what you sold, how many, and the rate.")
+    base = (tenant.get("currency") or "INR").upper()
+    fx_rate = None
+    if currency != base:
+        fx_rate = round(float(inp.fx_rate or 0), 4)
+        if fx_rate <= 0:
+            raise HTTPException(status_code=400, detail=f"Add the exchange rate: 1 {currency} = how many {base}?")
     date = _day(inp.date)
     number = (inp.number or "").strip()[:40] or await _next_number(tid, tenant, date)
     if await db.invoices.find_one({"tenant_id": tid, "type": "sales_invoice", "number": number}, {"_id": 1}):
@@ -145,15 +155,69 @@ async def create_gst_invoice(inp: GstInvoiceInput, user: dict = Depends(require_
         "currency": currency, "status": "unpaid", "amount_paid": 0,
         "purchase_type": "", "notes": (inp.notes or "").strip()[:1000],
         "source": "invoice_builder", "created_by": user["id"], "created_at": now_iso(),
+        "fx_rate": fx_rate,
         **calc,
     }
     await db.invoices.insert_one(dict(doc))
+    if fx_rate:
+        await db.tenants.update_one({"id": tid}, {"$set": {f"fx_last.{currency}": fx_rate}})
     doc.pop("_id", None)
     await log_activity(tid, user["id"], "invoice_created",
                        f"{user.get('name') or 'Someone'} raised invoice {number} to {cust} for {currency} {doc['amount']:,.2f}",
                        "invoice", doc["id"])
     doc["balance"] = _remaining(doc)
     return doc
+
+
+@router.patch("/invoices/{iid}/fx-rate")
+async def set_invoice_fx_rate(iid: str, inp: FxRateInput, user: dict = Depends(require_ledger)):
+    """The exchange rate of an invoice or bill in another currency, so it counts
+    in the company's totals. Payments already made against it take the same rate."""
+    tid = user["tenant_id"]
+    inv = await db.invoices.find_one({"id": iid, "tenant_id": tid}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    base = (await _currency(tid)).upper()
+    cur = (inv.get("currency") or base).upper()
+    if cur == base:
+        raise HTTPException(status_code=400, detail=f"This invoice is already in {base}.")
+    rate = round(_num(inp.fx_rate), 4)
+    if rate <= 0:
+        raise HTTPException(status_code=400, detail=f"Enter how many {base} one {cur} was worth.")
+    await db.invoices.update_one({"id": iid, "tenant_id": tid}, {"$set": {"fx_rate": rate}})
+    # The expense booked from a bill is the same money, at the same rate.
+    await db.expenses.update_many({"tenant_id": tid, "invoice_id": iid, "currency": cur}, {"$set": {"fx_rate": rate}})
+    await db.payments.update_many(
+        {"tenant_id": tid, "currency": cur, "$or": [{"invoice_id": iid}, {"applications.invoice_id": iid}],
+         "fx_rate": {"$in": [None, 0]}}, {"$set": {"fx_rate": rate}})   # $in null also matches "not set"
+    await db.tenants.update_one({"id": tid}, {"$set": {f"fx_last.{cur}": rate}})
+    await log_activity(tid, user["id"], "invoice_fx_rate",
+                       f"{user.get('name') or 'Someone'} set 1 {cur} = {rate:g} {base} on "
+                       f"{inv.get('number') or inv.get('title') or 'an invoice'}", "invoice", iid)
+    return {"id": iid, "fx_rate": rate, "amount_base": round(_num(inv.get("amount")) * rate, 2)}
+
+
+@router.patch("/expenses/{eid}/fx-rate")
+async def set_expense_fx_rate(eid: str, inp: FxRateInput, user: dict = Depends(require_ledger)):
+    """The exchange rate of an expense in another currency (a USD bill read from
+    a photo, say), so it counts in the company's totals instead of being left out."""
+    tid = user["tenant_id"]
+    exp = await db.expenses.find_one({"id": eid, "tenant_id": tid}, {"_id": 0})
+    if not exp:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    base = (await _currency(tid)).upper()
+    cur = (exp.get("currency") or base).upper()
+    if cur == base:
+        raise HTTPException(status_code=400, detail=f"This expense is already in {base}.")
+    rate = round(_num(inp.fx_rate), 4)
+    if rate <= 0:
+        raise HTTPException(status_code=400, detail=f"Enter how many {base} one {cur} was worth.")
+    await db.expenses.update_one({"id": eid, "tenant_id": tid}, {"$set": {"fx_rate": rate}})
+    await db.tenants.update_one({"id": tid}, {"$set": {f"fx_last.{cur}": rate}})
+    await log_activity(tid, user["id"], "expense_fx_rate",
+                       f"{user.get('name') or 'Someone'} set 1 {cur} = {rate:g} {base} on "
+                       f"{exp.get('title') or 'an expense'}", "expense", eid)
+    return {"id": eid, "fx_rate": rate, "amount_base": round(_num(exp.get("amount")) * rate, 2)}
 
 
 @router.get("/invoices/{iid}/pdf")

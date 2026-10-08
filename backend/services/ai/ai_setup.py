@@ -161,8 +161,28 @@ def summarize_ai_setup_status(status_map: dict) -> dict:
 STATUS_PENDING = "pending"
 
 
+def _shown_operating_model(om, roles):
+    """The operating model from the sign-up review, cleaned like any other:
+    normalized, and each stage / stage-task team resolved onto the company's
+    real team keys. None when there is nothing usable (then it is designed now)."""
+    if not isinstance(om, dict) or not om.get("pipelines"):
+        return None
+    from shared.normalizers import normalize_operating_model
+    from shared.roles import resolve_role
+    clean = normalize_operating_model(om)
+    keys = [r.get("key") for r in (roles or []) if r.get("key")] + ["owner"]
+    for p in clean.get("pipelines") or []:
+        for st in p.get("stages") or []:
+            if isinstance(st, dict):
+                st["role"] = resolve_role(st.get("role"), keys) or ""
+                for t in st.get("tasks") or []:
+                    t["role"] = resolve_role(t.get("role"), keys) or ""
+    return clean if clean.get("pipelines") else None
+
+
 async def generate_tenant_setup(tenant_id: str, *, industry: str, company_size: str,
-                                 roles: list, description: str) -> dict:
+                                 roles: list, description: str,
+                                 operating_model: dict = None, approval_actions: list = None) -> dict:
     """Generate a new workspace's lexicon, operating model and finance
     categories, and write them onto the tenant.
 
@@ -182,9 +202,18 @@ async def generate_tenant_setup(tenant_id: str, *, industry: str, company_size: 
     import asyncio
 
     set_usage_tenant(tenant_id)
+    # Audit 2026-10-08: the pipelines the founder saw on the review screen are
+    # the ones the company gets -- no second design that could differ.
+    shown = _shown_operating_model(operating_model, roles)
+
+    async def _om():
+        if shown:
+            return shown, STATUS_GENERATED
+        return await ai_generate_operating_model_with_status(industry, company_size, roles, description)
+
     lex_r, om_r, fc_r = await asyncio.gather(
         ai_generate_lexicon_with_status(industry, company_size, roles, description),
-        ai_generate_operating_model_with_status(industry, company_size, roles, description),
+        _om(),
         ai_generate_finance_categories_with_status(industry, company_size, roles, description),
         return_exceptions=True,
     )
@@ -208,8 +237,11 @@ async def generate_tenant_setup(tenant_id: str, *, industry: str, company_size: 
     # Audit B-01 (2026-10-08): the approval rules from the interview become
     # settings now that there are real teams and stages to point them at.
     try:
-        from services.ai.approval_rules import apply_interview_rules
-        applied = await apply_interview_rules(tenant_id)
+        from services.ai.approval_rules import apply_interview_rules, apply_shown_actions
+        # The rules as the review screen showed them on these pipelines; with
+        # none (or the preview never finished) they are worked out now.
+        applied = (await apply_shown_actions(tenant_id, approval_actions) if shown and approval_actions
+                   else await apply_interview_rules(tenant_id))
         if applied:
             logger.info(f"interview approval rules applied for {tenant_id}: "
                         f"{sum(1 for a in applied if a.get('setting'))} settings, "

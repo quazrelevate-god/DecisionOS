@@ -37,6 +37,7 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 # 2026-10-06: categories + keyword rules live in services/finance_words (shared with
 # services/calculated); re-exported here under their old names.
+from shared.money import as_base_rows, in_base, needs_rate as _needs_rate, total_in_base  # noqa: E402  (audit: one currency per total)
 from services.finance_words import (  # noqa: E402,F401
     EXPENSE_CATEGORIES, ASSET_CATEGORIES, _CATEGORY_KEYWORDS, guess_expense_category,
     _ASSET_KEYWORDS, guess_asset_category, get_finance_categories, _match_category,
@@ -806,8 +807,14 @@ async def list_expenses(user: dict = Depends(require_ledger),
                         limit: int = Query(1000, ge=1, le=2000), offset: int = Query(0, ge=0)):
     # S9 (U8-09.4): optional pagination. Defaults reproduce the prior response
     # (newest up to 1000); now index-backed by (tenant_id, created_at).
-    return await db.expenses.find({"tenant_id": user["tenant_id"]}, {"_id": 0}) \
+    rows = await db.expenses.find({"tenant_id": user["tenant_id"]}, {"_id": 0}) \
         .sort("created_at", -1).skip(offset).limit(limit).to_list(limit)
+    # Audit 2026-10-08: each expense in the company's currency too (None = a
+    # bill in another currency with no exchange rate yet).
+    base = await _currency(user["tenant_id"])
+    for e in rows:
+        e["amount_base"] = in_base(e.get("amount"), e, base)
+    return rows
 
 
 # J7 (JOURNEY-1) — THE HIGH-VALUE THRESHOLD APPLIES TO EVERY EXPENSE, HOWEVER
@@ -1136,9 +1143,16 @@ async def list_revenue(user: dict = Depends(require_ledger)):
         i["balance"] = _remaining(i)
         i["overdue"] = receivable_overdue(i, now)
         i["days_past_due"] = days_past_due(i, now)
-    billed = sum(_num(i.get("amount")) for i in invoices)
-    received = sum(_num(p.get("amount")) for p in payments)
-    outstanding = sum(_remaining(i) for i in invoices if i.get("status") != "paid")
+        # Audit 2026-10-08 — in the company's currency too (None = no rate yet).
+        i["amount_base"] = in_base(i.get("amount"), i, currency)
+        i["balance_base"] = in_base(i["balance"], i, currency)
+    for p in payments:
+        p["amount_base"] = in_base(p.get("amount"), p, currency)
+    # Totals in the company's currency. A foreign invoice with no rate is not
+    # guessed at -- it is left out and listed in needs_rate.
+    billed = total_in_base(invoices, currency, lambda i: i.get("amount"))
+    received = total_in_base(payments, currency, lambda p: p.get("amount"))
+    outstanding = total_in_base([i for i in invoices if i.get("status") != "paid"], currency, _remaining)
     # Payments (or leftover balances) we couldn't confidently link → surfaced for human matching.
     unmatched = [{**p, "remaining": _pay_remaining(p)} for p in payments
                  if _pay_remaining(p) > 0.01 and p.get("match_status") != "standalone"]
@@ -1148,7 +1162,8 @@ async def list_revenue(user: dict = Depends(require_ledger)):
         "totals": {"billed": round(billed, 2), "received": round(received, 2),
                    "outstanding": round(outstanding, 2),
                    "invoice_count": len(invoices), "payment_count": len(payments),
-                   "unmatched_count": len(unmatched)},
+                   "unmatched_count": len(unmatched),
+                   "needs_rate": _needs_rate(invoices, currency, lambda i: i.get("amount"))},
         "invoices": invoices, "payments": payments,
         "unmatched_payments": unmatched,
         "open_invoices": [{"id": i["id"], "number": i.get("number"), "title": i.get("title"),
@@ -1214,6 +1229,7 @@ async def list_payables(user: dict = Depends(require_ledger)):
     payments = await db.payments.find({"tenant_id": tid, "direction": "out"}, {"_id": 0}).sort("created_at", -1).to_list(3000)
     for b in bills:
         b["balance"] = _remaining(b)
+        b["balance_base"] = in_base(b["balance"], b, currency)
     unmatched = [{**p, "remaining": _pay_remaining(p)} for p in payments
                  if _pay_remaining(p) > 0.01 and p.get("match_status") != "standalone"]
     open_bills = [b for b in bills if b.get("status") != "paid" and _remaining(b) > 0.01]
@@ -1221,12 +1237,14 @@ async def list_payables(user: dict = Depends(require_ledger)):
     return {
         "currency": currency,
         "totals": {"unmatched_count": len(unmatched), "open_bill_count": len(open_bills),
-                   "payable_outstanding": round(sum(_remaining(b) for b in open_bills), 2)},
+                   "payable_outstanding": total_in_base(open_bills, currency, _remaining),
+                   "needs_rate": _needs_rate(open_bills, currency, _remaining)},
         "unmatched_payments": unmatched,
         "open_invoices": [{"id": b["id"], "number": b.get("number"), "title": b.get("title"),
                            "contact_name": b.get("contact_name"), "amount": _num(b.get("amount")),
                            "balance": _remaining(b), "date": b.get("date"),
-                           "due_date": b.get("due_date"), "currency": b.get("currency")} for b in open_bills],
+                           "due_date": b.get("due_date"), "currency": b.get("currency"),
+                           "fx_rate": b.get("fx_rate"), "balance_base": b.get("balance_base")} for b in open_bills],
         # J1-11 — approved, not yet billed. Read, never booked (see above).
         "committed": committed,
     }
@@ -1363,8 +1381,11 @@ async def ledger_summary(user: dict = Depends(require_ledger)):
     # yet, and one they turned down never will be. Both stay on the Expenses
     # list, marked, so the person who typed it can see what happened to it —
     # they are simply not counted. An approved one joins these totals at once.
-    expenses = await db.expenses.find(
+    expenses_raw = await db.expenses.find(
         {"tenant_id": tid, "approval_status": {"$nin": ["pending", "rejected"]}}, {"_id": 0}).to_list(5000)
+    # Audit 2026-10-08: every expense figure below is in the company's
+    # currency; a foreign bill with no exchange rate is left out (needs_rate).
+    expenses = as_base_rows(expenses_raw, currency)
     assets = await db.assets.find({"tenant_id": tid}, {"_id": 0}).to_list(5000)
     inventory = await db.inventory.find({"tenant_id": tid}, {"_id": 0}).to_list(5000)
     sales = await db.invoices.find({"tenant_id": tid, "type": "sales_invoice"}, {"_id": 0}).to_list(5000)
@@ -1373,14 +1394,16 @@ async def ledger_summary(user: dict = Depends(require_ledger)):
     # and the stock it has USED — the cost of the goods it sold.
     bills = await db.invoices.find({"tenant_id": tid, "type": "purchase_bill"}, {"_id": 0}).to_list(5000)
     used = await db.stock_movements.find({"tenant_id": tid}, {"_id": 0, "date": 1, "value": 1}).to_list(5000)
-    payables_outstanding = sum(_remaining(b) for b in bills if b.get("status") != "paid")
+    unpaid_bills = [b for b in bills if b.get("status") != "paid"]
+    payables_outstanding = total_in_base(unpaid_bills, currency, _remaining)
     stock_used = sum(_num(u.get("value")) for u in used)
 
     total = sum(_num(e.get("amount")) for e in expenses)
     paid = sum(_num(e.get("amount")) for e in expenses if e.get("status") == "paid")
-    revenue_billed = sum(_num(s.get("amount")) for s in sales)
-    revenue_received = sum(_num(p.get("amount")) for p in pays_in)
-    revenue_outstanding = sum(_remaining(s) for s in sales if s.get("status") != "paid")
+    # Audit 2026-10-08: every money total in the company's currency.
+    revenue_billed = total_in_base(sales, currency, lambda s: s.get("amount"))
+    revenue_received = total_in_base(pays_in, currency, lambda p: p.get("amount"))
+    revenue_outstanding = total_in_base([s for s in sales if s.get("status") != "paid"], currency, _remaining)
     by_cat, by_vendor, by_month = {}, {}, {}
     for e in expenses:
         amt = _num(e.get("amount"))
@@ -1414,6 +1437,9 @@ async def ledger_summary(user: dict = Depends(require_ledger)):
             "net_profit": round(revenue_billed - _operating - stock_used, 2),
             "payables_outstanding": round(payables_outstanding, 2),
             "open_bill_count": sum(1 for b in bills if b.get("status") != "paid" and _remaining(b) > 0.01),
+            # Foreign-currency invoices / bills with no exchange rate yet: NOT in
+            # the figures above; the page asks for their rate.
+            "needs_rate": _needs_rate(sales + unpaid_bills + expenses_raw, currency, lambda d: d.get("amount")),
         },
         "stock_used": [{"date": u.get("date"), "value": _num(u.get("value"))} for u in used],
         "by_category": [{"category": k, "amount": round(v, 2)} for k, v in sorted(by_cat.items(), key=lambda x: -x[1])],
@@ -1438,7 +1464,8 @@ _SCOPE_FOCUS = {
 
 async def _finance_context(tid: str, scope: str) -> dict:
     currency = await _currency(tid)
-    expenses = await db.expenses.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    expenses_raw = await db.expenses.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    expenses = as_base_rows(expenses_raw, currency)      # audit: one currency per total
     assets = await db.assets.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(2000)
     inventory = await db.inventory.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(2000)
     sales = await db.invoices.find({"tenant_id": tid, "type": "sales_invoice"}, {"_id": 0}).sort("created_at", -1).to_list(2000)
@@ -1452,18 +1479,21 @@ async def _finance_context(tid: str, scope: str) -> dict:
     open_bills = [b for b in bills if b.get("status") != "paid" and _remaining(b) > 0.01]
     total = sum(_num(e.get("amount")) for e in expenses)
     paid = sum(_num(e.get("amount")) for e in expenses if e.get("status") == "paid")
-    revenue_billed = sum(_num(s.get("amount")) for s in sales)
-    revenue_received = sum(_num(p.get("amount")) for p in pays_in)
-    revenue_outstanding = sum(_remaining(s) for s in sales if s.get("status") != "paid")
+    revenue_billed = total_in_base(sales, currency, lambda s: s.get("amount"))
+    revenue_received = total_in_base(pays_in, currency, lambda p: p.get("amount"))
+    revenue_outstanding = total_in_base([s for s in sales if s.get("status") != "paid"], currency, _remaining)
     by_cat, by_vendor, by_month, unpaid = {}, {}, {}, []
     by_customer, unpaid_sales = {}, []
     for s in sales:
         amt = _num(s.get("amount"))
         cn = s.get("contact_name") or "Unspecified"
-        by_customer[cn] = by_customer.get(cn, 0) + amt
+        amt_base = in_base(amt, s, currency)       # audit: one currency per total
+        if amt_base is not None:
+            by_customer[cn] = by_customer.get(cn, 0) + amt_base
         if s.get("status") != "paid":
             unpaid_sales.append({"title": s.get("title") or s.get("number"), "customer": cn,
-                                 "amount": amt, "due_date": s.get("due_date"), "date": s.get("date")})
+                                 "amount": amt, "currency": s.get("currency") or currency,
+                                 "due_date": s.get("due_date"), "date": s.get("date")})
     for e in expenses:
         amt = _num(e.get("amount"))
         by_cat[e.get("category") or "Other"] = by_cat.get(e.get("category") or "Other", 0) + amt
@@ -1496,8 +1526,10 @@ async def _finance_context(tid: str, scope: str) -> dict:
             "capital_spend": round(_capital, 2),
             "stock_used": round(stock_used, 2),
             "net_profit": round(revenue_billed - _operating - stock_used, 2),
-            "payables_outstanding": round(sum(_remaining(b) for b in open_bills), 2),
+            "payables_outstanding": total_in_base(open_bills, currency, _remaining),
             "open_bill_count": len(open_bills),
+            "not_in_totals_no_exchange_rate": _needs_rate(sales + open_bills + expenses_raw, currency,
+                                                          lambda d: d.get("amount")),
         },
         "by_category": _top(by_cat), "by_vendor": _top(by_vendor),
         "by_month": [{"month": m, "amount": round(by_month[m], 2)} for m in sorted(by_month)[-6:]],
@@ -1508,6 +1540,7 @@ async def _finance_context(tid: str, scope: str) -> dict:
         ctx["payables_due"] = sorted(
             ({"supplier": b.get("contact_name") or "Unspecified", "number": b.get("number"),
               "booked_as": b.get("purchase_type") or "expense", "balance": _remaining(b),
+              "currency": b.get("currency") or currency,
               "due_date": b.get("due_date"), "date": b.get("date")} for b in open_bills),
             key=lambda x: -x["balance"])[:12]
     if scope in ("assets", "brief"):

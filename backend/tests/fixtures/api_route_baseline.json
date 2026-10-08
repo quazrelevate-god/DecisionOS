@@ -1,6 +1,6 @@
 {
-  "count": 373,
-  "sha": "ac94877f90f5e09211dee0fe3bfdbc06d486221a057ded03bdcbdca0c830f8f7",
+  "count": 376,
+  "sha": "33aa026a3091dfcaed57333753800547405b38c08fa7d1d1c2f164cb4f3f6ff1",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -198,7 +198,9 @@
     "PATCH /api/decisions/{decision_id}",
     "PATCH /api/decisions/{decision_id}/proposal/tasks/{key}",
     "PATCH /api/expenses/{eid}",
+    "PATCH /api/expenses/{eid}/fx-rate",
     "PATCH /api/inventory/{iid}",
+    "PATCH /api/invoices/{iid}/fx-rate",
     "PATCH /api/onboarding/draft/{draft_id}",
     "PATCH /api/tasks/{task_id}",
     "PATCH /api/tasks/{task_id}/execution-plan",
@@ -332,6 +334,7 @@
     "POST /api/signup/interview/answer",
     "POST /api/signup/interview/back",
     "POST /api/signup/interview/blueprint",
+    "POST /api/signup/interview/flow",
     "POST /api/signup/interview/refine",
     "POST /api/signup/interview/start",
     "POST /api/signup/phone/send-code",

@@ -147,6 +147,26 @@ def describe(action: dict, teams: List[dict], pipelines: List[dict]) -> str:
     return "Noted — there is no setting for this yet, so Dex keeps it as a note."
 
 
+def apply_to_pipelines(pipelines: List[dict], actions: List[dict]) -> bool:
+    """Put the stage rules onto the pipelines, in place: the sign-off stage
+    and, for a limit, the team that may sign off itself up to it. Pure, so the
+    sign-up preview and the real setup produce exactly the same pipelines.
+    Returns True when anything changed."""
+    changed = False
+    for a in actions:
+        if a.get("kind") not in ("stage_limit", "owner_stage"):
+            continue
+        for p in pipelines:
+            if p.get("key") == a.get("pipeline"):
+                p["approval_stage"] = a["stage"]
+                if a["kind"] == "stage_limit":
+                    p["approval_delegate"] = {"role": a["team"], "up_to": a["up_to"]}
+                else:
+                    p.pop("approval_delegate", None)
+                changed = True
+    return changed
+
+
 async def apply_actions(tenant_id: str, actions: List[dict]) -> List[dict]:
     """Write the validated actions onto the tenant. Returns the per-rule summary."""
     t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "roles": 1, "operating_model": 1,
@@ -157,25 +177,15 @@ async def apply_actions(tenant_id: str, actions: List[dict]) -> List[dict]:
     pipelines = om.get("pipelines") or []
     sets: Dict[str, Any] = {}
     leave_map: Dict[str, str] = {}
-    om_changed = False
+    if apply_to_pipelines(pipelines, actions):
+        sets["operating_model.pipelines"] = pipelines
     for a in actions:
-        if a["kind"] in ("stage_limit", "owner_stage"):
-            for p in pipelines:
-                if p.get("key") == a["pipeline"]:
-                    p["approval_stage"] = a["stage"]
-                    if a["kind"] == "stage_limit":
-                        p["approval_delegate"] = {"role": a["team"], "up_to": a["up_to"]}
-                    else:
-                        p.pop("approval_delegate", None)
-                    om_changed = True
-        elif a["kind"] == "leave_approver":
+        if a["kind"] == "leave_approver":
             for team in a["for_teams"]:
                 leave_map[team] = a["team"]
         elif a["kind"] == "money_threshold":
             sets["high_value_threshold"] = a["amount"]
             sets["require_owner_signoff"] = True
-    if om_changed:
-        sets["operating_model.pipelines"] = pipelines
     if leave_map:
         sets["leave_approver_teams"] = leave_map
     descs = {r.get("name"): r.get("description") or "" for r in (t.get("approval_rules") or []) if isinstance(r, dict)}
@@ -216,3 +226,16 @@ async def apply_interview_rules(tenant_id: str) -> List[dict]:
     actions = await structure_approval_rules(rules, (t or {}).get("roles") or [],
                                              ((t or {}).get("operating_model") or {}).get("pipelines") or [])
     return await apply_actions(tenant_id, actions)
+
+
+async def apply_shown_actions(tenant_id: str, actions: List[dict]) -> List[dict]:
+    """The rule actions the sign-up review showed, applied without a second AI
+    call -- validated first against this company's real teams, pipelines and
+    rules, so nothing the browser sent can point anywhere else."""
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "roles": 1, "operating_model": 1,
+                                                      "approval_rules": 1})
+    t = t or {}
+    valid = validate_actions({"actions": actions or []}, rules=t.get("approval_rules") or [],
+                             teams=t.get("roles") or [],
+                             pipelines=(t.get("operating_model") or {}).get("pipelines") or [])
+    return await apply_actions(tenant_id, valid)

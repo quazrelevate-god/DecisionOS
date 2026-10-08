@@ -14,6 +14,7 @@ import {
   ArrowSquareIn, ArrowSquareOut, ChartPieSlice, CurrencyCircleDollar, CurrencyInr, Cube, DownloadSimple, Package, Robot, Storefront, TrendUp,
 } from "@phosphor-icons/react";
 import { AiPanel } from "./FinanceAi";
+import { NeedsRateNote } from "./MoneyActions";
 import { CARD, DeltaChip, EmptyNote, SMALL_PILL, Sparkline, TONE_CHIP, compactMoney, fmt } from "./financeKit";
 import { LIST_LIMIT, categorySlices, financeMetrics, latestEntryAt, receivableFacts } from "./ledgerMath";
 
@@ -69,6 +70,8 @@ export function OverviewTab({ summary, revenue, expenses, assets, inventory, per
             trendLabel={`${tile.label}, ${tile.neutral ? "running total" : "per interval"} over ${trendSpan}`} />
         ))}
       </div>
+      {/* Audit 2026-10-08 — foreign invoices with no exchange rate are not in these figures. */}
+      <NeedsRateNote rows={totals.needs_rate} testid="overview-needs-rate" />
       {m.truncated && p.days && (
         <p className="text-xs text-slate-500">
           Period figures count the newest {LIST_LIMIT.toLocaleString()} records of each kind; anything older than that isn't in them.

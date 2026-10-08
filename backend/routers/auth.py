@@ -617,14 +617,16 @@ async def register(inp: RegisterInput, request: Request, response: Response,
         background.add_task(
             _gen_setup, tenant_id, industry=inp.industry or "General",
             company_size=inp.company_size or "", roles=clean_roles or DEFAULT_ROLES,
-            description=inp.description or "")
+            description=inp.description or "",
+            operating_model=inp.operating_model, approval_actions=inp.approval_actions)
     else:
         # No request context (a test or a script calling register directly):
         # run it inline so behaviour is identical, just slower.
         try:
             await _gen_setup(tenant_id, industry=inp.industry or "General",
                              company_size=inp.company_size or "", roles=clean_roles or DEFAULT_ROLES,
-                             description=inp.description or "")
+                             description=inp.description or "",
+                             operating_model=inp.operating_model, approval_actions=inp.approval_actions)
         except Exception as _setup_err:
             logger.error(f"register: inline AI setup failed: {_setup_err}")
 

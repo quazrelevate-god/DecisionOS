@@ -11,7 +11,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Cell, Pie, PieChart, Tooltip } from "recharts";
 import {
-  ChartPieSlice, CurrencyCircleDollar, CurrencyInr, Cube, DownloadSimple, Package, Robot, Storefront, TrendUp,
+  ArrowSquareIn, ArrowSquareOut, ChartPieSlice, CurrencyCircleDollar, CurrencyInr, Cube, DownloadSimple, Package, Robot, Storefront, TrendUp,
 } from "@phosphor-icons/react";
 import { AiPanel } from "./FinanceAi";
 import { CARD, DeltaChip, EmptyNote, SMALL_PILL, Sparkline, TONE_CHIP, compactMoney, fmt } from "./financeKit";
@@ -42,16 +42,28 @@ export function OverviewTab({ summary, revenue, expenses, assets, inventory, per
     { id: "received", icon: DownloadSimple, tone: "sky", label: "Received", metric: m.received, to: "/finance?tab=revenue" },
     { id: "net-profit", icon: ChartPieSlice, tone: "orange", label: "Net profit", metric: m.net, to: "/finance?tab=expenses",
       // J2-06 — say what it leaves out, on the tile, so nobody has to guess
-      // why it does not match revenue minus spend.
-      note: setAside > 0 ? "stock & equipment not counted as a loss" : undefined },
+      // why it does not match revenue minus spend. Audit F-04: and the cost
+      // of stock used is IN it — or, when none is recorded, say so.
+      note: m.net.stockUsed > 0 ? `after ${short(m.net.stockUsed)} of stock used`
+        : (totals.inventory_value || 0) > 0 && (totals.revenue_billed || 0) > 0
+          ? "stock used isn't recorded yet — Inventory › Use"
+          : setAside > 0 ? "stock & equipment not counted as a loss" : undefined },
     { id: "spend", icon: TrendUp, tone: "slate", label: t("finance.k_spend"), metric: m.spend, to: "/finance?tab=expenses", goodWhenUp: false },
     { id: "assets", icon: Cube, tone: "violet", label: t("finance.k_asset"), metric: m.assets, to: "/finance?tab=assets", neutral: true },
     { id: "inventory", icon: Package, tone: "amber", label: t("finance.k_inv"), metric: m.stock, to: "/finance?tab=inventory", neutral: true },
+    /* Audit F-04 (2026-10-08) — WHAT IS OWED, BOTH WAYS. A 1,68,000 yarn bill
+       sat unpaid and the overview had no figure for it at all; "to collect"
+       was only on the Revenue tab. Balances now, not period flows. */
+    { id: "to-collect", icon: ArrowSquareIn, tone: "sky", label: "To collect", neutral: true, to: "/finance?tab=revenue",
+      metric: { value: totals.revenue_outstanding || 0, change: null, trend: [] }, note: "unpaid sales invoices" },
+    { id: "to-pay", icon: ArrowSquareOut, tone: "rose", label: "To pay", neutral: true, to: "/finance?tab=expenses",
+      metric: { value: totals.payables_outstanding || 0, change: null, trend: [] },
+      note: totals.open_bill_count ? `${totals.open_bill_count} supplier bill${totals.open_bill_count === 1 ? "" : "s"} unpaid` : "no supplier bills due" },
   ];
 
   return (
     <div className="space-y-5" data-testid="ledger-overview">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 lg:gap-4 xl:grid-cols-6" data-testid="ledger-kpis">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4" data-testid="ledger-kpis">
         {tiles.map((tile) => (
           <KpiTile key={tile.id} {...tile} value={f(tile.metric.value)} prevLabel={p.prevLabel}
             trendLabel={`${tile.label}, ${tile.neutral ? "running total" : "per interval"} over ${trendSpan}`} />

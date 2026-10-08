@@ -44,6 +44,9 @@ function withUids(om) {
     pipelines: (om.pipelines || []).map((p) => ({
       _uid: uid(), key: p.key || "", label: p.label || "", sub: p.sub || "",
       approval_stage: p.approval_stage || "",
+      // Audit B-01 — a team that may sign off itself, up to a value.
+      delegate_role: p.approval_delegate?.role || "",
+      delegate_up_to: p.approval_delegate?.up_to ?? "",
       // 2026-09-22 — working days of silence before a card here is stuck.
       stuck_after_days: p.stuck_after_days ?? "",
       stages: (p.stages || []).map((s) => ({
@@ -216,6 +219,8 @@ export function OperatingModelEditor() {
       .map((p) => ({
         key: p.key || undefined, label: p.label.trim(), sub: p.sub.trim(),
         approval_stage: p.approval_stage || null,
+        approval_delegate: p.approval_stage && p.delegate_role && Number(p.delegate_up_to) > 0
+          ? { role: p.delegate_role, up_to: Number(p.delegate_up_to) } : null,
         stuck_after_days: p.stuck_after_days === "" ? null : Number(p.stuck_after_days),
         stages: p.stages
           .filter((s) => s.label.trim())
@@ -456,6 +461,28 @@ export function OperatingModelEditor() {
                           ...p.stages.filter((s) => s.key).map((s) => ({ value: s.key, label: s.label }))]} />
               <span className="text-[11px] text-muted-foreground">(only the owner can advance to it)</span>
             </div>
+            {/* Audit B-01 (2026-10-08) — "Sales can confirm orders up to 5 lakh;
+                above that, me." One team may move a card into the sign-off
+                stage itself while the card's value is within the limit. */}
+            {p.approval_stage && (
+              <div className="mt-2 flex flex-wrap items-center gap-2" data-testid={`op-delegate-${pi}`}>
+                <span className="label-mono shrink-0 text-muted-foreground">Except</span>
+                <GlassSelect testid={`op-delegate-role-${pi}`} variant="field" triggerClassName={`${smSel} min-w-[9rem]`}
+                  value={p.delegate_role || ""} onChange={(v) => setPipeline(pi, { delegate_role: v })}
+                  placeholder="No one" ariaLabel="Team that may sign off itself"
+                  options={[{ value: "", label: "No one" },
+                            ...ROLE_OPTS.filter((r) => r.key !== "owner").map((r) => ({ value: r.key, label: r.label }))]} />
+                {p.delegate_role && (
+                  <>
+                    <span className="text-[11px] text-muted-foreground">may approve up to</span>
+                    <input data-testid={`op-delegate-upto-${pi}`} type="number" min="1" inputMode="numeric"
+                      className={`${smInp} w-32`} placeholder="500000" value={p.delegate_up_to}
+                      onChange={(e) => setPipeline(pi, { delegate_up_to: e.target.value.replace(/[^0-9.]/g, "") })} />
+                    <span className="text-[11px] text-muted-foreground">on the card's value; above that, the owner</span>
+                  </>
+                )}
+              </div>
+            )}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="label-mono text-muted-foreground">Stuck after</span>
               <input data-testid={`op-stuck-days-${pi}`} type="number" min="1" max="30" inputMode="numeric"

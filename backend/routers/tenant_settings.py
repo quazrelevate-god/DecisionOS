@@ -279,7 +279,10 @@ async def regenerate_finance_categories(user: dict = Depends(require_perm("team_
 async def update_tenant(inp: TenantUpdateInput, user: dict = Depends(require_perm("team_manage"))):
     updates = {}
     for f in ["name", "industry", "company_size", "region", "gst", "phone", "branches",
-              "support_email"]:
+              "support_email",
+              # Audit F-03: the invoice header / footer
+              "address", "state", "bank_name", "bank_account", "bank_ifsc", "upi_id",
+              "invoice_prefix", "invoice_terms"]:
         v = getattr(inp, f)
         if v is not None:
             updates[f] = v.strip() if isinstance(v, str) else v
@@ -855,3 +858,26 @@ async def add_invites(inp: InviteInput, user: dict = Depends(require_perm("team_
 
 # ---------------------------------------------------------------------------
 # Team / users
+
+
+# Audit B-01 (2026-10-08): what the sign-up interview's approval rules became.
+@router.get("/tenant/approval-rules")
+async def get_approval_rules(user: dict = Depends(require_perm("team_manage"))):
+    t = await db.tenants.find_one({"id": user["tenant_id"]}, {
+        "_id": 0, "approval_rules": 1, "approval_rules_applied": 1, "approval_rules_applied_at": 1})
+    t = t or {}
+    return {"rules": t.get("approval_rules") or [], "applied": t.get("approval_rules_applied") or [],
+            "applied_at": t.get("approval_rules_applied_at")}
+
+
+@router.post("/tenant/approval-rules/apply")
+async def reapply_approval_rules(user: dict = Depends(require_role("owner"))):
+    """Turn the interview's rules into settings again (e.g. after the teams or
+    pipelines changed). Overwrites only what each rule names."""
+    from services.ai.approval_rules import apply_interview_rules
+    applied = await apply_interview_rules(user["tenant_id"])
+    await log_activity(user["tenant_id"], user["id"], "approval_rules_applied",
+                       f"{user['name']} applied the sign-up interview's approval rules "
+                       f"({sum(1 for a in applied if a.get('setting'))} became settings)")
+    t = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "approval_rules_applied_at": 1})
+    return {"applied": applied, "applied_at": (t or {}).get("approval_rules_applied_at")}

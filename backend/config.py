@@ -269,6 +269,7 @@ MODEL_ROUTES = {
     # onboarding generators + wizard (text)
     "generators.lexicon": "claude-sonnet", "generators.operating_model": "claude-sonnet",
     "generators.finance_categories": "claude-sonnet", "generators.stage_work": "claude-sonnet",
+    "generators.approval_rules": "claude-sonnet",
     "onboarding.suggest": "claude-sonnet", "onboarding.os_blueprint": "claude-sonnet",
     "onboarding.web_intel": "claude-sonnet", "onboarding.interview": "claude-sonnet",
     "onboarding.blueprint": "claude-sonnet",

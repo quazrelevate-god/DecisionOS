@@ -148,6 +148,8 @@ export function financeMetrics({ summary, revenue, expenses, assets, inventory, 
     })),
     assets: (assets || []).map((a) => ({ t: timeOf(a.purchase_date, a.created_at), v: num(a.purchase_amount) })),
     stock: (inventory || []).map((i) => ({ t: timeOf(i.created_at), v: num(i.value) })),
+    // Audit F-04 (2026-10-08): stock USED — the cost of what was sold.
+    stockUsed: (summary?.stock_used || []).map((u) => ({ t: timeOf(u.date), v: num(u.value) })),
   };
   const tt = summary?.totals || {};
   const windowed = Boolean(p.days);
@@ -178,13 +180,20 @@ export function financeMetrics({ summary, revenue, expenses, assets, inventory, 
      shown, as Spend and as their own tiles; they are simply not a loss. */
   const operatingRows = rows.spend.filter((r) => r.operating);
   const operating = flow(operatingRows, tt.operating_spend);
-  const netNow = billed.value - operating.value;
+  /* Audit F-04 (2026-10-08) — AND THE COST OF WHAT WAS SOLD. J2-06 is right
+     that stock BOUGHT is not a loss; but a sale of shirts made from yarn cost
+     the yarn, and profit read the whole sale because nothing recorded the yarn
+     being used. Stock used (Inventory › Use) is that cost, and it comes off. */
+  const used = flow(rows.stockUsed, tt.stock_used);
+  const netNow = billed.value - operating.value - used.value;
   const net = {
     value: windowed ? netNow : (tt.net_profit ?? netNow),
     change: windowed
-      ? change(netNow, sumIn(rows.billed, prevStart, start) - sumIn(operatingRows, prevStart, start))
+      ? change(netNow, sumIn(rows.billed, prevStart, start) - sumIn(operatingRows, prevStart, start)
+        - sumIn(rows.stockUsed, prevStart, start))
       : null,
-    trend: billed.trend.map((v, i) => v - operating.trend[i]),
+    trend: billed.trend.map((v, i) => v - operating.trend[i] - used.trend[i]),
+    stockUsed: used.value,
   };
   const balance = (list, total) => ({
     value: total ?? balanceAt(list, Infinity),

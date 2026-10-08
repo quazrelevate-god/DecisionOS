@@ -22,6 +22,7 @@ import { AREA, FIELD, Field, FileField, SHEET_CONTENT, SheetFoot, SheetHead, fmt
 import { DraftNote } from "../../components/karma/DraftNote";
 import { PartyPicker } from "../../components/karma/PartyPicker";
 import { useDraft } from "../../hooks/useDraft";
+import { InvoiceBuilderDialog } from "./MoneyActions";
 
 const withCurrent = (list, value) => (value && !list.includes(value) ? [value, ...list] : list);
 
@@ -454,6 +455,8 @@ export function AddRecordDialogs({ adding, setAdding, categories, assetCategorie
   return (
     <>
       <AddIncomeDialog {...bind("income")} />
+      {/* Audit F-03 — a GST / export invoice with line items, and its PDF. */}
+      <InvoiceBuilderDialog {...bind("invoice")} />
       <AddExpenseDialog {...bind("expense")} categories={categories} />
       <AddAssetDialog {...bind("asset")} categories={assetCategories} />
       <AddInventoryDialog {...bind("inventory")} cur={cur} />
@@ -474,6 +477,7 @@ export function AddRecordControl({ tab, onPick }) {
   const L = lex(tenant);
   const [open, setOpen] = useState(false);
   const kinds = {
+    invoice: { icon: Receipt, title: "Invoice", hint: `A GST or export invoice with line items, to send to a ${L.customer_singular.toLowerCase()} as a PDF`, button: "New invoice", testid: "add-invoice-btn" },
     income: { icon: CurrencyInr, title: "Income", hint: `A sale or service invoice — money in from a ${L.customer_singular.toLowerCase()}`, button: "Add income", testid: "add-income-btn" },
     expense: { icon: Receipt, title: "Expense", hint: `A bill or payment — money out to a ${L.vendor_singular.toLowerCase()}`, button: t("finance.add_expense"), testid: "add-expense-btn" },
     asset: { icon: Buildings, title: "Asset", hint: "Machinery, equipment or property you own", button: t("finance.add_asset"), testid: "add-asset-btn" },

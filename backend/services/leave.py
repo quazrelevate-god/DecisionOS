@@ -33,11 +33,21 @@ async def _resolve_leave_approver(tenant_id: str, requester: dict):
         m = await db.users.find_one({"id": rm, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1})
         if m:
             return m["id"], m.get("name")
-    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "leave_approvers": 1})
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "leave_approvers": 1, "leave_approver_teams": 1})
     mapping = (t or {}).get("leave_approvers") or {}
     aid = mapping.get(requester.get("role"))
     if aid and aid != rid:
         m = await db.users.find_one({"id": aid, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1})
+        if m:
+            return m["id"], m.get("name")
+    # Audit B-01 (2026-10-08) — "the HR manager approves leave": a TEAM is the
+    # approver (set from the sign-up interview, before anyone had joined), so
+    # it is resolved to a member of that team now. Someone in that team asking
+    # for their own leave goes on up to the owner.
+    teams = (t or {}).get("leave_approver_teams") or {}
+    team = teams.get(requester.get("role")) or teams.get("*")
+    if team and team != requester.get("role"):
+        m = await _team_leave_approver(tenant_id, team, rid)
         if m:
             return m["id"], m.get("name")
     # The owner fallback — but never the requester (a co-owner in a multi-owner
@@ -158,3 +168,17 @@ async def _create_leave(tenant_id, requester, leave_type, from_date, to_date, da
 # 2026-10-06 (AI audit step 5): leave impact is calculated now -- services/calculated.leave_impact.
 
 
+
+
+async def _team_leave_approver(tenant_id: str, team: str, requester_id: str):
+    """An active member of `team` who can approve leave (not the requester)."""
+    from services.auth.membership import list_memberships_for_tenant, members_effective_perms, LIVE_STATUSES
+    ids = [m["user_id"] for m in await list_memberships_for_tenant(db, tenant_id, statuses=LIVE_STATUSES)
+           if m.get("role") == team and m.get("user_id") != requester_id]
+    if not ids:
+        return None
+    people = await db.users.find({"id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1, "role": 1,
+                                                       "permissions": 1}).sort("name", 1).to_list(50)
+    perms = await members_effective_perms(db, tenant_id, people)
+    able = [p for p in people if "leave_approve" in (perms.get(p["id"]) or set())]
+    return able[0] if able else None

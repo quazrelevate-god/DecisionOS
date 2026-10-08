@@ -35,6 +35,15 @@ class TenantUpdateInput(BaseModel):
     phone: Optional[str] = None
     branches: Optional[str] = None
     products: Optional[List[ProductItem]] = None
+    # Audit F-03 (2026-10-08): what a GST invoice's header and footer need.
+    address: Optional[str] = None
+    state: Optional[str] = None          # GST state -- decides CGST+SGST vs IGST
+    bank_name: Optional[str] = None
+    bank_account: Optional[str] = None
+    bank_ifsc: Optional[str] = None
+    upi_id: Optional[str] = None
+    invoice_prefix: Optional[str] = None
+    invoice_terms: Optional[str] = None
 
 
 class InviteInput(BaseModel):

@@ -1225,7 +1225,8 @@ async def list_payables(user: dict = Depends(require_ledger)):
         "unmatched_payments": unmatched,
         "open_invoices": [{"id": b["id"], "number": b.get("number"), "title": b.get("title"),
                            "contact_name": b.get("contact_name"), "amount": _num(b.get("amount")),
-                           "balance": _remaining(b), "date": b.get("date")} for b in open_bills],
+                           "balance": _remaining(b), "date": b.get("date"),
+                           "due_date": b.get("due_date"), "currency": b.get("currency")} for b in open_bills],
         # J1-11 — approved, not yet billed. Read, never booked (see above).
         "committed": committed,
     }
@@ -1368,6 +1369,12 @@ async def ledger_summary(user: dict = Depends(require_ledger)):
     inventory = await db.inventory.find({"tenant_id": tid}, {"_id": 0}).to_list(5000)
     sales = await db.invoices.find({"tenant_id": tid, "type": "sales_invoice"}, {"_id": 0}).to_list(5000)
     pays_in = await db.payments.find({"tenant_id": tid, "direction": "in"}, {"_id": 0}).to_list(5000)
+    # Audit F-04 (2026-10-08): what the company OWES (unpaid purchase bills)
+    # and the stock it has USED — the cost of the goods it sold.
+    bills = await db.invoices.find({"tenant_id": tid, "type": "purchase_bill"}, {"_id": 0}).to_list(5000)
+    used = await db.stock_movements.find({"tenant_id": tid}, {"_id": 0, "date": 1, "value": 1}).to_list(5000)
+    payables_outstanding = sum(_remaining(b) for b in bills if b.get("status") != "paid")
+    stock_used = sum(_num(u.get("value")) for u in used)
 
     total = sum(_num(e.get("amount")) for e in expenses)
     paid = sum(_num(e.get("amount")) for e in expenses if e.get("status") == "paid")
@@ -1401,8 +1408,14 @@ async def ledger_summary(user: dict = Depends(require_ledger)):
             "operating_spend": round(_operating, 2),
             "stock_spend": round(_stock, 2),
             "capital_spend": round(_capital, 2),
-            "net_profit": round(revenue_billed - _operating, 2),
+            # Audit F-04: stock is not a loss when it is bought (J2-06) -- it
+            # is a cost when it is USED, which is what the goods sold cost.
+            "stock_used": round(stock_used, 2),
+            "net_profit": round(revenue_billed - _operating - stock_used, 2),
+            "payables_outstanding": round(payables_outstanding, 2),
+            "open_bill_count": sum(1 for b in bills if b.get("status") != "paid" and _remaining(b) > 0.01),
         },
+        "stock_used": [{"date": u.get("date"), "value": _num(u.get("value"))} for u in used],
         "by_category": [{"category": k, "amount": round(v, 2)} for k, v in sorted(by_cat.items(), key=lambda x: -x[1])],
         "by_vendor": [{"vendor": k, "amount": round(v, 2)} for k, v in sorted(by_vendor.items(), key=lambda x: -x[1])[:8]],
         "by_month": [{"month": m, "amount": round(by_month[m], 2)} for m in months],
@@ -1430,6 +1443,13 @@ async def _finance_context(tid: str, scope: str) -> dict:
     inventory = await db.inventory.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(2000)
     sales = await db.invoices.find({"tenant_id": tid, "type": "sales_invoice"}, {"_id": 0}).sort("created_at", -1).to_list(2000)
     pays_in = await db.payments.find({"tenant_id": tid, "direction": "in"}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    # Audit F-01/F-04 (2026-10-08): the AI was never shown the purchase bills,
+    # so "how much do we owe suppliers?" got "nothing" while a 1,68,000 bill
+    # sat unpaid. It sees what is owed, and the stock used, as the page does.
+    bills = await db.invoices.find({"tenant_id": tid, "type": "purchase_bill"}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    used = await db.stock_movements.find({"tenant_id": tid}, {"_id": 0, "value": 1}).to_list(5000)
+    stock_used = sum(_num(u.get("value")) for u in used)
+    open_bills = [b for b in bills if b.get("status") != "paid" and _remaining(b) > 0.01]
     total = sum(_num(e.get("amount")) for e in expenses)
     paid = sum(_num(e.get("amount")) for e in expenses if e.get("status") == "paid")
     revenue_billed = sum(_num(s.get("amount")) for s in sales)
@@ -1474,13 +1494,22 @@ async def _finance_context(tid: str, scope: str) -> dict:
             "operating_spend": round(_operating, 2),
             "stock_spend": round(_stock, 2),
             "capital_spend": round(_capital, 2),
-            "net_profit": round(revenue_billed - _operating, 2),
+            "stock_used": round(stock_used, 2),
+            "net_profit": round(revenue_billed - _operating - stock_used, 2),
+            "payables_outstanding": round(sum(_remaining(b) for b in open_bills), 2),
+            "open_bill_count": len(open_bills),
         },
         "by_category": _top(by_cat), "by_vendor": _top(by_vendor),
         "by_month": [{"month": m, "amount": round(by_month[m], 2)} for m in sorted(by_month)[-6:]],
     }
     if scope in ("expenses", "brief", "overview"):
         ctx["top_unpaid"] = sorted(unpaid, key=lambda x: -x["amount"])[:12]
+        # Supplier bills not yet paid -- what the company owes, and when.
+        ctx["payables_due"] = sorted(
+            ({"supplier": b.get("contact_name") or "Unspecified", "number": b.get("number"),
+              "booked_as": b.get("purchase_type") or "expense", "balance": _remaining(b),
+              "due_date": b.get("due_date"), "date": b.get("date")} for b in open_bills),
+            key=lambda x: -x["balance"])[:12]
     if scope in ("assets", "brief"):
         ctx["assets"] = [{"name": a.get("name"), "category": a.get("category"),
                           "value": _num(a.get("purchase_amount")), "status": a.get("status")} for a in assets[:30]]

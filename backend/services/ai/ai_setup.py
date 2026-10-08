@@ -205,6 +205,17 @@ async def generate_tenant_setup(tenant_id: str, *, industry: str, company_size: 
         "ai_setup_status": status,
     }})
     logger.info(f"tenant setup generated for {tenant_id}: {status}")
+    # Audit B-01 (2026-10-08): the approval rules from the interview become
+    # settings now that there are real teams and stages to point them at.
+    try:
+        from services.ai.approval_rules import apply_interview_rules
+        applied = await apply_interview_rules(tenant_id)
+        if applied:
+            logger.info(f"interview approval rules applied for {tenant_id}: "
+                        f"{sum(1 for a in applied if a.get('setting'))} settings, "
+                        f"{sum(1 for a in applied if not a.get('setting'))} notes")
+    except Exception as e:  # noqa: BLE001 — the workspace stands without them
+        logger.error(f"interview approval rules for {tenant_id}: {e}")
     return status
 
 

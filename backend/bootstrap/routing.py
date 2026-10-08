@@ -12,6 +12,7 @@ helper is imported from its real home.)
 """
 from routers.onboarding import router as onboarding_router
 from routers.ledger import router as ledger_router
+from routers.invoicing import router as invoicing_router  # audit 2026-10-08: payments, GST invoices, stock used
 from routers.admin import router as admin_router
 from routers.admin_tenant360 import router as admin_tenant360_router  # Epic 10 S1
 from routers.admin_impersonation import router as admin_impersonation_router  # Epic 10 S2
@@ -64,6 +65,7 @@ from routers.health import router as health_router
 _DOMAIN_ROUTERS = (
     onboarding_router,
     ledger_router,
+    invoicing_router,  # audit 2026-10-08 F-02/F-03/F-04
     admin_router,
     admin_tenant360_router,
     admin_impersonation_router,

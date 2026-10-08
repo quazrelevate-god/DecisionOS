@@ -567,10 +567,24 @@ async def advance(
     if pipeline:
         appr_stage = pipeline.get("approval_stage")
     if appr_stage and target_stage == appr_stage and actor_role != "owner":
-        raise WorkflowAdvanceError(
-            "Only the owner can approve this stage",
-            "owner_only_approval", 403,
-        )
+        # Audit B-01 (2026-10-08): a team the owner delegated to (from the
+        # sign-up interview, or Settings) moves the card itself while its value
+        # is within the limit. No value on the card = the owner decides, and
+        # the message says how to change that.
+        dlg = (pipeline or {}).get("approval_delegate") or {}
+        limit = dlg.get("up_to")
+        value = wf.get("amount")
+        if not (dlg.get("role") and actor_role == dlg.get("role") and limit
+                and value is not None and float(value) <= float(limit)):
+            if dlg.get("role") and actor_role == dlg.get("role") and limit:
+                from services.invoicing import _money
+                cap = "₹" + _money(float(limit), "INR")[:-3]     # ₹5,00,000
+                msg = (f"Above {cap} the owner approves this stage"
+                       if value is not None else
+                       f"Add the order value to the card first — you can approve up to {cap}")
+            else:
+                msg = "Only the owner can approve this stage"
+            raise WorkflowAdvanceError(msg, "owner_only_approval", 403)
 
     # Work left behind: say what happens to it, then check the gate.
     if resolutions is not None:

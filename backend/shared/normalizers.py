@@ -366,6 +366,18 @@ def normalize_operating_model(data: dict) -> dict:
             "sub": (p.get("sub") or "").strip() or f"{stages[0]['label']} → {stages[-1]['label']}",
             "stages": stages, "approval_stage": appr,
         }
+        # Audit B-01 (2026-10-08) — "Sales can confirm up to 5 lakh, above that
+        # the owner": one team may move a card into the sign-off stage itself
+        # while the card's value is within the limit. Kept only alongside a
+        # real sign-off stage, with a team and a positive limit.
+        dlg = p.get("approval_delegate")
+        if appr and isinstance(dlg, dict) and str(dlg.get("role") or "").strip():
+            try:
+                up_to = float(dlg.get("up_to"))
+            except (TypeError, ValueError):
+                up_to = 0
+            if up_to > 0:
+                np["approval_delegate"] = {"role": str(dlg["role"]).strip(), "up_to": round(up_to, 2)}
         # 2026-09-22 — working days of silence before a card on this board is
         # "stuck" (and its people are told). Unset = the company default.
         stuck = _whole_days(p.get("stuck_after_days"), 30)

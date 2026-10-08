@@ -29,6 +29,25 @@ const FIELDS = [
   { key: "branches", label: "Branches" },
 ];
 
+/* Audit F-03 (2026-10-08) — what goes on the invoices this company sends:
+   the address and state under the name (the state decides CGST+SGST or IGST),
+   and where the buyer pays. */
+const INVOICE_FIELDS = [
+  { key: "address", label: "Address on invoices", wide: true },
+  { key: "state", label: "State (for GST)", list: "gst-states" },
+  { key: "invoice_prefix", label: "Invoice number prefix (e.g. AT)" },
+  { key: "bank_name", label: "Bank name" },
+  { key: "bank_account", label: "Account number" },
+  { key: "bank_ifsc", label: "IFSC" },
+  { key: "upi_id", label: "UPI ID" },
+  { key: "invoice_terms", label: "Terms printed on invoices", wide: true },
+];
+const GST_STATES = ["Andaman and Nicobar Islands", "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chandigarh",
+  "Chhattisgarh", "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Goa", "Gujarat", "Haryana", "Himachal Pradesh",
+  "Jammu and Kashmir", "Jharkhand", "Karnataka", "Kerala", "Ladakh", "Lakshadweep", "Madhya Pradesh", "Maharashtra",
+  "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Puducherry", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
+  "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"];
+
 export function CompanyDetails() {
   const { tenant, user, refreshTenant } = useAuth();
   const canManage = hasPerm(user, "team_manage");
@@ -45,6 +64,7 @@ export function CompanyDetails() {
       name: tenant.name || "", industry: tenant.industry || "", company_size: tenant.company_size || "",
       phone: tenant.phone || "", region: tenant.region || "", gst: tenant.gst || "",
       support_email: tenant.support_email || "", branches: tenant.branches || "",
+      ...Object.fromEntries(INVOICE_FIELDS.map((f) => [f.key, tenant[f.key] || ""])),
     });
     setProducts((tenant.products || []).map((p) => ({ name: p.name || "", description: p.description || "", _key: uid() })));
   }, [tenant]);
@@ -95,6 +115,20 @@ export function CompanyDetails() {
               disabled={!canManage} onChange={(e) => setField(f.key, e.target.value)} placeholder={canManage ? f.label : "—"} />
           </div>
         ))}
+      </div>
+
+      <h3 className="mt-5 text-sm font-medium">On your invoices</h3>
+      <p className="mt-0.5 text-xs text-muted-foreground">Printed on every invoice you raise from Finance. Your state decides CGST + SGST or IGST.</p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2" data-testid="company-invoice-fields">
+        {INVOICE_FIELDS.map((f) => (
+          <div key={f.key} className={f.wide ? "sm:col-span-2" : ""}>
+            <label htmlFor={`company-field-${f.key}`} className={FIELD_LABEL}>{f.label}</label>
+            <input id={`company-field-${f.key}`} data-testid={`company-field-${f.key}`} className={`${DRAWER_FIELD} mt-1`}
+              value={form[f.key] || ""} list={f.list} disabled={!canManage}
+              onChange={(e) => setField(f.key, e.target.value)} placeholder={canManage ? "" : "—"} />
+          </div>
+        ))}
+        <datalist id="gst-states">{GST_STATES.map((s) => <option key={s} value={s} />)}</datalist>
       </div>
 
       {canManage && tenant?.id && (

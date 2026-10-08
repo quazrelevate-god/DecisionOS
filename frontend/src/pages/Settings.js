@@ -12,6 +12,7 @@ import { BusinessVocabulary } from "../components/BusinessVocabulary";
 // move to Operations. Both were sections at the bottom of Company Details.
 import { TeamsCard } from "../components/settings/TeamsCard";
 import { PlanCard } from "../components/settings/PlanCard";
+import { InterviewRulesCard } from "../components/settings/InterviewRulesCard";
 import { TaskTemplatesCard } from "../components/settings/TaskTemplatesCard";
 import { AccessSwitch } from "../components/settings/AccessSwitch";
 import { OperatingModelEditor } from "../components/OperatingModelEditor";
@@ -1108,6 +1109,8 @@ export default function Settings() {
 
         {tab === "operations" && (
           <>
+            {/* Audit B-01 — what the sign-up interview's approval rules became. */}
+            <Section id="settings-s-interview-rules" label="Approvals from sign-up"><InterviewRulesCard /></Section>
             <Section id="settings-s-model" label="Operating model"><OperatingModelEditor /></Section>
             <Section id="settings-s-templates" label="Task templates"><TaskTemplatesCard /></Section>
             {user?.role === "owner" && <Section id="settings-s-deadlines" label="Deadlines"><EscalationCard /></Section>}

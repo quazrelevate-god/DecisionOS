@@ -76,3 +76,34 @@ register(EvalCase(
     ],
     note="Finance categories: expense + asset lists, each de-duped and always terminated by 'Other'.",
 ))
+
+
+# Audit B-01 (2026-10-08): the interview's approval rules -> settings on real keys.
+from services.ai.approval_rules import structure_approval_rules  # noqa: E402
+
+_AR_TEAMS = [{"key": "sales_&_buyer_management", "label": "Sales & Buyer Management"}, {"key": "hr", "label": "HR"}]
+_AR_PIPES = [{"key": "order_fulfillment", "label": "Order Fulfillment",
+              "stages": [{"key": "inquiry", "label": "Inquiry"}, {"key": "order_confirmed", "label": "Order Confirmed"}]}]
+_AR_RULES = [{"name": "Order confirmation", "description": "Sales confirms orders up to 5 lakh; above that the owner"},
+             {"name": "Leave", "description": "The HR manager approves leave"},
+             {"name": "Discounts", "description": "Discounts over 5% need the owner"}]
+
+register(EvalCase(
+    task="generators.approval_rules", name="interview_rules_to_settings",
+    fn=structure_approval_rules,
+    kwargs={"rules": _AR_RULES, "teams": _AR_TEAMS, "pipelines": _AR_PIPES},
+    golden="""{"actions": [
+        {"rule": "Order confirmation", "kind": "stage_limit", "pipeline": "order_fulfillment",
+         "stage": "order_confirmed", "team": "sales_&_buyer_management", "up_to": 500000},
+        {"rule": "Leave", "kind": "leave_approver", "team": "hr", "for_teams": ["*"]},
+        {"rule": "Discounts", "kind": "note", "reason": "No discount setting"},
+        {"rule": "Made up", "kind": "money_threshold", "amount": 1}]}""",
+    checks=[
+        predicate("one action per real rule, none invented", lambda r: sorted(a["rule"] for a in r) ==
+                  ["Discounts", "Leave", "Order confirmation"]),
+        predicate("the order limit is a stage_limit on real keys", lambda r: any(
+            a["kind"] == "stage_limit" and a["stage"] == "order_confirmed" and a["up_to"] == 500000 for a in r)),
+        predicate("HR approves leave", lambda r: any(a["kind"] == "leave_approver" and a["team"] == "hr" for a in r)),
+    ],
+    note="Approval rules: every rule accounted for; only the company's own team/stage keys survive.",
+))

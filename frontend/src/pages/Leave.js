@@ -451,6 +451,12 @@ export function ApproverConfig({ roleOptions, members }) {
   const { tenant, refreshTenant } = useAuth();
   const [map, setMap] = useState(() => ({ ...(tenant?.leave_approvers || {}) }));
   const nonOwner = members.filter((m) => m.role !== "owner");
+  const teamMap = tenant?.leave_approver_teams || {};
+  const defaultApprover = (key) => {
+    const team = teamMap[key] || teamMap["*"];
+    if (!team || team === key) return "Owner (default)";
+    return `${roleLabel(team, roleOptions)} team (from your sign-up)`;
+  };
   const save = async () => {
     try {
       await api.patch("/tenant/leave-approvers", { approvers: map });
@@ -472,7 +478,9 @@ export function ApproverConfig({ roleOptions, members }) {
               triggerClassName="kr-pressed h-11 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--kr-gold))]"
               value={map[r.key] || ""} onChange={(v) => setMap({ ...map, [r.key]: v })}
               options={[
-                { value: "", label: "Owner (default)" },
+                // Audit B-01: a team named in the sign-up interview ("HR
+                // approves leave") is the default before anyone is picked.
+                { value: "", label: defaultApprover(r.key) },
                 ...nonOwner.map((m) => ({ value: m.id, label: `${m.name} · ${roleLabel(m.role, roleOptions)}` })),
                 ...members.filter((m) => m.role === "owner").map((m) => ({ value: m.id, label: `${m.name} · owner` })),
               ]} />

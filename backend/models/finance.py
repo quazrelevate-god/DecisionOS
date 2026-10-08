@@ -1,6 +1,6 @@
 """Finance / ledger / ingestion request schemas (Epic 8 Sprint 5 -- consolidated from routers).
 """
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel
 
 
@@ -79,3 +79,42 @@ class IncomeInput(BaseModel):
 class LedgerAskInput(BaseModel):
     question: str
     scope: Optional[str] = "brief"
+
+
+# --- Audit 2026-10-08: F-02 record a payment, F-03 a real invoice, F-04 stock used --------
+class RecordPaymentInput(BaseModel):
+    """Money received against a sales invoice, or paid against a purchase bill."""
+    amount: float
+    date: Optional[str] = None
+    method: Optional[str] = ""        # bank transfer / UPI / cash / cheque / card
+    reference: Optional[str] = ""     # UTR, cheque no.
+    notes: Optional[str] = ""
+
+
+class InvoiceLineInput(BaseModel):
+    description: str
+    hsn: Optional[str] = ""
+    qty: float = 1
+    unit: Optional[str] = ""
+    rate: float = 0
+    gst_rate: float = 0
+
+
+class GstInvoiceInput(BaseModel):
+    contact_id: Optional[str] = None
+    customer_name: str
+    customer_gstin: Optional[str] = ""
+    customer_address: Optional[str] = ""
+    place_of_supply: Optional[str] = ""   # a state, or "Export (outside India)"
+    currency: Optional[str] = None
+    number: Optional[str] = ""            # blank = the next number in the series
+    date: Optional[str] = None
+    due_date: Optional[str] = None
+    items: List[InvoiceLineInput] = []
+    notes: Optional[str] = ""
+
+
+class StockUseInput(BaseModel):
+    quantity: float
+    date: Optional[str] = None
+    note: Optional[str] = ""

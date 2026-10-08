@@ -115,3 +115,41 @@ FINANCE_CATEGORIES = register(Prompt(
         "Use the industry's real terminology; never invent nonsense."
     ),
 ))
+
+
+# Audit B-01 (2026-10-08): the interview's approval rules ("Sales can confirm
+# orders up to 5 lakh, above that me", "the HR manager approves leave") were
+# kept as free text and nothing read them, so the owner was made to approve
+# every order and every leave. This turns each rule into a setting the app
+# enforces, using ONLY the company's real team and pipeline/stage keys (given
+# in the user message); anything with no setting behind it is a "note".
+APPROVAL_RULES = register(Prompt(
+    name="generators.approval_rules",
+    version="1.1",
+    intent="Turn the founder's interview approval rules into enforceable settings (stage limits, owner-only stages, leave approver team, money threshold) or notes.",
+    template=(
+        "You turn a founder's approval rules, said in their sign-up interview, into DecisionOS settings. "
+        "You are given the rules, the company's TEAMS (key + label) and its PIPELINES (key, label, stages with key + label). "
+        "Return ONLY valid JSON, no prose, EXACTLY this shape: {\"actions\": [ ... ]}. Each action is ONE of: "
+        "{\"rule\": rule name, \"kind\": \"stage_limit\", \"pipeline\": pipeline key, \"stage\": stage key, \"team\": team key, \"up_to\": number} "
+        "-- that team may move work INTO that stage by itself while the card's value is at most up_to; above it the owner signs off "
+        "(e.g. 'sales can confirm orders up to 5 lakh, above that the owner' -> the order pipeline's confirmation stage, the sales team, 500000). "
+        "{\"rule\": rule name, \"kind\": \"owner_stage\", \"pipeline\": pipeline key, \"stage\": stage key} "
+        "-- only the owner may move work into that stage, whatever the value. "
+        "{\"rule\": rule name, \"kind\": \"leave_approver\", \"team\": team key, \"for_teams\": [\"*\"] or [team keys]} "
+        "-- that team approves leave (\"*\" = for every other team). "
+        "{\"rule\": rule name, \"kind\": \"money_threshold\", \"amount\": number} "
+        "-- spending or purchases at or above this amount need the owner's sign-off. "
+        "{\"rule\": rule name, \"kind\": \"note\", \"reason\": short reason} "
+        "-- anything with no setting above (discount percentages, seasonal rules, rework, quality calls). "
+        "A note's reason is ONE short plain sentence for the owner -- never mention action kinds, keys or field names. "
+        "Use ONLY keys from the lists given; never invent one. If a rule names a team or stage you cannot find, make it a note. "
+        # v1.1 (2026-10-08, first live run): a QC-inspection dependency became an
+        # owner-only stage, and "HR handles routine leave" was scoped to one team.
+        "NEVER make a stage owner_stage unless the rule says the owner / founder signs off at that step; a rule that something "
+        "else must happen first (an inspection, a document, a buyer's approval) is a note. "
+        "A rule about who handles leave in general is for_teams [\"*\"]; an exception for one team or season is a separate note. "
+        "Amounts are plain numbers in rupees: 5 lakh = 500000, 1 crore = 10000000, 50k = 50000. "
+        "Give each rule one action; a rule that clearly sets two things may give two. Keep the rule name exactly as given."
+    ),
+))

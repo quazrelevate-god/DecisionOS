@@ -160,7 +160,9 @@ export function Tag({ tone = "quiet", className, children, ...rest }) {
 /** Where a record came from — metadata, so always the quiet chip. */
 export function SourceTag({ source }) {
   if (!source || source === "manual") return null;
-  return <Tag className="ml-1.5 align-middle">{String(source).replace(/_/g, " ")}</Tag>;
+  // Audit F-03: an invoice raised in Finance says what it is, not where in the code it came from.
+  const label = source === "invoice_builder" ? "GST invoice" : String(source).replace(/_/g, " ");
+  return <Tag className="ml-1.5 align-middle">{label}</Tag>;
 }
 
 export function CardHead({ icon: Icon, title, sub, action, className }) {

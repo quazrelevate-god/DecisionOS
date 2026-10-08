@@ -22,6 +22,7 @@ import {
   AttachmentLink, CARD, EmptyNote, FIELD, LoadError, SMALL_INK, SMALL_PILL, SourceTag, TONE_CHIP, Tag, fmt,
 } from "./financeKit";
 import { latestEntryAt, daysSince, isInvoiceOverdue, overdueDays } from "./ledgerMath";
+import { BillsToPayPanel, InvoiceRowActions } from "./MoneyActions";
 // J2-07 — the Date columns printed the stored "2026-09-22". shortDate reads it
 // back as a day ("22 Sep 2026"); the tables still SORT on the raw value.
 import { shortDate } from "../../lib/format";
@@ -198,7 +199,7 @@ const SORTS = [
   { value: "overdue", label: "Oldest awaiting" },
 ];
 
-export function RevenueTab({ data, loading, error, cur, onDelete, onChange, initialFilter = "all" }) {
+export function RevenueTab({ data, loading, error, cur, onDelete, onChange, onPay, initialFilter = "all" }) {
   const f = fmt(cur);
   const tt = data?.totals || {};
   const invoices = useMemo(() => data?.invoices || [], [data]);
@@ -285,7 +286,13 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, init
     { key: "amount", head: "Amount", role: "amount", align: "right", tdClass: "font-semibold tabular-nums text-slate-900",
       cell: (s) => f(s.amount) },
     { key: "act", head: <span className="sr-only">Actions</span>, role: "action", align: "right",
-      cell: (s) => <DeleteButton onClick={() => onDelete("invoice", s.id)} testid={`revenue-invoice-delete-${s.id}`} label="Delete invoice" /> },
+      // Audit F-02/F-03: record a payment on it, or download it as a PDF.
+      cell: (s) => (
+        <span className="inline-flex items-center justify-end gap-1">
+          <InvoiceRowActions inv={{ ...s, currency: s.currency || cur }} onPay={onPay} />
+          <DeleteButton onClick={() => onDelete("invoice", s.id)} testid={`revenue-invoice-delete-${s.id}`} label="Delete invoice" />
+        </span>
+      ) },
   ];
   const paymentColumns = [
     { key: "customer", head: "Customer", role: "title", tdClass: "font-medium text-slate-900",
@@ -417,7 +424,7 @@ function CommittedPanel({ rows, cur, testid = "payables-committed" }) {
   );
 }
 
-export function ExpensesTab({ rows, loading, error, payables, cur, onDelete, onChange }) {
+export function ExpensesTab({ rows, loading, error, payables, cur, onDelete, onChange, onPay }) {
   const { t } = useTranslation();
   const f = fmt(cur);
   const { user } = useAuth();
@@ -463,6 +470,8 @@ export function ExpensesTab({ rows, loading, error, payables, cur, onDelete, onC
   ];
   return (
     <div className="space-y-5">
+      {/* Audit F-02 — the supplier bills still unpaid, with a way to pay them. */}
+      <BillsToPayPanel bills={payables?.open_invoices} total={payables?.totals?.payable_outstanding || 0} cur={cur} onPay={onPay} />
       <CommittedPanel rows={payables?.committed} cur={cur} />
       <NeedsMatchingPanel title="Supplier payments to match" testid="payables-needs-matching"
         hint="These payments to suppliers couldn’t be auto-linked to a purchase bill. Pick the bill they settle, or mark it as a standalone expense."
@@ -516,7 +525,7 @@ export function AssetsTab({ rows, loading, error, cur, onDelete }) {
   );
 }
 
-export function InventoryTab({ rows, loading, error, cur, onDelete }) {
+export function InventoryTab({ rows, loading, error, cur, onDelete, onUse }) {
   const { t } = useTranslation();
   const f = fmt(cur);
   const columns = [
@@ -529,7 +538,16 @@ export function InventoryTab({ rows, loading, error, cur, onDelete }) {
     { key: "vendor", head: t("finance.c_vendor"), role: "meta", tdClass: "text-slate-600", value: (i) => i.vendor_name, cell: (i) => i.vendor_name || "—" },
     { key: "value", head: t("finance.i_value"), role: "amount", align: "right", tdClass: "font-semibold tabular-nums text-slate-900", cell: (i) => f(i.value) },
     { key: "act", head: <span className="sr-only">Actions</span>, role: "action", align: "right",
-      cell: (i) => <DeleteButton onClick={() => onDelete(i.id)} testid={`inventory-delete-${i.id}`} label="Delete item" /> },
+      // Audit F-04 — stock used for an order: its cost reaches profit.
+      cell: (i) => (
+        <span className="inline-flex items-center justify-end gap-1">
+          {onUse && Number(i.quantity) > 0 && (
+            <button type="button" className={SMALL_PILL} data-testid={`inventory-use-${i.id}`}
+              onClick={() => onUse({ ...i, currency: i.currency || cur })}>Use</button>
+          )}
+          <DeleteButton onClick={() => onDelete(i.id)} testid={`inventory-delete-${i.id}`} label="Delete item" />
+        </span>
+      ) },
   ];
   return (
     <div className="space-y-5">

@@ -55,6 +55,11 @@ KNOWN_TENANT_SCOPED_COLLECTIONS = {
     "brain_documents",   # documents catalog
     # Audit / ops
     "brain_audit", "usage_events", "wa_events", "files",
+    # 2026-10-08 (Play audit C3): push tokens, sessions, audit log and the rest
+    # of the tenant-scoped trail the wipe had been leaving behind.
+    "device_tokens", "active_sessions", "audit_log", "ai_calls", "crm_activities",
+    "support_tickets", "operating_score_history", "operating_score_cache",
+    "content_reports",
 }
 
 

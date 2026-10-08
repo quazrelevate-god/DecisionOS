@@ -77,7 +77,8 @@ def _public(n: dict, names: dict) -> dict:
         "id": n["id"], "text": n.get("text") or "", "tag": n.get("tag") or "note",
         "visibility": n.get("visibility") or "public", "department": n.get("department") or "",
         "roles_allowed": n.get("roles_allowed") or [], "source": _source(n),
-        "decision_id": n.get("decision_id"), "created_by_name": names.get(n.get("created_by")) or "Dex",
+        "decision_id": n.get("decision_id"), "created_by": n.get("created_by"),
+        "created_by_name": names.get(n.get("created_by")) or "Dex",
         "created_at": n.get("created_at"), "updated_at": n.get("updated_at"),
         "index_state": (n.get("index") or {}).get("state"),
     }

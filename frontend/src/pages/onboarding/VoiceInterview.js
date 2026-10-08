@@ -9,6 +9,7 @@ import { DexWave } from "../../components/mobile/DexWave";
 import { fetchTTS, useAnswerRecorder, useSynthLevels, SPOKEN_LANGS, langLabel } from "./voice";
 // ASK-36 5 — the app's one loading animation.
 import { Loader } from "../../components/common";
+import { AiNotice } from "../../components/ReportButton";
 
 // KM-19 — the interview now shows the SAME voice surface the app shows.
 // components/mobile/DexWave is the three-ribbon lens (white, grey, gold) that
@@ -362,6 +363,14 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack }) {
                 )}
               </h1>
               {why && <p className="mt-3 text-xs text-muted-foreground">Why we ask — {why}</p>}
+              {/* 2026-10-08 — Play's AI-content policy: Dex's question can be
+                  flagged here, before there is an account (public endpoint). */}
+              {question && (
+                <AiNotice className="mt-2" report={{
+                  publicEndpoint: true, targetType: "signup_interview", targetId: `q${index}`,
+                  snapshot: question, context: why || undefined,
+                }} />
+              )}
             </motion.div>
           )}
         </AnimatePresence>

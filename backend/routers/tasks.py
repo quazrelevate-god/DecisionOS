@@ -490,12 +490,14 @@ async def task_activity(task_id: str, user: dict = Depends(get_current_user)):
             names[u["id"]] = u.get("name")
     items = [{
         "id": r.get("id"), "kind": r.get("kind"), "text": _timeline_text(r),
-        "actor_name": names.get(r.get("actor")), "created_at": r.get("created_at"),
+        "actor_name": names.get(r.get("actor")), "actor_id": r.get("actor"), "created_at": r.get("created_at"),
     } for r in rows]
     for u in t.get("updates") or []:
         items.append({
             "id": u.get("id"), "kind": _TRAIL_KIND.get(u.get("kind"), f"task_{u.get('kind')}"),
             "text": u.get("text") or "", "actor_name": u.get("author_name"),
+            # 2026-10-08: a person's own words on the trail — reportable in the app.
+            "actor_id": u.get("author_id"), "written": True,
             "to_name": u.get("to_name"), "step_text": u.get("step_text"), "created_at": u.get("created_at"),
         })
     items.sort(key=lambda x: x.get("created_at") or "", reverse=True)

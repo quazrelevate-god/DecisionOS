@@ -30,13 +30,27 @@ THREE OUTCOMES, decided per workspace:
   blocked            You own it and other people are in it. Deleting you
                      silently would either destroy a company that other people
                      depend on, or leave it with no owner. Neither is ours to
-                     choose, so we refuse and say what to do: hand ownership
-                     over, or remove everyone first.
+                     choose, so we ask: the owner can name the workspace in
+                     `delete_workspaces` to delete it with everyone in it, or
+                     remove people first. (2026-10-08, Play audit C3: a refusal
+                     with no way through is the "obstacle" the Account Deletion
+                     policy forbids, and there is no ownership hand-over yet.)
 
 A blocker stops the WHOLE request, not just that workspace. Half-deleting
 somebody and reporting partial success is worse than not starting: they think
 they are gone, and they are not.
+
+WHAT ELSE GOES WITH THE PERSON (2026-10-08, Play audit C3). The user row was
+never the whole of somebody: their push tokens, sessions (IP, user agent),
+notifications, one-time codes, sign-in lockout counters, unfinished signup
+drafts and email tokens were all left behind, and the audit log kept their IP
+and email against every action. _erase_personal_traces takes those. Work they
+did for a company stays with the company (above); payment records stay for as
+long as tax law requires, which the privacy policy says.
 """
+import re
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
@@ -51,6 +65,9 @@ CONFIRM_PHRASE = "DELETE"
 
 class DeleteAccountInput(BaseModel):
     confirm: str
+    # Workspaces the owner has explicitly chosen to delete along with everyone
+    # in them. Only meaningful for an outcome that would otherwise be blocked.
+    delete_workspaces: List[str] = []
 
 
 async def _plan(user: dict) -> dict:
@@ -108,12 +125,13 @@ async def _plan(user: dict) -> dict:
         }
         if is_owner and others:
             entry["outcome"] = "blocked"
+            entry["can_delete_workspace"] = True
             entry["reason"] = (
                 f"You own this workspace and {len(others)} other "
                 f"{'person is' if len(others) == 1 else 'people are'} in it. "
-                "Make someone else the owner first, or remove them — we won't "
-                "delete a company other people are working in, and we won't "
-                "leave it without an owner."
+                "We won't leave it without an owner, so choose: delete the whole "
+                "workspace — everyone in it loses access and every record goes — "
+                "or remove them from Team first."
             )
         elif is_owner:
             entry["outcome"] = "workspace_deleted"
@@ -126,6 +144,74 @@ async def _plan(user: dict) -> dict:
         "blocked": [w for w in workspaces if w["outcome"] == "blocked"],
         "confirm_phrase": CONFIRM_PHRASE,
     }
+
+
+async def _erase_personal_traces(*, user_ids, phone_norm: str, emails) -> None:
+    """Everything about this person that is not a user row or company work.
+
+    Runs after the workspaces are dealt with, so it also catches rows a wiped
+    workspace already took (deleting nothing twice is fine). Each step is
+    independent and best effort: one collection failing must not leave the
+    rest in place — the account itself is already gone by now.
+    """
+    steps = []
+    for uid in user_ids:
+        steps += [
+            # A push token is the person's device; the client cannot remove it
+            # itself because its session was revoked a moment ago.
+            ("device_tokens", "delete_many", {"user_id": uid}),
+            ("active_sessions", "delete_many", {"user_id": uid}),
+            ("notifications", "delete_many", {"user_id": uid}),
+            ("auth_email_tokens", "delete_many", {"user_id": uid}),
+            # The action stays in the company's audit trail; who-from does not.
+            ("audit_log", "update_many", ({"actor_id": uid},
+                {"$set": {"actor_email": None, "actor_ip": None, "actor_ua": None}})),
+        ]
+    if phone_norm:
+        steps.append(("otp_codes", "delete_many", {"phone": phone_norm}))
+    for email in emails:
+        steps += [
+            ("onboarding_drafts", "delete_many", {"email": email}),
+            ("auth_email_tokens", "delete_many", {"email": email}),
+            # Lockout counters are keyed "<ip>:<email>" (routers/auth._login_ident).
+            ("user_login_attempts", "delete_many",
+             {"identifier": {"$regex": f":{re.escape(email)}$"}}),
+        ]
+    for coll, op, arg in steps:
+        try:
+            if op == "update_many":
+                await db[coll].update_many(*arg)
+            else:
+                await getattr(db[coll], op)(arg)
+        except Exception as e:
+            logger.warning("account_delete: %s.%s failed: %s", coll, op, e)
+
+
+class TermsInput(BaseModel):
+    version: str
+
+
+@router.post("/terms")
+async def accept_terms(inp: TermsInput, user: dict = Depends(get_current_user)):
+    """Record that this person accepted the Terms of Service (Play audit C2).
+
+    A person is a mobile number with a user row per workspace, so the
+    acceptance goes on every row for that number: agreeing once is agreeing.
+    The version must be the current one — accepting a document nobody is
+    being shown any more means nothing.
+    """
+    from services.legal import TERMS_VERSION
+    if (inp.version or "").strip() != TERMS_VERSION:
+        raise HTTPException(status_code=409, detail={
+            "message": "The terms have changed. Reload to read the current version.",
+            "current_version": TERMS_VERSION,
+        })
+    record = {"version": TERMS_VERSION, "accepted_at": now_iso()}
+    norm = (user.get("phone_norm") or "").strip()
+    if norm:
+        await db.users.update_many({"phone_norm": norm}, {"$set": {"terms_accepted": record}})
+    await db.users.update_one({"id": user["id"]}, {"$set": {"terms_accepted": record}})
+    return {"ok": True, "terms_accepted": record}
 
 
 @router.get("/deletion")
@@ -150,16 +236,31 @@ async def delete_account(inp: DeleteAccountInput, request: Request, response: Re
         )
 
     plan = await _plan(user)
+    chosen = {t for t in (inp.delete_workspaces or []) if t}
+    for w in plan["workspaces"]:
+        if w["outcome"] == "blocked" and w["tenant_id"] in chosen:
+            w["outcome"] = "workspace_deleted"
+    plan["blocked"] = [w for w in plan["workspaces"] if w["outcome"] == "blocked"]
     if plan["blocked"]:
         # 409, not 403: nothing is wrong with who they are, the workspace is
         # in a state that has to be resolved first.
         raise HTTPException(status_code=409, detail={
-            "message": "Some workspaces have to be handed over first.",
+            "message": ("You own a workspace other people are in. Choose to delete "
+                        "it too, or remove them first."),
             "blocked": plan["blocked"],
         })
 
     from services.auth.membership import remove_membership
     from services.tenant_wipe import wipe_tenant
+
+    # Read before anything is erased: each workspace's user row can carry its
+    # own email, and those rows are about to go.
+    norm = (user.get("phone_norm") or "").strip()
+    emails = {(user.get("email") or "").strip().lower()}
+    if norm:
+        for r in await db.users.find({"phone_norm": norm}, {"_id": 0, "email": 1}).to_list(200):
+            emails.add((r.get("email") or "").strip().lower())
+    emails.discard("")
 
     deleted_workspaces, left_workspaces = [], []
     for w in plan["workspaces"]:
@@ -182,7 +283,6 @@ async def delete_account(inp: DeleteAccountInput, request: Request, response: Re
     # its user row, so this catches only rows the plan could not see (a user
     # doc with no live membership, say). Without it the number stays taken and
     # the person cannot sign up again.
-    norm = (user.get("phone_norm") or "").strip()
     stragglers = 0
     if norm:
         remaining = await db.users.find({"phone_norm": norm}, {"_id": 0, "id": 1}).to_list(200)
@@ -191,6 +291,12 @@ async def delete_account(inp: DeleteAccountInput, request: Request, response: Re
             stragglers += 1
         if remaining:
             await db.users.delete_many({"phone_norm": norm})
+
+    user_ids = {w["user_id"] for w in plan["workspaces"] if w.get("user_id")}
+    user_ids |= {r["id"] for r in (remaining if norm else []) if r.get("id")}
+    if user.get("id"):
+        user_ids.add(user["id"])
+    await _erase_personal_traces(user_ids=user_ids, phone_norm=norm, emails=emails)
 
     # End the session properly — revoke the jti, not just the cookie, so a
     # copied token dies with the account.

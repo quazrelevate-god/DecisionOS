@@ -79,6 +79,7 @@ import { userPerms } from "../lib/perms";
 import { canAssignPerson } from "../lib/taskAccess";
 import { proposalCreatesText } from "../lib/decisionProposal";
 import { LeftoverReview } from "./workflow/LeftoverReview";
+import { ReportButton } from "./ReportButton";
 import { isDraft as readDraft, subscribeDrafts, draftOverrides, settleDraft, saveAsDraft, clearDraft } from "../lib/decisionDrafts";
 
 /* ── helpers shared with the Desk's decision cards ───────────────────────── */
@@ -450,7 +451,13 @@ export function DecisionPanel({
               {e.kind === "comment" && <ChatCircleText size={13} weight="bold" aria-hidden="true" className="shrink-0" />}
               {e.label}
             </p>
-            <p className="text-xs text-slate-500">{e.actor || "System"} · {timeAgo(e.ts)}</p>
+            <p className="flex items-center text-xs text-slate-500">
+              <span>{e.actor || "System"} · {timeAgo(e.ts)}</span>
+              {e.kind === "comment" && e.actor_id && e.actor_id !== user?.id && (
+                <ReportButton kind="content" targetType="comment" targetId={`${d.id}:${e.ts}`}
+                  snapshot={e.label} size={11} className="ml-1 py-0 text-slate-400" />
+              )}
+            </p>
           </div>
         ))}
       </div>
@@ -775,7 +782,16 @@ export function DecisionPanel({
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-5">
                 {/* LEFT — the decision and what to do about it */}
                 <div className="flex min-w-0 flex-col gap-4">
-                  <Card label="The decision" testid="decision-summary-card">
+                  <Card label="The decision" testid="decision-summary-card"
+                    right={(d.created_by !== user?.id || d.said) ? (
+                      /* 2026-10-08 — Play: someone else's decision, or the one Dex
+                         drafted from a note, can be reported from here. */
+                      <ReportButton
+                        kind={d.created_by !== user?.id ? "content" : "ai_output"}
+                        targetType="decision" targetId={d.id}
+                        snapshot={[d.title, d.summary].filter(Boolean).join("\n\n")}
+                        context={d.said?.text || undefined} size={13} className="-my-1 text-slate-400" />
+                    ) : null}>
                     {editable ? (
                       <div className="text-[15px] leading-relaxed text-slate-800" data-testid="decision-summary">
                         <EditableText value={d.summary || ""} testid="decision-summary-edit" multiline

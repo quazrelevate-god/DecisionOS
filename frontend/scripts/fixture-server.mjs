@@ -865,10 +865,17 @@ function resolve(method, path, q, body = {}) {
   const me = USERS.find((u) => u.role === role) || USERS[0];
 
   // --- auth ---
+  /* Play audit C2 (2026-10-08) — the persona has accepted the current Terms,
+     or components/TermsGate would stand in front of every screen this server
+     is used to show. DOS_FIXTURE_NO_TERMS=1 shows the gate instead. Keep the
+     version equal to src/lib/legal.js TERMS_VERSION. */
+  const terms = process.env.DOS_FIXTURE_NO_TERMS === '1'
+    ? {} : { terms_accepted: { version: '2026-10-08', accepted_at: daysAgo(1) } };
+  if (p === '/account/terms') return { ok: true, terms_accepted: { version: '2026-10-08', accepted_at: daysAgo(0) } };
   if (p === '/auth/me' || p === '/auth/login' || p === '/auth/register' || p === '/auth/otp/verify') {
     /* PILOT-1 F — the tenant carries its finance categories, as the real
        /auth/me does; Settings > Money's editor reads them from here. */
-    return { user: me, tenant: { ...TENANT, finance_categories: { expense: [...FIN_CATS.expense], asset: [...FIN_CATS.asset] } } };
+    return { user: { ...me, ...terms }, tenant: { ...TENANT, finance_categories: { expense: [...FIN_CATS.expense], asset: [...FIN_CATS.asset] } } };
   }
   if (p === '/auth/logout') return OK;
   if (p === '/auth/otp/request') return { sent: true, dev_code: '123456' };

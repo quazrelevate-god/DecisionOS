@@ -29,6 +29,7 @@ import {
   GLASS_ICON_BTN, GLASS_PILL, GLASS_SHEET, INK_PILL,
 } from "../components/karma/glass";
 import { GlassSelect } from "../components/karma/GlassSelect";
+import { ReportButton } from "../components/ReportButton";
 import { AddMemberTile, MEMBER_STATUS, MemberNode, OrgTree, orderByReportingLine } from "./team/OrgTree";
 // 2026-09-16, founder: at lg and up the tree is the reference's left-to-right
 // org chart (OrgCanvas); below lg the vertical OrgTree stays.
@@ -1371,6 +1372,13 @@ function MemberProfileDialog({
                   </button>
                 }
               />
+            )}
+            {/* 2026-10-08 — Play's UGC policy: a person can be reported from their
+                profile. Goes to the DecisionOS team, never to them. */}
+            {!isMe && (
+              <ReportButton kind="user" targetType="user" targetId={u.id}
+                snapshot={`${u.name}${u.title ? ` · ${u.title}` : ""}`}
+                className={`${GLASS_ICON_BTN} p-0 text-slate-500 max-lg:my-0`} size={16} />
             )}
             <button type="button" onClick={onClose} aria-label="Close" data-testid={`profile-close-${u.id}`}
               className={GLASS_ICON_BTN}>

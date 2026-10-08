@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Play audit W10 (2026-10-08): only what the app hands to the camera.
+     Capacitor's file-input capture (BridgeWebChromeClient.createImageFile)
+     writes its temporary photo to getExternalFilesDir(DIRECTORY_PICTURES),
+     the app's own folder. This used to share external-path ".", the whole of
+     shared storage, which nothing needed. -->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-path name="my_images" path="." />
+    <external-files-path name="my_images" path="Pictures/" />
     <cache-path name="my_cache_images" path="." />
 </paths>

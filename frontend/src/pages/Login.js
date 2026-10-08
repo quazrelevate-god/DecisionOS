@@ -612,6 +612,10 @@ export default function Login() {
           <Link to="/privacy" className="underline underline-offset-2 hover:text-foreground" data-testid="login-privacy-link">
             Privacy
           </Link>
+          {" · "}
+          <Link to="/terms" className="underline underline-offset-2 hover:text-foreground" data-testid="login-terms-link">
+            Terms
+          </Link>
         </p>
       </footer>
     </div>

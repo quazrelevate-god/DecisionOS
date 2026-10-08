@@ -54,6 +54,9 @@ class RegisterInput(BaseModel):
     # Optional in dev (see services/captcha.py); made hard-required in
     # prod via CAPTCHA_REQUIRED=1 env.
     captcha_token: Optional[str] = None
+    # Play audit C2 (2026-10-08): the Terms version the founder ticked on the
+    # signup consent step. Recorded on the user only if it is the current one.
+    terms_version: Optional[str] = None
 
 
 class LoginInput(BaseModel):

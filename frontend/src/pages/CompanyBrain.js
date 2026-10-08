@@ -22,6 +22,7 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader, EmptyState, LoadFailed } from "../components/common";
 import { DocumentsPanel } from "./BrainDocuments";
+import { ReportButton } from "../components/ReportButton";
 import { Books, Note, Plus, MagnifyingGlass, PencilSimple, Trash, Lock, Sparkle, ArrowRight } from "@phosphor-icons/react";
 
 const FIELD = "w-full rounded-2xl bg-white/80 px-3 py-2 text-sm text-slate-800 ring-1 ring-inset ring-slate-900/[0.08] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25";
@@ -87,7 +88,7 @@ function NoteForm({ initial, teams, busy, onSave, onCancel }) {
 }
 
 function NotesPanel({ focusId }) {
-  const { tenant } = useAuth();
+  const { tenant, user } = useAuth();
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [term, setTerm] = useState("");
@@ -163,6 +164,13 @@ function NotesPanel({ focusId }) {
                   <Link to={`/?focus=approval:${n.decision_id}`} className="inline-flex items-center gap-0.5 font-medium text-slate-700 hover:underline">
                     Decision <ArrowRight size={10} weight="bold" />
                   </Link>
+                )}
+                {n.created_by !== user?.id && (
+                  <ReportButton
+                    kind={n.created_by ? "content" : "ai_output"}
+                    targetType="note" targetId={n.id} snapshot={n.text} size={12}
+                    className="ml-auto text-slate-400"
+                  />
                 )}
               </div>
               {canManage && (

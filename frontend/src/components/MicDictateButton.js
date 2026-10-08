@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Microphone, Stop } from "@phosphor-icons/react";
 // ASK-36 5 — the app's one loading animation.
 import { Loader } from "./common";
+import { askBeforeMic } from "../lib/micNotice";
 
 // Small mic button that records a short clip, transcribes it to text via
 // /api/transcribe, and hands the text back through onText(). Reusable anywhere
@@ -15,6 +16,8 @@ export function MicDictateButton({ onText, language = "auto", title = "Dictate",
   const chunksRef = useRef([]);
 
   const start = async () => {
+    // Play audit W5 — once, what happens to the audio (lib/micNotice).
+    if (!(await askBeforeMic())) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mr = new MediaRecorder(stream);

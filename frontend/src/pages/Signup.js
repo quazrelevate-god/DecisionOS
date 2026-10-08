@@ -16,6 +16,8 @@ import { Loader } from "../components/common";
 import { WebsiteIntel } from "./onboarding/WebsiteIntel";
 import { VoiceInterview } from "./onboarding/VoiceInterview";
 import { BuildReveal } from "./onboarding/BuildReveal";
+import { SignupConsent } from "./onboarding/SignupConsent";
+import { TERMS_VERSION, getSignupConsent, giveSignupConsent } from "../lib/legal";
 
 const PHASES = [
   { key: "basics", label: "Basics" },
@@ -104,6 +106,9 @@ export default function Signup() {
   const [world, setWorld] = useState(null); // { industry, business_model, description, website_summary, products }
   const [sessionId, setSessionId] = useState(null);
   const [languageCode, setLanguageCode] = useState("en-IN");
+  /* Play audit C2 + C4 — the AI steps and the Terms are agreed to before the
+     first phase that sends anything to an AI provider (onboarding/SignupConsent). */
+  const [consented, setConsented] = useState(() => Boolean(getSignupConsent()));
   const phaseIdx = PHASES.findIndex((p) => p.key === phase);
 
   /* B05 (2026-09-29) — MOVING ON IS SAVED, not just arriving at the end.
@@ -135,11 +140,12 @@ export default function Signup() {
   // Resumed straight into the build (their blueprint was saved), there is no
   // `world` from the website step — the draft's own answers stand in.
   const buildPayload = (() => {
-    const base = world
+    const base0 = world
       ? { ...form, company_size: form.team_size,
           industry: world.industry, description: world.description, products: world.products }
       : { ...form, company_size: form.team_size,
           industry: form.industry || "General", description: form.description || "", products: [] };
+    const base = consented ? { ...base0, terms_version: TERMS_VERSION } : base0;
     // A second company carries the confirmed mobile and nothing else: register
     // reads the proof, finds the person it belongs to, and creates the
     // workspace without a second sign-in address or password.
@@ -449,11 +455,16 @@ export default function Signup() {
                 }}
                 onDone={() => goTo(savedBlueprint ? "build" : world ? "interview" : "website")} />
             )}
-            {phase === "website" && (
+            {phase !== "basics" && !consented && (
+              <SignupConsent
+                onAgree={() => { giveSignupConsent(); setConsented(true); }}
+                onBack={() => goTo("basics")} />
+            )}
+            {consented && phase === "website" && (
               <WebsiteIntel companyName={form.company_name.trim()} onBack={() => goTo("basics")}
                 onDone={(w) => { setWorld(w); goTo("interview", { world: w }); }} />
             )}
-            {phase === "interview" && (
+            {consented && phase === "interview" && (
               <VoiceInterview
                 profile={interviewProfile}
                 /* KM-62 — Back at the interview's first question returns here
@@ -468,7 +479,7 @@ export default function Signup() {
                 onSkip={(sid, lang) => { setSessionId(sid); setLanguageCode(lang || "en-IN"); goTo("build", { sessionId: sid, languageCode: lang || "en-IN" }); }}
               />
             )}
-            {phase === "build" && (
+            {consented && phase === "build" && (
               <BuildReveal
                 sessionId={sessionId} languageCode={languageCode} payload={buildPayload}
                 register={register} onEnter={enterApp}

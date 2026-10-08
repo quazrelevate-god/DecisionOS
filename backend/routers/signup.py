@@ -46,6 +46,18 @@ router = APIRouter(prefix="/api/signup")
 _SIGNUP_AI_LIMIT_HOURLY = (30, 3600)   # 30/hr per IP for the whole /api/signup surface
 _SIGNUP_BURST_LIMIT = (5, 10)          # 5/10s burst — kills tight loops
 
+# 2026-10-08 (Play audit C4) — THE AI ASKS FIRST. These endpoints send what the
+# founder says or types (their voice, their answers, their website) to our AI
+# and speech providers, and they all run BEFORE there is an account — so the
+# workspace consent gate (services/ai_consent, the 451) never saw them, and the
+# consent was only recorded at the very end, on "Enter DecisionOS". The signup
+# page now asks up front and sends the accepted version on every call as
+# X-AI-Consent; without it nothing leaves for a provider.
+_AI_SIGNUP_KINDS = {
+    "website_intel", "interview_start", "interview_back", "interview_answer",
+    "interview_blueprint", "interview_refine", "tts", "stt",
+}
+
 
 async def _guard_signup_endpoint(request: Request, kind: str) -> str:
     """Shared gate for the public /api/signup AI endpoints.
@@ -58,7 +70,18 @@ async def _guard_signup_endpoint(request: Request, kind: str) -> str:
          when no *_SECRET is configured.
 
     Returns the caller's IP for downstream logging.
+
+    An AI endpoint (_AI_SIGNUP_KINDS) is refused with a 451 first, before any
+    quota is spent, unless the request carries the consent the page asked for.
     """
+    if kind in _AI_SIGNUP_KINDS:
+        from services.ai_consent import CURRENT_CONSENT_VERSION
+        if (request.headers.get("X-AI-Consent") or "").strip() != CURRENT_CONSENT_VERSION:
+            raise HTTPException(status_code=451, detail={
+                "code": "ai_consent_required",
+                "message": "Agree to AI processing to use this step.",
+                "current_version": CURRENT_CONSENT_VERSION,
+            })
     ip = client_ip(request)
     # Hourly ceiling
     ok, retry_after = await check_rate_limit(

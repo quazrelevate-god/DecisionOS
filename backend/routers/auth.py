@@ -487,6 +487,7 @@ async def register(inp: RegisterInput, request: Request, response: Response,
     # right after. Once every downstream reader has been migrated to
     # read from memberships, tenant_id/role can be dropped from the
     # user doc entirely.
+    from services.legal import TERMS_VERSION as _TERMS_VERSION
     try:
         await db.users.insert_one({
             "id": user_id, "tenant_id": tenant_id,
@@ -503,6 +504,9 @@ async def register(inp: RegisterInput, request: Request, response: Response,
             **({"password_hash": hash_password(inp.password)} if inp.password
                else {"passwordless": True}),
             "role": "owner", "created_at": now_iso(),
+            # Play audit C2 — ticked on the signup consent step.
+            **({"terms_accepted": {"version": inp.terms_version, "accepted_at": now_iso()}}
+               if inp.terms_version and inp.terms_version == _TERMS_VERSION else {}),
         })
     except Exception as _register_err:
         # pymongo.errors.DuplicateKeyError only fires when the unique
@@ -1142,9 +1146,13 @@ async def me(request: Request, response: Response, user: dict = Depends(get_curr
     # rule the workflow endpoints enforce, so the board's tabs and the links to
     # it never offer a pipeline the server will refuse. null = every pipeline.
     from services.workflows import workflow_scope
+    # Play audit C2 — the Terms version the app must have accepted; the client
+    # asks until user.terms_accepted.version matches (components/TermsGate).
+    from services.legal import TERMS_VERSION
     return {"user": {**user, "effective_permissions": sorted(user_perms(user)),
                      "workflow_scope": await workflow_scope(user),
-                     "credentials_elsewhere": _elsewhere},
+                     "credentials_elsewhere": _elsewhere,
+                     "terms_current": TERMS_VERSION},
             "tenant": tenant}
 
 

@@ -1,6 +1,7 @@
 import axios from "axios";
 import { toast } from "sonner";
 import { showAiConsentToast, aiConsentMessage } from "./aiConsent";
+import { getSignupConsent } from "./legal";
 
 /* DEPLOY-3 — an EMPTY backend url is now the correct production value, and
    the `|| ""` is what makes it usable. The app is served by a node process
@@ -87,6 +88,18 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers = config.headers || {};
     config.headers[CSRF_HEADER] = token;
+  }
+  return config;
+});
+
+/* Play audit C4 — the signup AI steps carry the consent the page asked for
+   (lib/legal.js). The server refuses them without it, with the same 451 the
+   in-app AI features use. */
+api.interceptors.request.use((config) => {
+  const consent = (config.url || "").startsWith("/signup/") && getSignupConsent();
+  if (consent) {
+    config.headers = config.headers || {};
+    config.headers["X-AI-Consent"] = consent;
   }
   return config;
 });

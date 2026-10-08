@@ -748,6 +748,9 @@ function DeleteAccountCard() {
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
+  /* Owned workspaces other people are in, which the owner has ticked to
+     delete along with the account (Play audit C3: no dead end). */
+  const [alsoDelete, setAlsoDelete] = useState([]);
 
   const look = async () => {
     setBusy(true);
@@ -765,7 +768,7 @@ function DeleteAccountCard() {
   const doIt = async () => {
     setBusy(true);
     try {
-      await api.post("/account/delete", { confirm: typed.trim() });
+      await api.post("/account/delete", { confirm: typed.trim(), delete_workspaces: alsoDelete });
       /* The session is already dead server-side; this clears the client so no
          screen tries to render against a user who no longer exists. */
       try { await logout(); } catch (e) { /* already gone */ }
@@ -779,8 +782,9 @@ function DeleteAccountCard() {
     }
   };
 
-  const blocked = (plan?.blocked || []).length > 0;
+  const blocked = (plan?.blocked || []).some((w) => !alsoDelete.includes(w.tenant_id));
   const phrase = plan?.confirm_phrase || "DELETE";
+  const toggleAlso = (id) => setAlsoDelete((xs) => (xs.includes(id) ? xs.filter((x) => x !== id) : [...xs, id]));
 
   return (
     <div className="kr-bento p-5 sm:p-6" data-testid="settings-delete-account">
@@ -816,13 +820,21 @@ function DeleteAccountCard() {
                     && "You leave and your account here goes, freeing your mobile number. The work you did stays in the company's history."}
                   {w.outcome === "blocked" && w.reason}
                 </p>
+                {w.outcome === "blocked" && w.can_delete_workspace && (
+                  <label className="mt-2 flex items-start gap-2 text-xs text-foreground">
+                    <input type="checkbox" className="mt-0.5"
+                      data-testid={`delete-account-also-${w.tenant_id}`}
+                      checked={alsoDelete.includes(w.tenant_id)} onChange={() => toggleAlso(w.tenant_id)} />
+                    <span>Delete {w.tenant_name || "this workspace"} too — every record and file, and {w.other_people} {w.other_people === 1 ? "person loses" : "people lose"} access.</span>
+                  </label>
+                )}
               </li>
             ))}
           </ul>
 
           {blocked ? (
             <div className="mt-5 flex justify-end">
-              <button type="button" onClick={() => { setOpen(false); setTyped(""); }}
+              <button type="button" onClick={() => { setOpen(false); setTyped(""); setAlsoDelete([]); }}
                 className={PILL}>Close</button>
             </div>
           ) : (

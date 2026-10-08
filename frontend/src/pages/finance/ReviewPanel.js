@@ -19,6 +19,7 @@ import { Dialog, DialogContent } from "../../components/ui/dialog";
 import { GlassSelect } from "../../components/karma/GlassSelect";
 import { DRAWER_FIELD, INK_PILL } from "../../components/karma/glass";
 import { CARD, EmptyNote, SHEET_CONTENT, SMALL_PILL, SheetHead, Tag } from "./financeKit";
+import { AiNotice } from "../../components/ReportButton";
 
 const INPUT = cn(DRAWER_FIELD, "h-10 rounded-xl px-3 py-0 text-sm");
 const LABEL = "mb-1 block text-[11px] font-medium text-slate-500";
@@ -200,6 +201,12 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
                 <span className="text-xs text-slate-500">confidence {Math.round(ingestion.confidence * 100)}%</span>
               )}
             </div>
+            {/* 2026-10-08 — Play's AI-content policy: the AI's reading of the bill is flaggable. */}
+            <AiNotice className="mt-2 text-slate-500" report={{
+              targetType: "ledger_read", targetId: ingestion.id,
+              snapshot: JSON.stringify({ summary: ingestion.summary, doc_type: ingestion.doc_type, records: ingestion.records }).slice(0, 4000),
+              context: ingestion.filename,
+            }} />
           </div>
         </div>
         <div className="flex flex-wrap gap-2">

@@ -1019,18 +1019,15 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                   className="text-sm font-medium text-foreground underline underline-offset-4 disabled:opacity-50">
                   Enter and bring my team in first
                 </button>
-                {/* J2-12 (JOURNEY-1) — THE CONSENT IS ASKED WHERE IT IS GIVEN.
-                    The server records this press as the AI-processing consent
-                    ("the signup click IS the consent event", routers/auth.py),
-                    and Settings then told the founder they had agreed to
-                    something no screen had put in front of them. It is one
-                    line, and it is here rather than in a tickbox because the
-                    press is the agreement: there is no DecisionOS without it,
-                    and Settings is where it can be taken back. */}
+                {/* J2-12 (JOURNEY-1) — the server records this press as the
+                    workspace's AI-processing consent (routers/auth.py). Since
+                    2026-10-08 (Play audit C4) the founder has already agreed,
+                    with a tick, before the first AI step (SignupConsent); this
+                    line says where that agreement now lives and how to undo it. */}
                 <p data-testid="build-ai-consent-line" className="max-w-xl text-xs leading-relaxed text-muted-foreground">
-                  Pressing this turns Dex on: what you type or say, and the documents you send it,
-                  go to our AI providers so it can read them. You can switch that off any time in
-                  Settings → AI processing.
+                  As you agreed at the start, Dex keeps using AI in your workspace: what you type or
+                  say, and the documents you send it, go to our AI providers so it can read them. You
+                  can switch that off any time in Settings → AI processing.
                 </p>
               </div>
             </Rise>

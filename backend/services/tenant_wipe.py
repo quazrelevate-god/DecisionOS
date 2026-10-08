@@ -41,6 +41,12 @@ TENANT_COLLECTIONS = [
     # 2026-10-05: the Company Brain index (services/ai/brain_embed) and the hidden
     # Desk briefing cache.
     "brain_chunks", "brain_index_meta", "desk_narrative_cache",
+    # 2026-10-08 (Play audit C3): tenant-scoped rows the list had missed. A push
+    # token is linked to a person and outlived the workspace; sessions and the
+    # audit log carry IP and user agent; the rest are the company's own trail.
+    "device_tokens", "active_sessions", "audit_log", "ai_calls", "crm_activities",
+    "support_tickets", "operating_score_history", "operating_score_cache",
+    "content_reports",
 ]
 
 

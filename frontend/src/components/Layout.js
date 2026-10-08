@@ -43,6 +43,7 @@ import { DemoWorkspaceBanner } from "./DemoWorkspaceBanner";
 import { ConnectionNotice } from "./ConnectionNotice";
 // 2026-09-19 — members sign in by mobile; owners also have email + password.
 import OwnerCredentialsGate from "./auth/OwnerCredentialsGate";
+import TermsGate from "./TermsGate";
 import WelcomeMemberCard from "./auth/WelcomeMemberCard";
 // MPWA-03: mobile navigation is the floating dock + All Apps panel. The
 // edge-to-edge tab bar and the hamburger drawer are both gone below lg.
@@ -726,6 +727,8 @@ export default function Layout({ children }) {
       {/* An owner who came in by mobile adds an email and password first;
           a member's first screen asks them to check their details. */}
       <OwnerCredentialsGate />
+      {/* Play audit C2 — everyone agrees to the Terms before carrying on. */}
+      <TermsGate />
       <WelcomeMemberCard />
       {/* KR-5 — the Karma header. Three tracks: logo · centred pill nav ·
           circular controls + the avatar block. The reference's shell exactly,

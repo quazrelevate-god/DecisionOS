@@ -78,6 +78,22 @@ class _FakeColl:
     async def count_documents(self, filt):
         return sum(1 for d in self.docs if all(d.get(k) == v for k, v in filt.items()))
 
+    async def update_one(self, filt, update):
+        for d in self.docs:
+            if all(d.get(k) == v for k, v in filt.items()):
+                d.update(update.get("$set", {}))
+                break
+
+    async def update_many(self, filt, update):
+        n = 0
+        for d in self.docs:
+            if all(d.get(k) == v for k, v in filt.items()):
+                d.update(update.get("$set", {}))
+                n += 1
+        class _R: pass
+        r = _R(); r.modified_count = n
+        return r
+
 
 class _FakeDB:
     def __init__(self):
@@ -348,5 +364,92 @@ class TestDeleting:
         assert resp.deleted_cookies, "the auth cookie must be cleared"
 
 
+    def test_an_owner_can_choose_to_delete_a_shared_workspace(self, monkeypatch):
+        """Play audit C3: a refusal with no way through is an obstacle. The
+        owner may name the workspace and take it with them, everyone in it."""
+        fake, wiped = _seed(
+            monkeypatch,
+            choices=[{"tenant_id": "ten-A", "tenant_name": "Shared", "user_id": "u-me", "role": "owner"}],
+            seats_by_tenant={"ten-A": [{"user_id": "u-me", "status": "active"},
+                                       {"user_id": "u-other", "status": "active"}]},
+            users=[{"id": "u-me", "tenant_id": "ten-A", "phone_norm": PHONE}])
+        plan = asyncio.run(account._plan(ME))
+        assert plan["workspaces"][0]["can_delete_workspace"] is True
+        out = asyncio.run(account.delete_account(
+            DeleteAccountInput(confirm=CONFIRM_PHRASE, delete_workspaces=["ten-A"]),
+            _FakeRequest(), _FakeResponse(), ME))
+        assert wiped == ["ten-A"]
+        assert out["workspaces_deleted"][0]["tenant_id"] == "ten-A"
+
+    def test_naming_a_different_workspace_does_not_unblock(self, monkeypatch):
+        _, wiped = _seed(
+            monkeypatch,
+            choices=[{"tenant_id": "ten-A", "tenant_name": "Shared", "user_id": "u-me", "role": "owner"}],
+            seats_by_tenant={"ten-A": [{"user_id": "u-me", "status": "active"},
+                                       {"user_id": "u-other", "status": "active"}]})
+        with pytest.raises(HTTPException) as e:
+            asyncio.run(account.delete_account(
+                DeleteAccountInput(confirm=CONFIRM_PHRASE, delete_workspaces=["ten-Z"]),
+                _FakeRequest(), _FakeResponse(), ME))
+        assert e.value.status_code == 409
+        assert wiped == []
+
+    def test_what_is_about_the_person_goes_with_them(self, monkeypatch):
+        """Push tokens, sessions, notifications, codes and drafts are the
+        person's, not the company's; the audit trail keeps the action but
+        loses who-from."""
+        fake, _ = _seed(
+            monkeypatch,
+            choices=[{"tenant_id": "ten-A", "tenant_name": "K", "user_id": "u-me", "role": "sales"}],
+            seats_by_tenant={"ten-A": [{"user_id": "u-me", "status": "active"},
+                                       {"user_id": "u-boss", "status": "active"}]},
+            users=[{"id": "u-me", "tenant_id": "ten-A", "phone_norm": PHONE, "email": "me@k.in"},
+                   {"id": "u-boss", "tenant_id": "ten-A", "phone_norm": "919999900000"}])
+        fake.device_tokens.docs += [{"token": "t1", "user_id": "u-me"},
+                                    {"token": "t2", "user_id": "u-boss"}]
+        fake.active_sessions.docs.append({"jti": "j1", "user_id": "u-me", "ip": "1.2.3.4"})
+        fake.notifications.docs.append({"id": "n1", "user_id": "u-me"})
+        fake.otp_codes.docs.append({"phone": PHONE})
+        fake.onboarding_drafts.docs.append({"id": "d1", "email": "me@k.in"})
+        fake.audit_log.docs.append({"actor_id": "u-me", "actor_ip": "1.2.3.4",
+                                    "actor_email": "me@k.in", "action": "task.create"})
+        asyncio.run(account.delete_account(
+            DeleteAccountInput(confirm=CONFIRM_PHRASE), _FakeRequest(), _FakeResponse(),
+            {**ME, "role": "sales", "email": "me@k.in"}))
+        assert [d["token"] for d in fake.device_tokens.docs] == ["t2"]
+        assert fake.active_sessions.docs == []
+        assert fake.notifications.docs == []
+        assert fake.otp_codes.docs == []
+        assert fake.onboarding_drafts.docs == []
+        row = fake.audit_log.docs[0]
+        assert row["action"] == "task.create"
+        assert row["actor_ip"] is None and row["actor_email"] is None
+
+
 def await_count(fake, phone):
     return asyncio.run(fake.users.count_documents({"phone_norm": phone}))
+
+
+# ---------------------------------------------------------------------------
+# Accepting the Terms (Play audit C2)
+# ---------------------------------------------------------------------------
+class TestTerms:
+    def test_an_old_version_is_refused(self, monkeypatch):
+        _seed(monkeypatch, choices=[], seats_by_tenant={},
+              users=[{"id": "u-me", "tenant_id": "ten-A", "phone_norm": PHONE}])
+        with pytest.raises(HTTPException) as e:
+            asyncio.run(account.accept_terms(account.TermsInput(version="1999-01-01"), ME))
+        assert e.value.status_code == 409
+
+    def test_accepting_once_covers_every_workspace_of_the_number(self, monkeypatch):
+        from services.legal import TERMS_VERSION
+        fake, _ = _seed(monkeypatch, choices=[], seats_by_tenant={},
+                        users=[{"id": "u-me", "tenant_id": "ten-A", "phone_norm": PHONE},
+                               {"id": "u-me-b", "tenant_id": "ten-B", "phone_norm": PHONE},
+                               {"id": "u-other", "tenant_id": "ten-A", "phone_norm": "919000000001"}])
+        out = asyncio.run(account.accept_terms(account.TermsInput(version=TERMS_VERSION), ME))
+        assert out["terms_accepted"]["version"] == TERMS_VERSION
+        by_id = {u["id"]: u for u in fake.users.docs}
+        assert by_id["u-me"]["terms_accepted"]["version"] == TERMS_VERSION
+        assert by_id["u-me-b"]["terms_accepted"]["version"] == TERMS_VERSION
+        assert "terms_accepted" not in by_id["u-other"]

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { Toaster } from "./components/ui/sonner";
@@ -17,6 +17,7 @@ import { ForgotPassword, ResetPassword } from "./pages/PasswordReset";
 import VerifyEmail from "./pages/EmailVerify";
 import DeleteAccount from "./pages/DeleteAccount";
 import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
 import DecisionReview from "./pages/DecisionReview";
 import { useUiScale } from "./hooks/useUiScale";
 import Workflows from "./pages/Workflows";
@@ -55,7 +56,15 @@ import Calendar from "./pages/Calendar";
 import OperatingScore from "./pages/OperatingScore";
 import WorkCoach from "./pages/WorkCoach";
 import Ledger from "./pages/Ledger";
-import AdminPortal from "./pages/admin/AdminPortal";
+/* Play audit W2 (2026-10-08) — the platform-admin portal is ours, not the
+   customer's, and an app store reviewer reads a route nobody can find as a
+   hidden feature. The native build (REACT_APP_NATIVE=1, set by the cap:sync
+   scripts) leaves it out entirely: the condition is a build-time constant, so
+   webpack never follows the import and the portal's code is not in the APK.
+   The website keeps it, loaded only when somebody opens /admin. */
+const AdminPortal = process.env.REACT_APP_NATIVE === "1"
+  ? null
+  : lazy(() => import("./pages/admin/AdminPortal"));
 // MPWA-04: dev-only harness for the §7 mobile components. Tree-shaken out of
 // production builds by the NODE_ENV guard on its route below.
 import MobileKitchenSink from "./pages/MobileKitchenSink";
@@ -63,6 +72,8 @@ import MobileKitchenSink from "./pages/MobileKitchenSink";
 import DesignLab from "./pages/DesignLab";
 // MOBILE-2: Android's back gesture, inside the Capacitor app.
 import { useNativeBack } from "./hooks/useNativeBack";
+import PushRationale from "./components/PushRationale";
+import MicNoticeHost from "./components/MicNoticeHost";
 // B04: the screen for "we cannot reach the server", which is not "signed out".
 import { CantReachUs } from "./components/auth/CantReachUs";
 
@@ -222,8 +233,9 @@ function Home() {
    browser; inside the APK it is what stops Back from closing DecisionOS.
    It has to sit INSIDE BrowserRouter, because it navigates. */
 function NativeBack() {
-  useNativeBack();
-  return null;
+  const { pushAsk } = useNativeBack();
+  // Play audit W3 — the reason for notifications, before Android asks.
+  return pushAsk ? <PushRationale onAnswer={pushAsk.answer} /> : null;
 }
 
 /* B?? — the page-level ErrorBoundary now RESETS on navigation. It only clears
@@ -246,6 +258,8 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           <NativeBack />
+          {/* Play audit W5 — the one-time microphone notice. */}
+          <MicNoticeHost />
           {/* MW-10 fix: ErrorBoundary around the routed page area so a
               single broken component costs one page rather than the
               whole product (MW-08 was the canonical example -- a
@@ -292,8 +306,11 @@ function App() {
                 person can read BEFORE installing, and cross-checks it against
                 the Data Safety form. Registered in the Console; do not move. */}
             <Route path="/privacy" element={<Privacy />} />
-            <Route path="/admin" element={<AdminPortal />} />
-            <Route path="/admin/*" element={<AdminPortal />} />
+            {/* PLAY-3 — public for the same reason as /privacy: the terms are
+                read before they are agreed to (signup, components/TermsGate). */}
+            <Route path="/terms" element={<Terms />} />
+            {AdminPortal && <Route path="/admin" element={<Suspense fallback={null}><AdminPortal /></Suspense>} />}
+            {AdminPortal && <Route path="/admin/*" element={<Suspense fallback={null}><AdminPortal /></Suspense>} />}
             <Route path="/" element={<Home />} />
             <Route path="/dashboard" element={<Navigate to="/brief" replace />} />
             {/* Epic 2 Sprint 6 (E2-47) and MPWA-12c (§2.1) reached the same

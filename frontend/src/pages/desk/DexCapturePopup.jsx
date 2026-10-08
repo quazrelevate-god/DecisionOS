@@ -41,6 +41,7 @@ import { GLASS_ICON_BTN, GLASS_PILL, GLASS_SHEET, INK_PILL } from "../../compone
 import { decisionCounts, readyLine, stageLabel, OUTCOME_COPY } from "../../lib/dexOutcome";
 import { cn } from "../../lib/utils";
 import { DexForgeFit } from "../onboarding/DexForge";
+import { AiNotice } from "../../components/ReportButton";
 
 const STEP_COPY = {
   said: { n: 1, title: "What you said", hint: "Read it through, change anything Dex heard wrong, then press Next." },
@@ -416,7 +417,11 @@ export function DexCapturePopup({
     body = (
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 lg:px-7" data-testid="dex-outcome-nothing">
         {outcome?.answer
-          ? <p className="whitespace-pre-line break-words text-[15px] leading-relaxed text-slate-700">{outcome.answer}</p>
+          ? <>
+              <p className="whitespace-pre-line break-words text-[15px] leading-relaxed text-slate-700">{outcome.answer}</p>
+              <AiNotice className="mt-3 text-slate-500"
+                report={{ targetType: "dex_reply", snapshot: outcome.answer, context: sentText }} />
+            </>
           : <p className="text-[15px] leading-relaxed text-slate-700">Nothing in it needs a decision, so nothing was created.</p>}
       </div>
     );

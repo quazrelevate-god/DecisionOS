@@ -159,6 +159,9 @@ _PUBLIC_EXACT = {
     # is asked by someone signed out, from the link in their email.
     "/api/auth/password/reset/check",
     "/api/auth/otp/request", "/api/auth/otp/verify", "/api/auth/invite/{token}/start",
+    # 2026-10-08 (Play audit C1) -- reporting an AI question during signup,
+    # before an account exists. ai_output only, IP rate limited (routers/reports.py).
+    "/api/reports/public",
 }
 
 

@@ -7,7 +7,8 @@
  * function, mounted once from hooks/useNativeBack.js.
  *
  * WHAT IT DOES on a device:
- *   1. Asks for notification permission (once; declined = silently no push).
+ *   1. Explains what notifications are for, then asks for the permission
+ *      (declined = silently no push).
  *   2. Registers with FCM and hands the token to the backend (POST /api/devices).
  *   3. On a tapped notification, routes to the screen it is about — reusing
  *      notifLink(), the exact map the in-app bell already uses, off the `data`
@@ -24,15 +25,32 @@ import { notifLink } from "../notif";
 /* Remembered so sign-out can tell the backend to stop sending to THIS device. */
 let currentToken = null;
 
+/* Play audit W3 (2026-10-08) — the OS prompt is not the first thing anybody
+   sees about notifications. `explain` (components/PushRationale, via
+   hooks/useNativeBack) says what they are for and resolves true for "Turn on";
+   only then is the system prompt shown. "Not now" is remembered for a week so
+   the explanation is not a nag on every launch. */
+const SNOOZE_KEY = "dos.push.notNowAt";
+const SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
+const snoozed = () => {
+  try { return Date.now() - Number(window.localStorage.getItem(SNOOZE_KEY) || 0) < SNOOZE_MS; }
+  catch { return false; }
+};
+const snooze = () => {
+  try { window.localStorage.setItem(SNOOZE_KEY, String(Date.now())); } catch { /* asked again next launch */ }
+};
+
 const platform = () =>
   (typeof window !== "undefined" && window.Capacitor?.getPlatform?.()) || "android";
 
 /**
  * Register for push and wire the tap handler.
  * @param {Function} go  (path) => void — navigate, through the router
+ * @param {{explain?: Function}} opts  explain() => Promise<boolean>, shown
+ *        before the OS permission prompt
  * @returns {Promise<Function>} cleanup that removes the listeners
  */
-export async function startPush(go) {
+export async function startPush(go, { explain } = {}) {
   if (!isNativeApp()) return () => {};
   /* IOS WAITS FOR AN APNs KEY. (2026-10-06, on the merge, before flashing.)
      This leaf runs on both platforms, and on iOS it reaches requestPermissions()
@@ -51,6 +69,8 @@ export async function startPush(go) {
      time; after that it returns the saved answer without prompting again. */
   let perm = await PushNotifications.checkPermissions();
   if (perm.receive === "prompt" || perm.receive === "prompt-with-rationale") {
+    if (snoozed()) return () => {};
+    if (explain && !(await explain())) { snooze(); return () => {}; }
     perm = await PushNotifications.requestPermissions();
   }
   if (perm.receive !== "granted") return () => {};

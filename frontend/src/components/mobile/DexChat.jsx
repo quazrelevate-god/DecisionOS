@@ -14,6 +14,7 @@ import { DexFailureNotice } from "./DexFailureNotice";
 import { useBackDismiss } from "@/hooks/useBackDismiss";
 // ASK-36 5 — the app's one loading animation.
 import { Loader } from "../common";
+import { ReportButton, AiNotice } from "../ReportButton";
 
 // KM-23 · DexChat — Dex as a conversation, over the page you were on.
 //
@@ -225,9 +226,13 @@ function SentFile({ file, onOpen }) {
 }
 
 /** One turn in the transcript. */
-export function Bubble({ m, index, onOpenFile, onAsk, onGo }) {
+export function Bubble({ m, index, onOpenFile, onAsk, onGo, prompt }) {
   const mine = m.role === "user";
   const files = m.files || [];
+  /* 2026-10-08 — Play's AI-content policy: every Dex answer can be flagged
+     from where it is read. Not on a turn still being written. */
+  const reportable = !mine && Boolean(m.id) && !m.pending && !m.reading
+    && m.outcome?.kind !== "failed" && Boolean(m.text || m.outcome);
   return (
     <motion.div
       layout
@@ -429,6 +434,19 @@ export function Bubble({ m, index, onOpenFile, onAsk, onGo }) {
                 </span>
               );
             })}
+          </div>
+        )}
+        {reportable && (
+          <div className="-mb-1 -mr-2 mt-1 flex justify-end">
+            <ReportButton
+              kind="ai_output"
+              targetType="dex_reply"
+              targetId={m.id}
+              snapshot={m.text || m.outcome?.title || m.outcome?.message}
+              context={prompt}
+              size={12}
+              className="text-white/40 hover:bg-white/10 hover:text-white"
+            />
           </div>
         )}
       </div>
@@ -659,6 +677,7 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                   key={m.id}
                   onOpenFile={openFile}
                   onAsk={(q) => ask?.(q)}
+                  prompt={m.role !== "user" ? log.slice(0, i).reverse().find((p) => p.role === "user")?.text : undefined}
                   /* A citation is a place: following one closes the sheet, the
                      way every other link out of this transcript does. */
                   onGo={(to) => { onClose?.(); navigate(to); }}
@@ -688,6 +707,9 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                   yet, and the founder is watching the wrong thing. The chip
                   above says what is actually happening. */}
               {busy && !attaching && <Bubble onOpenFile={openFile} m={{ role: "dex", text: "Thinking…", pending: true }} index={log.length} />}
+              {log.some((m) => m.role !== "user") && (
+                <AiNotice className="justify-center pt-1 text-white/50" />
+              )}
               <div ref={endRef} />
             </div>
             </PresenceContext.Provider>

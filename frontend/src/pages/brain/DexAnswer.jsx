@@ -34,6 +34,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from "../../components/ui/dropdown-menu";
 import { GLASS_MENU, GLASS_MENU_ITEM } from "../../components/karma/glass";
+import { AiNotice } from "../../components/ReportButton";
 
 const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 const CARD = "nm-raised overflow-hidden rounded-[20px]";
@@ -453,6 +454,9 @@ function Refusal({ icon: Icon, title, children, testid }) {
 
 function AnswerBody({ m, onGo, onAsk, currency }) {
   const r = m.resp || {};
+  /* Play audit C1 (2026-10-08) — Play's AI-content policy: an answer can be
+     flagged where it stands, without leaving the app. */
+  const report = (text) => ({ targetType: "brain_answer", targetId: m.id, snapshot: text, context: m.question });
 
   if (r.type === "NOTICE") {
     return <Refusal icon={Info} testid="brain-notice">{r.answer}</Refusal>;
@@ -472,6 +476,7 @@ function AnswerBody({ m, onGo, onAsk, currency }) {
           )}
         </Refusal>
         <AskNext items={r.suggested_questions} onAsk={onAsk} label="Try one of these" />
+        <AiNotice report={report(r.answer)} />
       </div>
     );
   }
@@ -495,6 +500,9 @@ function AnswerBody({ m, onGo, onAsk, currency }) {
         contextId={r.query_context_id}
       />
       <AskNext items={r.suggested_questions} onAsk={onAsk} />
+      {(r.answer || r.kpis || r.table) && (
+        <AiNotice report={report(r.answer || JSON.stringify(r.kpis || r.table || "").slice(0, 4000))} />
+      )}
     </div>
   );
 }

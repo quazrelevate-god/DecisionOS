@@ -26,6 +26,10 @@ export default function DeleteAccount() {
   const [plan, setPlan] = useState(null);
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
+  /* Owned workspaces with other people in them that the owner chose to delete
+     too (Play audit C3: there must be a way through, not just a refusal). */
+  const [alsoDelete, setAlsoDelete] = useState([]);
+  const toggleAlso = (id) => setAlsoDelete((xs) => (xs.includes(id) ? xs.filter((x) => x !== id) : [...xs, id]));
 
   useEffect(() => {
     if (!user) return;
@@ -37,12 +41,12 @@ export default function DeleteAccount() {
   }, [user]);
 
   const phrase = plan?.confirm_phrase || "DELETE";
-  const blocked = (plan?.blocked || []).length > 0;
+  const blocked = (plan?.blocked || []).some((w) => !alsoDelete.includes(w.tenant_id));
 
   const doIt = async () => {
     setBusy(true);
     try {
-      await api.post("/account/delete", { confirm: typed.trim() });
+      await api.post("/account/delete", { confirm: typed.trim(), delete_workspaces: alsoDelete });
       try { await logout(); } catch (e) { /* the session is already gone */ }
       toast.success("Your account is gone.");
       navigate("/login", { replace: true });
@@ -74,8 +78,14 @@ export default function DeleteAccount() {
         </p>
         <p>
           If you <strong className="text-foreground">own</strong> a workspace
-          that other people are in, we will not delete it from under them. Hand
-          it to somebody else first, or remove them.
+          that other people are in, we will not leave it without an owner. You
+          can choose to delete that workspace too &mdash; everyone in it loses
+          access &mdash; or remove them from it first.
+        </p>
+        <p>
+          Payment records for a paid plan are kept for as long as tax law
+          requires; everything else about you goes.{" "}
+          <a href="/privacy" className="underline underline-offset-2 hover:text-foreground">Privacy policy</a>.
         </p>
       </div>
 
@@ -119,6 +129,14 @@ export default function DeleteAccount() {
                     && "You leave and your account here goes. The work you did stays in the company's history."}
                   {w.outcome === "blocked" && w.reason}
                 </p>
+                {w.outcome === "blocked" && w.can_delete_workspace && (
+                  <label className="mt-2 flex items-start gap-2 text-xs text-foreground">
+                    <input type="checkbox" className="mt-0.5"
+                      data-testid={`delete-account-also-${w.tenant_id}`}
+                      checked={alsoDelete.includes(w.tenant_id)} onChange={() => toggleAlso(w.tenant_id)} />
+                    <span>Delete {w.tenant_name || "this workspace"} too — every record and file, and {w.other_people} {w.other_people === 1 ? "person loses" : "people lose"} access.</span>
+                  </label>
+                )}
               </li>
             ))}
           </ul>

@@ -14,7 +14,7 @@
  * In a browser this is inert: startNativeBack returns immediately when
  * window.Capacitor is absent, and nothing is imported that a browser lacks.
  */
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
@@ -29,6 +29,7 @@ import { lockZoomInApp } from "../lib/native/viewport";
 import { startOverlaySwipeBack } from "../lib/native/swipeBack";
 // PUSH (2026-10-05) — register for device notifications once signed in.
 import { startPush } from "../lib/native/push";
+import { termsAccepted } from "../lib/legal";
 
 export function useNativeBack() {
   const navigate = useNavigate();
@@ -73,16 +74,25 @@ export function useNativeBack() {
      user id so it registers on sign-in and re-registers if the account changes,
      not on every unrelated user-object update. Sign-out cleanup lives in
      AuthContext.logout (it must not run on app close). Inert in a browser. */
+  /* Play audit W3 — the explanation shown before the OS prompt. startPush
+     awaits explain(); the dialog (components/PushRationale, rendered by
+     App.js's NativeBack) resolves it. */
+  const [pushAsk, setPushAsk] = useState(null);
+  // Not on top of the Terms gate: one question at a time.
+  const agreed = termsAccepted(user);
   useEffect(() => {
-    if (!user?.id) return undefined;
+    if (!user?.id || !agreed) return undefined;
     let stop = null;
     let cancelled = false;
-    startPush((path) => navigate(path)).then((off) => {
+    const explain = () => new Promise((resolve) => {
+      setPushAsk({ answer: (yes) => { setPushAsk(null); resolve(yes); } });
+    });
+    startPush((path) => navigate(path), { explain }).then((off) => {
       if (cancelled) off?.();
       else stop = off;
     });
-    return () => { cancelled = true; stop?.(); };
-  }, [user?.id, navigate]);
+    return () => { cancelled = true; stop?.(); setPushAsk(null); };
+  }, [user?.id, agreed, navigate]);
 
   useEffect(() => {
     let stop = null;
@@ -99,6 +109,8 @@ export function useNativeBack() {
       stop?.();
     };
   }, [navigate, home]);
+
+  return { pushAsk };
 }
 
 export default useNativeBack;

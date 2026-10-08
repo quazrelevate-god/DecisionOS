@@ -453,7 +453,10 @@ def test_signup_guard_enforces_burst_429(with_test_db, rate_limits_on):
 
     class _Req:
         def __init__(self, ip):
-            self.headers = {"X-Forwarded-For": ip}
+            # X-AI-Consent: website_intel is an AI step, refused with a 451
+            # before any quota without it (Play audit C4).
+            from services.ai_consent import CURRENT_CONSENT_VERSION
+            self.headers = {"X-Forwarded-For": ip, "X-AI-Consent": CURRENT_CONSENT_VERSION}
             self.client = None
 
     async def scenario(_db):

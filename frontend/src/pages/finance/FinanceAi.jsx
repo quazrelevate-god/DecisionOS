@@ -20,6 +20,7 @@ import { Dialog, DialogContent } from "../../components/ui/dialog";
 import { GlassSelect } from "../../components/karma/GlassSelect";
 import { CHIP, INK_PILL } from "../../components/karma/glass";
 import { AREA, CARD, FIELD, Field, SHEET_CONTENT, SMALL_INK, SMALL_PILL, SheetFoot, SheetHead } from "./financeKit";
+import { AiNotice } from "../../components/ReportButton";
 
 const LEVEL_ORDER = { high: 0, medium: 1, low: 2 };
 const LEVEL = {
@@ -217,6 +218,12 @@ export function AiPanel({ scope, variant = "inline", scopeLabel, facts, positive
               </ul>
             </div>
           )}
+          {(headline || insights.length > 0) && (
+            <AiNotice className="mt-3 text-slate-500" report={{
+              targetType: "finance_brief", targetId: scope,
+              snapshot: [headline, ...insights.map((it) => `${it.title || ""}: ${it.detail || ""}`)].filter(Boolean).join("\n"),
+            }} />
+          )}
         </>
       )}
 
@@ -241,6 +248,8 @@ export function AiPanel({ scope, variant = "inline", scopeLabel, facts, positive
           <div className="mt-3 whitespace-pre-line rounded-2xl bg-white/75 p-4 text-sm leading-relaxed text-slate-700 ring-1 ring-inset ring-slate-900/[0.05]"
             data-testid={`ai-answer-${scope}`} aria-live="polite">
             {answer}
+            <AiNotice className="mt-2 text-slate-500"
+              report={{ targetType: "finance_answer", targetId: scope, snapshot: answer, context: q }} />
           </div>
         )}
       </div>

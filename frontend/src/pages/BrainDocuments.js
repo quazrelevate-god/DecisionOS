@@ -7,6 +7,7 @@ import {
 import api, { formatApiError } from "../lib/api";
 import { EmptyState, Loader, ConfirmAction } from "../components/common";
 import { useAuth } from "../context/AuthContext";
+import { ReportButton } from "../components/ReportButton";
 
 const KINDS = [
   { key: "policy", label: "Policy" },
@@ -342,6 +343,11 @@ export function DocumentsPanel({ focusId = null }) {
                     className="flex items-center justify-center gap-1.5 border border-border py-2 px-3 text-[11px] font-medium bg-white hover:bg-brand-600 hover:text-white transition-colors disabled:opacity-40">
                     {deleting === d.id ? <Loader size={14} /> : <Trash size={12} weight="bold" />}
                   </button>
+                )}
+                {d.uploaded_by && d.uploaded_by !== user?.id && (
+                  <ReportButton kind="content" targetType="file" targetId={d.id}
+                    snapshot={[d.title, d.summary].filter(Boolean).join("\n")} size={12}
+                    className="self-stretch border border-border bg-white px-3 max-lg:my-0" />
                 )}
               </div>
             </div>

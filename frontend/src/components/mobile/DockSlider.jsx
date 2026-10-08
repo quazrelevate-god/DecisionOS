@@ -36,6 +36,7 @@ import { AnimatePresence } from "framer-motion";
 import { DexSlider } from "../karma/DexSlider";
 import { dockSlots, DockItem } from "./FloatingDock";
 import { Bubble, Outcome } from "./DexChat";
+import { AiNotice } from "../ReportButton";
 import { buildTiles, buildUtility } from "./AllAppsPanel";
 import { useBackDismiss } from "@/hooks/useBackDismiss";
 import { cn } from "@/lib/utils";
@@ -335,6 +336,7 @@ function DockAskPanel({ chat, onClose, onOpenDecision, children }) {
                 ? <Outcome key={m.id || i} o={m.outcome} onReview={onOpenDecision}
                     onRetry={() => retry?.()} retryDisabled={!canRetry} />
                 : <Bubble key={m.id || i} m={m} index={i} onOpenFile={openFile} onAsk={(q) => ask?.(q)}
+                    prompt={m.role !== "user" ? log.slice(0, i).reverse().find((p) => p.role === "user")?.text : undefined}
                     /* Following a citation closes Ask and goes there — the bar
                        cannot sit open over the page it just sent you to. */
                     onGo={(to) => { onClose?.(); navigate(to); }} />
@@ -342,6 +344,9 @@ function DockAskPanel({ chat, onClose, onOpenDecision, children }) {
           </AnimatePresence>
           {busy && !attaching && (
             <Bubble m={{ role: "dex", text: "Thinking…" }} index={log.length} onOpenFile={openFile} />
+          )}
+          {log.some((m) => m.role !== "user") && (
+            <AiNotice className="justify-center pt-1 text-white/50" />
           )}
           <div ref={endRef} aria-hidden="true" />
         </div>

@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { toastAiConsentOr } from "../lib/aiConsent";
 import api from "../lib/api";
 import { micProblem } from "../lib/native/mic";
+import { askBeforeMic } from "../lib/micNotice";
 
 export const BARS = 28;
 
@@ -319,6 +320,9 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
      is still being granted is remembered and applied the moment it arrives,
      instead of being lost. */
   const startRecording = useCallback(async () => {
+    if (startingRef.current || mediaRef.current?.state === "recording") return false;
+    // Play audit W5 — once, what happens to the audio (lib/micNotice).
+    if (!(await askBeforeMic())) return false;
     if (startingRef.current || mediaRef.current?.state === "recording") return false;
     startingRef.current = true;
     cancelStartRef.current = false;

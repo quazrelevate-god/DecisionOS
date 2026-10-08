@@ -64,6 +64,8 @@ import { RoutinesNudge } from "../components/routines/RoutinesSetup";
 import { DraftNote } from "../components/karma/DraftNote";
 import { useDraft } from "../hooks/useDraft";
 import { draftScope, hasDraft, hasDraftUnder } from "../lib/drafts";
+import { ReportButton } from "../components/ReportButton";
+import { askBeforeMic } from "../lib/micNotice";
 
 // RD-2 (2026-08-17): the toolbar control. Was uppercase + wide tracking +
 // hard black border — eight of these in a row read as a control panel. Now a
@@ -504,10 +506,17 @@ function TaskTrail({ t, members, roleOptions, onChange, openTrigger = 0, noteOnl
                   <div className="min-w-0 flex-1">
                     {e.step_text && <p className="truncate text-xs text-slate-500">On: {e.step_text}</p>}
                     <p className={`break-words text-sm leading-snug ${meta.strong ? "font-medium text-slate-900" : "text-slate-700"}`}>{e.text}</p>
-                    <p className="mt-0.5 text-xs text-slate-500">
+                    <p className="mt-0.5 flex flex-wrap items-center text-xs text-slate-500">
+                      <span>
                       {e.actor_name || "Someone"}
                       {e.to_name && <> <ArrowRight size={10} weight="bold" className="inline" aria-hidden="true" /> {e.to_name}</>}
                       {e.created_at && <> · <time dateTime={e.created_at} title={fullTime(e.created_at)}>{timeAgo(e.created_at)}</time></>}
+                      </span>
+                      {/* A colleague's note or hand-off is their words — reportable, not your own. */}
+                      {e.written && e.text && e.actor_id && e.actor_id !== user?.id && (
+                        <ReportButton kind="content" targetType="task_comment" targetId={`${t.id}:${e.id}`}
+                          snapshot={e.text} size={11} className="ml-1 py-0 text-slate-400" />
+                      )}
                     </p>
                   </div>
                 </div>
@@ -828,7 +837,15 @@ function ExecutionPlan({ t, onChange, onPatched, members = [], roleOptions = [] 
         <span className="flex items-center gap-2.5 text-[15px] font-semibold text-slate-800">
           <ListChecks size={20} weight="regular" aria-hidden="true" className="text-slate-600" /> AI Execution Guide
         </span>
-        <span className="text-sm text-slate-500"><span data-testid={`exec-progress-${t.id}`}>{progress}%</span> complete</span>
+        <span className="flex items-center gap-1 text-sm text-slate-500">
+          {/* 2026-10-08 — Play's AI-content policy: an AI-drafted checklist can be flagged. */}
+          {plan?.generated_at && (
+            <ReportButton kind="ai_output" targetType="execution_plan" targetId={t.id}
+              snapshot={steps.map((s, i) => `${i + 1}. ${s.text}`).join("\n")} context={t.title}
+              size={13} className="text-slate-400" />
+          )}
+          <span><span data-testid={`exec-progress-${t.id}`}>{progress}%</span> complete</span>
+        </span>
       </div>
 
       <div className="space-y-2.5">
@@ -1096,6 +1113,10 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
               {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
               {t.due_date && <span className="text-xs text-muted-foreground">due {new Date(t.due_date).toLocaleDateString()}</span>}
               <span className="label-mono text-muted-foreground ml-auto">{t.progress || 0}%</span>
+              {t.created_by && t.created_by !== user?.id && (
+                <ReportButton kind="content" targetType="task" targetId={t.id}
+                  snapshot={[t.title, t.description].filter(Boolean).join("\n\n")} size={13} />
+              )}
             </div>
             {t.description && <p className="text-sm text-muted-foreground">{t.description}</p>}
 
@@ -2111,6 +2132,8 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       setRecording(false);
       return;
     }
+    // Play audit W5 — once, what happens to the audio (lib/micNotice).
+    if (!(await askBeforeMic())) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mr = new MediaRecorder(stream);
@@ -2352,6 +2375,12 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
             {armedAtt === a.id ? "Remove" : <X size={11} weight="bold" aria-hidden="true" />}
           </button>
         )}
+        {/* 2026-10-08 — Play's UGC policy: a file a colleague shared can be reported. */}
+        {a.by && a.by !== user?.id && (
+          <ReportButton kind="content" targetType="file" targetId={a.id || a.url}
+            snapshot={`${a.filename || "attachment"} (${a.url}) on task "${t.title}"`} size={10}
+            className="absolute -bottom-1.5 -right-1.5 z-10 h-6 w-6 justify-center rounded-full bg-white p-0 max-lg:my-0 text-slate-500 shadow-sm ring-1 ring-inset ring-black/[0.06]" />
+        )}
       </div>
     );
     const renderAttInner = (a) => (
@@ -2459,6 +2488,13 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
               <RepeatLine t={t} canStop={rights.priority} onSaved={onChange} />
             </p>
           </div>
+          {/* 2026-10-08 — Play's UGC policy: a task someone else wrote can be
+              reported from the task itself. Not your own. */}
+          {t.created_by && t.created_by !== user?.id && (
+            <ReportButton kind="content" targetType="task" targetId={t.id}
+              snapshot={[t.title, t.description].filter(Boolean).join("\n\n")} size={17}
+              className="h-11 w-11 shrink-0 justify-center rounded-full bg-white/70 text-slate-500 max-lg:my-0 ring-1 ring-inset ring-slate-900/[0.06] hover:bg-white" />
+          )}
           {/* PILOT-1 B — rename, for the people who may change what the work
               is. Beside the close, the same size, a quieter face. */}
           {rights.wording && !renaming && (

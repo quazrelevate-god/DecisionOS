@@ -1703,112 +1703,6 @@
     .nm-raised, .nm-tile { border-color: hsl(var(--nm-edge) / .70); }
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   NM-17 — the Dex dissolve.
-   /brain is a DARK route regardless of the app's light/dark setting: Dex is
-   the product's centrepiece and it gets its own room, not the same shell in a
-   different accent. Entering and leaving it therefore swaps every token in the
-   sheet at once, which without help is a one-frame flash from white to near
-   black — jarring, and it makes the app look broken rather than deliberate.
-
-   `theme-x` is added to <html> for the length of the swap and removed after.
-   The `*` + !important is doing real work here and is the reason it is
-   temporary: token changes land on background-color, color, border-color and
-   box-shadow of essentially every node, and there is no single element to
-   transition instead. Leaving this rule on permanently would put a 500ms
-   easing on every hover in the app; 500ms of it, twice a session, is free.
-
-   `fill` is included because the Phosphor glyphs are SVG — without it the
-   icons would snap while their containers faded.
-   ═════════════════════════════════════════════════════════════════════════ */
-html.theme-x,
-html.theme-x body,
-html.theme-x *,
-html.theme-x *::before,
-html.theme-x *::after {
-    transition:
-        background-color 480ms cubic-bezier(.4, 0, .2, 1),
-        color            480ms cubic-bezier(.4, 0, .2, 1),
-        border-color     480ms cubic-bezier(.4, 0, .2, 1),
-        box-shadow       480ms cubic-bezier(.4, 0, .2, 1),
-        fill             480ms cubic-bezier(.4, 0, .2, 1) !important;
-}
-
-/* A cross-fade IS the motion here — there is no non-animated fallback that
-   still reads as one theme becoming another, so under reduced motion the swap
-   is simply instant. */
-@media (prefers-reduced-motion: reduce) {
-    html.theme-x,
-    html.theme-x body,
-    html.theme-x *,
-    html.theme-x *::before,
-    html.theme-x *::after {
-        transition: none !important;
-    }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   KR-3 — the Dex room joins the Karma ink. (Was NM-18's navy sky.)
-   The MECHANICS are NM-18's, untouched and proven: token overrides scoped to
-   [data-dex] so the base variables carry the change, a pseudo-element sky
-   that fades on opacity through NM-17's crossfade, isolation on the shell.
-   Only the LIGHT changes: navy+indigo becomes the band ink warmed by the
-   same amber bloom the light zone uses — one atmosphere for the whole
-   product, at two exposures.
-   ═════════════════════════════════════════════════════════════════════════ */
-html[data-dex="1"] {
-    /* The band ink, exactly — the room and the dark band are one material. */
-    --background:       240 4% 5%;
-    --surface:          240 4% 10%;
-    --surface-raised:   240 4% 13%;
-    --surface-sunken:   240 5% 3%;
-    --surface-hover:    240 4% 16%;
-    /* On a lit ground the border carries the boundary; warm, not blue. */
-    --hairline:         40 8% 24%;
-    --hairline-strong:  40 10% 34%;
-    --text-secondary:   40 12% 76%;
-    --text-tertiary:    40 8% 60%;
-
-    --nm-bg:      240 4% 7%;
-    --nm-raised:  240 4% 12%;
-    --nm-sunken:  240 5% 3%;
-    --nm-rail:    240 4% 12%;
-    /* Bright, and deliberately so — see the rim-light note below. */
-    --nm-edge:    40 12% 56%;
-    --nm-light:   186 160 128;
-    --nm-dark:    10 8 4;
-}
-
-/* THE ONE PLACE THE REVAMP'S OWN RULE HAS TO BEND. §2's premise is that a card
-   sits at the SAME value as the page and is separated by shadow alone. That
-   works because a shadow needs an unlit ground to fall on — and this room is
-   lit. With a glow behind it the composer measured rgb(15,20,36) against a
-   page of rgb(15,20,36): identical, and the shadow that was supposed to
-   separate them was being cancelled by the very gradient behind it. Here, and
-   only here, raised surfaces take the raised VALUE. */
-html[data-dex="1"] .nm-raised,
-html[data-dex="1"] .nm-tile { background-color: hsl(var(--nm-raised)); }
-
-/* RIM LIGHT — and the one place the §5 stop clause does NOT apply.
-   In the light theme I could not get a card boundary to WCAG's 3:1 without
-   drawing a visible grey frame, which is exactly what §1 removes, so I stopped
-   there and said so. Here the opposite is true: a bright 1px rim on a dark
-   surface is idiomatic, it reads as the edge catching the room's light rather
-   than as a box drawn round a card, and it is the only thing that can carry
-   the boundary once a glow behind the card has cancelled its shadow.
-   Measured against the composer's own fill, not against the page. */
-html[data-dex="1"] .nm-raised,
-html[data-dex="1"] .nm-tile  { border-color: hsl(var(--nm-edge) / .80); }
-html[data-dex="1"] .nm-inset { border-color: hsl(var(--nm-edge) / .55); }
-
-/* RD-1's dark cleanup hard-codes `.dark .text-muted-foreground` to a fixed
-   neutral grey, which bypasses --muted-foreground entirely — so raising the
-   token above did nothing to the one thing it was raised for. Restored to the
-   token inside this room only; the global override is left alone because
-   every dark screen in the app depends on it and that is a separate call.
-   (Unlayered, so it beats the @layer base rule without a specificity war.) */
-html[data-dex="1"].dark .text-muted-foreground { color: hsl(var(--muted-foreground)); }
-
 /* The sky is a PSEUDO-ELEMENT that is always present and fades on opacity,
    rather than a background-image switched on with the route. background-image
    is not interpolable between `none` and a gradient — it snaps — so painting
@@ -1828,13 +1722,12 @@ html[data-dex="1"].dark .text-muted-foreground { color: hsl(var(--muted-foregrou
 /* KR-3 — TWO skies on two pseudo-elements, faded on opacity, because
    background-image cannot interpolate between two gradient sets: a single
    layer would snap from bloom to bloom halfway through the 480ms crossfade.
-   ::before is the LIGHT-ZONE bloom (the default weather of the whole app);
-   ::after is the DEX-ROOM bloom (the same amber over ink). Both oversized
+   ::before is the LIGHT-ZONE bloom (the default weather of the whole app).
+   (DEX-R1: ::after was the Dex room's ink sky; the room is light now.) Oversized
    (inset -12%) so the 90s drift never exposes an edge. transform-only
    animation — no layout, no paint storm; the blur is done once by the
    gradient stops, not by filter. */
-.app-sky::before,
-.app-sky::after {
+.app-sky::before {
     content: "";
     position: fixed;
     inset: -12%;
@@ -2020,8 +1913,6 @@ html[data-dex="1"].dark .text-muted-foreground { color: hsl(var(--muted-foregrou
         opacity: var(--sky-art-opacity-lg, var(--sky-art-opacity, 1));
     }
 }
-/* The Dex room owns the whole sky — artwork stands down with the gradient. */
-html[data-dex="1"] .app-sky__art { opacity: 0; }
 
 /* ── the artwork table ─────────────────────────────────────────────────────
    One line per room. Uncomment it, drop the matching file in public/sky/,
@@ -2685,20 +2576,21 @@ html[data-page="settings"] .app-sky {
     --sky-wash: hsl(220 10% 70% / .22);
 }
 
-/* The Dex room: same amber family over the ink, pushed toward the orb's
-   seat. Hidden by default; the crossfade trades the two layers as the
-   theme turns. */
-.app-sky::after {
-    opacity: 0;
-    background-image:
-        radial-gradient(50% 42% at 50% 24%, hsl(30 90% 50% / .20), transparent 68%),
-        radial-gradient(36% 40% at 12% 78%, hsl(19 90% 45% / .12), transparent 72%),
-        radial-gradient(70% 30% at 50% 104%, hsl(35 85% 55% / .12), transparent 72%),
-        linear-gradient(180deg, hsl(30 40% 16% / .35), transparent 30%);
+/* Dex — DEX-R1 (2026-10-08). The room used to be ink with an amber bloom
+   pushed toward the orb. It is light now, and its sky is the app's own amber
+   taken down to a reading light: the hue stays (Dex has always been the amber
+   room), the chroma drops by half, because here text is set straight on the
+   ground and is read in paragraphs, not glanced at in tiles. Alphas are the
+   fixed KR-11.1 budget like every other room. /dex is the same page. */
+html[data-page="brain"] .app-sky,
+html[data-page="dex"] .app-sky {
+    --sky-core: hsl(38 46% 82% / .62);
+    --sky-deep: hsl(28 22% 76% / .38);
+    --sky-lift: hsl(44 70% 84% / .38);
+    --sky-wash: hsl(36 18% 82% / .22);
 }
 
-html[data-dex="1"] .app-sky::before { opacity: 0; }
-html[data-dex="1"] .app-sky::after  { opacity: 1; }
+
 
 /* ═══ KR-13 · THE PAGE ARRIVES ════════════════════════════════════════════
    Layer two of the navigation. The sky (above) says the room changed; this
@@ -2745,18 +2637,10 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
     animation: kr-page-in 260ms cubic-bezier(.22, 1, .36, 1) backwards;
 }
 
-/* KR-13.1 — THE DEX BOUNDARY OWNS ITS OWN MOTION, and nothing else plays
-   over it. A blur pulse lived here for one commit. The founder: "it's
-   interfering with the dark fade-in of the Dex page… only the light to dark
-   transition that is there within Dex should be there, no overlapping."
-   Right, and the reason is structural rather than a matter of taste:
-   entering Dex already runs a 480ms cross-fade across background-color,
-   color, border-color, box-shadow and fill on EVERY node in the app
-   (html.theme-x, further up this file). A second timeline over that does not
-   add richness, it competes — two easings, two durations, one moment.
-   .kr-page-in is suppressed across this boundary too; see Layout, where it
-   is skipped in both directions because leaving Dex runs the same
-   cross-fade as entering it. */
+/* KR-13.1 suppressed the page-arrival lift across the Dex boundary, where a
+   document-wide light-to-dark cross-fade was already running. DEX-R1
+   (2026-10-08) made /brain light, the cross-fade went with the dark room, and
+   /brain now arrives like every other page. */
 
 @keyframes kr-drift {
     from { transform: translate3d(-1.5%, -1%, 0) scale(1); }
@@ -2769,9 +2653,8 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
        a slow recolour, and it is the only cue left that the page changed
        once the lift and the blur are gone. The drift animation and the
        page-arrival lift both stop. */
-    .app-sky::before, .app-sky::after { animation: none; }
+    .app-sky::before { animation: none; }
     .kr-page-in { animation: none; opacity: 1; transform: none; }
-    html.theme-x .app-canvas { animation: none; filter: none; }
 
     /* KM-66 — the new-item ring still has to MARK the item; only the pulse
        goes. A static hairline for the same five seconds says the same thing
@@ -4229,15 +4112,7 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
     }
 }
 
-/* NM-11 — the Dex orb's idle breath. Runs ONLY when nothing is recording:
-   with a live signal the rings are driven by the microphone and a loop on top
-   of that would be two motions fighting. Off under reduced motion. */
-@keyframes dexBreathe {
-    0%, 100% { transform: scale(1);     opacity: .55; }
-    50%      { transform: scale(1.045); opacity: .9;  }
-}
-.dex-breathe { animation: dexBreathe 4.2s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) { .dex-breathe { animation: none; } }
+
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -4400,3 +4275,13 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
     .kr-toast.kr-toast[data-sonner-toast] { transition: none; }
     .kr-toast__icon { animation: none; }
 }
+
+/* DEX-R1 — the one motion on /brain: an answer settles into place when it
+   arrives. Short, on the app's sheet curve, and only an answer — nothing
+   that is already on the page animates. Off under reduced motion. */
+@keyframes dex-rise {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: none; }
+}
+.dex-rise { animation: dex-rise 240ms cubic-bezier(.33, 1, .68, 1) both; }
+@media (prefers-reduced-motion: reduce) { .dex-rise { animation: none; } }

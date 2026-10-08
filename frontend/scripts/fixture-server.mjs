@@ -707,6 +707,152 @@ const OK = { ok: true };
    way the real route would (resolve returns it; the server unwraps it). */
 const refuse = (status, detail) => ({ __status: status, detail });
 
+/* 2026-10-08 — /ask in every shape the real router returns (routers/brain.py).
+   The fixture used to send one thin answer for any question, so the KPI grid,
+   the table, the export bar, twenty sources and both refusals had never been
+   drawn by anything but production. Picked by words in the question, so the
+   page's own opener questions each land on a different shape:
+
+     "attention"            ANSWER  prose + sources, the everyday reply
+     "completed on time"    ANSWER  KPIs + a task table + export
+     "overdue tasks"        ANSWER  a people table, no money
+     "invoices"             ANSWER  money KPIs + a money table + 14 sources
+     "salary" / "payroll"   PERMISSION_DENIED  (message + can_ask)
+     "forecast" / "weather" INSUFFICIENT_DATA  (missing + suggestions)
+
+   Anything else gets the original Krishna Garments answer, unchanged. */
+function askFixture(question) {
+  const q = question.toLowerCase();
+  const ctx = { query_context_id: 'ctx_fixture', currency: 'INR' };
+  if (/salary|payroll/.test(q)) return {
+    type: 'PERMISSION_DENIED',
+    message: "Sorry Rajesh — salaries aren't part of your access, so I can't answer that. Your workspace owner can give you that access. You can ask me about tasks, decisions, workflows or contacts.",
+    can_ask: ['tasks', 'decisions', 'workflows', 'contacts'],
+  };
+  if (/forecast|weather/.test(q)) return {
+    type: 'INSUFFICIENT_DATA',
+    answer: "I couldn't find enough information in your workspace to answer that yet.",
+    missing_information: ['No matching records were found for this question.'],
+    suggested_questions: ['What needs my attention today?', 'Show my overdue tasks', 'Show tasks completed this month'],
+  };
+  if (/completed on time/.test(q)) return {
+    ...ctx, type: 'ANSWER',
+    answer: '**18 of 23** tasks finished on time this month — a **78%** on-time rate. Production was the steadiest at 92%; **Sales & Order Management** slipped most, with 3 of its 7 late.',
+    kpis: [
+      { label: 'Completed', value: 23 }, { label: 'On time', value: 18 },
+      { label: 'Late', value: 5 }, { label: 'On-time rate', value: '78%' },
+      { label: 'Best department', value: 'Production — 92%' },
+    ],
+    table: {
+      columns: [
+        { key: 'task', label: 'Task', type: 'text' }, { key: 'assignee', label: 'Assignee', type: 'text' },
+        { key: 'role', label: 'Department', type: 'text' }, { key: 'due', label: 'Due', type: 'date' },
+        { key: 'completed', label: 'Completed', type: 'date' }, { key: 'on_time', label: 'On time', type: 'text' },
+      ],
+      rows: [
+        ['Dispatch lot 44 to Reliance Trends', 'Anil Kumar', 'production', '2026-10-02', '2026-10-01', 'Yes'],
+        ['File TDS return for Q2', 'Sunita Rao', 'finance', '2026-09-30', '2026-09-30', 'Yes'],
+        ['Quote for Arvind Mills grey fabric', 'Priya Shah', 'sales_&_order_management', '2026-09-28', '2026-10-03', 'No'],
+        ['Re-dye rejected batch 41', 'Anil Kumar', 'production', '2026-09-26', '2026-09-25', 'Yes'],
+        ['Chase Krishna Garments payment', 'Priya Shah', 'sales_&_order_management', '2026-09-24', '2026-09-29', 'No'],
+        ['Renew factory insurance', 'Sunita Rao', 'finance', '2026-09-22', '2026-09-22', 'Yes'],
+        ['Sample swatches to Fabindia', 'Meera Iyer', 'sales_&_order_management', '2026-09-20', '2026-09-21', 'No'],
+        ['Service loom 3', 'Ravi Patel', 'production', '2026-09-18', '2026-09-17', 'Yes'],
+        ['Reconcile September bank statement', 'Sunita Rao', 'finance', '2026-10-05', '2026-10-04', 'Yes'],
+        ['Hire two weavers for night shift', 'Rajesh Kumar', 'owner', '2026-09-15', '2026-09-15', 'Yes'],
+        ['GST input credit claim', 'Sunita Rao', 'finance', '2026-09-12', '2026-09-12', 'Yes'],
+      ].map(([task, assignee, role, due, completed, on_time]) => ({ task, assignee, role, due, completed, on_time })),
+      total_rows: 11,
+    },
+    sources: [
+      { type: 'task', id: 't_44', title: 'Dispatch lot 44 to Reliance Trends', deep_link: '/my-work?task=t_44', confidence: 'VERIFIED' },
+      { type: 'task', id: 't_45', title: 'File TDS return for Q2', deep_link: '/my-work?task=t_45', confidence: 'VERIFIED' },
+      { type: 'task', id: 't_46', title: 'Quote for Arvind Mills grey fabric', deep_link: '/my-work?task=t_46', confidence: 'VERIFIED' },
+    ],
+    suggested_questions: ['Why did Sales slip this month?', 'Show the late tasks only', 'Compare with last month'],
+    export_options: ['csv', 'excel', 'pdf'],
+  };
+  if (/overdue tasks/.test(q)) return {
+    ...ctx, type: 'ANSWER',
+    answer: '**Priya Shah** carries the most overdue work — 4 tasks, the oldest 9 days late. Sales & Order Management as a team holds 6 of the 9 overdue tasks.',
+    // brain.py:588-594, verbatim labels.
+    kpis: [{ label: 'People/teams with work', value: 4 }, { label: 'Total overdue', value: 9 }, { label: 'Total open', value: 27 }],
+    table: {
+      columns: [
+        { key: 'employee', label: 'Employee / Team', type: 'text' }, { key: 'role', label: 'Department', type: 'text' },
+        { key: 'overdue', label: 'Overdue', type: 'number' }, { key: 'open', label: 'Open', type: 'number' },
+      ],
+      rows: [
+        { employee: 'Priya Shah', role: 'sales_&_order_management', overdue: 4, open: 9 },
+        { employee: 'Meera Iyer', role: 'sales_&_order_management', overdue: 2, open: 6 },
+        { employee: 'Anil Kumar', role: 'production', overdue: 2, open: 8 },
+        { employee: 'Sunita Rao', role: 'finance', overdue: 1, open: 4 },
+      ],
+      total_rows: 4,
+    },
+    sources: [
+      { type: 'employee', id: 'u_priya', title: 'Priya Shah', deep_link: '/team?u=u_priya', confidence: 'VERIFIED' },
+      { type: 'employee', id: 'u_meera', title: 'Meera Iyer', deep_link: '/team?u=u_meera', confidence: 'VERIFIED' },
+    ],
+    suggested_questions: ['What is Priya working on?', 'Reassign the oldest one'],
+    export_options: ['csv', 'excel', 'pdf'],
+  };
+  if (/invoice/.test(q)) {
+    const parties = ['Krishna Garments', 'Reliance Trends', 'Arvind Mills', 'Fabindia', 'Raymond Retail', 'Siyaram Silk',
+      'Bombay Dyeing', 'Welspun Living', 'Trident Home', 'Vardhman Textiles', 'Alok Industries', 'Mafatlal', 'Grasim', 'Indo Count'];
+    const amounts = [400000, 285000, 196000, 142500, 118000, 96000, 88400, 72000, 64800, 51000, 43200, 38000, 26500, 18900];
+    const days = [31, 22, 18, 14, 11, 9, 8, 6, 5, 4, 3, 2, 1, 0];
+    const rows = parties.map((party, i) => ({
+      invoice: `SBT/25-26/${String(412 + i).padStart(4, '0')}`, party, amount: amounts[i],
+      due: new Date(Date.UTC(2026, 9, 7) - days[i] * 86400000).toISOString().slice(0, 10),
+      stage: days[i] > 0 ? 'overdue' : 'sent',
+    }));
+    return {
+      ...ctx, type: 'ANSWER',
+      answer: "You're owed **₹16,40,300** across 14 customers. **Krishna Garments** is the one to chase — ₹4,00,000, 31 days late, and Priya's two reminders have gone unanswered. The next three together are another ₹6,23,500.",
+      /* The router's own three for invoices (brain.py:656) — Billed and
+         Outstanding are the money ones the client formats by label. A money
+         KPI named anything else would print raw, which is why the labels here
+         are copied rather than invented. */
+      kpis: [
+        { label: 'Invoices', value: 14 },
+        { label: 'Billed', value: 2860300 },
+        { label: 'Outstanding', value: 1640300, comparison: 'up ₹2.1L from last month' },
+      ],
+      table: {
+        columns: [
+          { key: 'invoice', label: 'Invoice', type: 'text' }, { key: 'party', label: 'Customer', type: 'text' },
+          { key: 'amount', label: 'Amount', type: 'money' }, { key: 'due', label: 'Due', type: 'date' },
+          { key: 'stage', label: 'Stage', type: 'text' },
+        ],
+        rows, total_rows: rows.length,
+      },
+      sources: rows.map((r, i) => ({ type: 'invoice', id: `inv_${i}`, title: `${r.invoice} · ${r.party}`, deep_link: `/finance?tab=revenue&invoice=inv_${i}`, confidence: 'VERIFIED' })),
+      suggested_questions: ['Draft a reminder to Krishna Garments', 'Who pays slowest on average?', 'How much came in this week?'],
+      export_options: ['csv', 'excel', 'pdf'],
+    };
+  }
+  if (/attention/.test(q)) return {
+    ...ctx, type: 'ANSWER',
+    answer: "Three things today.\n\n**Krishna Garments** owes ₹4,00,000 and is 31 days late — Priya has chased twice with no reply, so it needs a call from you.\n\n**Lot 44** for Reliance Trends dispatches tomorrow and the packing list isn't approved yet.\n\n**Two decisions** are waiting on you: the Arvind Mills quote and the night-shift hiring.",
+    kpis: [], table: null,
+    sources: [
+      { type: 'invoice', id: 'i_1', title: 'Invoice SBT/25-26/0412', deep_link: '/finance?tab=revenue&invoice=i_1', confidence: 'VERIFIED' },
+      { type: 'task', id: 't_44', title: 'Dispatch lot 44 to Reliance Trends', deep_link: '/my-work?task=t_44', confidence: 'VERIFIED' },
+      { type: 'decision', id: 'd_7', title: 'Arvind Mills quote — approve price?', deep_link: '/decisions?d=d_7', confidence: 'VERIFIED' },
+      { type: 'decision', id: 'd_8', title: 'Night shift — hire two weavers', deep_link: '/decisions?d=d_8', confidence: 'VERIFIED' },
+      { type: 'document', id: 'doc_1', title: 'Reliance Trends master agreement 2025' },
+    ],
+    suggested_questions: ['Draft a reminder to Krishna Garments', 'Show the Arvind Mills quote', 'What else is due this week?'],
+    export_options: [],
+  };
+  return { type: 'answer',
+    answer: 'Krishna Garments owes ₹4,00,000 and is 31 days late. Priya has chased twice with no answer.',
+    missing_information: [],
+    suggested_questions: ['How much is overdue in total?', 'Who else is past 30 days?'],
+    sources: [{ id: 'i_1', title: 'Invoice SBT/25-26/0412' }] };
+}
+
 function resolve(method, path, q, body = {}) {
   const seg = path.split('/').filter(Boolean); // ['api', ...]
   const p = '/' + seg.slice(1).join('/');
@@ -1032,11 +1178,7 @@ function resolve(method, path, q, body = {}) {
      follow-up chips a thin answer hands back were never exercised by any
      suite — which is how they stayed decorative long enough for the founder
      to find them. They are part of the contract now. */
-  if (p === '/ask') return { type: 'answer',
-    answer: 'Krishna Garments owes ₹4,00,000 and is 31 days late. Priya has chased twice with no answer.',
-    missing_information: [],
-    suggested_questions: ['How much is overdue in total?', 'Who else is past 30 days?'],
-    sources: [{ id: 'i_1', title: 'Invoice SBT/25-26/0412' }] };
+  if (p === '/ask') return askFixture(String(body.question || ''));
 
   // --- misc screens ---
   if (p === '/calendar') return CALENDAR;

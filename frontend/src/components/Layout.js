@@ -276,18 +276,12 @@ export default function Layout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // ── NM-17 · the Dex dissolve ────────────────────────────────────────────
-  // /brain renders dark whatever the app's theme is; the transition into the
-  // room is cross-faded rather than flipped.
-  //
-  // KR-5: `wantDark = dexRoute`, full stop. User-facing dark mode retired
-  // with the Karma language (approved plan) — Karma is a two-zone light
-  // composition and `dark` now means "inside the ink", which only the Dex
-  // room asserts at page level. ASK-33 Phase 5 (founder, 2026-09-16) removed
-  // the rest: useTheme, the Settings and Login switches and the All Apps theme
-  // branch are gone, and index.js clears any saved "dark". This class now
-  // belongs to the Dex room alone.
-  const dexRoute = location.pathname.startsWith("/brain") || location.pathname.startsWith("/dex");
+  /* DEX-R1 (2026-10-08) — /brain is no longer a dark room. It used to toggle
+     `.dark` and `data-dex` on <html> on arrival and cross-fade every node in
+     the document to get there; the founder asked for it light, like the rest
+     of the app, and it now is — its own sky tint (index.css) and nothing else.
+     User-facing dark mode was already retired (KR-5 / ASK-33), so nothing in
+     the app asserts `.dark` any more. */
   /* DEX-SLIDER Part 1 — the Desk, and only the Desk. The slider's left end IS
      Ask there, so a second way in beside the bar is one too many; every other
      phone page keeps the circle, because asking about the page you are on is
@@ -307,35 +301,6 @@ export default function Layout({ children }) {
     openAskInline: () => { setDexChannel("ask"); setDexOpen(true); setDexInline(true); },
     closeAsk: () => { setDexOpen(false); setDexChannel(null); setDexInline(false); },
   }), []);
-  const wantDark = dexRoute;
-  const lastDark = useRef(null);
-  useEffect(() => {
-    const root = document.documentElement;
-    // Only fade an actual CHANGE. Without this the first paint of every
-    // /brain navigation would arm a 480ms transition on the whole document
-    // for a swap that is not happening.
-    const changed = lastDark.current !== null && lastDark.current !== wantDark;
-    lastDark.current = wantDark;
-
-    if (!changed) {
-      root.classList.toggle("dark", wantDark);
-      return undefined;
-    }
-    root.classList.add("theme-x");
-    root.classList.toggle("dark", wantDark);
-    const t = setTimeout(() => root.classList.remove("theme-x"), 520);
-    return () => clearTimeout(t);
-  }, [wantDark]);
-
-  // NM-18: the sky's token overrides hang off <html>, not off a React node —
-  // they have to reach the header and the rail, which are siblings of the
-  // canvas. Separate from the dark class above because the two answer
-  // different questions: `dark` is "which theme", `data-dex` is "which room".
-  useEffect(() => {
-    const root = document.documentElement;
-    if (dexRoute) root.setAttribute("data-dex", "1");
-    else root.removeAttribute("data-dex");
-  }, [dexRoute]);
 
 
   // KR-13 — replay the page-arrival animation on every route change.
@@ -356,29 +321,17 @@ export default function Layout({ children }) {
   useSkyFade(location.pathname);
 
   const mainRef = useRef(null);
-  const wasDex = useRef(dexRoute);
   useEffect(() => {
     const el = mainRef.current;
-    const leavingOrEnteringDex = dexRoute || wasDex.current;
-    wasDex.current = dexRoute;
     if (!el) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
-    // KR-13.1 — NO PAGE TRANSITION ACROSS THE DEX BOUNDARY, in either
-    // direction. Dex already runs its own 480ms light↔dark cross-fade over
-    // every node in the app (html.theme-x); adding a 320ms rise on top of it
-    // meant two easings and two durations fighting over one moment, which is
-    // exactly the interference the founder reported. The room swap IS the
-    // transition there. Both directions, because leaving Dex runs the same
-    // cross-fade as entering it.
-    if (leavingOrEnteringDex) {
-      el.classList.remove("kr-page-in");
-      return;
-    }
+    // (KR-13.1 skipped this across the Dex boundary, where a light↔dark
+    // cross-fade was already running. That cross-fade is gone with the dark
+    // room, so /brain arrives like every other page.)
     el.classList.remove("kr-page-in");
     void el.offsetWidth;
     el.classList.add("kr-page-in");
-  }, [location.pathname, dexRoute]);
+  }, [location.pathname]);
 
   const [profileOpen, setProfileOpen] = useState(false);
   // MPWA-03 mobile navigation state.

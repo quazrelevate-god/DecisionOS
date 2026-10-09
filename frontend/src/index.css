@@ -831,7 +831,9 @@
            given LESS than its content must clip rather than print over its
            neighbour (an Android 6.1" screenshot of three titles on top of one
            another is why that line exists) — and data-desk-tight below is what
-           now keeps the rows from ever getting there. */
+           now keeps the rows from ever getting there.
+           (2026-10-09: the sharing is gone — a row is one fixed slot of three,
+           see ONE CARD HEIGHT below. The floor and the clip stand.) */
         overflow: hidden;
     }
     .kr-desk-row-title {
@@ -868,8 +870,9 @@
        Nothing here is a different design: it is the same Desk with the air
        taken out of it, and one line fewer per row. */
     :root[data-desk-tight="2"] .kr-desk-row-meta { display: none; }
-    :root[data-desk-tight] .kr-desk-sheet-list { gap: 0.375rem; }
-    :root[data-desk-tight] [data-testid="desk-phone-more"] { height: 2.75rem; }
+    :root[data-desk-tight] .kr-desk-sheet-list { --desk-row-gap: 0.375rem; }
+    :root[data-desk-tight] [data-testid="desk-phone-more"],
+    :root[data-desk-tight] [data-testid="desk-phone-more-slot"] { height: 2.75rem; }
     :root[data-desk-tight] .kr-kpi-tile { padding: 0.5rem; }
     :root[data-desk-tight] [data-testid="desk-page"] { gap: 0.5rem; }
     :root[data-desk-tight] .kr-desk-row-roomy { padding-block: calc(0.25rem * var(--desk-row-scale)); }
@@ -889,6 +892,28 @@
        same rule by the same line. */
     .kr-desk-sheet-list [data-row] { min-height: min-content; }
 
+    /* ONE CARD HEIGHT, HOWEVER MANY CARDS. (2026-10-09, founder.)
+       The rows were `flex-1`, so they shared the card between however many
+       there were: three rows and the Show-all control at 85pt each on a
+       390x844, two at 156pt, one at the whole 320pt — the card grew as the
+       list shrank. The founder looked at type grown to fill those (a proposal,
+       turned down) and called it the other way: "static fixed height card,
+       just like" the three-row Desk.
+       So every row is one slot of the three, on every tab and in every state:
+       a third of the list, less its gaps. Desk.js keeps the list the same
+       height whatever is in it (the Show-all slot is held when there is no
+       Show all to draw) and sets --desk-row-slots to the rows the screen can
+       seat (three, fewer only on the smallest phones), so two decisions are
+       two cards of exactly the height three would have been, with the sheet's
+       own black below them. Watch is held to it by the same line; its gap is
+       the list's, so it is the same slot. min-content above still wins over
+       the slot, so a row can never be cut shorter than its words. */
+    .kr-desk-sheet-list { --desk-row-gap: 0.625rem; gap: var(--desk-row-gap); }
+    .kr-desk-sheet-list [data-testid="desk-watch"] { gap: var(--desk-row-gap); }
+    .kr-desk-sheet-list [data-row] {
+        flex: 0 0 calc((100% - (var(--desk-row-slots, 3) - 1) * var(--desk-row-gap)) / var(--desk-row-slots, 3));
+    }
+
     /* THE OPEN CIRCLE BENDS WITH THE ROW IT IS IN. A fixed 32px control inside
        a row whose type scales is a floor the scale cannot reach past: at
        375x667 the titles were already at the 11pt floor and the rows still did
@@ -903,6 +928,7 @@
         height: calc(2rem * var(--desk-row-scale));
         width: calc(2rem * var(--desk-row-scale));
     }
+
 
     /* THE DECISION ROW AS ITS OWN PILL. (2026-10-05, founder.)
        "Remove the inside gradient black card inside the black sheet for the
@@ -983,8 +1009,14 @@
    its own now; it is drawn inside the dock's own well, which grows to hold it.
    See DexSlider's `menu` prop.) */
 
+/* 2026-10-09 (founder) — AND IT OPENS TO THE DESK'S SHEET. The half-screen
+   ceiling is gone: DockAskPanel gives the panel the height from its foot up to
+   the line the Desk's black sheet starts at (lib/deskSheet), on every page, so
+   on the Desk it covers the sheet exactly instead of standing on it at a
+   height of its own. What is left here is only a cap for the case it cannot
+   measure, so a long transcript still scrolls inside it. */
 .kr-dock-chat {
-    max-height: calc(50dvh / var(--ui-scale, 1));
+    max-height: calc(85dvh / var(--ui-scale, 1));
     background: hsl(0 0% 7% / .92);
     -webkit-backdrop-filter: blur(22px) saturate(1.2);
     backdrop-filter: blur(22px) saturate(1.2);
@@ -3653,6 +3685,37 @@ html[data-page="dex"] .app-sky {
         .kr-desk-board {
             padding: 0.75rem;
             border-radius: var(--radius-tile);
+        }
+
+        /* DESK-SHEET (2026-10-09) — A SHEET AGAIN. Founder: "stretch the black
+           sheet fully to both left and right end of the screen, and also to the
+           bottom end of the screen behind the dock, and increase the corner
+           radius of the top side."
+           It breaks out of the page gutter on both flanks and out of the page's
+           dock clearance at the foot, cancelled in the same expressions they are
+           written in (.px-gutter-safe, --dock-clear) — move those, move these.
+           Then it puts both back as PADDING, which is the whole trick: the black
+           reaches the screen's edges and runs on under the dock, while the tabs
+           and rows inside keep exactly the box they had. The rows' height is
+           unchanged to the pixel (so the three-row fit is untouched), and their
+           sides now line up with the KPI tiles' outer edges above them.
+           `.kr-desk-sheet-floor` carries the margins alone so the spacer that
+           holds the sheet's place while it is lifted (Desk.js, ASK-47) can wear
+           them too and take exactly the room the sheet took.
+           THE TOP CORNERS ARE CONCENTRIC WITH THE TAB STRIP: its curve is half
+           of (--tabs-trigger-h + 0.5rem) — 26px on a phone — and the sheet sits
+           0.75rem outside it, so 38px, up from 24. Square at the foot: there is
+           no foot, it runs off the bottom of the screen. */
+        .kr-desk-sheet-floor {
+            margin-left: calc(-1 * max(1rem, var(--sa-left)));
+            margin-right: calc(-1 * max(1rem, var(--sa-right)));
+            margin-bottom: calc(-1 * var(--dock-clear));
+        }
+        .kr-desk-board.kr-desk-sheet-floor {
+            /* 0.25rem over the clearance is the seam the card used to keep
+               above the bar (its old -mb-2 against 0.75rem of padding). */
+            padding: 0.75rem max(1rem, var(--sa-right)) calc(var(--dock-clear) + 0.25rem) max(1rem, var(--sa-left));
+            border-radius: calc((var(--tabs-trigger-h) + 0.5rem) / 2 + 0.75rem) calc((var(--tabs-trigger-h) + 0.5rem) / 2 + 0.75rem) 0 0;
         }
     }
     @media (min-width: 1024px) {

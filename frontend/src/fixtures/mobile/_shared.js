@@ -1,4 +1,5 @@
 // Shared builders for the three fixture states (§4).
+import { TERMS_VERSION } from "../../lib/legal";
 //
 // Dates are anchored to midnight UTC today so relative strings ("3 days
 // overdue", "Due Monday") are stable for a whole day and screenshots do not
@@ -9,7 +10,15 @@ export const ymd = (n) => shift(n).toISOString().slice(0, 10);
 export const iso = (n) => shift(n).toISOString();
 export const TODAY = ymd(0);
 
-export const OWNER = { id: "u_owner", name: "Rajesh Sharma", role: "owner", email: "owner@sharma.com", language: "en" };
+/* The persona has accepted the current Terms (Play audit C2), or
+   components/TermsGate stands in front of every screen these fixtures exist to
+   show. The fixture SERVER was given this in d6ed845; this in-app layer
+   (?fixture=…) was not, and every suite that loads ?fixture=busy timed out
+   behind the gate. The version is read from lib/legal so the two cannot drift. */
+export const OWNER = {
+  id: "u_owner", name: "Rajesh Sharma", role: "owner", email: "owner@sharma.com", language: "en",
+  terms_accepted: { version: TERMS_VERSION, accepted_at: "2026-10-08T00:00:00.000Z" },
+};
 
 export const TENANT = {
   id: "ten_fixture",

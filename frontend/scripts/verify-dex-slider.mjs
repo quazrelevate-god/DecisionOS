@@ -67,6 +67,7 @@ for (const [w, h] of WIDTHS) {
   await page.waitForTimeout(1500);
   console.log(`\n${w}x${h}`);
   const rowType = {};
+  const rowHeight = {};
 
   // ── the Desk's order, and that it still fits ───────────────────────────────
   const box = async (t) => (await page.locator(`[data-testid="${t}"]`).boundingBox());
@@ -76,8 +77,21 @@ for (const [w, h] of WIDTHS) {
      against it rather than against a sibling. */
   const [kpi, board, dex] = [await box('desk-kpi-grid'), await box('desk-board'), await box('dock-slider')];
   check('tiles, then the card, then the control', kpi.y < board.y && board.y < dex.y);
-  check('the card sits directly on the control', dex.y - (board.y + board.height) <= 24,
-    `${Math.round(dex.y - (board.y + board.height))}px`);
+  /* DESK-SHEET (2026-10-09) — the board is a SHEET again: edge to edge, and on
+     under the dock to the floor of the screen. What must still hold is that
+     the CONTENT inside it — the tabbed card — stops above the bar, and as
+     close to it as before (the old card-to-control seam). */
+  {
+    const vw = await page.evaluate(() => window.innerWidth);
+    const vh = await page.evaluate(() => window.innerHeight);
+    const card = await box('desk-phone-card');
+    check('the sheet runs edge to edge', board.x <= 0.5 && board.x + board.width >= vw - 0.5,
+      `${Math.round(board.x)}..${Math.round(board.x + board.width)} of ${vw}`);
+    check('the sheet runs on under the dock to the floor', board.y + board.height >= vh - 1 && board.y + board.height > dex.y + dex.height,
+      `foot ${Math.round(board.y + board.height)} of ${vh}`);
+    check('the card in it stops just above the control', card.y + card.height <= dex.y && dex.y - (card.y + card.height) <= 24,
+      `${Math.round(dex.y - (card.y + card.height))}px`);
+  }
   check('the page does not scroll',
     await page.evaluate(() => document.scrollingElement.scrollHeight <= window.innerHeight + 2));
   check('no horizontal overflow',
@@ -105,7 +119,16 @@ for (const [w, h] of WIDTHS) {
       const lb = list.getBoundingClientRect();
       const boxes = rows.map((r) => r.getBoundingClientRect());
       const more = document.querySelector('[data-testid="desk-phone-more"]');
+      /* One slot of the list: what every card should be (index.css, ONE CARD
+         HEIGHT), in screen pixels — the gap is read in the list's own CSS
+         pixels and scaled by the app's zoom, which the boxes are already in. */
+      const cs = getComputedStyle(list);
+      const slots = parseFloat(cs.getPropertyValue('--desk-row-slots')) || 3;
+      const zoom = lb.height / (list.offsetHeight || 1);
+      const slot = (lb.height - (slots - 1) * parseFloat(cs.rowGap) * zoom) / slots;
       return {
+        slot: Math.round(slot),
+        heights: boxes.map((b) => Math.round(b.height)),
         rows: rows.length,
         /* clipped: the row is drawn shorter than the content inside it. 2px of
            slack for sub-pixel line-heights at a fractional --desk-row-scale. */
@@ -123,11 +146,55 @@ for (const [w, h] of WIDTHS) {
     check(`${tab}: it has rows`, m.rows > 0, `${m.rows}`);
     check(`${tab}: nothing is compressed`, m.clipped === 0, `${m.clipped} clipped`);
     check(`${tab}: nothing overlaps or leaves the card`, !m.overlap && !m.escapes);
-    /* FILLS IT: the last row ends at the foot of the list, bar the slack a
-       capped row count leaves (one row's worth is the most that can be left
-       over before a row would have fitted). */
-    check(`${tab}: the rows use the whole card`, m.slack !== null && m.slack <= 24, `${m.slack}px left under them`);
+    /* ONE CARD HEIGHT (2026-10-09, founder: "static fixed height card").
+       Every card is one slot of the list — a third of it, less the gaps — not
+       a share of it, so the count of rows never changes their height. (It
+       replaces "the rows use the whole card", 2026-10-06, which was the
+       opposite rule.) Watch on the smallest screens gives back the Show-all
+       room and is one slot of the taller list it leaves, which this still
+       measures. */
+    check(`${tab}: every card is one slot of the list`,
+      m.heights.every((x) => Math.abs(x - m.slot) <= 2), `${m.heights.join('/')} against ${m.slot}`);
     rowType[tab] = m.title;
+    rowHeight[tab] = m.heights[0];
+  }
+  /* THE SAME CARD IN EVERY TAB, wherever the screen seats three rows and the
+     Show-all room under them (no tight layout). */
+  if (!(await page.evaluate(() => document.documentElement.hasAttribute('data-desk-tight')))) {
+    const hs = Object.values(rowHeight).filter(Boolean);
+    check('one card height across the three tabs', Math.max(...hs) - Math.min(...hs) <= 2,
+      Object.entries(rowHeight).map(([k, v]) => `${k} ${v}`).join(', '));
+  }
+  /* FEWER ROWS, SAME CARDS — the founder's case: two decisions waiting are two
+     cards of the three-row height with the sheet's black under them, not two
+     cards stretched to fill it. The sparse fixture has exactly two. On its own
+     page, so the busy Desk above is left as the slider checks below expect. */
+  {
+    const sp = await ctx.newPage();
+    await sp.goto(`${BASE}/inbox?fixture=sparse`, { waitUntil: 'domcontentloaded' });
+    await sp.waitForSelector('[data-testid="desk-phone-card-card"] [data-row]', { timeout: 25000 });
+    await sp.waitForTimeout(1500);
+    const f = await sp.evaluate(() => {
+      const list = document.querySelector('.kr-desk-sheet-list');
+      const lb = list.getBoundingClientRect();
+      const boxes = [...list.querySelectorAll('[data-row]')].map((r) => r.getBoundingClientRect());
+      const cs = getComputedStyle(list);
+      const slots = parseFloat(cs.getPropertyValue('--desk-row-slots')) || 3;
+      const zoom = lb.height / (list.offsetHeight || 1);
+      const gap = parseFloat(cs.rowGap) * zoom;
+      return {
+        rows: boxes.length, slots,
+        slot: Math.round((lb.height - (slots - 1) * gap) / slots),
+        heights: boxes.map((b) => Math.round(b.height)),
+        under: Math.round(lb.bottom - boxes[boxes.length - 1].bottom),
+      };
+    });
+    if (f.rows < f.slots) {
+      check(`${f.rows} decisions keep the three-row card height`,
+        f.heights.every((x) => Math.abs(x - f.slot) <= 2), `${f.heights.join('/')} against ${f.slot}`);
+      check('…with the sheet left empty under them', f.under >= f.slot - 2, `${f.under}px under`);
+    }
+    await sp.close();
   }
   /* ONE TYPE ACROSS THE TABS, to within the scale. The tabs are not always
      given the same height — a tab with more than three rows spends 44-56px of

@@ -741,6 +741,18 @@ export function DeskDexWell({ className, style, testid, phone = false, onReview,
      it re-renders. */
   const stopRef = useRef(null);
   stopRef.current = () => onMic();
+  /* 2026-10-09 (founder) — AND A CANCEL BESIDE THE STOP. Dragging the parked
+     handle back to the centre: the take is thrown away (useDexCapture's
+     cancelRecording — nothing uploaded, nothing structured, no step 1 and no
+     kept draft) and the door closes, so the control is back at rest and the
+     next drag right starts again from nothing. Unlike closing the door, which
+     is never cancelling (above), this is the one gesture that means it. */
+  const cancelRef = useRef(null);
+  cancelRef.current = () => {
+    dex.cancelRecording();
+    setWaitingWords(false);
+    onClose?.();
+  };
   useEffect(() => {
     onMeter?.({
       readLevel,
@@ -748,6 +760,7 @@ export function DeskDexWell({ className, style, testid, phone = false, onReview,
       recording,
       capturing: surface === "overlay" && open,
       stop: () => stopRef.current?.(),
+      cancel: () => cancelRef.current?.(),
     });
   }, [onMeter, readLevel, dex.levelsRef, recording, surface, open]);
 

@@ -382,8 +382,10 @@ export default function Layout({ children }) {
      control, now that the control is the dock. */
   const [dockLive, setDockLive] = useState({ recording: false, capturing: false, levelsRef: null });
   const dockStopRef = useRef(null);
+  const dockCancelRef = useRef(null);
   const onDockMeter = useCallback((c) => {
     dockStopRef.current = c.stop;
+    dockCancelRef.current = c.cancel;
     setDockLive({ recording: !!c.recording, capturing: !!c.capturing, levelsRef: c.levelsRef });
   }, []);
   /* The page reserves room against --dock-h, and the slider bar is taller than
@@ -1139,8 +1141,8 @@ export default function Layout({ children }) {
           which is what `pb-dock` on main pays for), plus Dex as a separate
           64px circle on the same baseline. Desktop keeps its sidebar. */}
       {dockIsSlider ? (
-        /* THE BAR IS THE CONTROL. Ask opens INSIDE it (the panel grows to half
-           the screen and then scrolls); Decide hands over to the same capture
+        /* THE BAR IS THE CONTROL. Ask opens INSIDE it (the panel opens to the
+           Desk's black sheet line and then scrolls); Decide hands over to the same capture
            and review card the Desk uses, through DeskDexWell's overlay, so
            there is one Decide in the product rather than two. */
         <DockSlider
@@ -1160,7 +1162,25 @@ export default function Layout({ children }) {
             if (dex.recording) { askSendOnTranscript.current = true; dex.stopRecording(); return; }
             chat.submit();
           }}
-          onAsk={() => { setDexChannel("ask"); setDexOpen(true); setDexInline(true); if (!dex.recording) dex.startRecording(); }}
+          /* ONE QUESTION AT A TIME (2026-10-09, founder: "while it's thinking
+             and while after I send it should not allow me to speak"). From the
+             send until Dex's written answer is in, the bar opens to the
+             conversation but does not record — the words are still being
+             transcribed (`dex.sending`) or answered (`chat.busy`). The panel's
+             own control is locked for the same span (`askBusy`). */
+          onAsk={() => {
+            setDexChannel("ask"); setDexOpen(true); setDexInline(true);
+            if (!dex.recording && !dex.sending && !chat.busy) dex.startRecording();
+          }}
+          askBusy={!!(dex.sending || chat.busy)}
+          /* CANCEL — the parked handle dragged back to the centre: the take is
+             thrown away, whichever end it was started from. Ask's also forgets
+             that its transcript was to send itself; nothing is coming. */
+          onCancel={() => {
+            if (dockDecide) { dockCancelRef.current?.(); return; }
+            askSendOnTranscript.current = false;
+            dex.cancelRecording();
+          }}
           onDecide={() => setDockDecide(true)}
           onCloseAsk={() => { setDexOpen(false); setDexChannel(null); setDexInline(false); }}
           /* A TOGGLE, because More is now a state of the bar rather than a card

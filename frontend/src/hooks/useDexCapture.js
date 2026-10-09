@@ -87,6 +87,9 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
      await be honoured when the stream finally arrives. */
   const startingRef = useRef(false);
   const cancelStartRef = useRef(false);
+  /* 2026-10-09 — …and a stop pressed during that await that was a CANCEL, so
+     the take the stream arrives into is thrown away rather than sent. */
+  const discardStartRef = useRef(false);
   /* KM-60 — the live meter, in a REF as well as in state.
      The interval below samples the mic every 55ms. Writing that straight to
      React state re-rendered Layout ~18 times a second — and Layout renders the
@@ -326,6 +329,7 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
     if (startingRef.current || mediaRef.current?.state === "recording") return false;
     startingRef.current = true;
     cancelStartRef.current = false;
+    discardStartRef.current = false;
     // Optimistic: the UI must answer the tap, not the hardware.
     setRecording(true);
     setRecordSecs(0);
@@ -354,6 +358,12 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
       mr.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
         stopMeter();
+        /* CANCELLED, NOT STOPPED (cancelRecording): the take is dropped here,
+           before anything is uploaded, transcribed or sent. Marked on THIS
+           recorder rather than in a shared flag, because onstop runs a task
+           after the stop — a new take started in between must not inherit the
+           cancel, and this one must not lose it. */
+        if (mr.discarded) { chunksRef.current = []; return; }
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
         const fd = new FormData();
         fd.append("file", blob, "capture.webm");
@@ -455,7 +465,10 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
       /* One last look: a stop can also land between the stream arriving and
          the recorder starting. Honour it rather than leaving a take running
          that nothing is going to end. */
-      if (cancelStartRef.current) { try { mr.stop(); } catch { /* already gone */ } }
+      if (cancelStartRef.current) {
+        mr.discarded = discardStartRef.current;
+        try { mr.stop(); } catch { /* already gone */ }
+      }
       // recording / secs / levels were set before the await — see the note above.
       return true;
     } catch (e) {
@@ -490,6 +503,27 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
       setSending(true);
     }
     setRecording(false);
+    clearInterval(timerRef.current);
+    stopMeter();
+  }, [stopMeter]);
+
+  /* 2026-10-09 (founder) — CANCEL: the recording ends and NOTHING happens with
+     it. "Once I swipe … I don't have an option to cancel what I am talking" —
+     dragging the parked handle back to the centre lands here. The microphone
+     is released exactly as a stop releases it; the difference is that the
+     take is thrown away in onstop instead of uploaded, and `sending` is never
+     raised, so the control is free at once to start again from nothing. A
+     cancel during the getUserMedia await is remembered the same way a stop is
+     (KM-54), and marked as a cancel so the take that arrives is dropped. */
+  const cancelRecording = useCallback(() => {
+    if (startingRef.current) { cancelStartRef.current = true; discardStartRef.current = true; }
+    const mr = mediaRef.current;
+    if (mr && mr.state !== "inactive") {
+      mr.discarded = true;
+      try { mr.stop(); } catch { /* already stopped */ }
+    }
+    setRecording(false);
+    setRecordSecs(0);
     clearInterval(timerRef.current);
     stopMeter();
   }, [stopMeter]);
@@ -534,7 +568,7 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
     text, setText,
     sending, recording, recordSecs, levels, levelsRef,
     understanding, clearUnderstanding, reset, follow,
-    sendText, startRecording, stopRecording, uploadFile,
+    sendText, startRecording, stopRecording, cancelRecording, uploadFile,
     attachments, removeAttachment,
     fileRef,
   };

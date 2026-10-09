@@ -124,6 +124,10 @@ def user_perms(user: dict) -> set:
     # `approvals` still means holding both.
     if "approvals" in base:
         base.add("captures_approve")
+    # Audit B-09 -- the same for Manage Team, which has always included the
+    # people work that "staff_manage" now names on its own.
+    if "team_manage" in base:
+        base.add("staff_manage")
     return base
 
 

@@ -66,6 +66,20 @@ def count_between(k, lo, hi) -> base.Check:
     return (f"{lo}<=len({k!r})<={hi}", _f)
 
 
+# Audit B-06 -- the region the founder named (and none when they named none).
+def region_has(*names) -> base.Check:
+    def _f(r):
+        got = (r.get("region") or "").lower()
+        assert any(n in got for n in names), f"region {r.get('region')!r} names none of {names}"
+    return (f"region names one of {names}", _f)
+
+
+def region_blank() -> base.Check:
+    def _f(r):
+        assert not (r.get("region") or "").strip(), f"region guessed: {r.get('region')!r}"
+    return ("region stays empty when no place was named", _f)
+
+
 def _BLUEPRINT_CHECKS(terms, min_hits=3):
     """The invariants every generated OS must satisfy, plus per-niche grounding."""
     return [
@@ -109,7 +123,8 @@ register(EvalCase(
       "approval_rules":[{"name":"Bulk purchase above Rs 20,000","description":"Owner approves any grocery/vegetable bulk order over Rs 20,000 before it is placed."}],
       "products":[{"name":"Dine-in service","description":"Sit-down South Indian meals"},{"name":"Delivery","description":"Swiggy/Zomato orders"}],
       "welcome_line":"Your OS keeps prep, billing and Swiggy/Zomato orders on one rail so nothing burns at the dinner peak."}""",
-    checks=_BLUEPRINT_CHECKS(["kitchen", "prep", "swiggy", "zomato", "purchase", "delivery", "wastage", "20,000"], min_hits=3),
+    checks=_BLUEPRINT_CHECKS(["kitchen", "prep", "swiggy", "zomato", "purchase", "delivery", "wastage", "20,000"], min_hits=3)
+    + [region_blank()],
     note="Restaurant: kitchen/service/purchase/delivery departments, grounded in prep, aggregators, the 20k approval.",
 ))
 
@@ -187,6 +202,35 @@ register(EvalCase(
       "welcome_line":"Your OS keeps yarn, dyeing and dispatch on one rail so a procurement delay never makes you miss a brand deadline."}""",
     checks=_BLUEPRINT_CHECKS(["yarn", "dye", "dispatch", "weav", "suresh", "50,000", "quality"], min_hits=3),
     note="Textile: yarn->weave/dye->dispatch, the 50k approval + Suresh's QC gate, grounded in the founder's own words.",
+))
+
+
+# --- Audit B-06 (2026-10-09): WHERE THEY ARE, WHEN THEY SAID IT ---------------
+# Settings > Company details > Region was empty for a founder who had said
+# "Tiruppur". The blueprint now carries `region`, only from what was said.
+register(EvalCase(
+    task="onboarding.blueprint", name="region_from_interview",
+    fn=generate_blueprint,
+    kwargs={
+        "profile": {"company_name": "Kongu Knits", "founder_name": "Meera", "team_size": "11-50",
+                    "industry": "Textile & Apparel", "business_model": "B2B",
+                    "description": "knitted garments for export buyers"},
+        "transcript": [
+            {"q": "Walk me through day-to-day operations.",
+             "a": "We're a knitting and stitching unit in Tiruppur. Export buyers send orders, we knit, dye outside, stitch and pack for shipment."},
+            {"q": "Who approves what?",
+             "a": "I approve every job-work payment above one lakh."},
+        ],
+    },
+    golden="""{"departments":[{"key":"merch","label":"Merchandising"},{"key":"production","label":"Knitting & Stitching"},{"key":"dispatch","label":"Packing & Shipment"}],
+      "operational_tasks":[{"title":"Daily job-work status with the dyeing unit","category":"Review"}],
+      "approval_rules":[{"name":"Job-work payment above Rs 1 lakh","description":"Meera approves job-work payments over Rs 1 lakh."}],
+      "products":[{"name":"Knitted garments","description":"Export knitwear"}],
+      "welcome_line":"Your OS keeps knitting, job-work and shipments on one rail.",
+      "region":"Tiruppur, Tamil Nadu"}""",
+    checks=_BLUEPRINT_CHECKS(["knit", "stitch", "job-work", "job work", "lakh", "export", "dye"], min_hits=2)
+    + [region_has("tiruppur")],
+    note="B-06: the place the founder named comes back as region.",
 ))
 
 # --- Retail ------------------------------------------------------------------

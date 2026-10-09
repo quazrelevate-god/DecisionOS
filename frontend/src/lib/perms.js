@@ -35,6 +35,11 @@ export const PERMISSIONS = [
   { key: "decisions_approve", label: "Approve decisions" },
   { key: "leave_approve", label: "Approve leave" },
   { key: "team_manage", label: "Manage Team" },
+  /* Audit B-09 (2026-10-09) — the people half of Manage Team on its own, for
+     HR: add, correct, move and re-invite members. It never changes what anyone
+     can open (the server holds that line: routers/team._refuse_beyond_people).
+     Manage Team includes it. */
+  { key: "staff_manage", label: "Manage people (add and edit members)" },
   // ASK-28 TK-08 (plan Phase 6) — off for every role unless ticked here.
   { key: "tasks_assign_any", label: "Assign tasks to anyone" },
   { key: "tasks_view_all", label: "See all tasks" },
@@ -52,7 +57,7 @@ export const PERMISSION_GROUPS = [
   { title: "Money", keys: ["finance"] },
   { title: "Company Brain", keys: ["brain", "ask", "brain_export"] },
   { title: "Approvals", keys: ["approvals", "captures_approve", "decisions_approve", "leave_approve"] },
-  { title: "Running the team", keys: ["team_manage", "tasks_assign_any", "tasks_view_all"] },
+  { title: "Running the team", keys: ["team_manage", "staff_manage", "tasks_assign_any", "tasks_view_all"] },
 ].map((g) => ({ ...g, items: g.keys.map((k) => PERMISSIONS.find((p) => p.key === k)).filter(Boolean) }));
 
 // FIX-FUP-51: mirror of backend core._BASE_PERMS — kept in sync so the
@@ -82,6 +87,12 @@ export function roleDefaultPerms(role, tenantRoles) {
 }
 
 export function userPerms(user) {
+  const out = userPermsRaw(user);
+  // Audit B-09 — Manage Team carries Manage people, as on the server.
+  return out.includes("team_manage") && !out.includes("staff_manage") ? [...out, "staff_manage"] : out;
+}
+
+function userPermsRaw(user) {
   if (!user) return [];
   // ASK-28 TK-08 — the signed-in user carries what the server resolved
   // (company role settings included). 2026-10-03 RBAC audit: for owners too.

@@ -404,6 +404,16 @@ PERMISSION_KEYS = [
     # the access they had. Finance starts with it because that inbox is theirs
     # (the founder's call on J14).
     "approvals", "captures_approve", "decisions_approve", "leave_approve", "team_manage",
+    # Audit B-09 (2026-10-09) -- MANAGE PEOPLE, WITHOUT MANAGING THE COMPANY.
+    # HR approved leave but could not add the person who had just joined: that
+    # needed "Manage Team", which also edits the company details, the teams,
+    # the pipelines, the finance categories and everybody's access -- far more
+    # than an HR manager is given. This is the people half on its own: add a
+    # member, correct their details, move them between teams, re-invite them,
+    # bring back someone who left. It never changes what anyone can open.
+    # Holding team_manage still means holding this (core/permissions.py), so
+    # nobody who could do it before loses it.
+    "staff_manage",
     # ASK-28 TK-08 (plan Phase 6): opt-in task access, off for every role by
     # default (the owner has them via the all-perms shortcut).
     #   tasks_assign_any  give tasks to anyone, not only self / own team / reports

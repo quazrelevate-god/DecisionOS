@@ -43,9 +43,10 @@ class TestListUsersEnrichment:
 
 class TestUninviteEndpoint:
     def test_endpoint_exists_and_requires_team_manage(self):
+        # Audit B-09 (2026-10-09): Manage people, which Manage Team includes.
         from routers.team import uninvite_user
         src = inspect.getsource(uninvite_user)
-        assert 'require_perm("team_manage")' in src
+        assert 'require_perm("staff_manage")' in src
 
     def test_refuses_non_pending_member(self):
         """Uninviting an active member shouldn't work — that's what

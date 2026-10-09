@@ -286,7 +286,7 @@ async def deprovision_member(user_id: str, inp: DeprovisionInput,
 
 
 @router.get("/users/deactivated")
-async def list_deactivated(user: dict = Depends(require_perm("team_manage"))):
+async def list_deactivated(user: dict = Depends(require_perm("staff_manage"))):
     """J14-12 (JOURNEY-1) — THE PEOPLE WHO LEFT ARE STILL SOMEWHERE.
 
     Removing somebody hid them from the team list and kept their mobile number
@@ -318,7 +318,7 @@ async def list_deactivated(user: dict = Depends(require_perm("team_manage"))):
 
 
 @router.post("/users/{user_id}/reactivate")
-async def reactivate_member(user_id: str, user: dict = Depends(require_perm("team_manage"))):
+async def reactivate_member(user_id: str, user: dict = Depends(require_perm("staff_manage"))):
     """J14-12 — bring a deactivated person back, on the number they always had.
 
     Their access comes back as it was; their history was never deleted. A seat
@@ -326,10 +326,12 @@ async def reactivate_member(user_id: str, user: dict = Depends(require_perm("tea
     """
     from services.auth.membership import find_membership, update_membership, STATUS_ACTIVE
     target = await db.users.find_one({"id": user_id, "tenant_id": user["tenant_id"]},
-                                     {"_id": 0, "id": 1, "name": 1, "role": 1})
+                                     {"_id": 0, "id": 1, "name": 1, "role": 1, "permissions": 1,
+                                      "permissions_custom": 1})
     if not target:
         raise HTTPException(status_code=404, detail="Member not found")
     m = await find_membership(db, user_id, user["tenant_id"])
+    await _refuse_beyond_people(user, target=target, membership=m)
     if not m or m.get("status") != "removed":
         raise HTTPException(status_code=400, detail="This person is already on the team.")
     # update_membership reserves the seat on the way back to active, and refuses
@@ -376,7 +378,7 @@ async def erase_member(user_id: str, user: dict = Depends(require_role("owner"))
 
 
 @router.post("/users/{user_id}/uninvite")
-async def uninvite_user(user_id: str, user: dict = Depends(require_perm("team_manage"))):
+async def uninvite_user(user_id: str, user: dict = Depends(require_perm("staff_manage"))):
     """FIX-004-E (RBAC-17): revoke a pending invite before the invitee
     logs in for the first time. Removes the membership (soft-delete)
     and invalidates the invite_token so the invite link stops working.
@@ -413,10 +415,15 @@ async def uninvite_user(user_id: str, user: dict = Depends(require_perm("team_ma
 
 
 @router.post("/users")
-async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("team_manage"))):
+async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("staff_manage"))):
     from core import tenant_role_keys
     from services.whatsapp import _norm_phone
     role_keys = await tenant_role_keys(user["tenant_id"])
+    # Audit B-09 -- with Manage people alone, the new member follows their
+    # team's access; choosing their own is Manage Team's.
+    await _refuse_beyond_people(
+        user, role=inp.role,
+        own_access=inp.follow_role is False or bool(clean_perms(inp.permissions)))
     if inp.role == "owner":
         if user.get("role") != "owner":
             raise HTTPException(status_code=403, detail="Only an owner can create another owner")
@@ -548,7 +555,7 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
 
 
 @router.post("/users/{user_id}/invite")
-async def regenerate_invite(user_id: str, user: dict = Depends(require_perm("team_manage"))):
+async def regenerate_invite(user_id: str, user: dict = Depends(require_perm("staff_manage"))):
     from services.whatsapp import _mask_phone, _norm_phone
     target = await db.users.find_one({"id": user_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not target:
@@ -584,6 +591,38 @@ async def regenerate_invite(user_id: str, user: dict = Depends(require_perm("tea
             "invite_url": f"{_app_base_url()}/login?invite={token}"}
 
 
+async def _refuse_beyond_people(user: dict, *, target: Optional[dict] = None, role: Optional[str] = None,
+                                own_access: bool = False, membership: Optional[dict] = None) -> None:
+    """Audit B-09 (2026-10-09) -- WHERE MANAGE PEOPLE STOPS.
+
+    "staff_manage" lets HR add, correct, move and re-invite the people they
+    look after. It must not become a way round Manage Team, so someone who
+    holds it WITHOUT Manage Team may not:
+      * choose a person's own access (they follow their team's),
+      * put anyone into a team whose access includes Manage Team,
+      * edit, or bring back, someone who can Manage Team.
+    Owners and team managers are never stopped here."""
+    perms = user_perms(user)
+    if user.get("role") == "owner" or "team_manage" in perms:
+        return
+    no = "Only someone who can Manage Team can {}. Ask an owner."
+    if own_access:
+        raise HTTPException(status_code=403, detail=no.format(
+            "choose what a person can open — with Manage people they follow their team's access"))
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "roles": 1})
+    role_map = {r["key"]: list(r["permissions"]) for r in ((tenant or {}).get("roles") or [])
+                if r.get("key") and isinstance(r.get("permissions"), list) and r.get("permissions")}
+    if role and role != "owner" and "team_manage" in user_perms(
+            {"role": role, "permissions": [], "_role_perms_map": role_map}):
+        raise HTTPException(status_code=403, detail=no.format("add people to a team that manages the team"))
+    if target:
+        src = {**target, "_role_perms_map": role_map}
+        if membership:
+            src.update({k: membership[k] for k in ("role", "permissions", "permissions_custom") if k in membership})
+        if target.get("role") == "owner" or "team_manage" in user_perms(src):
+            raise HTTPException(status_code=403, detail=no.format("change someone who manages the team"))
+
+
 async def _refuse_ungrantable(user: dict, perms: list, role: Optional[str], target: Optional[dict] = None) -> None:
     """RBAC P0 (2026-09-15) — Manage team could raise access, its own included.
     Someone who isn't an owner may give only what they hold themselves, what the
@@ -607,10 +646,19 @@ async def _refuse_ungrantable(user: dict, perms: list, role: Optional[str], targ
 
 
 @router.patch("/users/{user_id}")
-async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(require_perm("team_manage"))):
+async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(require_perm("staff_manage"))):
     target = await db.users.find_one({"id": user_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="Member not found")
+    # Audit B-09 -- Manage people edits the person, never what they can open.
+    _cur_follow = not target.get("permissions_custom") and not (target.get("permissions") or [])
+    _access_changed = (
+        (inp.follow_role is not None and bool(inp.follow_role) != _cur_follow)
+        or (inp.follow_role is not True and inp.permissions is not None
+            and sorted(clean_perms(inp.permissions)) != sorted(clean_perms(target.get("permissions") or []))))
+    await _refuse_beyond_people(
+        user, target=target, own_access=_access_changed,
+        role=inp.role if inp.role is not None and inp.role != target.get("role") else None)
     acting_is_owner = user.get("role") == "owner"
     # Only an owner may change another owner's access (e.g. to demote them).
     if target["role"] == "owner" and not acting_is_owner:
@@ -811,7 +859,7 @@ async def _avatar_target(user: dict, user_id: str) -> dict:
     if not target:
         raise HTTPException(status_code=404, detail="Member not found")
     if user_id != user["id"]:
-        if "team_manage" not in user_perms(user):
+        if "staff_manage" not in user_perms(user):
             raise HTTPException(status_code=403, detail="Only the member or a team manager can change this photo")
         if target.get("role") == "owner" and user.get("role") != "owner":
             raise HTTPException(status_code=403, detail="Only an owner can change another owner's photo")
@@ -880,7 +928,7 @@ async def mark_attendance(inp: AttendanceInput, user: dict = Depends(require_rol
 
 
 @router.get("/attendance")
-async def list_attendance(date: Optional[str] = None, user: dict = Depends(require_perm("team_manage"))):  # 2026-10-03 RBAC audit: the whole team's register
+async def list_attendance(date: Optional[str] = None, user: dict = Depends(require_perm("staff_manage"))):  # 2026-10-03 RBAC audit: the whole team's register
     date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     return await db.attendance.find(
         {"tenant_id": user["tenant_id"], "date": date}, {"_id": 0}

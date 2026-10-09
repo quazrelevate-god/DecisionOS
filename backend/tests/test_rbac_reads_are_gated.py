@@ -149,7 +149,8 @@ def test_every_read_is_gated_or_on_the_reviewed_list(routes):
     ("/api/brain/documents/{doc_id}", ("perm", "brain")),
     ("/api/brain/documents/{doc_id}/download", ("perm", "brain")),
     ("/api/invites", ("perm", "team_manage")),
-    ("/api/attendance", ("perm", "team_manage")),
+    # Audit B-09 (2026-10-09): the team register is people work -- Manage people.
+    ("/api/attendance", ("perm", "staff_manage")),
     ("/api/inbox", ("role", ("owner",))),
     ("/api/dashboard", ("role", ("owner",))),
     ("/api/meetings", ("role", ("owner",))),

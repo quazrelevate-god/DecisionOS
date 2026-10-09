@@ -31,7 +31,8 @@ def test_the_menu_preview_is_the_real_nav():
     team = src("pages/Team.js")
     assert "const MENU_PREVIEW" not in team
     assert 'import { NAV, navEntryOpen } from "../components/Layout";' in team
-    assert "previewMenus(shownPerms).map(" in team
+    # Audit C-02: through MenuList, which the profile reads too.
+    assert "const menus = previewMenus(perms);" in team and "<MenuList perms={shownPerms}" in team
     assert "\"CEO Brief\"" not in team and "\"Meeting Notes\"" not in team  # as on-screen labels
     assert '"Finance (upload only)"' in team
 

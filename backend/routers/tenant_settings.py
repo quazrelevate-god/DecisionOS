@@ -818,8 +818,26 @@ async def update_owner_exclusions(inp: OwnerExclusionsInput, request: Request,
     )
     excl = clean_perms(inp.exclusions)
     # RBAC P2 (2026-09-16): excluding Manage team would leave nobody able to run the team.
-    if "team_manage" in excl:
+    # Audit B-09: Manage people is part of it.
+    if "team_manage" in excl or "staff_manage" in excl:
         raise HTTPException(status_code=400, detail="Owners always keep Manage team, or nobody could manage the team.")
+    # Audit B-10 (2026-10-09) -- THE ONLY OWNER, SWITCHING THEIR OWN DOOR SHUT.
+    # "All owners, you included" is meant for a company with a co-founder who
+    # should not see Finance. With one owner it hides the area from the person
+    # setting it, so a NEW exclusion asks them to confirm first (409 with the
+    # areas). Turning areas back on never asks. This card stays reachable --
+    # it is owner-only and owners always keep Manage team -- so it is also
+    # always the way back.
+    added = sorted(set(excl) - set((tenant_before or {}).get("owner_exclusions") or []))
+    if added and not inp.confirm_self:
+        owners = await db.users.count_documents({"tenant_id": user["tenant_id"], "role": "owner"})
+        if owners <= 1:
+            raise HTTPException(status_code=409, detail={
+                "code": "only_owner_excludes_self",
+                "message": ("You're the only owner, so this hides these areas from you too. "
+                            "You can switch them back on here at any time."),
+                "areas": added,
+            })
     await db.tenants.update_one(
         {"id": user["tenant_id"]}, {"$set": {"owner_exclusions": excl}},
     )

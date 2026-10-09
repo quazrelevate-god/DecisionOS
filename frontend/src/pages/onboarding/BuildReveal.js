@@ -539,6 +539,8 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
         ...(payload.terms_version ? { terms_version: payload.terms_version } : {}),
         industry: payload.industry || "General", description: payload.description,
         company_size: payload.company_size, currency: "INR",
+        // Audit B-06 — the town they named in the interview, when they named one.
+        ...(bp.region ? { region: bp.region } : {}),
         business_scale: { employees: payload.company_size },
         roles: bp.departments || [],
         products,

@@ -20,6 +20,8 @@ from services import obj_store
 from models.workflows import WORKFLOW_OWNER_ROLE
 from bootstrap.seed import seed_demo, fixup_demo_tenant, write_test_credentials
 from bootstrap.migrations import (
+    fill_company_contact,
+    hr_teams_manage_people,
     merge_ledger_into_finance,
     migrate_tenants,
     migrate_local_disk_uploads_to_obj_store,
@@ -310,6 +312,20 @@ async def _bootstrap():
                 logger.info("Migration applied: merge_ledger_into_finance_v1")
         except Exception as e:
             logger.exception(f"merge_ledger_into_finance migration: {e}")
+
+        # Audit B-06 / B-09 (2026-10-09) — company mobile and email from the
+        # owner who signed up; Manage people for the HR teams that approve leave.
+        for _name, _fn, _desc in (
+            ("fill_company_contact_v1", fill_company_contact,
+             "Company mobile and email filled from the owner where blank"),
+            ("hr_teams_manage_people_v1", hr_teams_manage_people,
+             "HR teams that approve leave can also add and edit people"),
+        ):
+            try:
+                if await _apply_migration(db, _name, _fn, description=_desc) == "applied":
+                    logger.info(f"Migration applied: {_name}")
+            except Exception as e:
+                logger.exception(f"{_name} migration: {e}")
 
         try:
             _rres = await _apply_migration(

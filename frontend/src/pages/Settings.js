@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api, { formatApiError } from "../lib/api";
-import { hasPerm, userPerms, PERMISSION_GROUPS } from "../lib/perms";
+import { hasPerm, userPerms, PERMISSIONS, PERMISSION_GROUPS } from "../lib/perms";
 import { roleLabel } from "../lib/departments";
 import { PageHeader } from "../components/common";
 import { CompanyDetails } from "../components/CompanyDetails";
@@ -567,22 +567,31 @@ function OwnerExclusionsCard() {
   const { tenant, refreshTenant } = useAuth();
   const [excl, setExcl] = useState(tenant?.owner_exclusions || []);
   const [busy, setBusy] = useState(false);
-  const toggle = (k) => setExcl((x) => (x.includes(k) ? x.filter((y) => y !== k) : [...x, k]));
-  const save = async () => {
+  /* Audit B-10 (2026-10-09) — the only owner switching an area off for
+     themselves is asked first, here on the card: the server answers 409 with
+     the areas, and "Switch off for me too" sends it again confirmed. Turning
+     areas back on never asks, and this card is always the way back. */
+  const [selfConfirm, setSelfConfirm] = useState(null);
+  const toggle = (k) => { setSelfConfirm(null); setExcl((x) => (x.includes(k) ? x.filter((y) => y !== k) : [...x, k])); };
+  const save = async (confirmSelf = false) => {
     setBusy(true);
     try {
-      await api.put("/tenant/owner-exclusions", { exclusions: excl });
+      await api.put("/tenant/owner-exclusions", { exclusions: excl, ...(confirmSelf ? { confirm_self: true } : {}) });
       if (refreshTenant) await refreshTenant();
+      setSelfConfirm(null);
       toast.success(excl.length ? "Owners no longer see the areas you switched off" : "Owners see everything again");
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Couldn't save");
+      const full = e.response?.data?.detail_full;
+      if (full?.code === "only_owner_excludes_self") setSelfConfirm(full);
+      else toast.error(formatApiError(e.response?.data?.detail) || "Couldn't save");
     } finally { setBusy(false); }
   };
+  const areaName = (k) => PERMISSIONS.find((p) => p.key === k)?.label || k;
   return (
     <div className="kr-bento p-5 sm:p-6" data-testid="settings-owner-exclusions-card">
       <h2 className="text-base font-medium">What owners can open</h2>
       <p className="mt-1 text-xs text-muted-foreground">
-        Every owner can open everything. Switch an area off to keep it from all owners, you included &mdash; for example a co-founder who shouldn&rsquo;t see finance. Manage team always stays on.
+        Every owner can open everything. Switch an area off to keep it from all owners, you included &mdash; for example a co-founder who shouldn&rsquo;t see finance. Manage team (and with it Manage people) always stays on, so you can always come back here.
       </p>
       {/* 2026-10-05 — grouped by area like the team editor, not nineteen in a row. */}
       <div className="mt-4 space-y-3">
@@ -591,7 +600,7 @@ function OwnerExclusionsCard() {
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{g.title}</p>
             <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
               {g.items.map((p) => {
-                const locked = p.key === "team_manage";
+                const locked = p.key === "team_manage" || p.key === "staff_manage";
                 return (
                   <AccessSwitch key={p.key} label={p.label} on={locked || !excl.includes(p.key)}
                     onToggle={() => toggle(p.key)} disabled={busy} locked={locked}
@@ -603,7 +612,24 @@ function OwnerExclusionsCard() {
           </div>
         ))}
       </div>
-      <button type="button" onClick={save} disabled={busy} data-testid="owner-exclusions-save" className={`${INK} mt-4`}>
+      {selfConfirm && (
+        <div role="alertdialog" aria-labelledby="owner-self-title" data-testid="owner-exclusions-self-confirm"
+          className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-inset ring-amber-200">
+          <p id="owner-self-title" className="font-semibold">
+            You&rsquo;re the only owner &mdash; this hides {(selfConfirm.areas || []).map(areaName).join(", ")} from you too.
+          </p>
+          <p className="mt-1 text-[13px]">
+            You can switch {(selfConfirm.areas || []).length === 1 ? "it" : "them"} back on here at any time: this card and Manage team always stay with owners.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" className={PILL} disabled={busy} data-testid="owner-exclusions-self-cancel"
+              onClick={() => setSelfConfirm(null)}>{(selfConfirm.areas || []).length === 1 ? "Keep it on" : "Keep them on"}</button>
+            <button type="button" className={INK} disabled={busy} data-testid="owner-exclusions-self-go"
+              onClick={() => save(true)}>Switch off for me too</button>
+          </div>
+        </div>
+      )}
+      <button type="button" onClick={() => save()} disabled={busy || !!selfConfirm} data-testid="owner-exclusions-save" className={`${INK} mt-4`}>
         {busy ? "Saving…" : "Save what owners can open"}
       </button>
     </div>

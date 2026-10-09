@@ -129,3 +129,6 @@ class TenantAIKeysInput(BaseModel):
 
 class OwnerExclusionsInput(BaseModel):
     exclusions: List[str]
+    # Audit B-10 (2026-10-09): the only owner switching an area off for
+    # themselves says so first.
+    confirm_self: bool = False

@@ -77,9 +77,11 @@ def test_the_stored_list_keeps_the_base_a_team_already_had():
 
 
 def test_an_hr_team_starts_able_to_approve_leave_and_nothing_else():
-    """2026-10-03 (founder: 'build both')."""
+    """2026-10-03 (founder: 'build both'). Audit B-09 (2026-10-09): and to add
+    and edit the people whose leave it approves -- Manage people, never Manage
+    Team (tests/test_team_access_batch.py)."""
     for key, label in [("hr", "HR"), ("human_resources", "Human Resources"), ("payroll", "Payroll")]:
-        assert starting_perms(key, label) == ["leave_approve"], key
+        assert starting_perms(key, label) == ["leave_approve", "staff_manage"], key
 
 
 def test_a_money_team_approves_its_ai_drafts():

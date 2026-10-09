@@ -143,7 +143,9 @@ def starting_perms(*names: Optional[str]) -> list:
     if words & _SELLING_WORDS:
         out += ["crm_buyers"]
     if words & _PEOPLE_WORDS:
-        out += ["leave_approve"]
+        # Audit B-09 (2026-10-09) -- and adds and edits the people whose leave
+        # it approves. Not Manage Team: that is the whole company's settings.
+        out += ["leave_approve", "staff_manage"]
     return sorted(set(out))
 
 

@@ -175,6 +175,35 @@ function previewMenus(perms) {
   ];
 }
 
+/* Audit C-02 (2026-10-09) — THE PREVIEW AND THE PROFILE SAY THE SAME THING.
+   Adding an HR member showed CRM in the preview (struck through, which read as
+   "listed") and "Finance (upload only)", while her profile said "No access to
+   … CRM … Finance". Both were reading real access — HR holds Data Input, which
+   opens Finance's upload inbox — but in two different languages. Now the
+   preview lists only the menus they will see, says plainly which they won't,
+   and the profile shows the same list from the same function. */
+function MenuList({ perms, testid, label = "They will see these menus" }) {
+  const menus = previewMenus(perms);
+  const shown = menus.filter((m) => m.visible);
+  const hidden = menus.filter((m) => !m.visible);
+  return (
+    <div data-testid={testid}>
+      <p className={DRAWER_LABEL}>{label}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {shown.map((m) => (
+          <span key={m.label} data-testid={`preview-${m.label}`}
+            className={`${CHIP} bg-primary/10 text-primary ring-primary/20`}>{m.label}</span>
+        ))}
+      </div>
+      {hidden.length > 0 && (
+        <p className="mt-2 text-xs text-neutral-500" data-testid={`${testid}-hidden`}>
+          Not in their menus: {hidden.map((m) => m.label).join(", ")}.
+        </p>
+      )}
+    </div>
+  );
+}
+
 /* Add a member, or edit one (`initial`). `defaultRole` pre-sets the team when
    the dialog opens from that team's branch; `defaultManagerId` pre-sets
    "Reports to" when it opens from a node in the desktop tree. */
@@ -188,6 +217,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
   const blankForm = () => ({
     name: "", email: "", title: "", phone: "",
     role: startRole, permissions: roleDefaultPerms(startRole, roleOptions), reporting_manager_id: startManager,
+    // (Audit B-09: with Manage people only, it always stays on — see accessLocked.)
     // 2026-09-15 — a new member follows their role's access unless unticked.
     follow_role: true,
   });
@@ -214,6 +244,14 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
     && (initial?.phone || "").replace(/\D/g, "").length >= 10;
   const rolePerms = roleDefaultPerms(form.role, roleOptions);
   const shownPerms = form.follow_role ? rolePerms : form.permissions;
+  /* Audit B-09 (2026-10-09) — Manage people without Manage Team (HR): they add
+     and edit the person, and the person follows their team's access. The
+     switches are shown, not offered, and a team that itself manages the team
+     is not one they can put anyone into (routers/team._refuse_beyond_people). */
+  const accessLocked = me?.role !== "owner" && !userPerms(me).includes("team_manage");
+  const teamChoices = accessLocked
+    ? roleOptions.filter((r) => r.key === form.role || !roleDefaultPerms(r.key, roleOptions).includes("team_manage"))
+    : roleOptions;
 
   /* basicOnly — YOUR OWN mobile and email, changed here rather than in Settings
      (founder, 2026-09-20: a member without Settings still has to be able to
@@ -393,8 +431,9 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
           // RBAC P1 (2026-09-15): name can be corrected. The email goes when
           // this person may change it (see emailLocked).
           name: form.name.trim(), ...(emailLocked || ownContact ? {} : { email: emailTyped }),
-          follow_role: !!form.follow_role,
-          role: form.role, permissions: form.follow_role ? [] : form.permissions,
+          // Audit B-09 — left out when this person may not change access.
+          ...(accessLocked ? {} : { follow_role: !!form.follow_role, permissions: form.follow_role ? [] : form.permissions }),
+          role: form.role,
           // Left out when it is locked, so a save of the other fields still goes through.
           ...(phoneLocked || ownContact ? {} : { phone: form.phone }),
           reporting_manager_id: form.reporting_manager_id, title: form.title.trim(),
@@ -417,8 +456,8 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
       const base = {
         name: form.name, email: form.email, title: form.title.trim() || null, role: form.role,
         // An empty list means "the role's access" on the server.
-        follow_role: !!form.follow_role,
-        permissions: form.follow_role ? [] : form.permissions, phone: form.phone, reporting_manager_id: form.reporting_manager_id || null,
+        follow_role: accessLocked ? true : !!form.follow_role,
+        permissions: form.follow_role || accessLocked ? [] : form.permissions, phone: form.phone, reporting_manager_id: form.reporting_manager_id || null,
       };
       if (!form.email.trim()) delete base.email;
       const res = await api.post("/users", base);
@@ -587,7 +626,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                   value and every consumer are untouched. */}
               <Field label="Department">
                 <GlassSelect testid="member-role-select" ariaLabel="Department" value={form.role} onChange={setRole}
-                  options={roleOptions.map((r) => ({ value: r.key, label: r.label }))} />
+                  options={teamChoices.map((r) => ({ value: r.key, label: r.label }))} />
               </Field>
               <Field label="Reports to">
                 <GlassSelect testid="member-manager-select" ariaLabel="Reporting manager" value={form.reporting_manager_id}
@@ -612,6 +651,15 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
               </div>
             ) : (
               <>
+                {accessLocked && (
+                  <p className={`mb-3 px-4 py-3 text-xs leading-relaxed text-neutral-600 ${DRAWER_CARD}`} data-testid="member-access-locked">
+                    {editing && !form.follow_role
+                      ? "They have their own access, shown below."
+                      : `They get the ${roleName(form.role)} team's access, shown below.`}{" "}
+                    Only someone who can Manage Team changes what a person can open.
+                  </p>
+                )}
+                {!accessLocked && (
                 <label className={`mb-3 flex cursor-pointer items-start gap-3 px-4 py-3 ${DRAWER_CARD}`} data-testid="member-follow-role">
                   <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-neutral-900" checked={!!form.follow_role}
                     data-testid="member-follow-role-toggle"
@@ -630,6 +678,7 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                     </span>
                   </span>
                 </label>
+                )}
                 {/* An area that is on is a solid white glass card with the black tick; one that is off is a faint one. */}
                 <div className="space-y-4" data-testid="permission-list">
                   {PERMISSION_GROUPS.map((g) => (
@@ -651,8 +700,9 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                                person may not give it. */
                             <div key={p.key} className={locked ? "opacity-45" : undefined}>
                               <AccessSwitch label={p.label} on={on} onToggle={() => togglePerm(p.key)}
-                                disabled={locked || form.follow_role} testid={`perm-${p.key}`}
-                                title={form.follow_role ? "Set by the team — untick “Use the team’s access” to choose" : locked ? "Only an owner can give access you don't have" : undefined} />
+                                disabled={locked || form.follow_role || accessLocked} testid={`perm-${p.key}`}
+                                title={accessLocked ? "Only someone who can Manage Team changes what a person can open"
+                                  : form.follow_role ? "Set by the team — untick “Use the team’s access” to choose" : locked ? "Only an owner can give access you don't have" : undefined} />
                             </div>
                           );
                         })}
@@ -660,20 +710,9 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                     </div>
                   ))}
                 </div>
-                <div className="mt-4" data-testid="menu-preview">
-                  <p className={DRAWER_LABEL}>They will see these menus</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {previewMenus(shownPerms).map((m) => {
-                      const { visible } = m;
-                      return (
-                        <span key={m.label} data-testid={`preview-${m.label}`}
-                          className={`${CHIP} ${visible ? "bg-primary/10 text-primary ring-primary/20" : `${QUIET_CHIP} line-through opacity-60`}`}>
-                          {m.label}
-                        </span>
-                      );
-                    })}
-                  </div>
-                  <p className="mt-2 text-xs text-neutral-500">My Work, Ops, Team, Leave and Settings are always there; Ops shows their own score.</p>
+                <div className="mt-4">
+                  <MenuList perms={shownPerms} testid="menu-preview" />
+                  <p className="mt-1 text-xs text-neutral-500">My Work, Ops, Team, Leave and Settings are always there; Ops shows their own score.</p>
                 </div>
               </>
             )}
@@ -860,7 +899,10 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
     refetchInterval: 15 * 60 * 1000,
   });
   // U7-09.TEAM v2: readOnly lets People render this view-only.
-  const canManageTeam = !readOnly && hasPerm(user, "team_manage");
+  // Audit B-09 — adding and editing people is "Manage people", which Manage
+  // Team includes; what a person can open stays Manage Team's (canManageAccess).
+  const canManageTeam = !readOnly && hasPerm(user, "staff_manage");
+  const canManageAccess = !readOnly && hasPerm(user, "team_manage");
   /* J14-12 (JOURNEY-1) — THE PEOPLE WHO LEFT ARE SOMEWHERE, NOT NOWHERE.
      Removing somebody took them off this page and kept their mobile number
      reserved for ever, so bringing them back on their own number was refused
@@ -1247,6 +1289,7 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
         roleOptions={roleOptions}
         roleName={(key) => roleNameFor(tenantRoles, key)}
         canManageTeam={canManageTeam}
+        canManageAccess={canManageAccess}
         isOwner={isOwner}
         currentUserId={user?.id}
       />
@@ -1293,7 +1336,7 @@ function TreeSkeleton({ mobile }) {
 // ---------------------------------------------------------------------------
 function MemberProfileDialog({
   u, onClose, onSaved, onInvite, onInviteLink, onAvatarChanged,
-  members, roleOptions, roleName, canManageTeam, isOwner, currentUserId,
+  members, roleOptions, roleName, canManageTeam, canManageAccess, isOwner, currentUserId,
 }) {
   const openChange = (o) => { if (!o) onClose(); };
   if (!u) return null;
@@ -1305,7 +1348,9 @@ function MemberProfileDialog({
   const denied = PERMISSIONS.filter((pp) => !perms.includes(pp.key));
   const manager = (members || []).find((m) => m.id === u.reporting_manager_id);
   // Only an owner edits another owner — the rule PATCH /users holds too.
-  const canManageMember = canManageTeam && (u.role !== "owner" || isOwner);
+  const canManageMember = canManageTeam && (u.role !== "owner" || isOwner)
+    // Audit B-09 — Manage people does not edit someone who can Manage Team.
+    && (canManageAccess || !perms.includes("team_manage"));
   // Without Manage Team a member still edits their OWN basic details here
   // (name, job title) — never their department, reporting line or access.
   const canEdit = canManageMember || isMe;
@@ -1469,6 +1514,10 @@ function MemberProfileDialog({
                 {denied.length > 0 && (
                   <p className="mt-3 text-xs leading-relaxed text-slate-500">No access to {denied.map((pp) => pp.label).join(", ")}.</p>
                 )}
+                {/* Audit C-02 — the menus, from the same list Add member previews. */}
+                <div className="mt-4">
+                  <MenuList perms={perms} testid={`profile-menus-${u.id}`} label="Their menus" />
+                </div>
               </div>
             )}
           </section>

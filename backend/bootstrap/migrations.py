@@ -89,6 +89,57 @@ async def merge_ledger_into_finance(_db):
     logger.info(f"[RBAC] merge_ledger_into_finance: {touched}")
 
 
+async def fill_company_contact(_db):
+    """Audit B-06 (2026-10-09) — companies made before sign-up filled these in
+    show Company mobile and Company email empty in Settings. Fill each blank one
+    from the owner who signed up: their confirmed mobile, their email. Only
+    blanks; nothing a founder typed is touched. Run once, through the ledger."""
+    filled = 0
+    async for t in _db.tenants.find(
+        {"$or": [{"phone": {"$in": [None, ""]}}, {"phone": {"$exists": False}},
+                 {"support_email": {"$in": [None, ""]}}, {"support_email": {"$exists": False}}]},
+        {"_id": 0, "id": 1, "phone": 1, "support_email": 1},
+    ):
+        # The first owner: the one who signed the company up.
+        rows = await _db.users.find(
+            {"tenant_id": t["id"], "role": "owner"}, {"_id": 0, "phone": 1, "email": 1},
+        ).sort("created_at", 1).to_list(1)
+        if not rows:
+            continue
+        owner = rows[0]
+        patch = {}
+        if not (t.get("phone") or "").strip() and (owner.get("phone") or "").strip():
+            patch["phone"] = owner["phone"].strip()
+        if not (t.get("support_email") or "").strip() and (owner.get("email") or "").strip():
+            patch["support_email"] = owner["email"].strip().lower()
+        if patch:
+            await _db.tenants.update_one({"id": t["id"]}, {"$set": patch})
+            filled += 1
+    logger.info(f"[B-06] fill_company_contact: {filled} companies")
+
+
+async def hr_teams_manage_people(_db):
+    """Audit B-09 (2026-10-09) — an HR team made before "Manage people" existed
+    approves leave but cannot add the person who just joined. Give it the new
+    switch, the same rule a new HR team starts with (shared/roles.starting_perms):
+    only a team named for HR, and only one whose access was set explicitly."""
+    from shared.roles import starting_perms
+    touched = 0
+    async for t in _db.tenants.find({"roles": {"$exists": True}}, {"_id": 0, "id": 1, "roles": 1}):
+        roles, changed = [], False
+        for r in t.get("roles") or []:
+            perms = r.get("permissions")
+            if (isinstance(perms, list) and "leave_approve" in perms and "staff_manage" not in perms
+                    and "staff_manage" in starting_perms(r.get("key"), r.get("label"))):
+                r = {**r, "permissions": [*perms, "staff_manage"]}
+                changed = True
+            roles.append(r)
+        if changed:
+            await _db.tenants.update_one({"id": t["id"]}, {"$set": {"roles": roles}})
+            touched += 1
+    logger.info(f"[B-09] hr_teams_manage_people: {touched} companies")
+
+
 async def migrate_local_disk_uploads_to_obj_store(_db):
     """FIX-002-E: one-shot migration. Copy every legacy local-disk upload
     referenced by voice_notes/meetings/ingestions/expenses/assets to

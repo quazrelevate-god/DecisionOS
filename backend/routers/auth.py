@@ -443,14 +443,21 @@ async def register(inp: RegisterInput, request: Request, response: Response,
         "industry": inp.industry or "General",
         "description": (inp.description or "").strip(),
         "company_size": inp.company_size or "",
-        "region": inp.region or "",
+        # Audit B-06 (2026-10-09) — Settings › Company details showed Company
+        # mobile, Company email and Region empty for a company whose founder had
+        # just given all three. The mobile is the one confirmed by a code, the
+        # email the one they signed up with (unless they gave the company its
+        # own), and the region the place they named in the interview — only
+        # ever a place they actually said (prompts/onboarding.py), never a guess.
+        "region": (inp.region or str((inp.os_blueprint or {}).get("region") or "")).strip()[:80],
+        "phone": display_indian_mobile(_phone_norm) if _phone_norm else "",
         "currency": (inp.currency or "INR").upper(),
         "gst": inp.gst or "",
         # Where support and receipts for THIS company go. A founder's second
         # company has no sign-in address of its own, so this is how they are
         # reachable about it — and it may be the same address as their first
         # company, because it is company contact detail, not an account.
-        "support_email": (inp.support_email or "").strip().lower(),
+        "support_email": ((inp.support_email or "").strip() or email).lower(),
         "branches": inp.branches or "",
         "business_scale": inp.business_scale or {},
         "current_software": inp.current_software or [],

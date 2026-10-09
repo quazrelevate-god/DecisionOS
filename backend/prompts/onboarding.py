@@ -117,7 +117,9 @@ BLUEPRINT = register(Prompt(
         '"products": [{"name": string, "description": short string}] (their actual products/services already '
         "named in the profile or interview, up to 5 — do not invent products not already established), "
         '"welcome_line": string (ONE warm, specific sentence telling this founder what their new OS will handle for them — '
-        "reference something real they said, under 30 words)}."
+        "reference something real they said, under 30 words), "
+        '"region": string (the town or city, and state, the company works from — e.g. "Tiruppur, Tamil Nadu" — ONLY '
+        'if the profile or the founder named it; otherwise "". Never guess it from the industry or the language)}.'
     ),
 ))
 

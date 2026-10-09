@@ -188,4 +188,7 @@ async def generate_blueprint(
         {"name": (p.get("name") or "").strip(), "description": (p.get("description") or "").strip()}
         for p in (data.get("products") or []) if (p.get("name") or "").strip()
     ][:5]
-    return {**bp, "products": products, "welcome_line": (data.get("welcome_line") or "").strip()}
+    # Audit B-06 — where they are, when they said it (Settings › Company details › Region).
+    region = data.get("region") if isinstance(data.get("region"), str) else ""
+    return {**bp, "products": products, "welcome_line": (data.get("welcome_line") or "").strip(),
+            "region": region.strip()[:80]}

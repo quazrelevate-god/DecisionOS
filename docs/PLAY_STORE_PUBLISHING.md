@@ -10,14 +10,22 @@ if the wording has changed, the *thing being asked for* has not.
 **You need:** a Google account, a one-off **$25** registration fee, and the
 signed bundle. Everything else below is forms.
 
+> **2026-10-09 — superseded for the running order by
+> [PLAY_STORE_LAUNCH_TRACKER.md](PLAY_STORE_LAUNCH_TRACKER.md)**, which adds
+> what this page predates: the **12-tester × 14-day closed test** that new
+> personal developer accounts must run before production, the 16 KB page-size
+> check, the store-build exclusions (no in-app checkout, no admin portal, no
+> design lab), and the listing copy and questionnaire answers written out in
+> [play-store/](play-store/). The steps below are still accurate.
+
 **Your bundle is already built and signed:**
 
 ```
-~/Documents/DecisionOS-release-v1.0.1/DecisionOS-v1.0.1-2.aab
+~/Documents/DecisionOS-release-v1.0.4/DecisionOS-v1.0.4-5.aab
 ```
 
-11 MB, `versionCode 2`, `versionName 1.0.1`, signed, verified, and run on an
-emulator.
+12.9 MB, `versionCode 5`, `versionName 1.0.4`, signed, verified, and run on an
+emulator. (The 1.0.1 bundle this page first named is retired.)
 
 ---
 

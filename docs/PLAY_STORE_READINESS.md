@@ -8,6 +8,10 @@ it is in much worse shape — read it before promising an iOS date.
 For the running order rather than the audit, see
 [PLAY_STORE_PUBLISHING.md](PLAY_STORE_PUBLISHING.md).
 
+> **2026-10-09:** what is still open, across this audit and the 8 October
+> compliance audit, is tracked in
+> [PLAY_STORE_LAUNCH_TRACKER.md](PLAY_STORE_LAUNCH_TRACKER.md).
+
 Audited against what Play actually rejects for, not against code quality. The
 bug report work is done and the app runs; nothing below is a bug. These are
 the things that stop an upload, or get one taken down after it is live.

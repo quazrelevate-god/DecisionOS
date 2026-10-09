@@ -11,6 +11,8 @@
  *   ai_budget_exceeded  the company's own monthly AI spend budget
  * Both reset with the calendar month (services/quotas: UTC month).
  */
+import { STORE_BUILD } from "./storeBuild";
+
 export const AI_LIMIT_CODES = ["quota_exceeded", "ai_budget_exceeded"];
 
 /* lib/api flattens a {code, message} detail to its sentence and keeps the
@@ -40,5 +42,7 @@ export function aiLimitMessage(e, now = new Date()) {
     const budget = Number(d.budget_usd || 0).toFixed(2);
     return `This month's AI budget is used up ($${spend} of $${budget}). Dex can answer again on ${when}.`;
   }
-  return `This month's AI allowance is used up (${n(d.usage)} of ${n(d.cap)}). Dex can answer again on ${when}, or straight away on a bigger plan.`;
+  // The store build says when it comes back and nothing about buying more
+  // (lib/storeBuild — Play's Payments policy).
+  return `This month's AI allowance is used up (${n(d.usage)} of ${n(d.cap)}). Dex can answer again on ${when}${STORE_BUILD ? "." : ", or straight away on a bigger plan."}`;
 }

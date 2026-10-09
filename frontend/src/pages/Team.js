@@ -42,6 +42,7 @@ import { RequestLeaveDialog, STATUS_META, typeLabel } from "./Leave";
 // B11 — the dev OTP is ignored by a production build (lib/devOtp).
 import { devOtpFrom } from "../lib/devOtp";
 import { roleLabel } from "../lib/departments";
+import { STORE_BUILD } from "../lib/storeBuild";
 
 const SHEET = `gap-5 rounded-[1.75rem] p-6 sm:rounded-[1.75rem] [&>button.absolute]:hidden ${GLASS_SHEET}`;
 /* 2026-09-16, founder: the profile pop-up is frosted glass like the Team tree's
@@ -500,7 +501,10 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
             className="mb-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-inset ring-amber-200">
             <p className="font-semibold">All {wall.seat_limit} seats on your plan are in use.</p>
             <p className="mt-0.5 text-[13px]">
-              Remove someone who has left (their seat frees up at once), or ask us to add seats — then add{" "}
+              {/* The store build does not offer more seats (lib/storeBuild). */}
+              {STORE_BUILD
+                ? "Remove someone who has left — their seat frees up at once — then add "
+                : "Remove someone who has left (their seat frees up at once), or ask us to add seats — then add "}
               {form.name || "them"}. What you've typed here is kept.
             </p>
           </div>

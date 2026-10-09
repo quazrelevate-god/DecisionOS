@@ -26,7 +26,19 @@
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
+            android:screenOrientation="portrait"
             android:exported="true">
+
+            <!--
+              PLAY (2026-10-09) · PORTRAIT ON A PHONE. Every phone screen is laid
+              out for a tall screen and none for a wide one: turned on its side
+              the Desk put the dock over the middle of the page and cut the
+              Decisions sheet off below it, with nothing to scroll — which is
+              the first thing a reviewer does with a phone. The iOS build was
+              set iPhone portrait-only for the same reason (APP_STORE_READINESS
+              §2). Android 16 ignores this on screens 600dp and wider, so a
+              tablet still rotates, into the desktop layout it was given.
+            -->
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

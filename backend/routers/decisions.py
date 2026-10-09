@@ -282,7 +282,7 @@ async def edit_decision_proposal_task(decision_id: str, key: str, inp: DecisionP
     needs approving; applied when approval creates the task."""
     from services.decision_flow import edit_proposal_task
     from services.enrich import enrich_decision
-    d = await edit_proposal_task(user, decision_id, key, title=inp.title,
+    d = await edit_proposal_task(user, decision_id, key, title=inp.title, use_existing=inp.use_existing,
                                  assignee_id=inp.assignee_id, due_date=inp.due_date,
                                  priority=inp.priority, evidence_required=inp.evidence_required,
                                  approval_required=inp.approval_required, approval_stage=inp.approval_stage,

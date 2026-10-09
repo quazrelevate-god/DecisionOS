@@ -42,8 +42,13 @@ export function LeftoverReview({ tasks = [], value = {}, onChange, toLabel, test
      in the browser: three quick taps each copied the same stale list and only
      the last one survived, so a fast thumb on a phone lost choices. Callers pass
      a state setter (or anything that accepts one). */
+  /* Audit C-10 (2026-10-09) — a task that asks for proof, with none attached,
+     cannot be closed from here (the server carries it on with the card if it
+     is tried). Its "Done" is off and says why; "Set all: Done" skips it. */
+  const needsProof = (t) => t.evidence_required && !t.has_proof;
   const set = (id, key) => onChange?.((prev) => ({ ...(prev || {}), [id]: key }));
-  const setAll = (key) => onChange?.(() => Object.fromEntries(tasks.map((t) => [t.id, key])));
+  const setAll = (key) => onChange?.(() => Object.fromEntries(tasks.map((t) => [t.id,
+    key === "done" && needsProof(t) ? "keep" : key])));
   const counts = tasks.reduce((c, t) => ({ ...c, [choiceOf(value, t.id)]: (c[choiceOf(value, t.id)] || 0) + 1 }), {});
 
   return (
@@ -75,17 +80,24 @@ export function LeftoverReview({ tasks = [], value = {}, onChange, toLabel, test
                     <CalendarBlank size={10} weight="bold" aria-hidden="true" /> {shortDue(t.due_date)}
                   </span>
                 )}
+                {needsProof(t) && (
+                  <span className="font-medium text-amber-700" data-testid={`${testid}-needs-proof-${t.id}`}>
+                    Needs proof — attach it on the task to close it
+                  </span>
+                )}
               </p>
               <div className="mt-2 grid grid-cols-3 gap-1.5" role="radiogroup" aria-label={`What happens to "${t.title}"`}>
                 {LEFTOVER_CHOICES.map((c) => {
                   const Icon = c.icon;
                   const on = chosen === c.key;
+                  const blocked = c.key === "done" && needsProof(t);
                   return (
-                    <button key={c.key} type="button" role="radio" aria-checked={on}
-                      title={c.key === "keep" && toLabel ? `Still to do — it moves to ${toLabel} with the card` : c.hint}
-                      onClick={() => set(t.id, c.key)}
+                    <button key={c.key} type="button" role="radio" aria-checked={on} disabled={blocked}
+                      title={blocked ? "This task needs proof before it can be closed — attach it on the task"
+                        : c.key === "keep" && toLabel ? `Still to do — it moves to ${toLabel} with the card` : c.hint}
+                      onClick={() => !blocked && set(t.id, c.key)}
                       data-testid={`${testid}-${c.key}-${t.id}`}
-                      className={`flex min-h-10 items-center justify-center gap-1.5 rounded-pill px-2 text-[12.5px] font-medium ring-1 ring-inset transition-colors ${on ? ON[c.key] : OFF}`}>
+                      className={`flex min-h-10 items-center justify-center gap-1.5 rounded-pill px-2 text-[12.5px] font-medium ring-1 ring-inset transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${on ? ON[c.key] : OFF}`}>
                       <Icon size={13} weight="bold" aria-hidden="true" /> {c.label}
                     </button>
                   );

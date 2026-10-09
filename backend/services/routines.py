@@ -150,7 +150,29 @@ async def setup_view(user: dict, today: Optional[date] = None) -> dict:
     suggested cadence, first date and person."""
     tid = user["tenant_id"]
     tenant = await db.tenants.find_one(
-        {"id": tid}, {"_id": 0, "operational_task_templates": 1, "routine_setup": 1}) or {}
+        {"id": tid}, {"_id": 0, "operational_task_templates": 1, "routine_setup": 1, "roles": 1}) or {}
+    # Audit C-18 (2026-10-09): who does each routine. Every one started with the
+    # owner -- "Monthly export invoice reconciliation with Accounts" included,
+    # though an Accounts team with people in it existed. The routine's category,
+    # else its own words, names a team (shared/roles.resolve_role, the rule the
+    # rest of the app matches teams by); its first member is suggested. No team,
+    # or nobody in it yet: the owner, as before. The owner can change any of them.
+    from shared.roles import resolve_role
+    people_rows = await _people(tid)
+    team_keys = [r.get("key") for r in (tenant.get("roles") or []) if isinstance(r, dict) and r.get("key")]
+    labels = {r.get("key"): r.get("label") or r.get("key") for r in (tenant.get("roles") or []) if isinstance(r, dict)}
+    by_team: dict = {}
+    for p in people_rows:
+        if p.get("role") and p.get("role") != "owner":
+            by_team.setdefault(p["role"], []).append(p)
+
+    def _suggest(title: str, category: str):
+        team = resolve_role(category, team_keys) if category else None
+        if not team:
+            team = resolve_role(title, team_keys)
+        if team and by_team.get(team):
+            return by_team[team][0]["id"], labels.get(team)
+        return user["id"], None
     answered = tenant.get("routine_setup") or {}
     seen: set = set()
     items, started = [], 0
@@ -169,15 +191,17 @@ async def setup_view(user: dict, today: Optional[date] = None) -> dict:
         if state == "skipped":
             continue
         guess = guess_cadence(title, (tpl or {}).get("category", "") if isinstance(tpl, dict) else "")
+        who, team_label = _suggest(title, (tpl or {}).get("category", "") if isinstance(tpl, dict) else "")
         items.append({
             "key": key, "title": title,
             "category": (tpl or {}).get("category") if isinstance(tpl, dict) else None,
             **guess,
             "first_due": first_dates(title, today),
-            "assignee_id": user["id"],
+            "assignee_id": who,
+            "suggested_team": team_label,
         })
     people = [{"id": p["id"], "name": p.get("name") or "Someone", "role": p.get("role")}
-              for p in await _people(tid)]
+              for p in people_rows]
     return {"items": items, "people": people, "started": started, "pending": len(items)}
 
 

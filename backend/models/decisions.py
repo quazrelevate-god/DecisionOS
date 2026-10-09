@@ -27,6 +27,9 @@ class DecisionProposalTaskInput(BaseModel):
     # for what the founder calls the packing list. Renaming it afterwards in
     # My Work is a second job on work that is already somebody's.
     title: Optional[str] = Field(None, max_length=200)
+    # Audit C-14 (2026-10-09): use the task already on the card (True) or add
+    # this one as new (False). Only meaningful when the proposal found a match.
+    use_existing: Optional[bool] = None
     assignee_id: Optional[str] = Field(None, max_length=64)
     due_date: Optional[str] = Field(None, max_length=10)  # "YYYY-MM-DD"; "" = no due date
     priority: Optional[str] = Field(None, max_length=10)  # "low" | "medium" | "high"

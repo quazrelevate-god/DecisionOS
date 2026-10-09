@@ -374,6 +374,7 @@ async def build_proposal(tenant_id, extracted, troles, members, cat_keys, pipeli
                    and party_words(w.get("counterparty")) <= words), None)
         if wf:
             t.update({"workflow_id": wf["id"], "workflow_title": wf.get("title"), "workflow_stage": wf.get("stage")})
+    await find_existing_work(tenant_id, tasks, workflows)        # audit C-14
     return {"tasks": tasks, "workflows": workflows, "meetings": meetings,
             "reminders": reminders, "memory_notes": memory_notes}
 
@@ -403,7 +404,134 @@ async def _default_approver_for(tenant_id, decision, on_task):
     return await _default_task_approver(creator, frozenset(x for x in on_task if x))
 
 
-async def _create_decision_tasks(tenant_id, decision, items):
+# --- Audit C-14 (2026-10-09): THE WORK IS ALREADY THERE -----------------------
+# The order card already had "Raise the pro-forma invoice" and "Verify advance
+# payment or LC" on it. A decision said "Rahul to send the revised pro-forma"
+# and "Arun to confirm the advance", and approving it added "Send revised
+# pro-forma invoice" and "Confirm 30% advance payment received" BESIDE them --
+# the card carried both pairs and nobody knew which to do. A proposed task is
+# now compared with the open work already there; a match is shown in the review
+# ("Already on the card: ...") and, unless the reviewer says "Add as new",
+# approving gives THAT task the new person and date instead of making a twin.
+_DUP_FILLER = {
+    "the", "a", "an", "to", "for", "of", "and", "or", "on", "in", "at", "with", "from", "by", "our", "their",
+    "his", "her", "this", "that", "it", "is", "be", "as", "all", "any", "up", "out", "please", "task",
+    # what is DONE to the thing -- the thing itself is what identifies the work
+    "send", "sent", "raise", "raised", "prepare", "make", "get", "do", "check", "verify", "confirm",
+    "confirmed", "ensure", "follow", "share", "issue", "create", "update", "revise", "revised", "new",
+    "final", "received", "receive", "collect", "arrange", "complete", "finish", "review", "call",
+    "email", "whatsapp", "before", "after", "today", "tomorrow", "asap", "urgent", "by",
+    "preliminary", "draft", "customer", "buyer", "client", "supplier", "vendor", "party",
+}
+
+
+def work_words(text: str) -> set:
+    """The words that say WHICH work a task is (not what is done to it)."""
+    t = (text or "").lower()
+    t = re.sub(r"pro[\s-]?forma", "proforma", t)
+    out = set()
+    for w in re.findall(r"[a-z0-9%]+", t):
+        if w in _DUP_FILLER or len(w) < 2:
+            continue
+        if len(w) > 3 and w.endswith("s") and not w.endswith("ss"):
+            w = w[:-1]
+        out.add(w)
+    return out
+
+
+def same_work(a: str, b: str, strict: bool = False, ignore: set = frozenset()) -> bool:
+    """Two task titles name the same piece of work. On the same card (`ignore`
+    = the card's customer, which its own tasks only call "the customer") two
+    shared words, or one that is the whole of the shorter title ("quotation"),
+    is enough; anywhere else the bar is higher."""
+    wa, wb = work_words(a) - set(ignore), work_words(b) - set(ignore)
+    if not wa or not wb:
+        return False
+    shared = len(wa & wb)
+    ratio = shared / min(len(wa), len(wb))
+    if strict:
+        return shared >= 3 and ratio >= 0.6
+    return (shared >= 2 and ratio >= 0.5) or (shared == 1 and ratio >= 1.0)
+
+
+async def find_existing_work(tenant_id: str, tasks: list, workflows: list) -> None:
+    """Mark each proposed task that names work already open: `existing` (what
+    it is, who has it, when it is due, which card) and `use_existing` True."""
+    if not tasks:
+        return
+    key_to_wf = {w["key"]: w.get("workflow_id") for w in workflows or [] if w.get("mode") == "existing"}
+    cards = {w["id"]: w async for w in db.workflows.find(
+        {"tenant_id": tenant_id, "id": {"$in": [x for x in {t.get("workflow_id") or key_to_wf.get(t.get("workflow_key"))
+                                                          for t in tasks} if x]}},
+        {"_id": 0, "id": 1, "counterparty": 1})}
+    open_tasks = await db.tasks.find(
+        {"tenant_id": tenant_id, "status": {"$nin": ["done", "cancelled", "archived"]},
+         "source": {"$nin": ["reminder"]}},
+        {"_id": 0, "id": 1, "title": 1, "assignee_id": 1, "assignee_role": 1, "due_date": 1,
+         "status": 1, "workflow_id": 1, "stage_key": 1},
+    ).sort("created_at", -1).to_list(400)
+    if not open_tasks:
+        return
+    wf_ids = list({t.get("workflow_id") for t in open_tasks if t.get("workflow_id")})
+    wf_title = {w["id"]: w.get("title") async for w in db.workflows.find(
+        {"tenant_id": tenant_id, "id": {"$in": wf_ids}}, {"_id": 0, "id": 1, "title": 1})} if wf_ids else {}
+    ids = list({t.get("assignee_id") for t in open_tasks if t.get("assignee_id")})
+    names = {u["id"]: u.get("name") async for u in db.users.find(
+        {"tenant_id": tenant_id, "id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1})} if ids else {}
+    taken = set()
+    for t in tasks:
+        card = t.get("workflow_id") or key_to_wf.get(t.get("workflow_key"))
+        title = f"{t.get('title') or ''}"
+        hit = None
+        if card:
+            party = work_words((cards.get(card) or {}).get("counterparty") or "")
+            hit = next((o for o in open_tasks if o["id"] not in taken and o.get("workflow_id") == card
+                        and same_work(title, o.get("title"), ignore=party)), None)
+        if not hit:
+            hit = next((o for o in open_tasks if o["id"] not in taken
+                        and (not card or o.get("workflow_id") in (None, card))
+                        and same_work(title, o.get("title"), strict=True)), None)
+        if hit:
+            taken.add(hit["id"])
+            t["existing"] = {
+                "id": hit["id"], "title": hit.get("title"), "status": hit.get("status"),
+                "assignee_id": hit.get("assignee_id"), "assignee_name": names.get(hit.get("assignee_id")),
+                "assignee_role": hit.get("assignee_role"), "due_date": hit.get("due_date"),
+                "workflow_id": hit.get("workflow_id"), "workflow_title": wf_title.get(hit.get("workflow_id")),
+            }
+            t["use_existing"] = True
+
+
+async def _reuse_existing_task(tenant_id, decision, t) -> str:
+    """Approve onto the task that is already there: the decision's person and
+    date (when it named them), a line saying so, the decision linked. Returns
+    the task id, or "" when that task is gone or finished (a new one is made)."""
+    ex = (t.get("existing") or {}).get("id")
+    if not ex:
+        return ""
+    cur = await db.tasks.find_one({"id": ex, "tenant_id": tenant_id}, {"_id": 0})
+    if not cur or cur.get("status") in ("done", "cancelled", "archived"):
+        return ""
+    sets = {"updated_at": now_iso(), "last_action": "Updated by a decision"}
+    changed = []
+    if t.get("assignee_id") and t["assignee_id"] != cur.get("assignee_id"):
+        sets["assignee_id"] = t["assignee_id"]
+        if t.get("assignee_role"):
+            sets["assignee_role"] = t["assignee_role"]
+        changed.append("person")
+    if t.get("due_date") and t["due_date"] != cur.get("due_date"):
+        sets["due_date"] = t["due_date"]
+        sets.pop("due_from_stage", None)
+        changed.append("due date")
+    await db.tasks.update_one({"id": ex, "tenant_id": tenant_id},
+                              {"$set": sets, "$addToSet": {"decision_ids": decision["id"]}})
+    await log_activity(tenant_id, decision.get("created_by"), "task_updated_by_decision",
+                       f"Decision '{decision.get('title') or ''}' used the existing task '{cur.get('title')}'"
+                       + (f" (changed: {', '.join(changed)})" if changed else ""), "task", ex)
+    return ex
+
+
+async def _create_decision_tasks(tenant_id, decision, items, reused=None):
     """Create the decision's tasks on approval; returns their ids.
     ASK-50 — with the proof and approval the proposal was given
     (services.proposal_task_settings.creation_fields): the same fields, and the
@@ -411,6 +539,13 @@ async def _create_decision_tasks(tenant_id, decision, items):
     from services.proposal_task_settings import creation_fields
     task_ids = []
     for t in items or []:
+        # Audit C-14: the reviewer kept "Use that task" -- update it, no twin.
+        if t.get("use_existing"):
+            ex = await _reuse_existing_task(tenant_id, decision, t)
+            if ex:
+                if reused is not None:
+                    reused.append(ex)
+                continue
         tid = new_id()
         default_approver = None
         if t.get("approval_required") and not t.get("approver_id"):
@@ -547,7 +682,8 @@ async def materialize_proposal(tenant_id: str, decision: dict) -> dict:
         {"tenant_id": tenant_id, "id": {"$in": list(linked)}}, {"_id": 0, "id": 1, "stage": 1})} if linked else {}
     for t in task_items:
         t["stage_key"] = stage_of_wf.get(t.get("workflow_id")) if t.get("workflow_id") else None
-    task_ids = await _create_decision_tasks(tenant_id, decision, task_items)
+    reused = []
+    task_ids = await _create_decision_tasks(tenant_id, decision, task_items, reused)
     ref_ids = decision.get("reference_file_ids") or []
     if ref_ids and task_ids:
         # Attach the uploaded reference file(s) to every task this decision produced.
@@ -561,6 +697,7 @@ async def materialize_proposal(tenant_id: str, decision: dict) -> dict:
     unlinked = [tid for tid, t in zip(task_ids, task_items) if not t.get("workflow_id")]
     await _link_tasks_to_workflows(tenant_id, unlinked, list(key_to_id.values()), fallback=False)
     return {"task_ids": task_ids, "workflow_ids": new_ids, "linked_workflow_ids": existing_ids,
+            "reused_task_ids": reused,
             "meetings": len(meetings), "reminders": len(p.get("reminders") or []),
             "memory_notes": len(p.get("memory_notes") or [])}
 

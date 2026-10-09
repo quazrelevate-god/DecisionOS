@@ -146,8 +146,14 @@ export function RoutinesSetup({ onDone, showLater = true, notNowLabel = "Not now
                     <CalendarBlank size={12} weight="bold" aria-hidden="true" />
                     {cadenceWords(c.every, c.interval)} · first on {niceDate(due)}
                   </span>
+                  {/* Audit C-18 (2026-10-09) — suggested from the team the routine is about. */}
+                  {people.length > 1 && it.suggested_team && c.assignee_id === it.assignee_id && (
+                    <span className="ml-auto text-[11px] text-slate-500" data-testid={`${testid}-team-${it.key}`}>
+                      from the {it.suggested_team} team
+                    </span>
+                  )}
                   {people.length > 1 && (
-                    <span className="ml-auto inline-block w-40">
+                    <span className={`${it.suggested_team && c.assignee_id === it.assignee_id ? "" : "ml-auto "}inline-block w-40`}>
                       <GlassSelect value={c.assignee_id} onChange={(v) => set(it.key, { assignee_id: v })}
                         ariaLabel={`Who does "${it.title}"`} testid={`${testid}-who-${it.key}`}
                         options={people.map((p) => ({ value: p.id, label: p.role === "owner" ? `${p.name} (you)` : p.name }))} />

@@ -513,12 +513,23 @@ export function DecisionPanel({
     mutationFn: () => api.post(`/decisions/${decisionId}/approve`,
       Object.keys(leftChoices).length ? { resolutions: leftChoices } : undefined),
     onSuccess: (res) => {
+      /* Audit C-15 (2026-10-09) — the answer IS the approved decision. The
+         window used to keep drawing the copy it had ("Decision ready for you",
+         buttons gone) until the re-read came back, seconds later, so the
+         approval looked as if it had not happened. It shows the result now. */
+      if (res?.data?.id === decisionId) {
+        qc.setQueryData(["decision", decisionId], (old) => ({ ...(old || {}), ...res.data }));
+      }
       const c = res?.data?.created_on_approval;
       const made = c ? [
         c.task_ids ? `${c.task_ids} task${c.task_ids === 1 ? "" : "s"}` : null,
         c.workflow_ids ? `${c.workflow_ids} workflow${c.workflow_ids === 1 ? "" : "s"}` : null,
       ].filter(Boolean) : [];
-      toast.success(made.length ? `Approved — ${made.join(" and ")} created` : "Approved");
+      // Audit C-14: and the tasks it used instead of copying.
+      const reused = c?.reused_task_ids || 0;
+      const usedLine = reused ? `${reused} existing task${reused === 1 ? "" : "s"} updated` : "";
+      toast.success(made.length ? `Approved — ${made.join(" and ")} created${usedLine ? `, ${usedLine}` : ""}`
+        : usedLine ? `Approved — ${usedLine}` : "Approved");
       // PILOT-2 B — issued, so it is not a draft any more (the server cleared
       // the flag with the status; this drops our own optimistic answer).
       settleDraft(decisionId);
@@ -1104,6 +1115,40 @@ export function DecisionPanel({
                               <p className="mt-0.5 text-xs text-slate-500" data-testid={`decision-task-workflow-${t.id || t.key}`}>
                                 Part of {t.workflow_title || t.workflow_summary.title}
                               </p>
+                            )}
+                            {/* Audit C-14 (2026-10-09) — the work is already there. Shown
+                                with who has it and when it is due; approving uses it (new
+                                person and date) unless "Add as new" is picked. */}
+                            {proposing && t.existing && (
+                              <div data-testid={`decision-task-existing-${t.key}`}
+                                className={`mt-2 rounded-2xl px-3 py-2 text-xs ring-1 ring-inset ${t.use_existing
+                                  ? "bg-sky-50 text-sky-900 ring-sky-200" : "bg-slate-50 text-slate-600 ring-slate-200"}`}>
+                                <p className="font-medium">
+                                  Already {t.existing.workflow_title ? `on ${t.existing.workflow_title}` : "in My Work"}:{" "}
+                                  “{t.existing.title}”
+                                </p>
+                                <p className="mt-0.5 text-[11px] opacity-80">
+                                  {t.existing.assignee_name ? `${t.existing.assignee_name}` : t.existing.assignee_role ? `${deptName(tenant, t.existing.assignee_role)} team` : "Nobody yet"}
+                                  {t.existing.due_date ? ` · due ${new Date(t.existing.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : " · no date"}
+                                  {t.use_existing ? " — approving gives it this decision's person and date, no second task" : " — a second task will be added beside it"}
+                                </p>
+                                {editable && (
+                                  <div className="mt-1.5 flex flex-wrap gap-1.5" role="group" aria-label="Use the existing task or add a new one">
+                                    <button type="button" disabled={editBusy} aria-pressed={!!t.use_existing}
+                                      data-testid={`decision-task-use-existing-${t.key}`}
+                                      onClick={() => !t.use_existing && editTask(t.key, { use_existing: true })}
+                                      className={`h-8 rounded-pill px-3 text-[11px] font-semibold ${t.use_existing ? "bg-slate-900 text-white" : GLASS_PILL}`}>
+                                      Use that task
+                                    </button>
+                                    <button type="button" disabled={editBusy} aria-pressed={!t.use_existing}
+                                      data-testid={`decision-task-add-new-${t.key}`}
+                                      onClick={() => t.use_existing && editTask(t.key, { use_existing: false })}
+                                      className={`h-8 rounded-pill px-3 text-[11px] font-semibold ${!t.use_existing ? "bg-slate-900 text-white" : GLASS_PILL}`}>
+                                      Add as new
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             )}
                           </div>
                         </li>

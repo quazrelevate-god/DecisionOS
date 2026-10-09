@@ -377,7 +377,8 @@ async def _save_proposal(user: dict, d: dict, label: str) -> dict:
     return await db.decisions.find_one(tenant_filter(d["id"], tid), {"_id": 0})
 
 
-async def edit_proposal_task(user: dict, decision_id: str, key: str, *, title=None, assignee_id=None, due_date=None,
+async def edit_proposal_task(user: dict, decision_id: str, key: str, *, title=None, use_existing=None,
+                             assignee_id=None, due_date=None,
                              priority=None, evidence_required=None, approval_required=None,
                              approval_stage=None, approver_id=None) -> dict:
     """assignee_id: who does it (held to the same rule as giving anyone a task);
@@ -407,6 +408,11 @@ async def edit_proposal_task(user: dict, decision_id: str, key: str, *, title=No
             was = task.get("title")
             task["title"] = clean
             changes.append(f'renamed from "{was}"')
+    # Audit C-14: the reviewer's call on work that is already there.
+    if use_existing is not None and task.get("existing") and bool(use_existing) != bool(task.get("use_existing")):
+        task["use_existing"] = bool(use_existing)
+        changes.append(f'uses the existing task "{task["existing"].get("title")}"' if use_existing
+                       else "added as a new task beside the existing one")
     if assignee_id and assignee_id != task.get("assignee_id"):
         target = await db.users.find_one({"id": assignee_id, "tenant_id": tid},
                                          {"_id": 0, "id": 1, "name": 1, "role": 1, "reporting_manager_id": 1})
@@ -530,17 +536,20 @@ async def approve_decision_flow(user: dict, decision_id: str, *, authorized: boo
     if d.get("proposal"):
         made = await materialize_proposal(tid, d)
         await db.decisions.update_one(tenant_filter(decision_id, tid), {"$set": {
-            "task_ids": list(d.get("task_ids") or []) + made["task_ids"],
+            "task_ids": list(d.get("task_ids") or []) + made["task_ids"] + list(made.get("reused_task_ids") or []),
             "workflow_ids": list(d.get("workflow_ids") or []) + made["workflow_ids"],
             "created_on_approval": {k: (len(v) if isinstance(v, list) else v) for k, v in made.items()},
+            # Audit C-14: the tasks it used rather than made.
+            "reused_task_ids": made.get("reused_task_ids") or [],
         }})
     # Older decisions created their tasks blocked at capture: release them.
     await db.tasks.update_many(
         {"tenant_id": tid, "decision_id": decision_id, "status": "blocked", "approval_required": {"$ne": True}},
         {"$set": {"status": "todo", "updated_at": now_iso(), "last_action": "Decision approved"}})
     parts = []
-    if made["task_ids"]:
-        parts.append(f"{len(made['task_ids'])} task(s)")
+    new_tasks = [x for x in made["task_ids"] if x not in set(made.get("reused_task_ids") or [])]
+    if new_tasks:
+        parts.append(f"{len(new_tasks)} task(s)")
     if made["workflow_ids"]:
         parts.append(f"{len(made['workflow_ids'])} workflow(s)")
     if made["meetings"]:
@@ -549,6 +558,17 @@ async def approve_decision_flow(user: dict, decision_id: str, *, authorized: boo
         parts.append(f"{made['reminders']} reminder(s)")
     await add_decision_event(decision_id, "Approved — created " + ", ".join(parts) if parts else "Approved — tasks unblocked",
                              user["name"], "approved")
+    # Audit C-14: say which existing tasks it used, and what changed on them.
+    for rid in made.get("reused_task_ids") or []:
+        rt = await db.tasks.find_one({"id": rid, "tenant_id": tid}, {"_id": 0, "title": 1, "assignee_id": 1, "due_date": 1})
+        if rt:
+            who = await db.users.find_one({"id": rt.get("assignee_id"), "tenant_id": tid}, {"_id": 0, "name": 1}) if rt.get("assignee_id") else None
+            await add_decision_event(
+                decision_id,
+                f"Used the existing task '{rt['title']}'"
+                + (f" — now with {who['name']}" if who else "")
+                + (f", due {rt['due_date']}" if rt.get("due_date") else ""),
+                user["name"], "assigned")
 
     # ASK-32 Phase 4.3 — the workflows this decision touches move by themselves
     # (WE-07: through the engine, with a reason in history and the audit log).

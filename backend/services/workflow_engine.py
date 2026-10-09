@@ -405,6 +405,12 @@ async def record_stage_approval(
 LEFTOVER_ACTIONS = ("done", "not_needed", "keep")
 
 
+def _has_proof(t: dict) -> bool:
+    """The task router's rule (routers/tasks.update_task): any attachment that is
+    not reference material is proof."""
+    return any((a or {}).get("kind") != "reference" for a in (t.get("attachments") or []))
+
+
 async def leftover_tasks(tenant_id: str, workflow_id: str) -> dict:
     """The open work on the card's CURRENT stage, with who holds each piece."""
     wf = await db.workflows.find_one(
@@ -416,7 +422,7 @@ async def leftover_tasks(tenant_id: str, workflow_id: str) -> dict:
         {"tenant_id": tenant_id, "workflow_id": workflow_id, "stage_key": stage_key,
          "status": {"$nin": ["done", "cancelled"]}},
         {"_id": 0, "id": 1, "title": 1, "status": 1, "due_date": 1,
-         "assignee_id": 1, "assignee_role": 1},
+         "assignee_id": 1, "assignee_role": 1, "evidence_required": 1, "attachments": 1},
     ).sort("created_at", 1).to_list(200)
     ids = [t["assignee_id"] for t in rows if t.get("assignee_id")]
     names = {}
@@ -426,6 +432,10 @@ async def leftover_tasks(tenant_id: str, workflow_id: str) -> dict:
             names[u["id"]] = u.get("name")
     for t in rows:
         t["assignee_name"] = names.get(t.get("assignee_id"))
+        # Audit C-10: whether it can be closed here -- proof first when asked for.
+        t["evidence_required"] = bool(t.get("evidence_required"))
+        t["has_proof"] = _has_proof(t)
+        t.pop("attachments", None)
     pipeline = await _load_pipeline(tenant_id, wf.get("type") or "")
     so = _stage_object(pipeline, stage_key) if pipeline else None
     return {"stage": stage_key, "stage_label": (so or {}).get("label") or stage_key, "tasks": rows}
@@ -456,7 +466,7 @@ async def resolve_leftover(tenant_id: str, workflow_id: str, resolutions: Option
     skip = set(skip_ids or [])
     open_rows = [t for t in open_rows if t["id"] not in skip]
     choices = {str(k): str(v) for k, v in (resolutions or {}).items()}
-    counts = {"done": 0, "not_needed": 0, "keep": 0}
+    counts = {"done": 0, "not_needed": 0, "keep": 0, "needs_proof": 0}
     # The task router owns what a close sets off; deferred so the engine keeps
     # no import-time dependency on a router (services already do this).
     from routers.tasks import _log_task_event, _release_dependents, _spawn_next_occurrence
@@ -465,6 +475,13 @@ async def resolve_leftover(tenant_id: str, workflow_id: str, resolutions: Option
         action = choices.get(t["id"], "keep")
         if action not in LEFTOVER_ACTIONS:
             action = "keep"
+        # Audit C-10 (2026-10-09): "It was done -- close it" closed tasks that
+        # ask for proof, with none attached -- the one rule My Work enforces
+        # was skipped by moving the card. Such a task is not closed here: it
+        # goes on with the card, still to do, until its proof is attached.
+        if action == "done" and t.get("evidence_required") and not _has_proof(t):
+            action = "keep"
+            counts["needs_proof"] += 1
         if action == "done":
             await db.tasks.update_one({"id": t["id"], "tenant_id": tenant_id}, {"$set": {
                 "status": "done", "progress": 100, "waiting_on": None,

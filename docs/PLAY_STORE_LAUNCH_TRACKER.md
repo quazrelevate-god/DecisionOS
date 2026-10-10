@@ -15,7 +15,7 @@ six phases and its final checklist), merged with what was still open in
 
 | What | Where |
 |---|---|
-| Signed bundle to upload | `~/Documents/DecisionOS-release-v1.0.4/DecisionOS-v1.0.4-5.aab` (+ the matching `.apk` and `SHA256SUMS.txt`) |
+| Signed bundle to upload | `~/Documents/DecisionOS-release-v1.0.5/DecisionOS-v1.0.5-6.aab` (+ the matching `.apk` and `SHA256SUMS.txt`). The 1.0.4 (5) bundle beside it is superseded: never uploaded. |
 | Listing text, App access text, tester message | [play-store/STORE_LISTING.md](play-store/STORE_LISTING.md) |
 | Questionnaire answers (Data safety, rating, ads…) | [play-store/CONSOLE_ANSWERS.md](play-store/CONSOLE_ANSWERS.md) |
 | Icon, feature graphic, 8 screenshots | [play-store/](play-store/) |
@@ -27,7 +27,7 @@ six phases and its final checklist), merged with what was still open in
 
 | # | Decision | Recommendation | Why it matters |
 |---|---|---|---|
-| D1 | **Personal or Organisation** developer account | Organisation, if DecisionOS is (or will be) a registered company | A **personal** account created after 13 Nov 2023 must run a **closed test with 12+ testers for 14 continuous days** before Play lets you publish. An **organisation** account skips that, but needs a D-U-N-S number and Google's verification (days to weeks). Start whichever you choose now: it is the longest wait in this list. |
+| D1 | ~~Personal or Organisation developer account~~ | **Settled 2026-10-10: Organisation** (Play Console → Developer account → Account type), already paid | The 12-tester × 14-day closed test applies only to *personal* accounts created after 13 Nov 2023, so **it does not apply here**. Internal testing → pre-launch report → production, with no "apply for production access" step. |
 | D2 | **The developer name** shown on the listing | The registered company name (or your own name for a personal account) | Play requires the privacy policy to name the same developer. Tell me the exact name and I'll add it to `/privacy` and `/terms`. |
 | D3 | **The public demo workspace** ("Try DecisionOS on a live workspace") | Give reviewers a **dedicated reviewer account** (App access set B), and either reset the shared demo on a schedule or hide its button in the store build | It is one shared workspace anyone can write in, and it is never reset: it is seeded once and keeps whatever visitors leave. The emulator showed strangers' entries in it today ("Dispatch all stock to vendors tomorrow"). A reviewer who lands on something offensive can reject under User-Generated Content (audit C2/W9). |
 | D4 | **Analytics and crash reporting in production** (PostHog `REACT_APP_POSTHOG_KEY`, Sentry `SENTRY_DSN` on Railway) | Decide on/off now and keep it that way through review | The Data safety answers change with it ([CONSOLE_ANSWERS §6](play-store/CONSOLE_ANSWERS.md)). Over-declaring is safe; under-declaring is not. |
@@ -40,11 +40,12 @@ six phases and its final checklist), merged with what was still open in
 | | Item | Notes |
 |---|---|---|
 | 🟡 | **Back up the signing key off this Mac** | Copy `frontend/android/release.keystore` and `keystore.properties` into a password manager's secure-file slot. Right now they exist only on this laptop. |
-| 🟡 | **Retire the second key** | [RELEASE_SIGNING.md](RELEASE_SIGNING.md) records two keys. This Mac holds the original (`E4:C5:7E:AD…4A:8F:30`), the one `assetlinks.json` already trusts, and it signed the 1.0.4 bundle. Delete the other (`8C:56:55:CC…`) wherever it lives (the Windows machine) so it is never uploaded by mistake. |
+| 🟡 | **Retire the second key** | [RELEASE_SIGNING.md](RELEASE_SIGNING.md) records two keys. This Mac holds the original (`E4:C5:7E:AD…4A:8F:30`), the one `assetlinks.json` already trusts, and it signed the 1.0.4 and 1.0.5 bundles. Delete the other (`8C:56:55:CC…`) wherever it lives (the Windows machine) so it is never uploaded by mistake. |
 | 🟡 | **Make `support@decisionos.biz` deliver** | The policy, the terms and the listing all point there; DPDP needs a working grievance contact. Send it a test email. |
 | 🟡 | **Check `FIREBASE_SERVICE_ACCOUNT` is set on the production backend** | Without it push notifications do nothing for reviewers and testers (audit R4). |
-| 🟡 | **Recruit 12+ testers** (personal account only) | Each needs a Gmail on an Android phone. The message to send is in STORE_LISTING.md. Recruit 15 to 20: anyone who leaves early can restart the 14 days. |
-| 🟡 | **Register, pay $25, verify identity** | play.google.com/console. Google now verifies developer identity; have ID and (organisation) D-U-N-S ready. |
+| — | ~~Recruit 12+ testers~~ | Not required for an Organisation account. A handful of internal testers is still worth it (same message, STORE_LISTING.md). |
+| ✅ | **Register, pay $25** | Done: Organisation account, on the corporate Google account. Use a Chrome profile signed in to that account only. |
+| 🟡 | **Android developer verification** | Open it from the Play Console sidebar and check that nothing is pending. If it asks you to register the app: package `com.decisionos.app`, upload key SHA-256 `E4:C5:7E:AD:34:CD:99:64:29:79:62:8D:6C:02:FE:7E:5C:A0:8B:65:C3:30:6D:1B:E5:02:57:B8:75:4A:8F:30`. |
 
 ---
 
@@ -52,7 +53,8 @@ six phases and its final checklist), merged with what was still open in
 
 | | Item |
 |---|---|
-| 🟡 | Account created, $25 paid, identity verified (D1) |
+| ✅ | Account created, $25 paid: **Organisation** (seen 2026-10-10) |
+| 🟡 | Android developer verification: nothing pending (sidebar item) |
 | ✅ | Merchant account: **not needed**. The app is free, with no in-app purchases. |
 
 ## Phase 2 · The code
@@ -67,7 +69,7 @@ six phases and its final checklist), merged with what was still open in
 | ✅ | Phones locked to portrait | **Fixed today.** Landscape put the dock over the Desk with nothing scrollable. Tablets still rotate (Android 16 rule). |
 | ✅ | `targetSdk` / `compileSdk` **36**, `minSdk` 24 | `variables.gradle`; Play's floor since 31 Aug 2026 is 36 |
 | ✅ | `applicationId` `com.decisionos.app` | unique, permanent once published |
-| ✅ | `versionCode` **5**, `versionName` **1.0.4** | Defaults updated in `variables.gradle`; iOS numbers matched (`project.pbxproj`). 1.0.2 (3) and 1.0.3 (4) were sideloaded APKs only. |
+| ✅ | `versionCode` **6**, `versionName` **1.0.5** | Defaults updated in `variables.gradle`; iOS numbers matched (`project.pbxproj`). 1.0.2 (3) and 1.0.3 (4) were sideloaded APKs only; 1.0.4 (5) was built and tagged, then superseded before upload by 1.0.5 (6), which adds Yokesh's audit P2/P3 fixes (2026-10-10). |
 | ✅ | 16 KB page size (Android 15+ requirement) | The one native library (`libdatastore_shared_counter.so`, from Firebase) passes `zipalign -P 16` and has 16 KB-aligned LOAD segments in all four ABIs. |
 | ✅ | Shrinking (`minifyEnabled`): **left off, deliberately** | Recommended, not required. 9.9 MB of dex would shrink, but R8 can strip classes Capacitor plugins reach by reflection, and that only shows up as a runtime crash. Revisit after launch, with a full test pass on the minified build. |
 
@@ -84,10 +86,10 @@ six phases and its final checklist), merged with what was still open in
 
 | | Item | Evidence |
 |---|---|---|
-| ✅ | Signed `.aab` built with `cap:sync:prod` | `DecisionOS-v1.0.4-5.aab`, 12.9 MB, `jar verified`, signer SHA-256 `E4:C5:7E:AD…4A:8F:30` |
+| ✅ | Signed `.aab` built with `cap:sync:prod` | `DecisionOS-v1.0.5-6.aab`, 12.9 MB, `jar verified`, signer SHA-256 `E4:C5:7E:AD…4A:8F:30`, 16 KB check passes, release scans clean |
 | ✅ | Release build tested | Matching `.apk` (v2-signed, verifies) installed on the emulator. Launch, render and portrait lock checked; no crash in logcat. |
 | 🟡 | Keystore backed up off the laptop | above |
-| 🟡 | Built from a **tagged commit** | The bundle is today's working tree, uncommitted. Say the word and it is committed, tagged `mobile-1.0.4-build5`, and the bundle in the folder is exactly that tree. |
+| ✅ | Built from a **tagged commit** | Tag `mobile-1.0.5-build6`; the bundle in the folder is exactly that tree. (`mobile-1.0.4-build5` marks the superseded build.) |
 | ⬜ | **Opt into Play App Signing** at the first upload | Irreversible, and the right choice: the key on this Mac becomes a replaceable *upload* key. |
 
 ## Phase 5 · Play Console setup
@@ -111,15 +113,15 @@ six phases and its final checklist), merged with what was still open in
 | ⬜ | **Internal testing**: upload the `.aab`, release notes from STORE_LISTING.md, roll out | No review; live in minutes; up to 100 testers. Start here. |
 | ⬜ | **Read the pre-launch report** a few hours later | Google runs the app on real phones and reports crashes, ANRs and accessibility issues. Fix before promoting. |
 | ⬜ | After Play App Signing: copy the **app signing** SHA-256 from Setup → App integrity | Then set `ANDROID_APP_FINGERPRINT` on the web deploy to `E4:C5:…,<Play's fingerprint>` so invite links open the app from a Play install. Send it to me and I'll update DEEP_LINKS.md. |
-| ⬜ | **Closed testing**: 12+ testers opted in for **14 continuous days** (personal account) | Log below. Keep testers opted in the whole time. |
-| ⬜ | **Apply for production access** (dashboard), answer the questionnaire | Google asks how testers were recruited, what they reported and what changed. The log below is that answer. |
-| ⬜ | **Production release**: same `.aab`, Review release, then Start rollout | First review: days to two weeks. Budget about three weeks end to end. |
+| — | ~~Closed testing, 12 testers × 14 days~~ | Not required: Organisation account. Optional if you want a wider test group first. |
+| — | ~~Apply for production access~~ | Not required: Organisation account. |
+| ⬜ | **Production release**: same `.aab`, Review release, then Start rollout | First review of a new app: a few days to two weeks. |
 
 ### Closed test log (fill in as it runs)
 
 | Date | Testers opted in | Build | Feedback received | Changed in response |
 |---|---|---|---|---|
-| | | 1.0.4 (5) | | |
+| | | 1.0.5 (6) | | |
 
 ---
 

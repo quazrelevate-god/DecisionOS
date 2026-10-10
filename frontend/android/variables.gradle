@@ -34,10 +34,12 @@ ext {
     //
     // 2026-10-09 — the defaults follow the build that goes to Play, so a plain
     // `./gradlew bundleRelease` is never a step behind what testers already
-    // have. 1.0.2 (3) and 1.0.3 (4) went to phones as sideloaded APKs; the
-    // first Play upload is 1.0.4 (5).
-    appVersionCode = (System.getenv("ANDROID_VERSION_CODE") ?: "5") as Integer
-    appVersionName = System.getenv("ANDROID_VERSION_NAME") ?: "1.0.4"
+    // have. 1.0.2 (3) and 1.0.3 (4) went to phones as sideloaded APKs; 1.0.4
+    // (5) was prepared for Play and superseded before upload by 1.0.5 (6),
+    // which carries the audit P2/P3 fixes (2026-10-10). The first Play upload
+    // is 1.0.5 (6).
+    appVersionCode = (System.getenv("ANDROID_VERSION_CODE") ?: "6") as Integer
+    appVersionName = System.getenv("ANDROID_VERSION_NAME") ?: "1.0.5"
     minSdkVersion = 24
     compileSdkVersion = 36
     targetSdkVersion = 36

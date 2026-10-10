@@ -1,6 +1,6 @@
 # Play Console: App content answers
 
-**Prepared 2026-10-09 for build 1.0.4 (5).** Play Console → **Policy → App
+**Prepared 2026-10-09 for build 1.0.4 (5); still true of 1.0.5 (6).** Play Console → **Policy → App
 content**. Play will not roll out to *any* track, internal testing included,
 until every item on that page is answered. The facts come from
 [../PRIVACY.md](../PRIVACY.md) (the data inventory, read out of the code) and
@@ -119,7 +119,7 @@ banking, loans, investments or crypto.
 
 ## 9 · Permissions you may be asked about
 
-From the merged release manifest (checked on the 1.0.4 build):
+From the merged release manifest (checked on the 1.0.4 and 1.0.5 builds; the same nine):
 
 | Permission | Why |
 |---|---|

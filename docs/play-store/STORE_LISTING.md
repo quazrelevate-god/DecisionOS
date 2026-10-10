@@ -1,6 +1,6 @@
 # Google Play store listing — ready to paste
 
-**Prepared 2026-10-09 for build 1.0.4 (versionCode 5).** Everything on this page
+**Prepared 2026-10-09 for build 1.0.4, carried to 1.0.5 (versionCode 6) on 2026-10-10.** Everything on this page
 goes into Play Console as written. The graphics are in this folder. The
 questionnaire answers are in [CONSOLE_ANSWERS.md](CONSOLE_ANSWERS.md). The
 running order is in [../PLAY_STORE_LAUNCH_TRACKER.md](../PLAY_STORE_LAUNCH_TRACKER.md).
@@ -56,7 +56,7 @@ Decision Journal
 Every decision is kept: what was decided, by whom, and what came of it.
 
 Operating Score
-A score out of 100 for how the company is running, across execution, finance, sales and responsiveness, with the gaps to fix first.
+A score out of 100 for how the company is running, across execution, finance, decisions and responsiveness, with the gaps to fix first.
 
 Team and roles
 Invite your team by mobile number. Each person sees what their role allows.
@@ -113,7 +113,7 @@ requirement.
 
 ---
 
-## Release notes (the "What's new" text for 1.0.4)
+## Release notes (the "What's new" text for 1.0.5)
 
 ```
 <en-IN>

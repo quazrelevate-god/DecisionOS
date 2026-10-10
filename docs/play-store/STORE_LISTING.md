@@ -1,6 +1,6 @@
 # Google Play store listing — ready to paste
 
-**Prepared 2026-10-09 for build 1.0.4, carried to 1.0.5 (versionCode 6) on 2026-10-10.** Everything on this page
+**Prepared 2026-10-09 for build 1.0.4, carried to 1.0.6 (versionCode 7) on 2026-10-10.** Everything on this page
 goes into Play Console as written. The graphics are in this folder. The
 questionnaire answers are in [CONSOLE_ANSWERS.md](CONSOLE_ANSWERS.md). The
 running order is in [../PLAY_STORE_LAUNCH_TRACKER.md](../PLAY_STORE_LAUNCH_TRACKER.md).
@@ -113,7 +113,7 @@ requirement.
 
 ---
 
-## Release notes (the "What's new" text for 1.0.5)
+## Release notes (the "What's new" text for 1.0.6)
 
 ```
 <en-IN>

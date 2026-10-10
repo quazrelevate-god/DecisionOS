@@ -15,7 +15,7 @@ six phases and its final checklist), merged with what was still open in
 
 | What | Where |
 |---|---|
-| Signed bundle to upload | `~/Documents/DecisionOS-release-v1.0.5/DecisionOS-v1.0.5-6.aab` (+ the matching `.apk` and `SHA256SUMS.txt`). The 1.0.4 (5) bundle beside it is superseded: never uploaded. |
+| Signed bundle to upload | `~/Documents/DecisionOS-release-v1.0.6/DecisionOS-v1.0.6-7.aab` (+ the matching `.apk` and `SHA256SUMS.txt`). The 1.0.4 (5) and 1.0.5 (6) bundles beside it are superseded: never uploaded. |
 | Listing text, App access text, tester message | [play-store/STORE_LISTING.md](play-store/STORE_LISTING.md) |
 | Questionnaire answers (Data safety, rating, ads…) | [play-store/CONSOLE_ANSWERS.md](play-store/CONSOLE_ANSWERS.md) |
 | Icon, feature graphic, 8 screenshots | [play-store/](play-store/) |
@@ -40,7 +40,7 @@ six phases and its final checklist), merged with what was still open in
 | | Item | Notes |
 |---|---|---|
 | 🟡 | **Back up the signing key off this Mac** | Copy `frontend/android/release.keystore` and `keystore.properties` into a password manager's secure-file slot. Right now they exist only on this laptop. |
-| 🟡 | **Retire the second key** | [RELEASE_SIGNING.md](RELEASE_SIGNING.md) records two keys. This Mac holds the original (`E4:C5:7E:AD…4A:8F:30`), the one `assetlinks.json` already trusts, and it signed the 1.0.4 and 1.0.5 bundles. Delete the other (`8C:56:55:CC…`) wherever it lives (the Windows machine) so it is never uploaded by mistake. |
+| 🟡 | **Retire the second key** | [RELEASE_SIGNING.md](RELEASE_SIGNING.md) records two keys. This Mac holds the original (`E4:C5:7E:AD…4A:8F:30`), the one `assetlinks.json` already trusts, and it signed the 1.0.4, 1.0.5 and 1.0.6 bundles. Delete the other (`8C:56:55:CC…`) wherever it lives (the Windows machine) so it is never uploaded by mistake. |
 | 🟡 | **Make `support@decisionos.biz` deliver** | The policy, the terms and the listing all point there; DPDP needs a working grievance contact. Send it a test email. |
 | 🟡 | **Check `FIREBASE_SERVICE_ACCOUNT` is set on the production backend** | Without it push notifications do nothing for reviewers and testers (audit R4). |
 | — | ~~Recruit 12+ testers~~ | Not required for an Organisation account. A handful of internal testers is still worth it (same message, STORE_LISTING.md). |
@@ -69,7 +69,7 @@ six phases and its final checklist), merged with what was still open in
 | ✅ | Phones locked to portrait | **Fixed today.** Landscape put the dock over the Desk with nothing scrollable. Tablets still rotate (Android 16 rule). |
 | ✅ | `targetSdk` / `compileSdk` **36**, `minSdk` 24 | `variables.gradle`; Play's floor since 31 Aug 2026 is 36 |
 | ✅ | `applicationId` `com.decisionos.app` | unique, permanent once published |
-| ✅ | `versionCode` **6**, `versionName` **1.0.5** | Defaults updated in `variables.gradle`; iOS numbers matched (`project.pbxproj`). 1.0.2 (3) and 1.0.3 (4) were sideloaded APKs only; 1.0.4 (5) was built and tagged, then superseded before upload by 1.0.5 (6), which adds Yokesh's audit P2/P3 fixes (2026-10-10). |
+| ✅ | `versionCode` **7**, `versionName` **1.0.6** | Defaults updated in `variables.gradle`; iOS numbers matched (`project.pbxproj`). 1.0.2 (3) and 1.0.3 (4) were sideloaded APKs only. 1.0.4 (5) and 1.0.5 (6) were built and tagged, then superseded before upload: 1.0.5 added Yokesh's audit P2/P3 fixes, and 1.0.6 adds "Your call" pinned to the decision sheet's foot and the minimal dock (2026-10-10). |
 | ✅ | 16 KB page size (Android 15+ requirement) | The one native library (`libdatastore_shared_counter.so`, from Firebase) passes `zipalign -P 16` and has 16 KB-aligned LOAD segments in all four ABIs. |
 | ✅ | Shrinking (`minifyEnabled`): **left off, deliberately** | Recommended, not required. 9.9 MB of dex would shrink, but R8 can strip classes Capacitor plugins reach by reflection, and that only shows up as a runtime crash. Revisit after launch, with a full test pass on the minified build. |
 
@@ -86,10 +86,10 @@ six phases and its final checklist), merged with what was still open in
 
 | | Item | Evidence |
 |---|---|---|
-| ✅ | Signed `.aab` built with `cap:sync:prod` | `DecisionOS-v1.0.5-6.aab`, 12.9 MB, `jar verified`, signer SHA-256 `E4:C5:7E:AD…4A:8F:30`, 16 KB check passes, release scans clean |
+| ✅ | Signed `.aab` built with `cap:sync:prod` | `DecisionOS-v1.0.6-7.aab`, 12.9 MB, `jar verified`, signer SHA-256 `E4:C5:7E:AD…4A:8F:30`, 16 KB check passes, release scans clean |
 | ✅ | Release build tested | Matching `.apk` (v2-signed, verifies) installed on the emulator. Launch, render and portrait lock checked; no crash in logcat. |
 | 🟡 | Keystore backed up off the laptop | above |
-| ✅ | Built from a **tagged commit** | Tag `mobile-1.0.5-build6`; the bundle in the folder is exactly that tree. (`mobile-1.0.4-build5` marks the superseded build.) |
+| ✅ | Built from a **tagged commit** | Tag `mobile-1.0.6-build7`; the bundle in the folder is exactly that tree. (`mobile-1.0.4-build5` and `mobile-1.0.5-build6` mark the superseded builds.) |
 | ⬜ | **Opt into Play App Signing** at the first upload | Irreversible, and the right choice: the key on this Mac becomes a replaceable *upload* key. |
 
 ## Phase 5 · Play Console setup
@@ -121,7 +121,7 @@ six phases and its final checklist), merged with what was still open in
 
 | Date | Testers opted in | Build | Feedback received | Changed in response |
 |---|---|---|---|---|
-| | | 1.0.5 (6) | | |
+| | | 1.0.6 (7) | | |
 
 ---
 

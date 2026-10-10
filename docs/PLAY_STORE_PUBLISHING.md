@@ -21,11 +21,11 @@ signed bundle. Everything else below is forms.
 **Your bundle is already built and signed:**
 
 ```
-~/Documents/DecisionOS-release-v1.0.5/DecisionOS-v1.0.5-6.aab
+~/Documents/DecisionOS-release-v1.0.6/DecisionOS-v1.0.6-7.aab
 ```
 
-12.9 MB, `versionCode 6`, `versionName 1.0.5`, signed, verified, and run on an
-emulator. (The 1.0.1 and 1.0.4 bundles before it are retired; neither was uploaded.)
+12.9 MB, `versionCode 7`, `versionName 1.0.6`, signed, verified, and run on an
+emulator. (The 1.0.1, 1.0.4 and 1.0.5 bundles before it are retired; none was uploaded.)
 
 ---
 

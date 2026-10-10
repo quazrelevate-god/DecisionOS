@@ -111,12 +111,28 @@ export function DockSlider({
     { to: "#more", label: t("bottomnav.more", "More"), icon: DotsThree, testid: "dock-more", onClick: onMore, isMore: true },
   ];
 
-  const items = (side) => (
-    <div className="flex min-w-0 flex-1 items-stretch justify-around gap-0.5">
-      {side.map((s) => (
-        <DockItem key={s.to} {...s}
-          active={s.isMore ? moreOpen : location.pathname.startsWith(s.to)} />
-      ))}
+  /* THE BAR IS A GRID (2026-10-10, founder): a rounded cap, two cells, the
+     handle's slot, two cells, a rounded cap — the four cells equal, so the
+     four destinations sit evenly either side of the handle. The live one is
+     marked by its icon and word alone (DockItem's grid cell). The outer cell
+     of each side also spans that side's cap, so the cap stays tappable, and is
+     told which end it owns so its icon centres beside the curve. */
+  const CAP = "calc(var(--desk-slider-track, 6rem) / 2)";
+  const items = (side, end) => (
+    <div className="grid min-w-0 flex-1 items-stretch"
+      style={{ gridTemplateColumns: end === "start" ? `${CAP} 1fr 1fr` : `1fr 1fr ${CAP}` }}>
+      {side.map((s, i) => {
+        const outer = end === "start" ? i === 0 : i === side.length - 1;
+        return (
+          <div key={s.to} className="min-w-0"
+            style={outer ? { gridColumn: end === "start" ? "1 / span 2" : "2 / span 2" } : undefined}>
+            {/* One live cell at a time: while More is open it is More, and
+                the page's own cell lights again the moment the menu closes. */}
+            <DockItem {...s} grid edge={outer ? end : null}
+              active={s.isMore ? moreOpen : !moreOpen && location.pathname.startsWith(s.to)} />
+          </div>
+        );
+      })}
     </div>
   );
 
@@ -127,12 +143,12 @@ export function DockSlider({
     <div
       aria-hidden={pct > 0.4 ? "true" : undefined}
       style={{ opacity: fade, pointerEvents: fade < 0.6 ? "none" : undefined }}
-      className="absolute inset-0 flex items-stretch px-2 transition-opacity duration-150"
+      className="absolute inset-0 flex items-stretch transition-opacity duration-150"
       data-testid="dock-slider-items"
     >
-      {items(left)}
+      {items(left, "start")}
       <span className="w-[6.25rem] shrink-0" aria-hidden="true" />
-      {items(right)}
+      {items(right, "end")}
     </div>
   );
 

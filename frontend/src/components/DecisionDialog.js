@@ -80,6 +80,7 @@ import { canAssignPerson } from "../lib/taskAccess";
 import { proposalCreatesText } from "../lib/decisionProposal";
 import { LeftoverReview } from "./workflow/LeftoverReview";
 import { ReportButton } from "./ReportButton";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { isDraft as readDraft, subscribeDrafts, draftOverrides, settleDraft, saveAsDraft, clearDraft } from "../lib/decisionDrafts";
 
 /* ── helpers shared with the Desk's decision cards ───────────────────────── */
@@ -237,6 +238,7 @@ export function DecisionPanel({
   const [sending, setSending] = useState(false);
   const [confirmReject, setConfirmReject] = useState(false);
   const { user, tenant } = useAuth();
+  const isPhone = useIsMobile();
   /* ASK-50 — what the card shows while a change is on its way to the server;
      null means "show what the proposal says". Each change is SAVED ON THE
      PROPOSAL as it is made (PATCH …/proposal/tasks/:key, as who and when
@@ -614,6 +616,83 @@ export function DecisionPanel({
     </div>
   ) : null;
 
+  /* 2026-10-10 (founder) — ON A PHONE, "YOUR CALL" IS PINNED TO THE FOOT.
+     The sheet's title is held at the top while the body scrolls; the answer
+     was the other way round — somewhere down the scroll, between the task
+     settings and "What happens next", so the decision could be read in full
+     and still not be decidable without hunting for the buttons. Now the same
+     section — its label, Approve and Reject, Save as draft and the reject
+     warning — is held at the bottom the way the title is held at the top, and
+     everything between them scrolls. Rendered once, in one place or the
+     other (useIsMobile), so the buttons' test ids never appear twice.
+     Desktop keeps it in the left column, where the two-column card already
+     shows it without scrolling. */
+  const pinCall = mayDecide && !embedded && isPhone;
+  const yourCallBody = (
+    <>
+                      <div className="flex flex-wrap gap-2.5" data-testid="decision-actions">
+                        <button
+                          type="button"
+                          onClick={() => approveM.mutate()}
+                          disabled={busy}
+                          data-testid="decision-approve"
+                          className={`flex h-14 flex-1 items-center justify-center gap-2 rounded-pill px-5 text-sm font-medium disabled:opacity-60 lg:h-12 ${INK_PILL}`}
+                        >
+                          <CheckCircle size={16} weight="bold" aria-hidden="true" />
+                          {approveM.isPending ? "Approving…" : "Approve"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => (confirmReject ? rejectM.mutate() : setConfirmReject(true))}
+                          disabled={busy}
+                          data-testid="decision-reject"
+                          className={`flex h-14 flex-1 items-center justify-center gap-2 rounded-pill px-5 text-sm font-medium disabled:opacity-60 lg:h-12 ${
+                            confirmReject ? MAROON_PILL : `text-slate-800 hover:bg-white ${GLASS_PILL}`}`}
+                        >
+                          {confirmReject
+                            ? <><WarningCircle size={16} weight="bold" aria-hidden="true" />{rejectM.isPending ? "Rejecting…" : "Confirm reject"}</>
+                            : <><X size={16} weight="bold" aria-hidden="true" /> Reject</>}
+                        </button>
+                      </div>
+                      {/* 2026-09-27 — AND THE THIRD ANSWER: not yet. The owner
+                          who opens this the morning after, sets the priority
+                          and moves the task to Anand has saved all of that
+                          (each change is written as it is made) — but with
+                          only Approve and Reject here, the decision goes back
+                          to looking untouched, and tomorrow they cannot tell
+                          it from the ones that arrived overnight. Below the
+                          two, because it is not a decision: it is the note
+                          that they have been here. */}
+                      {/* 2026-10-05 — AND IT IS ONLY OFFERED ON THE WAY IN.
+                          Opening a decision that is ALREADY a draft used to put
+                          "Not a draft any more" under Approve and Reject, which
+                          the founder read as noise and they were right: by then
+                          the only answers that matter are the two above it, and
+                          both clear the draft flag themselves. Saving one is a
+                          thing you do to a decision you are leaving; un-saving
+                          it is not a thing anybody came here to do. */}
+                      {!isDraft && (
+                      <button
+                        type="button"
+                        onClick={() => draftM.mutate(true)}
+                        disabled={busy}
+                        data-testid="decision-save-draft"
+                        className="mt-2.5 flex h-11 w-full items-center justify-center rounded-pill px-5 text-sm font-medium text-slate-600 transition-colors hover:bg-white hover:text-slate-900 disabled:opacity-60"
+                      >
+                        {draftM.isPending ? "Saving…" : "Save as draft — decide later"}
+                      </button>
+                      )}
+                      {confirmReject && (
+                        <p className="mt-3 text-xs text-rose-700" data-testid="decision-reject-warning">
+                          {proposing
+                            ? "Nothing it proposes will be created."
+                            : "Tasks still waiting on it are cancelled; work already under way stays."}{" "}
+                          Click Confirm reject again to proceed, or Approve to change your mind.
+                        </p>
+                      )}
+    </>
+  );
+
   /* PILOT-2 A — THE ACTIONS, PINNED, when the panel is embedded. The Dex
      pop-up's third step is the review, and its way on has to be whole and in
      view however long the breakdown above it runs: Approve issues it, Save as
@@ -935,68 +1014,9 @@ export function DecisionPanel({
 
                   {/* Embedded, the same two actions (and Save as draft) are
                       pinned at the foot instead — see pinnedActions. */}
-                  {mayDecide && !embedded && (
+                  {mayDecide && !embedded && !pinCall && (
                     <Card label="Your call" testid="decision-actions-card">
-                      <div className="flex flex-wrap gap-2.5" data-testid="decision-actions">
-                        <button
-                          type="button"
-                          onClick={() => approveM.mutate()}
-                          disabled={busy}
-                          data-testid="decision-approve"
-                          className={`flex h-14 flex-1 items-center justify-center gap-2 rounded-pill px-5 text-sm font-medium disabled:opacity-60 lg:h-12 ${INK_PILL}`}
-                        >
-                          <CheckCircle size={16} weight="bold" aria-hidden="true" />
-                          {approveM.isPending ? "Approving…" : "Approve"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => (confirmReject ? rejectM.mutate() : setConfirmReject(true))}
-                          disabled={busy}
-                          data-testid="decision-reject"
-                          className={`flex h-14 flex-1 items-center justify-center gap-2 rounded-pill px-5 text-sm font-medium disabled:opacity-60 lg:h-12 ${
-                            confirmReject ? MAROON_PILL : `text-slate-800 hover:bg-white ${GLASS_PILL}`}`}
-                        >
-                          {confirmReject
-                            ? <><WarningCircle size={16} weight="bold" aria-hidden="true" />{rejectM.isPending ? "Rejecting…" : "Confirm reject"}</>
-                            : <><X size={16} weight="bold" aria-hidden="true" /> Reject</>}
-                        </button>
-                      </div>
-                      {/* 2026-09-27 — AND THE THIRD ANSWER: not yet. The owner
-                          who opens this the morning after, sets the priority
-                          and moves the task to Anand has saved all of that
-                          (each change is written as it is made) — but with
-                          only Approve and Reject here, the decision goes back
-                          to looking untouched, and tomorrow they cannot tell
-                          it from the ones that arrived overnight. Below the
-                          two, because it is not a decision: it is the note
-                          that they have been here. */}
-                      {/* 2026-10-05 — AND IT IS ONLY OFFERED ON THE WAY IN.
-                          Opening a decision that is ALREADY a draft used to put
-                          "Not a draft any more" under Approve and Reject, which
-                          the founder read as noise and they were right: by then
-                          the only answers that matter are the two above it, and
-                          both clear the draft flag themselves. Saving one is a
-                          thing you do to a decision you are leaving; un-saving
-                          it is not a thing anybody came here to do. */}
-                      {!isDraft && (
-                      <button
-                        type="button"
-                        onClick={() => draftM.mutate(true)}
-                        disabled={busy}
-                        data-testid="decision-save-draft"
-                        className="mt-2.5 flex h-11 w-full items-center justify-center rounded-pill px-5 text-sm font-medium text-slate-600 transition-colors hover:bg-white hover:text-slate-900 disabled:opacity-60"
-                      >
-                        {draftM.isPending ? "Saving…" : "Save as draft — decide later"}
-                      </button>
-                      )}
-                      {confirmReject && (
-                        <p className="mt-3 text-xs text-rose-700" data-testid="decision-reject-warning">
-                          {proposing
-                            ? "Nothing it proposes will be created."
-                            : "Tasks still waiting on it are cancelled; work already under way stays."}{" "}
-                          Click Confirm reject again to proceed, or Approve to change your mind.
-                        </p>
-                      )}
+                      {yourCallBody}
                     </Card>
                   )}
 
@@ -1238,6 +1258,13 @@ export function DecisionPanel({
                 </div>
               </div>
             </div>
+            {pinCall && (
+              <div className="shrink-0 border-t border-slate-900/[0.06] bg-white/45 px-5 pb-3 pt-3.5 shadow-[0_-12px_28px_-18px_hsl(0_0%_10%/0.35)] backdrop-blur-xl"
+                data-testid="decision-actions-card" data-pinned="true">
+                <p className={`${DRAWER_LABEL} mb-2`}>Your call</p>
+                {yourCallBody}
+              </div>
+            )}
             {pinnedActions}
           </>
   );

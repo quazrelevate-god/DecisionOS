@@ -73,7 +73,8 @@ export function dockSlots(user, t = (k, d) => d) {
   return slots.filter((s) => (seen.has(s.to) ? false : seen.add(s.to)));
 }
 
-export function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
+export function DockItem({ to, label, icon: Icon, testid, active, onClick, grid = false, edge = null }) {
+  if (grid) return <GridDockItem {...{ to, label, Icon, testid, active, onClick, edge }} />;
   /* KM-49 — THE SELECTED SLOT IS FLAT, and it is an INDICATOR rather than a
      treatment of the whole slot. Founder: "the neumorphic styled option is not
      nice in the bottom fab bar so make it a usual materialistic flat style menu
@@ -156,6 +157,58 @@ export function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
     "data-testid": testid,
     "data-active": active ? "true" : undefined,
     className: cls,
+    "aria-current": active ? "page" : undefined,
+  };
+  if (onClick) {
+    return <button type="button" onClick={onClick} {...common}>{content}</button>;
+  }
+  return <NavLink to={to} {...common}>{content}</NavLink>;
+}
+
+/* THE SLIDER DOCK'S SLOT: A CELL OF THE BAR, MARKED BY ITS ICON. (2026-10-10.)
+   The plate above (a rounded slab floating inside the bar) never sat right in
+   the slider dock: a button inside a button. The founder drew the bar as a
+   grid instead — cap | Desk | Work | handle | Money | More | cap — with four
+   equal cells, and first asked for the live cell to be the bar pressed in.
+   Seen built, that read as less professional than nothing, so the shadow is
+   gone (founder, same day: "use just the highlighted icon… let it be
+   minimal"): the live cell is the filled icon and the white word, the others
+   dimmed, and no shape at all.
+   THE TWO ENDS. Desk and More own the bar's rounded caps. The cap stays part
+   of their touch target, and their icon and word sit centred over the cell
+   beside it, not over the curve, so the four read as one evenly spaced row.
+   `edge` is which end this cell owns ("start" | "end"); DockSlider lays the
+   grid out and tells each cell. */
+function GridDockItem({ to, label, Icon, testid, active, onClick, edge }) {
+  const CAP = "calc(var(--desk-slider-track, 6rem) / 2)";
+  const content = (
+    <>
+      <span className="flex min-w-0 flex-col items-center gap-0.5">
+        <span aria-hidden="true" className="grid h-6 w-11 place-items-center">
+          <Icon size={20} weight={active ? "fill" : "regular"} />
+        </span>
+        <span className="max-w-full text-center text-[length:var(--text-label)] font-semibold leading-tight [overflow-wrap:anywhere]">
+          {label}
+        </span>
+      </span>
+    </>
+  );
+  const common = {
+    style: {
+      "--dock-item-min": "2.75rem",
+      ...(edge === "start" ? { paddingLeft: CAP } : edge === "end" ? { paddingRight: CAP } : null),
+    },
+    "data-testid": testid,
+    "data-active": active ? "true" : undefined,
+    "data-edge": edge || undefined,
+    className: cn(
+      /* w-full: More is a <button>, and a button shrinks to its content
+         instead of filling its cell the way a link does — its word sat off
+         the cell's centre. */
+      "dock-item flex h-full w-full min-w-0 flex-col items-center justify-center",
+      "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+      active ? "text-white" : "text-white/55 hover:text-white/80"
+    ),
     "aria-current": active ? "page" : undefined,
   };
   if (onClick) {

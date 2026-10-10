@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../context/AuthContext";
 import api, { formatApiError } from "../../lib/api";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
+import { STORE_BUILD } from "../../lib/storeBuild";
 
 /* Audit B-04 (2026-10-08) — PLAN, SEATS AND THE AI ALLOWANCE, IN ONE PLACE.
    The card said "Trial · ends 22 Oct 2026 · 1 of 10 seats used" and nothing
@@ -36,11 +37,11 @@ function trialLine(p) {
   if (p.key !== "trial") return null;
   const left = p.trial_days_left;
   if (p.trial_expired || (left != null && left < 0)) {
-    return `Your trial ended on ${dayLabel(p.trial_ends_at)}. Choose a plan to keep going.`;
+    return `Your trial ended on ${dayLabel(p.trial_ends_at)}.${STORE_BUILD ? "" : " Choose a plan to keep going."}`;
   }
   const when = p.trial_ends_at ? dayLabel(p.trial_ends_at) : "";
   const count = left == null ? "" : left === 0 ? "Last day of your trial" : `${left} day${left === 1 ? "" : "s"} left in your trial`;
-  return `${count}${when ? ` — it ends ${when}` : ""}. Choose a plan before then to carry on without a break.`;
+  return `${count}${when ? ` — it ends ${when}` : ""}.${STORE_BUILD ? "" : " Choose a plan before then to carry on without a break."}`;
 }
 
 export function PlanCard() {
@@ -65,7 +66,10 @@ export function PlanCard() {
             </p>
           )}
         </div>
-        {p && !paidTop && (
+        {/* PLAY PAYMENTS (2026-10-09) — not in the store build: a plan is a
+            digital subscription, and inside a Play app it may only be sold
+            through Play billing (lib/storeBuild). The website keeps it. */}
+        {p && !paidTop && !STORE_BUILD && (
           <button type="button" onClick={() => setOpen(true)} data-testid="plan-upgrade"
             className="h-10 shrink-0 rounded-pill bg-kr-ink px-5 text-sm font-medium text-white">
             Choose a plan
@@ -96,7 +100,7 @@ export function PlanCard() {
                 <Bar pct={aiPct} warn={ai.over} />
                 {(ai.over || aiPct >= 90) && (
                   <p className="mt-2 text-xs text-rose-700" data-testid="plan-ai-warning">
-                    {ai.over ? `The allowance is used up. Dex, bill reading and Ask stop until ${dayLabel(ai.resets_on)} — or choose a bigger plan.`
+                    {ai.over ? `The allowance is used up. Dex, bill reading and Ask stop until ${dayLabel(ai.resets_on)}${STORE_BUILD ? "." : " — or choose a bigger plan."}`
                       : `Nearly used up. When it runs out, Dex, bill reading and Ask stop until ${dayLabel(ai.resets_on)}.`}
                   </p>
                 )}
@@ -108,7 +112,7 @@ export function PlanCard() {
         </div>
       )}
 
-      {p && <UpgradeDialog open={open} onOpenChange={setOpen} current={p.key}
+      {p && !STORE_BUILD && <UpgradeDialog open={open} onOpenChange={setOpen} current={p.key}
         configured={!!p.billing_configured} company={tenant?.name || tenant?.company_name || ""} />}
     </div>
   );

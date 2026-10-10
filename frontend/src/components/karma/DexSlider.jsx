@@ -45,7 +45,7 @@
  */
 import * as React from "react";
 import { useTranslation } from "react-i18next";
-import { ChatCircle, PaperPlaneTilt, Waveform } from "@phosphor-icons/react";
+import { ChatCircle, PaperPlaneTilt, Waveform, X } from "@phosphor-icons/react";
 import { DexWave } from "../mobile/DexWave";
 import { VoiceRipple } from "./VoiceRipple";
 import { cn } from "@/lib/utils";
@@ -102,10 +102,12 @@ async function tick(style) {
  *                   the handle is the way to stop
  * @param {boolean}  [recording] the microphone is live right now
  * @param {Function} [onStop]   the parked handle was pressed
+ * @param {Function} [onCancel] the parked handle was dragged back to the centre
+ *                   and let go there: the capture is thrown away
  * @param {object}   [levelsRef] the capture's rolling loudness window, for DexWave
  */
 export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false,
-                            recording = false, onStop, levelsRef = null,
+                            recording = false, onStop, onCancel, levelsRef = null,
                             /* "light" — the control sits on the page's own pale
                                ground, which is everywhere it ships today.
                                "ink"   — it sits on the black sheet. The well
@@ -222,17 +224,40 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
      button should stay left and it should become a send icon, but it again
      switches back to the right side". A control that travels away from the
      finger that committed it is lying about what it just did. */
+  const park = React.useCallback(() => {
+    const m = composer ? -travel() : travel();
+    lastDxRef.current = m;
+    setDx(m);
+  }, [composer, travel]);
   React.useEffect(() => {
     if (!capturing) return;
     draggingRef.current = false;
     setDragging(false);
-    const park = () => { const m = composer ? -travel() : travel(); lastDxRef.current = m; setDx(m); };
+    /* A re-park on resize must not yank the handle out from under a finger
+       that is dragging it home to cancel. */
+    const repark = () => { if (!draggingRef.current) park(); };
     park();
-    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(park) : null;
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(repark) : null;
     if (ro && trackRef.current) ro.observe(trackRef.current);
     return () => ro?.disconnect();
-  }, [capturing, travel, composer]);
+  }, [capturing, park]);
   React.useEffect(() => { if (!capturing) settle(); }, [capturing, settle]);
+
+  /* BACK TO THE CENTRE IS CANCEL. (2026-10-09, founder: "once I swipe … I
+     don't have an option to cancel what I am talking … I could swipe back to
+     the center in order to cancel the voice I am speaking and start from the
+     beginning again", for Ask and for Decide alike.)
+     So the parked handle is a handle again, in one direction only: it can be
+     drawn back from the end it is parked at toward the centre — never past
+     it, never further out. Let go in the centre and the take is thrown away
+     (onCancel); let go anywhere short of it and it springs back to the stop,
+     still recording, with nothing lost. A press that does not travel is still
+     the send. The centre is the same few pixels of slop the ends are given,
+     or a sixth of the travel if that is larger — a finger needs a target,
+     not a line. `home` carries the drag: where it started and whether it
+     moved. */
+  const homeRef = React.useRef(null);
+  const homeZone = () => Math.max(END_SLOP, travel() / 6);
 
   const onPointerDown = (e) => {
     /* BEFORE the capturing guard, deliberately: while a capture runs dragging
@@ -240,7 +265,16 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
        stale flag survived to eat a real press. A touch always disarms. */
     ghostClickRef.current = false;
     setTouched(true);
-    if (disabled || capturing) return;
+    if (capturing) {
+      if (!onCancel) return;
+      homeRef.current = { x0: e.clientX, from: lastDxRef.current, moved: false };
+      handleRef.current?.setPointerCapture?.(e.pointerId);
+      draggingRef.current = true;
+      setDragging(true);
+      reachedRef.current = null;
+      return;
+    }
+    if (disabled) return;
     /* THE TOUCH IS THE SIGNAL, not the travel. The founder wants the dock's
        destinations gone the instant the knob is pressed — "then only it looks
        elegant, otherwise it feels like some sloppy stuff" — rather than
@@ -254,7 +288,21 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
   };
 
   const onPointerMove = (e) => {
-    if (!draggingRef.current || disabled || capturing) return;
+    if (capturing) {
+      const h = homeRef.current;
+      if (!draggingRef.current || !h) return;
+      const d = e.clientX - h.x0;
+      if (Math.abs(d) > 4) h.moved = true;
+      // Between the stop it is parked at and the centre, and nowhere else.
+      const next = Math.max(Math.min(h.from, 0), Math.min(Math.max(h.from, 0), h.from + d));
+      lastDxRef.current = next;
+      setDx(next);
+      const home = Math.abs(next) <= homeZone();
+      if (home && reachedRef.current !== "home") { reachedRef.current = "home"; tick("arrive"); }
+      if (!home && reachedRef.current === "home") reachedRef.current = null;
+      return;
+    }
+    if (!draggingRef.current || disabled) return;
     const tr = trackRef.current;
     if (!tr) return;
     const r = tr.getBoundingClientRect();
@@ -302,6 +350,25 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
   const onPointerUp = () => {
     onPressChange?.(false);
     setTouched(false);
+    if (capturing) {
+      const h = homeRef.current;
+      homeRef.current = null;
+      if (!draggingRef.current || !h) return;
+      draggingRef.current = false;
+      setDragging(false);
+      reachedRef.current = null;
+      if (!h.moved) return;                // a press: the click that follows sends
+      /* It moved, so the click that follows is the drag's, not a send — the
+         same ghost the commit gesture guards against below. */
+      ghostClickRef.current = true;
+      if (Math.abs(lastDxRef.current) <= homeZone()) {
+        tick("fire");
+        onCancel?.();                      // the capture ends; the handle settles with it
+        return;
+      }
+      park();                              // short of the centre: still recording
+      return;
+    }
     if (!draggingRef.current) return;
     draggingRef.current = false;
     setDragging(false);
@@ -314,7 +381,12 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
   };
 
   const onKeyDown = (e) => {
-    if (disabled || capturing) return;
+    // The keyboard's way back to the centre: Escape cancels a live capture.
+    if (capturing) {
+      if (e.key === "Escape" && onCancel) { e.preventDefault(); tick("fire"); onCancel(); }
+      return;
+    }
+    if (disabled) return;
     if (e.key === "ArrowLeft") { e.preventDefault(); tick("fire"); onAsk?.(); }
     if (e.key === "ArrowRight") { e.preventDefault(); tick("fire"); onDecide?.(); }
   };
@@ -346,7 +418,12 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
      icon that never changes says nothing a second time. It appears the moment
      the handle leaves the middle, which is also the moment it has something to
      say: which room you are opening, or that this is now a send. */
-  const Glyph = capturing ? PaperPlaneTilt
+  /* Drawn home far enough to cancel, the send becomes a cross: let go here and
+     this is what happens. Only mid-drag — `dx` passes through the centre for
+     a frame as a capture opens, before the handle is parked. */
+  const homing = capturing && dragging;
+  const cancelling = homing && Math.abs(dx) <= homeZone();
+  const Glyph = cancelling ? X : capturing ? PaperPlaneTilt
     : heading === "ask" ? ChatCircle : heading === "decide" ? Waveform : null;
 
   /* THE WORDS GET OUT OF THE WAY. The handle now travels to the wall, so it
@@ -473,8 +550,12 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
              at the other. The founder's photograph is the right-hand third of
              the control, empty. Mirrored with the park side; 7rem is the
              5.375rem knob and its breathing room, 1.5rem is the wall. */
+          /* …and it thins as the handle is drawn home, so the take visibly
+             goes with it: at the centre, where letting go cancels, it is all
+             but gone. Off `pct`, so it comes back if the finger turns round. */
           <div className={cn("pointer-events-none absolute inset-0 flex items-center",
-            composer ? "pl-28 pr-6" : "pl-6 pr-28")} aria-hidden="true">
+            composer ? "pl-28 pr-6" : "pl-6 pr-28")} aria-hidden="true"
+            style={homing ? { opacity: Math.max(0.12, pct) } : undefined}>
             <DexWave
               state={recording ? "listening" : "thinking"}
               levelsRef={levelsRef}
@@ -529,7 +610,12 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          onPointerCancel={() => { onPressChange?.(false); setTouched(false); draggingRef.current = false; setDragging(false); settle(); }}
+          onPointerCancel={() => {
+            onPressChange?.(false); setTouched(false); draggingRef.current = false; setDragging(false);
+            homeRef.current = null;
+            // A capture interrupted mid-drag goes back to its stop, still live.
+            if (capturing) park(); else settle();
+          }}
           onKeyDown={onKeyDown}
           /* THREE JOBS, ONE BUTTON. At rest it is the handle. While a capture
              runs it is the send that stops it. In type mode it is the send for
@@ -572,8 +658,9 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
 
         {/* What a screen reader hears while the handle moves. */}
         <span className="sr-only" aria-live="polite">
-          {capturing ? (recording
-            ? t("desk.slider.listening", "Listening. Press to stop and send.")
+          {cancelling ? t("desk.slider.atCancel", "Release to cancel the recording.")
+            : capturing ? (recording
+            ? t("desk.slider.listening", "Listening. Press to stop and send, or slide back to the centre to cancel.")
             : t("desk.slider.reading", "Dex is reading what you said."))
             : at === "ask" ? t("desk.slider.atAsk", "Release to ask Dex")
             : at === "decide" ? t("desk.slider.atDecide", "Release to record a decision")

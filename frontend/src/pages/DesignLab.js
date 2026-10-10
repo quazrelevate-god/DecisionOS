@@ -9,7 +9,9 @@
 // re-implementations. Blocks render inline, since they are pure presentation.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { FIXTURE_NAMES, FIXTURE_LABEL } from "../fixtures/mobile";
+// names.js, not the index: the index carries the fixture data, which must not
+// reach the production bundle (this page ships, owner-only).
+import { FIXTURE_NAMES, FIXTURE_LABEL } from "../fixtures/mobile/names";
 import { Verdict, Pulse, Queue, Board, Grid, Strip, CompletionRing } from "../components/mobile/blocks";
 import { EmptyState } from "../components/mobile";
 import { inr } from "../lib/format";

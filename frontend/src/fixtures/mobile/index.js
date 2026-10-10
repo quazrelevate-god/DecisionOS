@@ -13,13 +13,9 @@ import { SPARSE } from "./sparse";
 import { BUSY } from "./busy";
 
 export const FIXTURES = { empty: EMPTY, sparse: SPARSE, busy: BUSY };
-export const FIXTURE_NAMES = ["empty", "sparse", "busy"];
-
-export const FIXTURE_LABEL = {
-  empty: "A · empty",
-  sparse: "B · sparse",
-  busy: "C · busy",
-};
+// The names live in their own module so production code can read them without
+// pulling the data in behind them (see names.js).
+export { FIXTURE_NAMES, FIXTURE_LABEL } from "./names";
 
 const isDev = () => process.env.NODE_ENV !== "production";
 

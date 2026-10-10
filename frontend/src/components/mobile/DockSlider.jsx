@@ -19,9 +19,9 @@
  * All three are driven off the SAME number — DexSlider's own travel, reported
  * through `onDrag` — rather than off three animations that would drift.
  *
- * LEFT IS ASK, and the bar becomes the conversation: it grows with the chat to
- * half the screen and then scrolls inside itself (the founder's call), with a
- * close button to put it back. RIGHT IS DECIDE, unchanged from the Desk — the
+ * LEFT IS ASK, and the bar becomes the conversation: it opens to the line the
+ * Desk's black sheet starts at and scrolls inside itself (the founder's call,
+ * 2026-10-09 — it was half the screen), with a close button to put it back. RIGHT IS DECIDE, unchanged from the Desk — the
  * capture and its review card, and this bar does not move.
  *
  * NOT ON THE DESK. The Desk has its own slider on its own sheet and is
@@ -40,11 +40,16 @@ import { AiNotice } from "../ReportButton";
 import { buildTiles, buildUtility } from "./AllAppsPanel";
 import { useBackDismiss } from "@/hooks/useBackDismiss";
 import { cn } from "@/lib/utils";
+import { deskSheetTop } from "@/lib/deskSheet";
 
 export function DockSlider({
   user, chat, askOpen, onAsk, onDecide, onCloseAsk, onMore, moreOpen = false,
   capturing = false, recording = false, levelsRef = null, onStop,
   onOpenDecision,
+  /* 2026-10-09 (founder): `onCancel` — the parked handle dragged back to the
+     centre throws the recording away (DexSlider); `askBusy` — a question is
+     being transcribed or answered, and the conversation's control waits. */
+  onCancel, askBusy = false,
 }) {
   const { t } = useTranslation();
   const location = useLocation();
@@ -93,7 +98,10 @@ export function DockSlider({
      ENDS fading in, because those have somewhere to arrive from.
      `pointer-events` goes with the opacity: a destination you cannot see must
      not be tappable either, or a committed swipe can end on a navigation. */
-  const fade = pressed ? 0 : Math.max(0, 1 - pct * 1.25);
+  /* …and they stay gone for the whole capture. The handle can travel back
+     toward the centre now while one is live (that is the cancel), and `pct`
+     falling with it must not bring Desk and Money up under the waveform. */
+  const fade = pressed || capturing ? 0 : Math.max(0, 1 - pct * 1.25);
   /* TWO AND TWO, AND THE FOURTH IS MORE. dockSlots hands back Desk, Work,
      Money, CRM; the founder moved CRM into the More panel and gave its slot to
      More itself, so the bar reads Desk · Work │ handle │ Money · More. */
@@ -155,6 +163,7 @@ export function DockSlider({
           recording={recording}
           levelsRef={levelsRef}
           onStop={onStop}
+          onCancel={onCancel}
         />
       ) : askOpen ? (
         <DockAskPanel chat={chat} onClose={onCloseAsk} onOpenDecision={onOpenDecision}>
@@ -165,6 +174,10 @@ export function DockSlider({
             recording={recording}
             levelsRef={levelsRef}
             onStop={onStop}
+            onCancel={onCancel}
+            /* Locked from the send until the answer is in — but never while a
+               take is live, or its own stop and cancel would go dead with it. */
+            disabled={askBusy && !capturing}
             onAsk={onAsk}
             onDecide={onDecide}
           />
@@ -181,6 +194,7 @@ export function DockSlider({
           recording={recording}
           levelsRef={levelsRef}
           onStop={onStop}
+          onCancel={onCancel}
         />
       )}
     </nav>
@@ -281,13 +295,38 @@ function DockMore({ user, onClose }) {   // onClose: picked a destination
 }
 
 /* THE BAR, GROWN INTO A CONVERSATION.
- * Half the screen is the ceiling the founder chose — beyond that the transcript
- * scrolls inside itself and the page behind stays visible, which is the whole
- * point of it being the dock that grew rather than a screen that arrived. */
+ * It opens to the Desk's black sheet (2026-10-09, founder): the panel's top is
+ * the sheet's top edge, on the Desk and on every other page, so it is never a
+ * black box of one height standing on a black sheet of another. The transcript
+ * scrolls inside it and the page above the line stays visible, which is still
+ * the point of it being the dock that grew rather than a screen that arrived.
+ * (It was content-sized up to half the screen before this.) */
 function DockAskPanel({ chat, onClose, onOpenDecision, children }) {
   const navigate = useNavigate();
   const { log = [], busy, attaching = false, retry, canRetry, clear, ask } = chat || {};
   const endRef = React.useRef(null);
+  const panelRef = React.useRef(null);
+  /* ITS HEIGHT IS FROM ITS OWN FOOT UP TO THE SHEET'S LINE. The foot is where
+     the dock stands, so the panel is measured from there rather than given a
+     number: whatever inset and safe area the bar sits on, the top lands on
+     the line. Screen pixels both, turned into this element's own CSS pixels
+     by its own zoom (the app draws a phone at 0.8). Before paint, and again
+     on a resize. Too little room to be a conversation — a short landscape
+     screen — and it falls back to its content, under the CSS cap. */
+  React.useLayoutEffect(() => {
+    const el = panelRef.current;
+    if (!el) return undefined;
+    const fit = () => {
+      const r = el.getBoundingClientRect();
+      const zoom = el.offsetHeight ? r.height / el.offsetHeight : 1;
+      const h = (r.bottom - deskSheetTop()) / (zoom || 1);
+      if (h >= 160) el.style.height = `${Math.round(h)}px`;
+      else el.style.removeProperty("height");
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, []);
   const [lightbox, setLightbox] = React.useState(null);
   const openFile = React.useCallback((src, name) => setLightbox({ src, name }), []);
 
@@ -297,6 +336,7 @@ function DockAskPanel({ chat, onClose, onOpenDecision, children }) {
 
   return (
     <div
+      ref={panelRef}
       className="kr-dock-chat flex flex-col overflow-hidden rounded-[var(--radius-card)]"
       data-testid="dock-ask-panel"
     >

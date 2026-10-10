@@ -31,8 +31,13 @@ ext {
     //
     // The env overrides let CI stamp a build without editing a tracked file:
     //   ANDROID_VERSION_CODE=7 ANDROID_VERSION_NAME=1.1 ./gradlew bundleRelease
-    appVersionCode = (System.getenv("ANDROID_VERSION_CODE") ?: "2") as Integer
-    appVersionName = System.getenv("ANDROID_VERSION_NAME") ?: "1.0.1"
+    //
+    // 2026-10-09 — the defaults follow the build that goes to Play, so a plain
+    // `./gradlew bundleRelease` is never a step behind what testers already
+    // have. 1.0.2 (3) and 1.0.3 (4) went to phones as sideloaded APKs; the
+    // first Play upload is 1.0.4 (5).
+    appVersionCode = (System.getenv("ANDROID_VERSION_CODE") ?: "5") as Integer
+    appVersionName = System.getenv("ANDROID_VERSION_NAME") ?: "1.0.4"
     minSdkVersion = 24
     compileSdkVersion = 36
     targetSdkVersion = 36

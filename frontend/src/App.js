@@ -69,7 +69,14 @@ const AdminPortal = process.env.REACT_APP_NATIVE === "1"
 // production builds by the NODE_ENV guard on its route below.
 import MobileKitchenSink from "./pages/MobileKitchenSink";
 // MPWA-12a: design lab (§6), development only — see the route guard below.
-import DesignLab from "./pages/DesignLab";
+/* PLAY (2026-10-09) — and the design lab stays on the website too. It is an
+   owner-only workbench that nothing in the app links to, which is exactly what
+   a store reviewer reads as a hidden feature (the same Behavior Transparency
+   point as the admin portal above). Lazy and build-time gated, so the store
+   build never follows the import; the website and dev keep it as they were. */
+const DesignLab = process.env.REACT_APP_NATIVE === "1"
+  ? null
+  : lazy(() => import("./pages/DesignLab"));
 // MOBILE-2: Android's back gesture, inside the Capacitor app.
 import { useNativeBack } from "./hooks/useNativeBack";
 import PushRationale from "./components/PushRationale";
@@ -426,12 +433,12 @@ function App() {
                 owner gate as the Journal, so the page is the founder's and no
                 signed-out visitor sees the workbench. Unlinked either way:
                 nothing in the app navigates here. */}
-            <Route
+            {DesignLab && <Route
               path="/design-lab"
               element={process.env.NODE_ENV === "production"
-                ? <Protected ownerOnly><DesignLab /></Protected>
-                : <DesignLab />}
-            />
+                ? <Protected ownerOnly><Suspense fallback={null}><DesignLab /></Suspense></Protected>
+                : <Suspense fallback={null}><DesignLab /></Suspense>}
+            />}
             <Route path="*" element={<NotFound />} />
           </Routes>
           </RoutedBoundary>

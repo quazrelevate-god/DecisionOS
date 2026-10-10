@@ -66,6 +66,7 @@ import { DeskDexWell } from "./desk/DeskDexWell";
 import { TeamNudge } from "./desk/TeamNudge";
 // DEX-SLIDER Part 1 — the phone Desk's new order sits behind this.
 import { DEX_SLIDER } from "../lib/flags";
+import { publishDeskSheetTop } from "../lib/deskSheet";
 import { useDexDoors } from "../components/mobile/DexDoors";
 // 2026-09-14, founder — the Task approvals column opens My Work's task
 // drawer HERE, on the Desk, instead of sending the founder to My Work.
@@ -645,6 +646,16 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
      — carries what is left. Reset on resize with `tight`, so a rotation or a
      keyboard asks the question again from a clean layout. */
   const [maxRows, setMaxRows] = useState(PHONE_ROWS);
+  /* ONE CARD HEIGHT (2026-10-09) — the slots the list is cut into (index.css):
+     the rows this screen seats; Watch (children) is always its three feeds. */
+  const slotCount = children ? PHONE_ROWS : Math.min(maxRows, PHONE_ROWS);
+  /* …and whether Watch is still holding the Show-all room under its cards.
+     It gives it back (below) before anything else is taken from the page —
+     on a 360x640 that room is what its three cards need — and a resize asks
+     again. */
+  const [watchSlot, setWatchSlot] = useState(true);
+  // The tab the deficit's readings were taken on (see the measure).
+  const fitTab = useRef(tab);
   /* The card height that asked for tight, so the card can give it back. The
      measure runs while the page is still filling in — the Desk lays out once
      with the query layer in flight — and a card that is briefly 40px tall asks
@@ -681,7 +692,7 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
   const released = useRef(0);
   useEffect(() => {
     if (!roomy) return undefined;
-    const onResize = () => { tabScales.current = {}; released.current = 0; setTight(0); setMaxRows(PHONE_ROWS); setFitTick((n) => n + 1); };
+    const onResize = () => { tabScales.current = {}; released.current = 0; setTight(0); setMaxRows(PHONE_ROWS); setWatchSlot(true); setFitTick((n) => n + 1); };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [roomy]);
@@ -698,6 +709,11 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
     if (!el) return;
     if (!roomy || open) { el.style.removeProperty("--desk-row-scale"); return; }
     el.style.setProperty("--desk-row-scale", "1");
+    /* A NEW TAB IS A NEW QUESTION. The deficit's re-measure is capped per
+       question, and Decisions can spend the whole cap settling before Watch is
+       ever opened — which left Watch's one short reading on a 360x640 never
+       confirmed, and its third card hanging out of the sheet. */
+    if (fitTab.current !== tab) { fitTab.current = tab; deficit.current = { avail: -1, hits: 0, asks: 0 }; }
     /* ASK THE ROWS, NOT THE BOX. The list's own scrollHeight never exceeds its
        clientHeight here and never will: the rows are `flex-1 min-h-0`, so a
        short container does not overflow, it SQUEEZES them — 19px boxes around
@@ -745,12 +761,21 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
        that is the number. Restored before this effect returns, so nothing is
        ever painted in the measured state. Two reflows a pass, at most three
        passes, on resize and on new data. */
+    /* ONE SLOT EACH (2026-10-09, founder: "static fixed height card"). A row
+       is a third of the list whatever else is in it (index.css, ONE CARD
+       HEIGHT), so what has to fit is the tallest row in every slot the screen
+       seats — not the rows there happen to be. Two decisions are measured as
+       the three they stand in for, so a tab with fewer rows draws its words at
+       the size a full one would, and the shared scale below never has to pull
+       them apart. Watch is always its three feeds, so it is always three
+       slots — see `slotCount` below. */
+    const slots = slotCount;
     const need = () => {
       kids.forEach((k) => { k.style.flex = "0 0 auto"; });
-      let n = 0;
-      kids.forEach((k) => { n += k.offsetHeight; });
+      let m = 0;
+      kids.forEach((k) => { m = Math.max(m, k.offsetHeight); });
       kids.forEach((k) => { k.style.flex = ""; });
-      return n + (kids.length - 1) * gap;
+      return m * slots + (slots - 1) * gap;
     };
     const DESK_ROW_SCALE_FLOOR = 0.8;                     // 11pt, see index.css
     /* IT CONVERGES, IT DOES NOT ESTIMATE. One pass of avail/needed assumes a
@@ -800,6 +825,11 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
        short of three two-line rows. One flat tight level answered that by
        dropping "Raised by Sunita Rao · You decide" from every row on a 6.3"
        phone, to save a gap's worth of space. */
+    /* Watch first gives back the Show-all room it is holding: it is Watch's
+       own, it has no Show all to draw in it, and it costs nobody else a thing
+       — tight would thin the whole page and one fewer row would cost
+       Decisions a row. */
+    if (children && watchSlot && maxRows >= PHONE_ROWS) { setWatchSlot(false); return; }
     if (tight < 2) { if (!tight) tightAt.current = avail; setTight(tight + 1); return; }
     /* Tight too, and still short at the floor: seat ONE fewer row and measure
        again (see maxRows above). One step at a time, never a division — an
@@ -809,7 +839,7 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
        on the real answer in at most two more passes and cannot overshoot,
        because every pass is a fresh measurement of what is actually drawn. */
     if (s <= DESK_ROW_SCALE_FLOOR && maxRows > 1) setMaxRows(maxRows - 1);
-  }, [roomy, open, rows, loading, fitTick, tight, maxRows, tab]);
+  }, [roomy, open, rows, loading, fitTick, tight, maxRows, tab, watchSlot]);
 
   /* ASK-35 1.1 — THREE, AND THEN A CONTROL: the Desk's job on a phone is to say
      what is waiting, not to show it all.
@@ -831,6 +861,13 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
   // ASK-42 A — three, always (see the measure above); "Show all" is the rest.
   const shown = showAll ? rows : rows.slice(0, maxRows);
   const hidden = rows.length - shown.length;
+  /* ONE CARD HEIGHT (2026-10-09) — whether the Show-all room is held when
+     there is no Show all, so the list (and with it every slot) is one height
+     in every tab. Watch holds it only where the screen seats three rows with
+     it — on an iPhone SE that room is what its three cards need. */
+  const holdMoreSlot = roomy && !open && (children
+    ? maxRows >= PHONE_ROWS && watchSlot
+    : (loading || !(hidden > 0 || showAll)));
 
   return (
     /* min-w-0: a grid item defaults to min-width:auto, i.e. its min-content,
@@ -914,7 +951,11 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
           /* kr-desk-sheet-list — the one handle index.css needs to tighten the
              space between the pills when the card is tight (see data-desk-tight
              above); the gap itself stays Tailwind's. */
-          roomy && !open && "kr-desk-sheet-list gap-2.5")}>
+          roomy && !open && "kr-desk-sheet-list gap-2.5")}
+          /* How many slots the rows are cut into (index.css, ONE CARD HEIGHT):
+             the rows this screen seats, which is three on every phone but the
+             smallest. */
+          style={roomy && !open ? { "--desk-row-slots": slotCount } : undefined}>
         {children || (
           <>
             {loading && (
@@ -960,6 +1001,14 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
             space to increase the pill height". */}
         {!children && !open && !roomy && (loading || !(hidden > 0 || showAll)) && (
           <div aria-hidden="true" className="mt-1 h-11 shrink-0" data-testid="desk-phone-more-slot" />
+        )}
+        {/* …AND BACK IN THE SHEET (2026-10-09, founder: "static fixed height
+            card"). The rows are fixed slots now, a third of the list each, so
+            the list itself has to be one height in every tab — with or without
+            a Show all, Watch included. The slot is the control's own 56px (44
+            when tight, index.css), drawn as nothing. */}
+        {holdMoreSlot && (
+          <div aria-hidden="true" className="mt-1 h-11 max-lg:h-14 shrink-0" data-testid="desk-phone-more-slot" />
         )}
         {!children && !loading && (hidden > 0 || showAll) && (
           <button
@@ -1319,6 +1368,20 @@ export default function Desk() {
      between and the card grows UP and DOWN at once — which is the thing the
      founder asked for and the thing a height animation alone cannot do. */
   const boardRef = useRef(null);
+  /* THE SHEET'S TOP IS THE LINE THE DOCK OPENS TO (2026-10-09, founder) —
+     on this page and every other, so it is left where the dock can read it
+     (lib/deskSheet). Re-read whenever the sheet changes size, which is what
+     happens when the tiles above it load or the Workflows tile grows a "Next
+     up"; not while it is lifted out for Show all. */
+  useEffect(() => {
+    const board = boardRef.current;
+    if (!isMobile || !deskSheet || !board || typeof ResizeObserver === "undefined") return undefined;
+    const read = () => { if (board.style.position !== "fixed") publishDeskSheetTop(board.getBoundingClientRect().top); };
+    const ro = new ResizeObserver(read);
+    ro.observe(board);
+    read();
+    return () => ro.disconnect();
+  }, [isMobile, deskSheet]);
   const [pop, setPop] = useState(null); // { rest, full, at: "rest" | "full" }
   useEffect(() => {
     if (!isMobile) { setPop(null); return undefined; }
@@ -1376,6 +1439,18 @@ export default function Desk() {
           inner ? inner.scrollHeight - inner.clientHeight : 0,
           0
         );
+        /* DESK-SHEET (2026-10-09) — A SHEET GROWS UP FROM THE FLOOR. It already
+           runs off the bottom of the screen under the dock, so "never over the
+           dock" and "grow from the centre" no longer describe anything: its
+           foot stays where it is and its top rises toward the top bar, the way
+           a sheet climbs to a taller detent. The dock's clearance is padding
+           inside it, so the rows still stop above the bar. */
+        if (deskSheet) {
+          const floor = rest.top + rest.height;
+          const height = Math.min(rest.height + extra, floor - topOwn);
+          setPop((prev) => (prev ? { ...prev, full: { ...rest, top: floor - height, height }, at: "full" } : prev));
+          return;
+        }
         const height = Math.min(rest.height + extra, maxH);
         /* AND IT GROWS FROM ITS CENTRE — up and down at once, which is the
            whole of the founder's ask. Held inside the same two lines: never
@@ -1386,7 +1461,7 @@ export default function Desk() {
       });
     });
     return () => cancelAnimationFrame(raf);
-  }, [phoneExpanded, isMobile, phoneTab]);
+  }, [phoneExpanded, isMobile, phoneTab, deskSheet]);
 
   // Escape closes it, like every other layer in the app.
   useEffect(() => {
@@ -2036,7 +2111,9 @@ export default function Desk() {
           stay where the founder left them. Without it the page would reflow the
           moment the card lifted, which is the one thing this rearrangement is
           not allowed to do. */}
-      {pop && <div aria-hidden="true" style={{ height: pop.rest.height }} data-testid="desk-board-spacer" />}
+      {/* The sheet's own break-out margins, so the place it holds is the room
+          the sheet took — not a gutter and a dock's clearance more. */}
+      {pop && <div aria-hidden="true" style={{ height: pop.rest.height }} className={deskSheet ? "kr-desk-sheet-floor" : undefined} data-testid="desk-board-spacer" />}
       {/* THE PAGE BEHIND IT, dimmed and blurred — subtly, both. It sits under
           the card (9001) and under the dock (10000), so the bar keeps its own
           material and its own sharpness: the blur only ever touches what is
@@ -2090,6 +2167,9 @@ export default function Desk() {
         style={pop ? {
           position: "fixed",
           zIndex: 9001,
+          /* Lifted, it is placed by its measured rect alone; the sheet's
+             break-out margins would shove it a gutter left and off the floor. */
+          margin: 0,
           left: pop[pop.at].left,
           top: pop[pop.at].top,
           width: pop[pop.at].width,
@@ -2138,7 +2218,11 @@ export default function Desk() {
              all. Founder: "all corners should have the same corner radius."
              Nothing here now: .kr-desk-board's own --radius-tile applies to
              all four. */
-          deskSheet && "max-lg:-mb-2 max-lg:flex max-lg:flex-col",
+          /* DESK-SHEET (2026-10-09) — and it is a sheet again: full-bleed, run
+             on under the dock to the floor, top corners concentric with the tab
+             strip. The geometry is all in index.css (.kr-desk-sheet-floor); it
+             replaces the -mb-2 seam, which that padding now carries. */
+          deskSheet && "kr-desk-sheet-floor max-lg:flex max-lg:flex-col",
           showDecisions && "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]",
           /* PILOT — the card stays its minimal content height on a phone (it does
              NOT grow to fill). The stack is top-aligned, so closing the demo

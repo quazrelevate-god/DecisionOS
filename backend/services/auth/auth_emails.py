@@ -182,6 +182,19 @@ def render_verify_email(user_name: str, verify_url: str) -> str:
     )
 
 
+def render_invite_email(member_name: str, company: str, inviter: str, invite_url: str) -> str:
+    """Audit C-04 (2026-10-09) -- the invite link, emailed when the person
+    adding a member asks for it. Names are escaped: they are typed by people."""
+    from html import escape
+    return (
+        f"<p>Hi {escape(member_name or 'there')},</p>"
+        f"<p>{escape(inviter or 'Your team')} has added you to {escape(company or 'their company')} on DecisionOS.</p>"
+        f'<p><a href="{escape(invite_url, quote=True)}">Join {escape(company or "the team")}</a></p>'
+        f"<p>You sign in with your mobile number: we text you a code. "
+        f"The link works for 7 days.</p>"
+    )
+
+
 def render_reset_email(user_name: str, reset_url: str) -> str:
     return (
         f"<p>Hi {user_name or 'there'},</p>"

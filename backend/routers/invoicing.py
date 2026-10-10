@@ -143,7 +143,12 @@ async def create_gst_invoice(inp: GstInvoiceInput, user: dict = Depends(require_
     cust = (inp.customer_name or "").strip()
     if not cust:
         raise HTTPException(status_code=400, detail="Who is this invoice for? Add the buyer's name.")
-    currency = (inp.currency or tenant.get("currency") or "INR").strip().upper()[:3]
+    # Audit C-07 (2026-10-09): the buyer's own currency and terms, when the
+    # invoice names a contact that has them and none was given here.
+    buyer = await db.contacts.find_one({"id": inp.contact_id, "tenant_id": tid},
+                                       {"_id": 0, "currency": 1, "payment_terms_days": 1}) if inp.contact_id else None
+    buyer_terms = (buyer or {}).get("payment_terms_days")
+    currency = (inp.currency or (buyer or {}).get("currency") or tenant.get("currency") or "INR").strip().upper()[:3]
     pos = invoicing._norm_state(inp.place_of_supply) or (invoicing.EXPORT if currency != "INR" else tenant.get("state") or "")
     calc = invoicing.compute_invoice([i.model_dump() for i in inp.items], seller_state=tenant.get("state"),
                                      place_of_supply=pos, currency=currency)
@@ -170,7 +175,9 @@ async def create_gst_invoice(inp: GstInvoiceInput, user: dict = Depends(require_
         "customer_gstin": gstin, "customer_address": (inp.customer_address or "").strip()[:400],
         "place_of_supply": pos, "title": first + (f" + {more} more" if more else ""),
         # Audit B-12: no due date typed -> the company's payment terms set one.
-        "date": date, "due_date": _day(inp.due_date) if inp.due_date else _terms_due(date, tenant.get("payment_terms_days")),
+        # Audit C-07: the buyer's own terms first, when they have them.
+        "date": date, "due_date": _day(inp.due_date) if inp.due_date else _terms_due(
+            date, buyer_terms if buyer_terms is not None else tenant.get("payment_terms_days")),
         "currency": currency, "status": "unpaid", "amount_paid": 0,
         "purchase_type": "", "notes": (inp.notes or "").strip()[:1000],
         "source": "invoice_builder", "created_by": user["id"], "created_at": now_iso(),

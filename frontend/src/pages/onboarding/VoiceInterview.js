@@ -10,6 +10,7 @@ import { fetchTTS, useAnswerRecorder, useSynthLevels, SPOKEN_LANGS, langLabel } 
 // ASK-36 5 — the app's one loading animation.
 import { Loader } from "../../components/common";
 import { AiNotice } from "../../components/ReportButton";
+import { useSignupBack } from "./signupBack";
 
 // KM-19 — the interview now shows the SAME voice surface the app shows.
 // components/mobile/DexWave is the three-ribbon lens (white, grey, gold) that
@@ -75,7 +76,13 @@ const LanguagePick = ({ onPick, onSkip, onBack }) => (
     <h1 className="mb-2 font-display text-3xl leading-[1.04] sm:text-4xl lg:text-5xl">
       Which language should Dex speak?
     </h1>
-    <p className="mb-7 text-sm text-muted-foreground">Dex will ask every question — voice and text — in the language you pick. You can answer by speaking or typing.</p>
+    <p className="mb-2 text-sm text-muted-foreground">Dex will ask every question — voice and text — in the language you pick. You can answer by speaking or typing.</p>
+    {/* Audit A-15 (2026-10-09, founder) — the language is for speaking
+        comfortably during this interview only. Everyone lands in the app in
+        English (routers/auth.register stores language "en"). */}
+    <p className="mb-7 text-xs text-muted-foreground" data-testid="lang-pick-app-note">
+      This is only for the interview. DecisionOS itself opens in English.
+    </p>
     <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
       {SPOKEN_LANGS.map((l, i) => (
         <motion.button
@@ -298,6 +305,13 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack, resumeSess
   };
 
   // Step back to the previous question with the earlier answer prefilled for editing.
+  // Audit A-02 — the browser's Back is the same as the page's: from the
+  // language pick back to the website step, from a question to the one before.
+  useSignupBack(() => {
+    if (phase === "pick") { if (!onBack) return false; stopAudio(); onBack(); return true; }
+    if (phase === "live") { goBack(); return true; }
+    return true;   // starting: hold still rather than leave mid-start
+  });
   const goBack = async () => {
     if (thinking) return;
     /* KM-62 — at the first question there is no earlier answer to return to,

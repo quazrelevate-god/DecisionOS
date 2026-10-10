@@ -163,8 +163,19 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
     setForm({ ...form, assign: v, co_assignee_ids: pid ? form.co_assignee_ids.filter((id) => id !== pid) : [] });
   };
 
+  const pendingPick = (() => {
+    const pid = (form.assign || "").startsWith("u:") ? form.assign.slice(2) : "";
+    const m = pid && (members || []).find((x) => x.id === pid);
+    return m && m.invite_status === "pending" ? m : null;
+  })();
+
   const create = async () => {
-    if (!form.title.trim()) { setTitleError("Give the task a title"); return; }
+    if (!form.title.trim()) {
+      // Audit C-19 (2026-10-09) — said in words, and the caret goes back to it.
+      setTitleError("Give the task a title");
+      document.getElementById("task-title")?.focus();
+      return;
+    }
     if (!dueDate) {
       setDueError(form.due_preset === "pick" ? "Pick the day it's due" : "Choose when it's due");
       document.getElementById("task-due-label")?.scrollIntoView?.({ block: "center" });
@@ -389,7 +400,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
               onChange={(e) => { setForm({ ...form, title: e.target.value }); if (titleError) setTitleError(""); }}
               onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); create(); } }} />
             {titleError && (
-              <p id="task-title-error" data-testid="task-title-error" className="mt-1.5 text-xs font-medium text-kr-accent">{titleError}</p>
+              <p id="task-title-error" role="alert" data-testid="task-title-error" className="mt-1.5 text-sm font-medium text-kr-accent">{titleError}</p>
             )}
           </div>
 
@@ -413,7 +424,8 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                   { value: "", label: "Nobody yet" },
                   { label: "People", options: assignable.map((m) => ({
                     value: `u:${m.id}`,
-                    label: m.id === user?.id ? `Me · ${m.name}` : `${m.name} · ${roleLabel(m.role, roleOptions)}`,
+                    label: m.id === user?.id ? `Me · ${m.name}`
+                      : `${m.name} · ${roleLabel(m.role, roleOptions)}${m.invite_status === "pending" ? " · not joined yet" : ""}`,
                   })) },
                   ...(teams.length > 0
                     ? [{ label: "A team (least busy person)", options: teams.map((r) => ({ value: `r:${r.key}`, label: `${r.label} team` })) }]
@@ -421,6 +433,13 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                 ]} />
             </div>
           </div>
+          {/* Audit C-19 (2026-10-09) — the task waits for someone who has not
+              joined: say so, so nobody thinks it was seen. */}
+          {pendingPick && (
+            <p className="-mt-2 text-xs text-amber-700" data-testid="task-assignee-pending-hint">
+              {pendingPick.name} hasn&rsquo;t joined yet — they&rsquo;ll see this once they do.
+            </p>
+          )}
           {teamKey && (
             <p className="-mt-2 text-xs text-muted-foreground" data-testid="task-team-hint">
               Goes to whoever in {roleLabel(teamKey, roleOptions)} has the least open work.

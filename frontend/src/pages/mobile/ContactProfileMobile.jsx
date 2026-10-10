@@ -15,7 +15,7 @@ import {
   ClockCounterClockwise, Sparkle, FileText, ListChecks, Warning, MapPin, PencilSimple,
 } from "@phosphor-icons/react";
 import api from "../../lib/api";
-import { inr } from "../../lib/format";
+import { inr, money } from "../../lib/format";
 import { EmptyState, ListSkeleton, MoneySkeleton, StatusChip, dueLabel } from "../../components/mobile";
 import { humanStage } from "../../lib/format";
 
@@ -112,6 +112,9 @@ export default function ContactProfileMobile({ canManage = false, onEdit, onLogC
   const outstanding = summary.outstanding ?? null;
   const billed = summary.total_billed ?? null;
   const paid = summary.total_paid ?? null;
+  // Audit C-07 (2026-10-09) — in the currency the server counted them in.
+  const sumCur = summary.currency || "INR";
+  const fmtSum = (n) => (sumCur === "INR" ? inr(n) : money(n, sumCur));
 
   return (
     <div data-testid="contact-profile-mobile">
@@ -191,9 +194,9 @@ export default function ContactProfileMobile({ canManage = false, onEdit, onLogC
       {/* ---------------- financial summary (expanded) ---------------- */}
       <Accordion id="financial" title="Money" icon={CurrencyInr} defaultOpen>
         {/* §5.3: a skeleton, never a zero standing in for an unknown. */}
-        <Row label="Outstanding" value={outstanding == null ? <MoneySkeleton /> : inr(outstanding)} />
-        <Row label="Billed to date" value={billed == null ? <MoneySkeleton /> : inr(billed)} />
-        <Row label="Paid to date" value={paid == null ? <MoneySkeleton /> : inr(paid)} />
+        <Row label="Outstanding" value={outstanding == null ? <MoneySkeleton /> : fmtSum(outstanding)} />
+        <Row label="Billed to date" value={billed == null ? <MoneySkeleton /> : fmtSum(billed)} />
+        <Row label="Paid to date" value={paid == null ? <MoneySkeleton /> : fmtSum(paid)} />
         {summary.open_complaints > 0 && (
           <Row label="Open complaints" value={summary.open_complaints} />
         )}
@@ -208,7 +211,7 @@ export default function ContactProfileMobile({ canManage = false, onEdit, onLogC
                   </span>
                 </span>
                 <span className="shrink-0 font-semibold tabular-nums">
-                  {inr(Math.max(0, (iv.amount || 0) - (iv.paid_amount || 0)))}
+                  {money(Math.max(0, (iv.amount || 0) - (iv.paid_amount || 0)), iv.currency || "INR")}
                 </span>
               </li>
             ))}
@@ -258,7 +261,7 @@ export default function ContactProfileMobile({ canManage = false, onEdit, onLogC
             ))}
             {payments.slice(0, 5).map((p) => (
               <li key={p.id}>
-                <span className="font-semibold">{inr(p.amount)} received</span>
+                <span className="font-semibold">{money(p.amount, p.currency || "INR")} received</span>
                 <span className="block text-muted-foreground">
                   {p.mode} {p.reference}{humanDate(p.date) ? ` · ${humanDate(p.date)}` : ""}
                 </span>

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import api, { formatApiError } from "../../lib/api";
 import { normIndianMobile, displayIndianMobile } from "../../lib/phone";
 import OtpBoxes from "../../components/auth/OtpBoxes";
+import { useSignupBack } from "./signupBack";
 // ASK-36 5 — the app's one loading animation.
 import { Loader } from "../../components/common";
 // A role held in ANOTHER company: no label list for it here, so the key read as words.
@@ -267,7 +268,7 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
       setCode("");
       const detail = formatApiError(e.response?.data?.detail) || "That code didn't work. Try again.";
       // 2026-10-08 — a spent or expired code: say so and offer a new one now (Login.js).
-      const spent = /request an otp first|request a new|expired/i.test(detail);
+      const spent = /send yourself a|request an otp first|request a new|expired/i.test(detail);
       setError(spent ? "That code can't be used any more — send yourself a new one below." : detail);
       if (spent) setResendIn(0);
       // The boxes were disabled while the code was checked, so the caret left
@@ -410,6 +411,12 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
     if (codeFor) { setCodeFor(""); setCode(""); setError(""); return; }   // back to the number
     if (idx > 0) { setError(""); setIdx(idx - 1); }
   };
+  // Audit A-02 — the browser's Back does the same, while there is a step to go back to.
+  useSignupBack(() => {
+    if (!(existing || codeFor || idx > 0)) return false;
+    back();
+    return true;
+  });
   const setVal = (v) => {
     if (step.key === "email" && unverified && unverified !== String(v).trim()) setUnverified("");
     setForm((f) => ({ ...f, [step.key]: v }));

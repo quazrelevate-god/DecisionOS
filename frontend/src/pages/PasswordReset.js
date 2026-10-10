@@ -96,9 +96,9 @@ export function ForgotPassword() {
       <div className="kr-pressed mt-6 flex items-start gap-3 rounded-cardlg p-3" data-testid="forgot-password-otp-hint">
         <DeviceMobile size={17} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0 text-muted-foreground" />
         <p className="text-xs leading-relaxed text-muted-foreground">
-          Sign in with a code instead? If your workspace set you up with mobile OTP you have no password —{" "}
+          Sign in with a code instead? If you sign in with your mobile you have no password —{" "}
           <Link to="/login" className="font-semibold text-foreground underline underline-offset-2">
-            use Mobile OTP on the sign-in page</Link>.
+            use Mobile number on the sign-in page</Link>.
         </p>
       </div>
     </Shell>

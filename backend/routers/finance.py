@@ -163,7 +163,11 @@ async def commit_ingestion(ingestion_id: str, inp: IngestCommitInput,
         await db.inbox.update_one({"id": ing["inbox_id"]}, {"$set": {"status": "done"}})
     label = ing.get("filename", "document")
     await log_activity(user["tenant_id"], user["id"], "data_ingested",
-                       f"Filed data from '{label}' — {created['contacts']} contacts, {created['invoices']} invoices, {created['payments']} payments, {created['tasks']} tasks",
+                       # Audit F-06 -- only what was filed, with the right plural.
+                       f"Filed data from '{label}'" + (" — " + ", ".join(
+                           f"{created[k]} {k if created[k] != 1 else k[:-1]}"
+                           for k in ("contacts", "invoices", "payments", "tasks") if created.get(k)) if any(
+                           created.get(k) for k in ("contacts", "invoices", "payments", "tasks")) else ""),
                        "ingestion", ingestion_id)
     return {"filed": True, "created": created}
 
@@ -244,6 +248,17 @@ async def contact_profile(contact_id: str, user: dict = Depends(require_perm("fi
     _base = ((await db.tenants.find_one({"id": tid}, {"_id": 0, "currency": 1})) or {}).get("currency") or "INR"
     total_billed = total_in_base(invoices, _base, lambda i: i.get("amount")) + total_expensed
     total_paid = total_in_base(payments, _base, lambda p: p.get("amount"))
+    # Audit C-07 (2026-10-09) -- a UK buyer's page in pounds. When the contact
+    # trades in its own currency and every invoice and payment with it is in
+    # that currency, the totals are counted in it, as written; anything mixed
+    # stays in the company's currency (converted, as above).
+    summary_currency = _base
+    _cc = (c.get("currency") or "").upper()
+    if _cc and _cc != _base.upper() and not direct_expenses and all(
+            (x.get("currency") or _base).upper() == _cc for x in invoices + payments):
+        total_billed = sum(float(i.get("amount") or 0) for i in invoices)
+        total_paid = sum(float(p.get("amount") or 0) for p in payments)
+        summary_currency = _cc
     outstanding = round(total_billed - total_paid, 2)
     last_payment = payments[0].get("date") if payments else None
 
@@ -267,6 +282,10 @@ async def contact_profile(contact_id: str, user: dict = Depends(require_perm("fi
         "contact": c,
         "summary": {"total_billed": round(total_billed, 2), "total_paid": round(total_paid, 2),
                     "outstanding": outstanding, "last_payment": last_payment,
+                    "currency": summary_currency,   # audit C-07
+                    # over the credit limit the contact was given, if any
+                    "over_credit_limit": bool(c.get("credit_limit")) and summary_currency == (_cc or _base)
+                    and outstanding > float(c.get("credit_limit") or 0),
                     "open_complaints": len([x for x in complaints if x.get("status") != "resolved"])},
         "invoices": invoices,
         "expenses": direct_expenses,     # J2-04: what was paid to them without a bill on file

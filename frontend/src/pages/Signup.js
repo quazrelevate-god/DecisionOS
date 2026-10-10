@@ -17,6 +17,7 @@ import { WebsiteIntel } from "./onboarding/WebsiteIntel";
 import { VoiceInterview } from "./onboarding/VoiceInterview";
 import { BuildReveal } from "./onboarding/BuildReveal";
 import { SignupConsent } from "./onboarding/SignupConsent";
+import { SIGNUP_BACK } from "./onboarding/signupBack";
 import { TERMS_VERSION, getSignupConsent, giveSignupConsent, clearSignupConsent } from "../lib/legal";
 
 const PHASES = [
@@ -134,6 +135,40 @@ export default function Signup() {
      the last question (team size). It reopened the wizard on question one, the
      mobile number, so Back meant walking every answer through again. */
   const backToBasics = () => { setBasicsStart("team_size"); setResumed(false); goTo("basics"); };
+
+  /* Audit A-02 (2026-10-09) — THE BROWSER'S BACK IS THE PAGE'S BACK.
+     The steps were never in the browser's history, so its Back button left
+     sign-up altogether (to /login) from any step. Sign-up now keeps one extra
+     history entry, and Back from the browser is turned into a SIGNUP_BACK
+     event that the step on screen answers with its own Back (a question, the
+     language pick, an interview question — BasicsFlow and VoiceInterview call
+     preventDefault when they handled it). What no step handles falls to the
+     phase: the consent and website screens go back to the last question; the
+     finished review stays (stepping back into the interview would start a new
+     one and lose every answer — "Missing something? Tell Dex" is the way to
+     change it). With nowhere left to go, the browser's Back leaves sign-up, as
+     it always did. */
+  const phaseBackRef = useRef(null);
+  phaseBackRef.current = () => {
+    if (phase === "website" || (phase !== "basics" && !consented)) { backToBasics(); return true; }
+    if (phase === "interview") { setSessionId(null); goTo("website", { sessionId: "" }); return true; }
+    if (phase === "build") { return true; }
+    return false;
+  };
+  useEffect(() => {
+    const guard = () => window.history.pushState({ ...(window.history.state || {}), dosSignupStep: true }, "");
+    // Once: a reload, or React mounting twice in development, is already on it.
+    if (!window.history.state?.dosSignupStep) guard();
+    const onPop = () => {
+      const ev = new Event(SIGNUP_BACK, { cancelable: true });
+      const handled = !window.dispatchEvent(ev) || phaseBackRef.current?.();
+      if (handled) { guard(); return; }
+      window.removeEventListener("popstate", onPop);
+      window.history.back();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   const interviewProfile = world && {
     company_name: form.company_name, founder_name: form.name, team_size: form.team_size,

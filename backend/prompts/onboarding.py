@@ -184,7 +184,7 @@ INTERVIEW = register(Prompt(
         "the conversation — if you're not sure whether something applies to them, ask, don't assume.\n"
         "  • Purely OPERATIONAL — never strategic, visionary, growth-plan, or 'where do you see the company in 5 years' style.\n\n"
 
-        'Return ONLY valid JSON: {"question": string, "why": string (under 10 words, why this matters), '
+        'Return ONLY valid JSON: {"question": string, "why": string (under 10 words, why this matters, said TO the founder as "you" -- e.g. "So Dex knows what you check each week" -- never about "the founder" or in note-taking words), '
         '"enough": boolean (true only if the checklist is covered AND at least ${min_questions} answers exist)}.'
     ),
 ))

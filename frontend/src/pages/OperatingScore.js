@@ -59,11 +59,13 @@ const CATS = [
     formula: "(tasks done ÷ total actionable) × 100  −  (overdue ÷ open) × 40",
     plain: "How much of what you started is finished on time." },
   { key: "finance", label: "Finance", icon: Coins, weight: 25,
-    formula: "(paid ÷ billed) × 100  −  overdue invoices × 5",
-    plain: "How well cash is coming in vs. how much is stuck." },
-  { key: "sales", label: "Sales", icon: ChartBar, weight: 20,
+    formula: "(paid ÷ billed and due) × 100  −  overdue invoices × 5",
+    plain: "How much of the money already due has come in. Invoices not yet due don't count." },
+  // Audit G-02 (2026-10-09) — this measures approvals, so it is called that.
+  // The stored key stays "sales" (services/operating_score.py).
+  { key: "sales", label: "Decisions", icon: ChartBar, weight: 20,
     formula: "approved decisions ÷ total decisions × 100",
-    plain: "Rate at which raised decisions get a green light." },
+    plain: "How many of the decisions raised get approved." },
   { key: "responsiveness", label: "Responsiveness", icon: Timer, weight: 20,
     formula: "100  −  (open complaints × 12)  −  (overdue tasks × 3)",
     plain: "How fast the team is closing loops — complaints and missed dates." },
@@ -1356,7 +1358,7 @@ function InlineCapture() {
 function NotEnoughDataEmptyState({ stats }) {
   const doneCount = (stats?.done || 0) + (stats?.open || 0);
   const hasTasks = doneCount >= 3;
-  const hasInvoices = (stats?.total_decisions || 0) > 0;
+  const hasInvoices = (stats?.invoices || 0) > 0;   // audit G-02: was reading decisions
   const taskProgress = Math.min(doneCount, 3);
   return (
     <section className={`p-6 sm:p-8 ${CARD}`} data-testid="operating-not-ready">

@@ -19,6 +19,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import api from "../lib/api";
+import { noteTag } from "../lib/format";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader, EmptyState, LoadFailed } from "../components/common";
 import { DocumentsPanel } from "./BrainDocuments";
@@ -157,7 +158,7 @@ function NotesPanel({ focusId }) {
               <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{n.text}</p>
               {INDEX_NOTE[n.index_state] && <p className="text-[11px] text-caution-600">{INDEX_NOTE[n.index_state]}</p>}
               <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-[11px] text-slate-500">
-                <span className="rounded-pill bg-slate-900/[0.05] px-2 py-0.5">#{n.tag}</span>
+                <span className="rounded-pill bg-slate-900/[0.05] px-2 py-0.5">{noteTag(n.tag)}</span>
                 <span className="inline-flex items-center gap-1">{n.visibility !== "public" && <Lock size={10} weight="bold" />}{whoSees(n)}</span>
                 <span className="inline-flex items-center gap-1">{n.source === "capture" && <Sparkle size={10} weight="bold" />}{sourceLine(n)}</span>
                 {n.decision_id && (

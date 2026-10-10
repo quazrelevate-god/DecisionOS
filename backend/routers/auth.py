@@ -515,6 +515,10 @@ async def register(inp: RegisterInput, request: Request, response: Response,
             **({"password_hash": hash_password(inp.password)} if inp.password
                else {"passwordless": True}),
             "role": "owner", "created_at": now_iso(),
+            # Audit A-15 (2026-10-09, founder): the interview language is for
+            # speaking comfortably during sign-up only -- the app opens in
+            # English for everyone (AuthContext applies user.language).
+            "language": "en",
             # Play audit C2 — ticked on the signup consent step.
             **({"terms_accepted": {"version": inp.terms_version, "accepted_at": now_iso()}}
                if inp.terms_version and inp.terms_version == _TERMS_VERSION else {}),

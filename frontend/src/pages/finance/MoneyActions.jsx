@@ -238,8 +238,17 @@ export function InvoiceBuilderDialog({ open, onOpenChange, onDone }) {
   const pickBuyer = ({ name, id }) => {
     const list = Array.isArray(contactsQ.data) ? contactsQ.data : contactsQ.data?.contacts || [];
     const c = id ? list.find((x) => x.id === id) : null;
+    // Audit C-07 (2026-10-09) — the buyer's own currency and payment terms,
+    // when their contact has them (both stay editable here).
+    const home = (tenant?.currency || "INR").toUpperCase();
+    const theirCur = (c?.currency || "").toUpperCase();
+    const exportState = (meta?.states || []).find((x) => String(x).startsWith("Export"));
+    const theirTerms = Number.isInteger(c?.payment_terms_days) ? c.payment_terms_days : null;
     setF((s) => ({ ...s, customer_name: name, contact_id: id || "",
-      customer_gstin: c?.tax_id || s.customer_gstin, customer_address: c?.address || s.customer_address }));
+      customer_gstin: c?.tax_id || s.customer_gstin, customer_address: c?.address || s.customer_address,
+      ...(theirCur && theirCur !== home ? { currency: theirCur, ...(exportState ? { place_of_supply: exportState } : {}) } : {}),
+      ...(theirTerms != null && s.date
+        ? { due_date: new Date(new Date(s.date).getTime() + theirTerms * 86400000).toISOString().slice(0, 10) } : {}) }));
   };
 
   if (!open) return null;

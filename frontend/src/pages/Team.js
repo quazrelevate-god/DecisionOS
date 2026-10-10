@@ -460,8 +460,13 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
         permissions: form.follow_role || accessLocked ? [] : form.permissions, phone: form.phone, reporting_manager_id: form.reporting_manager_id || null,
       };
       if (!form.email.trim()) delete base.email;
+      else if (form.email_invite) base.email_invite = true;
       const res = await api.post("/users", base);
-      toast.success(`${form.name} added`);
+      if (res?.data?.invite_emailed) toast.success(`${form.name} added — we emailed them the invite link`);
+      else {
+        toast.success(`${form.name} added`);
+        if (base.email_invite) toast.info("The invite email couldn't be sent — share the link below instead.");
+      }
       setOpen(false);
       onSaved();
       if (res?.data?.invite_token && onInvite) {
@@ -532,6 +537,15 @@ function MemberDialog({ trigger, initial, defaultRole, defaultManagerId, roleOpt
                 )}
               </Field>
             </div>
+            {/* Audit C-04 (2026-10-09) — the invite link can go by email too. */}
+            {!editing && !basicOnly && emailTyped && !emailBad && (
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-neutral-600" data-testid="member-email-invite">
+                <input type="checkbox" className="h-4 w-4 accent-neutral-900" checked={!!form.email_invite}
+                  data-testid="member-email-invite-toggle"
+                  onChange={(e) => setForm({ ...form, email_invite: e.target.checked })} />
+                Also email them the invite link
+              </label>
+            )}
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Job title" htmlFor="member-title">
                 <input id="member-title" data-testid="member-title-input" className={MEMBER_FIELD} placeholder="e.g. Sales Lead" maxLength={80}
@@ -1210,6 +1224,19 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
         />
       )}
 
+      {/* Audit C-03 (2026-10-09) — what the coloured dots mean, shown once
+          anybody on the team carries one that is not plain "Active". */}
+      {members.some((m) => m.invite_status === "pending" || m.invite_status === "suspended") && (
+        <p className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500" data-testid="team-status-legend">
+          {["active", "pending", "suspended"].map((k) => (
+            <span key={k} className="inline-flex items-center gap-1.5">
+              <span className={`h-2 w-2 rounded-full ${MEMBER_STATUS[k].dot}`} aria-hidden="true" />
+              {MEMBER_STATUS[k].label}
+            </span>
+          ))}
+        </p>
+      )}
+
       {/* J14-12 — deactivated people, and the two doors. */}
       {canManageTeam && (goneQ.data || []).length > 0 && (
         <section data-testid="team-deactivated" className="mt-8">
@@ -1347,6 +1374,7 @@ function MemberProfileDialog({
   const granted = PERMISSIONS.filter((pp) => perms.includes(pp.key));
   const denied = PERMISSIONS.filter((pp) => !perms.includes(pp.key));
   const manager = (members || []).find((m) => m.id === u.reporting_manager_id);
+  const ownerAbove = !manager && u.role !== "owner" ? (members || []).find((m) => m.role === "owner") : null;
   // Only an owner edits another owner — the rule PATCH /users holds too.
   const canManageMember = canManageTeam && (u.role !== "owner" || isOwner)
     // Audit B-09 — Manage people does not edit someone who can Manage Team.
@@ -1481,7 +1509,10 @@ function MemberProfileDialog({
                 </span>
               } />
               {/* No "Direct reports" here (founder, 2026-09-16): the tree already shows them. */}
-              <ContactRow icon={User} label="Reports to" value={manager ? manager.name : "No one"} />
+              {/* Audit C-03 (2026-10-09) — the tree draws someone with no
+                  manager under the owner; this said "No one". Same answer now. */}
+              <ContactRow icon={User} label="Reports to" value={manager ? manager.name
+                : ownerAbove ? `${ownerAbove.name} (owner) — no manager set` : "No one"} />
               {/* 2026-09-16 — in their own words, from Settings > Your Profile:
                   what to bring them. Only shown once they have written it. */}
               {u.about && <ContactRow icon={ChatText} label="Handles" value={u.about} wide />}

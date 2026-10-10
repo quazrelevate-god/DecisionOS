@@ -31,7 +31,7 @@ def test_an_empty_tab_in_a_company_that_has_contacts_says_so():
 def test_a_genuinely_new_workspace_still_gets_the_welcome():
     """"No relationships yet" is right exactly once — when it is true."""
     assert 't("crm.empty_title")' in CRM
-    assert 't("crm.empty_hint_manage")' in CRM
+    assert 't("crm.empty_hint_manage", {' in CRM   # audit C-08: in the company's words
     i_any = CRM.index("anyContacts ? `No ${scopeLabel.toLowerCase()} yet`")
     i_all = CRM.index(': t("crm.empty_title")')
     assert i_any < i_all, "the tab case is decided first, the whole-CRM case is the fallback"

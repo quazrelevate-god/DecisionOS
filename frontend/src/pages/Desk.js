@@ -418,6 +418,12 @@ function DeskHeading({ tone, title, count, note, className = "" }) {
    all. As soon as either exists this is an ordinary quiet line again, because
    then the absence IS the news. */
 function FirstSteps() {
+  /* Audit A-17 (2026-10-09) — the example named "Suresh" and "the indigo
+     lot", who are in nobody's company but the demo's. It uses one of THIS
+     company's teams now, and a neutral line when there is none yet. */
+  const { tenant } = useAuth();
+  const team = (tenant?.roles || []).find((r) => r.key && r.key !== "owner" && r.label)?.label;
+  const example = team ? `Ask ${team} to send the revised quote by Friday` : "Send the revised quote to the buyer by Friday";
   return (
     <div className="py-1 text-left" data-testid="desk-first-steps">
       <p className="text-[15px] font-medium text-neutral-200">Nothing here yet — start with one decision</p>
@@ -428,7 +434,7 @@ function FirstSteps() {
         <li className="flex items-start gap-2.5">
           <span aria-hidden="true" className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-white/10 text-[11px] font-semibold text-neutral-300">1</span>
           <p className="min-w-0 text-xs leading-relaxed text-neutral-400">
-            Type it into the Dex box — &ldquo;Tell Suresh to ship the indigo lot before Friday&rdquo;. The microphone is there if you would rather say it.
+            Type it into the Dex box — &ldquo;{example}&rdquo;. The microphone is there if you would rather say it.
           </p>
         </li>
         <li className="flex items-start gap-2.5">

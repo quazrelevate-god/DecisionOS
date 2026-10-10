@@ -82,7 +82,7 @@ const resources = {
         add_customer: "Add {{name}}", add_supplier: "Add {{name}}",
         empty_title: "No relationships yet",
         // J15 — three kinds now, each with its own way in.
-        empty_hint_manage: "Add your first one from the Add contact button \u2014 a customer, a partner or a supplier.",
+        empty_hint_manage: "Add your first one from the Add contact button \u2014 a {{customer}}, a partner or a {{vendor}}.",
         empty_hint: "No records match your filters.",
       },
       brain: {

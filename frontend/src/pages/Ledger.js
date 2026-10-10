@@ -22,13 +22,13 @@
 //     nothing carried — FN-08).
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { toastAiConsentOr } from "../lib/aiConsent";
 import {
-  ArrowRight, Buildings, CalendarBlank, Camera, ChartPieSlice, ChatCircleDots, CurrencyInr, FilePdf,
-  Package, Plus, Receipt, Sparkle, Tray, UploadSimple,
+  ArrowRight, Buildings, CalendarBlank, Camera, ChartPieSlice, CurrencyInr, FilePdf,
+  Package, Plus, Receipt, Tray, UploadSimple,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import api, { formatApiError } from "../lib/api";
@@ -44,7 +44,7 @@ import { AddRecordControl, AddRecordDialogs } from "./finance/FinanceForms";
 import { OverviewTab } from "./finance/FinanceOverview";
 import { AssetsTab, ExpensesTab, InventoryTab, RevenueTab } from "./finance/FinanceRecords";
 import { RecordPaymentDialog, SetRateDialog, UseStockDialog } from "./finance/MoneyActions";
-import { CARD, FIELD, LoadError } from "./finance/financeKit";
+import { CARD, LoadError } from "./finance/financeKit";
 import { LIST_LIMIT, PERIODS, periodOf } from "./finance/ledgerMath";
 
 const TABS = [
@@ -127,12 +127,10 @@ function SectionTabs({ tab, setTab, pendingCount, isMobile, tabs = TABS }) {
 // Epic 2 Sprint 4 (E2-25): capture stays one click from every Finance tab.
 function QuickCapture({ pendingCount, isMobile, onIngested, onOpenInbox, onAddExpense }) {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const qc = useQueryClient();
   const canIngest = hasPerm(user, "data_input");
   const [uploading, setUploading] = useState(false);
   const [active, setActive] = useState(null);
-  const [question, setQuestion] = useState("");
 
   const upload = async (endpoint, file) => {
     if (!file) return;
@@ -156,12 +154,6 @@ function QuickCapture({ pendingCount, isMobile, onIngested, onOpenInbox, onAddEx
       setUploading(false);
     }
   };
-  const ask = (e) => {
-    e.preventDefault();
-    const q = question.trim();
-    if (q) navigate(`/brain?q=${encodeURIComponent(q)}`);
-  };
-
   const sfx = isMobile ? "-m" : "";
   const pick = (key, Icon, label, endpoint, accept, title, capture) => (
     <label key={key} data-testid={`finance-hero-${key}${sfx}`} title={title}
@@ -175,26 +167,12 @@ function QuickCapture({ pendingCount, isMobile, onIngested, onOpenInbox, onAddEx
         onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; upload(endpoint, file); }} />
     </label>
   );
-  const askForm = (
-    <form onSubmit={ask} className={cn("flex min-w-0 items-center gap-2.5", isMobile ? "mt-4" : "ml-auto")}>
-      {!isMobile && (
-        <span className="flex items-center gap-1.5 whitespace-nowrap text-sm text-slate-600">
-          <Sparkle size={15} weight="fill" aria-hidden="true" className="text-orange-500" /> Need help?
-        </span>
-      )}
-      <label className="relative min-w-0 flex-1 lg:w-80 lg:flex-none">
-        <span className="sr-only">Ask Dex anything about your finances</span>
-        <ChatCircleDots size={16} aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input value={question} onChange={(e) => setQuestion(e.target.value)} data-testid="finance-ask"
-          placeholder="Ask about your finances…" className={cn(FIELD, "rounded-pill pl-10 pr-12")} />
-        <button type="submit" aria-label="Ask Dex" data-testid="finance-ask-send" disabled={!question.trim()}
-          className="absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-slate-900/[0.06] text-slate-600 transition-colors hover:bg-slate-900 hover:text-white disabled:opacity-40 disabled:hover:bg-slate-900/[0.06] disabled:hover:text-slate-600">
-          <ArrowRight size={14} weight="bold" aria-hidden="true" />
-        </button>
-      </label>
-    </form>
-  );
-
+  /* Audit F-06 (2026-10-09) — ONE PLACE TO ASK. This hero carried an "Ask
+     about your finances…" box that went to Dex, and the AI panel below has its
+     own that answers from the books; two boxes, one question. The panel's
+     stays (it knows which tab you are on). Without Data Input there is nothing
+     left to show here. */
+  if (!canIngest) return null;
   return (
     <>
       {isMobile ? (
@@ -228,7 +206,6 @@ function QuickCapture({ pendingCount, isMobile, onIngested, onOpenInbox, onAddEx
               {pick("csv", UploadSimple, "CSV / Excel", "/ingest/csv", ".csv,.xlsx,.xls", "Bulk import from CSV or Excel")}
             </div>
           )}
-          {askForm}
           {uploading && <p role="status" className="mt-3 text-xs text-slate-500">Extracting…</p>}
         </section>
       ) : (
@@ -252,7 +229,6 @@ function QuickCapture({ pendingCount, isMobile, onIngested, onOpenInbox, onAddEx
               {uploading && <span role="status" className="text-xs text-slate-500">Extracting…</span>}
             </>
           )}
-          {askForm}
         </section>
       )}
       {active && (

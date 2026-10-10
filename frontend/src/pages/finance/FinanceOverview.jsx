@@ -124,7 +124,12 @@ function KpiTile({ id, icon: Icon, tone, label, value, metric, to, goodWhenUp = 
           breaks after a comma ("₹22,85," / "000") rather than mid-group. At
           the normal size it fits, and nothing moves. */}
       <span className="mt-1 text-[1.35rem] font-semibold leading-tight text-slate-900 [overflow-wrap:anywhere] sm:text-[1.45rem]" title={value}>
-        {String(value ?? "").replace(/,/g, ",\u200B")}
+        {/* Audit F-06 (2026-10-09) \u2014 the break chance is a <wbr>, not a
+            zero-width space: copying "\u20B911,50,000" into a sheet brought the
+            invisible characters along and the cell wasn't a number. */}
+        {String(value ?? "").split(",").map((part, i, all) => (
+          <span key={i}>{part}{i < all.length - 1 && <>,<wbr /></>}</span>
+        ))}
       </span>
       {/* J2-06 — a figure that leaves something out says so on its own face. */}
       {note && <span className="mt-1 text-[11px] leading-snug text-slate-500">{note}</span>}

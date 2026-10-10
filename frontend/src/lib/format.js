@@ -203,3 +203,10 @@ export const taskStatusLabel = (s) => TASK_STATUS_LABELS[s] || humanStage(s);
 
 /** "medium" -> "Medium". Priorities are stored lower-case. */
 export const priorityLabel = (p) => humanStage(p || "medium");
+
+/* Audit C-16 (2026-10-09) — a company note's tag, as words. The AI files a
+   note under a tag such as "buyer_terms"; screens showed that raw. */
+export function noteTag(tag) {
+  const t = String(tag || "").replace(/[_-]+/g, " ").trim();
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : "";
+}

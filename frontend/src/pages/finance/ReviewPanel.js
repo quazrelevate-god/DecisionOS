@@ -175,7 +175,10 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
       Object.keys(records).forEach((b) => { clean[b] = (records[b] || []).map(({ _key, ...rest }) => rest); });
       const { data } = await api.post(`/ingest/${ingestion.id}/commit`, { records: clean });
       const c = data.created;
-      toast.success(`Filed: ${c.contacts} contacts · ${c.invoices} invoices · ${c.payments} payments · ${c.tasks} tasks`);
+      // Audit F-06 — "1 invoice · 1 task", not "0 contacts · 1 invoices · ...".
+      const said = [["contacts", "contact"], ["invoices", "invoice"], ["payments", "payment"], ["tasks", "task"]]
+        .filter(([k]) => c?.[k]).map(([k, one]) => `${c[k]} ${c[k] === 1 ? one : k}`);
+      toast.success(said.length ? `Filed ${said.join(" · ")}` : "Filed");
       onFiled();
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail));

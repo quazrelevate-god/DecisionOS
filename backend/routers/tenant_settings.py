@@ -401,6 +401,19 @@ def _slug_role(label: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", (label or "").strip().lower()).strip("_")
 
 
+# Audit B-11 (2026-10-09) -- the screen says "team"; these said "role". And a
+# second team with a name already in use was refused on add but let through on
+# rename, so two teams could end up called the same thing.
+NO_TEAM_NAME = "Enter a team name."
+TEAM_GONE = "That team no longer exists — refresh the page."
+
+
+def _same_name_team(roles: list, key: str, label: str, *, but: str = "") -> Optional[dict]:
+    want = _slug_role(label)
+    return next((r for r in roles if r.get("key") != but
+                 and (r.get("key") == key or _slug_role(r.get("label") or "") == want)), None)
+
+
 
 
 @router.post("/tenant/roles")
@@ -408,11 +421,12 @@ async def add_role(inp: RoleLabelInput, user: dict = Depends(require_perm("team_
     label = (inp.label or "").strip()
     key = _slug_role(label)
     if not label or not key or key == "owner":
-        raise HTTPException(status_code=400, detail="Enter a valid role name")
+        raise HTTPException(status_code=400, detail=NO_TEAM_NAME if not key else "Owner isn't a team — pick another name.")
     t = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "roles": 1})
     roles = (t or {}).get("roles") or []
-    if any(r.get("key") == key for r in roles):
-        raise HTTPException(status_code=400, detail="A role with this name already exists")
+    clash = _same_name_team(roles, key, label)
+    if clash:
+        raise HTTPException(status_code=400, detail=f"There's already a {clash.get('label') or label} team.")
     # 2026-10-03 (founder) — A TEAM ADDED HERE STARTS WITH WHAT IT DOES, as a
     # team made at sign-up has since J1-05: an "Accounts" team the owner adds
     # on day thirty opened no Finance until they found the Access toggle. The
@@ -432,14 +446,17 @@ async def add_role(inp: RoleLabelInput, user: dict = Depends(require_perm("team_
 @router.patch("/tenant/roles/{key}")
 async def rename_role(key: str, inp: RoleLabelInput, user: dict = Depends(require_perm("team_manage"))):
     label = (inp.label or "").strip()
-    if not label:
-        raise HTTPException(status_code=400, detail="Enter a valid role name")
-    if key == "owner":
-        raise HTTPException(status_code=400, detail="The Owner role can't be renamed")
+    if not label or not _slug_role(label):
+        raise HTTPException(status_code=400, detail=NO_TEAM_NAME)
+    if key == "owner" or _slug_role(label) == "owner":
+        raise HTTPException(status_code=400, detail="Owner isn't a team, so it can't be renamed or used as a name.")
     t = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "roles": 1})
     roles = (t or {}).get("roles") or []
     if not any(r.get("key") == key for r in roles):
-        raise HTTPException(status_code=404, detail="Role not found")
+        raise HTTPException(status_code=404, detail=TEAM_GONE)
+    clash = _same_name_team(roles, "", label, but=key)
+    if clash:
+        raise HTTPException(status_code=400, detail=f"There's already a {clash.get('label') or label} team.")
     for r in roles:
         if r.get("key") == key:
             r["label"] = label
@@ -451,14 +468,16 @@ async def rename_role(key: str, inp: RoleLabelInput, user: dict = Depends(requir
 @router.delete("/tenant/roles/{key}")
 async def delete_role(key: str, user: dict = Depends(require_perm("team_manage"))):
     if key == "owner":
-        raise HTTPException(status_code=400, detail="The Owner role can't be deleted")
+        raise HTTPException(status_code=400, detail="Owner isn't a team, so it can't be deleted.")
     t = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "roles": 1})
     roles = (t or {}).get("roles") or []
     if not any(r.get("key") == key for r in roles):
-        raise HTTPException(status_code=404, detail="Role not found")
+        raise HTTPException(status_code=404, detail=TEAM_GONE)
     in_use = await db.users.count_documents({"tenant_id": user["tenant_id"], "role": key})
     if in_use:
-        raise HTTPException(status_code=400, detail=f"This role has {in_use} member(s) assigned. Reassign them to another role before deleting.")
+        raise HTTPException(status_code=400, detail=(
+            f"{in_use} {'person is' if in_use == 1 else 'people are'} in this team. "
+            "Move them to another team on the Team page, then delete it."))
     new_roles = [r for r in roles if r.get("key") != key]
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"roles": new_roles}})
     await log_activity(user["tenant_id"], user["id"], "role_deleted", f"{user['name']} deleted a role")
@@ -483,16 +502,16 @@ async def update_role_permissions(key: str, inp: RolePermissionsInput,
     if key == "owner":
         raise HTTPException(
             status_code=400,
-            detail="The Owner role's permissions are managed via owner-exclusions, not per-role.",
+            detail="What owners can open is set under “What owners can open”, not per team.",
         )
     # RBAC P0 (2026-09-15): what a role can do reaches everyone holding it — the
     # editor's own role included — so only an owner changes it.
     if user.get("role") != "owner":
-        raise HTTPException(status_code=403, detail="Only an owner can change what a role can do.")
+        raise HTTPException(status_code=403, detail="Only an owner can change what a team can open.")
     t = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "roles": 1})
     roles = (t or {}).get("roles") or []
     if not any(r.get("key") == key for r in roles):
-        raise HTTPException(status_code=404, detail="Role not found")
+        raise HTTPException(status_code=404, detail=TEAM_GONE)
     perms = clean_perms(inp.permissions)
     for r in roles:
         if r.get("key") == key:

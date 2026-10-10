@@ -37,6 +37,13 @@ export function scoreBand(score) {
  * @param {object} stats       the payload's stats block
  * @param {object} categories  company.categories, when the viewer is an owner
  */
+const WEAKEST_AREA = {
+  execution: { name: "Execution", to: "/my-work", why: "Finish or re-date what is open — late and unfinished work pulls it down." },
+  finance: { name: "Finance", to: "/finance", why: "Chase the invoices that are due — money owed and not in is what pulls it down." },
+  sales: { name: "Decisions", to: "/inbox", why: "Decide what is waiting on the Desk — decisions left unapproved pull it down." },
+  responsiveness: { name: "Responsiveness", to: "/crm", why: "Close open complaints and missed dates — they count against it directly." },
+};
+
 export function scoreActions(stats, categories = null) {
   const out = [];
   if (!stats) return out;
@@ -63,11 +70,15 @@ export function scoreActions(stats, categories = null) {
   const scored = Object.entries(categories || {}).filter(([, v]) => v != null);
   const weakest = scored.sort((a, b) => a[1] - b[1])[0];
   if (weakest && weakest[1] < 70) {
+    /* Audit G-02 (2026-10-09) — the weakest area goes somewhere real. With no
+       link it was hidden on a real company, so a low score said "Start with
+       Do these first" over "Nothing urgent right now". */
+    const area = WEAKEST_AREA[weakest[0]] || { name: weakest[0], to: null, why: "" };
     out.push({
       key: "weakest",
-      label: `${weakest[0][0].toUpperCase()}${weakest[0].slice(1)} is at ${weakest[1]}`,
-      why: "Your lowest-scoring category — open it to see what is pulling it down.",
-      to: null,           // handled in-page: opens that category's drill-down
+      label: `${area.name} is at ${weakest[1]}`,
+      why: area.why || "Your lowest-scoring category — open it to see what is pulling it down.",
+      to: area.to,
       drill: weakest[0],
     });
   }

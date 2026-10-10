@@ -455,8 +455,14 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("s
         _local, _, _domain = email.partition("@")
         if not _local or "." not in _domain:
             raise HTTPException(status_code=400, detail="Enter a valid email, or leave it empty")
-        if await db.users.find_one({"email": email}):
-            raise HTTPException(status_code=400, detail="Email already registered")
+        _taken = await db.users.find_one({"email": email}, {"_id": 0, "name": 1, "tenant_id": 1})
+        if _taken:
+            # Audit C-04 (2026-10-09) -- say whose, as a duplicate mobile does;
+            # someone in another company is not named.
+            raise HTTPException(status_code=400, detail=(
+                f"That email is already {_taken.get('name')}'s in this workspace."
+                if _taken.get("tenant_id") == user["tenant_id"] and _taken.get("name")
+                else "That email is already used by another account — use a different one, or leave it empty."))
     phone = display_indian_mobile(_member_norm)
     # 2026-09-16: one mobile, one member — inside this workspace. The number is
     # the sign-in and the WhatsApp route, so two people sharing one means codes
@@ -551,7 +557,23 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("s
         # known. See the note on regenerate_invite below.
         from routers.auth import _app_base_url
         out["invite_url"] = f"{_app_base_url()}/login?invite={invite_token}"
+        # Audit C-04 (2026-10-09) -- and emailed, when asked and there is an
+        # address. Best effort: the link is on screen either way.
+        if inp.email_invite and email:
+            out["invite_emailed"] = await _email_invite(user, inp.name, email, out["invite_url"])
     return out
+
+
+async def _email_invite(user: dict, member_name: str, email: str, url: str) -> bool:
+    from services.email import send_email
+    from services.auth.auth_emails import render_invite_email
+    t = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "name": 1}) or {}
+    try:
+        res = await send_email(email, f"You're invited to {t.get('name') or 'DecisionOS'}",
+                               render_invite_email(member_name, t.get("name") or "", user.get("name") or "", url))
+    except Exception:  # noqa: BLE001 -- never fails the add
+        return False
+    return bool((res or {}).get("sent"))
 
 
 @router.post("/users/{user_id}/invite")

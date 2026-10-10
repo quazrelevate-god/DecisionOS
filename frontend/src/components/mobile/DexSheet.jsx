@@ -48,8 +48,10 @@ const CHIPS = {
     "Why is this still waiting on me?",
     "Push today's approvals to tomorrow",
   ],
+  // Audit A-17 (2026-10-09) — no names: the chips named people and buyers
+  // that no real company has.
   "/my-work": [
-    "Tell Suresh to ship the indigo lot before Friday",
+    "Remind me to send the quote by Friday",
     "What's running late?",
     "Move my Friday tasks to Monday",
   ],
@@ -70,8 +72,8 @@ const CHIPS = {
   ],
   "/team": [
     "Who is absent today?",
-    "Give Priya the Tirupur order",
-    "Approve Anita's leave",
+    "Who has the most open tasks?",
+    "Show leave waiting for me",
   ],
   "/calendar": [
     "Move tomorrow's meeting to Thursday",
@@ -80,9 +82,9 @@ const CHIPS = {
   ],
 };
 const CHIPS_DEFAULT = [
-  "Tell Suresh to ship the indigo lot before Friday",
-  "Ask Priya where the Krishna Garments payment is",
-  "Remind me to check the loom motor tomorrow",
+  "Remind me to send the quote by Friday",
+  "Who owes me the most?",
+  "What's running late this week?",
 ];
 
 /** Longest matching path prefix wins, so /contacts/c_1 gets the contact chips. */

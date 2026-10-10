@@ -78,7 +78,7 @@ def test_a_mobile_only_member_is_pointed_at_the_door_that_opens():
     password to reset, so the screen has to say where to go instead."""
     page = _fe("pages", "PasswordReset.js")
     assert 'data-testid="forgot-password-otp-hint"' in page
-    assert "Mobile OTP" in page
+    assert "use Mobile number on the sign-in page" in page   # audit A-06: "code", not "OTP"
 
 
 # ---------------------------------------------------------------------------

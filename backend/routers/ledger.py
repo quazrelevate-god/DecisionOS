@@ -1591,8 +1591,22 @@ def _brief_unavailable(failure) -> str:
     return "The brief couldn't be written just now. Press Refresh to try again."
 
 
+def _no_finance_records(ctx: dict) -> bool:
+    t = (ctx or {}).get("totals") or {}
+    counts = ("expense_count", "asset_count", "inventory_count", "sales_count", "open_bill_count")
+    return not any(t.get(k) for k in counts) and not t.get("revenue_billed") and not t.get("total_spend")
+
+
 async def _generate_analysis(tid: str, scope: str, ctx: Optional[dict] = None) -> dict:
     ctx = ctx if ctx is not None else await _finance_context(tid, scope)
+    # Audit F-06 (2026-10-09) -- NOTHING TO ANALYSE, NOTHING SPENT. A brand-new
+    # company's brief was an AI call that came back "No financial data found…
+    # Zero records across all financial categories": allowance spent to say
+    # what the page already shows. With no records at all the brief says so
+    # itself, and is not stored -- the first record changes the answer.
+    if _no_finance_records(ctx):
+        return {"scope": scope, "empty": True, "insights": [], "generated_at": None,
+                "headline": "Nothing to analyse yet — your first invoice, bill or expense starts the brief."}
     focus = _SCOPE_FOCUS.get(scope, _SCOPE_FOCUS["overview"])
     system = render("ledger.analysis", focus=focus, currency=ctx['currency'], today=ctx['today'])
     data = {}

@@ -163,7 +163,7 @@ export function ProfileForm({ onSaved }) {
         <label className="label-mono text-muted-foreground" htmlFor="profile-phone">Mobile number</label>
         <input id="profile-phone" data-testid="profile-phone-input" value={form.phone} onChange={set("phone")}
           className={inp} placeholder="+91 98765 43210" />
-        <p className="label-mono text-muted-foreground mt-1">Used for OTP login and to route your WhatsApp messages to this workspace.</p>
+        <p className="label-mono text-muted-foreground mt-1">Used to sign you in with a texted code, and to route your WhatsApp messages to this workspace.</p>
         {phoneChanged && !newPhone && (
           <p className="label-mono mt-2 text-danger-600" data-testid="profile-phone-invalid">
             Enter a 10-digit Indian mobile number

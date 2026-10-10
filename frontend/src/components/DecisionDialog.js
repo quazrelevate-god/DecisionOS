@@ -56,7 +56,7 @@ import { WorkflowLink } from "./workflow/WorkflowLink";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api, { formatApiError } from "../lib/api";
-import { timeAgo } from "../lib/format";
+import { timeAgo, noteTag } from "../lib/format";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
@@ -306,7 +306,7 @@ export function DecisionPanel({
     }),
     ...(proposal.meetings || []).map((m) => ({ key: m.key, kind: "meetings", label: `Meeting: ${m.title}`, sub: [m.when, m.date].filter(Boolean).join(" · ") })),
     ...(proposal.reminders || []).map((r) => ({ key: r.key, kind: "reminders", label: `Reminder: ${r.title}`, sub: `For ${d?.created_by_name || "the person who raised it"}` })),
-    ...(proposal.memory_notes || []).map((n) => ({ key: n.key, kind: "memory_notes", label: `Company note: ${n.text}`, sub: n.tag })),
+    ...(proposal.memory_notes || []).map((n) => ({ key: n.key, kind: "memory_notes", label: `Company note: ${n.text}`, sub: n.tag ? `About: ${noteTag(n.tag)}` : "" })),   // audit C-16
   ] : [];
   const nWorkflows = (proposal?.workflows || []).length;
   // ASK-33 — the wording lives in lib/decisionProposal, so the Desk's Dex well

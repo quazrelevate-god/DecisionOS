@@ -22,6 +22,8 @@ class UserCreateInput(BaseModel):
     reporting_manager_id: Optional[str] = None
     title: Optional[str] = None               # job title on the Team tree, e.g. "Sales Lead"
     follow_role: Optional[bool] = None        # True: the role's access; False: their own list (empty = no access)
+    # Audit C-04 (2026-10-09): also email them the invite link (needs an email).
+    email_invite: bool = False
 
 
 class UserUpdateInput(BaseModel):

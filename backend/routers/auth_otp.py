@@ -120,6 +120,9 @@ async def request_otp(inp: OtpRequestInput):
     choices = await find_tenant_choices_for_phone(db, norm)
     if not choices:
         # Audit A-03: the same answer as a real number. Nothing is sent.
+        # (A-06: but its wrong codes count down like a real one's.)
+        from services.otp import note_request_without_account
+        await note_request_without_account(norm)
         return {"sent": True, "detail": SENT}
     # Invited but not yet in: only the invite link opens those (see INVITE_FIRST).
     # Removed or suspended: told so, and no code is sent (JOURNEY-1).
@@ -228,8 +231,10 @@ async def verify_otp(inp: OtpVerifyInput, response: Response):
     from services.auth.phone import find_tenant_choices_for_phone
     choices = await find_tenant_choices_for_phone(db, norm)
     if not choices:
-        # Audit A-03: a number with no account hears what a wrong code hears.
-        raise HTTPException(status_code=401, detail="Incorrect OTP")
+        # Audit A-03: a number with no account hears what a wrong code hears --
+        # A-06: including how many tries are left (services.otp).
+        from services.otp import refuse_without_account
+        await refuse_without_account(norm)
     if invite_user:
         # The invite link names its own workspace and member.
         _exp = invite_user.get("invite_expires_at")

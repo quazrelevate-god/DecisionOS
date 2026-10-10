@@ -385,10 +385,15 @@ const TYPE_META = {
   dealer: { icon: Storefront, hint: "A dealer or distributor who resells what you sell." },   // shown as Partner
   vendor: { icon: Truck, hint: "Someone you buy from — a supplier or a raw-material source." },
 };
+/* Audit C-07 (2026-10-09) — a contact's trading terms: where they are, the
+   currency they pay in (blank = the company's), their payment terms and credit
+   limit, and the people at the firm. */
+export const CONTACT_CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED", "SAR", "SGD", "AUD", "CAD"];
+const TERMS_BLANK = { country: "", currency: "", payment_terms_days: "", credit_limit: "", contact_people: [] };
 const blankContact = (type) => ({
   type, name: "", company: "", phone: "", email: "", address: "", tax_id: "", tags: "",
   status: VENDOR_TYPES.includes(type) ? "active" : "lead",
-  assigned_id: "", notes: "", lifecycle_stage: "",
+  assigned_id: "", notes: "", lifecycle_stage: "", ...TERMS_BLANK,
 });
 // JOURNEY-1 J8 — the same window edits a contact that exists.
 const contactForm = (c) => ({
@@ -397,6 +402,9 @@ const contactForm = (c) => ({
   tags: Array.isArray(c.tags) ? c.tags.join(", ") : (c.tags || ""),
   status: c.status || "lead", assigned_id: c.assigned_id || "", notes: c.notes || "",
   lifecycle_stage: c.lifecycle_stage || "",
+  country: c.country || "", currency: c.currency || "",
+  payment_terms_days: c.payment_terms_days ?? "", credit_limit: c.credit_limit ?? "",
+  contact_people: Array.isArray(c.contact_people) ? c.contact_people.map((p) => ({ ...p })) : [],
 });
 
 function Field({ label, htmlFor, required = false, wide = false, hint, children }) {
@@ -437,7 +445,7 @@ function FormSection({ label, children }) {
    the retired Contacts page. `onLogComplaint` adds a way to log a complaint
    from here, for the people who can see CRM but not a buyer's full page. */
 export function CrmContactDialog({ type, contact, onClose, onSaved, users, labels, onLogComplaint,
-                                   complaints = [], onComplaintsChanged, onDeleted }) {
+                                   complaints = [], onComplaintsChanged, onDeleted, startDelete = false }) {
   const editing = !!contact;
   /* PILOT-1 A — a contact half-typed is kept (lib/drafts.js), one per kind of
      contact the window was opened for. It used to start blank on every open,
@@ -469,6 +477,8 @@ export function CrmContactDialog({ type, contact, onClose, onSaved, users, label
      same in every context, and it is the app's own material rather than the
      operating system's chrome. */
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Audit C-08 — opened from the profile's own Delete: ask straight away.
+  useEffect(() => { if (contact && startDelete) setConfirmDelete(true); }, [contact?.id, startDelete]); // eslint-disable-line react-hooks/exhaustive-deps
   const removeContact = async () => {
     if (!contact) return;
     setConfirmDelete(false);
@@ -517,6 +527,11 @@ export function CrmContactDialog({ type, contact, onClose, onSaved, users, label
         assigned_id: form.assigned_id || null, notes: form.notes,
         tags: form.tags ? form.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
         lifecycle_stage: form.lifecycle_stage || "",
+        // Audit C-07 — trading terms; numbers only when typed.
+        country: (form.country || "").trim(), currency: form.currency || "",
+        ...(String(form.payment_terms_days ?? "").trim() !== "" ? { payment_terms_days: Number(form.payment_terms_days) } : {}),
+        ...(String(form.credit_limit ?? "").trim() !== "" ? { credit_limit: Number(form.credit_limit) } : {}),
+        contact_people: (form.contact_people || []).filter((p) => (p.name || "").trim()),
       };
       if (editing) await api.patch(`/contacts/${contact.id}`, payload);
       else await api.post("/contacts", { ...payload, birthday: "", ...(opts.anyway ? { allow_duplicate: true } : {}) });
@@ -621,6 +636,57 @@ export function CrmContactDialog({ type, contact, onClose, onSaved, users, label
             )}
           </FormSection>
 
+          <FormSection label="Trading terms">
+            <Field label="Country" htmlFor="crm-contact-country" hint="Leave empty for India.">
+              <input id="crm-contact-country" data-testid="crm-contact-country" className={FIELD}
+                placeholder="e.g. United Kingdom" value={form.country || ""} onChange={set("country")} />
+            </Field>
+            <Field label="Currency they pay in">
+              <GlassSelect testid="crm-contact-currency" ariaLabel="Currency" value={form.currency || ""} triggerClassName="h-11 text-sm"
+                onChange={(v) => setForm((f) => ({ ...f, currency: v }))}
+                options={[{ value: "", label: "Same as yours" }, ...CONTACT_CURRENCIES.map((c) => ({ value: c, label: c }))]} />
+            </Field>
+            <Field label="Payment terms (days)" htmlFor="crm-contact-terms" hint="Their invoices fall due this many days after the date.">
+              <input id="crm-contact-terms" data-testid="crm-contact-terms" type="number" min="0" max="365" inputMode="numeric"
+                className={FIELD} placeholder="e.g. 60" value={form.payment_terms_days ?? ""} onChange={set("payment_terms_days")} />
+            </Field>
+            <Field label="Credit limit" htmlFor="crm-contact-credit" hint="Their page warns when they owe more than this.">
+              <input id="crm-contact-credit" data-testid="crm-contact-credit" type="number" min="0" inputMode="decimal"
+                className={FIELD} placeholder="e.g. 500000" value={form.credit_limit ?? ""} onChange={set("credit_limit")} />
+            </Field>
+          </FormSection>
+
+          <FormSection label="People at the firm">
+            <div className="min-w-0 space-y-2 sm:col-span-2 lg:col-span-3" data-testid="crm-contact-people">
+              {(form.contact_people || []).map((p, i) => {
+                const setP = (k) => (e) => {
+                  const v = e.target.value;
+                  setForm((f) => ({ ...f, contact_people: f.contact_people.map((x, j) => (j === i ? { ...x, [k]: v } : x)) }));
+                };
+                return (
+                  <div key={i} className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1fr_1fr_1fr_auto]" data-testid={`crm-person-${i}`}>
+                    <input aria-label="Name" className={FIELD} placeholder="Name" value={p.name || ""} onChange={setP("name")} />
+                    <input aria-label="Role" className={FIELD} placeholder="Role, e.g. Accounts" value={p.role || ""} onChange={setP("role")} />
+                    <input aria-label="Phone" className={FIELD} placeholder="Phone" value={p.phone || ""} onChange={setP("phone")} />
+                    <input aria-label="Email" className={FIELD} placeholder="Email" value={p.email || ""} onChange={setP("email")} />
+                    <button type="button" aria-label={`Remove ${p.name || "this person"}`} data-testid={`crm-person-remove-${i}`}
+                      onClick={() => setForm((f) => ({ ...f, contact_people: f.contact_people.filter((_, j) => j !== i) }))}
+                      className="grid h-11 w-11 place-items-center rounded-full text-slate-500 hover:bg-slate-900/5 hover:text-slate-900">
+                      <X size={15} weight="bold" aria-hidden="true" />
+                    </button>
+                  </div>
+                );
+              })}
+              {(form.contact_people || []).length < 10 && (
+                <button type="button" data-testid="crm-person-add"
+                  onClick={() => setForm((f) => ({ ...f, contact_people: [...(f.contact_people || []), { name: "", role: "", phone: "", email: "" }] }))}
+                  className="flex h-10 items-center gap-1.5 rounded-pill px-3 text-sm font-medium text-slate-700 hover:bg-slate-900/5">
+                  <Plus size={14} weight="bold" aria-hidden="true" /> Add a person
+                </button>
+              )}
+            </div>
+          </FormSection>
+
           <FormSection label="More">
             <Field label="Address" htmlFor="crm-contact-address" wide>
               <input id="crm-contact-address" data-testid="crm-contact-address" className={FIELD}
@@ -704,7 +770,13 @@ export function CrmContactDialog({ type, contact, onClose, onSaved, users, label
         </div>
 
         {/* The confirm, in the app's own material. */}
-        <AlertDialog open={confirmDelete} onOpenChange={(v) => { if (!busy) setConfirmDelete(v); }}>
+        {/* Audit C-08: opened by the profile's own Delete, "Keep them" closes
+            everything — the edit form was never what they asked for. */}
+        <AlertDialog open={confirmDelete} onOpenChange={(v) => {
+          if (busy) return;
+          setConfirmDelete(v);
+          if (!v && startDelete) onClose();
+        }}>
           <AlertDialogContent data-testid="crm-contact-delete-confirm">
             <AlertDialogHeader>
               <AlertDialogTitle>Delete {contact?.name}?</AlertDialogTitle>
@@ -1019,7 +1091,11 @@ export default function CRM() {
               ? `No ${scopeLabel.toLowerCase()} match that search or status.`
               : anyContacts
                 ? `Your other lists have people in them — this one is empty.`
-                : canManage ? t("crm.empty_hint_manage") : t("crm.empty_hint")}
+                : canManage ? t("crm.empty_hint_manage", {
+                  // Audit C-08 — in the company's own words.
+                  customer: (L.customer_singular || "customer").toLowerCase(),
+                  vendor: (L.vendor_singular || "supplier").toLowerCase(),
+                }) : t("crm.empty_hint")}
           </p>
           {filtering ? (
             <button type="button" onClick={() => { setQ(""); setStatus(""); }} data-testid="crm-clear-filters"

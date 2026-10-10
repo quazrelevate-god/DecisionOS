@@ -186,7 +186,9 @@ def test_an_unknown_number_hears_what_a_known_one_hears(with_test_db):
     strip = lambda r: {k: v for k, v in r.items() if k not in ("dev_otp", "dev_mode")}
     assert strip(known) == strip(unknown), "same answer whether or not the number has an account"
     assert sent_rows == 0, "nothing is texted to a number with no account"
-    assert status == (401, "Incorrect OTP"), "and a code for it is just a wrong code"
+    # Audit A-06 (2026-10-09): a wrong code says how many tries are left -- and
+    # an unknown number counts down the same way (services.otp, A-03).
+    assert status == (401, "That code isn't right — 4 tries left."), "and a code for it is just a wrong code"
 
 
 # ---------------------------------------------------------------------------
@@ -274,3 +276,38 @@ def test_thirty_invites_at_scale_stay_isolated(with_test_db):
     assert ok == 30, "all 30 members verify successfully in their own workspace"
     assert consumed == 30, "every accepted invite is consumed (token nulled, consumed_at stamped)"
     assert leftover == 0, "every OTP is single-use -- all 30 rows are deleted after verify"
+
+
+def test_a06_wrong_codes_count_down_the_same_with_or_without_an_account(monkeypatch):
+    """Audit A-06 + A-03 (2026-10-09): "4 tries left", "3 tries left" ... for a
+    real number, and the very same sequence for a number with no account."""
+    import asyncio
+    from datetime import datetime, timedelta, timezone
+    from fastapi import HTTPException
+    import services.otp as otp
+    from tests.fake_mongo import FakeDB
+    d = FakeDB()
+    monkeypatch.setattr(otp, "db", d)
+    later = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+    d.otp_codes.docs.append({"phone": "9000000001", "tenant_id": "t1", "attempts": 0,
+                             "code_hash": otp._hash_otp("111111", "9000000001"), "expires_at": later})
+
+    def answers(call):
+        out = []
+        for _ in range(7):
+            try:
+                asyncio.run(call())
+                out.append(None)
+            except HTTPException as e:
+                out.append((e.status_code, e.detail))
+        return out
+
+    real = answers(lambda: otp.consume_otp("9000000001", "t1", "222222"))
+    asyncio.run(otp.note_request_without_account("9000000002"))
+    ghost = answers(lambda: otp.refuse_without_account("9000000002"))
+    assert real == ghost
+    assert real[0] == (401, "That code isn't right — 4 tries left.")
+    assert real[3] == (401, "That code isn't right — 1 try left.")
+    assert real[4] == (401, "That code isn't right, and that was the last try — send yourself a new code.")
+    assert real[5] == (429, otp.TOO_MANY) and real[6] == (400, otp.NO_CODE)
+    assert "OTP" not in " ".join(str(x) for x in real)

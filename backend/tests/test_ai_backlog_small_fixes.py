@@ -47,7 +47,7 @@ def test_an_unwritten_brief_says_why_and_is_not_cached(monkeypatch, exc, words):
     d = FakeDB()
     monkeypatch.setattr(led, "db", d)
     monkeypatch.setattr(led, "claude_chat", lambda **k: _RefusingChat(exc))
-    out = _run(led._generate_analysis("t1", "brief", ctx={"currency": "INR", "today": "2026-10-07"}))
+    out = _run(led._generate_analysis("t1", "brief", ctx={"currency": "INR", "today": "2026-10-07", "totals": {"sales_count": 1}}))
     assert out["unavailable"] is True and words in out["headline"]
     assert "Not enough data" not in out["headline"]
     assert out["insights"] == [] and out["generated_at"] is None
@@ -64,7 +64,7 @@ def test_a_written_brief_is_still_cached(monkeypatch):
             return '{"headline": "Spend is up 12% on freight", "insights": []}'
 
     monkeypatch.setattr(led, "claude_chat", lambda **k: Ok(None))
-    out = _run(led._generate_analysis("t1", "brief", ctx={"currency": "INR", "today": "2026-10-07"}))
+    out = _run(led._generate_analysis("t1", "brief", ctx={"currency": "INR", "today": "2026-10-07", "totals": {"sales_count": 1}}))
     assert out["headline"] == "Spend is up 12% on freight" and not out.get("unavailable")
     assert len(d.ledger_ai.docs) == 1
 

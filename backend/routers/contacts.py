@@ -4,6 +4,7 @@ Buyer/supplier contact CRUD with a denormalized-name cascade into invoices,
 payments and workflows on rename. enrich_contacts + CONTACT_TYPES/STATUS/
 LIFECYCLE_STAGES stay in server (shared with dashboard/ingestion) for now.
 """
+import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -66,6 +67,34 @@ async def list_contacts(type: Optional[str] = None, status: Optional[str] = None
     return await enrich_contacts(contacts)
 
 
+def trading_terms(data: dict, partial: bool = False) -> dict:
+    """Audit C-07 (2026-10-09) -- a contact's trading terms, cleaned: an ISO
+    currency in capitals ("" = the company's), a country, payment terms in days,
+    a credit limit, and the people at the firm (empty rows dropped, ten at most).
+    With `partial`, only the fields that were sent."""
+    out = {}
+    if not partial or "country" in data:
+        out["country"] = str(data.get("country") or "").strip()[:60]
+    if not partial or "currency" in data:
+        cur = str(data.get("currency") or "").strip().upper()
+        if cur and not re.fullmatch(r"[A-Z]{3}", cur):
+            raise HTTPException(status_code=400, detail="Pick the currency from the list (three letters, like GBP).")
+        out["currency"] = cur
+    if not partial or "payment_terms_days" in data:
+        out["payment_terms_days"] = data.get("payment_terms_days")
+    if not partial or "credit_limit" in data:
+        out["credit_limit"] = data.get("credit_limit")
+    if not partial or "contact_people" in data:
+        people = []
+        for p in data.get("contact_people") or []:
+            p = p if isinstance(p, dict) else {}
+            row = {k: str(p.get(k) or "").strip() for k in ("name", "role", "phone", "email")}
+            if row["name"]:
+                people.append(row)
+        out["contact_people"] = people[:10]
+    return out
+
+
 @router.post("/contacts")
 # RBAC P1 (2026-09-15): People access, not the role name — a custom role with
 # People was refused although the buttons showed (owners pass).
@@ -106,6 +135,8 @@ async def create_contact(inp: ContactInput, user: dict = Depends(require_crm)):
         "address": inp.address or "", "tax_id": clean_tax_id(inp.tax_id), "tags": inp.tags or [],
         "status": status, "assigned_id": inp.assigned_id, "notes": inp.notes or "",
         "birthday": inp.birthday or "", "lifecycle_stage": stage,
+        # Audit C-07 -- trading terms.
+        **trading_terms(inp.model_dump()),
         "created_by": user["id"], "created_at": now_iso(),
     }
     await db.contacts.insert_one(doc)
@@ -124,6 +155,8 @@ async def update_contact(contact_id: str, inp: ContactUpdateInput, user: dict = 
     if inp.type is not None:
         _refuse_other_side(user, inp.type)
     updates = {k: v for k, v in inp.model_dump().items() if v is not None}
+    # Audit C-07 -- trading terms, cleaned the same way as on create.
+    updates.update(trading_terms(updates, partial=True))
     if "tax_id" in updates:
         from shared.tax_id import tax_id_problem, clean_tax_id
         _tax_problem = tax_id_problem(updates["tax_id"])

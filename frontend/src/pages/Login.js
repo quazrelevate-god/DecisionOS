@@ -266,7 +266,7 @@ export default function Login() {
          OTP", then "Request an OTP first"). The resend link stayed behind its
          30-second countdown all the same, so the only thing on screen to do
          was wait. The code is gone: say so, and offer the new one now. */
-      const spent = /request an otp first|request a new|expired/i.test(detail);
+      const spent = /send yourself a|request an otp first|request a new|expired/i.test(detail);
       setError(spent ? "That code can't be used any more — send yourself a new one below." : detail);
       if (spent) setResendIn(0);
       /* B18 (2026-09-29) — A REFUSED CODE WAS LEFT IN THE BOXES. The founder
@@ -399,7 +399,7 @@ export default function Login() {
             </button>
             <button onClick={() => { setLoginTab("otp"); setError(""); }} data-testid="login-tab-otp"
               className={`flex-1 flex items-center justify-center gap-1.5 rounded-pill px-3 py-2 text-xs font-medium ${loginTab === "otp" ? "kr-pop" : "text-foreground/60 hover:text-foreground"}`}>
-              <DeviceMobile size={14} weight="bold" /> Mobile OTP
+              <DeviceMobile size={14} weight="bold" /> Mobile number
             </button>
           </div>
 
@@ -515,7 +515,7 @@ export default function Login() {
                       a Send OTP beside them would only ask the question again. */}
                   {!otpChoices && (
                     <button type="submit" disabled={busy} data-testid="otp-submit-button" className="kr-lift flex h-12 w-full items-center justify-center rounded-pill bg-kr-ink text-sm font-medium text-white disabled:opacity-50">
-                      {busy ? "Sending…" : "Send OTP"}
+                      {busy ? "Sending…" : "Text me a code"}
                     </button>
                   )}
                 </>
@@ -581,7 +581,7 @@ export default function Login() {
                     {resendIn > 0 ? (
                       <span className="text-muted-foreground">Resend code in <span className="font-semibold tabular-nums">{resendIn}s</span></span>
                     ) : (
-                      <button type="button" onClick={requestOtp} disabled={busy} data-testid="otp-resend" className="font-semibold text-foreground/80 underline-offset-2 hover:text-foreground hover:underline">Didn't get it? Resend OTP</button>
+                      <button type="button" onClick={requestOtp} disabled={busy} data-testid="otp-resend" className="font-semibold text-foreground/80 underline-offset-2 hover:text-foreground hover:underline">Didn't get it? Text it again</button>
                     )}
                   </div>
                   {/* Audit A-03 — the server no longer says "no account", so
@@ -715,7 +715,9 @@ export default function Login() {
               "multi-tenant" is a promise to US that other companies' data is
               not in theirs, and it is not a sentence a workshop owner has ever
               needed to read. */}
-          Workflow as an engine · Decision Desk · Dex
+          {/* Audit A-07 (2026-10-09) — and the first screen a visitor sees
+              should say what it does for them, not name our parts. */}
+          Your team&rsquo;s work and decisions, in one place
         </p>
         {/* PLAY-2 — the policy has to be reachable BEFORE anyone signs up, and
             this is the only screen everybody sees first. A plain link, not a

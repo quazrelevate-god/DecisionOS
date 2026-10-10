@@ -290,7 +290,7 @@ function PillSection({ label, items, tint, testid, startAt, stagger, still, newK
         className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
         {label}
       </Rise>
-      <div className="flex flex-col items-start gap-2">
+      <div className="flex flex-wrap items-start gap-2">
         {strs.map((t, i) => {
           const isNew = newKeys.has(t.trim().toLowerCase().replace(/\s+/g, " "));
           const takeRef = isNew && !firstNewSeen;
@@ -993,7 +993,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
             </div>
 
             {/* ── BAND 3 · what Dex designed ─────────────────────────────
-                Two columns on desktop, one pill per row inside each. The old
+                Two columns on desktop; the pills wrap across each (audit A-13). The old
                 wrapped cluster made a department and a task look like the same
                 kind of thing in the same soup. */}
             <div className="grid gap-4 lg:grid-cols-2 lg:gap-5">

@@ -111,18 +111,71 @@ async def consume_otp(norm: str, tenant_id: str, code: str) -> None:
     """
     key = {"phone": norm, "tenant_id": tenant_id}
     rec = await db.otp_codes.find_one(key, {"_id": 0})
-    if not rec:
-        raise HTTPException(status_code=400, detail="Request an OTP first")
-    if datetime.now(timezone.utc) > datetime.fromisoformat(rec["expires_at"]):
-        await db.otp_codes.delete_one(key)
-        raise HTTPException(status_code=400, detail="OTP expired. Request a new one")
-    if rec.get("attempts", 0) >= OTP_MAX_ATTEMPTS:
-        await db.otp_codes.delete_one(key)
-        raise HTTPException(status_code=429, detail="Too many attempts. Request a new OTP")
+    try:
+        _refuse_spent_or_wrong(rec)
+    except HTTPException:
+        if rec:
+            await db.otp_codes.delete_one(key)      # spent or out of date: gone
+        raise
     if _hash_otp((code or "").strip(), norm) != rec["code_hash"]:
         await db.otp_codes.update_one(key, {"$inc": {"attempts": 1}})
-        raise HTTPException(status_code=401, detail="Incorrect OTP")
+        raise HTTPException(status_code=401, detail=wrong_code(OTP_MAX_ATTEMPTS - rec.get("attempts", 0) - 1))
     await db.otp_codes.delete_one(key)
+
+
+# Audit A-06 (2026-10-09) -- ONE WORD, AND HOW MANY TRIES ARE LEFT.
+# The screens say "code"; these said "OTP" ("Incorrect OTP", "Request an OTP
+# first"), and a wrong code never said how many more could be tried before the
+# code was thrown away. The frontend recognises a spent code by "send yourself
+# a" (pages/Login.js, onboarding/BasicsFlow.js).
+NO_CODE = "Send yourself a code first."
+EXPIRED = "That code has expired — send yourself a new one."
+TOO_MANY = "Too many wrong tries — send yourself a new code."
+
+
+def wrong_code(left: int) -> str:
+    if left <= 0:
+        return "That code isn't right, and that was the last try — send yourself a new code."
+    return f"That code isn't right — {left} {'try' if left == 1 else 'tries'} left."
+
+
+def _refuse_spent_or_wrong(rec) -> None:
+    """The refusals before a code is compared: none sent, out of date, or too
+    many wrong tries already. Shared with the no-account path below so the two
+    can never answer differently."""
+    if not rec:
+        raise HTTPException(status_code=400, detail=NO_CODE)
+    if datetime.now(timezone.utc) > datetime.fromisoformat(rec["expires_at"]):
+        raise HTTPException(status_code=400, detail=EXPIRED)
+    if rec.get("attempts", 0) >= OTP_MAX_ATTEMPTS:
+        raise HTTPException(status_code=429, detail=TOO_MANY)
+
+
+# Audit A-03 + A-06 -- A NUMBER WITH NO ACCOUNT COUNTS DOWN TOO. "4 tries left"
+# from a real number and a flat "wrong code" from an unknown one would tell a
+# stranger which numbers have accounts, the very thing A-03 closed. So asking for
+# a code for an unknown number starts a count here (nothing is texted, and
+# nothing goes in otp_codes), and checking a code against it answers exactly as
+# a wrong code for a real number does, try by try.
+async def note_request_without_account(norm: str) -> None:
+    await db.otp_misses.update_one(
+        {"phone": norm},
+        {"$set": {"attempts": 0, "expires_at": (datetime.now(timezone.utc)
+                                                + timedelta(seconds=OTP_TTL_SECONDS)).isoformat()}},
+        upsert=True)
+
+
+async def refuse_without_account(norm: str) -> None:
+    key = {"phone": norm}
+    rec = await db.otp_misses.find_one(key, {"_id": 0})
+    try:
+        _refuse_spent_or_wrong(rec)
+    except HTTPException:
+        if rec:
+            await db.otp_misses.delete_one(key)     # as a spent real code is deleted
+        raise
+    await db.otp_misses.update_one(key, {"$inc": {"attempts": 1}})
+    raise HTTPException(status_code=401, detail=wrong_code(OTP_MAX_ATTEMPTS - rec.get("attempts", 0) - 1))
 
 
 async def _issue_otp(norm: str, display_phone: str, tenant_id: str, enforce_cooldown: bool = True):

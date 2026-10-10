@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft, Phone, EnvelopeSimple, MapPin, Receipt, CurrencyCircleDollar,
   Warning, Truck, TrendUp, Brain, CheckSquare, Buildings, Sparkle, Heart, ShieldWarning,
-  Note, Clock, ChatCircleDots, WhatsappLogo, Handshake, FlowArrow, PencilSimple, CheckCircle,
+  Note, Clock, ChatCircleDots, WhatsappLogo, Handshake, FlowArrow, PencilSimple, CheckCircle, Trash,
 } from "@phosphor-icons/react";
 
 // Epic 2 Sprint 1 (E2-08): activity kind -> icon + colour. Small map
@@ -111,6 +111,7 @@ export default function ContactProfile() {
   // server asks for People access for both, as it does for adding one).
   const canManage = hasPerm(user, "people");
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteAsked, setDeleteAsked] = useState(false);   // audit C-08
   const [complaintOpen, setComplaintOpen] = useState(false);
   // J15 — closing one, from the page that lists them.
   const [resolving, setResolving] = useState(null);
@@ -223,7 +224,9 @@ export default function ContactProfile() {
   const payments = dedupe(rawPayments);
   const complaints = dedupe(rawComplaints);
   const workflows = dedupe(rawWorkflows);
-  const cur = invoices?.[0]?.currency || "INR";
+  // Audit C-07 (2026-10-09) — the totals' own currency, as the server counted
+  // them (the contact's, when all its money is in it), not the first invoice's.
+  const cur = summary?.currency || tenant?.currency || "INR";
   const rel = ai_relationship;
 
   const ScoreBox = ({ label, value, Icon, good }) => {
@@ -252,6 +255,7 @@ export default function ContactProfile() {
           the contact this page is ABOUT has to leave the page: staying would
           show a profile of somebody who no longer exists. */}
       <CrmContactDialog contact={editOpen ? c : null} onClose={() => setEditOpen(false)} users={users} labels={typeLabels}
+        startDelete={deleteAsked}
         complaints={complaints}
         onComplaintsChanged={() => qc.invalidateQueries({ queryKey: ["contact-profile", id] })}
         onDeleted={() => { setEditOpen(false); navigate("/crm"); }}
@@ -283,7 +287,8 @@ export default function ContactProfile() {
       <div className="card-brutal p-6 mb-6" data-testid="profile-header">
         <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-2 mb-2">
-          <Chip value={typeLabel(c.type)} className={c.type === "customer" ? "bg-brand-50 text-brand-700" : "bg-muted text-muted-foreground"} />
+          {/* Audit C-08 (2026-10-09) — the company's own word ("Buyer"), not "Customer". */}
+          <Chip value={typeLabels[c.type] || typeLabel(c.type)} className={c.type === "customer" ? "bg-brand-50 text-brand-700" : "bg-muted text-muted-foreground"} />
           <Chip value={c.status} />
         </div>
         {canManage && (
@@ -294,9 +299,15 @@ export default function ContactProfile() {
                 <Warning size={15} weight="bold" aria-hidden="true" /> Log complaint
               </button>
             )}
-            <button type="button" onClick={() => setEditOpen(true)} data-testid="profile-edit"
+            <button type="button" onClick={() => { setDeleteAsked(false); setEditOpen(true); }} data-testid="profile-edit"
               className="flex min-h-10 items-center gap-1.5 rounded-pill border border-border bg-card px-4 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline">
               <PencilSimple size={15} weight="bold" aria-hidden="true" /> Edit
+            </button>
+            {/* Audit C-08 — Delete was only inside Edit. It opens the same
+                "this can't be undone" question the edit window asks. */}
+            <button type="button" onClick={() => { setDeleteAsked(true); setEditOpen(true); }} data-testid="profile-delete"
+              className="flex min-h-10 items-center gap-1.5 rounded-pill border border-border bg-card px-4 text-sm font-medium text-kr-accent transition-colors hover:bg-kr-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline">
+              <Trash size={15} weight="bold" aria-hidden="true" /> Delete
             </button>
           </div>
         )}
@@ -309,6 +320,32 @@ export default function ContactProfile() {
           {c.address && <span className="flex items-center gap-1.5"><MapPin size={14} weight="bold" className="text-muted-foreground" /> {c.address}</span>}
           {c.tax_id && <span className="font-mono text-muted-foreground">{c.tax_id}</span>}
         </div>
+        {/* Audit C-07 (2026-10-09) — their trading terms and the people at the firm. */}
+        {(c.country || c.currency || c.payment_terms_days != null || c.credit_limit != null) && (
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground" data-testid="profile-terms">
+            {c.country && <span>{c.country}</span>}
+            {c.currency && <span>Pays in {c.currency}</span>}
+            {c.payment_terms_days != null && <span>{c.payment_terms_days} days to pay</span>}
+            {c.credit_limit != null && <span>Credit limit {money(c.credit_limit, c.currency || tenant?.currency || "INR")}</span>}
+          </div>
+        )}
+        {summary?.over_credit_limit && (
+          <p className="mt-2 text-sm font-medium text-kr-accent" data-testid="profile-over-limit">
+            They owe {money(summary.outstanding, cur)} — more than their credit limit.
+          </p>
+        )}
+        {(c.contact_people || []).length > 0 && (
+          <ul className="mt-3 flex flex-wrap gap-2 text-sm" data-testid="profile-people">
+            {c.contact_people.map((p, i) => (
+              <li key={i} className="rounded-pill bg-muted px-3 py-1">
+                <span className="font-medium">{p.name}</span>
+                {p.role && <span className="text-muted-foreground"> · {p.role}</span>}
+                {p.phone && <span className="text-muted-foreground"> · {formatPhone(p.phone)}</span>}
+                {p.email && <span className="text-muted-foreground"> · {p.email}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Financial summary */}

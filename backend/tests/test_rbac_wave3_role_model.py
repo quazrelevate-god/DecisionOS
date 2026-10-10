@@ -98,7 +98,7 @@ class TestPerRolePermissions:
     def test_endpoint_refuses_unknown_role(self):
         from routers.tenant_settings import update_role_permissions
         src = inspect.getsource(update_role_permissions)
-        assert '"Role not found"' in src
+        assert 'detail=TEAM_GONE' in src   # audit B-11: "That team no longer exists" 
         assert 'status_code=404' in src
 
     def test_endpoint_filters_unknown_perms(self):

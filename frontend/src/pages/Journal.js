@@ -27,6 +27,7 @@ import api from "../lib/api";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { PageHeader, Chip, EmptyState, LoadFailed } from "../components/common";
 import { ymd, addDays, startOfWeek, DOW, dayTitle } from "../lib/dates";
+import { noteTag } from "../lib/format";
 import {
   Dialog,
   DialogContent,
@@ -174,7 +175,7 @@ function DayEntries({ day, onOpen }) {
               </span>
               <div className="min-w-0">
                 <p className="text-sm leading-snug">{n.text}</p>
-                {n.tag && <Chip value={n.tag} className="mt-2" />}
+                {n.tag && <Chip value={noteTag(n.tag)} className="mt-2" />}
               </div>
             </div>
           ))}

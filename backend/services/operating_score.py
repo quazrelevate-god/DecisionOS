@@ -23,7 +23,7 @@ from routers.ledger import parse_amount as _amt
 # below used `due_date < now` with `now` a UTC timestamp, which made a task due
 # TODAY overdue all day.
 from services.task_timing import approvals_of, timing_of
-from shared.due import IST, is_overdue
+from shared.due import IST, as_instant, is_overdue, today_ist
 
 
 # S9 (U8-09.5): shared short-TTL cache for the company operating view. The view
@@ -205,7 +205,7 @@ async def _company_operating_view(tid: str, viewer: dict, now: str, window: Opti
 
     execution, done, open_tasks, overdue, actionable = _score_execution(tasks, now)
 
-    total_billed = total_paid = 0.0
+    total_billed = total_paid = due_billed = 0.0
     overdue_inv = 0
     inv_count = 0
     if can_finance:
@@ -220,10 +220,19 @@ async def _company_operating_view(tid: str, viewer: dict, now: str, window: Opti
         total_paid = sum(_amt(p.get("amount")) for p in pays)
         overdue_inv = sum(1 for i in invs if i.get("type") == "sales_invoice" and i.get("status") != "paid"
                           and is_overdue(i.get("due_date"), now))
+        # Audit G-02 (2026-10-09) -- A NEW COMPANY IS NOT BEHIND. Day one, with
+        # its first invoice raised and not yet due, read "Finance 0/100": the
+        # score asked how much had come in before anything was owed. Only money
+        # that is DUE (its date has come, or it was paid) is measured now; with
+        # nothing due yet Finance is left out ("Nothing to score yet").
+        _today = today_ist(as_instant(now))   # `now` arrives as an ISO string here
+        due_billed = sum(_amt(i.get("amount")) for i in invs if i.get("type") == "sales_invoice" and (
+            i.get("status") == "paid" or not isinstance(i.get("due_date"), str) or not i.get("due_date")
+            or i["due_date"].strip()[:10] <= _today))
     # PILOT-1 D: nothing billed yet is nothing to score — left out, not 70.
     finance = None
-    if can_finance and total_billed:
-        collected = min(total_paid, total_billed) / total_billed
+    if can_finance and due_billed:
+        collected = min(total_paid, due_billed) / due_billed
         finance = _clamp100(collected * 100 - overdue_inv * 5)
 
     sales, total_dec, approved = _score_sales(decisions)
@@ -265,6 +274,7 @@ async def _company_operating_view(tid: str, viewer: dict, now: str, window: Opti
                     "unscored": unscored},
         "stats": {"done": done, "open": len(open_tasks), "overdue": overdue,
                   "total_decisions": total_dec, "approved": approved, "open_complaints": open_complaints,
+                  "invoices": inv_count,   # audit G-02: the "first invoice" step reads this
                   # How the WHOLE company's work moves, on the same footing as
                   # each person's (2026-09-29): typical days to close, the
                   # share that landed by its date, and the age of the oldest

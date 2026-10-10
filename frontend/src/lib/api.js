@@ -184,6 +184,12 @@ function sentenceFor(entry) {
   if (type === "missing" || type === "value_error.missing") {
     return word ? `Your ${word} is needed.` : "Something needed was left out.";
   }
+  /* Audit A-05 (2026-10-09) — name@example.test is a well-formed address on a
+     domain that can never receive mail; "does not look right" sent people
+     hunting for a typo that wasn't there. */
+  if (word === "email address" && /special-use|reserved name|cannot be used with email/i.test(String(entry.msg || ""))) {
+    return "That email address can't receive mail — use one you check.";
+  }
   if (word === "email address") return "That email address does not look right.";
   if (word === "mobile number") return "That mobile number does not look right.";
   if (type.startsWith("string_too_short") || type.startsWith("too_short")) {

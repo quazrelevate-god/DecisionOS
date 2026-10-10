@@ -1,6 +1,6 @@
 # Google Play store listing — ready to paste
 
-**Prepared 2026-10-09 for build 1.0.4, carried to 1.0.6 (versionCode 7) on 2026-10-10.** Everything on this page
+**Prepared 2026-10-09 for build 1.0.4, carried to 1.0.7 (versionCode 8) on 2026-10-10.** Everything on this page
 goes into Play Console as written. The graphics are in this folder. The
 questionnaire answers are in [CONSOLE_ANSWERS.md](CONSOLE_ANSWERS.md). The
 running order is in [../PLAY_STORE_LAUNCH_TRACKER.md](../PLAY_STORE_LAUNCH_TRACKER.md).
@@ -113,7 +113,7 @@ requirement.
 
 ---
 
-## Release notes (the "What's new" text for 1.0.6)
+## Release notes (the "What's new" text for 1.0.7)
 
 ```
 <en-IN>
@@ -131,36 +131,35 @@ First test release of DecisionOS for Android.
 
 ## App access instructions (Policy → App access)
 
-Choose **"All or some functionality is restricted"** and add **one**
-instruction set. Which one depends on the demo-workspace decision in the
-tracker (§ Decisions). Use set B if the public demo stays out of the reviewer's
-path.
+**The app has no demo sign-in** (2026-10-10, founder: no demo login in the
+mobile app; the store build leaves the "Try DecisionOS on a live workspace"
+seats out entirely). So reviewers get a **dedicated reviewer account**, and it
+has to exist before you send a release for review.
 
-**A · the public demo (no credentials):**
+**Set it up once (founder):**
+1. On decisionos.biz or in the app, **Register** a separate workspace for
+   review, for example "DecisionOS Review", with an **email and password** you
+   control. Sign-up confirms a mobile number by code; use your own.
+2. Sign in to it once and give it a little real-looking work: speak or type two
+   or three decisions to Dex, add a task and a teammate. A reviewer who opens an
+   empty Desk sees an app that "does nothing".
+3. Keep the password unchanged until the review is approved.
+
+Then choose **"All or some functionality is restricted"** and paste:
 
 ```
-1. Open the app.
-2. On the sign-in screen, tap "Try DecisionOS on a live workspace".
-3. Choose any role (Owner shows everything). You are signed in. No code or password is needed.
-The workspace is a demonstration company (Sharma Textiles) and is marked as a demo inside the app.
-To try voice: slide the round handle at the bottom right to record a decision, or left to ask Dex a question. Allow the microphone when asked.
-```
-
-**B · a dedicated reviewer account (recommended):**
-
-```
-1. Open the app and tap "Email & Password" on the sign-in screen.
+1. Open the app. On the sign-in screen, tap "Email & Password".
 2. Email: <reviewer email>   Password: <reviewer password>
-3. You land on the Desk of a demonstration workspace set up for review.
-To try voice: slide the round handle at the bottom right to record a decision, or left to ask Dex a question. Allow the microphone when asked.
+3. You land on the Desk of a workspace set up for review.
+To try voice: slide the round handle in the middle of the bottom bar to the right to record a decision, or to the left to ask Dex a question. Allow the microphone when asked.
 ```
 
 Sign-in by mobile is an OTP to an Indian number, which a reviewer abroad cannot
-receive. That is why both sets avoid it.
+receive. That is why the reviewer signs in with email and password.
 
 ---
 
-## Message to testers (closed test, 12 or more people, 14 days)
+## Message to testers (internal or closed test)
 
 ```
 Hi <name>,

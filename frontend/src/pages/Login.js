@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { devOtpFrom } from "../lib/devOtp";
 import { currentDraft } from "../lib/onboardingDraft";
 import { normIndianMobile } from "../lib/phone";
+import { STORE_BUILD } from "../lib/storeBuild";
 
 // KM-66 — the demo takes the whole card, not a corner of it. The default
 // state is the sign-in form; a single professional invitation ("Try
@@ -22,7 +23,12 @@ import { normIndianMobile } from "../lib/phone";
 // own and the icons were making a set of four read as a menu. The choices
 // themselves still call demoLogin — this is a UI revamp, not a routing
 // change.
-const DEMO = [
+/* PLAY (2026-10-10, founder) — NO DEMO IN THE APP. The store build signs in,
+   registers and resets a password, and nothing else: no live-workspace
+   invitation, no role seats, no shared demo password. Every line of it is
+   behind STORE_BUILD (lib/storeBuild), a build-time constant, so the store
+   bundle does not carry it at all; the website keeps its demo as it was. */
+const DEMO = STORE_BUILD ? [] : [
   { role: "Owner",      email: "owner@sharma.com",      hint: "Full workspace view" },
   { role: "Sales",      email: "sales@sharma.com",      hint: "Customer pipeline" },
   { role: "Production", email: "production@sharma.com", hint: "Operations floor" },
@@ -165,6 +171,7 @@ export default function Login() {
     finally { setBusy(false); }
   };
   const demoLogin = async (email) => {
+    if (STORE_BUILD) return;
     setError(""); setBusy(true);
     try { await login(email, "demo1234"); navigate(takeReturnTo() || "/", { replace: true }); }
     catch (err) { setError(formatApiError(err.response?.data?.detail)); }
@@ -375,7 +382,8 @@ export default function Login() {
               the enter begins — the two panes never overlap during the
               transition. */}
           <AnimatePresence mode="wait" initial={false}>
-          {!demoOpen ? (
+          {/* The store build never opens the demo pane (no way in, above). */}
+          {STORE_BUILD || !demoOpen ? (
           <motion.div
             key="signin-pane"
             initial={{ opacity: 0, y: 4 }}
@@ -614,6 +622,7 @@ export default function Login() {
               gave it its own section; it reads as secondary now — the same
               size, quieter, and without the block of space that made it look
               like a second front door. */}
+          {!STORE_BUILD && (
           <div className="mt-6 border-t border-white/45 pt-4">
             <motion.button
               type="button"
@@ -628,6 +637,7 @@ export default function Login() {
               <ArrowRight size={16} weight="bold" className="text-foreground/70" />
             </motion.button>
           </div>
+          )}
           </motion.div>
           ) : (
           /* LIVE DEMO pane — the entire sign-in card gives way to this. Four

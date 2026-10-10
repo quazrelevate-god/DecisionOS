@@ -15,7 +15,11 @@ import { Link } from "react-router-dom";
 import { TERMS_VERSION } from "../lib/legal";
 
 const CONTACT = "support@decisionos.biz";
-const UPDATED = "8 October 2026";
+/* Who publishes DecisionOS, as named on the Google Play listing. Naming the
+   publisher is not a material change, so TERMS_VERSION is untouched and
+   nobody is asked to agree again. */
+const DEVELOPER = "Bhuvanesh Kumar";
+const UPDATED = "10 October 2026";
 
 function Section({ title, children }) {
   return (
@@ -42,7 +46,8 @@ export default function Terms() {
         for using the DecisionOS app and website. By creating an account, joining
         a workspace, or pressing &ldquo;I agree&rdquo;, you accept them. If you do
         not agree, do not use DecisionOS. How we handle personal data is in our{" "}
-        <A to="/privacy">Privacy Policy</A>.
+        <A to="/privacy">Privacy Policy</A>. DecisionOS is developed and published
+        by {DEVELOPER}.
       </p>
 
       <Section title="Who can use DecisionOS">
@@ -148,7 +153,8 @@ export default function Terms() {
 
       <Section title="Law and contact">
         <p>
-          These terms are governed by the laws of India. Questions:{" "}
+          These terms are governed by the laws of India. DecisionOS is developed
+          and published by {DEVELOPER}. Questions:{" "}
           <a href={`mailto:${CONTACT}`} className="font-medium text-foreground underline underline-offset-2">{CONTACT}</a>.
         </p>
       </Section>

@@ -89,7 +89,7 @@ key is no worse off than yesterday — only a build that *can* sign does.
 > **2026-10-09 — resolved in practice.** The key on the founder's Mac (the one
 > this repo's `keystore.properties` points at) is the **original**,
 > `E4:C5:7E:AD…4A:8F:30`. It is the fingerprint `assetlinks.json` already
-> serves, and it signed the 1.0.4, 1.0.5 and 1.0.6 bundles prepared for the first Play upload.
+> serves, and it signed the 1.0.4 to 1.0.7 bundles prepared for the first Play upload.
 > Keep it; retire `8C:56:55:CC…` wherever it lives. See
 > [PLAY_STORE_LAUNCH_TRACKER.md](PLAY_STORE_LAUNCH_TRACKER.md).
 

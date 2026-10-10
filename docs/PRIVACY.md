@@ -130,8 +130,8 @@ leaves stays with that company. Billing events are kept.
 1. **`support@decisionos.biz` must deliver.** The policy page and DPDP's
    grievance requirement both point there. It is one constant, `CONTACT` in
    `frontend/src/pages/Privacy.js` and `Terms.js`.
-2. **The legal entity name** that will be the Play developer must appear in the
-   privacy policy (Play: the entity named in the store listing must appear in
-   the privacy policy, or the app must be named in it).
+2. ~~The legal entity name~~ — done 2026-10-10: the policy and the terms say
+   DecisionOS is developed and published by **Bhuvanesh Kumar**, the Play
+   account's developer name (`DEVELOPER` in `Privacy.js` and `Terms.js`).
 3. **PostHog and Sentry in production** — decide, then make this table, the
    policy and the Data Safety form agree.

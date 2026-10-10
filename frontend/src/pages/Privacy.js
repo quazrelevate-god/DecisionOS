@@ -26,7 +26,10 @@
 import { Link } from "react-router-dom";
 
 const CONTACT = "support@decisionos.biz";
-const UPDATED = "8 October 2026";
+/* Play requires the developer named on the store listing to be named in the
+   privacy policy (2026-10-10: the Play Console account's developer name). */
+const DEVELOPER = "Bhuvanesh Kumar";
+const UPDATED = "10 October 2026";
 
 function Section({ title, children }) {
   return (
@@ -47,8 +50,9 @@ export default function Privacy() {
 
       <p className="mt-6 text-sm text-muted-foreground">
         This privacy policy covers the DecisionOS app for Android and the web, and
-        the website at decisionos.biz. DecisionOS is a working tool for a small
-        company. The things you put in it — decisions, money, staff, suppliers —
+        the website at decisionos.biz. DecisionOS is developed and published by{" "}
+        {DEVELOPER}, the developer named on its Google Play listing. It is a
+        working tool for a small company. The things you put in it — decisions, money, staff, suppliers —
         are the company&rsquo;s business and not ours. This page says exactly what
         we hold, who else ever sees it, how long we keep it, and how to make it go
         away. Questions go to{" "}
@@ -236,7 +240,7 @@ export default function Privacy() {
 
       <Section title="Contact">
         <p>
-          DecisionOS —{" "}
+          DecisionOS, developed and published by {DEVELOPER} —{" "}
           <a href={`mailto:${CONTACT}`} className="font-medium text-foreground underline underline-offset-2">{CONTACT}</a>.
           See also our{" "}
           <Link to="/terms" className="font-medium text-foreground underline underline-offset-2">Terms of Service</Link>.

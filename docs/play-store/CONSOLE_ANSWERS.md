@@ -1,6 +1,6 @@
 # Play Console: App content answers
 
-**Prepared 2026-10-09 for build 1.0.4 (5); still true of 1.0.6 (7).** Play Console → **Policy → App
+**Prepared 2026-10-09 for build 1.0.4 (5); still true of 1.0.7 (8).** Play Console → **Policy → App
 content**. Play will not roll out to *any* track, internal testing included,
 until every item on that page is answered. The facts come from
 [../PRIVACY.md](../PRIVACY.md) (the data inventory, read out of the code) and
@@ -21,14 +21,15 @@ Live, public and readable signed out (checked 2026-10-09; it renders "Last
 updated 8 October 2026" and names Sarvam, Firebase, PostHog, deletion and the
 support address).
 
-**Before submitting:** the policy must name the **developer name exactly as it
-will appear on the Play listing** (the person or company you register the Play
-account as). See the tracker, decision D2.
+**The developer is named:** "developed and published by Bhuvanesh Kumar", in
+the policy and the terms (2026-10-10), matching the Play account. Check the live
+URL shows it once the website has been deployed from that commit.
 
 ## 2 · App access
 
-**"All or some functionality is restricted"**, then paste instruction set A
-or B from [STORE_LISTING.md § App access](STORE_LISTING.md).
+**"All or some functionality is restricted"**, then paste the reviewer-account
+instructions from [STORE_LISTING.md § App access](STORE_LISTING.md). The app has
+no demo sign-in, so the reviewer account must exist first.
 
 ## 3 · Ads
 
@@ -119,7 +120,7 @@ banking, loans, investments or crypto.
 
 ## 9 · Permissions you may be asked about
 
-From the merged release manifest (checked on the 1.0.4, 1.0.5 and 1.0.6 builds; the same nine):
+From the merged release manifest (checked on the 1.0.4 to 1.0.7 builds; the same nine):
 
 | Permission | Why |
 |---|---|

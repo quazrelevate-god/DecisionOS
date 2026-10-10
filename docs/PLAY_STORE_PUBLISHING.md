@@ -21,11 +21,11 @@ signed bundle. Everything else below is forms.
 **Your bundle is already built and signed:**
 
 ```
-~/Documents/DecisionOS-release-v1.0.6/DecisionOS-v1.0.6-7.aab
+~/Documents/DecisionOS-release-v1.0.7/DecisionOS-v1.0.7-8.aab
 ```
 
-12.9 MB, `versionCode 7`, `versionName 1.0.6`, signed, verified, and run on an
-emulator. (The 1.0.1, 1.0.4 and 1.0.5 bundles before it are retired; none was uploaded.)
+12.9 MB, `versionCode 8`, `versionName 1.0.7`, signed, verified, and run on an
+emulator. (The 1.0.1 and 1.0.4 to 1.0.6 bundles before it are retired; none was uploaded.)
 
 ---
 
@@ -182,6 +182,13 @@ than a wrapped website — which is the policy risk
 This is where login-gated apps die. DecisionOS signs in by **OTP to an Indian
 mobile number**, which a reviewer in another country cannot receive. Left
 blank, the reviewer cannot get in and rejects the app.
+
+> **2026-10-10: superseded.** The app no longer has a demo sign-in (the
+> founder's call: no demo login in the mobile app; the store build leaves it
+> out). Reviewers sign in to a **dedicated reviewer account** with email and
+> password; the set-up steps and the text to paste are in
+> [play-store/STORE_LISTING.md § App access](play-store/STORE_LISTING.md). The
+> paragraph below is the original plan, kept for the record.
 
 You already have the answer. On the sign-in screen, **"Try DecisionOS on a live
 workspace"** signs in as a role in one tap, no OTP, and the workspace is marked

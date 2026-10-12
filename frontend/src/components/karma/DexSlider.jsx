@@ -436,23 +436,10 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
     <span
       aria-hidden="true"
       /* ON THE DESK the ends are NAMED AT REST and get out of the way as the
-         handle arrives. IN THE DOCK it is the other way round: the bar already
-         carries four destinations, so the ends appear as those fade, which is
-         the swap the founder asked to happen "simultaneously". One number
-         drives both directions, so they cannot drift apart.
-         AND IN THE DOCK ONLY ONE WORD IS EVER SHOWN. (2026-10-06, founder.)
-         Both faded up together, so a drag to the right lit "Decide" on the left
-         AND "Ask" on the right — and since the gesture is heading right, the
-         word sitting at the end you are travelling toward says the opposite of
-         what is about to happen: "we are swiping towards the Ask when we swipe
-         right as the text indicates". Only the word that NAMES WHERE THIS DRAG
-         IS GOING appears; the other is not faded, it is absent.
-         `names` is which end this label is the name of, which in the dock is
-         the opposite of the side it prints on — that is the swap two commits
-         ago, where the word moved out from under the thumb. */
-      style={{ opacity: behind
-        ? (heading === (side === "ask" ? "decide" : "ask") ? Math.min(1, pct * 1.6) : 0)
-        : Math.max(0, 1 - pct * 1.25) }}
+         handle arrives. (The dock no longer uses these: since 2026-10-12 it
+         shows one word, centred — see below. Before that it printed the word
+         at the end opposite the swipe, which people read as the wrong way.) */
+      style={{ opacity: Math.max(0, 1 - pct * 1.25) }}
       className={cn(
         /* /70, not /45. Measured on the rendered control: foreground at 45%
            over the well's own wash lands at 2.99:1 for a 12pt label, against
@@ -567,21 +554,34 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
           </div>
         ) : (
           <>
-            {/* THE WORD IS ON THE SIDE THE THUMB IS NOT. (2026-10-06.)
-                Founder: "when I swipe right my thumb obviously covers the
-                Decide text, and I can clearly see the Ask text on the left."
-                Of course — you drag toward the word and then your hand is on
-                top of it. So in the dock the ends TRADE PLACES: Decide prints
-                on the left, Ask on the right, and each is read over the hand
-                that is not moving. What the ends DO is unchanged — left still
-                commits Ask and right still commits Decide; only the labels
-                moved, because the gesture was never the thing that was wrong. */}
-            <Label side="ask">{behind
-              ? t("desk.slider.decide", "Decide")
-              : t("desk.slider.ask", "Ask")}</Label>
-            {!composer && <Label side="decide">{behind
-              ? t("desk.slider.ask", "Ask")
-              : t("desk.slider.decide", "Decide")}</Label>}
+            {/* IN THE DOCK THE WORD IS IN THE MIDDLE. (2026-10-12, client.)
+                Printed at the far end, the word sat on the side opposite the
+                swipe — right showed "Decide" on the LEFT — and people read
+                that as the swipe going the wrong way. It is centred now, in
+                the spot the handle leaves as it travels, so it is uncovered by
+                the very movement it names and belongs to neither end. One
+                word, the one this drag is heading for; it fades in with the
+                travel, as before. The Desk's own slider (no `behind`) still
+                names both ends at rest. */}
+            {behind ? (
+              <span
+                aria-hidden="true"
+                data-testid="dex-slider-heading-word"
+                className={cn(
+                  "pointer-events-none absolute inset-0 flex select-none items-center justify-center text-[15px] font-medium",
+                  onInk ? "text-white/75" : "text-foreground/70"
+                )}
+                style={{ opacity: heading ? Math.min(1, pct * 1.6) : 0 }}
+              >
+                {heading === "decide" ? t("desk.slider.decide", "Decide")
+                  : heading === "ask" ? t("desk.slider.ask", "Ask") : null}
+              </span>
+            ) : (
+              <>
+                <Label side="ask">{t("desk.slider.ask", "Ask")}</Label>
+                {!composer && <Label side="decide">{t("desk.slider.decide", "Decide")}</Label>}
+              </>
+            )}
           </>
         )}
 

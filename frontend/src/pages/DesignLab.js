@@ -34,6 +34,9 @@ import { DexWave } from "../components/mobile/DexWave";
    web application"), so this page is its only call site and the component sits
    in pages/designlab/ rather than in components/ where the app would find it. */
 import { VoiceRipple, RIPPLE_DEFAULTS } from "../components/karma/VoiceRipple";
+// 2026-10-12 — the client's "too thin, too small" on the phone Desk: fifteen
+// type and spacing variations, applied inside their own frames only.
+import DeskTypeLab from "./designlab/DeskTypeLab";
 
 const SCREENS = [
   { path: "/inbox", label: "Desk · now" },
@@ -649,6 +652,8 @@ export default function DesignLab() {
           . The choice sticks for the tab.
         </p>
       </header>
+
+      <DeskTypeLab />
 
       <DeskAcrossDevices />
 

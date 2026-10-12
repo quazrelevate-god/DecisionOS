@@ -38,9 +38,12 @@ module.exports = {
                 // the family is just no longer a serif. `logo` is deleted
                 // (zero call sites — the wordmark is a PNG). Mono stays for
                 // genuine data: money columns, IDs, receipts.
-                sans: ['Urbanist', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
-                heading: ['Urbanist', 'system-ui', 'sans-serif'],
-                display: ['Urbanist', 'system-ui', 'sans-serif'],
+                // 2026-10-12 — the one voice is Nunito Sans now (design lab,
+                // variation 7: the client found Urbanist too thin to read on a
+                // phone). Same three keys, same reason they survive.
+                sans: ['Nunito Sans', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+                heading: ['Nunito Sans', 'system-ui', 'sans-serif'],
+                display: ['Nunito Sans', 'system-ui', 'sans-serif'],
                 mono: ['IBM Plex Mono', 'ui-monospace', 'monospace'],
             },
             borderRadius: {

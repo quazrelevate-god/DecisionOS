@@ -1288,7 +1288,8 @@
        wordmark has been a PNG since RD-1.) */
     body {
         @apply bg-background text-foreground;
-        font-family: 'Urbanist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+        /* 2026-10-12 — Nunito Sans (src/fonts.css); Urbanist until then. */
+        font-family: 'Nunito Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
         font-size: 14px;
         line-height: 21px;
         letter-spacing: 0;
@@ -1303,7 +1304,7 @@
         -webkit-font-smoothing: antialiased;
     }
     h1, h2, h3, h4, .font-heading {
-        font-family: 'Urbanist', system-ui, sans-serif;
+        font-family: 'Nunito Sans', system-ui, sans-serif;
         letter-spacing: -0.01em;
     }
     :focus-visible {
@@ -4349,3 +4350,156 @@ html[data-page="dex"] .app-sky {
 }
 .dex-rise { animation: dex-rise 240ms cubic-bezier(.33, 1, .68, 1) both; }
 @media (prefers-reduced-motion: reduce) { .dex-rise { animation: none; } }
+
+/* ===========================================================================
+   VARIATION 7 — THE PHONE'S TYPE. (2026-10-12, client.)
+   "The font is too thin to be readable on a 6.1-inch phone, and the size is
+   too small." Measured on the glass at 390x844 (the phone draws at --ui-scale
+   0.8): KPI labels 11.2px/400, dock labels 10.4px, decision meta 12px/400,
+   decision titles 13.6px/500. Fifteen faces and spacings were tried side by
+   side in the design lab (pages/designlab/DeskTypeLab.jsx); the client chose
+   variation 7: Nunito Sans (src/fonts.css), the large type scale, the sturdy
+   weights and the airy spacing.
+
+   EVERYTHING HERE IS BELOW lg. The desktop takes the new face (tailwind.config
+   + the base layer) and nothing else; its sizes and weights are untouched.
+   Every selector starts with :root. Tailwind v3 writes its responsive
+   variants (max-lg:text-sm, …) at the very END of this sheet, after these
+   rules, so at equal specificity a phone-only size on an element would win;
+   the extra (0,1,0) makes one rule re-size every call site of a class
+   without touching a component. The Desk's :root[data-desk-tight] rules
+   are more specific still, so a short phone still tightens.
+
+   1 · WEIGHT. Regular text goes from 400 to 500 and every named weight steps
+       up one — the "too thin" half of the complaint.
+   2 · SIZE. Small text grows about 17%, tapering off as it gets bigger; the
+       headline sizes are left alone. Named sizes bring a line height that
+       grows with them, but never over an explicit leading-* on the element.
+   3 · THE DESK gets variation 7's exact numbers and spacing.
+   =========================================================================== */
+@media (max-width: 1023.98px) {
+    :root body { font-weight: 500; font-size: 16px; line-height: 1.45; }
+
+    /* 1 · weights */
+    :root .font-light { font-weight: 400; }
+    :root .font-normal { font-weight: 500; }
+    :root .font-medium { font-weight: 600; }
+    :root .font-semibold { font-weight: 700; }
+    :root .text-body, :root .text-small, :root .text-lead, :root .text-meta { font-weight: 500; }
+    :root .text-body-strong { font-weight: 700; }
+    :root .text-h3 { font-weight: 700; }
+    :root .font-display { font-weight: 700; }
+
+    /* 2 · sizes — the DS-4 tiers and the mobile floors */
+    :root { --text-label: 0.9375rem; --text-meta: 0.9375rem; } /* 13 → 15 */
+    :root .text-body, :root .text-body-strong { font-size: 1.03rem; }      /* 14 → 16.5 */
+    :root .text-small { font-size: 0.9375rem; }                      /* 13 → 15 */
+    :root .text-lead { font-size: 1.09rem; }                        /* 15 → 17.5 */
+    :root .text-h3 { font-size: 1.0625rem; }                      /* 15 → 17 */
+    :root .text-h2 { font-size: 1.1875rem; }                      /* 17 → 19 */
+    :root .text-h1 { font-size: 1.5rem; }                         /* 22 → 24 */
+    :root .text-display { font-size: 1.875rem; }                     /* 28 → 30 */
+
+    /* Tailwind's named sizes */
+    :root .text-xs, :root .max-lg\:text-xs { font-size: 0.875rem; }    /* 12 → 14 */
+    :root .text-sm, :root .max-lg\:text-sm { font-size: 1.03rem; }     /* 14 → 16.5 */
+    :root .text-base { font-size: 1.125rem; }    /* 16 → 18 */
+    :root .text-lg { font-size: 1.25rem; }     /* 18 → 20 */
+    :root .text-xl { font-size: 1.375rem; }    /* 20 → 22 */
+    :root .text-2xl { font-size: 1.625rem; }    /* 24 → 26 */
+    :root .text-xs:not([class*="leading-"]) { line-height: 1.2rem; }
+    :root .text-sm:not([class*="leading-"]), :root .max-lg\:text-sm:not([class*="leading-"]) { line-height: 1.4rem; }
+    :root .text-base:not([class*="leading-"]) { line-height: 1.6rem; }
+    :root .text-lg:not([class*="leading-"]) { line-height: 1.75rem; }
+    :root .text-xl:not([class*="leading-"]) { line-height: 1.875rem; }
+    :root .text-2xl:not([class*="leading-"]) { line-height: 2.125rem; }
+
+    /* …and the arbitrary ones the app writes by hand */
+    :root .text-\[9px\] { font-size: 11px; }
+    :root .text-\[10px\] { font-size: 12px; }
+    :root .text-\[10\.5px\] { font-size: 12.5px; }
+    :root .text-\[11px\] { font-size: 13px; }
+    :root .text-\[11\.5px\] { font-size: 13.5px; }
+    :root .text-\[12px\] { font-size: 14px; }
+    :root .text-\[12\.5px\] { font-size: 14.5px; }
+    :root .text-\[13px\] { font-size: 15px; }
+    :root .text-\[13\.5px\] { font-size: 15.5px; }
+    :root .text-\[14px\], :root .max-lg\:text-\[14px\] { font-size: 16.5px; }
+    :root .text-\[15px\], :root .max-lg\:text-\[15px\], :root .text-\[0\.9375rem\] { font-size: 17.5px; }
+    :root .text-\[0\.8rem\] { font-size: 14.8px; }
+    :root .text-\[16px\] { font-size: 18px; }
+    :root .text-\[17px\] { font-size: 19.5px; }
+    :root .text-\[18px\] { font-size: 20px; }
+    :root .text-\[19px\] { font-size: 21px; }
+
+    /* 3 · THE DESK — variation 7 exactly (large type, sturdy, airy). */
+    :root [data-testid="desk-brief-greeting"] { font-size: 30px; line-height: 1.12; letter-spacing: -0.02em; }
+    :root [data-testid="desk-brief-greeting"] span { font-weight: 700; }
+    :root [data-testid="desk-score-link-phone"] .font-display { font-size: 58px; font-weight: 700; letter-spacing: -0.02em; }
+    :root [data-testid="desk-score-link-phone"] .text-sm { font-size: 16px; font-weight: 600; }
+
+    :root [data-testid="desk-kpi-grid"] { gap: 0.75rem; }
+    :root [data-testid="desk-kpi-grid"] .kr-kpi-tile { padding: 1rem; border-radius: 1.5rem; }
+    :root [data-testid="desk-kpi-grid"] .text-4xl { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; }
+    :root [data-testid="desk-kpi-grid"] .text-lg { font-size: 20px; }
+    :root [data-testid="desk-kpi-grid"] .text-sm,
+    :root [data-testid="desk-kpi-grid"] .kr-stat__label { font-size: 17px; line-height: 1.25; font-weight: 600; }
+    :root [data-testid="kpi-workflows-open"] { font-size: 17px; font-weight: 700; }
+    /* The label sat BESIDE the 32px icon, which left it ~52px of a 117px
+       tile: at 17px "Complaints" would print as "Complai". It goes under the
+       icon and gets the tile's whole width. */
+    :root [data-testid="desk-kpi-grid"] > a.kr-kpi-tile > div:first-child { flex-wrap: wrap; row-gap: 0.75rem; }
+    :root [data-testid="desk-kpi-grid"] > a.kr-kpi-tile > div:first-child > p { flex-basis: 100%; }
+
+    :root .kr-desk-board { padding-inline: 1rem; }
+    :root [data-testid^="desk-tab-"]:not([data-testid="desk-tab-slider"]) { font-size: 17px; font-weight: 700; }
+    :root .kr-desk-sheet-list { --desk-row-gap: 0.75rem; gap: var(--desk-row-gap); }
+    :root[data-desk-tight] .kr-desk-sheet-list { --desk-row-gap: 0.375rem; }
+    :root .kr-desk-pill { padding-inline: 1.125rem; border-radius: 1.375rem; }
+    :root .kr-desk-row-roomy { padding-block: calc(0.75rem * var(--desk-row-scale)); }
+    :root[data-desk-tight] .kr-desk-row-roomy { padding-block: calc(0.25rem * var(--desk-row-scale)); }
+    :root .kr-desk-pill > div:first-child { gap: 6px; }
+    :root .kr-desk-row-title {
+        font-size: calc(20.5px * var(--desk-row-scale));
+        line-height: calc(25.6px * var(--desk-row-scale));
+        font-weight: 600;
+        letter-spacing: -0.005em;
+    }
+    :root .kr-desk-row-meta {
+        font-size: calc(17.5px * var(--desk-row-scale));
+        line-height: calc(22.75px * var(--desk-row-scale));
+        font-weight: 500;
+    }
+    /* In the face, not the mono: variation 7 set the amount in Nunito Sans
+       with tabular figures, which line up without a second typeface. */
+    :root .kr-desk-row-amount { font-family: 'Nunito Sans', system-ui, sans-serif; font-size: calc(18px * var(--desk-row-scale)); font-weight: 600; font-variant-numeric: tabular-nums; }
+    :root [data-testid="desk-phone-more"] { font-size: 17px; font-weight: 700; }
+
+    /* ROOM FOR THE SECOND LINE. (2026-10-12, on the release APK.) On real
+       data the Workflows card carries "Next up" and two buttons, and with the
+       bigger type the top half of the Desk grew until the three decision
+       slots were shorter than a two-line row (~78px): the Desk's fit rule
+       then dropped every row's "Raised by…" line — the row the client had
+       chosen in the lab no longer looked like it. The client's call: compact
+       the tiles and the Workflows card, keep every type size as it is.
+       Icon and number side by side was the first idea and does not fit — a
+       tile is ~111–120px inside, and "₹1.7L" at 40px is ~85 beside a 32px
+       icon — so the space comes out of the air around them instead (~85px
+       measured at 411x848). */
+    :root [data-testid="desk-page"] { gap: 0.75rem; }
+    :root [data-testid="desk-kpi-grid"] .kr-kpi-tile { padding: 0.75rem; }
+    :root [data-testid="desk-kpi-grid"] > a.kr-kpi-tile > div:first-child { row-gap: 0.375rem; }
+    :root [data-testid="desk-kpi-grid"] > a.kr-kpi-tile > div:first-child > span:first-child { width: 2rem; height: 2rem; }
+    :root [data-testid="desk-kpi-grid"] > a.kr-kpi-tile > div:nth-of-type(2) { padding-top: 0.25rem; }
+    :root [data-testid="desk-kpi-grid"] .text-sm,
+    :root [data-testid="desk-kpi-grid"] .kr-stat__label { line-height: 1.15; }
+    :root [data-testid="kpi-workflows"] .max-lg\:h-\[3\.5rem\] { height: 2.75rem; }  /* 56 → 44, the touch floor */
+    :root [data-testid="kpi-workflows"] .flex-col.gap-2 { gap: 0.375rem; }
+    /* …and the pills give back 2px a side (12 → 10): measured at 411x874,
+       the emulator's usable height, it is what keeps the row type at 1.0
+       instead of the fit rule scaling it to 0.955. */
+    :root .kr-desk-row-roomy { padding-block: calc(0.625rem * var(--desk-row-scale)); }
+
+    /* The dock's words: --text-label is 15px above; they take the sturdy 700. */
+    :root [data-testid="dock-slider-items"] .dock-item span { font-weight: 700; }
+}

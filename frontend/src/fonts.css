@@ -7,14 +7,14 @@
  * first run — and every user's IP reached fonts.gstatic.com, which is a row
  * on Play's Data Safety form for something the app can simply carry.
  *
- * Urbanist and IBM Plex Mono are both under the SIL Open Font License, so
+ * The UI face and IBM Plex Mono are both under the SIL Open Font License, so
  * bundling and redistributing them is exactly what that licence is for.
  *
  * LATIN AND LATIN-EXT ONLY. Google also serves cyrillic and vietnamese, which
  * this product will never render. unicode-range is kept as Google wrote it,
  * so a browser still fetches only the subset a page actually needs.
  *
- * Urbanist is VARIABLE (font-weight: 100 900): one file per style covers
+ * The UI face (Nunito Sans since 2026-10-12, Urbanist before) is VARIABLE: one file per style covers
  * every weight the design system uses, which is why all of this costs 196 KB.
  *
  * They live in src/ rather than public/ so webpack owns them: an absolute
@@ -71,35 +71,41 @@
   src: url('./fonts/ibmplexmono-normal-600-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
+
+/* 2026-10-12 — Nunito Sans replaces Urbanist (the client's "too thin to
+   read" on the phone; chosen as variation 7 in the design lab). Variable,
+   weight 200-1000, SIL Open Font License like the faces it replaces. The
+   latin-ext subset carries the rupee sign (U+20B9), so amounts no longer
+   fall back to a system face for that one glyph. */
 @font-face {
-  font-family: 'Urbanist';
-  font-style: italic;
-  font-weight: 100 900;
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 200 1000;
   font-display: swap;
-  src: url('./fonts/urbanist-italic-100-900-latin-ext.woff2') format('woff2');
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+  src: url('./fonts/nunitosans-normal-200-1000-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: 'Urbanist';
-  font-style: italic;
-  font-weight: 100 900;
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 200 1000;
   font-display: swap;
-  src: url('./fonts/urbanist-italic-100-900-latin.woff2') format('woff2');
+  src: url('./fonts/nunitosans-normal-200-1000-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: 'Urbanist';
-  font-style: normal;
-  font-weight: 100 900;
+  font-family: 'Nunito Sans';
+  font-style: italic;
+  font-weight: 200 1000;
   font-display: swap;
-  src: url('./fonts/urbanist-normal-100-900-latin-ext.woff2') format('woff2');
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+  src: url('./fonts/nunitosans-italic-200-1000-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: 'Urbanist';
-  font-style: normal;
-  font-weight: 100 900;
+  font-family: 'Nunito Sans';
+  font-style: italic;
+  font-weight: 200 1000;
   font-display: swap;
-  src: url('./fonts/urbanist-normal-100-900-latin.woff2') format('woff2');
+  src: url('./fonts/nunitosans-italic-200-1000-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }

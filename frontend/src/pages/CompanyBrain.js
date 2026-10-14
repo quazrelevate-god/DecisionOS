@@ -154,14 +154,17 @@ function NotesPanel({ focusId }) {
           hint={canManage ? "Add what the company should remember: customer terms, supplier quirks, rules of thumb. Dex uses them in answers."
                           : "Your managers add the company's notes here; Dex uses them in answers."} />
       ) : (
-        <div className="grid gap-3 lg:grid-cols-2" data-testid="brain-notes-list">
+        /* grid-cols-1: the same guard as the document grid (BrainDocuments) —
+           a single implicit column is sized to its widest content, so one long
+           unbroken string (a pasted link) would push every note off-screen. */
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2" data-testid="brain-notes-list">
           {notes.map((n) => editing === n.id ? (
             <NoteForm key={n.id} initial={n} teams={teams} busy={busy}
               onSave={(body) => update(n.id, body)} onCancel={() => setEditing(null)} />
           ) : (
             <div key={n.id} data-testid={`brain-note-${n.id}`}
-              className={`ng-bento flex flex-col gap-2 p-4 ${n.id === focusId ? "ring-2 ring-brand-600" : ""}`}>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{n.text}</p>
+              className={`ng-bento flex min-w-0 flex-col gap-2 p-4 ${n.id === focusId ? "ring-2 ring-brand-600" : ""}`}>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800 [overflow-wrap:anywhere]">{n.text}</p>
               {INDEX_NOTE[n.index_state] && <p className="text-[11px] text-caution-600">{INDEX_NOTE[n.index_state]}</p>}
               <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-[11px] text-slate-500">
                 <span className="rounded-pill bg-slate-900/[0.05] px-2 py-0.5">{noteTag(n.tag)}</span>

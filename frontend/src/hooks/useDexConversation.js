@@ -408,7 +408,19 @@ export function useDexConversation({ dex, open, channel = "ask", onCommitted, us
     dex?.startRecording?.();
   }, [ask, draft, dex, mode]);
 
-  return { log, busy, mode, setMode, draft, setDraft, draftKept, setDraftFromVoice, ask, attach, removeFile, retry, adopt, canRetry, submit, fabIntent, pendingFiles };
+  /** 2026-10-14 — CLEAR THIS CONVERSATION. The dock's Ask panel has offered
+      a "Clear" button since it gained a transcript, and it called `clear` —
+      which this hook never returned, so the press did nothing at all. It is
+      the same reset switching doors does (above): the transcript, the follow-up
+      context and any attached files go; the words being typed stay. */
+  const clear = useCallback(() => {
+    setLog([]);
+    setCtxId(null);
+    setPendingFiles([]);
+    heldNoteRef.current = null;
+  }, []);
+
+  return { log, busy, mode, setMode, draft, setDraft, draftKept, setDraftFromVoice, ask, attach, removeFile, retry, adopt, canRetry, submit, fabIntent, pendingFiles, clear };
 }
 
 export default useDexConversation;

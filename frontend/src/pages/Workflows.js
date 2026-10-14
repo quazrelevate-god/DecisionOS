@@ -174,10 +174,13 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
                    lg:data-[state=closed]:[--tw-exit-translate-x:-50%] lg:data-[state=closed]:[--tw-exit-translate-y:-48%]"
       >
         <DialogHeader className="shrink-0 pr-11">
+          {/* 2026-10-14 — below the status bar on a phone. The sheet's padding
+              (--sa-top) moves its content down, but this button is absolute from
+              the sheet's own top edge, so at top-4 it sat on the battery icon. */}
           <DialogPrimitiveClose
             data-testid="wf-dialog-close"
             aria-label="Close"
-            className="ng-pop absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full text-foreground/70">
+            className="ng-pop absolute right-4 top-[calc(var(--sa-top)+0.75rem)] grid h-9 w-9 place-items-center rounded-full text-foreground/70 lg:top-4">
             <X size={15} weight="bold" aria-hidden="true" />
           </DialogPrimitiveClose>
           <DialogTitle className="font-display text-xl">{t("workflows.dlg_title", { type: typeLabel })}</DialogTitle>

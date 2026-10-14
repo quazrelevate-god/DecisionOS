@@ -21,7 +21,12 @@ const SheetPortal = SheetPrimitive.Portal
 
 const SheetOverlay = React.forwardRef(({ className, ...props }, ref) => (
   <SheetPrimitive.Overlay
-    /* data-scrim: a closing scrim takes no presses — see [data-scrim][data-state="closed"] in index.css. */
+    /* data-scrim: a closing scrim takes no presses — see [data-scrim][data-state="closed"] in index.css.
+       data-dialog-overlay (2026-10-14): the same flat, soft 220ms phone scrim the
+       dialogs get, in step with the panel. Without it a sheet dimmed the page to
+       black/80 in 150ms and lifted it before the panel had left — the "whole
+       screen glitches" on My Work's filter. */
+    data-dialog-overlay=""
     data-scrim=""
     className={cn(
       "fixed inset-0 z-50 bg-black/80  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
@@ -59,16 +64,21 @@ const sheetVariants = cva(
 const SheetContent = React.forwardRef(({ side = "right", className, children, hideClose = false, ...props }, ref) => (
   <SheetPortal>
     <SheetOverlay />
-    <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
-      {!hideClose && (
-        <SheetPrimitive.Close
-          className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
-          <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
-        </SheetPrimitive.Close>
-      )}
-      {children}
-    </SheetPrimitive.Content>
+    {/* 2026-10-14 — the panel escapes the body zoom like DialogContent's does
+        (.ui-scale [data-dialog-scale-root] in index.css). Under the 0.8 zoom
+        the webview painted the sliding sheet in tiles, a strip at a time. */}
+    <div data-dialog-scale-root="">
+      <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
+        {!hideClose && (
+          <SheetPrimitive.Close
+            className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </SheetPrimitive.Close>
+        )}
+        {children}
+      </SheetPrimitive.Content>
+    </div>
   </SheetPortal>
 ))
 SheetContent.displayName = SheetPrimitive.Content.displayName

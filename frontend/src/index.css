@@ -1036,8 +1036,13 @@
        out over 180ms — but because they sit above the dialog, during that fade
        they ghosted on top of the dialog's own bottom action bar, which was half
        of the "crack" on opening a card. Instant hide, no transition.) */
-    body:has([role="dialog"][data-state="open"]:not([data-keeps-chrome])) [data-mobile-chrome],
-    body:has([role="alertdialog"][data-state="open"]) [data-mobile-chrome] {
+    /* 2026-10-14 — and while it is CLOSING too. Matching only data-state="open"
+       brought the dock back the instant a sheet began its exit, so it was
+       drawn on top of the filter sheet still sliding down (My Work's filter,
+       captured frame by frame on the phone). Radix unmounts the panel when its
+       exit ends, so "mounted at all" is the right test. */
+    body:has([role="dialog"][data-state]:not([data-keeps-chrome])) [data-mobile-chrome],
+    body:has([role="alertdialog"][data-state]) [data-mobile-chrome] {
         opacity: 0 !important;
         visibility: hidden;
         pointer-events: none;
@@ -1129,6 +1134,37 @@
    Radix marks it for us — data-state="closed" IS "on the way out" — and the
    panel gets the same treatment, since a card in its exit animation should not
    be collecting clicks either. */
+/* 2026-10-14 · BODY KEEPS ITS POINTER-EVENTS UNDER A SCRIM. A modal Radix
+   layer (every Dialog, Sheet, AlertDialog) writes `pointer-events: none` on
+   <body> when it opens and takes it off when it closes. The property is
+   inherited, so each write restyles every node on the page — measured in the
+   app's WebView on My Work (~4,200 nodes): 47–234ms per write, twice per
+   sheet, landing exactly where the open/close animation should be running.
+   That freeze is what made the filter sheet "glitch" on a phone.
+   While a scrim is mounted it already takes every tap outside the panel
+   (and closes the layer, as before), so body needs no pointer-events of its
+   own — keeping it `auto` means the write changes nothing and nothing is
+   restyled. Nested layers are unaffected: Radix still sets the layers under a
+   modal menu to `none` on themselves. Phone only, where the cost is. */
+@media (max-width: 1023.98px) {
+    body:has(> [data-scrim]) {
+        pointer-events: auto !important;
+    }
+}
+
+/* 2026-10-14 · …AND THE SCROLL LOCK'S VARIABLE IS ALREADY THERE. The same
+   modal layers lock page scroll through react-remove-scroll-bar, which adds
+   `body[data-scroll-locked] { --removed-body-scroll-bar-size: <gap>px }`.
+   A custom property is inherited, so its arriving on lock and leaving on
+   unlock each restyled the whole page — measured in the app's WebView: 66–286ms
+   to lock, 51–70ms to unlock, the other half of the sheet freeze. A phone's
+   scrollbars take no width, so the gap is 0px: with body carrying that value
+   all the time, the lock writes what is already there and restyles nothing
+   (measured 0.3ms). Nothing in the app reads the variable. */
+body {
+    --removed-body-scroll-bar-size: 0px;
+}
+
 [data-scrim][data-state="closed"],
 [data-dialog-overlay][data-state="closed"],
 [role="dialog"][data-state="closed"],
@@ -1238,6 +1274,20 @@
     z-index: 50;
     pointer-events: none;
     zoom: calc(1 / var(--ui-scale, 1));
+}
+/* 2026-10-14 · THE WRAPPER WAITS FOR ITS PANEL TO LEAVE. Radix's Portal puts
+   each of its children under its own Presence, and Presence unmounts a node
+   the moment it closes unless that node is itself animating. The wrapper never
+   was, so it took the panel with it on the first frame of the exit: a sheet or
+   dialog vanished instead of sliding down while its scrim was still fading
+   (My Work's filter, frame by frame on the phone). A do-nothing hold, as long
+   as the phone's panel exit (220ms, below) and no longer — a longer hold would
+   show the panel snapping back after its own animation ends. */
+@keyframes dos-dialog-hold { from { opacity: 1; } to { opacity: 1; } }
+@media (max-width: 1023.98px) {
+    .ui-scale [data-dialog-scale-root]:has(> [data-state="closed"]) {
+        animation: dos-dialog-hold 210ms linear;
+    }
 }
 .ui-scale [data-dialog-scale-root] > * {
     /* Put the page scale back on the panel so it is drawn at 0.8 like everything

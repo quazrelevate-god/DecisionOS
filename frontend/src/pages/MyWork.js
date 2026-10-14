@@ -1863,11 +1863,18 @@ function WaitingOn({ t, members = [], onPatched, readOnly = false }) {
 }
 
 // "Mon, 29 Sep" — the reference's form; the year only when it is not this one.
+// 2026-10-14 — two formatters made once, not two toLocaleDateString calls per
+// card per render: each of those builds a fresh Intl formatter, and on a phone
+// that was ~160ms every time My Work re-rendered — which opening or closing
+// any sheet on the page does (measured in the app's WebView, filter sheet).
+// Same output: both use the device's default locale.
+const DUE_WEEKDAY = new Intl.DateTimeFormat(undefined, { weekday: "short" });
+const DUE_MONTH = new Intl.DateTimeFormat(undefined, { month: "short" });
 function dueLabel(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  const wd = d.toLocaleDateString(undefined, { weekday: "short" });
-  const mo = d.toLocaleDateString(undefined, { month: "short" });
+  const wd = DUE_WEEKDAY.format(d);
+  const mo = DUE_MONTH.format(d);
   const yr = d.getFullYear() !== new Date().getFullYear() ? ` ${d.getFullYear()}` : "";
   return `${wd}, ${d.getDate()} ${mo}${yr}`;
 }

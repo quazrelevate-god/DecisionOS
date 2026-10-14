@@ -37,6 +37,7 @@ import { DexSlider } from "../neuglass/DexSlider";
 import { dockSlots, DockItem } from "./FloatingDock";
 import { Bubble, Outcome } from "./DexChat";
 import { AiNotice } from "../ReportButton";
+import { Loader } from "../common";
 import { buildTiles, buildUtility } from "./AllAppsPanel";
 import { useBackDismiss } from "@/hooks/useBackDismiss";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,13 @@ export function DockSlider({
      centre throws the recording away (DexSlider); `askBusy` — a question is
      being transcribed or answered, and the conversation's control waits. */
   onCancel, askBusy = false,
+  /* 2026-10-14 — Ask's words are being transcribed (Layout): the panel says so
+     until Dex's own "Thinking…" takes over. */
+  askTranscribing = false,
+  /* 2026-10-14 — which capture is live, "ask" or "decide": every slider in the
+     bar parks a live capture at that capture's own end, whichever of them is
+     drawing it (see DexSlider's parkSide). */
+  captureSide = "ask",
 }) {
   const { t } = useTranslation();
   const location = useLocation();
@@ -159,6 +167,21 @@ export function DockSlider({
       data-mobile-chrome=""
       aria-label={t("nav.primary", "Primary")}
     >
+      {/* 2026-10-14 — A TAP OUTSIDE CLOSES MORE. The grown bar had no outside:
+          the page under it stayed live, so a tap meant for "close this" landed
+          on whatever was behind the menu instead. While More is open a clear
+          layer under the dock takes that tap and only closes the menu. It is
+          a sibling of the bar inside this fixed <nav>, so it is portalled
+          nowhere and needs no z-index war — the nav's own stacking puts the
+          bar above it. */}
+      {moreOpen && !askOpen && (
+        <div
+          aria-hidden="true"
+          data-testid="dock-more-backdrop"
+          className="fixed inset-0 -z-10"
+          onPointerDown={(e) => { e.preventDefault(); onMore?.(); }}
+        />
+      )}
       {moreOpen && !askOpen ? (
         /* MORE IS THE BAR, GROWN. (2026-10-06, founder.) It used to be a card
            floating over the page just above the dock; now the dock itself takes
@@ -168,6 +191,7 @@ export function DockSlider({
            puts it back. */
         <DexSlider
           tone="ink"
+          parkSide={captureSide}
           behind={behind}
           menu={<DockMore user={user} onClose={onMore} />}
           onDrag={onDrag}
@@ -181,9 +205,10 @@ export function DockSlider({
           onCancel={onCancel}
         />
       ) : askOpen ? (
-        <DockAskPanel chat={chat} onClose={onCloseAsk} onOpenDecision={onOpenDecision}>
+        <DockAskPanel chat={chat} onClose={onCloseAsk} onOpenDecision={onOpenDecision} transcribing={askTranscribing}>
           <DexSlider
             tone="ink"
+            parkSide={captureSide}
             composer
             capturing={capturing}
             recording={recording}
@@ -200,6 +225,7 @@ export function DockSlider({
       ) : (
         <DexSlider
           tone="ink"
+          parkSide={captureSide}
           behind={behind}
           onDrag={onDrag}
           onPressChange={setPressed}
@@ -316,7 +342,7 @@ function DockMore({ user, onClose }) {   // onClose: picked a destination
  * scrolls inside it and the page above the line stays visible, which is still
  * the point of it being the dock that grew rather than a screen that arrived.
  * (It was content-sized up to half the screen before this.) */
-function DockAskPanel({ chat, onClose, onOpenDecision, children }) {
+function DockAskPanel({ chat, onClose, onOpenDecision, transcribing = false, children }) {
   const navigate = useNavigate();
   const { log = [], busy, attaching = false, retry, canRetry, clear, ask } = chat || {};
   const endRef = React.useRef(null);
@@ -347,7 +373,7 @@ function DockAskPanel({ chat, onClose, onOpenDecision, children }) {
 
   React.useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end", behavior: log.length > 1 ? "smooth" : "auto" });
-  }, [log.length, busy]);
+  }, [log.length, busy, transcribing]);
 
   return (
     <div
@@ -397,6 +423,17 @@ function DockAskPanel({ chat, onClose, onOpenDecision, children }) {
                     onGo={(to) => { onClose?.(); navigate(to); }} />
             ))}
           </AnimatePresence>
+          {/* 2026-10-14 — THE WORDS ARE ON THEIR WAY. Between letting go of the
+              mic and the question going out, the recording is being turned into
+              text, and nothing on screen said so: the panel sat still while the
+              work ran behind it. It says so now, with the app's one loading
+              animation, until Dex's "Thinking…" below takes over. */}
+          {transcribing && !busy && (
+            <div role="status" data-testid="dock-ask-transcribing"
+              className="flex items-center justify-center gap-2 py-1 text-sm font-medium text-white/75">
+              <Loader size={18} color="currentColor" label="Transcribing" /> Transcribing what you said…
+            </div>
+          )}
           {busy && !attaching && (
             <Bubble m={{ role: "dex", text: "Thinking…" }} index={log.length} onOpenFile={openFile} />
           )}

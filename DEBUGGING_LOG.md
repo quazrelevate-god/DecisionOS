@@ -8,6 +8,23 @@ A running record of issues we investigate and how we resolve them, so we can ref
 
 ---
 
+## 2026-10-14 — Issue 9: My Work filter sheet glitches on open/close (Redmi)  ✅ FIXED (measured in the app's WebView)
+
+**Symptom (user, Redmi):** opening or closing the filter on Work makes the whole screen and the bottom sheet glitch.
+
+**Pass 1 — visual (frame-by-frame + a 10× slowed build, like Issue 6c).** The shared `ui/sheet.jsx` never got the Issue-6c/6e dialog fixes: heavy `bg-black/80` scrim on its own timing, panel painted in tiles under the 0.8 zoom, dock reappearing on top of the closing sheet, panel vanishing in one frame on close (Radix Portal wraps each child in its own Presence; the zoom-escape wrapper had no animation, so it unmounted at once). Fixed: `data-dialog-overlay` on the sheet scrim, panel wrapped in `[data-dialog-scale-root]`, dock hidden while any `[role=dialog][data-state]` is mounted, a 210ms do-nothing `dos-dialog-hold` animation on a closing scale-root. Same fixes reach every Sheet and Dialog on the phone.
+
+**Pass 2 — still glitched on the Redmi. Real cause = main-thread freeze.** The release WebView can't be inspected, so a temporary release build with `webContentsDebuggingEnabled` (same signature, login kept) was profiled over CDP (`adb forward … localabstract:webview_devtools_remote_<pid>`). Opening the filter blocked the main thread **500–900ms**, closing **140–620ms** (+ another re-render on the `history.back()` popstate) — longer than the 220ms animation, so on a phone it read as freeze-then-jump. Three causes, each measured in isolation:
+1. **Radix writes `body.style.pointerEvents = 'none'`** on every modal open and clears it on close. Inherited property → every node restyled: **47–298ms per write**. Fix: `body:has(> [data-scrim]) { pointer-events: auto !important }` (phone only). The scrim still takes every outside tap; verified a tap on the scrim closes the sheet and does not press the card underneath. → **0.2–2ms**.
+2. **react-remove-scroll-bar adds `body[data-scroll-locked] { --removed-body-scroll-bar-size: 0px }`** while locked. Custom properties are inherited → whole-page restyle on lock **66–286ms** and unlock **51–70ms**. Fix: `body { --removed-body-scroll-bar-size: 0px }` always, so the lock changes nothing. → **0.3ms**.
+3. **`dueLabel` in My Work called `toLocaleDateString` twice per card per render** (a new Intl formatter each time) — ~160ms per My Work render, and a sheet opening/closing re-renders the page. Fix: two module-level `Intl.DateTimeFormat`s. → ~12ms.
+
+**After (emulator, which is many times slower than a phone):** open ~380ms (was 500–900), two full-page style recalcs (2×118ms) down to one (~60ms). **Remaining:** the whole My Work page still re-renders when the sheet opens/closes (its state lives in the page, no memoization — see Issue 7/8), plus one smaller full restyle at mount whose trigger wasn't isolated.
+
+**Lesson:** for the WebView, measure inside the app (inspectable release build + CDP), not from frames alone — the emulator's ~8fps hides a main-thread freeze. And as in Issue 6d: a fix only shows on the phone once the new APK is actually installed on it.
+
+---
+
 ## 2026-10-03 — Investigation round 1 (findings only, nothing changed)
 
 Three questions were raised. Status: **all investigated, no fixes applied yet.**

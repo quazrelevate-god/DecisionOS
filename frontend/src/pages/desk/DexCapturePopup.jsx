@@ -42,6 +42,7 @@ import { decisionCounts, readyLine, stageLabel, OUTCOME_COPY } from "../../lib/d
 import { cn } from "../../lib/utils";
 import { DexForgeFit } from "../onboarding/DexForge";
 import { AiNotice } from "../../components/ReportButton";
+import { Loader } from "../../components/common";
 
 const STEP_COPY = {
   said: { n: 1, title: "What you said", hint: "Read it through, change anything Dex heard wrong, then press Next." },
@@ -285,6 +286,15 @@ export function DexCapturePopup({
             at the least on desktop, and whatever the sheet has on a phone. It
             is read-only only while the words are still on their way, so
             nothing typed in that gap is overwritten when they land (KM-53). */}
+        {/* 2026-10-14 — THE WORDS ARE ON THEIR WAY, said out loud. The only
+            sign used to be the field's placeholder pulsing, which on a phone
+            read as a frozen screen while the upload and transcription ran. */}
+        {transcribing && (
+          <div role="status" data-testid="dex-popup-transcribing"
+            className="flex items-center gap-2 text-sm font-medium text-slate-600">
+            <Loader size={18} color="currentColor" label="Transcribing" /> Transcribing what you said…
+          </div>
+        )}
         <textarea
           ref={fieldRef}
           value={text}

@@ -340,6 +340,10 @@ export default function Layout({ children }) {
   const [profileOpen, setProfileOpen] = useState(false);
   // MPWA-03 mobile navigation state.
   const [allAppsOpen, setAllAppsOpen] = useState(false);
+  /* 2026-10-14 — A NEW PAGE CLOSES MORE. The menu's own picks closed it, but
+     Desk / Work / Money in the bar under it only navigated, so the menu rode
+     along open onto the next screen. Any route change now shuts it. */
+  useEffect(() => { setAllAppsOpen(false); }, [location.pathname]);
   const [dexOpen, setDexOpen] = useState(false);
   /* ASK-INLINE (2026-10-05) — the same conversation, hosted by the Desk.
      The founder's redesign puts Ask inside the Desk's black sheet rather than
@@ -483,6 +487,14 @@ export default function Layout({ children }) {
      before they go. */
   const askSendOnTranscript = useRef(false);
   const askSendRef = useRef(null);
+  /* 2026-10-14 — ASK'S WORDS ARE ON THEIR WAY, AND THE BAR SAYS SO. The bar
+     used to be live only while recording, so the moment you stopped it went
+     back to rest — and for the whole upload and transcription nothing on the
+     screen moved while the work ran behind it. From the stop until the words
+     come back (or the capture gives up on them) the bar stays live without
+     recording, which DexSlider already draws as its "thinking" wave, and the
+     panel says "Transcribing…". */
+  const [askTranscribing, setAskTranscribing] = useState(false);
   /* KM-54 — which door Dex was opened by: "ask" or "decide"; null while it is
      closed. ASK-33 Phase 4 — there is no picker any more: the FAB opens "ask",
      and "decide" is set only when the Desk's Dex well hands a decision to the
@@ -496,6 +508,7 @@ export default function Layout({ children }) {
     // Stopping a recording now yields TEXT for review, not a committed capture.
     // ASK-32 1.6 — the held note's id comes back with the words.
     onTranscript: (text, noteId) => {
+      setAskTranscribing(false);
       draftSinkRef.current?.(text, noteId);
       if (askSendOnTranscript.current) {
         askSendOnTranscript.current = false;
@@ -514,6 +527,20 @@ export default function Layout({ children }) {
        same motion, none of the renders. */
     meterState: false,
   });
+  /* …and it ends when the upload does: the words landed (onTranscript, above),
+     or nothing came through and the hook stopped sending. The stop starts the
+     wait a moment before `sending` turns on, so only a true → false turn ends
+     it; the clock is a floor for a capture that never started sending at all. */
+  const askWasSending = useRef(false);
+  useEffect(() => {
+    if (askWasSending.current && !dex.sending) setAskTranscribing(false);
+    askWasSending.current = !!dex.sending;
+  }, [dex.sending]);
+  useEffect(() => {
+    if (!askTranscribing) return undefined;
+    const t = setTimeout(() => setAskTranscribing(false), 60000);
+    return () => clearTimeout(t);
+  }, [askTranscribing]);
   /* KM-26 — one conversation, three surfaces: the dock hosts the input, the
      FAB submits it, the transcript shows it. None of them can own the state, so
      it lives in the hook and Layout hands it to all three. */
@@ -1164,7 +1191,7 @@ export default function Layout({ children }) {
           askOpen={dexOpen && dexInline}
           /* Decide's capture belongs to the well; Ask's is Layout's own. The
              bar shows whichever is live, and its handle stops that one. */
-          capturing={dockDecide ? dockLive.capturing : !!dex.recording}
+          capturing={dockDecide ? dockLive.capturing : !!(dex.recording || askTranscribing)}
           recording={dockDecide ? dockLive.recording : !!dex.recording}
           levelsRef={dockDecide ? dockLive.levelsRef : dex.levelsRef}
           /* Decide's stop hands over to the capture's own pop-up; Ask's stop is
@@ -1172,7 +1199,9 @@ export default function Layout({ children }) {
              recording the press sends whatever has been dictated already. */
           onStop={() => {
             if (dockDecide) { dockStopRef.current?.(); return; }
-            if (dex.recording) { askSendOnTranscript.current = true; dex.stopRecording(); return; }
+            if (dex.recording) { askSendOnTranscript.current = true; setAskTranscribing(true); dex.stopRecording(); return; }
+            // The words are still on their way: the question sends itself.
+            if (askTranscribing) return;
             chat.submit();
           }}
           /* ONE QUESTION AT A TIME (2026-10-09, founder: "while it's thinking
@@ -1186,16 +1215,33 @@ export default function Layout({ children }) {
             if (!dex.recording && !dex.sending && !chat.busy) dex.startRecording();
           }}
           askBusy={!!(dex.sending || chat.busy)}
+          askTranscribing={askTranscribing}
+          /* Decide's capture parks right, Ask's left — whichever slider in
+             the bar is drawing it (closing Ask mid-capture swaps sliders). */
+          captureSide={dockDecide ? "decide" : "ask"}
           /* CANCEL — the parked handle dragged back to the centre: the take is
              thrown away, whichever end it was started from. Ask's also forgets
              that its transcript was to send itself; nothing is coming. */
           onCancel={() => {
             if (dockDecide) { dockCancelRef.current?.(); return; }
+            // Too late to take back once the take has gone for transcription.
+            if (askTranscribing && !dex.recording) return;
             askSendOnTranscript.current = false;
             dex.cancelRecording();
           }}
           onDecide={() => setDockDecide(true)}
-          onCloseAsk={() => { setDexOpen(false); setDexChannel(null); setDexInline(false); }}
+          /* 2026-10-14 — CLOSING ASK ENDS IT. The ✕ only hid the panel: a take
+             still recording kept recording, so the bar came back as the live
+             wave with the handle parked instead of as the navbar. Closing now
+             throws a running take away (nothing is uploaded), and words still
+             being transcribed land as a kept draft rather than sending
+             themselves as a question nobody is watching for. */
+          onCloseAsk={() => {
+            askSendOnTranscript.current = false;
+            setAskTranscribing(false);
+            if (dex.recording) dex.cancelRecording();
+            setDexOpen(false); setDexChannel(null); setDexInline(false);
+          }}
           /* A TOGGLE, because More is now a state of the bar rather than a card
              over it: the same press that grew the dock puts it back, which is
              what a person does when the thing they opened is still under their

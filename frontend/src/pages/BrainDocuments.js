@@ -284,10 +284,17 @@ export function DocumentsPanel({ focusId = null }) {
       )}
 
       {!loading && docs.length > 0 && (
-        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4" data-testid="brain-doc-grid">
+        /* 2026-10-14 — grid-cols-1, not an implicit column. With no template a
+           phone's single column was `auto`, sized to the widest card's
+           min-content — and a `truncate` title never wraps, so one long camera
+           filename ("JPEG_20261004_072153_8913018500…") made the column, and
+           every card in it, wider than the screen: the size and date were cut
+           off at the right edge. grid-cols-1 is minmax(0, 1fr), so the column
+           is the screen's width and the title truncates as it was meant to. */
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" data-testid="brain-doc-grid">
           {docs.map((d) => (
             <div key={d.id} data-testid={`brain-doc-card-${d.id}`}
-              className={cn("ng-bento flex flex-col gap-3 p-4", d.id === focusId && "ring-2 ring-[hsl(var(--ng-ink))]")}>
+              className={cn("ng-bento flex min-w-0 flex-col gap-3 p-4", d.id === focusId && "ring-2 ring-[hsl(var(--ng-ink))]")}>
               <div className="flex items-start justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2.5">
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white text-slate-700 ring-1 ring-inset ring-slate-900/[0.06]">

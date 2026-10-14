@@ -127,6 +127,16 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
                                and the right end offers nothing, because there
                                is no Decide door to open mid-question. */
                             composer = false,
+                            /* 2026-10-14 — WHICH END A LIVE CAPTURE PARKS AT:
+                               "ask" (left) or "decide" (right). Without it the
+                               side follows `composer`, as it always did. The
+                               dock passes the live capture's own side, because
+                               the same Ask capture is drawn by two of these —
+                               the conversation's composer and the bar — and
+                               closing the conversation mid-capture swapped
+                               the one parking left for the one parking right:
+                               the handle shot across to the Decide end. */
+                            parkSide = null,
                             /* THE DOCK USES THIS CONTROL AS ITS BAR. (2026-10-06.)
                                On every page but the Desk the founder wants the
                                navbar to BE the slider: its height, its well,
@@ -273,11 +283,12 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
      button should stay left and it should become a send icon, but it again
      switches back to the right side". A control that travels away from the
      finger that committed it is lying about what it just did. */
+  const parkLeft = parkSide ? parkSide === "ask" : composer;
   const park = React.useCallback(() => {
-    const m = composer ? -travel() : travel();
+    const m = parkLeft ? -travel() : travel();
     lastDxRef.current = m;
     setDx(m);
-  }, [composer, travel]);
+  }, [parkLeft, travel]);
   React.useEffect(() => {
     if (!capturing) return;
     draggingRef.current = false;
@@ -591,7 +602,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
              goes with it: at the centre, where letting go cancels, it is all
              but gone. Off `pct`, so it comes back if the finger turns round. */
           <div className={cn("pointer-events-none absolute inset-0 flex items-center",
-            composer ? "pl-28 pr-6" : "pl-6 pr-28")} aria-hidden="true"
+            parkLeft ? "pl-28 pr-6" : "pl-6 pr-28")} aria-hidden="true"
             style={homing ? { opacity: Math.max(0.12, pct) } : undefined}>
             <DexWave
               state={recording ? "listening" : "thinking"}

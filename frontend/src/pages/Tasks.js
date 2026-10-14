@@ -370,10 +370,13 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
               shrinks it: 44 CSS pixels at --ui-scale 0.8 is 35 real ones, which
               is what the audit measured and what a thumb misses. --touch-min
               divides by the scale, so this lands at 44 wherever it is drawn. */}
+          {/* 2026-10-14 — below the status bar on a phone. The sheet's padding
+              (--sa-top) moves its content down, but this button is absolute from
+              the sheet's own top edge, so at top-4 it sat on the battery icon. */}
           <DialogPrimitiveClose
             data-testid="task-dialog-close"
             aria-label="Close"
-            className="ng-pop absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full text-foreground/70 [min-height:var(--touch-min)] [min-width:var(--touch-min)] lg:h-9 lg:w-9 lg:[min-height:auto] lg:[min-width:auto]">
+            className="ng-pop absolute right-4 top-[calc(var(--sa-top)+0.75rem)] grid h-11 w-11 place-items-center rounded-full text-foreground/70 [min-height:var(--touch-min)] [min-width:var(--touch-min)] lg:top-4 lg:h-9 lg:w-9 lg:[min-height:auto] lg:[min-width:auto]">
             <X size={16} weight="bold" aria-hidden="true" className="lg:hidden" />
             <X size={15} weight="bold" aria-hidden="true" className="hidden lg:block" />
           </DialogPrimitiveClose>

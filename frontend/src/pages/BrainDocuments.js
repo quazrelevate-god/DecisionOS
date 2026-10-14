@@ -1,13 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  Upload, MagnifyingGlass, File, Trash, PencilSimple, DownloadSimple, Lock,
-  X,
+  Upload, MagnifyingGlass, File, Trash, DownloadSimple, Lock, Paperclip, FileText,
 } from "@phosphor-icons/react";
 import api, { formatApiError } from "../lib/api";
 import { EmptyState, Loader, ConfirmAction } from "../components/common";
 import { useAuth } from "../context/AuthContext";
 import { ReportButton } from "../components/ReportButton";
+import { Dialog, DialogContent } from "../components/ui/dialog";
+import { GlassSelect } from "../components/neuglass/GlassSelect";
+import { GLASS_PILL, INK_PILL } from "../components/neuglass/glass";
+import { AREA, FIELD, Field, SHEET_CONTENT, SheetFoot, SheetHead } from "./finance/financeKit";
+import { cn } from "@/lib/utils";
 
 const KINDS = [
   { key: "policy", label: "Policy" },
@@ -23,10 +27,7 @@ const VISIBILITIES = [
   { key: "dept", label: "One department only" },
   { key: "private", label: "Only owner + named roles" },
 ];
-const KIND_TINT = {
-  policy: "bg-caution-50/40", filing: "bg-brand-blue/20", contract: "bg-white",
-  sop: "bg-brand-600/10", report: "bg-brand-paper", note: "bg-white", other: "bg-white",
-};
+const KIND_LABEL = Object.fromEntries(KINDS.map((k) => [k.key, k.label]));
 
 const fmtSize = (n) => {
   if (!n) return "";
@@ -42,8 +43,12 @@ const fmtDate = (iso) => {
 
 // -----------------------------------------------------------------------------
 // Upload dialog — owner + team_manage only
+// 2026-10-12 (founder) — the app's own sheet now (financeKit's, the same one
+// Finance uses), with glass dropdowns; it was the pre-redesign square card
+// with a blue button and the operating system's own select lists.
 // -----------------------------------------------------------------------------
 function UploadDialog({ onClose, onUploaded }) {
+  const uid = useId();
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState("policy");
@@ -80,89 +85,66 @@ function UploadDialog({ onClose, onUploaded }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-4" data-testid="brain-doc-upload-dialog">
-      <div className="w-full max-w-lg bg-brand-paper border border-border shadow-md max-h-[calc(90vh/var(--ui-scale,1))] overflow-y-auto">
-        <div className="flex items-center justify-between border-b border-border px-5 py-3">
-          <p className="font-medium">Add a document</p>
-          <button onClick={onClose} data-testid="brain-doc-upload-close" className="w-8 h-8 flex items-center justify-center hover:bg-accent">
-            <X size={16} weight="bold" />
-          </button>
-        </div>
-        <div className="p-5 space-y-4">
-          <label className="block">
-            <span className="label-mono text-muted-foreground">File</span>
-            <input
-              type="file" data-testid="brain-doc-upload-file"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-              className="mt-1 block w-full text-sm nm-tile file:mr-3 file:py-2 file:px-4 file:border-0 file:border-r file:border-border file:bg-primary file:text-white file:font-semibold file:uppercase file:tracking-wider file:text-xs" />
-            <span className="text-[11px] text-muted-foreground font-mono mt-1 block">PDF · DOCX · XLSX · TXT · images · 25MB max</span>
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className={cn(SHEET_CONTENT, "max-w-lg")} data-testid="brain-doc-upload-dialog">
+        <SheetHead icon={FileText} title="Add a document"
+          description="Dex reads it and answers from it. Only the people you choose can open it." onClose={onClose} />
+        <div className="space-y-4 px-6 pb-5">
+          <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-slate-900/15 bg-white/55 px-4 py-2.5 text-sm transition-colors hover:bg-white/80 focus-within:ring-2 focus-within:ring-neutral-900/25">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white text-slate-600 ring-1 ring-inset ring-slate-900/[0.06]">
+              <Paperclip size={15} weight="bold" aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs font-medium text-slate-600">File</span>
+              <span className="block truncate text-slate-500">{file ? file.name : "PDF, Word, Excel, text or a photo · up to 25 MB"}</span>
+            </span>
+            <input type="file" className="sr-only" data-testid="brain-doc-upload-file"
+              onChange={(e) => setFile(e.target.files?.[0] || null)} />
           </label>
 
-          <label className="block">
-            <span className="label-mono text-muted-foreground">Title</span>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} data-testid="brain-doc-upload-title"
-              placeholder={file?.name || "e.g. Leave Policy 2026"}
-              className="mt-1 w-full px-3 py-2 nm-tile text-sm focus:outline-none" />
-          </label>
+          <Field label="Title" htmlFor={`${uid}-title`}>
+            <input id={`${uid}-title`} value={title} onChange={(e) => setTitle(e.target.value)} data-testid="brain-doc-upload-title"
+              placeholder={file?.name || "e.g. Leave Policy 2026"} className={FIELD} />
+          </Field>
 
           <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="label-mono text-muted-foreground">Kind</span>
-              <select value={kind} onChange={(e) => setKind(e.target.value)} data-testid="brain-doc-upload-kind"
-                className="mt-1 w-full px-3 py-2 nm-tile text-sm focus:outline-none">
-                {KINDS.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className="label-mono text-muted-foreground">Tags (comma-separated)</span>
-              <input value={tags} onChange={(e) => setTags(e.target.value)} data-testid="brain-doc-upload-tags"
-                placeholder="hr, leave, holiday"
-                className="mt-1 w-full px-3 py-2 nm-tile text-sm focus:outline-none" />
-            </label>
+            <Field label="Kind" htmlFor={`${uid}-kind`}>
+              <GlassSelect id={`${uid}-kind`} variant="field" triggerClassName={FIELD} testid="brain-doc-upload-kind" ariaLabel="Kind"
+                value={kind} onChange={setKind} options={KINDS.map((k) => ({ value: k.key, label: k.label }))} />
+            </Field>
+            <Field label="Tags" htmlFor={`${uid}-tags`}>
+              <input id={`${uid}-tags`} value={tags} onChange={(e) => setTags(e.target.value)} data-testid="brain-doc-upload-tags"
+                placeholder="hr, leave" className={FIELD} />
+            </Field>
           </div>
 
-          <label className="block">
-            <span className="label-mono text-muted-foreground">Who can see this?</span>
-            <select value={visibility} onChange={(e) => setVisibility(e.target.value)} data-testid="brain-doc-upload-visibility"
-              className="mt-1 w-full px-3 py-2 nm-tile text-sm focus:outline-none">
-              {VISIBILITIES.map((v) => <option key={v.key} value={v.key}>{v.label}</option>)}
-            </select>
-          </label>
+          <Field label="Who can see this?" htmlFor={`${uid}-vis`}>
+            <GlassSelect id={`${uid}-vis`} variant="field" triggerClassName={FIELD} testid="brain-doc-upload-visibility" ariaLabel="Who can see this?"
+              value={visibility} onChange={setVisibility} options={VISIBILITIES.map((v) => ({ value: v.key, label: v.label }))} />
+          </Field>
 
           {visibility === "dept" && (
-            <label className="block">
-              <span className="label-mono text-muted-foreground">Department (role key)</span>
-              <input value={department} onChange={(e) => setDepartment(e.target.value)} data-testid="brain-doc-upload-department"
-                placeholder="finance, sales, operations…"
-                className="mt-1 w-full px-3 py-2 nm-tile text-sm focus:outline-none" />
-            </label>
+            <Field label="Department" htmlFor={`${uid}-dept`}>
+              <input id={`${uid}-dept`} value={department} onChange={(e) => setDepartment(e.target.value)} data-testid="brain-doc-upload-department"
+                placeholder="finance, sales, operations…" className={FIELD} />
+            </Field>
           )}
           {visibility !== "public" && (
-            <label className="block">
-              <span className="label-mono text-muted-foreground">Also allow these roles (optional)</span>
-              <input value={rolesAllowed} onChange={(e) => setRolesAllowed(e.target.value)} data-testid="brain-doc-upload-roles"
-                placeholder="finance, hr"
-                className="mt-1 w-full px-3 py-2 nm-tile text-sm focus:outline-none" />
-            </label>
+            <Field label="Also allow these roles (optional)" htmlFor={`${uid}-roles`}>
+              <input id={`${uid}-roles`} value={rolesAllowed} onChange={(e) => setRolesAllowed(e.target.value)} data-testid="brain-doc-upload-roles"
+                placeholder="finance, hr" className={FIELD} />
+            </Field>
           )}
 
-          <label className="block">
-            <span className="label-mono text-muted-foreground">Short summary (optional)</span>
-            <textarea value={summary} onChange={(e) => setSummary(e.target.value)} rows={2} data-testid="brain-doc-upload-summary"
-              placeholder="One-line description Dex will use to help match this document to questions."
-              className="mt-1 w-full px-3 py-2 nm-tile text-sm focus:outline-none resize-none" />
-          </label>
+          <Field label="Short summary (optional)" htmlFor={`${uid}-summary`}>
+            <textarea id={`${uid}-summary`} value={summary} onChange={(e) => setSummary(e.target.value)} rows={2} data-testid="brain-doc-upload-summary"
+              placeholder="One line Dex can use to match this document to questions." className={cn(AREA, "resize-none")} />
+          </Field>
         </div>
-        <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3 bg-white">
-          <button onClick={onClose} className="px-4 py-2 border border-border text-xs font-medium hover:bg-accent">Cancel</button>
-          <button onClick={submit} disabled={busy || !file} data-testid="brain-doc-upload-submit"
-            className="flex items-center gap-2 bg-brand-600 text-white px-5 py-2 border border-border text-xs font-medium transition-all disabled:opacity-40">
-            {busy ? <Loader size={16} /> : <Upload size={14} weight="bold" />}
-            {busy ? "Adding…" : "Add to Brain"}
-          </button>
-        </div>
-      </div>
-    </div>
+        <SheetFoot onCancel={onClose} onSave={submit} busy={busy} disabled={!file} testid="brain-doc-upload-submit"
+          saveLabel="Add to Brain" busyLabel="Adding…" />
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -254,41 +236,43 @@ export function DocumentsPanel({ focusId = null }) {
 
   return (
     <div data-testid="brain-documents-panel">
-      {/* Search + filter + upload */}
-      <div className="flex flex-col md:flex-row md:items-center gap-2 mb-2 max-w-3xl">
-        <div className="flex-1 flex items-center nm-tile px-4">
-          <MagnifyingGlass size={18} weight="bold" className="text-muted-foreground" />
+      {/* Search + filter + upload — 2026-10-12 (founder): the app's own pills,
+          a glass dropdown and the ink button, where these were the
+          pre-redesign square tiles, a native dropdown and a blue button. */}
+      <div className="mb-2 flex max-w-3xl flex-col gap-2 md:flex-row md:items-center">
+        <div className="ng-pressed flex min-w-0 flex-1 items-center rounded-pill">
+          <MagnifyingGlass size={16} className="ml-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <input
             data-testid="brain-doc-search"
             value={q} onChange={(e) => onQChange(e.target.value)}
             placeholder="Search by title, tag or keyword…"
-            className="flex-1 py-3 px-3 text-sm font-mono focus:outline-none"
+            aria-label="Search documents"
+            className="min-w-0 flex-1 bg-transparent px-3 py-3 text-sm outline-none"
           />
         </div>
-        <select value={kind} onChange={(e) => { setKind(e.target.value); load(q, e.target.value); }}
-          data-testid="brain-doc-kind-filter"
-          className="px-3 py-2 nm-tile text-sm font-mono focus:outline-none min-w-[140px]">
-          <option value="">All kinds</option>
-          {KINDS.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}
-        </select>
-        {isOwner && (
-          <button onClick={() => setShowUpload(true)} data-testid="brain-doc-add-btn"
-            className="flex items-center gap-2 bg-brand-600 text-white px-5 py-3 border border-border text-xs font-medium transition-all">
-            <Upload size={14} weight="bold" /> Add document
-          </button>
-        )}
+        <div className="flex gap-2">
+          <div className="min-w-0 flex-1 md:w-44 md:flex-none">
+            <GlassSelect testid="brain-doc-kind-filter" ariaLabel="Kind of document" triggerClassName="h-11 text-sm"
+              value={kind} onChange={(v) => { setKind(v); load(q, v); }}
+              options={[{ value: "", label: "All kinds" }, ...KINDS.map((k) => ({ value: k.key, label: k.label }))]} />
+          </div>
+          {isOwner && (
+            <button onClick={() => setShowUpload(true)} data-testid="brain-doc-add-btn"
+              className={`flex h-11 shrink-0 items-center gap-2 rounded-pill px-5 text-sm font-semibold ${INK_PILL}`}>
+              <Upload size={15} weight="bold" aria-hidden="true" /> Add document
+            </button>
+          )}
+        </div>
       </div>
-      <p className="text-xs text-muted-foreground mb-8">
+      <p className="mb-6 text-xs text-muted-foreground">
         Dump the policies, filings, contracts and old reports here — employees can find them by asking Dex or searching.
       </p>
 
       {/* B?? — skeleton rows instead of a bare "Loading…", so the list area
           doesn't flash empty-then-content while the docs query resolves. */}
       {loading && (
-        <div className="animate-pulse space-y-3" aria-hidden="true">
-          <div className="h-16 rounded-xl bg-slate-200/60" />
-          <div className="h-16 rounded-xl bg-slate-200/60" />
-          <div className="h-16 rounded-xl bg-slate-200/50" />
+        <div className="space-y-3" aria-hidden="true">
+          {[0, 1, 2].map((i) => <div key={i} className="ds-skeleton h-24 rounded-cardlg" />)}
         </div>
       )}
       {!loading && docs.length === 0 && (
@@ -303,13 +287,15 @@ export function DocumentsPanel({ focusId = null }) {
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4" data-testid="brain-doc-grid">
           {docs.map((d) => (
             <div key={d.id} data-testid={`brain-doc-card-${d.id}`}
-              className={`nm-tile shadow-sm p-4 flex flex-col gap-3 transition-shadow ${d.id === focusId ? "ring-2 ring-brand-600" : ""}`}>
+              className={cn("ng-bento flex flex-col gap-3 p-4", d.id === focusId && "ring-2 ring-[hsl(var(--ng-ink))]")}>
               <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <File size={18} weight="bold" className="shrink-0" />
-                  <p className="font-medium text-sm leading-tight truncate">{d.title}</p>
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white text-slate-700 ring-1 ring-inset ring-slate-900/[0.06]">
+                    <File size={16} weight="bold" aria-hidden="true" />
+                  </span>
+                  <p className="truncate text-sm font-semibold leading-tight text-slate-900">{d.title}</p>
                 </div>
-                <span className={`px-2 py-0.5 border border-border text-[10px] font-mono  shrink-0 ${KIND_TINT[d.kind] || "bg-white"}`}>{d.kind}</span>
+                <span className="shrink-0 rounded-pill bg-slate-900/[0.06] px-2.5 py-0.5 text-[11px] font-medium text-slate-600">{KIND_LABEL[d.kind] || d.kind}</span>
               </div>
               {d.summary && <p className="text-xs text-muted-foreground leading-relaxed">{d.summary}</p>}
               {/* 2026-10-05 — why Ask can't find something in this file. */}
@@ -319,11 +305,11 @@ export function DocumentsPanel({ focusId = null }) {
               {(d.tags || []).length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {d.tags.map((t) => (
-                    <span key={t} className="px-1.5 py-0.5 border border-border text-[10px] font-mono bg-brand-paper">#{t}</span>
+                    <span key={t} className="rounded-pill bg-white/80 px-2 py-0.5 text-[11px] text-slate-600 ring-1 ring-inset ring-slate-900/[0.06]">#{t}</span>
                   ))}
                 </div>
               )}
-              <div className="flex items-center justify-between text-[11px] font-mono text-muted-foreground pt-2 border-t border-border">
+              <div className="flex items-center justify-between border-t border-slate-900/[0.06] pt-2 text-[11px] text-muted-foreground">
                 <span className="flex items-center gap-1.5">
                   {d.visibility === "public"
                     ? "Everyone"
@@ -335,19 +321,20 @@ export function DocumentsPanel({ focusId = null }) {
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => download(d)} data-testid={`brain-doc-download-${d.id}`}
-                  className="flex-1 flex items-center justify-center gap-1.5 border border-border py-2 text-[11px] font-medium bg-white hover:bg-accent">
-                  <DownloadSimple size={12} weight="bold" /> Download
+                  className={`flex h-10 flex-1 items-center justify-center gap-1.5 rounded-pill text-xs font-medium text-slate-700 transition-colors hover:bg-white ${GLASS_PILL}`}>
+                  <DownloadSimple size={13} weight="bold" aria-hidden="true" /> Download
                 </button>
                 {(isOwner || d.uploaded_by === user?.id) && (
                   <button onClick={() => remove(d)} disabled={deleting === d.id} data-testid={`brain-doc-delete-${d.id}`}
-                    className="flex items-center justify-center gap-1.5 border border-border py-2 px-3 text-[11px] font-medium bg-white hover:bg-brand-600 hover:text-white transition-colors disabled:opacity-40">
-                    {deleting === d.id ? <Loader size={14} /> : <Trash size={12} weight="bold" />}
+                    aria-label={`Remove ${d.title}`}
+                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-slate-600 transition-colors hover:bg-white hover:text-rose-700 disabled:opacity-40 ${GLASS_PILL}`}>
+                    {deleting === d.id ? <Loader size={14} /> : <Trash size={14} weight="bold" aria-hidden="true" />}
                   </button>
                 )}
                 {d.uploaded_by && d.uploaded_by !== user?.id && (
                   <ReportButton kind="content" targetType="file" targetId={d.id}
                     snapshot={[d.title, d.summary].filter(Boolean).join("\n")} size={12}
-                    className="self-stretch border border-border bg-white px-3 max-lg:my-0" />
+                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-full max-lg:my-0 ${GLASS_PILL}`} />
                 )}
               </div>
             </div>

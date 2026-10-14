@@ -18,6 +18,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { WifiSlash } from "@phosphor-icons/react";
+import { TopNotice, NoticePill } from "./TopNotice";
 
 const deviceOnline = () => typeof navigator === "undefined" || navigator.onLine !== false;
 
@@ -43,18 +44,13 @@ export function ConnectionNotice() {
   }, []);
 
   if (online) return null;
+  // 2026-10-12 — first in the top-notice stack, so a stale-data pill sits under it rather than on it.
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      data-testid="connection-offline"
-      className="pointer-events-none fixed inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] z-[200] flex justify-center px-4"
-    >
-      <div className="flex max-w-md items-center gap-2 rounded-pill bg-slate-900 px-4 py-2 text-sm text-white shadow-lg">
-        <WifiSlash size={16} weight="bold" aria-hidden="true" className="shrink-0" />
-        <span>You&rsquo;re offline. Changes won&rsquo;t save until you&rsquo;re back.</span>
-      </div>
-    </div>
+    <TopNotice order={0}>
+      <NoticePill icon={WifiSlash} testid="connection-offline">
+        You&rsquo;re offline. Changes won&rsquo;t save until you&rsquo;re back.
+      </NoticePill>
+    </TopNotice>
   );
 }
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import api from "../../lib/api";
 import AdminLogin from "./AdminLogin";
-import { GLASS_PILL, INK_PILL } from "../../components/karma/glass";
+import { GLASS_PILL, INK_PILL } from "../../components/neuglass/glass";
 // The app's quiet grey ground, not the old black one.
 const PAGE = "min-h-[calc(100vh/var(--ui-scale,1))] bg-[linear-gradient(180deg,hsl(220_20%_97%),hsl(220_14%_91%))] text-slate-900";
 import {

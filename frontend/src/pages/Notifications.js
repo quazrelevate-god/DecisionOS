@@ -8,7 +8,7 @@ import { timeAgo, fullTime } from "../lib/format";
 import { notifMeta, notifLink } from "../lib/notif";
 import { BellRinging, Check, UserCircle, CaretRight } from "@phosphor-icons/react";
 import { useIsMobile } from "../hooks/useIsMobile";
-import { GLASS_PILL } from "../components/karma/glass";
+import { GLASS_PILL } from "../components/neuglass/glass";
 
 // Mobile PWA (2026-09-14) — on the glass, and one real fix: the "Show N older"
 // button was written INSIDE the row loop, so on a phone every notification

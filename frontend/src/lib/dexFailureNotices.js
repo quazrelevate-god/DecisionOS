@@ -9,8 +9,9 @@
 //
 // Sonner cannot place one toast differently from the rest, so these live in
 // this small store instead and are drawn by components/mobile/DexFailureNotice:
-// above the dock (with the page's scroll clearance extended by its height) when
-// the Dex sheet is closed, and in the sheet's own flow when it is open. Plan
+// in the top-notice stack under the status bar when the Dex sheet is closed
+// (2026-10-12 — every error pill floats at the top now, out of the page), and
+// in the sheet's own flow when it is open. Plan
 // item 5.3 ("My captures") is their proper home; this stands in until then.
 //
 // An entry: { id, message, retry, onRetry(entry), canRetry() }. The functions are

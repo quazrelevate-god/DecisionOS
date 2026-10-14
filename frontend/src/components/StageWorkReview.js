@@ -13,7 +13,7 @@
  * owner's decision to make, with the words in front of them.
  */
 import { roleLabel } from "../lib/departments";
-import { GlassSelect } from "./karma/GlassSelect";
+import { GlassSelect } from "./neuglass/GlassSelect";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Sparkle, Plus, Trash, CircleNotch } from "@phosphor-icons/react";
@@ -165,7 +165,7 @@ export function StageWorkReview({ model, roleOptions = [], onApplied }) {
                                   onChange={(e) => setTask(i, ti, { title: e.target.value })}
                                   data-testid={`stage-work-task-${r.pipeline_key}-${r.stage_key}-${ti}`} />
                                 <button type="button" onClick={() => dropTask(i, ti)} title="Drop this" aria-label="Drop this task"
-                                  className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted-foreground hover:text-kr-accent"><Trash size={14} weight="bold" /></button>
+                                  className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted-foreground hover:text-ng-accent"><Trash size={14} weight="bold" /></button>
                               </div>
                               <GlassSelect variant="field" triggerClassName={`${field} h-[34px] justify-between text-left`}
                                 testid={`stage-work-role-${r.pipeline_key}-${r.stage_key}-${ti}`}

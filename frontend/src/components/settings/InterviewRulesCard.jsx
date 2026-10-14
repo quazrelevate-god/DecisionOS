@@ -21,7 +21,7 @@ export function InterviewRulesCard() {
   const q = useQuery({ queryKey: ["approval-rules"], queryFn: () => api.get("/tenant/approval-rules").then((r) => r.data) });
   const rules = q.data?.rules || [];
   const applied = q.data?.applied || [];
-  if (q.isLoading) return <div className="kr-bento ds-skeleton h-32" aria-hidden="true" />;
+  if (q.isLoading) return <div className="ng-bento ds-skeleton h-32" aria-hidden="true" />;
   if (!rules.length) return null;
 
   const byRule = Object.fromEntries(applied.map((a) => [a.rule, a]));
@@ -41,7 +41,7 @@ export function InterviewRulesCard() {
   };
 
   return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="interview-rules-card">
+    <div className="ng-bento p-5 sm:p-6" data-testid="interview-rules-card">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 text-base font-medium">
@@ -53,7 +53,7 @@ export function InterviewRulesCard() {
         </div>
         {isOwner && (
           <button type="button" onClick={apply} disabled={busy} data-testid="interview-rules-apply"
-            className="kr-pop h-10 shrink-0 rounded-pill px-4 text-sm font-medium disabled:opacity-50">
+            className="ng-pop h-10 shrink-0 rounded-pill px-4 text-sm font-medium disabled:opacity-50">
             {busy ? "Applying…" : applied.length ? "Apply again" : "Set these up"}
           </button>
         )}

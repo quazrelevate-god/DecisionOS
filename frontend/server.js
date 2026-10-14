@@ -112,7 +112,7 @@ const NO_STORE = new Set(["/index.html", "/service-worker.js", "/manifest.json"]
    every client that had already loaded the page was entitled to ignore them.
    `no-cache` still CACHES — it just revalidates first, so an unchanged image
    costs a 304 and a changed one is picked up on the next load. */
-const REVALIDATE = /^\/(sky|landing)\//;
+const REVALIDATE = /^\/(sky|landing|guide)\//;
 app.use(
   express.static(BUILD, {
     index: false,
@@ -157,6 +157,19 @@ if (!HAS_LANDING) {
 app.get(["/", "/landing", "/landing/"], (req, res) => {
   res.setHeader("Cache-Control", "no-cache, must-revalidate");
   res.sendFile(HAS_LANDING ? LANDING : path.join(BUILD, "index.html"));
+});
+
+/* 2026-10-12 — THE USER GUIDE, at /guide. Like the landing page it is a
+   static page from the CRA public folder (public/guide), so its css, js and
+   screenshots are already served at /guide/*; only the document needs a route,
+   because express.static runs with index:false and the SPA fallback below
+   would otherwise answer /guide with the app. The app opens it from More →
+   Help & guide and Settings → Account → Help (src/lib/guide.js). */
+const GUIDE = path.join(BUILD, "guide", "index.html");
+app.get(["/guide", "/guide/"], (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  if (!require("fs").existsSync(GUIDE)) return res.status(404).send("Guide not built");
+  res.sendFile(GUIDE);
 });
 
 /* B19 (2026-09-29) — THE FILE THAT LETS AN INVITE OPEN THE APP.

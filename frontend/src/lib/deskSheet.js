@@ -31,7 +31,7 @@ export function publishDeskSheetTop(top) {
 export function deskSheetTop() {
   /* On the Desk, the sheet itself — unless it is lifted out over the page
      (Show all), when its rect is the pop's and not the sheet's. */
-  const board = document.querySelector('[data-testid="desk-board"].kr-desk-sheet-floor');
+  const board = document.querySelector('[data-testid="desk-board"].ng-desk-sheet-floor');
   if (board && board.style.position !== "fixed") {
     const top = board.getBoundingClientRect().top;
     if (top > 0) { publishDeskSheetTop(top); return top; }

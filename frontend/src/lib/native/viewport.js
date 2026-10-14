@@ -50,6 +50,11 @@ export function lockZoomInApp() {
     /* viewport-fit=cover is kept deliberately: without it env(safe-area-inset-*)
        reports 0 and every safe-area rule in index.css goes inert — which is
        the bug that hid the wordmark behind the Dynamic Island. */
+    /* Unless the page is already drawn through a widened viewport (useUiScale,
+       on a WebKit whose CSS zoom does not scale type): that content pins the
+       scale at 0.8 with the same three numbers, so it already does this job,
+       and writing `width=device-width` over it would undo the whole scale. */
+    if (tag.hasAttribute("data-ui-width")) return true;
     tag.setAttribute("content", PINNED);
     return true;
   } catch (e) {

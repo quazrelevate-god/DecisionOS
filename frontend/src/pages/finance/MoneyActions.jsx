@@ -25,8 +25,8 @@ import { useAuth } from "../../context/AuthContext";
 import { lex } from "../../lib/lexicon";
 import { shortDate } from "../../lib/format";
 import { Dialog, DialogContent } from "../../components/ui/dialog";
-import { GlassSelect } from "../../components/karma/GlassSelect";
-import { PartyPicker } from "../../components/karma/PartyPicker";
+import { GlassSelect } from "../../components/neuglass/GlassSelect";
+import { PartyPicker } from "../../components/neuglass/PartyPicker";
 import { AREA, CARD, FIELD, Field, SHEET_CONTENT, SMALL_INK, SMALL_PILL, SheetFoot, SheetHead, Tag, fmt } from "./financeKit";
 
 const today = () => new Date().toISOString().slice(0, 10);

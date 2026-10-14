@@ -1,5 +1,5 @@
 /* KR-1 (2026-08-18) — one voice: Urbanist, variable.
-   The Karma reference is a geometric low-contrast sans at every size — no
+   The Neu-glassmorphism reference is a geometric low-contrast sans at every size — no
    serif moments, no second face. Urbanist over the closer-looking Poppins
    for one load-bearing reason: Poppins ships static weights only, and this
    type ladder depends on weight 650 for the h2/h3 distinction (see the
@@ -64,7 +64,7 @@
         --success-900: 144 61% 20%;
 
         /* KR-2 (2026-08-18) — neutrals rotate onto the warm axis.
-           RD-1 put the greys on hue 240 to sit with the indigo brand. Karma's
+           RD-1 put the greys on hue 240 to sit with the indigo brand. Neu-glassmorphism's
            canvas is warm greige with an amber bloom, and cool greys on a warm
            ground read as dirt — every secondary string would look faintly
            blue-stained. Hue moves to 40 (the bloom's family), saturation
@@ -76,7 +76,7 @@
 
         /* ---- semantic · light ---- */
         /* KR-2: the ground/card relationship INVERTS from RD-1. RD-1 put page
-           and cards on one white ground separated by hairline alone; Karma
+           and cards on one white ground separated by hairline alone; Neu-glassmorphism
            separates by TONE — a warm greige page under pure-white cards, no
            shadows, near-no borders. --background is the greige; surfaces stay
            white so every existing bg-surface/bg-card call site becomes "a
@@ -349,8 +349,6 @@
     }
     .dark .shadow-hover:hover { box-shadow: var(--nm-shadow-lg) !important; }
     .dark .shadow-hover:active { box-shadow: var(--nm-pressed) !important; }
-    .dark ::-webkit-scrollbar-track { background: transparent; }
-    .dark ::-webkit-scrollbar-thumb { background: hsl(240 4% 24%); border-color: transparent; }
     .dark input::placeholder, .dark textarea::placeholder { color: hsl(240 5% 50%); }
     .dark textarea, .dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) { background-color: hsl(var(--card)); color: #f4f4f5; }
     .dark select:invalid, .dark select option { color: #f4f4f5; background-color: hsl(var(--card)); }
@@ -429,7 +427,7 @@
         width: 28px;
         height: 28px;
         border-radius: 9999px;
-        background: hsl(var(--kr-ink));
+        background: hsl(var(--ng-ink));
         border: 2px solid #fff;
         box-shadow: 0 1px 3px hsl(230 20% 20% / .28);
         cursor: pointer;
@@ -438,7 +436,7 @@
         width: 28px;
         height: 28px;
         border-radius: 9999px;
-        background: hsl(var(--kr-ink));
+        background: hsl(var(--ng-ink));
         border: 2px solid #fff;
         box-shadow: 0 1px 3px hsl(230 20% 20% / .28);
         cursor: pointer;
@@ -450,7 +448,7 @@
        be set by its controls instead of its content. 27px each, and they are
        the only targets in that column with 4px of clearance either side, so
        nothing sits close enough to mis-tap. Everything else keeps the floor. */
-    .kr-step-nudge {
+    .ng-step-nudge {
         min-height: 0;
         min-width: 0;
     }
@@ -464,13 +462,13 @@
        24x24 that WCAG 2.5.8 asks and well inside a thumb, because the target
        here is a wide bar rather than a small square — the floor exists to stop
        tiny icon buttons, and these are not that. Width is untouched. */
-    .kr-seg-compact {
+    .ng-seg-compact {
         min-height: 0;
     }
 
     /* 2026-10-06 — the THIRD documented exception, and the narrowest. The open
-       circle at the end of a Desk sheet row (.kr-desk-row-open, inside
-       .kr-desk-row-roomy only) is a second way into something the WHOLE ROW
+       circle at the end of a Desk sheet row (.ng-desk-row-open, inside
+       .ng-desk-row-roomy only) is a second way into something the WHOLE ROW
        already does: DeskRow's root is the link, its onClick is the same
        r.onOpen, and it is full width and never under 44px tall. So the floor
        here was not protecting a thumb — it was setting the row's height. A
@@ -480,7 +478,7 @@
        It is sized off --desk-row-scale with the rest of the row instead; 24px
        at the floor, inside a 44px-tall row that is itself the target. Outside
        the sheet the circle is untouched and keeps the floor. */
-    .kr-desk-row-roomy .kr-desk-row-open {
+    .ng-desk-row-roomy .ng-desk-row-open {
         min-height: 0;
         min-width: 0;
     }
@@ -817,7 +815,7 @@
    sizes are still written on it, and silently winning that fight is how a
    phone fix turns up on a laptop a month later. */
 @media (max-width: 1023.98px) {
-    .kr-desk-row-roomy {
+    .ng-desk-row-roomy {
         padding-block: calc(0.5rem * var(--desk-row-scale));
         /* NO CEILING IN THE SHEET ANY MORE. (2026-10-06, founder: the three
            rows should be "utilizing the entire space for it… either it should
@@ -836,11 +834,11 @@
            see ONE CARD HEIGHT below. The floor and the clip stand.) */
         overflow: hidden;
     }
-    .kr-desk-row-title {
+    .ng-desk-row-title {
         font-size: calc(17px * var(--desk-row-scale));
         line-height: calc(1.5rem * var(--desk-row-scale));
     }
-    .kr-desk-row-meta {
+    .ng-desk-row-meta {
         font-size: calc(15px * var(--desk-row-scale));
         line-height: calc(1.5rem * var(--desk-row-scale));
     }
@@ -869,13 +867,13 @@
            or a label.
        Nothing here is a different design: it is the same Desk with the air
        taken out of it, and one line fewer per row. */
-    :root[data-desk-tight="2"] .kr-desk-row-meta { display: none; }
-    :root[data-desk-tight] .kr-desk-sheet-list { --desk-row-gap: 0.375rem; }
+    :root[data-desk-tight="2"] .ng-desk-row-meta { display: none; }
+    :root[data-desk-tight] .ng-desk-sheet-list { --desk-row-gap: 0.375rem; }
     :root[data-desk-tight] [data-testid="desk-phone-more"],
     :root[data-desk-tight] [data-testid="desk-phone-more-slot"] { height: 2.75rem; }
-    :root[data-desk-tight] .kr-kpi-tile { padding: 0.5rem; }
+    :root[data-desk-tight] .ng-kpi-tile { padding: 0.5rem; }
     :root[data-desk-tight] [data-testid="desk-page"] { gap: 0.5rem; }
-    :root[data-desk-tight] .kr-desk-row-roomy { padding-block: calc(0.25rem * var(--desk-row-scale)); }
+    :root[data-desk-tight] .ng-desk-row-roomy { padding-block: calc(0.25rem * var(--desk-row-scale)); }
 
     /* A ROW IS NEVER SHORTER THAN WHAT IS IN IT. (2026-10-06.)
        The pills and the Watch cards are `flex-1` in a flex column, so the
@@ -890,7 +888,7 @@
        measurement in Desk.js can see it and scale the type until it is gone.
        On [data-row] rather than on the pill, so Watch's cards are held to the
        same rule by the same line. */
-    .kr-desk-sheet-list [data-row] { min-height: min-content; }
+    .ng-desk-sheet-list [data-row] { min-height: min-content; }
 
     /* ONE CARD HEIGHT, HOWEVER MANY CARDS. (2026-10-09, founder.)
        The rows were `flex-1`, so they shared the card between however many
@@ -908,9 +906,9 @@
        own black below them. Watch is held to it by the same line; its gap is
        the list's, so it is the same slot. min-content above still wins over
        the slot, so a row can never be cut shorter than its words. */
-    .kr-desk-sheet-list { --desk-row-gap: 0.625rem; gap: var(--desk-row-gap); }
-    .kr-desk-sheet-list [data-testid="desk-watch"] { gap: var(--desk-row-gap); }
-    .kr-desk-sheet-list [data-row] {
+    .ng-desk-sheet-list { --desk-row-gap: 0.625rem; gap: var(--desk-row-gap); }
+    .ng-desk-sheet-list [data-testid="desk-watch"] { gap: var(--desk-row-gap); }
+    .ng-desk-sheet-list [data-row] {
         flex: 0 0 calc((100% - (var(--desk-row-slots, 3) - 1) * var(--desk-row-gap)) / var(--desk-row-slots, 3));
     }
 
@@ -924,7 +922,7 @@
        target (it is a link, and its own height is well over 44), and this
        circle is the second way into the same thing, which is why shrinking it
        costs nothing a thumb can feel. Untouched off the sheet. */
-    .kr-desk-row-roomy .kr-desk-row-open {
+    .ng-desk-row-roomy .ng-desk-row-open {
         height: calc(2rem * var(--desk-row-scale));
         width: calc(2rem * var(--desk-row-scale));
     }
@@ -936,7 +934,7 @@
        rows with a fair amount of spacing in between them, and the container
        pill shouldn't be neumorphic, instead flat, and the colour subtle just
        like how it's shown in the watch section."
-       So this is the Watch cards' recipe (.kr-glass + the .kr-desk--* tones)
+       So this is the Watch cards' recipe (.ng-glass + the .ng-desk--* tones)
        with everything the sheet does not need taken out: no backdrop blur
        (there is nothing behind it but flat ink — the same finding KM-35 made
        for those four), no lift, no inset highlight. A wash and a hairline.
@@ -944,20 +942,20 @@
        medium are the exact pairs the Watch cards carry, so a colour means the
        same thing in both halves of this screen. Low is the hue drained out
        rather than a new grey, so the three read as one family. */
-    .kr-desk-pill {
-        --kr-row-from: 0 0% 72%;
-        --kr-row-to:   0 0% 44%;
+    .ng-desk-pill {
+        --ng-row-from: 0 0% 72%;
+        --ng-row-to:   0 0% 44%;
         border-radius: 1.15rem;
         padding-inline: 0.875rem;
         background: linear-gradient(145deg,
-            hsl(var(--kr-row-from) / .12),
-            hsl(var(--kr-row-to) / .06));
+            hsl(var(--ng-row-from) / .12),
+            hsl(var(--ng-row-to) / .06));
         border: 1px solid hsl(0 0% 100% / .10);
         box-shadow: none;                       /* flat — not neumorphic */
     }
-    .kr-desk-pill[data-tone="high"]   { --kr-row-from: 6 78% 52%;   --kr-row-to: 348 55% 26%; }
-    .kr-desk-pill[data-tone="medium"] { --kr-row-from: 33 92% 56%;  --kr-row-to: 16 82% 36%; }
-    .kr-desk-pill[data-tone="low"]    { --kr-row-from: 0 0% 72%;    --kr-row-to: 0 0% 44%; }
+    .ng-desk-pill[data-tone="high"]   { --ng-row-from: 6 78% 52%;   --ng-row-to: 348 55% 26%; }
+    .ng-desk-pill[data-tone="medium"] { --ng-row-from: 33 92% 56%;  --ng-row-to: 16 82% 36%; }
+    .ng-desk-pill[data-tone="low"]    { --ng-row-from: 0 0% 72%;    --ng-row-to: 0 0% 44%; }
 
     /* A DRAFT IS THE ONE THING PAINTED SOLID. The founder: amber already
        means draft here, and amber is also the medium band — so the draft stops
@@ -965,7 +963,7 @@
        and nothing else in this list is solid. That makes the distinction
        structural rather than chromatic: priority is a tint, a draft is a
        filled pill, and the two cannot be confused even in one glance. */
-    .kr-desk-pill[data-deferred="true"] {
+    .ng-desk-pill[data-deferred="true"] {
         background: hsl(0 0% 100%);
         border-color: hsl(0 0% 100%);
     }
@@ -973,21 +971,21 @@
     /* The type follows the ground it is printed on. On the tinted pills that
        is the dark sheet; on a solid white draft it is ink, or none of it would
        be readable at all. Measured on white: title 16.1:1, meta 7.0:1. */
-    .kr-desk-row-title     { color: hsl(0 0% 83%); }
-    .kr-desk-row-meta      { color: hsl(0 0% 64%); }
-    .kr-desk-row-amount    { color: hsl(0 0% 83%); }
-    .kr-desk-row-draftword { color: hsl(0 0% 83%); }
-    .kr-desk-pill[data-deferred="true"] .kr-desk-row-title     { color: hsl(0 0% 9%); }
-    .kr-desk-pill[data-deferred="true"] .kr-desk-row-meta      { color: hsl(0 0% 36%); }
-    .kr-desk-pill[data-deferred="true"] .kr-desk-row-amount    { color: hsl(0 0% 9%); }
-    .kr-desk-pill[data-deferred="true"] .kr-desk-row-draftword { color: hsl(0 0% 20%); }
+    .ng-desk-row-title     { color: hsl(0 0% 83%); }
+    .ng-desk-row-meta      { color: hsl(0 0% 64%); }
+    .ng-desk-row-amount    { color: hsl(0 0% 83%); }
+    .ng-desk-row-draftword { color: hsl(0 0% 83%); }
+    .ng-desk-pill[data-deferred="true"] .ng-desk-row-title     { color: hsl(0 0% 9%); }
+    .ng-desk-pill[data-deferred="true"] .ng-desk-row-meta      { color: hsl(0 0% 36%); }
+    .ng-desk-pill[data-deferred="true"] .ng-desk-row-amount    { color: hsl(0 0% 9%); }
+    .ng-desk-pill[data-deferred="true"] .ng-desk-row-draftword { color: hsl(0 0% 20%); }
     /* …and so does the open control, which is a white-on-black glass circle
        everywhere else in this list and would vanish entirely on a white pill. */
-    .kr-desk-pill[data-deferred="true"] button {
+    .ng-desk-pill[data-deferred="true"] button {
         background: hsl(0 0% 9% / .08);
         color: hsl(0 0% 20%);
     }
-    .kr-desk-pill[data-deferred="true"] button:hover {
+    .ng-desk-pill[data-deferred="true"] button:hover {
         background: hsl(0 0% 9% / .16);
         color: hsl(0 0% 9%);
     }
@@ -1002,7 +1000,7 @@
    growth dynamic without any measuring in JS.
    The material is the dock's own, because it IS the dock: the same frosted
    ink, rim and shadow the bar carries, so nothing changes hands mid-gesture. */
-/* (There is no .kr-dock-more. The first cut of the More menu gave it this
+/* (There is no .ng-dock-more. The first cut of the More menu gave it this
    material — a second surface with the bar nested inside it, which is exactly
    what the founder sent back: "there is another sheet appeared, and in that
    sheet the dock was there as a cutout inside it." The menu has no material of
@@ -1015,7 +1013,7 @@
    on the Desk it covers the sheet exactly instead of standing on it at a
    height of its own. What is left here is only a cap for the case it cannot
    measure, so a long transcript still scrolls inside it. */
-.kr-dock-chat {
+.ng-dock-chat {
     max-height: calc(85dvh / var(--ui-scale, 1));
     background: hsl(0 0% 7% / .92);
     -webkit-backdrop-filter: blur(22px) saturate(1.2);
@@ -1185,6 +1183,26 @@
     --sa-left:   calc(max(env(safe-area-inset-left, 0px),   var(--android-sa-left, 0px))   / var(--ui-scale, 1));
     --sa-right:  calc(max(env(safe-area-inset-right, 0px),  var(--android-sa-right, 0px))  / var(--ui-scale, 1));
 }
+
+/* 2026-10-12 · THE TOP-NOTICE STACK (components/TopNotice). Every error pill
+   floats here, under the status bar and out of the page's flow, so none of
+   them pushes the UI down. Above dialogs and the dock; below the walkthrough. */
+.top-notices {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: calc(var(--sa-top, 0px) + 0.75rem);
+    z-index: 10020;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0 0.75rem;
+    pointer-events: none;
+}
+.top-notices:empty { display: none; }
+.top-notice-slot { display: flex; width: 100%; justify-content: center; }
+.top-notice-slot:empty { display: none; }
 
 /* Radix poppers (dropdown menus, popovers, tooltips) position their wrapper
    with a translate that floating-ui computed in VISUAL px; inside the zoomed
@@ -1428,7 +1446,7 @@
        referenced in 52 files, so it is redefined rather than renamed — the
        rename is mechanical churn that would bury the real diff. */
     /* KR-2 — redefined a THIRD time, same move as RD-1 and NM-3 and for the
-       same reason: 73 call sites take the new surface in one edit. Karma's
+       same reason: 73 call sites take the new surface in one edit. Neu-glassmorphism's
        card is a white object on the greige canvas, 28px radius, separated by
        TONE — no shadow, the faint hairline as the glare floor. */
     /* Mobile PWA (2026-09-14) — the last pages still on this recipe
@@ -1483,9 +1501,18 @@
     outline-offset: 2px;
 }
 
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: hsl(240 6% 82%); border: 2px solid transparent; background-clip: padding-box; border-radius: 8px; }
+/* NO SCROLLBARS, ANYWHERE (2026-10-13, founder). Everything still scrolls —
+   touch, wheel, trackpad, keyboard — but no bar is drawn, on any element, on
+   any platform. It used to be styled here at 10px, and in Chromium (Android's
+   WebView included) STYLING the bar is what turns the thin overlay one into a
+   classic bar that takes layout width: the Desk's black sheet, lifted to show
+   every row, grew a 10px gutter down its right edge and squeezed the rows to
+   make room for it. `scrollbar-width` covers Firefox and current Chromium;
+   the pseudo-element covers WebKit and older Chromium. This supersedes the
+   per-element .ng-scroll-quiet / .ng-snap rules below, which stay harmless,
+   and it is !important so no utility (`[scrollbar-width:thin]`) can bring one back. */
+* { scrollbar-width: none !important; -ms-overflow-style: none !important; }
+*::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; background: transparent !important; }
 
 @keyframes pulse-ring {
     0% { box-shadow: 0 0 0 0 hsl(var(--destructive) / .5); }
@@ -1571,16 +1598,16 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   KR-2 — the Karma surface layer. (Was NM-1's soft-depth layer.)
+   KR-2 — the Neu-glassmorphism surface layer. (Was NM-1's soft-depth layer.)
 
    THE NAMES ARE PLUMBING, THE VALUES ARE THE DESIGN. Hundreds of call sites
    reference bg-nm / nm-raised / shadow-nm / border-nm-edge; renaming them to
-   kr-* would be churn that buries the real diff, so — the same move RD-1 and
+   ng-* would be churn that buries the real diff, so — the same move RD-1 and
    NM-3 made — the tokens keep their names and change what they mean:
 
      ground      greige, not white    cards separate by TONE on it
      card        pure white           borderless-looking, 24-28px radius
-     shadows     ZEROED               Karma has no drop shadows at all
+     shadows     ZEROED               Neu-glassmorphism has no drop shadows at all
      boundary    tone for containers; a ≥3:1 OUTLINE for controls
 
    The shadow variables are zeroed HERE rather than recipe-by-recipe because
@@ -1616,42 +1643,42 @@
         --nm-pressed:     0 0 #0000;
 
         /* Container hairline — kept at low opacity in the recipes as the
-           glare floor. CONTROLS do not use this: they use --kr-outline. */
+           glare floor. CONTROLS do not use this: they use --ng-outline. */
         --nm-edge: 225 5% 77%;
 
-        /* Karma's radius scale: visibly rounder than anything before it. */
+        /* Neu-glassmorphism's radius scale: visibly rounder than anything before it. */
         --radius-control: 16px;
         --radius-tile:    24px;
         --radius-card:    28px;
 
-        /* ---- the KR additions: what Karma has that no prior system did ---- */
-        --kr-ink:          240 4% 5%;    /* #0C0C0D — band, active pill, arrow buttons */
-        --kr-ink-raised:   240 4% 9%;    /* one step up inside the band */
-        --kr-accent:       19 100% 50%;  /* vivid orange — alerts, deltas, markers ONLY */
+        /* ---- the KR additions: what Neu-glassmorphism has that no prior system did ---- */
+        --ng-ink:          240 4% 5%;    /* #0C0C0D — band, active pill, arrow buttons */
+        --ng-ink-raised:   240 4% 9%;    /* one step up inside the band */
+        --ng-accent:       19 100% 50%;  /* vivid orange — alerts, deltas, markers ONLY */
         /* KM-19 — the gold that was already everywhere and named nowhere: the
            --sky-lift stop of all seven palettes, and the third ribbon in
            components/mobile/DexWave. Onboarding needed it too, which made
            three copies of one colour the moment to give it a name. Warm and
            mid-lightness ON PURPOSE — it is a light, not a fill, and it is
            never a text colour on the pale canvas (2.1:1 there). */
-        --kr-gold:         44 88% 60%;
-        --kr-accent-soft:  35 100% 62%;  /* the bloom's amber */
+        --ng-gold:         44 88% 60%;
+        --ng-accent-soft:  35 100% 62%;  /* the bloom's amber */
         /* The control boundary. 40 5% 52% on the L93 greige measures ≈3.2:1 —
            re-verify at the KR-7 gate; this is the token that carries WCAG
            1.4.11 now that shadows are gone and containers are borderless. */
-        --kr-outline:      225 4% 51%;
+        --ng-outline:      225 4% 51%;
         /* KR-11.6 — the founder's brown, for the Workflows switch. Warm and
            earthy rather than another grey: it is the one control that never
            changes depth, so colour is the only thing it has left to speak
            with. */
-        --kr-brown:        24 44% 33%;
-        /* Glass tints (used by .kr-glass in KR-3). */
-        --kr-glass-blue:   222 18% 40%;
-        --kr-glass-olive:  80 22% 32%;
-        --kr-glass-warm:   35 10% 38%;
+        --ng-brown:        24 44% 33%;
+        /* Glass tints (used by .ng-glass in KR-3). */
+        --ng-glass-blue:   222 18% 40%;
+        --ng-glass-olive:  80 22% 32%;
+        --ng-glass-warm:   35 10% 38%;
     }
 
-    /* KR-2: user-facing dark mode RETIRES — Karma is a two-zone light
+    /* KR-2: user-facing dark mode RETIRES — Neu-glassmorphism is a two-zone light
        composition. `.dark` no longer means "the user's night theme"; it means
        "inside the ink" (the Dex room via data-dex, and any surface that opts
        in). Values are the band palette. */
@@ -1668,7 +1695,7 @@
         --nm-inset:     0 0 #0000;
         --nm-pressed:   0 0 #0000;
         --nm-edge: 40 6% 26%;
-        --kr-outline: 40 5% 60%;     /* boundaries brighten on ink */
+        --ng-outline: 40 5% 60%;     /* boundaries brighten on ink */
     }
 }
 
@@ -1679,10 +1706,10 @@
    individual properties at a call site.
 
    KR-2 — THE GROUND CHANGES UNDER THE RECIPES. Every prior system put cards
-   at the PAGE value (bg-nm) and separated by shadow; Karma puts cards at the
+   at the PAGE value (bg-nm) and separated by shadow; Neu-glassmorphism puts cards at the
    OBJECT value (bg-nm-raised, white) on a tinted page and separates by tone.
    The faint nm-edge hairline stays as the glare floor on containers; it is
-   deliberately NOT the WCAG boundary — controls carry that via kr-outline. */
+   deliberately NOT the WCAG boundary — controls carry that via ng-outline. */
 @layer components {
     .nm-raised { @apply bg-nm-raised rounded-cardlg border border-nm-edge/40; }
     .nm-tile   { @apply bg-nm-raised rounded-tile border border-nm-edge/40; }
@@ -1701,11 +1728,11 @@
        elements across four pages, and routing them through shadcn would be a
        far larger change than making the flat ones look right. */
     /* KR-2: a control is OUTLINED in this language — the full-opacity
-       kr-outline ring is what carries WCAG 1.4.11 now that shadows are gone
+       ng-outline ring is what carries WCAG 1.4.11 now that shadows are gone
        and containers are borderless-looking. Feedback moves from shadow to
        transform: rise on hover, settle on press. */
     .nm-btn {
-        @apply rounded-control bg-nm-raised border border-kr-outline
+        @apply rounded-control bg-nm-raised border border-ng-outline
                transition-transform duration-150;
     }
     .nm-btn:hover:not(:disabled)  { transform: translateY(-2px); }
@@ -1768,7 +1795,7 @@
     pointer-events: none;
     transition: opacity 480ms cubic-bezier(.4, 0, .2, 1);
     background-repeat: no-repeat;
-    animation: kr-drift 90s ease-in-out infinite alternate;
+    animation: ng-drift 90s ease-in-out infinite alternate;
 }
 
 /* The light zone: amber bloom off-centre right on the greige, a faint echo
@@ -1841,7 +1868,7 @@
    declaration at runtime made it land on violet in the same frame. Measured
    both ways. Transitions on registered custom properties do not run reliably
    in this engine — the third time this branch has been bitten by a stalled
-   CSS transition (see .kr-pop ⇄ .kr-pressed in MyWork).
+   CSS transition (see .ng-pop ⇄ .ng-pressed in MyWork).
    So the cross-fade is driven from JS instead: hooks/useSkyFade reads the
    stylesheet's target for the new route and interpolates to it over rAF,
    writing inline values that outrank the sheet. The CSS above is the TARGET
@@ -1903,7 +1930,7 @@
    That is why several rooms below pan on the phone and fade on the desktop.
 
    WHY ARTWORK GETS A LAYER OF ITS OWN, instead of another background on
-   ::before: ::before carries kr-drift, a 90s transform. On a gradient that
+   ::before: ::before carries ng-drift, a 90s transform. On a gradient that
    reads as light moving; on a picture with real internal structure it reads
    as a sliding photograph — which is exactly why KM-13 had to switch drift
    off by hand for /inbox. Giving artwork its own un-animated layer means any
@@ -1932,7 +1959,7 @@
     opacity: var(--sky-art-opacity, 1);
     /* NO `transition` HERE, and the absence is load-bearing — the fourth time
        this branch has been bitten by a stalled transition on this engine (see
-       the .app-sky note above, and .kr-pop <-> .kr-pressed in MyWork).
+       the .app-sky note above, and .ng-pop <-> .ng-pressed in MyWork).
        With `transition: opacity 480ms` declared, --sky-art-opacity computed
        correctly as .4 on both <html> and this element while the USED value
        stayed pinned at 1 through 3.2s of waiting; setting transition:none at
@@ -1998,7 +2025,12 @@ html[data-page="inbox"] {
     --sky-art-lg: url("/sky/inbox-lg.png");
 }
 
-html[data-page="my-work"] {
+/* 2026-10-12 (founder) — Approvals, Leave and the Company Brain wear My Work's
+   picture too: the same plate, the same grayscale, the same sky beneath. */
+html[data-page="my-work"],
+html[data-page="approvals"],
+html[data-page="leave"],
+html[data-page="company-brain"] {
     --sky-art: url("/sky/my-work.webp");
     /* The founder's desktop plate, same arrangement as /inbox (KM-49): the
        phone keeps its portrait WebP, >= 1024px loads the landscape file, and
@@ -2009,7 +2041,10 @@ html[data-page="my-work"] {
    the black-and-gray task drawer. A filter on the art layer rather than a
    re-exported file: the originals in public/sky stay untouched and this is
    one rule to undo. Phone and desktop plates both take it. */
-html[data-page="my-work"] .app-sky__art {
+html[data-page="my-work"] .app-sky__art,
+html[data-page="approvals"] .app-sky__art,
+html[data-page="leave"] .app-sky__art,
+html[data-page="company-brain"] .app-sky__art {
     filter: grayscale(1);
 }
 
@@ -2097,7 +2132,7 @@ html[data-page="workflows"] {
    The phone gets the same idea on the other axis: there the pane is nearly
    full-width and the only free space is below it, so the glow lies along the
    bottom and fades upward. */
-/* KM-25 · .kr-stick — spacing only now.
+/* KM-25 · .ng-stick — spacing only now.
    KM-24 made this `position: sticky` with a translucent white bar behind it.
    The bar was the founder's complaint and it only existed because a sticky
    header shares a scrollport with its list. The header now lives in Layout's
@@ -2106,7 +2141,7 @@ html[data-page="workflows"] {
    portaled header the page's own bottom spacing, since it no longer sits
    inside the page's padded column. */
 @media (max-width: 1023.98px) {
-    .kr-stick {
+    .ng-stick {
         padding-bottom: 0.5rem;
     }
 }
@@ -2168,7 +2203,7 @@ html[data-page="workflows"] {
        artwork to defend against dark cores that are not in it. */
 }
 
-/* KM-46 · .kr-navplate — the header's shelf, cut to the founder's own curve.
+/* KM-46 · .ng-navplate — the header's shelf, cut to the founder's own curve.
    They supplied it as decisionos-curve.html; the geometry below is lifted from
    that file's <path id="panel"> and nothing else was taken from it — no glow,
    no colour, no stroke.
@@ -2214,11 +2249,11 @@ html[data-page="workflows"] {
    pill labels are translated, so the dip has to be as wide as whatever language
    is loaded. The founder's own flat is 39% of the box, which would leave the
    pills overhanging it below about 1500px. */
-.kr-navplate {
+.ng-navplate {
     position: relative;
     z-index: 0;          /* its own stacking context, so the -1 plate stays in */
 }
-.kr-navplate::before {
+.ng-navplate::before {
     content: "";
     position: absolute;
     inset: 0;
@@ -2238,15 +2273,15 @@ html[data-page="workflows"] {
        wordmark and the account block sit on the bare sky either side, as
        they always did, and keep their ink.
        2026-09-14, founder — "use the color of the create task button": the
-       INK_PILL recipe (karma/glass.js), a 24%→6% vertical gradient with a
+       INK_PILL recipe (neuglass/glass.js), a 24%→6% vertical gradient with a
        lit top edge, so the shelf, the Desk board and the filled buttons are
        one material. */
     background: linear-gradient(180deg, hsl(0 0% 24%), hsl(0 0% 6%));
     box-shadow: inset 0 1px 0 hsl(0 0% 100% / .16);
 
-    --kr-plate-h: 88px;                                       /* the header */
-    --kr-plate-cap: calc(var(--kr-plate-h) * 173 / 126);      /* their aspect */
-    --kr-plate-mid: var(--navplate-w, 640px);
+    --ng-plate-h: 88px;                                       /* the header */
+    --ng-plate-cap: calc(var(--ng-plate-h) * 173 / 126);      /* their aspect */
+    --ng-plate-mid: var(--navplate-w, 640px);
 
     /* THE SEAM. The three layers abut EXACTLY — measured, the gap either side
        is 0.000px, so the geometry above is right and nothing here is a nudge
@@ -2264,7 +2299,7 @@ html[data-page="workflows"] {
        translated pill labels — which is why it cannot be chased with a
        per-width offset.
        So the middle rectangle is painted 2px wider than it is POSITIONED:
-       1px of overlap under each cap. --kr-plate-mid stays the geometric
+       1px of overlap under each cap. --ng-plate-mid stays the geometric
        truth, and only mask-size reads the inflated one, so the caps do not
        move and the founder's flat is still --navplate-w wide. The overlap is
        invisible: at its inner edge each cap is full height (y=0..107 of 126,
@@ -2272,27 +2307,27 @@ html[data-page="workflows"] {
        that is already there. Overlap rather than a bigger number anywhere
        else, because union-with-slop is the only thing a subpixel raster
        cannot open a hole in. */
-    --kr-plate-midpaint: calc(var(--kr-plate-mid) + 2px);
+    --ng-plate-midpaint: calc(var(--ng-plate-mid) + 2px);
 
     -webkit-mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="173" height="126" viewBox="0 0 173 126" preserveAspectRatio="none"><path d="M0 0H173V107C76.1 107 96.9 2 0 2Z" fill="black"/></svg>'), linear-gradient(#000, #000), url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="173" height="126" viewBox="0 0 173 126" preserveAspectRatio="none"><path d="M0 0H173V2C76.1 2 96.9 107 0 107Z" fill="black"/></svg>');
             mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="173" height="126" viewBox="0 0 173 126" preserveAspectRatio="none"><path d="M0 0H173V107C76.1 107 96.9 2 0 2Z" fill="black"/></svg>'), linear-gradient(#000, #000), url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="173" height="126" viewBox="0 0 173 126" preserveAspectRatio="none"><path d="M0 0H173V2C76.1 2 96.9 107 0 107Z" fill="black"/></svg>');
     /* 84.92% = 107/126 — the dip's floor, straight off the path */
     -webkit-mask-size:
-        var(--kr-plate-cap) 100%,
-        var(--kr-plate-midpaint) 84.92%,
-        var(--kr-plate-cap) 100%;
+        var(--ng-plate-cap) 100%,
+        var(--ng-plate-midpaint) 84.92%,
+        var(--ng-plate-cap) 100%;
             mask-size:
-        var(--kr-plate-cap) 100%,
-        var(--kr-plate-midpaint) 84.92%,
-        var(--kr-plate-cap) 100%;
+        var(--ng-plate-cap) 100%,
+        var(--ng-plate-midpaint) 84.92%,
+        var(--ng-plate-cap) 100%;
     -webkit-mask-position:
-        calc(50% - (var(--kr-plate-mid) + var(--kr-plate-cap)) / 2) top,
+        calc(50% - (var(--ng-plate-mid) + var(--ng-plate-cap)) / 2) top,
         center top,
-        calc(50% + (var(--kr-plate-mid) + var(--kr-plate-cap)) / 2) top;
+        calc(50% + (var(--ng-plate-mid) + var(--ng-plate-cap)) / 2) top;
             mask-position:
-        calc(50% - (var(--kr-plate-mid) + var(--kr-plate-cap)) / 2) top,
+        calc(50% - (var(--ng-plate-mid) + var(--ng-plate-cap)) / 2) top,
         center top,
-        calc(50% + (var(--kr-plate-mid) + var(--kr-plate-cap)) / 2) top;
+        calc(50% + (var(--ng-plate-mid) + var(--ng-plate-cap)) / 2) top;
     -webkit-mask-repeat: no-repeat, no-repeat, no-repeat;
             mask-repeat: no-repeat, no-repeat, no-repeat;
     /* union, not the `exclude` the dark band uses — these three are one shape */
@@ -2422,7 +2457,7 @@ html[data-page="workflows"] {
     }
 
     /* KM-42 — THE CARD BLENDS INTO THE PICTURE. Scoped to the signup stage,
-       because .kr-well is app-wide (Ledger, Operating Score, InsightWell) and
+       because .ng-well is app-wide (Ledger, Operating Score, InsightWell) and
        those sit on a pale canvas where the recipe is already right.
 
        What had to go is the pane's neumorphic pair, specifically
@@ -2438,7 +2473,7 @@ html[data-page="workflows"] {
        the image. Nothing white touches the inside. */
     /* KM-43 — NOTHING ON THIS PAGE IS GREY. Founder marked the wordmark, the
        phase rail, Sign in, the step chip, the field and the Enter key: every
-       one of them is .kr-pop or .kr-pressed, and every one was rendering as a
+       one of them is .ng-pop or .ng-pressed, and every one was rendering as a
        milky grey blob on the photograph.
 
        The grey is not a colour anyone chose — it is neumorphism's shadow pair
@@ -2455,22 +2490,22 @@ html[data-page="workflows"] {
        photograph shows through all of it. Scoped to .signup-stage; the
        neumorphic recipes are correct everywhere they sit on the pale canvas. */
     /* THE :not() IS NOT DECORATION — without it this rule breaks the primary
-       button. `.signup-stage .kr-pop` scores (0,2,0) against Tailwind's
-       `.bg-kr-ink` at (0,1,0), and Tailwind v3 emits plain CSS with no native
+       button. `.signup-stage .ng-pop` scores (0,2,0) against Tailwind's
+       `.bg-ng-ink` at (0,1,0), and Tailwind v3 emits plain CSS with no native
        @layer, so specificity decides and the black Continue pill came out
        white-on-white. Anything carrying its own bg-* utility keeps it; only
        the edge and the lift are applied unconditionally. */
-    .signup-stage .kr-pop ,
-    .login-stage .kr-pop {
+    .signup-stage .ng-pop ,
+    .login-stage .ng-pop {
         border: 1px solid hsl(0 0% 100% / .70);
         box-shadow: 0 6px 18px -8px hsl(230 30% 18% / .38);
     }
-    .signup-stage .kr-pop:not([class*="bg-"]) ,
-    .login-stage .kr-pop:not([class*="bg-"]) {
+    .signup-stage .ng-pop:not([class*="bg-"]) ,
+    .login-stage .ng-pop:not([class*="bg-"]) {
         background: hsl(0 0% 100% / .58);
     }
-    .signup-stage .kr-pop:not([class*="bg-"]):hover ,
-    .login-stage .kr-pop:not([class*="bg-"]):hover {
+    .signup-stage .ng-pop:not([class*="bg-"]):hover ,
+    .login-stage .ng-pop:not([class*="bg-"]):hover {
         background: hsl(0 0% 100% / .70);
         box-shadow: 0 10px 24px -10px hsl(230 30% 18% / .44);
     }
@@ -2478,53 +2513,53 @@ html[data-page="workflows"] {
        `bg-transparent` as a utility and would beat any background set here, so
        the trough is drawn entirely by its ring — which is why this reads the
        same on the input, the step chip and the Enter key. */
-    .signup-stage .kr-pressed ,
-    .login-stage .kr-pressed {
+    .signup-stage .ng-pressed ,
+    .login-stage .ng-pressed {
         border: 1px solid hsl(0 0% 100% / .55);
         box-shadow: inset 0 1px 2px hsl(230 30% 18% / .10);
     }
-    .signup-stage .kr-pressed:not([class*="bg-"]) ,
-    .login-stage .kr-pressed:not([class*="bg-"]) {
+    .signup-stage .ng-pressed:not([class*="bg-"]) ,
+    .login-stage .ng-pressed:not([class*="bg-"]) {
         background: hsl(0 0% 100% / .20);
     }
     /* The live phase pill sits INSIDE the rail, so it needs to out-read a
        surface that is already white-on-white. */
-    .signup-stage .kr-pressed .kr-pop:not([class*="bg-"]) ,
-    .login-stage .kr-pressed .kr-pop:not([class*="bg-"]) {
+    .signup-stage .ng-pressed .ng-pop:not([class*="bg-"]) ,
+    .login-stage .ng-pressed .ng-pop:not([class*="bg-"]) {
         background: hsl(0 0% 100% / .82);
         box-shadow: 0 2px 8px -3px hsl(230 30% 18% / .40);
     }
 
     /* KM-66 follow-up — every button on signup / login rises 2px on hover.
-       Applies to .kr-pop (which is what every neumorphic button on both
+       Applies to .ng-pop (which is what every neumorphic button on both
        stages carries), animates with the same 200ms curve the shadow
        already fades in on, and covers both bg-less popovers and any
-       bg-kr-ink action button. Framer-motion buttons that set their own
+       bg-ng-ink action button. Framer-motion buttons that set their own
        inline transform (whileHover, animate) override this CSS transform,
        so the two Continue-style motion buttons still elevate via their
        own whileHover — no double-lift. */
-    .signup-stage .kr-pop ,
-    .login-stage .kr-pop {
+    .signup-stage .ng-pop ,
+    .login-stage .ng-pop {
         transition: transform 200ms ease-out,
                     box-shadow 200ms ease-out,
                     background-color 200ms ease-out,
                     border-color 200ms ease-out;
     }
-    .signup-stage .kr-pop:hover ,
-    .login-stage .kr-pop:hover {
+    .signup-stage .ng-pop:hover ,
+    .login-stage .ng-pop:hover {
         transform: translateY(-2px);
     }
-    /* Exception: any .kr-pop nested inside .kr-pressed is a "selected pill
+    /* Exception: any .ng-pop nested inside .ng-pressed is a "selected pill
        in a trough" (the phase rail's live phase); lifting it out of the
        trough would break that reading. */
-    .signup-stage .kr-pressed .kr-pop:hover ,
-    .login-stage .kr-pressed .kr-pop:hover {
+    .signup-stage .ng-pressed .ng-pop:hover ,
+    .login-stage .ng-pressed .ng-pop:hover {
         transform: none;
     }
 
-    .signup-stage .kr-well__pane ,
+    .signup-stage .ng-well__pane ,
 
-    .login-stage .kr-well__pane {
+    .login-stage .ng-well__pane {
         /* .40/.28, not .34/.22. The pane's own note says the floor of this
            wash IS the contrast floor of everything printed on it, and that
            floor was set against a drifting gradient. A photograph goes darker
@@ -2542,7 +2577,10 @@ html[data-page="workflows"] {
     }
 }
 
-html[data-page="my-work"] .app-sky {
+html[data-page="my-work"] .app-sky,
+html[data-page="approvals"] .app-sky,
+html[data-page="leave"] .app-sky,
+html[data-page="company-brain"] .app-sky {
     --sky-core: hsl(212 52% 79% / .62);
     --sky-deep: hsl(202 44% 72% / .38);
     --sky-lift: hsl(44 90% 77% / .38);
@@ -2645,16 +2683,16 @@ html[data-page="dex"] .app-sky {
    carrying six Recharts surfaces. 320ms — long enough to read as motion,
    short enough that a founder clicking through four pipelines in a row
    never waits on it. */
-@keyframes kr-dex-breathe {
+@keyframes ng-dex-breathe {
     0%, 100% { transform: scaleY(0.55); }
     50%      { transform: scaleY(1); }
 }
 
-@keyframes kr-page-in {
+@keyframes ng-page-in {
     from { opacity: 0; transform: translate3d(28px, 0, 0); }
     to   { opacity: 1; transform: translate3d(0, 0, 0); }
 }
-.kr-page-in {
+.ng-page-in {
     /* KM-33 / B?? — a SMALL slide-in (28px from the right) + fade, so navigation
        reads as a page sliding in rather than a plain cross-fade.
        THE HAZARD this lands on: this class is on <main>, and a transform on main
@@ -2667,7 +2705,7 @@ html[data-page="dex"] .app-sky {
        this 28px slide plays, and it ends at identity so nothing snaps. Verified
        frame-by-frame on a Desk navigation. If a page ever renders a fixed element
        on first paint, revert this to opacity-only. */
-    animation: kr-page-in 260ms cubic-bezier(.22, 1, .36, 1) backwards;
+    animation: ng-page-in 260ms cubic-bezier(.22, 1, .36, 1) backwards;
 }
 
 /* KR-13.1 suppressed the page-arrival lift across the Dex boundary, where a
@@ -2675,7 +2713,7 @@ html[data-page="dex"] .app-sky {
    (2026-10-08) made /brain light, the cross-fade went with the dark room, and
    /brain now arrives like every other page. */
 
-@keyframes kr-drift {
+@keyframes ng-drift {
     from { transform: translate3d(-1.5%, -1%, 0) scale(1); }
     to   { transform: translate3d( 1.5%,  1%, 0) scale(1.04); }
 }
@@ -2687,14 +2725,14 @@ html[data-page="dex"] .app-sky {
        once the lift and the blur are gone. The drift animation and the
        page-arrival lift both stop. */
     .app-sky::before { animation: none; }
-    .kr-page-in { animation: none; opacity: 1; transform: none; }
+    .ng-page-in { animation: none; opacity: 1; transform: none; }
 
     /* KM-66 — the new-item ring still has to MARK the item; only the pulse
        goes. A static hairline for the same five seconds says the same thing
        without moving. */
-    .kr-new-glow::after {
+    .ng-new-glow::after {
         animation: none;
-        box-shadow: 0 0 0 1px hsl(var(--kr-gold) / .55);
+        box-shadow: 0 0 0 1px hsl(var(--ng-gold) / .55);
     }
 }
 
@@ -2705,7 +2743,7 @@ html[data-page="dex"] .app-sky {
    380px across with smooth shoulders. Below lg (the 448px phone column) the card is too narrow for a
    cut beside its 2rem corners, so the pill sits above the card there. */
 @media (min-width: 1024px) {
-    .kr-notch {
+    .ng-notch {
         -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='380' height='32' viewBox='0 0 380 32'%3E%3Cpath d='M0 0C27 0 31 32 58 32H322C349 32 353 0 380 0Z'/%3E%3C/svg%3E") center top / 380px 32px no-repeat, linear-gradient(#000 0 0);
         -webkit-mask-composite: xor;
         mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='380' height='32' viewBox='0 0 380 32'%3E%3Cpath d='M0 0C27 0 31 32 58 32H322C349 32 353 0 380 0Z'/%3E%3C/svg%3E") center top / 380px 32px no-repeat, linear-gradient(#000 0 0);
@@ -2716,7 +2754,7 @@ html[data-page="dex"] .app-sky {
 /* ═══════════════════════════════════════════════════════════════════════════
    KR-3 — the dark band and the glass.
 
-   .kr-dark-band is the reference's bottom zone: a full-bleed near-black
+   .ng-dark-band is the reference's bottom zone: a full-bleed near-black
    section that ESCAPES the padded main via negative margins equal to the
    page padding. --page-pad is declared here on the canvas (1rem, 2rem at lg,
    mirroring main's p-4 lg:p-8) so the mechanism is self-contained; KR-5 can
@@ -2727,15 +2765,15 @@ html[data-page="dex"] .app-sky {
    recipes) just works on ink without a `dark:` variant in sight.
    ═════════════════════════════════════════════════════════════════════════ */
 @layer components {
-    /* KM-3 — .kr-pop INSIDE AN INK SURFACE inverts its ground.
-       .kr-pop is built for the light page: a 38%-white fill with a white
+    /* KM-3 — .ng-pop INSIDE AN INK SURFACE inverts its ground.
+       .ng-pop is built for the light page: a 38%-white fill with a white
        inset lip. Dropped onto the ink More panel that reads as a pale grey
        blob, and the panel's own light-on-dark text then sat light-on-light —
        measured: the CRM, Operating Score, Calendar and utility-row labels
        were all but unreadable. Same material, same direction of light,
-       opposite ground. Scoped to .kr-glass.dark so it only fires inside an
+       opposite ground. Scoped to .ng-glass.dark so it only fires inside an
        ink container and the light-page recipe is untouched elsewhere. */
-    .kr-glass.dark .kr-pop {
+    .ng-glass.dark .ng-pop {
         background: hsl(0 0% 100% / .08);
         box-shadow:
             inset 0 1px 0 hsl(0 0% 100% / .14),
@@ -2743,26 +2781,26 @@ html[data-page="dex"] .app-sky {
             0 4px 10px -4px hsl(0 0% 0% / .48);
         color: hsl(40 20% 97%);
     }
-    .kr-glass.dark .kr-pop:hover {
+    .ng-glass.dark .ng-pop:hover {
         background: hsl(0 0% 100% / .12);
     }
 
-    /* KM-5 — and the same inversion for .kr-pressed, which the decision
-       cards now use for their Review / Chase pill. .kr-pressed's dark inset
+    /* KM-5 — and the same inversion for .ng-pressed, which the decision
+       cards now use for their Review / Chase pill. .ng-pressed's dark inset
        from the top-left plus a 72%-white inset from the bottom-right is tuned
        for the light page; on an ink card the white inset blows out and the
        "pressed" pill reads as a raised white blob. On ink the depression is
        drawn the other way round: black doing the sinking, a faint white lip
        on the far side. Descendant selector, not .dark — the decision cards
-       are .kr-glass without the token re-scope. */
-    .kr-glass .kr-pressed {
+       are .ng-glass without the token re-scope. */
+    .ng-glass .ng-pressed {
         background: hsl(0 0% 0% / .22);
         box-shadow:
             inset 3px 3px 8px hsl(0 0% 0% / .45),
             inset -2px -2px 6px hsl(0 0% 100% / .13);
     }
 
-    /* KM-11 · .kr-vignette — the page darkens at its EDGES while Dex is
+    /* KM-11 · .ng-vignette — the page darkens at its EDGES while Dex is
        listening. A radial gradient rather than a flat scrim: a scrim dims the
        content you are trying to keep reading, whereas a vignette leaves the
        middle untouched and only weights the borders, which is what pulls the
@@ -2771,7 +2809,7 @@ html[data-page="dex"] .app-sky {
        shallow (28% at the very corners, nothing for the middle 55%) because
        the founder asked for subtle, and because this sits over a live app
        rather than a modal. */
-    .kr-vignette {
+    .ng-vignette {
         position: fixed;
         inset: 0;
         z-index: 9998;
@@ -2784,29 +2822,29 @@ html[data-page="dex"] .app-sky {
         opacity: 0;
         transition: opacity 260ms ease;
     }
-    .kr-vignette[data-on="1"] { opacity: 1; }
+    .ng-vignette[data-on="1"] { opacity: 1; }
 
-    /* ASK-40 4 · .kr-scroll-quiet — IT SCROLLS, IT JUST DOESN'T SAY SO.
+    /* ASK-40 4 · .ng-scroll-quiet — IT SCROLLS, IT JUST DOESN'T SAY SO.
        The Desk's Decisions column scrolls inside the black card (ASK-34 7.2)
        and was drawing the browser's own thin scrollbar down its edge: a second
        vertical rule beside the real one, and on any platform that paints bars
        permanently — Windows, or macOS set to "Show scroll bars: Always" — it
        never went away again. The founder asked for it gone. The scrolling
-       stays; only the bar is hidden, which is the same trade .kr-snap below
+       stays; only the bar is hidden, which is the same trade .ng-snap below
        already makes for the Desk band.
        DELIBERATELY NOT ON THE PAGE SCROLLER. A whole page that scrolls with
        nothing on screen to say so is a different problem from a list inside a
        card that is already captioned "N more waiting". */
-    .kr-scroll-quiet {
+    .ng-scroll-quiet {
         scrollbar-width: none;
         -ms-overflow-style: none;
     }
-    .kr-scroll-quiet::-webkit-scrollbar { width: 0; height: 0; display: none; }
+    .ng-scroll-quiet::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
-    /* KM-3 · .kr-snap — the horizontal section scroller on the Desk band.
+    /* KM-3 · .ng-snap — the horizontal section scroller on the Desk band.
        One section per screen, snapped, with the page gutter as the inline
        padding so a panel sits exactly where the page's content sits. */
-    .kr-snap {
+    .ng-snap {
         display: flex;
         overflow-x: auto;
         scroll-snap-type: x mandatory;
@@ -2826,12 +2864,12 @@ html[data-page="dex"] .app-sky {
            page margin while its right side kept one. */
         scroll-padding-inline: var(--page-pad, 1rem);
     }
-    .kr-snap::-webkit-scrollbar { display: none; }
-    .kr-snap > * {
+    .ng-snap::-webkit-scrollbar { display: none; }
+    .ng-snap > * {
         scroll-snap-align: start;
         flex: 0 0 100%;
         min-width: 0;
-        /* Contain each panel's backdrop root. Without this, the .kr-glass
+        /* Contain each panel's backdrop root. Without this, the .ng-glass
            cards' backdrop-filter escalates out of the scroll container and
            samples the whole page — measured: the hero above the band rendered
            blurred. `isolation` forms a stacking context, which is what pins
@@ -2839,7 +2877,7 @@ html[data-page="dex"] .app-sky {
         isolation: isolate;
     }
     @media (min-width: 1024px) {
-        .kr-snap {
+        .ng-snap {
             display: block;
             overflow-x: visible;
             scroll-snap-type: none;
@@ -2848,7 +2886,7 @@ html[data-page="dex"] .app-sky {
         }
     }
 
-    /* KM-3 · .kr-form-row — form fields STACK below lg. Full stop.
+    /* KM-3 · .ng-form-row — form fields STACK below lg. Full stop.
        A dialog is the viewport width on a phone: 375 minus the dialog's own
        p-4 (32px) leaves 343px of content. Two columns puts a currency or a
        name select at 165px; three puts a native date input at ~106px, which
@@ -2862,15 +2900,15 @@ html[data-page="dex"] .app-sky {
        them start at different y positions and the row reads as broken
        alignment. Stacked, every label owns its own line and the question
        disappears. */
-    .kr-form-row {
+    .ng-form-row {
         display: grid;
         grid-template-columns: 1fr;
         gap: 0.75rem;
     }
 }
 @media (min-width: 1024px) {
-    .kr-form-row    { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .kr-form-row--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .ng-form-row    { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ng-form-row--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 /* KM-0 — the bleed must match the GUTTER, not a guess at it. <main> pads with
@@ -2883,10 +2921,10 @@ html[data-page="dex"] .app-sky {
 @media (min-width: 1024px) { .app-canvas { --page-pad: 2rem; } }
 
 @layer components {
-    .kr-dark-band {
+    .ng-dark-band {
         margin-inline: calc(var(--page-pad, 1rem) * -1);
         padding-inline: var(--page-pad, 1rem);
-        background: hsl(var(--kr-ink));
+        background: hsl(var(--ng-ink));
         overflow-y: auto;
         /* KM-33 · A FIXED BOTTOM SHEET ON THE PHONE.
            It was in the scroll flow, so scrolling carried it up off the screen
@@ -2907,7 +2945,7 @@ html[data-page="dex"] .app-sky {
            you can half-see the page through is a scrim, and a scrim reads as
            temporary; a solid floor reads as a place. It also costs nothing to
            paint, where the blur was re-sampling the page every scroll frame.
-           #000 rather than --kr-ink (#0C0C0D) because "full black" is the ask
+           #000 rather than --ng-ink (#0C0C0D) because "full black" is the ask
            and the difference is visible against the cards sitting on it. */
         position: fixed;
         left: 0;
@@ -2994,9 +3032,9 @@ html[data-page="dex"] .app-sky {
         mask-composite: exclude;
 
         /* the re-scope — band children read tokens, not variants */
-        --background:       var(--kr-ink);
+        --background:       var(--ng-ink);
         --surface:          240 4% 10%;
-        --surface-raised:   var(--kr-ink-raised);
+        --surface-raised:   var(--ng-ink-raised);
         --surface-sunken:   240 5% 3%;
         --surface-hover:    240 4% 16%;
         --text-primary:     40 20% 97%;
@@ -3005,10 +3043,10 @@ html[data-page="dex"] .app-sky {
         --hairline:         40 8% 24%;
         --hairline-strong:  40 10% 34%;
         --nm-bg:            240 4% 7%;
-        --nm-raised:        var(--kr-ink-raised);
+        --nm-raised:        var(--ng-ink-raised);
         --nm-sunken:        240 5% 3%;
         --nm-edge:          40 12% 40%;
-        --kr-outline:       40 5% 60%;
+        --ng-outline:       40 5% 60%;
 
         /* THE ALIAS TRAP, and why these lines exist (measured, not theory):
            a custom property substitutes its var() refs at the element where
@@ -3047,7 +3085,7 @@ html[data-page="dex"] .app-sky {
 
     /* KM-33 — expanded: grow to 80svh, and let the sheet scroll its own
        content once it hits that ceiling rather than growing past the screen. */
-    .kr-dark-band[data-expanded="true"] {
+    .ng-dark-band[data-expanded="true"] {
         max-height: 80svh;
     }
 
@@ -3075,14 +3113,14 @@ html[data-page="dex"] .app-sky {
        right); the phone's rule rounds only the left, because its mask draws the
        right corner itself. */
     @media (min-width: 1024px) {
-        .kr-dark-band {
+        .ng-dark-band {
             position: static;
             max-height: none;
             overflow: visible;
             overscroll-behavior: auto;
             margin-inline: calc(var(--page-pad, 1rem) * -1);
             padding-inline: var(--page-pad, 1rem);
-            background: hsl(var(--kr-ink));
+            background: hsl(var(--ng-ink));
 
             border-radius: 14px 44px 0 0;
             -webkit-mask-image:
@@ -3098,7 +3136,7 @@ html[data-page="dex"] .app-sky {
         }
     }
 
-    /* KM-35 — .kr-band-haze IS GONE, and the gap where it was is the note.
+    /* KM-35 — .ng-band-haze IS GONE, and the gap where it was is the note.
        KM-33 put a fixed, gradient-masked backdrop-filter strip above the sheet
        so the page appeared to blur as it slid under it. With the sheet opaque
        black there is nothing for it to blend INTO: the strip would blur the
@@ -3106,7 +3144,7 @@ html[data-page="dex"] .app-sky {
        depth. Removed rather than retuned — the sheet's own edge is the
        transition now. */
 
-    /* KM-34 · .kr-netbar — the Finance net-profit bars, traced off
+    /* KM-34 · .ng-netbar — the Finance net-profit bars, traced off
        "finance page reference.png" rather than approximated.
 
        WHAT MAKES THIS CHART LOOK THE WAY IT DOES is not the bars, it is that
@@ -3118,7 +3156,7 @@ html[data-page="dex"] .app-sky {
        chart flattens into stripes; anchor one gradient to the shared baseline
        and the whole thing reads as a single wash the bars cut windows into.
 
-       `background-size: 100% var(--kr-netbar-h)` with `background-position:
+       `background-size: 100% var(--ng-netbar-h)` with `background-position:
        bottom` is exactly that: the gradient is always the CHART's height and
        always sits on the chart's floor, so a bar simply shows the slice its
        own height reaches. No canvas, no SVG, no library.
@@ -3127,14 +3165,14 @@ html[data-page="dex"] .app-sky {
        from the bar/card pairs at eleven heights. Deliberately NOT the success
        token: the reference prints this chart under a FALLING net profit with a
        red delta beside it, so the green is texture, not a verdict. */
-    .kr-netbars { --kr-netbar: 161 17% 49%; --kr-netbar-h: 50px; }
-    .kr-netbar {
+    .ng-netbars { --ng-netbar: 161 17% 49%; --ng-netbar-h: 50px; }
+    .ng-netbar {
         background-image: linear-gradient(to top,
-            hsl(var(--kr-netbar) / .16)  0%,
-            hsl(var(--kr-netbar) / .55) 30%,
-            hsl(var(--kr-netbar) / .90) 63%,
-            hsl(var(--kr-netbar) / 1)   80%);
-        background-size: 100% var(--kr-netbar-h);
+            hsl(var(--ng-netbar) / .16)  0%,
+            hsl(var(--ng-netbar) / .55) 30%,
+            hsl(var(--ng-netbar) / .90) 63%,
+            hsl(var(--ng-netbar) / 1)   80%);
+        background-size: 100% var(--ng-netbar-h);
         background-position: bottom;
         background-repeat: no-repeat;
     }
@@ -3147,24 +3185,24 @@ html[data-page="dex"] .app-sky {
        Credit Card Use runs blue into warm, Bank of America olive into deep
        green, the frosted ones warm-grey into blue-grey. The bloom still
        shows through the blur underneath the wash. */
-    .kr-glass {
-        --kr-glass-from: 36 18% 48%;
-        --kr-glass-to:   225 12% 38%;
+    .ng-glass {
+        --ng-glass-from: 36 18% 48%;
+        --ng-glass-to:   225 12% 38%;
         /* KM-32 — the two fill strengths are variables now. The founder's note
            on the Desk was that the section cards read as SOLID colour rather
            than as a tint of the ink behind them: "only subtle reference of the
            colour should be delivered". Rather than fork the recipe, the desk
            variants below dial these down and every other glass surface in the
            app (Finance, Ops, workflow cards) keeps the fill it was tuned at. */
-        --kr-glass-a1: .60;
-        --kr-glass-a2: .42;
+        --ng-glass-a1: .60;
+        --ng-glass-a2: .42;
         /* KM-35 — what colour a button lit in THIS surface's own hue has to
            print its label in. White by default; a variant whose hue is light
-           enough to fail it says so (see .kr-desk--needs). */
-        --kr-glass-btn-fg: 0 0% 100%;
+           enough to fail it says so (see .ng-desk--needs). */
+        --ng-glass-btn-fg: 0 0% 100%;
         background: linear-gradient(145deg,
-            hsl(var(--kr-glass-from) / var(--kr-glass-a1)),
-            hsl(var(--kr-glass-to) / var(--kr-glass-a2)));
+            hsl(var(--ng-glass-from) / var(--ng-glass-a1)),
+            hsl(var(--ng-glass-to) / var(--ng-glass-a2)));
         -webkit-backdrop-filter: blur(20px) saturate(1.35);
         backdrop-filter: blur(20px) saturate(1.35);
         border: 1px solid rgb(255 255 255 / .16);
@@ -3178,7 +3216,7 @@ html[data-page="dex"] .app-sky {
            substitutes its var() refs at the element where it is DECLARED and
            then inherits frozen. Measured on the Finance WhatsApp card before
            this block: muted body copy at 1.92:1 on the olive glass.
-           .kr-dark-band learned this in KR-8; the fix belongs here too, and
+           .ng-dark-band learned this in KR-8; the fix belongs here too, and
            doing it on the recipe fixes every glass surface at once (decision
            boxes, the Ops leaderboard, workflow cards) rather than one card. */
         --text-primary:     40 20% 97%;
@@ -3189,8 +3227,8 @@ html[data-page="dex"] .app-sky {
         --surface:          0 0% 100%;
         --surface-sunken:   0 0% 100%;
         --nm-edge:          0 0% 100%;
-        --kr-outline:       0 0% 88%;
-        --kr-chip-line:     40 12% 85%;
+        --ng-outline:       0 0% 88%;
+        --ng-chip-line:     40 12% 85%;
 
         /* …and the aliases, re-declared so they re-substitute HERE. */
         --foreground:         var(--text-primary);
@@ -3201,8 +3239,8 @@ html[data-page="dex"] .app-sky {
         --input:              var(--hairline);
         --accent-foreground:  var(--text-primary);
     }
-    /* KR-10 · .kr-frost — GLASS FOR THE LIGHT ZONE.
-       .kr-glass above is an INK-ZONE material: it tints dark and prints
+    /* KR-10 · .ng-frost — GLASS FOR THE LIGHT ZONE.
+       .ng-glass above is an INK-ZONE material: it tints dark and prints
        near-white text, which works because what composites behind it is the
        black band. Put the same class on the light zone and the tint lands on
        cream instead — measured on Finance's WhatsApp card, near-white body
@@ -3210,9 +3248,9 @@ html[data-page="dex"] .app-sky {
        ground itself was ~[161,175,119].
        So the light zone gets its own frost: the same white wash and blur the
        insight well uses, but RAISED rather than sunken, and printing ink.
-       One rule of thumb now covers it — glass on ink is .kr-glass, glass on
-       the page is .kr-frost. */
-    /* KR-11.2 · .kr-bento — the My Work grid tile.
+       One rule of thumb now covers it — glass on ink is .ng-glass, glass on
+       the page is .ng-frost. */
+    /* KR-11.2 · .ng-bento — the My Work grid tile.
        Founder: "glassmorphism and neumorphism and materialism mixed… a
        colour that complements the background blue glow, but it should be
        SEEN AS A SEPARATED VIEW, not get blended with the background."
@@ -3222,7 +3260,7 @@ html[data-page="dex"] .app-sky {
                       sky is present inside the tile rather than stopping at
                       its edge
        · neumorphic   a raised shadow pair from the same top-left light the
-                      well and .kr-pop use, so the tile sits ON the page
+                      well and .ng-pop use, so the tile sits ON the page
        · material     a real 1px edge. This is the part that answers
                       "separated, not blended": glass alone dissolves into a
                       soft ground, and the founder specifically did not want
@@ -3231,7 +3269,7 @@ html[data-page="dex"] .app-sky {
        The tint is cool (215°) to sit WITH the my-work sky rather than fight
        it, but it is carried at high opacity so the tile still reads as an
        object on the weather, not a hole in it. */
-    /* KR-11.5 · .kr-glass-well — a RECESSED container you can see through.
+    /* KR-11.5 · .ng-glass-well — a RECESSED container you can see through.
        The workflow board sat in .nm-inset, an opaque grey well. It held the
        board together but it also stamped a grey rectangle over the page's
        weather, which is the thing the founder keeps (rightly) objecting to.
@@ -3241,7 +3279,7 @@ html[data-page="dex"] .app-sky {
        and the same inset lip the neumorphic surfaces use — dark cast in from
        the top, bright catch along the bottom. The tiles inside it are RAISED,
        so the depth story still reads: cards sitting in a shallow tray. */
-    .kr-glass-well {
+    .ng-glass-well {
         border-radius: var(--radius-cardlg);
         background: linear-gradient(160deg,
             hsl(0 0% 100% / .16),
@@ -3254,15 +3292,15 @@ html[data-page="dex"] .app-sky {
             inset 0 -1px 0 hsl(0 0% 100% / .45);
     }
 
-    /* 2026-09-14, founder · .kr-lane — one visible container per workflow
+    /* 2026-09-14, founder · .ng-lane — one visible container per workflow
        stage on desktop. ASK-18 had cleared the columns' fill and left only
-       .kr-frost's blur, which on the pale grayscale sky drew a lane you could
+       .ng-frost's blur, which on the pale grayscale sky drew a lane you could
        barely see, with the cards blending into it. The lane is glass again,
        carried by DEPTH rather than fill: a white rim with a top-lip highlight,
        a hairline dark edge so it holds on near-white, a long soft drop shadow
        underneath and a tight white glow around the rim. The cards inside stay
        brighter and more lifted, so it reads board → lane → card. */
-    .kr-lane {
+    .ng-lane {
         border-radius: var(--radius-tile);
         background: linear-gradient(180deg,
             hsl(0 0% 100% / .50),
@@ -3278,7 +3316,7 @@ html[data-page="dex"] .app-sky {
             0 0 24px -4px hsl(0 0% 100% / .70);
     }
 
-    .kr-bento {
+    .ng-bento {
         position: relative;
         /* ASK-15 (2026-09-13): softer than a chip but tighter than a card.
            Was --radius-tile (24px); 16px reads as a distinct rectangle rather
@@ -3312,33 +3350,33 @@ html[data-page="dex"] .app-sky {
        exclusion is load-bearing rather than tidy. This rule sets `transform`
        outright, so on any element whose position depends on a transform it
        does not add a 3px lift — it REPLACES the positioning. Four dialogs
-       wear .kr-bento over Radix's centred panel (translate(-50%,-50%)), and
-       `.kr-bento:hover` at specificity (0,2,0) beats Tailwind's
+       wear .ng-bento over Radix's centred panel (translate(-50%,-50%)), and
+       `.ng-bento:hover` at specificity (0,2,0) beats Tailwind's
        `-translate-x-1/2` at (0,1,0) — media queries add none, so `lg:` does
        not rescue it either. Measured on the New Task panel: moving the cursor
        onto it threw the box 256px right and 437px down, which is the "it
        jumps off" the founder has now reported twice.
        Excluding the dialog roles fixes every current and future call site
        without each one having to remember an opt-out class. */
-    /* ASK-27 · .kr-progress-range — the task drawer's "Set % manually" bar is
+    /* ASK-27 · .ng-progress-range — the task drawer's "Set % manually" bar is
        a range input drawn as the reference's progress bar: a soft grey track,
        the filled part in blue up to --pct (set inline), and a small white
        thumb so it reads as something you can drag. Firefox paints the fill
        itself via ::-moz-range-progress; WebKit needs the gradient. */
-    .kr-progress-range {
+    .ng-progress-range {
         -webkit-appearance: none;
         appearance: none;
         height: 18px;
         background: transparent;
     }
-    .kr-progress-range::-webkit-slider-runnable-track {
+    .ng-progress-range::-webkit-slider-runnable-track {
         height: 10px;
         border-radius: 9999px;
         /* ASK-30 — black on gray: the filled part runs a dark gradient. */
         background: linear-gradient(90deg, hsl(0 0% 34%) 0%, hsl(0 0% 8%) var(--pct, 0%), hsl(0 0% 83%) var(--pct, 0%) 100%);
         box-shadow: inset 0 1px 2px hsl(0 0% 0% / .16);
     }
-    .kr-progress-range::-webkit-slider-thumb {
+    .ng-progress-range::-webkit-slider-thumb {
         -webkit-appearance: none;
         width: 18px;
         height: 18px;
@@ -3348,17 +3386,17 @@ html[data-page="dex"] .app-sky {
         border: 2px solid hsl(0 0% 10%);
         box-shadow: 0 2px 6px hsl(0 0% 0% / .28);
     }
-    .kr-progress-range::-moz-range-track {
+    .ng-progress-range::-moz-range-track {
         height: 10px;
         border-radius: 9999px;
         background: hsl(0 0% 83%);
     }
-    .kr-progress-range::-moz-range-progress {
+    .ng-progress-range::-moz-range-progress {
         height: 10px;
         border-radius: 9999px;
         background: linear-gradient(90deg, hsl(0 0% 34%), hsl(0 0% 8%));
     }
-    .kr-progress-range::-moz-range-thumb {
+    .ng-progress-range::-moz-range-thumb {
         width: 18px;
         height: 18px;
         border-radius: 9999px;
@@ -3366,15 +3404,15 @@ html[data-page="dex"] .app-sky {
         border: 2px solid hsl(0 0% 10%);
     }
     /* ASK-28 — locked to the checklist: no thumb, so it reads as a bar. */
-    .kr-progress-range:disabled::-webkit-slider-thumb { opacity: 0; }
-    .kr-progress-range:disabled::-moz-range-thumb { opacity: 0; }
-    .kr-progress-range:focus-visible {
+    .ng-progress-range:disabled::-webkit-slider-thumb { opacity: 0; }
+    .ng-progress-range:disabled::-moz-range-thumb { opacity: 0; }
+    .ng-progress-range:focus-visible {
         outline: 2px solid hsl(0 0% 10% / .4);
         outline-offset: 4px;
         border-radius: 9999px;
     }
 
-    .kr-bento:not([role="dialog"]):not([role="alertdialog"]):hover {
+    .ng-bento:not([role="dialog"]):not([role="alertdialog"]):hover {
         transform: translateY(-3px);
         box-shadow:
             inset 0 1px 0 hsl(0 0% 100% / .90),
@@ -3383,8 +3421,8 @@ html[data-page="dex"] .app-sky {
     }
     /* Opened: the tile stops hovering and settles, so an expanded card reads
        as a surface you are inside rather than one more thing to click. */
-    .kr-bento[data-open="true"],
-    .kr-bento[data-open="true"]:hover {
+    .ng-bento[data-open="true"],
+    .ng-bento[data-open="true"]:hover {
         transform: none;
         background: linear-gradient(152deg,
             hsl(214 44% 100% / .96),
@@ -3394,7 +3432,7 @@ html[data-page="dex"] .app-sky {
             4px 5px 16px hsl(216 30% 40% / .13);
     }
 
-    .kr-frost {
+    .ng-frost {
         background: linear-gradient(160deg,
             hsl(0 0% 100% / .52),
             hsl(0 0% 100% / .30));
@@ -3405,13 +3443,13 @@ html[data-page="dex"] .app-sky {
         color: hsl(var(--text-primary));
 
         /* KM-34 · THE ALIAS TRAP, FOURTH TIME — and this one had been left
-           half-done. .kr-frost set `color` and stopped, so anything reaching
+           half-done. .ng-frost set `color` and stopped, so anything reaching
            for --muted-foreground kept resolving against :root's neutral-600,
            a value tuned for the app's OPAQUE cream canvas. Under a translucent
            card the backdrop is whatever the room's sky happens to be, and on
            /finance's picture the darkest patch a card can sit over composites
            to L=0.449 — where 13px muted body copy measured 3.52:1 against a
-           4.5 requirement. .kr-glass solved exactly this for the ink zone
+           4.5 requirement. .ng-glass solved exactly this for the ink zone
            (see its note above); the light-glass recipe needs the same block.
 
            Secondary goes to 24% lightness here rather than neutral-600's 33%,
@@ -3426,27 +3464,27 @@ html[data-page="dex"] .app-sky {
         --muted-foreground: var(--text-secondary);
     }
 
-    /* KM-8 · .kr-frost-min — the same light glass as .kr-frost, one step
+    /* KM-8 · .ng-frost-min — the same light glass as .ng-frost, one step
        quieter, for panes that sit ON a frosted surface rather than on the
-       page. If a tile used full .kr-frost inside a .kr-frost panel the two
+       page. If a tile used full .ng-frost inside a .ng-frost panel the two
        alphas would stack to near-opaque and the tile would vanish into its
        own container; this drops the fill and lets the parent's blur do the
        work, so the tile is drawn almost entirely by its hairline. No
        backdrop-filter of its own — nesting blurs is how you get a smeared,
        expensive surface that reads as neither glass nor solid. */
-    .kr-frost-min {
+    .ng-frost-min {
         background: hsl(0 0% 100% / .34);
         border: 1px solid hsl(0 0% 100% / .60);
         border-radius: var(--radius-tile);
         color: hsl(var(--text-primary));
-        /* Same re-scope as .kr-frost — this one is often used STANDALONE on
+        /* Same re-scope as .ng-frost — this one is often used STANDALONE on
            the sky (a period pill, an input) rather than nested in a frost
            parent, so it cannot rely on inheriting the block above. */
         --text-secondary:   30 5% 24%;
         --text-tertiary:    30 5% 34%;
         --muted-foreground: var(--text-secondary);
     }
-    .kr-frost-min:hover { background: hsl(0 0% 100% / .46); }
+    .ng-frost-min:hover { background: hsl(0 0% 100% / .46); }
 
     /* KM-34 · /finance TAKES THE BLUR OFF ITS GLASS, and keeps everything else.
        The revamp put ELEVEN backdrop-filtered surfaces in one viewport — six
@@ -3469,8 +3507,8 @@ html[data-page="dex"] .app-sky {
        preview pane reports document.hidden and stops compositing content
        scrolled into view for the first time, so the capture was stale while
        the DOM was correct all along.) */
-    html[data-page="finance"] .kr-frost:not(.kr-keep-blur),
-    html[data-page="finance"] .kr-frost-min:not(.kr-keep-blur) {
+    html[data-page="finance"] .ng-frost:not(.ng-keep-blur),
+    html[data-page="finance"] .ng-frost-min:not(.ng-keep-blur) {
         -webkit-backdrop-filter: none;
                 backdrop-filter: none;
     }
@@ -3480,14 +3518,14 @@ html[data-page="dex"] .app-sky {
        everything, and only one is open at a time. Without this the More panel
        lost its blur — but only when opened from /finance, which is exactly the
        kind of bug that reads as random. Founder found it; it was mine. */
-    .kr-keep-blur {
+    .ng-keep-blur {
         -webkit-backdrop-filter: blur(20px) saturate(1.5) !important;
                 backdrop-filter: blur(20px) saturate(1.5) !important;
     }
 
-    .kr-glass--blue  { --kr-glass-from: 214 45% 58%; --kr-glass-to: 28 55% 50%; }
-    .kr-glass--olive { --kr-glass-from: 85 34% 42%;  --kr-glass-to: 75 32% 22%; }
-    .kr-glass--warm  { --kr-glass-from: 36 18% 48%;  --kr-glass-to: 225 12% 38%; }
+    .ng-glass--blue  { --ng-glass-from: 214 45% 58%; --ng-glass-to: 28 55% 50%; }
+    .ng-glass--olive { --ng-glass-from: 85 34% 42%;  --ng-glass-to: 75 32% 22%; }
+    .ng-glass--warm  { --ng-glass-from: 36 18% 48%;  --ng-glass-to: 225 12% 38%; }
 
     /* KR-8.5 — the desk's four identities. Colour IS the grouping here, so
        these carry the load that filter pills used to: amber = waiting on
@@ -3505,24 +3543,24 @@ html[data-page="dex"] .app-sky {
        the sheet underneath: KM-35 also made it opaque #000, so a 10% wash of
        saturated colour has a black ground to sit on and still separates. The
        white hairline at .16 is now doing most of the work of drawing the card,
-       which is the same bargain .kr-frost-min strikes in the light zone.
+       which is the same bargain .ng-frost-min strikes in the light zone.
        (These four are the only glass variants that go this low — every other
-       .kr-glass surface keeps the .60/.42 it was tuned at.) */
-    .kr-desk--needs,
-    .kr-desk--fire,
-    .kr-desk--today,
-    .kr-desk--flag  {
-        --kr-glass-a1: .10;
-        --kr-glass-a2: .05;
+       .ng-glass surface keeps the .60/.42 it was tuned at.) */
+    .ng-desk--needs,
+    .ng-desk--fire,
+    .ng-desk--today,
+    .ng-desk--flag  {
+        --ng-glass-a1: .10;
+        --ng-glass-a2: .05;
         /* KM-35 — and no backdrop blur, because there is provably nothing to
-           blur. These four only ever sit inside .kr-dark-band, whose fill is a
+           blur. These four only ever sit inside .ng-dark-band, whose fill is a
            flat opaque colour on both breakpoints (#000 on the phone now, ink on
            desktop) — blurring a uniform field returns the same uniform field,
            and `saturate` on black is black. Four full-size backdrop filters per
            viewport were being composited every scroll frame to produce an
            image identical to not running them. Same finding as /finance, for a
            different reason: there it was a pre-blurred picture, here it is a
-           solid. Other .kr-glass surfaces sit over real content and keep it. */
+           solid. Other .ng-glass surfaces sit over real content and keep it. */
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
     }
@@ -3534,16 +3572,16 @@ html[data-page="dex"] .app-sky {
        6.66. So the label follows the hue rather than the convention. This was
        not introduced by the transparency pass — it has been true since the
        buttons took the section colour — but it is measurable now. */
-    .kr-desk--needs { --kr-glass-from: 33 92% 56%;  --kr-glass-to: 16 82% 36%;
-                      --kr-glass-btn-fg: var(--kr-ink); }
-    .kr-desk--fire  { --kr-glass-from: 6 78% 52%;   --kr-glass-to: 348 55% 26%; }
-    .kr-desk--today { --kr-glass-from: 210 55% 50%; --kr-glass-to: 228 42% 27%; }
-    .kr-desk--flag  { --kr-glass-from: 92 34% 42%;  --kr-glass-to: 155 30% 22%; }
+    .ng-desk--needs { --ng-glass-from: 33 92% 56%;  --ng-glass-to: 16 82% 36%;
+                      --ng-glass-btn-fg: var(--ng-ink); }
+    .ng-desk--fire  { --ng-glass-from: 6 78% 52%;   --ng-glass-to: 348 55% 26%; }
+    .ng-desk--today { --ng-glass-from: 210 55% 50%; --ng-glass-to: 228 42% 27%; }
+    .ng-desk--flag  { --ng-glass-from: 92 34% 42%;  --ng-glass-to: 155 30% 22%; }
 
     /* Acted on. Dimmed and drained rather than removed — the founder keeps
        their place in the grid, and "I already did this" is a state worth
        seeing. */
-    .kr-done {
+    .ng-done {
         opacity: .42;
         filter: saturate(.3);
         transition: opacity 260ms ease, filter 260ms ease;
@@ -3557,13 +3595,13 @@ html[data-page="dex"] .app-sky {
 
     /* KR-4 — the two motion verbs the primitives share.
 
-       .kr-lift: the card answers the cursor by rising; any ArrowButton
+       .ng-lift: the card answers the cursor by rising; any ArrowButton
        glyph inside rotates ↗ → → in sympathy, which is what makes a whole
        tile read as one control instead of a box with a button in it.
 
-       .kr-reveal: the dark band's entrance — 24px rise + fade, stamped
+       .ng-reveal: the dark band's entrance — 24px rise + fade, stamped
        `is-in` once by useReveal and never re-run. */
-    /* KR-14.1 · .kr-glow — a translucent BLACK fill on hover, not a glow.
+    /* KR-14.1 · .ng-glow — a translucent BLACK fill on hover, not a glow.
        Founder: "let that be a translucent black colour fill effect rather
        than an orange glow."
        Right call, and it fixes something the orange version got wrong: the
@@ -3576,29 +3614,29 @@ html[data-page="dex"] .app-sky {
        The pseudo-element halo is gone with the glow — a flat fill needs no
        second layer, and box-shadow was unusable anyway (Tailwind's ring
        utilities compose box-shadow on these same pills and win). */
-    .kr-glow {
+    .ng-glow {
         transition: background-color 220ms ease, border-color 220ms ease, color 220ms ease;
     }
-    .kr-glow:hover {
-        background-color: hsl(var(--kr-ink) / .07);
-        border-color: hsl(var(--kr-ink));
+    .ng-glow:hover {
+        background-color: hsl(var(--ng-ink) / .07);
+        border-color: hsl(var(--ng-ink));
         color: hsl(var(--foreground));
     }
 
-    .kr-lift {
+    .ng-lift {
         transition: transform 180ms cubic-bezier(.22, 1, .36, 1);
     }
-    .kr-lift:hover  { transform: translateY(-4px); }
-    .kr-lift:active { transform: translateY(-1px) scale(.99); }
-    .kr-lift:hover .kr-arrow { transform: translateX(3px); }
+    .ng-lift:hover  { transform: translateY(-4px); }
+    .ng-lift:active { transform: translateY(-1px) scale(.99); }
+    .ng-lift:hover .ng-arrow { transform: translateX(3px); }
 
-    .kr-reveal {
+    .ng-reveal {
         opacity: 0;
         transform: translateY(24px);
         transition: opacity 500ms cubic-bezier(.22, 1, .36, 1),
                     transform 500ms cubic-bezier(.22, 1, .36, 1);
     }
-    .kr-reveal.is-in {
+    .ng-reveal.is-in {
         opacity: 1;
         transform: none;
     }
@@ -3616,35 +3654,35 @@ html[data-page="dex"] .app-sky {
        overhangs, and a highlight IN from the bottom-right where the far
        wall catches. That pairing is the whole illusion — reverse it and the
        same box pops out instead of sinking in. One light source, upper
-       left, shared with .kr-pop below so a raised control and a sunken well
+       left, shared with .ng-pop below so a raised control and a sunken well
        never contradict each other about where the light is.
 
        Still glass: the wash is a white film, not a fill, and the backdrop
        blur is what separates the panel from the bloom drifting behind it.
-       This and .kr-pop are the deliberate exceptions to KR-2's shadow kill
+       This and .ng-pop are the deliberate exceptions to KR-2's shadow kill
        — that rule retired DROP shadows on resting surfaces; depth modelled
        from a fixed light is a different material claim. */
-    /* ASK-25 · .kr-desk-board — the Desk's lower half is ONE BLACK CONTAINER
+    /* ASK-25 · .ng-desk-board — the Desk's lower half is ONE BLACK CONTAINER
        (2026-09-14, founder: "instead of glass or frost glass we go with the
        black container"). The ink token, the tile radius, white type; the
        columns and rows inside are parted by white hairlines drawn in
        Desk.js, and the three-row stack sits on it as white cards. The
-       frost .kr-desk-card this replaces is gone — the black is opaque, so
+       frost .ng-desk-card this replaces is gone — the black is opaque, so
        there is nothing behind it to blur and no reason to keep the recipe. */
-    .kr-desk-board {
+    .ng-desk-board {
         border-radius: var(--radius-tile);
         /* 2026-09-14, founder — PRESSED LIKE THE DEX WELL, IN BLACK
            ("similar to dex-today's pressed style for black colour"). The
-           well's recipe (.kr-well__pane) is a 7px/14px pair of inset shadows,
+           well's recipe (.ng-well__pane) is a 7px/14px pair of inset shadows,
            dark from the top-left and light from the bottom-right, on a
            translucent wash. Re-cut for ink: the ground sits ONE STEP above
-           pure black (9%, --kr-desk-ink) so the dark inset has something to
+           pure black (9%, --ng-desk-ink) so the dark inset has something to
            be darker than, the shadow is full black and reaches further in
            than the well's (10px/22px against 7px/14px), and the light is a
            14% white catch on the lower-right edges — the founder could not
            see the .9/.10 cut at the well's own reach on a ground this dark. */
-        --kr-desk-ink: 240 4% 9%;
-        background: hsl(var(--kr-desk-ink));
+        --ng-desk-ink: 240 4% 9%;
+        background: hsl(var(--ng-desk-ink));
         box-shadow:
             inset 10px 10px 22px hsl(0 0% 0% / 1),
             inset -8px -8px 18px hsl(0 0% 100% / .14);
@@ -3683,7 +3721,7 @@ html[data-page="dex"] .app-sky {
            the gutter, the 7.5rem of padding at the foot, and the top-corner
            radius cut to the tab strip's curve — a card's corners are the
            card's. */
-        .kr-desk-board {
+        .ng-desk-board {
             padding: 0.75rem;
             border-radius: var(--radius-tile);
         }
@@ -3700,19 +3738,19 @@ html[data-page="dex"] .app-sky {
            and rows inside keep exactly the box they had. The rows' height is
            unchanged to the pixel (so the three-row fit is untouched), and their
            sides now line up with the KPI tiles' outer edges above them.
-           `.kr-desk-sheet-floor` carries the margins alone so the spacer that
+           `.ng-desk-sheet-floor` carries the margins alone so the spacer that
            holds the sheet's place while it is lifted (Desk.js, ASK-47) can wear
            them too and take exactly the room the sheet took.
            THE TOP CORNERS ARE CONCENTRIC WITH THE TAB STRIP: its curve is half
            of (--tabs-trigger-h + 0.5rem) — 26px on a phone — and the sheet sits
            0.75rem outside it, so 38px, up from 24. Square at the foot: there is
            no foot, it runs off the bottom of the screen. */
-        .kr-desk-sheet-floor {
+        .ng-desk-sheet-floor {
             margin-left: calc(-1 * max(1rem, var(--sa-left)));
             margin-right: calc(-1 * max(1rem, var(--sa-right)));
             margin-bottom: calc(-1 * var(--dock-clear));
         }
-        .kr-desk-board.kr-desk-sheet-floor {
+        .ng-desk-board.ng-desk-sheet-floor {
             /* 0.25rem over the clearance is the seam the card used to keep
                above the bar (its old -mb-2 against 0.75rem of padding). */
             padding: 0.75rem max(1rem, var(--sa-right)) calc(var(--dock-clear) + 0.25rem) max(1rem, var(--sa-left));
@@ -3720,7 +3758,7 @@ html[data-page="dex"] .app-sky {
         }
     }
     @media (min-width: 1024px) {
-        .kr-desk-board {
+        .ng-desk-board {
             /* ASK-35 3.1 — ALL FOUR CORNERS. It was square below because it ran
                off the bottom of the page; it is a card sitting ON the page now,
                and a card has four corners. */
@@ -3731,24 +3769,24 @@ html[data-page="dex"] .app-sky {
 
     /* The three-row stack's cards are the old dark band's glass: the section
        hue at a whisper over the ink, no blur (the board is opaque — nothing
-       behind it to blur). .kr-desk--* already dial the tint to .10/.05; this
-       covers .kr-glass--warm (Leave), which otherwise keeps the light page's
+       behind it to blur). .ng-desk--* already dial the tint to .10/.05; this
+       covers .ng-glass--warm (Leave), which otherwise keeps the light page's
        .60/.42 and would read as a pale slab on the black. */
-    .kr-desk-board .kr-glass {
-        --kr-glass-a1: .10;
-        --kr-glass-a2: .05;
+    .ng-desk-board .ng-glass {
+        --ng-glass-a1: .10;
+        --ng-glass-a2: .05;
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
     }
 
-    .kr-well {
+    .ng-well {
         position: relative;
         border-radius: var(--radius-tile);
     }
 
     /* DEX-SLIDER — THE SLIDER SITS IN A WELL, not on a field. The founder's
        rearrangement puts the control inside the app's own concave surface, and
-       this is .kr-well__pane's recipe verbatim — the same 7px/14px inset pair,
+       this is .ng-well__pane's recipe verbatim — the same 7px/14px inset pair,
        dark from the top-left and light from the bottom-right — cut as a pill
        and given the sunk phone wash so the handle reads as sitting IN a channel
        rather than on a bar. Nothing new is invented; the well already knew how
@@ -3762,11 +3800,11 @@ html[data-page="dex"] .app-sky {
        that was flat — no hairline AND no shadow. So the tile is its fill, its
        radius and nothing else, and it reads against the page by being lighter
        than it. `box-shadow: none` rather than simply omitting one, because
-       .kr-stat (WorkflowsTile) brings its own and this has to beat it.
+       .ng-stat (WorkflowsTile) brings its own and this has to beat it.
        Scoped to this class rather than cut from .nm-tile, which some 180 call
        sites across /my-work, /crm, /team and /finance rely on and which I have
        no way to look at from here. */
-    .kr-kpi-tile {
+    .ng-kpi-tile {
         border: 0;
         box-shadow: none;
     }
@@ -3779,7 +3817,7 @@ html[data-page="dex"] .app-sky {
        `--mw-gain` is written per frame from the live microphone meter, so the
        reach and the brightness both answer the room; at rest it still breathes,
        because a recording screen that looks frozen looks broken. */
-    .kr-mic-waves {
+    .ng-mic-waves {
         position: absolute;
         left: 50%;
         top: 50%;
@@ -3787,7 +3825,7 @@ html[data-page="dex"] .app-sky {
         height: 0;
         pointer-events: none;
     }
-    .kr-mic-waves > i {
+    .ng-mic-waves > i {
         position: absolute;
         left: 50%;
         top: 50%;
@@ -3797,15 +3835,15 @@ html[data-page="dex"] .app-sky {
         border-radius: 9999px;
         border: 1.5px solid hsl(0 0% 100% / .9);
         opacity: 0;
-        animation: kr-mic-ring 2.8s cubic-bezier(.22, 1, .36, 1) infinite;
+        animation: ng-mic-ring 2.8s cubic-bezier(.22, 1, .36, 1) infinite;
     }
-    @keyframes kr-mic-ring {
+    @keyframes ng-mic-ring {
         0%   { transform: scale(1);   opacity: 0; }
         12%  { opacity: calc(.42 * var(--mw-gain, 1)); }
         100% { transform: scale(calc(3.2 + 2.6 * var(--mw-gain, 1))); opacity: 0; }
     }
     @media (prefers-reduced-motion: reduce) {
-        .kr-mic-waves > i { animation: none; opacity: 0; }
+        .ng-mic-waves > i { animation: none; opacity: 0; }
     }
 
     /* THE SLIDER'S KNOB, to the founder's own button.png: a raised disc with a
@@ -3814,7 +3852,7 @@ html[data-page="dex"] .app-sky {
        the outside, and the reverse on the inside, which is what makes the
        centre read as sunk rather than merely darker. The glyph sits in the
        dish, which is why it needs the stacking context. */
-    .kr-slider-knob {
+    .ng-slider-knob {
         position: relative;
         isolation: isolate;
         background: linear-gradient(145deg, hsl(0 0% 100%), hsl(220 14% 92%));
@@ -3826,7 +3864,7 @@ html[data-page="dex"] .app-sky {
            shadow was a second answer to "this sits in something". */
         box-shadow: none;
     }
-    .kr-slider-knob::after {
+    .ng-slider-knob::after {
         content: "";
         position: absolute;
         inset: 17%;
@@ -3837,9 +3875,9 @@ html[data-page="dex"] .app-sky {
             inset -4px -4px 8px hsl(0 0% 100% / .92);
         z-index: -1;
     }
-    .kr-slider-knob:active { transform-origin: center; }
+    .ng-slider-knob:active { transform-origin: center; }
 
-    .kr-slider-well {
+    .ng-slider-well {
         position: relative;
         border-radius: 9999px;
         border: 0;
@@ -3861,14 +3899,14 @@ html[data-page="dex"] .app-sky {
        mid-grey pill LYING ON the sheet rather than a channel cut INTO it — the
        founder's words, and they were right: a lighter fill is the opposite of
        pressed. So the ground is the sheet's own ink, the same hsl, and the pair
-       of inset shadows is the one .kr-desk-board already uses to look pressed
+       of inset shadows is the one .ng-desk-board already uses to look pressed
        in black: 10px/22px of full black from the top-left, an 8px/18px 14%
        white catch from the bottom-right. The well IS the sheet, with a groove
        in it, and nothing is added on top — which is why no fill shows.
        The blur goes with it: the board is opaque, so there is nothing behind
        this to see through and a backdrop-filter could only pull in light that
        is not there. */
-    .kr-slider-well--ink {
+    .ng-slider-well--ink {
         background: hsl(240 4% 9%);
         box-shadow:
             inset 10px 10px 22px hsl(0 0% 0% / 1),
@@ -3882,9 +3920,9 @@ html[data-page="dex"] .app-sky {
        three expanding rings on a keyframe; the founder could not see them at
        all, and handed over the lab's own config instead — so the control runs
        the app's real wave material, decoratively, and this recipe is gone
-       rather than left behind to rot. See components/karma/DexSlider.jsx. */
+       rather than left behind to rot. See components/neuglass/DexSlider.jsx. */
 
-    .kr-well__pane {
+    .ng-well__pane {
         position: relative;
         border-radius: inherit;
         border: 0;
@@ -3912,7 +3950,7 @@ html[data-page="dex"] .app-sky {
        top-left to 233 at the middle-left and 163-171 down the amber right: the
        light in the picture comes from the LEFT, which is the direction this
        recipe's inset pair already assumes (dark from the top-left, light from
-       the bottom-right — the app's grammar, .kr-pressed). The angle was never
+       the bottom-right — the app's grammar, .ng-pressed). The angle was never
        the problem. The CONTRAST was: at a 34%/20% white wash the pane is so
        transparent that the sky behind it outweighs a 7px shadow, and the well's
        edges measured 222 on the left and 198 on the right — tracking the
@@ -3924,7 +3962,7 @@ html[data-page="dex"] .app-sky {
        to read over a dimmed ground. Measured after the change, over the hottest
        part of the bloom: "Dex" 6.65:1 and "Tell Dex what you decided." 5.95:1,
        both over the 4.5 floor the original wash was cut to hold. */
-    .kr-well__pane.kr-well--sunk {
+    .ng-well__pane.ng-well--sunk {
         background:
             linear-gradient(160deg,
                 hsl(230 14% 26% / .10),
@@ -3937,7 +3975,7 @@ html[data-page="dex"] .app-sky {
             inset -12px -12px 24px hsl(0 0% 100% / .78);
     }
 
-    /* ASK-33 Phase 2's .kr-dex-grow / .kr-dex-fade — the Dex well growing
+    /* ASK-33 Phase 2's .ng-dex-grow / .ng-dex-fade — the Dex well growing
        over the hero while the greeting faded — are retired with the growth
        itself (PILOT-2 A): the capture happens in its own pop-up now. */
 
@@ -3948,29 +3986,29 @@ html[data-page="dex"] .app-sky {
        borderless control has. */
     /* ASK-50 · PRIORITY, TINTED — BARELY. The New Task priority is a segment
        bar now (ScopeSlider), and the founder asked for "a subtle, very subtle
-       light colour" on it. The thumb keeps .kr-pop's lighting and takes a wash
+       light colour" on it. The thumb keeps .ng-pop's lighting and takes a wash
        of the priority's own hue at three-quarters strength over a near-white:
        enough to tell low from high at a glance, too little to read as a status
-       chip. Two classes, so it outranks .kr-pop's own background. */
-    .kr-pop.kr-prio-thumb--low {
+       chip. Two classes, so it outranks .ng-pop's own background. */
+    .ng-pop.ng-prio-thumb--low {
         background: hsl(150 45% 93% / .85);
         transition: transform 240ms cubic-bezier(.22, 1, .36, 1), background-color 240ms ease;
     }
-    .kr-pop.kr-prio-thumb--medium {
+    .ng-pop.ng-prio-thumb--medium {
         background: hsl(40 90% 91% / .85);
         transition: transform 240ms cubic-bezier(.22, 1, .36, 1), background-color 240ms ease;
     }
-    .kr-pop.kr-prio-thumb--high {
+    .ng-pop.ng-prio-thumb--high {
         background: hsl(4 85% 94% / .85);
         transition: transform 240ms cubic-bezier(.22, 1, .36, 1), background-color 240ms ease;
     }
 
-    .kr-pop {
+    .ng-pop {
         border: 0;
         background: hsl(0 0% 100% / .38);
         backdrop-filter: blur(14px) saturate(1.4);
         -webkit-backdrop-filter: blur(14px) saturate(1.4);
-        /* KR-14.2 — same de-fogging as .kr-bento: the white halo goes, a
+        /* KR-14.2 — same de-fogging as .ng-bento: the white halo goes, a
            tight dark contact shadow does the lifting, and the only white
            left is an inset lip. */
         box-shadow:
@@ -3979,20 +4017,20 @@ html[data-page="dex"] .app-sky {
             0 4px 10px -4px hsl(230 20% 20% / .26);
         transition: box-shadow 160ms ease, transform 160ms ease;
     }
-    .kr-pop:hover {
+    .ng-pop:hover {
         box-shadow:
             inset 0 1px 0 hsl(0 0% 100% / .85),
             0 2px 4px hsl(230 20% 20% / .14),
             0 7px 14px -6px hsl(230 20% 20% / .30);
     }
-    /* KR-11.3 · .kr-pressed — the "on" state of a neumorphic control.
-       .kr-pop's :active is momentary; this is the same look held. Selected
+    /* KR-11.3 · .ng-pressed — the "on" state of a neumorphic control.
+       .ng-pop's :active is momentary; this is the same look held. Selected
        means pushed IN, which is the one thing this material says better than
        a fill does: the app's outlined pills mark selection with contrast,
        these mark it with depth, and the founder can now tell a page control
        from a nav control at a glance. */
     /* ═══════════════════════════════════════════════════════════════════
-       ASK-36 5 · .kr-cradle — the loading animation, app-wide.
+       ASK-36 5 · .ng-cradle — the loading animation, app-wide.
        The founder supplied it as a styled-components snippet. The geometry,
        the timings and both keyframe curves are transcribed exactly; what is NOT
        taken is styled-components itself — the app does not carry that
@@ -4007,7 +4045,7 @@ html[data-page="dex"] .app-sky {
        Under prefers-reduced-motion the dots hold still — the component keeps
        its own aria-live label, so a screen reader is told it is loading either
        way. */
-    .kr-cradle {
+    .ng-cradle {
         --uib-size: 50px;
         --uib-speed: 1.2s;
         --uib-color: #474554;
@@ -4018,7 +4056,7 @@ html[data-page="dex"] .app-sky {
         width: var(--uib-size);
         height: var(--uib-size);
     }
-    .kr-cradle__dot {
+    .ng-cradle__dot {
         position: relative;
         display: flex;
         align-items: center;
@@ -4026,7 +4064,7 @@ html[data-page="dex"] .app-sky {
         width: 25%;
         transform-origin: center top;
     }
-    .kr-cradle__dot::after {
+    .ng-cradle__dot::after {
         content: "";
         display: block;
         width: 100%;
@@ -4034,25 +4072,25 @@ html[data-page="dex"] .app-sky {
         border-radius: 50%;
         background-color: var(--uib-color);
     }
-    .kr-cradle__dot:first-child { animation: kr-cradle-swing var(--uib-speed) linear infinite; }
-    .kr-cradle__dot:last-child  { animation: kr-cradle-swing2 var(--uib-speed) linear infinite; }
+    .ng-cradle__dot:first-child { animation: ng-cradle-swing var(--uib-speed) linear infinite; }
+    .ng-cradle__dot:last-child  { animation: ng-cradle-swing2 var(--uib-speed) linear infinite; }
 
-    @keyframes kr-cradle-swing {
+    @keyframes ng-cradle-swing {
         0%   { transform: rotate(0deg);  animation-timing-function: ease-out; }
         25%  { transform: rotate(70deg); animation-timing-function: ease-in; }
         50%  { transform: rotate(0deg);  animation-timing-function: linear; }
     }
-    @keyframes kr-cradle-swing2 {
+    @keyframes ng-cradle-swing2 {
         0%   { transform: rotate(0deg);   animation-timing-function: linear; }
         50%  { transform: rotate(0deg);   animation-timing-function: ease-out; }
         75%  { transform: rotate(-70deg); animation-timing-function: ease-in; }
     }
     @media (prefers-reduced-motion: reduce) {
-        .kr-cradle__dot:first-child,
-        .kr-cradle__dot:last-child { animation: none; }
+        .ng-cradle__dot:first-child,
+        .ng-cradle__dot:last-child { animation: none; }
     }
 
-    .kr-pressed {
+    .ng-pressed {
         border: 0;
         background: hsl(0 0% 100% / .30);
         -webkit-backdrop-filter: blur(14px) saturate(1.4);
@@ -4062,11 +4100,11 @@ html[data-page="dex"] .app-sky {
             inset -4px -4px 9px hsl(0 0% 100% / .72);
     }
 
-    /* ── KM-64 · .kr-chip-on — "this one is chosen", said out loud ─────────
+    /* ── KM-64 · .ng-chip-on — "this one is chosen", said out loud ─────────
        Founder, with two screenshots of a B2C chip side by side: "the
        difference is subtle, I want a distinct difference when pressed."
 
-       WHY IT WENT QUIET. On the app's canvas .kr-pressed above carries a real
+       WHY IT WENT QUIET. On the app's canvas .ng-pressed above carries a real
        dual inset and reads clearly. On the signup and login stages it is
        OVERRIDDEN to `hsl(0 0% 100% / .20)` and a single 1px shadow, because
        there the same class also draws every text field's trough — a heavy
@@ -4077,7 +4115,7 @@ html[data-page="dex"] .app-sky {
        Selection gets its own recipe instead of strengthening the shared one,
        which would have dented every field on both stages.
 
-       INK, not a stronger dent. Depth is what .kr-pressed says, and depth is
+       INK, not a stronger dent. Depth is what .ng-pressed says, and depth is
        exactly what a photograph behind translucent white erodes: the founder
        could not see it because there was very little of it left. A filled
        chip does not depend on the backdrop at all. The inset is kept so the
@@ -4086,9 +4124,9 @@ html[data-page="dex"] .app-sky {
        treatment for the same reason in KM-62.
 
        17.9:1 against white text, against roughly 1.2:1 before. */
-    .kr-chip-on {
-        border: 1px solid hsl(var(--kr-ink));
-        background: hsl(var(--kr-ink));
+    .ng-chip-on {
+        border: 1px solid hsl(var(--ng-ink));
+        background: hsl(var(--ng-ink));
         color: #fff;
         box-shadow:
             inset 0 2px 5px hsl(230 30% 8% / .55),
@@ -4096,37 +4134,37 @@ html[data-page="dex"] .app-sky {
             0 1px 0 hsl(0 0% 100% / .45);
     }
     /* The label inherits, but anything inside carrying its own muted token
-       would not — so the scope is re-stated. Same alias trap as .kr-frost. */
-    .kr-chip-on * { color: inherit; }
+       would not — so the scope is re-stated. Same alias trap as .ng-frost. */
+    .ng-chip-on * { color: inherit; }
 
-    /* ── KM-66 · .kr-new-glow — "this one is new", for five seconds ────────
+    /* ── KM-66 · .ng-new-glow — "this one is new", for five seconds ────────
        When a refinement returns, the founder needs to find what changed in a
        list they have already read. A gold ring, three slow cycles, gone.
 
        DRAWN ON AN ::after, NOT ON THE ELEMENT'S OWN box-shadow. Every target
-       already has one that means something: .kr-pressed's inset is what makes
+       already has one that means something: .ng-pressed's inset is what makes
        a pill read as content rather than a control (KM-62), and animating
        box-shadow on the element would REPLACE it for five seconds — the pill
        would quietly turn into a button and back. The overlay ring adds to
        what is there instead of taking its place. `border-radius: inherit`
        makes it fit a pill and a tile without either knowing about it.
 
-       GOLD, not --kr-accent. Accent is this product's alert grammar; nothing
+       GOLD, not --ng-accent. Accent is this product's alert grammar; nothing
        has gone wrong here, something has been added. */
-    @keyframes kr-new-glow {
+    @keyframes ng-new-glow {
         0%, 100% {
             box-shadow:
-                0 0 0 1px hsl(var(--kr-gold) / .50),
-                0 0 10px 2px hsl(var(--kr-gold) / .18);
+                0 0 0 1px hsl(var(--ng-gold) / .50),
+                0 0 10px 2px hsl(var(--ng-gold) / .18);
         }
         55% {
             box-shadow:
-                0 0 0 1px hsl(var(--kr-gold) / .10),
-                0 0 4px 0 hsl(var(--kr-gold) / .03);
+                0 0 0 1px hsl(var(--ng-gold) / .10),
+                0 0 4px 0 hsl(var(--ng-gold) / .03);
         }
     }
-    .kr-new-glow { position: relative; }
-    .kr-new-glow::after {
+    .ng-new-glow { position: relative; }
+    .ng-new-glow::after {
         content: "";
         position: absolute;
         inset: 0;
@@ -4134,10 +4172,10 @@ html[data-page="dex"] .app-sky {
         pointer-events: none;
         /* 3 x 1.6s = 4.8s, inside the 5s the class is held for, so it ends on
            a full ring rather than being cut mid-fade. */
-        animation: kr-new-glow 1.6s ease-in-out 3;
+        animation: ng-new-glow 1.6s ease-in-out 3;
     }
 
-    .kr-pop:active {
+    .ng-pop:active {
         transform: translateY(1px);
         box-shadow:
             inset 4px 4px 8px hsl(230 22% 34% / .24),
@@ -4146,25 +4184,25 @@ html[data-page="dex"] .app-sky {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .kr-lift, .kr-lift:hover, .kr-lift:active { transition: none; transform: none; }
-    /* .kr-glow keeps its hover state under reduced motion — it never moved
+    .ng-lift, .ng-lift:hover, .ng-lift:active { transition: none; transform: none; }
+    /* .ng-glow keeps its hover state under reduced motion — it never moved
        anything, and removing the only affordance a nav pill has would cost
        more than the easing saves. Only the timing goes. */
-    .kr-glow { transition: none; }
-    .kr-lift:hover .kr-arrow { transform: none; }
-    .kr-reveal { opacity: 1; transform: none; transition: none; }
-    .kr-dex-breathe { animation: none; }
+    .ng-glow { transition: none; }
+    .ng-lift:hover .ng-arrow { transform: none; }
+    .ng-reveal { opacity: 1; transform: none; transition: none; }
+    .ng-dex-breathe { animation: none; }
 
     /* KR-8.9 — the aurora is gone, so the well itself has nothing left to
-       guard. .kr-pop still does: it eases its shadows on hover and drops 1px
+       guard. .ng-pop still does: it eases its shadows on hover and drops 1px
        on press, and the blanket rule below only catches the named legacy
-       loops. Same treatment as .kr-lift — the state still changes, it just
+       loops. Same treatment as .ng-lift — the state still changes, it just
        arrives instantly. */
-    .kr-pop, .kr-pop:hover, .kr-pop:active { transition: none; }
-    .kr-pop:active { transform: none; }
+    .ng-pop, .ng-pop:hover, .ng-pop:active { transition: none; }
+    .ng-pop:active { transform: none; }
 
     /* KR-6 — the consolidated catch for every decorative loop that predates
-       the Karma pass and never carried its own off-switch (audited: fadeIn,
+       the Neu-glassmorphism pass and never carried its own off-switch (audited: fadeIn,
        ds-pulse skeletons, wave-bar, halo-breathe, soft-rise, ring-flash).
        Anything data-driven (the live mic rings) is JS-gated instead. */
     .ds-skeleton,
@@ -4234,14 +4272,14 @@ html[data-page="dex"] .app-sky {
    runtime, unlayered — and an unlayered rule beats a layered one whatever the
    specificity, so the same block inside @layer components lost every property
    to sonner's defaults (8px radius, a 1px hairline, a flat 4px/12px shadow).
-   Unlayered, `.kr-toast[data-sonner-toast]` (0,2,0) simply outranks
+   Unlayered, `.ng-toast[data-sonner-toast]` (0,2,0) simply outranks
    `[data-sonner-toast]` (0,1,0) and no !important is needed.
    ═══════════════════════════════════════════════════════════════════════════ */
 /* ═══════════════════════════════════════════════════════════════════
-   ASK-36 4 · .kr-toast — the notification, in the app's own material.
+   ASK-36 4 · .ng-toast — the notification, in the app's own material.
    It wore shadcn's `bg-background / border-border / shadow-lg`: a flat card
    with a hairline, which is the system this branch retired everywhere else.
-   This is .kr-pop's recipe — white glass, a lit top lip, KR-14.2's tight
+   This is .ng-pop's recipe — white glass, a lit top lip, KR-14.2's tight
    contact shadow instead of the old white halo — at the card radius, plus
    the one thing a toast needs that a button does not: a settle.
    THE MOTION. Sonner's default slides a card in from the edge. A status
@@ -4252,7 +4290,7 @@ html[data-page="dex"] .app-sky {
    Specificity: sonner writes its own [data-sonner-toast] styles, so these
    are qualified with it rather than fighting !important. */
 [data-sonner-toaster] { --width: 21rem; }
-.kr-toast.kr-toast[data-sonner-toast] {
+.ng-toast.ng-toast[data-sonner-toast] {
     width: 100%;
     gap: 0.625rem;
     padding: 0.8125rem 0.875rem;
@@ -4270,37 +4308,37 @@ html[data-page="dex"] .app-sky {
 /* The rise. `data-mounted` is sonner's own "it is on screen now" flag and
    `data-removed` its "it is going"; both are set a frame apart from the
    element appearing, which is exactly the hook a transition needs. */
-.kr-toast.kr-toast[data-sonner-toast] {
+.ng-toast.ng-toast[data-sonner-toast] {
     opacity: 0;
     transform: translateY(8px) scale(.985);
     transition: opacity 260ms cubic-bezier(.22, 1, .36, 1),
                 transform 320ms cubic-bezier(.22, 1, .36, 1);
 }
-.kr-toast.kr-toast[data-sonner-toast][data-mounted="true"] {
+.ng-toast.ng-toast[data-sonner-toast][data-mounted="true"] {
     opacity: 1;
     transform: translateY(0) scale(1);
 }
-.kr-toast.kr-toast[data-sonner-toast][data-removed="true"] {
+.ng-toast.ng-toast[data-sonner-toast][data-removed="true"] {
     opacity: 0;
     transform: translateY(-6px) scale(.985);
 }
 /* One soft scale-in on the status icon — the only thing in the toast that
    is a picture rather than a word, so it is the only thing worth animating
    a second time. */
-.kr-toast__icon {
-    animation: kr-toast-pop 380ms cubic-bezier(.22, 1, .36, 1) both;
+.ng-toast__icon {
+    animation: ng-toast-pop 380ms cubic-bezier(.22, 1, .36, 1) both;
 }
-@keyframes kr-toast-pop {
+@keyframes ng-toast-pop {
     from { opacity: 0; transform: scale(.7); }
     to   { opacity: 1; transform: scale(1); }
 }
 /* The two buttons are the app's pills: the action is INK_PILL's gradient
-   (components/karma/glass.js — the thing that moves you on), the cancel the
+   (components/neuglass/glass.js — the thing that moves you on), the cancel the
    quiet raised one. 32px, because a toast is a strip and the 44px tier
    would make it a card; both keep a 44px touch area below lg through the
    pseudo-element, which costs no layout. */
-.kr-toast .kr-toast__action.kr-toast__action[data-button],
-.kr-toast .kr-toast__cancel.kr-toast__cancel[data-button] {
+.ng-toast .ng-toast__action.ng-toast__action[data-button],
+.ng-toast .ng-toast__cancel.ng-toast__cancel[data-button] {
     position: relative;
     height: 2rem;
     padding-inline: 0.875rem;
@@ -4310,35 +4348,35 @@ html[data-page="dex"] .app-sky {
     font-weight: 600;
     transition: filter 150ms ease-out, background-color 150ms ease-out;
 }
-.kr-toast .kr-toast__action.kr-toast__action[data-button] {
+.ng-toast .ng-toast__action.ng-toast__action[data-button] {
     background: linear-gradient(180deg, hsl(0 0% 24%), hsl(0 0% 6%));
     color: #fff;
     box-shadow: inset 0 1px 0 hsl(0 0% 100% / .16), 0 6px 14px -8px hsl(0 0% 0% / .7);
 }
-.kr-toast .kr-toast__action.kr-toast__action[data-button]:hover { filter: brightness(1.25); }
-.kr-toast .kr-toast__cancel.kr-toast__cancel[data-button] {
+.ng-toast .ng-toast__action.ng-toast__action[data-button]:hover { filter: brightness(1.25); }
+.ng-toast .ng-toast__cancel.ng-toast__cancel[data-button] {
     background: hsl(0 0% 100% / .55);
     color: hsl(var(--foreground) / .8);
     box-shadow: inset 0 1px 0 hsl(0 0% 100% / .85), 0 1px 2px hsl(230 20% 20% / .12);
 }
-.kr-toast .kr-toast__cancel.kr-toast__cancel[data-button]:hover { background: hsl(0 0% 100% / .8); }
+.ng-toast .ng-toast__cancel.ng-toast__cancel[data-button]:hover { background: hsl(0 0% 100% / .8); }
 @media (max-width: 1023.98px) {
-    .kr-toast .kr-toast__action.kr-toast__action[data-button]::after,
-    .kr-toast .kr-toast__cancel.kr-toast__cancel[data-button]::after {
+    .ng-toast .ng-toast__action.ng-toast__action[data-button]::after,
+    .ng-toast .ng-toast__cancel.ng-toast__cancel[data-button]::after {
         content: "";
         position: absolute;
         inset: -6px -2px;   /* 32 + 12 = 44, with no layout cost */
     }
 }
-.kr-toast .kr-toast__close.kr-toast__close[data-close-button] {
+.ng-toast .ng-toast__close.ng-toast__close[data-close-button] {
     border: 0;
     background: hsl(0 0% 100% / .7);
     color: hsl(var(--foreground) / .7);
     box-shadow: inset 0 1px 0 hsl(0 0% 100% / .85), 0 1px 2px hsl(230 20% 20% / .12);
 }
 @media (prefers-reduced-motion: reduce) {
-    .kr-toast.kr-toast[data-sonner-toast] { transition: none; }
-    .kr-toast__icon { animation: none; }
+    .ng-toast.ng-toast[data-sonner-toast] { transition: none; }
+    .ng-toast__icon { animation: none; }
 }
 
 /* DEX-R1 — the one motion on /brain: an answer settles into place when it
@@ -4439,40 +4477,40 @@ html[data-page="dex"] .app-sky {
     :root [data-testid="desk-score-link-phone"] .text-sm { font-size: 16px; font-weight: 600; }
 
     :root [data-testid="desk-kpi-grid"] { gap: 0.75rem; }
-    :root [data-testid="desk-kpi-grid"] .kr-kpi-tile { padding: 1rem; border-radius: 1.5rem; }
+    :root [data-testid="desk-kpi-grid"] .ng-kpi-tile { padding: 1rem; border-radius: 1.5rem; }
     :root [data-testid="desk-kpi-grid"] .text-4xl { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; }
     :root [data-testid="desk-kpi-grid"] .text-lg { font-size: 20px; }
     :root [data-testid="desk-kpi-grid"] .text-sm,
-    :root [data-testid="desk-kpi-grid"] .kr-stat__label { font-size: 17px; line-height: 1.25; font-weight: 600; }
+    :root [data-testid="desk-kpi-grid"] .ng-stat__label { font-size: 17px; line-height: 1.25; font-weight: 600; }
     :root [data-testid="kpi-workflows-open"] { font-size: 17px; font-weight: 700; }
     /* The label sat BESIDE the 32px icon, which left it ~52px of a 117px
        tile: at 17px "Complaints" would print as "Complai". It goes under the
        icon and gets the tile's whole width. */
-    :root [data-testid="desk-kpi-grid"] > a.kr-kpi-tile > div:first-child { flex-wrap: wrap; row-gap: 0.75rem; }
-    :root [data-testid="desk-kpi-grid"] > a.kr-kpi-tile > div:first-child > p { flex-basis: 100%; }
+    :root [data-testid="desk-kpi-grid"] > a.ng-kpi-tile > div:first-child { flex-wrap: wrap; row-gap: 0.75rem; }
+    :root [data-testid="desk-kpi-grid"] > a.ng-kpi-tile > div:first-child > p { flex-basis: 100%; }
 
-    :root .kr-desk-board { padding-inline: 1rem; }
+    :root .ng-desk-board { padding-inline: 1rem; }
     :root [data-testid^="desk-tab-"]:not([data-testid="desk-tab-slider"]) { font-size: 17px; font-weight: 700; }
-    :root .kr-desk-sheet-list { --desk-row-gap: 0.75rem; gap: var(--desk-row-gap); }
-    :root[data-desk-tight] .kr-desk-sheet-list { --desk-row-gap: 0.375rem; }
-    :root .kr-desk-pill { padding-inline: 1.125rem; border-radius: 1.375rem; }
-    :root .kr-desk-row-roomy { padding-block: calc(0.75rem * var(--desk-row-scale)); }
-    :root[data-desk-tight] .kr-desk-row-roomy { padding-block: calc(0.25rem * var(--desk-row-scale)); }
-    :root .kr-desk-pill > div:first-child { gap: 6px; }
-    :root .kr-desk-row-title {
+    :root .ng-desk-sheet-list { --desk-row-gap: 0.75rem; gap: var(--desk-row-gap); }
+    :root[data-desk-tight] .ng-desk-sheet-list { --desk-row-gap: 0.375rem; }
+    :root .ng-desk-pill { padding-inline: 1.125rem; border-radius: 1.375rem; }
+    :root .ng-desk-row-roomy { padding-block: calc(0.75rem * var(--desk-row-scale)); }
+    :root[data-desk-tight] .ng-desk-row-roomy { padding-block: calc(0.25rem * var(--desk-row-scale)); }
+    :root .ng-desk-pill > div:first-child { gap: 6px; }
+    :root .ng-desk-row-title {
         font-size: calc(20.5px * var(--desk-row-scale));
         line-height: calc(25.6px * var(--desk-row-scale));
         font-weight: 600;
         letter-spacing: -0.005em;
     }
-    :root .kr-desk-row-meta {
+    :root .ng-desk-row-meta {
         font-size: calc(17.5px * var(--desk-row-scale));
         line-height: calc(22.75px * var(--desk-row-scale));
         font-weight: 500;
     }
     /* In the face, not the mono: variation 7 set the amount in Nunito Sans
        with tabular figures, which line up without a second typeface. */
-    :root .kr-desk-row-amount { font-family: 'Nunito Sans', system-ui, sans-serif; font-size: calc(18px * var(--desk-row-scale)); font-weight: 600; font-variant-numeric: tabular-nums; }
+    :root .ng-desk-row-amount { font-family: 'Nunito Sans', system-ui, sans-serif; font-size: calc(18px * var(--desk-row-scale)); font-weight: 600; font-variant-numeric: tabular-nums; }
     :root [data-testid="desk-phone-more"] { font-size: 17px; font-weight: 700; }
 
     /* ROOM FOR THE SECOND LINE. (2026-10-12, on the release APK.) On real
@@ -4487,18 +4525,18 @@ html[data-page="dex"] .app-sky {
        icon — so the space comes out of the air around them instead (~85px
        measured at 411x848). */
     :root [data-testid="desk-page"] { gap: 0.75rem; }
-    :root [data-testid="desk-kpi-grid"] .kr-kpi-tile { padding: 0.75rem; }
-    :root [data-testid="desk-kpi-grid"] > a.kr-kpi-tile > div:first-child { row-gap: 0.375rem; }
-    :root [data-testid="desk-kpi-grid"] > a.kr-kpi-tile > div:first-child > span:first-child { width: 2rem; height: 2rem; }
-    :root [data-testid="desk-kpi-grid"] > a.kr-kpi-tile > div:nth-of-type(2) { padding-top: 0.25rem; }
+    :root [data-testid="desk-kpi-grid"] .ng-kpi-tile { padding: 0.75rem; }
+    :root [data-testid="desk-kpi-grid"] > a.ng-kpi-tile > div:first-child { row-gap: 0.375rem; }
+    :root [data-testid="desk-kpi-grid"] > a.ng-kpi-tile > div:first-child > span:first-child { width: 2rem; height: 2rem; }
+    :root [data-testid="desk-kpi-grid"] > a.ng-kpi-tile > div:nth-of-type(2) { padding-top: 0.25rem; }
     :root [data-testid="desk-kpi-grid"] .text-sm,
-    :root [data-testid="desk-kpi-grid"] .kr-stat__label { line-height: 1.15; }
+    :root [data-testid="desk-kpi-grid"] .ng-stat__label { line-height: 1.15; }
     :root [data-testid="kpi-workflows"] .max-lg\:h-\[3\.5rem\] { height: 2.75rem; }  /* 56 → 44, the touch floor */
     :root [data-testid="kpi-workflows"] .flex-col.gap-2 { gap: 0.375rem; }
     /* …and the pills give back 2px a side (12 → 10): measured at 411x874,
        the emulator's usable height, it is what keeps the row type at 1.0
        instead of the fit rule scaling it to 0.955. */
-    :root .kr-desk-row-roomy { padding-block: calc(0.625rem * var(--desk-row-scale)); }
+    :root .ng-desk-row-roomy { padding-block: calc(0.625rem * var(--desk-row-scale)); }
 
     /* The dock's words: --text-label is 15px above; they take the sturdy 700. */
     :root [data-testid="dock-slider-items"] .dock-item span { font-weight: 700; }

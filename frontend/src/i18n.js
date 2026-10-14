@@ -15,6 +15,7 @@ const resources = {
         people: "People", // legacy — retained for /contacts back-compat only
         crm: "CRM", team: "Team", ops: "Ops",
         brain: "Dex", finance: "Finance", capture: "Capture", meetings: "Meeting Notes", settings: "Settings",
+        guide: "Help & guide", preferences: "Preferences",
       },
       /* J14-11 (JOURNEY-1) — THE DESK IS THE SCREEN, SO THE DESK GETS THE WORDS.
          Switching to Tamil changed TWO words on the whole Desk — the dock's
@@ -165,6 +166,7 @@ const resources = {
         inbox: "निर्णय डेस्क", brief: "सीईओ ब्रीफ़", mywork: "मेरा काम",
         people: "लोग", crm: "सीआरएम", team: "टीम", ops: "ऑप्स",
         brain: "डेक्स", finance: "वित्त", capture: "कैप्चर", meetings: "मीटिंग नोट्स", settings: "सेटिंग्स",
+        guide: "मदद और गाइड", preferences: "प्राथमिकताएँ",
       },
       bottomnav: { desk: "डेस्क", brief: "ब्रीफ़", work: "काम", crm: "सीआरएम", brain: "डेक्स",
         money: "पैसा", more: "और" },
@@ -295,6 +297,7 @@ const resources = {
         inbox: "முடிவு மேசை", brief: "தலைமை சுருக்கம்", mywork: "எனது வேலை",
         people: "நபர்கள்", crm: "CRM", team: "குழு", ops: "இயக்கம்",
         brain: "டெக்ஸ்", finance: "நிதி", capture: "பதிவு", meetings: "கூட்டக் குறிப்புகள்", settings: "அமைப்புகள்",
+        guide: "உதவி & வழிகாட்டி", preferences: "விருப்பங்கள்",
       },
       bottomnav: { desk: "மேசை", brief: "சுருக்கம்", work: "வேலை", crm: "CRM", brain: "டெக்ஸ்",
         money: "பணம்", more: "மேலும்" },

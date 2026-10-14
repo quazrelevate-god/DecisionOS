@@ -26,7 +26,7 @@
 // The founder's call now: "no full screen, instead a popup which covers 70%
 // of the screen", and "the popup is not based on our current design theme,
 // revamp it". So:
-//   · the shell is the task drawer's gray glass sheet (components/karma/
+//   · the shell is the task drawer's gray glass sheet (components/neuglass/
 //     glass), with a round glass close, the small-caps labels, the raised
 //     glass cards, white glass pills for secondary actions, the black ink
 //     pill for Approve and maroon for the destructive confirm;
@@ -68,11 +68,11 @@ import { Link } from "react-router-dom";
 import {
   CHIP, QUIET_CHIP, DRAWER_CARD, DRAWER_FIELD, DRAWER_LABEL,
   GLASS_ICON_BTN, GLASS_PILL, GLASS_SHEET, INK_PILL, MAROON_PILL,
-} from "./karma/glass";
-import { GlassSelect } from "./karma/GlassSelect";
-import { ScopeSlider } from "./karma/ScopeSlider";
-import { DesignCheckbox } from "./karma/DesignCheckbox";
-import { ApprovalPanel } from "./karma/ApprovalPanel";
+} from "./neuglass/glass";
+import { GlassSelect } from "./neuglass/GlassSelect";
+import { ScopeSlider } from "./neuglass/ScopeSlider";
+import { DesignCheckbox } from "./neuglass/DesignCheckbox";
+import { ApprovalPanel } from "./neuglass/ApprovalPanel";
 import { useAuth } from "../context/AuthContext";
 import { deptName } from "../lib/departments";
 import { userPerms } from "../lib/perms";
@@ -958,7 +958,7 @@ export function DecisionPanel({
                         options={[{ key: "low", label: "Low" }, { key: "medium", label: "Medium" }, { key: "high", label: "High" }]}
                         value={taskPrio ?? proposedPrio}
                         onChange={(v) => { setTaskPrio(v); saveTaskSettings({ priority: v }, () => setTaskPrio(null)); }}
-                        thumbClassName={`kr-prio-thumb--${taskPrio ?? proposedPrio}`} />
+                        thumbClassName={`ng-prio-thumb--${taskPrio ?? proposedPrio}`} />
 
                       <ApprovalPanel className="mt-4" testid="decision-approval" disabled={editBusy}
                         subtitle="Approve before its work starts or when it's completed."

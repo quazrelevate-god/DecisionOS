@@ -11,11 +11,12 @@
 import { EMPTY } from "./empty";
 import { SPARSE } from "./sparse";
 import { BUSY } from "./busy";
+import { REAL_DATA_FRAME } from "./names";
 
 export const FIXTURES = { empty: EMPTY, sparse: SPARSE, busy: BUSY };
 // The names live in their own module so production code can read them without
 // pulling the data in behind them (see names.js).
-export { FIXTURE_NAMES, FIXTURE_LABEL } from "./names";
+export { FIXTURE_NAMES, FIXTURE_LABEL, REAL_DATA_FRAME } from "./names";
 
 const isDev = () => process.env.NODE_ENV !== "production";
 
@@ -31,6 +32,14 @@ const STICKY_KEY = "dos_fixture";
  */
 export function activeFixture(search = typeof window === "undefined" ? "" : window.location.search) {
   if (!isDev()) return null;
+  /* A frame NAMED for real data never takes a fixture (2026-10-13). The sticky
+     key is in sessionStorage, which every same-origin frame in the tab shares —
+     so in the design lab, the fixture frames kept re-setting it under the one
+     frame meant to show the real Desk, and once that Desk dropped `?fixture=off`
+     from its URL its later requests went to the fixtures: an empty greeting and
+     KPIs stuck on "…". A frame's name survives its own navigation; the URL
+     does not. */
+  if (typeof window !== "undefined" && window.name === REAL_DATA_FRAME) return null;
   const v = new URLSearchParams(search).get("fixture");
   try {
     if (v === "off" || v === "none") {

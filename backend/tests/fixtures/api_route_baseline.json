@@ -1,6 +1,6 @@
 {
-  "count": 380,
-  "sha": "3fd9526b37ebc31d05b3445bee054d0d00e1d88c997f38c5d83e06790f2f858e",
+  "count": 381,
+  "sha": "8243a37ed84a77f2833605e221df340521ba45b8ea4ef2b1dab6267b8798126e",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -265,6 +265,7 @@
     "POST /api/auth/phone/send-code",
     "POST /api/auth/register",
     "POST /api/auth/tenant/transfer-ownership",
+    "POST /api/auth/tour/done",
     "POST /api/auth/welcome/done",
     "POST /api/billing/checkout",
     "POST /api/billing/webhook",

@@ -1,7 +1,7 @@
 // KR-8 · chartTheme — the bridge between the token file and Recharts.
 //
 // Recharts writes SVG presentation attributes, so it needs LITERALS — it
-// cannot read `hsl(var(--kr-accent))`. This module resolves the tokens once
+// cannot read `hsl(var(--ng-accent))`. This module resolves the tokens once
 // per call from the live document, so a chart's colours come from the same
 // single home as everything else (index.css) instead of a parallel palette.
 // This is what retires Ledger.js's 12 hardcoded hexes.
@@ -18,8 +18,8 @@ function readVar(name, fallback) {
 export function chartTheme() {
   if (cache) return cache;
   cache = {
-    ink: readVar("--kr-ink", "#0C0C0D"),
-    accent: readVar("--kr-accent", "#FF5100"),
+    ink: readVar("--ng-ink", "#0C0C0D"),
+    accent: readVar("--ng-accent", "#FF5100"),
     // On-ink chart chrome (the History band draws on the dark zone).
     onInk: {
       bar: "rgba(255,255,255,0.34)",

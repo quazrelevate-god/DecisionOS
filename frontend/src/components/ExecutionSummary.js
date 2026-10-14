@@ -2,7 +2,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "./ui/dial
 import { CheckSquare, UsersThree, SealCheck, Truck, CalendarCheck, BellRinging, Lightning, ArrowRight } from "@phosphor-icons/react";
 // KR-4: the private CountUp moved to the shared kit — same ramp, plus the
 // reduced-motion guard this copy never had.
-import { CountUp } from "./karma/CountUp";
+import { CountUp } from "./neuglass/CountUp";
 
 const plural = (n, one, many) => (n === 1 ? one : many);
 

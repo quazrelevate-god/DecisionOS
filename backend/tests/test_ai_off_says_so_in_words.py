@@ -36,7 +36,10 @@ def test_the_words_the_link_and_the_switch_live_in_one_file():
 
 def test_it_reads_differently_for_the_person_who_can_turn_it_on():
     src = _read("lib", "aiConsent.js")
-    assert "Turn it on in Settings" in src, "an owner is offered the switch"
+    assert "Turn it on in ${settingsName()}" in src, "an owner is offered the switch"
+    # On a phone that screen is called Preferences (2026-10-14), so the way
+    # there uses the name the person can see.
+    assert '? "Preferences" : "Settings"' in src
     assert "An owner has to turn it on" in src, "everyone else is told who can"
     assert '"Turn on AI" : "See settings"' in src, "and the button matches"
     # The axios interceptor is outside React, so the flag is kept beside the words.

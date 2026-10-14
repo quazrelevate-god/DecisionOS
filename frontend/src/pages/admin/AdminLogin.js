@@ -2,7 +2,7 @@ import { useState } from "react";
 import api, { formatApiError } from "../../lib/api";
 import { ShieldStar, Spinner } from "@phosphor-icons/react";
 import { CARD_BASE, ADMIN_H3 } from "./adminStyle";
-import { DRAWER_FIELD, INK_PILL } from "../../components/karma/glass";
+import { DRAWER_FIELD, INK_PILL } from "../../components/neuglass/glass";
 
 export default function AdminLogin({ onSuccess }) {
   const [email, setEmail] = useState("");

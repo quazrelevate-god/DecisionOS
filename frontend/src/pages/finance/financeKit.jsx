@@ -8,7 +8,7 @@ import { ArrowDownRight, ArrowRight, ArrowUpRight, Paperclip, Tray, WarningCircl
 import { cn } from "@/lib/utils";
 import { inrCompact } from "../../lib/format";
 import { DialogDescription, DialogHeader, DialogTitle } from "../../components/ui/dialog";
-import { CHIP, DRAWER_FIELD, GLASS_ICON_BTN, GLASS_PILL, GLASS_SHEET, INK_PILL, QUIET_CHIP } from "../../components/karma/glass";
+import { CHIP, DRAWER_FIELD, GLASS_ICON_BTN, GLASS_PILL, GLASS_SHEET, INK_PILL, QUIET_CHIP } from "../../components/neuglass/glass";
 
 export const CARD = "rounded-[1.6rem] bg-white/75 ring-1 ring-inset ring-white shadow-[0_14px_36px_-18px_hsl(150_15%_20%/0.28),0_1px_2px_hsl(150_15%_20%/0.06)] backdrop-blur-xl";
 export const TILE = "rounded-[1.25rem] bg-white/85 ring-1 ring-inset ring-white shadow-[0_8px_22px_-14px_hsl(150_15%_20%/0.3)]";

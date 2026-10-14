@@ -21,10 +21,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, ArrowUpRight, Check, FlowArrow, SpinnerGap } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import api from "../../lib/api";
-import { BigNumeral } from "../../components/karma";
-import { IconChip } from "../../components/karma/IconChip";
-import { CHIP } from "../../components/karma/glass";
+import { BigNumeral } from "../../components/neuglass";
+import { IconChip } from "../../components/neuglass/IconChip";
+import { CHIP } from "../../components/neuglass/glass";
 import { cn } from "../../lib/utils";
+import { useIsMobile } from "../../hooks/useIsMobile";
 
 /* The bar's three parts, in the order the founder wrote them: you, stuck,
    late — the app's ink, its amber and its accent. A card is in exactly one, so
@@ -32,7 +33,7 @@ import { cn } from "../../lib/utils";
 const PARTS = [
   { key: "you", label: "you", bar: "bg-neutral-900", dot: "bg-neutral-900" },
   { key: "stuck", label: "stuck", bar: "bg-amber-400", dot: "bg-amber-400" },
-  { key: "late", label: "late", bar: "bg-kr-accent", dot: "bg-kr-accent" },
+  { key: "late", label: "late", bar: "bg-ng-accent", dot: "bg-ng-accent" },
 ];
 
 /* THE TWO MOVES ARE ONE PAIR, so they are one recipe. They were written
@@ -46,15 +47,15 @@ const PARTS = [
 const ACTION_PILL =
   "flex h-10 max-lg:h-[3.5rem] w-full shrink-0 items-center justify-center gap-1.5 rounded-pill px-2.5 lg:px-4 "
   + "text-center text-[13px] max-lg:text-[15px] font-medium leading-tight "
-  + "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline";
+  + "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline";
 
 /* THE TWO PILLS' TWO WEIGHTS. HIG (buttons › Style): the prominent style goes
    to the most likely action, and style — not size — says which one that is.
    They were the other way round: the way OUT ("Open Workflows") wore the ink
    and the move you can make here wore white. Same shape and size as before, so
    they still read as the founder's pair; only the emphasis moved to the act. */
-const PILL_INK = "bg-[hsl(var(--kr-action-bg,var(--kr-ink)))] text-[hsl(var(--kr-action-fg,0_0%_100%))]";
-const PILL_QUIET = "kr-pop text-foreground";
+const PILL_INK = "bg-[hsl(var(--ng-action-bg,var(--ng-ink)))] text-[hsl(var(--ng-action-fg,0_0%_100%))]";
+const PILL_QUIET = "ng-pop text-foreground";
 
 /* THE WIDE ARRANGEMENT'S TWO MOVES ARE CIRCLES, not pills — the founder's
    call, and the arithmetic is on their side. Two pills were taking 220 CSS px
@@ -72,7 +73,7 @@ const PILL_QUIET = "kr-pop text-foreground";
    lands, which is the platform's target. */
 const ICON_MOVE =
   "grid h-14 w-14 shrink-0 place-items-center rounded-full "
-  + "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline";
+  + "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline";
 
 const REASON_CHIP = {
   stuck: "bg-amber-50 text-amber-800 ring-amber-100",
@@ -88,6 +89,7 @@ const REASON_CHIP = {
    side instead of stacking, which is where the height comes from. */
 export function WorkflowsTile({ attention, loading = false, onMoved, className, wide = false, testid = "kpi-workflows" }) {
   const qc = useQueryClient();
+  const phone = useIsMobile();
   const [busy, setBusy] = useState(false);
   const { needAttention = 0, total = 0, nextUp = null, advancedToday = 0, atRisk = 0 } = attention || {};
   const quiet = !loading && needAttention === 0;
@@ -137,7 +139,7 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
           label is the affordance here, and a pill that wraps reads as cramped
           however equal its height is. */}
       <span className="whitespace-nowrap">Open Workflows</span>
-      <ArrowRight size={14} weight="bold" aria-hidden="true" className="kr-arrow hidden shrink-0 transition-transform duration-200 lg:block" />
+      <ArrowRight size={14} weight="bold" aria-hidden="true" className="ng-arrow hidden shrink-0 transition-transform duration-200 lg:block" />
     </Link>
   );
 
@@ -167,7 +169,7 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
            answers it, and the right-hand half — which carries the actual stuck
            card and its move — gets the width back: 0.85fr/1.6fr becomes
            0.6fr/1.9fr, which is the separator stepping left. */
-        className={cn("kr-stat nm-tile grid grid-cols-[minmax(0,0.6fr)_1px_minmax(0,1.9fr)] items-center gap-3 p-3", className)}
+        className={cn("ng-stat nm-tile grid grid-cols-[minmax(0,0.6fr)_1px_minmax(0,1.9fr)] items-center gap-3 p-3", className)}
       >
         <div className="flex min-w-0 items-center gap-2.5">
           <IconChip icon={FlowArrow} alert={needAttention > 0} />
@@ -209,7 +211,7 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
                 data-testid={`${testid}-open`}
                 title="Open Workflows"
                 aria-label="Open Workflows"
-                className={cn(ICON_MOVE, "bg-[hsl(var(--kr-action-bg,var(--kr-ink)))] text-[hsl(var(--kr-action-fg,0_0%_100%))]")}
+                className={cn(ICON_MOVE, "bg-[hsl(var(--ng-action-bg,var(--ng-ink)))] text-[hsl(var(--ng-action-fg,0_0%_100%))]")}
               >
                 <ArrowUpRight size={22} weight="bold" aria-hidden="true" />
               </Link>
@@ -239,7 +241,7 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
                     onClick={() => { setBusy(true); move.mutate(); }}
                     title={nextUp.actionLabel}
                     aria-label={nextUp.actionLabel}
-                    className={cn(ICON_MOVE, "kr-pop text-foreground disabled:opacity-50")}
+                    className={cn(ICON_MOVE, "ng-pop text-foreground disabled:opacity-50")}
                   >
                     {move.isPending
                       ? <SpinnerGap size={20} weight="bold" aria-hidden="true" className="animate-spin" />
@@ -251,7 +253,7 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
                   data-testid={`${testid}-open`}
                   title="Open Workflows"
                   aria-label="Open Workflows"
-                  className={cn(ICON_MOVE, "bg-[hsl(var(--kr-action-bg,var(--kr-ink)))] text-[hsl(var(--kr-action-fg,0_0%_100%))]")}
+                  className={cn(ICON_MOVE, "bg-[hsl(var(--ng-action-bg,var(--ng-ink)))] text-[hsl(var(--ng-action-fg,0_0%_100%))]")}
                 >
                   <ArrowUpRight size={22} weight="bold" aria-hidden="true" />
                 </Link>
@@ -266,12 +268,116 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
                 data-testid={`${testid}-open`}
                 title="Open Workflows"
                 aria-label="Open Workflows"
-                className={cn(ICON_MOVE, "bg-[hsl(var(--kr-action-bg,var(--kr-ink)))] text-[hsl(var(--kr-action-fg,0_0%_100%))]")}
+                className={cn(ICON_MOVE, "bg-[hsl(var(--ng-action-bg,var(--ng-ink)))] text-[hsl(var(--ng-action-fg,0_0%_100%))]")}
               >
                 <ArrowUpRight size={22} weight="bold" aria-hidden="true" />
               </Link>
             </div>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  /* THE PHONE'S OWN ARRANGEMENT (2026-10-13, founder): "uncluttered — remove
+     the elements marked … and re-arrange to make the tile feel fuller but
+     spacious". What went: the "N cards forecast to miss their target date"
+     line, the "3 you" legend, the NEXT UP eyebrow, "Workflows —" from the
+     label (a screen reader still hears it) and — third pass, 2026-10-14 — the
+     bar under the count: "3 / 13 is itself enough". What is left is two halves
+     either side of one separator, each ending in its own move:
+       · LEFT, only as wide as what is in it — the count beside the icon, "Need
+         attention" on one line, and the move (Approve) at its foot;
+       · RIGHT, everything else — the card's chip, name and where it stands,
+         and "Open Workflows" running the half from the separator to the edge.
+     The separator runs the tile's full height between the two buttons, a
+     comfortable gap-x-5 from each side.
+     A separate body rather than max-lg: classes on the desktop one, the way
+     `wide` is: desktop keeps every pixel it had, and this can change without
+     touching it. Same values, same test ids, same mutation. */
+  if (phone) {
+    return (
+      <div data-testid={testid} className={cn("ng-stat nm-tile", className)}>
+        <div className="grid grid-cols-[auto_1px_minmax(0,1fr)] grid-rows-[1fr_auto] gap-x-5 gap-y-3">
+          <div className="col-start-1 row-start-1 flex min-w-0 flex-col">
+            <div className="flex items-center gap-2.5">
+              <IconChip icon={FlowArrow} alert={needAttention > 0} />
+              <span className="inline-flex items-baseline whitespace-nowrap leading-none">
+                <BigNumeral text={loading ? "…" : String(needAttention)} size="md"
+                  className={quiet ? "text-foreground/45" : undefined}
+                  accent={!quiet && !loading} testid={`${testid}-count`} />
+                {!loading && <span className="ml-1 text-lg font-medium text-muted-foreground">/ {total}</span>}
+              </span>
+            </div>
+            <p className="ng-stat__label mt-2.5 whitespace-nowrap text-base text-foreground/80">
+              <span className="sr-only">Workflows — </span>Need attention
+            </p>
+          </div>
+
+          <span aria-hidden="true" className="col-start-2 row-span-2 row-start-1 w-px self-stretch bg-slate-900/10" />
+
+          <div className="col-start-3 row-start-1 flex min-w-0 flex-col">
+            {loading ? (
+              <div className="space-y-2" aria-hidden="true">
+                <div className="ds-skeleton h-6 w-28 rounded-pill" />
+                <div className="ds-skeleton h-4 w-4/5 rounded-control" />
+                <div className="ds-skeleton h-4 w-3/5 rounded-control" />
+              </div>
+            ) : quiet ? (
+              <p className="my-auto flex items-center gap-2 text-sm font-medium text-emerald-700" data-testid={`${testid}-quiet`}>
+                <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                All moving{advancedToday > 0 ? ` · ${advancedToday} advanced today` : ""}
+              </p>
+            ) : nextUp ? (
+              <>
+                {/* The words in their own span: `truncate` on the chip itself
+                    clips (it is a flex box) — the span is what can end in "…". */}
+                <span className={cn(CHIP, "min-w-0 max-w-full shrink self-start py-1 text-[14px]", REASON_CHIP[nextUp.reason] || REASON_CHIP.you)}
+                      title={nextUp.reasonLabel} data-testid={`${testid}-next-reason`}>
+                  <span className="min-w-0 truncate">{nextUp.reasonLabel}</span>
+                </span>
+                <p className="mt-2 line-clamp-2 text-sm font-medium text-foreground" title={nextUp.title} data-testid={`${testid}-next-title`}>
+                  {nextUp.title}
+                </p>
+                <p className="mt-auto truncate pt-1 text-[14px] text-muted-foreground" title={`${nextUp.stage}${nextUp.note ? ` · ${nextUp.note}` : ""}`}>
+                  {nextUp.stage}{nextUp.note ? ` · ${nextUp.note}` : ""}
+                </p>
+              </>
+            ) : (
+              <p className="my-auto text-sm text-muted-foreground">Nothing waiting on a move.</p>
+            )}
+          </div>
+
+          {/* The move under the left half — and on a phone it always says
+              "Approve" (2026-10-14, founder: "whatever the workflow stage it is,
+              keep a static approve button"). It still makes the card's own move
+              (Advance to Dispatched, Approve Quotation…), and a screen reader
+              still hears which: the visible word leads the accessible name, so
+              voice control's "tap Approve" keeps working. A fixed short word
+              never widens the half, so the button simply takes the half's width
+              (`w-0 min-w-full`) and the separator stays where "Need attention"
+              put it. While the move is in flight the word stays and a spinner
+              joins it. */}
+          {hasMove && (
+            <button
+              type="button"
+              data-testid={`${testid}-next-action`}
+              disabled={busy || move.isPending}
+              onClick={() => { setBusy(true); move.mutate(); }}
+              aria-label={/^approve$/i.test(nextUp.actionLabel) ? "Approve" : `Approve: ${nextUp.actionLabel}`}
+              className={cn(ACTION_PILL, PILL_INK, "col-start-1 row-start-2 w-0 min-w-full px-3 disabled:opacity-50")}
+            >
+              {move.isPending && <SpinnerGap size={16} weight="bold" aria-hidden="true" className="shrink-0 animate-spin" />}
+              <span className="whitespace-nowrap">Approve</span>
+            </button>
+          )}
+          <Link
+            to="/workflows"
+            data-testid={`${testid}-open`}
+            className={cn(ACTION_PILL, hasMove ? PILL_QUIET : PILL_INK, "col-start-3 row-start-2 px-4")}
+          >
+            <span className="whitespace-nowrap">Open Workflows</span>
+          </Link>
         </div>
       </div>
     );
@@ -294,7 +400,7 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
            The 20px gutter and the 170px floor are desktop's; on a 487px CSS
            viewport two columns plus a 20px trough leaves too little for the
            "next up" title, so the trough halves and the floor comes off. */
-        "kr-stat nm-tile grid grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] gap-5 p-5",
+        "ng-stat nm-tile grid grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] gap-5 p-5",
         /* 2026-10-06 (founder) — ON A PHONE THE SEPARATOR STEPS LEFT. Down the
            middle it gave both halves 164px, and the two sides do not need the
            same: the left is a fixed label, a count and a bar — "it is static in
@@ -312,7 +418,7 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
           whenever something needs attention (Delayed and To collect's rule). */}
       <div className="flex min-w-0 flex-col">
         <IconChip icon={FlowArrow} alert={needAttention > 0} />
-        <p className="kr-stat__label mt-4 text-base text-foreground/80">Workflows — need attention</p>
+        <p className="ng-stat__label mt-4 text-base text-foreground/80">Workflows — need attention</p>
         {/* 2026-09-22 — on time today, but forecast to miss the date the card
             has to be done by (services/workflow_timing). Not late yet, so not
             one of the three reasons; said here so it is seen before it is. */}
@@ -321,7 +427,7 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
             {atRisk === 1 ? "1 card" : `${atRisk} cards`} forecast to miss {atRisk === 1 ? "its" : "their"} target date
           </p>
         )}
-        <div className="kr-stat__foot mt-auto flex flex-wrap items-end justify-between gap-x-3 gap-y-2 pt-3">
+        <div className="ng-stat__foot mt-auto flex flex-wrap items-end justify-between gap-x-3 gap-y-2 pt-3">
           <span className="inline-flex shrink-0 items-baseline whitespace-nowrap leading-none">
             {/* The score's own shape: the number, then the total it is out of. */}
             <BigNumeral text={loading ? "…" : String(needAttention)} size="md"

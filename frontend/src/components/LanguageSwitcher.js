@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Globe, Check } from "@phosphor-icons/react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { GLASS_MENU } from "./karma/glass";
+import { GLASS_MENU } from "./neuglass/glass";
 import { LANGUAGES, setAppLanguage } from "../i18n";
 import { useAuth } from "../context/AuthContext";
 import api from "../lib/api";
@@ -59,7 +59,7 @@ export function LanguageSwitcher({ variant = "icon" }) {
             This icon variant renders only in the desktop top bar; the mobile
             sheet uses variant="inline", untouched. */}
         <button data-testid="language-switcher" title={t("common.language")}
-          className="h-10 w-10 rounded-full border border-kr-ink/55 grid place-items-center text-foreground/90 transition-colors hover:bg-white/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline">
+          className="h-10 w-10 rounded-full border border-ng-ink/55 grid place-items-center text-foreground/90 transition-colors hover:bg-white/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline">
           <Globe size={18} weight="regular" />
         </button>
       </PopoverTrigger>

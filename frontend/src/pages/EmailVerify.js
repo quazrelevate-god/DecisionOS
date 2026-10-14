@@ -124,7 +124,7 @@ export default function VerifyEmail() {
         <Link to="/app" className={`${primaryCls} mt-7`} data-testid="verify-email-continue">Back to DecisionOS</Link>
       ) : !loading && user ? (
         resent ? (
-          <div className="kr-pressed mt-6 flex items-start gap-3 rounded-cardlg p-3" data-testid="verify-email-resent">
+          <div className="ng-pressed mt-6 flex items-start gap-3 rounded-cardlg p-3" data-testid="verify-email-resent">
             <Envelope size={17} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0 text-muted-foreground" />
             <p className="text-xs leading-relaxed text-muted-foreground">
               A new link is on its way to <strong className="text-foreground">{user.email}</strong>. It lasts three days.
@@ -139,7 +139,7 @@ export default function VerifyEmail() {
       ) : !loading && (
         /* Signed out, we cannot send anything: the endpoint emails the address
            on the account, and we will not take one on trust from a page. */
-        <div className="kr-pressed mt-6 flex items-start gap-3 rounded-cardlg p-3" data-testid="verify-email-signin-first">
+        <div className="ng-pressed mt-6 flex items-start gap-3 rounded-cardlg p-3" data-testid="verify-email-signin-first">
           <Envelope size={17} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0 text-muted-foreground" />
           <p className="text-xs leading-relaxed text-muted-foreground">
             Sign in and you can send yourself a fresh link from{" "}

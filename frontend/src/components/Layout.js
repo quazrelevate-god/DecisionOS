@@ -13,7 +13,7 @@ import { timeAgo } from "../lib/format";
 import { notifMeta, notifLink } from "../lib/notif";
 import { Chip } from "./common";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { GLASS_MENU } from "./karma/glass";
+import { GLASS_MENU } from "./neuglass/glass";
 import {
   Brain as BrainIcon,
   AddressBook,
@@ -28,10 +28,12 @@ import {
   UsersThree, // Epic 2 E2-01: Team nav entry (Employees list)
   Buildings,  // 2026-09-20: the founder's other companies, in the profile menu
   Plus,
+  Lifebuoy,   // 2026-10-12: Help & guide, in the profile menu
 } from "@phosphor-icons/react";
-// KR-5/KR-8.2 — the Karma shell pieces.
-import { PillNav } from "./karma";
-import { KarmaLogo } from "./karma/Logo";
+import { openGuide } from "../lib/guide";
+// KR-5/KR-8.2 — the Neu-glassmorphism shell pieces.
+import { PillNav } from "./neuglass";
+import { NeuGlassLogo } from "./neuglass/Logo";
 import { CommandDialog, CommandInput, CommandList, CommandEmpty, CommandItem } from "./ui/command";
 import { ProfileDialog } from "./ProfileDialog";
 import AnnouncementBanner from "./AnnouncementBanner";
@@ -45,6 +47,7 @@ import { ConnectionNotice } from "./ConnectionNotice";
 import OwnerCredentialsGate from "./auth/OwnerCredentialsGate";
 import TermsGate from "./TermsGate";
 import WelcomeMemberCard from "./auth/WelcomeMemberCard";
+import Walkthrough from "./mobile/Walkthrough";
 // MPWA-03: mobile navigation is the floating dock + All Apps panel. The
 // edge-to-edge tab bar and the hamburger drawer are both gone below lg.
 import { FloatingDock } from "./mobile/FloatingDock";
@@ -133,7 +136,7 @@ export const NAV = [
 // carrying the wrong things — MPWA-03 replaced the bar itself. This supersedes
 // Epic 2's E2-10 bottom-nav rebalance, which was a founder decision.
 
-// KR-8.2: the shell's logo is KarmaLogo (components/karma/Logo.jsx) — the
+// KR-8.2: the shell's logo is NeuGlassLogo (components/neuglass/Logo.jsx) — the
 // founder discarded the PNG lockup for this design system. Wordmark.jsx
 // survives untouched for Landing/Login, which keep the registered artwork.
 
@@ -329,9 +332,9 @@ export default function Layout({ children }) {
     // (KR-13.1 skipped this across the Dex boundary, where a light↔dark
     // cross-fade was already running. That cross-fade is gone with the dark
     // room, so /brain arrives like every other page.)
-    el.classList.remove("kr-page-in");
+    el.classList.remove("ng-page-in");
     void el.offsetWidth;
-    el.classList.add("kr-page-in");
+    el.classList.add("ng-page-in");
   }, [location.pathname]);
 
   const [profileOpen, setProfileOpen] = useState(false);
@@ -619,7 +622,7 @@ export default function Layout({ children }) {
       <Popover>
         <PopoverTrigger asChild>
           {/* KR-5: the reference's outlined circle. The badge goes ORANGE: a
-              notification count is alert grammar, exactly what --kr-accent
+              notification count is alert grammar, exactly what --ng-accent
               exists for. */}
           {/* J2-14 (JOURNEY-1) — THE BADGE COUNTS WHAT NEEDS THEM, on the
               desktop as well. It wore the raw unread count, so on a first day
@@ -632,11 +635,11 @@ export default function Layout({ children }) {
               them: that word is honest, "need you" was not. */}
           <button data-testid="notif-bell"
             aria-label={bellCount > 0 ? `Notifications, ${bellCount} need you` : "Notifications"}
-            className="relative h-10 w-10 rounded-full border border-kr-ink/55 grid place-items-center text-foreground/90 transition-colors hover:bg-white/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline">
+            className="relative h-10 w-10 rounded-full border border-ng-ink/55 grid place-items-center text-foreground/90 transition-colors hover:bg-white/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline">
             <Bell size={18} weight="regular" />
             {bellCount > 0 && (
               <span data-testid="notif-count"
-                className="absolute -top-1.5 -right-1.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-kr-accent px-1 text-[10px] font-bold leading-none text-white">
+                className="absolute -top-1.5 -right-1.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-ng-accent px-1 text-[10px] font-bold leading-none text-white">
                 {bellCount > 99 ? "99+" : bellCount}
               </span>
             )}
@@ -679,7 +682,7 @@ export default function Layout({ children }) {
   };
 
   // KR-5: ThemeToggle is DELETED from the desktop shell, not hidden — dark
-  // mode retired with the Karma language and a control that can never change
+  // mode retired with the Neu-glassmorphism language and a control that can never change
   // what is on screen is worse than no control. ASK-33 Phase 5 finished the
   // job on the founder's call: no theme switch anywhere, no stored preference.
 
@@ -693,7 +696,7 @@ export default function Layout({ children }) {
   // email-a-snapshot flow duplicated live data behind an SMTP gate.
 
   // KR-5 — navigation is the header's centred pill strip now (PillNav from
-  // the Karma kit). NavItems and RailItems are DELETED, not parked: NavItems
+  // the Neu-glassmorphism kit). NavItems and RailItems are DELETED, not parked: NavItems
   // had no remaining render site, and the rail is gone with its aside. The
   // Finance capture badge moves onto the Finance pill.
   // NM-2 — the page ground moves onto the soft-depth surface. Depth needs a
@@ -732,7 +735,9 @@ export default function Layout({ children }) {
       {/* Play audit C2 — everyone agrees to the Terms before carrying on. */}
       <TermsGate />
       <WelcomeMemberCard />
-      {/* KR-5 — the Karma header. Three tracks: logo · centred pill nav ·
+      {/* 2026-10-12 — the phone walkthrough, once per person, after all of the above. */}
+      <Walkthrough />
+      {/* KR-5 — the Neu-glassmorphism header. Three tracks: logo · centred pill nav ·
           circular controls + the avatar block. The reference's shell exactly,
           which also KILLS two prior decisions on purpose:
             · the opaque bar (NM-2 "the bar dissolves") — this one FROSTS over
@@ -779,7 +784,7 @@ export default function Layout({ children }) {
            purpose: the controls in it are fixed-size and must never be
            squeezed, and with room to spare both tracks still take an equal
            share, so the pills stay on the centre line. */
-        className="kr-navplate hidden lg:grid h-[88px] shrink-0 grid-cols-[minmax(0,1fr)_auto_1fr] items-center gap-4 px-6 pb-[13px] bg-transparent"
+        className="ng-navplate hidden lg:grid h-[88px] shrink-0 grid-cols-[minmax(0,1fr)_auto_1fr] items-center gap-4 px-6 pb-[13px] bg-transparent"
         style={navW ? { "--navplate-w": `${navW}px` } : undefined}
       >
         {/* 2026-09-19, founder — the workspace's name sits after the wordmark,
@@ -796,7 +801,7 @@ export default function Layout({ children }) {
             it stretch makes the box exactly the track, and the content still
             sits left because flex-start is the default. */}
         <div className="flex min-w-0 items-center gap-2.5 overflow-hidden">
-          <KarmaLogo className="shrink-0" />
+          <NeuGlassLogo className="shrink-0" />
           {tenant?.name && (
             <>
               <span aria-hidden="true" className="shrink-0 select-none text-[17px] font-light leading-none text-foreground/25">|</span>
@@ -846,9 +851,9 @@ export default function Layout({ children }) {
               <button
                 data-testid="rail-user-menu"
                 aria-label={user?.name || "Account"}
-                className="flex items-center gap-2.5 rounded-pill py-1 pl-1 pr-2.5 transition-colors hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
+                className="flex items-center gap-2.5 rounded-pill py-1 pl-1 pr-2.5 transition-colors hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline"
               >
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-kr-outline bg-nm-raised text-sm font-semibold">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-ng-outline bg-nm-raised text-sm font-semibold">
                   {(user?.name || "?").trim().charAt(0).toUpperCase()}
                 </span>
                 <span className="hidden xl:block min-w-0 text-left leading-tight">
@@ -917,6 +922,14 @@ export default function Layout({ children }) {
                     <GearSix size={15} /> {t("nav.settings", "Settings")}
                   </button>
                 )}
+                {/* 2026-10-12 — the user guide, a web page in a new tab. */}
+                <button
+                  onClick={() => openGuide()}
+                  data-testid="nav-guide"
+                  className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-900/[0.06] hover:text-slate-900"
+                >
+                  <Lifebuoy size={15} /> {t("nav.guide", "Help & guide")}
+                </button>
                 <button
                   onClick={doLogout}
                   data-testid="logout-button"
@@ -1029,7 +1042,7 @@ export default function Layout({ children }) {
               data-testid="desk-topbar"
               className="px-gutter-safe flex items-center justify-between gap-3 pt-[calc(var(--sa-top)+0.375rem)]"
             >
-              <KarmaLogo size="sm" className="opacity-60" />
+              <NeuGlassLogo size="sm" className="opacity-60" />
               <Link
                 to="/notifications"
                 data-testid="desk-topbar-bell"
@@ -1039,14 +1052,14 @@ export default function Layout({ children }) {
                    beside it to crowd. accessibility.md › Offer sufficiently
                    sized controls. Desktop keeps 44 CSS, which is already 44pt
                    there. */
-                className="relative -my-1.5 -mr-2 grid h-11 w-11 max-lg:h-14 max-lg:w-14 place-items-center rounded-full text-foreground/60 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
+                className="relative -my-1.5 -mr-2 grid h-11 w-11 max-lg:h-14 max-lg:w-14 place-items-center rounded-full text-foreground/60 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline"
               >
                 <Bell size={18} weight="regular" aria-hidden="true" />
                 {bellCount > 0 && (
                   <span
                     data-testid="desk-topbar-bell-dot"
                     aria-hidden="true"
-                    className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-kr-accent ring-2 ring-[hsl(var(--background))]"
+                    className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-ng-accent ring-2 ring-[hsl(var(--background))]"
                   />
                 )}
               </Link>
@@ -1241,7 +1254,7 @@ export default function Layout({ children }) {
       {/* KM-11 — the vignette. Rendered always so it can transition rather
           than pop in, and gated by a data attribute. Sits below the dock's
           z-index so the bar stays fully lit while the edges fall away. */}
-      <div className="kr-vignette lg:hidden" data-on={dex.recording ? "1" : "0"} data-mobile-chrome=""
+      <div className="ng-vignette lg:hidden" data-on={dex.recording ? "1" : "0"} data-mobile-chrome=""
            data-testid="dex-vignette" aria-hidden="true" />
 
       {/* KM-23 — the FAB opens the CONVERSATION again, and this time it is a

@@ -110,7 +110,7 @@ def test_ops_scores_only_money_that_is_due_and_names_the_weakest():
     op = fe("pages/OperatingScore.js")
     assert '{ key: "sales", label: "Decisions"' in op
     assert "const hasInvoices = (stats?.invoices || 0) > 0;" in op
-    ks = fe("lib/karmaScore.js")
+    ks = fe("lib/neuglassScore.js")
     assert 'sales: { name: "Decisions", to: "/inbox"' in ks and "to: area.to," in ks
 
 

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, ArrowLeft, Globe, MagnifyingGlass, CheckCircle } from "@phosphor-icons/react";
 import api from "../../lib/api";
 import { INDUSTRIES } from "../../lib/format";
-import { GlassSelect } from "../../components/karma/GlassSelect";
+import { GlassSelect } from "../../components/neuglass/GlassSelect";
 
 /* J1-03 / J2-02 (JOURNEY-1, founder 24 Sep) — "WHO DO YOU SELL TO", ANSWERED
    IN WORDS. This row asked a sheet-metal shop owner to pick between B2B, B2C,
@@ -116,8 +116,8 @@ export function WebsiteIntel({ companyName, onDone, onBack, saved }) {
   };
 
   return (
-    <div className="kr-well mx-auto w-full max-w-2xl" data-testid="signup-website">
-      <div className="kr-well__pane rounded-[1.75rem] p-6 sm:p-9">
+    <div className="ng-well mx-auto w-full max-w-2xl" data-testid="signup-website">
+      <div className="ng-well__pane rounded-[1.75rem] p-6 sm:p-9">
       <AnimatePresence mode="wait">
         {stage === "ask" && (
           <motion.div key="ask" {...fade} transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}>
@@ -126,7 +126,7 @@ export function WebsiteIntel({ companyName, onDone, onBack, saved }) {
               Does {companyName} live on the web?
             </h1>
             <p className="mb-7 text-sm text-muted-foreground">Drop your website — our AI reads it so you don&apos;t have to explain yourself twice.</p>
-            <div className="kr-pressed flex items-center gap-3 rounded-2xl px-5 py-4 focus-within:ring-1 focus-within:ring-foreground/40">
+            <div className="ng-pressed flex items-center gap-3 rounded-2xl px-5 py-4 focus-within:ring-1 focus-within:ring-foreground/40">
               <Globe size={24} weight="bold" className="shrink-0 text-muted-foreground" />
               <input
                 autoFocus
@@ -148,11 +148,11 @@ export function WebsiteIntel({ companyName, onDone, onBack, saved }) {
             </div>
             <div className="mt-7 flex flex-wrap items-center gap-3">
               <button onClick={analyse} disabled={!url.trim()} data-testid="signup-website-analyse"
-                className="kr-pop flex h-12 items-center gap-2 rounded-pill bg-kr-ink px-7 text-sm font-medium text-white disabled:opacity-40">
+                className="ng-pop flex h-12 items-center gap-2 rounded-pill bg-ng-ink px-7 text-sm font-medium text-white disabled:opacity-40">
                 <MagnifyingGlass size={16} weight="bold" /> Read my website
               </button>
               <button onClick={() => setStage("manual")} data-testid="signup-website-skip"
-                className="kr-pop flex h-12 items-center rounded-pill px-6 text-sm font-medium text-muted-foreground">
+                className="ng-pop flex h-12 items-center rounded-pill px-6 text-sm font-medium text-muted-foreground">
                 No website — set it manually
               </button>
             </div>
@@ -165,15 +165,15 @@ export function WebsiteIntel({ companyName, onDone, onBack, saved }) {
                 black-outline style became a sunken dial with a gold sweep —
                 the same "light passing over material" the build screen uses,
                 so scanning and building read as one machine. */}
-            <div className="kr-pressed relative mx-auto mb-9 grid h-28 w-28 place-items-center overflow-hidden rounded-full">
+            <div className="ng-pressed relative mx-auto mb-9 grid h-28 w-28 place-items-center overflow-hidden rounded-full">
               <motion.div
                 aria-hidden="true"
                 className="absolute inset-0 rounded-full"
-                style={{ background: "conic-gradient(from 0deg, transparent 0deg, hsl(var(--kr-gold) / .55) 60deg, transparent 130deg)" }}
+                style={{ background: "conic-gradient(from 0deg, transparent 0deg, hsl(var(--ng-gold) / .55) 60deg, transparent 130deg)" }}
                 animate={{ rotate: 360 }}
                 transition={{ repeat: Infinity, duration: 2.4, ease: "linear" }}
               />
-              <div className="kr-pop relative grid h-[4.75rem] w-[4.75rem] place-items-center rounded-full">
+              <div className="ng-pop relative grid h-[4.75rem] w-[4.75rem] place-items-center rounded-full">
                 <Globe size={32} weight="bold" className="text-foreground" />
               </div>
             </div>
@@ -191,7 +191,7 @@ export function WebsiteIntel({ companyName, onDone, onBack, saved }) {
                 yank the screen out from under them. */}
             <button type="button" data-testid="signup-website-skip"
               onClick={() => { skipped.current = true; setFailure(""); setStage("manual"); }}
-              className="kr-pop mx-auto mt-8 flex h-11 items-center rounded-pill px-5 text-sm font-medium text-foreground">
+              className="ng-pop mx-auto mt-8 flex h-11 items-center rounded-pill px-5 text-sm font-medium text-foreground">
               Skip — I'll enter it myself
             </button>
           </motion.div>
@@ -203,11 +203,11 @@ export function WebsiteIntel({ companyName, onDone, onBack, saved }) {
             <h1 className="mb-6 font-display text-3xl leading-[1.04] sm:text-4xl">
               Here&apos;s what we learned.
             </h1>
-            {/* .kr-frost-min, not .kr-bento: this card sits INSIDE the pane's
+            {/* .ng-frost-min, not .ng-bento: this card sits INSIDE the pane's
                 own glass, and stacking a second blurred fill on a blurred
                 surface reads as neither glass nor solid (see the note on
-                .kr-frost-min in index.css). */}
-            <div className="kr-frost-min space-y-5 rounded-2xl p-5" data-testid="signup-intel-card">
+                .ng-frost-min in index.css). */}
+            <div className="ng-frost-min space-y-5 rounded-2xl p-5" data-testid="signup-intel-card">
               <p className="text-base leading-relaxed">{intel.summary}</p>
               {intel.highlights?.length > 0 && (
                 <div className="space-y-1.5">
@@ -225,19 +225,19 @@ export function WebsiteIntel({ companyName, onDone, onBack, saved }) {
                   <GlassSelect variant="field" testid="signup-intel-industry" ariaLabel="Industry"
                     value={industry} onChange={setIndustry}
                     options={INDUSTRIES.map((i) => ({ value: i, label: i }))}
-                    triggerClassName="kr-pressed mt-1.5 h-11 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-1 focus:ring-foreground/40" />
+                    triggerClassName="ng-pressed mt-1.5 h-11 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-1 focus:ring-foreground/40" />
                 </div>
                 <div>
                   <label className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">You sell to</label>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {MODELS.map((m) => (
-                      /* KM-64 — .kr-chip-on, not .kr-pressed: on this stage the
+                      /* KM-64 — .ng-chip-on, not .ng-pressed: on this stage the
                          pressed recipe is reduced to a 1px whisper so it can
                          double as the input trough, which left the chosen chip
                          all but indistinguishable. See index.css. */
                       <button key={m.value} data-testid={`signup-model-${m.value}`} onClick={() => setModel(m.value)}
                         aria-pressed={model === m.value}
-                        className={`flex h-9 items-center rounded-pill px-4 text-xs font-medium ${model === m.value ? "kr-chip-on" : "kr-pop"}`}>
+                        className={`flex h-9 items-center rounded-pill px-4 text-xs font-medium ${model === m.value ? "ng-chip-on" : "ng-pop"}`}>
                         {m.label}
                       </button>
                     ))}
@@ -250,10 +250,10 @@ export function WebsiteIntel({ companyName, onDone, onBack, saved }) {
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {intel.products.map((p) => (
                       /* KM-65 — sunken, not raised. These are things we FOUND
-                         on the website, not things to press; .kr-pop is the
+                         on the website, not things to press; .ng-pop is the
                          recipe every button on this screen uses, so a row of
                          them read as five more controls. */
-                      <span key={p.name} className="kr-pressed rounded-pill px-3 py-1.5 text-xs">{p.name}</span>
+                      <span key={p.name} className="ng-pressed rounded-pill px-3 py-1.5 text-xs">{p.name}</span>
                     ))}
                   </div>
                 </div>
@@ -278,7 +278,7 @@ export function WebsiteIntel({ companyName, onDone, onBack, saved }) {
                 been scanned to lose. */}
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <button onClick={() => finish(true)} data-testid="signup-intel-confirm"
-                className="kr-pop flex h-12 items-center gap-2 rounded-pill bg-kr-ink px-7 text-sm font-medium text-white">
+                className="ng-pop flex h-12 items-center gap-2 rounded-pill bg-ng-ink px-7 text-sm font-medium text-white">
                 That&apos;s us <ArrowRight size={16} weight="bold" />
               </button>
 
@@ -293,7 +293,7 @@ export function WebsiteIntel({ companyName, onDone, onBack, saved }) {
               Place {companyName} on the map.
             </h1>
             {failure ? (
-              <div className="kr-frost-min mb-6 rounded-2xl px-4 py-3" data-testid="signup-scan-failed">
+              <div className="ng-frost-min mb-6 rounded-2xl px-4 py-3" data-testid="signup-scan-failed">
                 <p className="text-sm">
                   {failure === "blocked"
                     ? <>We couldn&apos;t read <strong>{url.trim()}</strong> — its server turned us away. Big sites often block automated readers.</>
@@ -316,7 +316,7 @@ export function WebsiteIntel({ companyName, onDone, onBack, saved }) {
                 <GlassSelect variant="field" testid="signup-manual-industry" ariaLabel="Industry"
                   value={industry} onChange={setIndustry} placeholder="Select industry…"
                   options={INDUSTRIES.map((i) => ({ value: i, label: i }))}
-                  triggerClassName="kr-pressed mt-1.5 h-12 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-1 focus:ring-foreground/40" />
+                  triggerClassName="ng-pressed mt-1.5 h-12 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-1 focus:ring-foreground/40" />
               </div>
               <div>
                 <label className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">You sell to</label>
@@ -324,7 +324,7 @@ export function WebsiteIntel({ companyName, onDone, onBack, saved }) {
                   {MODELS.map((m) => (
                     <button key={m.value} data-testid={`signup-manual-model-${m.value}`} onClick={() => setModel(m.value)}
                       aria-pressed={model === m.value}
-                      className={`flex h-10 items-center rounded-pill px-4 text-xs font-medium ${model === m.value ? "kr-chip-on" : "kr-pop"}`}>
+                      className={`flex h-10 items-center rounded-pill px-4 text-xs font-medium ${model === m.value ? "ng-chip-on" : "ng-pop"}`}>
                       {m.label}
                     </button>
                   ))}
@@ -332,7 +332,7 @@ export function WebsiteIntel({ companyName, onDone, onBack, saved }) {
               </div>
             </div>
             <button onClick={() => finish(false)} disabled={!industry} data-testid="signup-manual-continue"
-              className="kr-pop mt-7 flex h-12 items-center gap-2 rounded-pill bg-kr-ink px-8 text-sm font-medium text-white disabled:opacity-40">
+              className="ng-pop mt-7 flex h-12 items-center gap-2 rounded-pill bg-ng-ink px-8 text-sm font-medium text-white disabled:opacity-40">
               Continue <ArrowRight size={16} weight="bold" />
             </button>
           </motion.div>
@@ -341,7 +341,7 @@ export function WebsiteIntel({ companyName, onDone, onBack, saved }) {
 
       {backTarget && (
         <button onClick={goBack} data-testid="signup-website-back"
-          className="kr-pop mt-8 flex h-9 items-center gap-1.5 rounded-pill px-4 text-xs font-medium text-muted-foreground">
+          className="ng-pop mt-8 flex h-9 items-center gap-1.5 rounded-pill px-4 text-xs font-medium text-muted-foreground">
           <ArrowLeft size={14} weight="bold" /> Back
         </button>
       )}

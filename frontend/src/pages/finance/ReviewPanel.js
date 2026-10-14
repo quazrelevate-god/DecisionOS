@@ -16,8 +16,8 @@ import api, { formatApiError } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { lex } from "../../lib/lexicon";
 import { Dialog, DialogContent } from "../../components/ui/dialog";
-import { GlassSelect } from "../../components/karma/GlassSelect";
-import { DRAWER_FIELD, INK_PILL } from "../../components/karma/glass";
+import { GlassSelect } from "../../components/neuglass/GlassSelect";
+import { DRAWER_FIELD, INK_PILL } from "../../components/neuglass/glass";
 import { CARD, EmptyNote, SHEET_CONTENT, SMALL_PILL, SheetHead, Tag } from "./financeKit";
 import { AiNotice } from "../../components/ReportButton";
 

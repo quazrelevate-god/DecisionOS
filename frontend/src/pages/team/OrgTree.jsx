@@ -19,8 +19,8 @@ import {
   AirplaneTakeoff, Buildings, CaretRight, Code, Coins, Factory, Gear, Headset,
   IdentificationBadge, Megaphone, Plus, ShoppingCart, Truck, UsersThree,
 } from "@phosphor-icons/react";
-import { PersonAvatar } from "../../components/karma/PersonAvatar";
-import { CHIP, QUIET_CHIP } from "../../components/karma/glass";
+import { PersonAvatar } from "../../components/neuglass/PersonAvatar";
+import { CHIP, QUIET_CHIP } from "../../components/neuglass/glass";
 
 // A node: white glass lifted off the page. The connectors are a faint ink
 // line; the dots are hollow, like the reference's joints.

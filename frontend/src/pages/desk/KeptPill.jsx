@@ -8,7 +8,7 @@
  * It was DraftNote: a 12px line with two text buttons, printed across the top of
  * the Desk. Everything about it was true and none of it looked like the app
  * speaking. This is the same words and the same two ways out in the material the
- * capture's own status pill already uses (.kr-pop, rounded-pill) — so the two
+ * capture's own status pill already uses (.ng-pop, rounded-pill) — so the two
  * things that can appear in that spot are one family — plus the gesture a pill
  * like this invites: drag it anywhere, and past a thumb's width it goes.
  *
@@ -89,12 +89,12 @@ export function KeptPill({ label, onOpen, onDiscard, testid = "dex-well-draft" }
       <span className="min-w-0 truncate">{label}</span>
       {onOpen && (
         <button type="button" onClick={onOpen} data-testid={`${testid}-open`}
-          className="-mr-1 inline-flex min-h-11 shrink-0 items-center rounded-pill px-2 font-medium underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60">
+          className="-mr-1 inline-flex min-h-11 shrink-0 items-center rounded-pill px-2 font-medium underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-ink/60">
           Open
         </button>
       )}
       <button type="button" onClick={onDiscard} data-testid={`${testid}-discard`}
-        className="-mr-2 inline-flex min-h-11 shrink-0 items-center rounded-pill px-2 font-medium text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60">
+        className="-mr-2 inline-flex min-h-11 shrink-0 items-center rounded-pill px-2 font-medium text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-ink/60">
         Discard
       </button>
     </div>

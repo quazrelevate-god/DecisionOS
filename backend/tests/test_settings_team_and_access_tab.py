@@ -62,7 +62,7 @@ def test_no_settings_card_is_on_the_old_style():
         for old in ("nm-tile", "border-nm-edge", "text-brand-blue", "bg-brand-paper"):
             assert old not in s, f"{rel} still uses {old}"
     leave = src("pages/Leave.js")
-    assert '<div className="kr-bento p-5 sm:p-6" data-testid="leave-approver-config">' in leave
+    assert '<div className="ng-bento p-5 sm:p-6" data-testid="leave-approver-config">' in leave
 
 
 def test_phone_tabs_scroll_with_whole_labels_and_are_real_tabs():

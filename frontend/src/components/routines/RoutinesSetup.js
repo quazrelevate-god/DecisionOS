@@ -20,9 +20,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ArrowsClockwise, CalendarBlank, ArrowRight } from "@phosphor-icons/react";
 import api from "../../lib/api";
-import { DesignCheckbox } from "../karma/DesignCheckbox";
-import { GlassSelect } from "../karma/GlassSelect";
-import { GLASS_PILL, INK_PILL } from "../karma/glass";
+import { DesignCheckbox } from "../neuglass/DesignCheckbox";
+import { GlassSelect } from "../neuglass/GlassSelect";
+import { GLASS_PILL, INK_PILL } from "../neuglass/glass";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../ui/dialog";
 
 const CADENCES = [

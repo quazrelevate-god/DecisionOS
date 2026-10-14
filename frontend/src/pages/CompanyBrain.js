@@ -21,13 +21,16 @@ import { toast } from "sonner";
 import api from "../lib/api";
 import { noteTag } from "../lib/format";
 import { useAuth } from "../context/AuthContext";
-import { PageHeader, EmptyState, LoadFailed } from "../components/common";
+import { PageHeader, EmptyState, LoadFailed, ConfirmAction } from "../components/common";
+import { GlassSelect } from "../components/neuglass/GlassSelect";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { hintDockSlider } from "../lib/dockHint";
 import { DocumentsPanel } from "./BrainDocuments";
 import { ReportButton } from "../components/ReportButton";
-import { Books, Note, Plus, MagnifyingGlass, PencilSimple, Trash, Lock, Sparkle, ArrowRight } from "@phosphor-icons/react";
+import { Books, Note, Plus, MagnifyingGlass, PencilSimple, Trash, Lock, Sparkle, ArrowRight, ArrowLeft } from "@phosphor-icons/react";
 
 const FIELD = "w-full rounded-2xl bg-white/80 px-3 py-2 text-sm text-slate-800 ring-1 ring-inset ring-slate-900/[0.08] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25";
-const INK = "inline-flex h-10 items-center gap-1.5 rounded-pill bg-kr-ink px-4 text-sm font-medium text-white disabled:opacity-50";
+const INK = "inline-flex h-10 items-center gap-1.5 rounded-pill bg-ng-ink px-4 text-sm font-medium text-white disabled:opacity-50";
 const QUIET = "inline-flex h-9 items-center gap-1.5 rounded-pill px-3 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-900/[0.08] hover:bg-white";
 
 const INDEX_NOTE = {
@@ -59,23 +62,21 @@ function NoteForm({ initial, teams, busy, onSave, onCancel }) {
              roles_allowed: vis === "dept" ? team : "" });
   };
   return (
-    <div className="kr-bento space-y-3 p-4" data-testid="brain-note-form">
+    <div className="ng-bento space-y-3 p-4" data-testid="brain-note-form">
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} maxLength={2000}
         placeholder="Something the company should remember — e.g. Bluewave pays 30% advance, balance in 45 days."
         className={FIELD} data-testid="brain-note-text" />
       <div className="grid gap-2 sm:grid-cols-3">
         <input value={tag} onChange={(e) => setTag(e.target.value)} maxLength={40} placeholder="Tag (e.g. customer, policy)"
           className={FIELD} data-testid="brain-note-tag" />
-        <select value={vis} onChange={(e) => setVis(e.target.value)} className={FIELD} data-testid="brain-note-visibility">
-          <option value="public">Everyone can see</option>
-          <option value="dept">One team</option>
-          <option value="private">Owner &amp; managers only</option>
-        </select>
+        {/* No native dropdowns: the app's own glass list (GlassSelect). */}
+        <GlassSelect variant="field" triggerClassName={`${FIELD} h-10`} testid="brain-note-visibility" ariaLabel="Who can see this note"
+          value={vis} onChange={setVis}
+          options={[{ value: "public", label: "Everyone can see" }, { value: "dept", label: "One team" }, { value: "private", label: "Owner & managers only" }]} />
         {vis === "dept" && (
-          <select value={team} onChange={(e) => setTeam(e.target.value)} className={FIELD} data-testid="brain-note-team">
-            <option value="">Choose a team…</option>
-            {teams.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
-          </select>
+          <GlassSelect variant="field" triggerClassName={`${FIELD} h-10`} testid="brain-note-team" ariaLabel="Which team can see it"
+            value={team} onChange={setTeam} placeholder="Choose a team…"
+            options={teams.map((t) => ({ value: t.key, label: t.label }))} />
         )}
       </div>
       <div className="flex flex-wrap gap-2">
@@ -119,15 +120,20 @@ function NotesPanel({ focusId }) {
   };
   const add = async (body) => { if (await run(() => api.post("/brain/notes", body), "Added to the Company Brain")) setAdding(false); };
   const update = async (id, body) => { if (await run(() => api.patch(`/brain/notes/${id}`, body), "Note saved")) setEditing(null); };
-  const remove = (n) => {
-    if (!window.confirm("Remove this note from the Company Brain? Dex will stop using it.")) return;
-    run(() => api.delete(`/brain/notes/${n.id}`), "Note removed");
+  /* Asked in the app, not by the browser: window.confirm answers false with
+     nothing drawn in the Capacitor WebView (the same fault the documents had). */
+  const [pendingRemove, setPendingRemove] = useState(null);
+  const remove = (n) => setPendingRemove(n);
+  const confirmRemove = async () => {
+    const n = pendingRemove;
+    if (!n) return;
+    if (await run(() => api.delete(`/brain/notes/${n.id}`), "Note removed")) setPendingRemove(null);
   };
 
   return (
     <div className="space-y-4" data-testid="brain-notes">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <form onSubmit={(e) => { e.preventDefault(); setTerm(q); }} className="kr-pressed flex min-w-0 flex-1 items-center rounded-pill">
+        <form onSubmit={(e) => { e.preventDefault(); setTerm(q); }} className="ng-pressed flex min-w-0 flex-1 items-center rounded-pill">
           <MagnifyingGlass size={16} className="ml-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search notes…" data-testid="brain-notes-search"
             className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-sm outline-none" />
@@ -154,7 +160,7 @@ function NotesPanel({ focusId }) {
               onSave={(body) => update(n.id, body)} onCancel={() => setEditing(null)} />
           ) : (
             <div key={n.id} data-testid={`brain-note-${n.id}`}
-              className={`kr-bento flex flex-col gap-2 p-4 ${n.id === focusId ? "ring-2 ring-brand-600" : ""}`}>
+              className={`ng-bento flex flex-col gap-2 p-4 ${n.id === focusId ? "ring-2 ring-brand-600" : ""}`}>
               <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{n.text}</p>
               {INDEX_NOTE[n.index_state] && <p className="text-[11px] text-caution-600">{INDEX_NOTE[n.index_state]}</p>}
               <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-[11px] text-slate-500">
@@ -188,7 +194,33 @@ function NotesPanel({ focusId }) {
           ))}
         </div>
       )}
+      <ConfirmAction
+        open={!!pendingRemove}
+        onOpenChange={() => setPendingRemove(null)}
+        title="Remove this note from the Company Brain?"
+        description="Dex will stop using it in answers."
+        confirmLabel="Remove it" busyLabel="Removing…" cancelLabel="Keep it"
+        busy={busy} onConfirm={confirmRemove} testid="brain-note-delete-confirm" />
     </div>
+  );
+}
+
+/* 2026-10-12 (founder) — ASK IS IN THE DOCK ON A PHONE. "Ask Dex about it" went
+   to /brain, the desktop Ask page, which is the wrong place on a phone: there,
+   Ask is a swipe LEFT on the bar. So the phone gets a quiet line that says so,
+   and the dock's handle shows the gesture (lib/dockHint) — once when the page
+   opens, and again whenever the line is tapped. */
+function AskHint() {
+  useEffect(() => {
+    const t = setTimeout(() => hintDockSlider("ask"), 1100);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <button type="button" onClick={() => hintDockSlider("ask")} data-testid="company-brain-ask-hint"
+      className="inline-flex items-center gap-1.5 rounded-pill px-1 py-1 text-xs font-medium text-slate-600">
+      <ArrowLeft size={12} weight="bold" aria-hidden="true" />
+      Swipe left on the bar below to ask Dex about these
+    </button>
   );
 }
 
@@ -198,20 +230,24 @@ export default function CompanyBrain() {
   const focusNote = params.get("note");
   const tab = params.get("tab") === "notes" || focusNote ? "notes" : "documents";
   const setTab = (t) => setParams(t === "notes" ? { tab: "notes" } : {}, { replace: true });
+  const isMobile = useIsMobile();
 
   return (
     <div data-testid="company-brain-page">
       <PageHeader eyebrow="What the company knows" title="Company Brain">
-        <Link to="/brain" className={QUIET} data-testid="company-brain-ask-dex">Ask Dex about it <ArrowRight size={12} weight="bold" /></Link>
+        {!isMobile && (
+          <Link to="/brain" className={QUIET} data-testid="company-brain-ask-dex">Ask Dex about it <ArrowRight size={12} weight="bold" /></Link>
+        )}
       </PageHeader>
-      <p className="-mt-3 mb-5 max-w-2xl text-sm text-slate-600">
+      <p className="-mt-3 mb-2 max-w-2xl text-sm text-slate-600">
         Policies, SOPs, contracts, price lists and the notes worth remembering. Dex answers from what is here,
         and everyone sees only what they're allowed to.
       </p>
-      <div className="kr-pressed mb-5 flex w-fit items-center gap-1 rounded-pill p-1" role="tablist" aria-label="Company Brain">
+      <div className="mb-3">{isMobile && <AskHint />}</div>
+      <div className="ng-pressed mb-5 flex w-fit items-center gap-1 rounded-pill p-1" role="tablist" aria-label="Company Brain">
         {[{ k: "documents", l: "Documents", I: Books }, { k: "notes", l: "Notes", I: Note }].map(({ k, l, I }) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)} data-testid={`company-brain-tab-${k}`}
-            className={`flex h-9 items-center gap-1.5 rounded-pill px-5 text-sm ${tab === k ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
+            className={`flex h-9 items-center gap-1.5 rounded-pill px-5 text-sm ${tab === k ? "ng-pop font-semibold text-foreground" : "text-foreground/60"}`}>
             <I size={15} /> {l}
           </button>
         ))}

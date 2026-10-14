@@ -21,7 +21,7 @@ export function SignupConsent({ onAgree, onBack }) {
   const [terms, setTerms] = useState(false);
 
   return (
-    <div className="kr-well mx-auto w-full max-w-xl rounded-[1.75rem] p-6 sm:p-8" data-testid="signup-consent">
+    <div className="ng-well mx-auto w-full max-w-xl rounded-[1.75rem] p-6 sm:p-8" data-testid="signup-consent">
       <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Before Dex starts</p>
       <h2 className="mt-2 font-display text-2xl text-foreground">Dex builds your workspace with AI</h2>
 
@@ -61,7 +61,7 @@ export function SignupConsent({ onAgree, onBack }) {
           <ArrowLeft size={16} weight="bold" /> Back
         </button>
         <button type="button" onClick={onAgree} disabled={!ai || !terms} data-testid="signup-consent-continue"
-          className="kr-pop flex h-12 items-center gap-2 rounded-pill bg-kr-ink px-6 text-sm font-medium text-white disabled:opacity-40">
+          className="ng-pop flex h-12 items-center gap-2 rounded-pill bg-ng-ink px-6 text-sm font-medium text-white disabled:opacity-40">
           Agree and continue <ArrowRight size={16} weight="bold" />
         </button>
       </div>

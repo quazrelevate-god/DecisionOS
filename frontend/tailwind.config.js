@@ -145,14 +145,18 @@ module.exports = {
                 // contrast inside a chip. The --badge-* tokens carry a dark
                 // override; naming them here is what makes the chip follow the
                 // theme instead of the ramp.
-                // KR-2 — Karma's own names. ink = the band / active pill /
+                // KR-2 — Neu-glassmorphism's own names. ink = the band / active pill /
                 // arrow buttons; accent = orange, ALERT GRAMMAR ONLY (deltas,
                 // alert badges, chart markers) — never a button fill.
-                kr: {
-          brown: "hsl(var(--kr-brown))",
-                    ink:    { DEFAULT: 'hsl(var(--kr-ink))', raised: 'hsl(var(--kr-ink-raised))' },
-                    accent: { DEFAULT: 'hsl(var(--kr-accent))', soft: 'hsl(var(--kr-accent-soft))' },
-                    outline: 'hsl(var(--kr-outline))',
+                // 2026-10-13 — named `ng` to match the kr- → ng- rename: every
+                // call site already says bg-ng-ink / ring-ng-outline / text-ng-accent,
+                // and under the old `kr` key none of those classes existed, so ink
+                // buttons (e.g. "Text me a code") rendered with no fill at all.
+                ng: {
+          brown: "hsl(var(--ng-brown))",
+                    ink:    { DEFAULT: 'hsl(var(--ng-ink))', raised: 'hsl(var(--ng-ink-raised))' },
+                    accent: { DEFAULT: 'hsl(var(--ng-accent))', soft: 'hsl(var(--ng-accent-soft))' },
+                    outline: 'hsl(var(--ng-outline))',
                 },
                 badge: {
                     pending:   { DEFAULT: 'hsl(var(--badge-pending-bg))',   fg: 'hsl(var(--badge-pending-fg))',   line: 'hsl(var(--badge-pending-bd))' },
@@ -231,7 +235,7 @@ module.exports = {
                 // KR-2: the control boundary — the token that carries WCAG
                 // 1.4.11 in a language with no shadows and toneless borders
                 // on containers. (Also under `colors` above for ring/text use.)
-                'kr-outline': 'hsl(var(--kr-outline))',
+                'ng-outline': 'hsl(var(--ng-outline))',
             },
             keyframes: {
                 'accordion-down': { from: { height: '0' }, to: { height: 'var(--radix-accordion-content-height)' } },

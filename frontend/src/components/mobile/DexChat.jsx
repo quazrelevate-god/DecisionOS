@@ -71,10 +71,10 @@ function richText(text) {
    both surfaces. Each ending keeps the capture it came from, so Retry on an
    older one re-sends that one. */
 const ACTION = "flex h-11 items-center rounded-pill px-4 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-40";
-// bg-[#fff]/text-kr-ink for the reason the white bubble gives below (KM-51).
+// bg-[#fff]/text-ng-ink for the reason the white bubble gives below (KM-51).
 // Phase 5 — Review and Retry commit, so they take the 56px tier; Got it and
 // Not now hold the 44px floor (MPWA-01 §5.1).
-const ACTION_MAIN = cn(ACTION, "h-14 min-h-touch-lg px-6 bg-[#fff] font-semibold text-kr-ink");
+const ACTION_MAIN = cn(ACTION, "h-14 min-h-touch-lg px-6 bg-[#fff] font-semibold text-ng-ink");
 const ACTION_QUIET = cn(ACTION, "bg-white/10 font-medium text-white hover:bg-white/20");
 
 export function Outcome({ o, onReview, onRetry, onDismiss, retryDisabled }) {
@@ -267,20 +267,20 @@ export function Bubble({ m, index, onOpenFile, onAsk, onGo, prompt }) {
                it read as unfinished: the pair only works as a pair, and a
                translucent bubble opposite an opaque one looks like one of them
                failed to load rather than like two speakers. */
-            /* bg-[#fff]/text-kr-ink, not bg-white/text-foreground, for the
+            /* bg-[#fff]/text-ng-ink, not bg-white/text-foreground, for the
                reason the Dex nav pill needed the same: index.css carries a
                legacy `.dark .bg-white { background-color: hsl(var(--card)) }`,
                and this sheet opens over /brain, which runs dark. "Solid white"
                asked for through `bg-white` would have quietly become a dark
                card there — the exact complaint, in a second place. The literal
                colours are immune to it and identical everywhere else. */
-            ? "rounded-br-lg bg-[#fff] text-kr-ink shadow-[0_2px_10px_-4px_hsl(230_30%_18%/.35)]"
-            : "rounded-bl-lg bg-kr-ink text-white shadow-[0_8px_24px_-12px_hsl(216_28%_18%/.6)]"
+            ? "rounded-br-lg bg-[#fff] text-ng-ink shadow-[0_2px_10px_-4px_hsl(230_30%_18%/.35)]"
+            : "rounded-bl-lg bg-ng-ink text-white shadow-[0_8px_24px_-12px_hsl(216_28%_18%/.6)]"
         )}
       >
         {!mine && (
           <span className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-white/45">
-            <Sparkle size={10} weight="fill" className="text-[hsl(var(--kr-gold))]" /> Dex
+            <Sparkle size={10} weight="fill" className="text-[hsl(var(--ng-gold))]" /> Dex
           </span>
         )}
         {m.reading ? (
@@ -584,7 +584,7 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                 aria-label="Close image"
                 data-testid="dex-lightbox-close"
                 onClick={(e) => { e.stopPropagation(); setLightbox(null); }}
-                className="kr-pop absolute right-4 grid h-14 w-14 place-items-center rounded-full"
+                className="ng-pop absolute right-4 grid h-14 w-14 place-items-center rounded-full"
                 style={{ top: "calc(var(--sa-top) + 0.75rem)" }}
               >
                 <X size={18} weight="bold" />
@@ -602,7 +602,7 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                   opens Ask, the Desk's Dex well opens Decide — and it is just
                   as invisible once you start typing. */}
               <span className="flex items-center gap-2 text-sm font-semibold text-white drop-shadow">
-                <Sparkle size={14} weight="fill" className="text-[hsl(var(--kr-gold))]" /> Dex
+                <Sparkle size={14} weight="fill" className="text-[hsl(var(--ng-gold))]" /> Dex
                 {channel && (
                   <span className="rounded-pill bg-white/15 px-2 py-0.5 text-[14px] font-semibold uppercase tracking-[0.08em] text-white/85">
                     {channel === "decide" ? "Decide" : "Ask"}
@@ -621,7 +621,7 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                   onClick={() => clear?.()}
                   data-testid="dex-chat-clear"
                   aria-label="Clear this conversation"
-                  className="kr-pop grid h-14 place-items-center rounded-pill px-5 text-sm font-medium"
+                  className="ng-pop grid h-14 place-items-center rounded-pill px-5 text-sm font-medium"
                 >
                   Clear
                 </button>
@@ -634,7 +634,7 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                 /* h-14: 40 CSS px is 32 REAL px once --ui-scale's 0.8 lands,
                    against accessibility.md's 44x44 pt default for iOS. This
                    sheet has room, so it takes the default. */
-                className="kr-pop grid h-14 w-14 place-items-center rounded-full"
+                className="ng-pop grid h-14 w-14 place-items-center rounded-full"
               >
                 <X size={18} weight="bold" />
               </button>
@@ -781,7 +781,7 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: 10, scale: 0.85 }}
                           transition={{ ...SPRING, delay: (ACTIONS.length - 1 - i) * 0.045 }}
-                          className="kr-frost flex h-11 items-center gap-2.5 rounded-pill pl-3 pr-4 text-sm font-medium"
+                          className="ng-frost flex h-11 items-center gap-2.5 rounded-pill pl-3 pr-4 text-sm font-medium"
                         >
                           <Icon size={17} weight="bold" aria-hidden="true" />
                           {a.label}
@@ -798,7 +798,7 @@ export function DexChat({ open, onClose, dex, chat, channel }) {
                 aria-label={plusOpen ? "Hide options" : "More ways to talk to Dex"}
                 aria-expanded={plusOpen}
                 onClick={() => setPlusOpen((v) => !v)}
-                className="app-plus-on-fab kr-frost grid h-14 w-14 place-items-center rounded-full"
+                className="app-plus-on-fab ng-frost grid h-14 w-14 place-items-center rounded-full"
               >
                 <motion.span animate={{ rotate: plusOpen ? 45 : 0 }} transition={SPRING} className="grid place-items-center">
                   <Plus size={19} weight="bold" />

@@ -79,8 +79,8 @@ function fmtTime(ts) {
   }
 }
 
-/* KM-10 — the timeline sheet joins the design system: .kr-bento instead of a
-   hairline-framed panel, the rail and its nodes drawn with .nm-inset / .kr-pop
+/* KM-10 — the timeline sheet joins the design system: .ng-bento instead of a
+   hairline-framed panel, the rail and its nodes drawn with .nm-inset / .ng-pop
    rather than border-border and .nm-tile, and the mono captions gone. */
 function TimelineDialog({ decisionId, open, onClose }) {
   const { data, isLoading } = useQuery({
@@ -92,7 +92,7 @@ function TimelineDialog({ decisionId, open, onClose }) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="kr-bento max-w-lg rounded-cardlg border-0" data-testid="timeline-dialog">
+      <DialogContent className="ng-bento max-w-lg rounded-cardlg border-0" data-testid="timeline-dialog">
         <DialogHeader>
           <DialogTitle className="pr-8 font-display text-xl">
             {data?.title || "Decision timeline"}
@@ -115,7 +115,7 @@ function TimelineDialog({ decisionId, open, onClose }) {
               const color = EVENT_COLOR[e.kind] || "text-muted-foreground";
               return (
                 <li key={`${e.kind}-${e.ts || i}`} className="mb-5 ml-6" data-testid={`timeline-event-${i}`}>
-                  <span className="kr-pop absolute -left-[15px] grid h-7 w-7 place-items-center rounded-full">
+                  <span className="ng-pop absolute -left-[15px] grid h-7 w-7 place-items-center rounded-full">
                     <Icon size={13} weight="bold" className={color} aria-hidden="true" />
                   </span>
                   <p className="text-sm font-medium leading-snug">{e.label}</p>
@@ -148,7 +148,7 @@ function DayEntries({ day, onOpen }) {
               key={d.id}
               onClick={() => onOpen(d.id)}
               data-testid={`journal-decision-${d.id}`}
-              className="kr-bento kr-lift flex flex-col gap-2 rounded-cardlg p-3.5 text-left"
+              className="ng-bento ng-lift flex flex-col gap-2 rounded-cardlg p-3.5 text-left"
             >
               <div className="flex items-start justify-between gap-2">
                 <Chip value={d.dtype} />
@@ -167,7 +167,7 @@ function DayEntries({ day, onOpen }) {
           the Journal is decision history. The block stays for an older API that
           still sends notes. */}
       {(day.notes || []).length > 0 && (
-        <div className="kr-bento divide-y divide-nm-edge/40 rounded-cardlg lg:max-w-3xl" data-testid={`journal-notes-${day.date}`}>
+        <div className="ng-bento divide-y divide-nm-edge/40 rounded-cardlg lg:max-w-3xl" data-testid={`journal-notes-${day.date}`}>
           {day.notes.map((n) => (
             <div key={n.id} className="flex items-start gap-3 p-3.5">
               <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-amber-50 text-amber-600">
@@ -269,7 +269,7 @@ export default function Journal() {
       <div className="lg:grid lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start lg:gap-8">
       <div className="lg:sticky lg:top-8 lg:self-start" data-testid="journal-rail">
 
-      {/* Search — .kr-pressed field and an ink pill, off the retired
+      {/* Search — .ng-pressed field and an ink pill, off the retired
           nm-tile + bg-primary pair. */}
       <form
         onSubmit={(e) => { e.preventDefault(); setTerm(q); }}
@@ -277,7 +277,7 @@ export default function Journal() {
            its button share 17rem, so they stack there and stay a row below lg. */
         className="mb-4 flex max-w-xl items-center gap-2 lg:max-w-none lg:flex-col lg:items-stretch"
       >
-        <div className="kr-pressed flex min-w-0 flex-1 items-center rounded-pill">
+        <div className="ng-pressed flex min-w-0 flex-1 items-center rounded-pill">
           <MagnifyingGlass size={16} weight="regular" aria-hidden="true" className="ml-3.5 shrink-0 text-muted-foreground" />
           <input
             value={q}
@@ -290,7 +290,7 @@ export default function Journal() {
         <button
           type="submit"
           data-testid="journal-search-btn"
-          className="kr-lift flex h-11 shrink-0 items-center justify-center rounded-pill bg-kr-ink px-5 text-sm font-medium text-white"
+          className="ng-lift flex h-11 shrink-0 items-center justify-center rounded-pill bg-ng-ink px-5 text-sm font-medium text-white"
         >
           Search
         </button>
@@ -304,25 +304,25 @@ export default function Journal() {
           framings of the log rather than three taps away in a menu. It is a
           LINK, not a third segment: Timeline and Calendar are two views of this
           page and Events desk is another room, and the shapes say which is
-          which (a .kr-pop pill against a pressed track). */}
+          which (a .ng-pop pill against a pressed track). */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Link
           to="/calendar"
           data-testid="journal-events-desk"
-          className="kr-pop flex h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60"
+          className="ng-pop flex h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-ink/60"
         >
           <CalendarBlank size={16} weight="bold" aria-hidden="true" />
           Events desk
         </Link>
 
         {/* Timeline / Calendar — the same pressed-track control /calendar uses. */}
-        <div className="kr-pressed flex w-fit items-center gap-1 rounded-pill p-1"
+        <div className="ng-pressed flex w-fit items-center gap-1 rounded-pill p-1"
              role="group" aria-label="Journal view" data-testid="journal-view">
           {[{ k: "timeline", l: "Timeline" }, { k: "calendar", l: "Calendar" }].map((v) => (
             <button key={v.k} type="button" onClick={() => setView(v.k)}
               aria-pressed={view === v.k} data-testid={`journal-view-${v.k}`}
               className={`flex h-9 items-center justify-center rounded-pill px-5 text-sm ${
-                view === v.k ? "kr-pop font-semibold text-foreground" : "text-foreground/60"
+                view === v.k ? "ng-pop font-semibold text-foreground" : "text-foreground/60"
               }`}>
               {v.l}
             </button>
@@ -333,7 +333,7 @@ export default function Journal() {
       {view === "calendar" && (
         /* The week strip, same anatomy as /calendar's: today ringed, the
            selected day sunken, a dot under any day that has entries. */
-        <div className="kr-bento mb-4 p-3" data-testid="journal-week-strip">
+        <div className="ng-bento mb-4 p-3" data-testid="journal-week-strip">
           <div className="mb-2 flex items-center justify-between">
             <button type="button" onClick={() => shiftWeek(-1)} aria-label="Previous week"
               data-testid="journal-week-prev"
@@ -361,17 +361,17 @@ export default function Journal() {
                   aria-label={dayTitle(iso)}
                   data-testid={`journal-day-cell-${iso}`}
                   className={`flex flex-1 basis-0 flex-col items-center gap-1 rounded-control py-2 ${
-                    isSel ? "kr-pressed font-semibold" : "text-foreground/75"
+                    isSel ? "ng-pressed font-semibold" : "text-foreground/75"
                   }`}
                 >
                   <span className="text-[10px] uppercase tracking-wide opacity-60">{DOW[i]}</span>
                   <span className={`grid h-7 w-7 place-items-center rounded-full text-sm tabular-nums ${
-                    iso === today && !isSel ? "ring-1 ring-kr-ink/45" : ""
+                    iso === today && !isSel ? "ring-1 ring-ng-ink/45" : ""
                   }`}>
                     {Number(iso.slice(8, 10))}
                   </span>
                   <span aria-hidden="true"
-                    className={`h-1 w-1 rounded-full ${n ? "bg-kr-ink/55" : "bg-transparent"}`} />
+                    className={`h-1 w-1 rounded-full ${n ? "bg-ng-ink/55" : "bg-transparent"}`} />
                 </button>
               );
             })}
@@ -413,7 +413,7 @@ export default function Journal() {
           {selectedDay
             ? <DayEntries day={selectedDay} onOpen={setOpenId} />
             : (
-              <div className="kr-bento rounded-cardlg px-4 py-8 text-center" data-testid="journal-day-empty">
+              <div className="ng-bento rounded-cardlg px-4 py-8 text-center" data-testid="journal-day-empty">
                 <p className="text-sm text-muted-foreground">Nothing logged on this day.</p>
               </div>
             )}
@@ -437,7 +437,7 @@ export default function Journal() {
               type="button"
               onClick={() => setShowAllEntries(true)}
               data-testid="journal-show-earlier"
-              className="kr-pop flex h-11 w-full items-center justify-center rounded-pill text-sm font-semibold text-foreground"
+              className="ng-pop flex h-11 w-full items-center justify-center rounded-pill text-sm font-semibold text-foreground"
             >
               Show {hiddenEntryCount} earlier {hiddenEntryCount === 1 ? "entry" : "entries"}
             </button>

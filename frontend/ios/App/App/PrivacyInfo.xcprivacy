@@ -113,6 +113,24 @@
 			</array>
 		</dict>
 
+		<!--
+		  Photos of bills, receipts and documents, taken with the camera or picked
+		  from the library and uploaded to the workspace (App Store audit
+		  2026-10-14: the attachments were collected and not declared).
+		-->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePhotosorVideos</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+
 		<!-- Invoices, payments, expenses, ledger — the business's own money. -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
@@ -157,6 +175,24 @@
 			<key>NSPrivacyCollectedDataTypePurposes</key>
 			<array>
 				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+			</array>
+		</dict>
+
+		<!--
+		  AI request records (feature, model, size, latency — PII redacted), kept to
+		  run and meter the AI features. Matches the "Diagnostics" row already
+		  declared in the Play Data Safety form (docs/play-store/CONSOLE_ANSWERS.md).
+		-->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherDiagnosticData</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
 

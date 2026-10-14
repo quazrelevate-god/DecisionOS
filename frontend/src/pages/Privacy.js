@@ -29,7 +29,7 @@ const CONTACT = "support@decisionos.biz";
 /* Play requires the developer named on the store listing to be named in the
    privacy policy (2026-10-10: the Play Console account's developer name). */
 const DEVELOPER = "Bhuvanesh Kumar";
-const UPDATED = "10 October 2026";
+const UPDATED = "14 October 2026";
 
 function Section({ title, children }) {
   return (
@@ -49,9 +49,9 @@ export default function Privacy() {
       <p className="mt-2 text-xs text-muted-foreground">Last updated {UPDATED}</p>
 
       <p className="mt-6 text-sm text-muted-foreground">
-        This privacy policy covers the DecisionOS app for Android and the web, and
+        This privacy policy covers the DecisionOS mobile app, the web app, and
         the website at decisionos.biz. DecisionOS is developed and published by{" "}
-        {DEVELOPER}, the developer named on its Google Play listing. It is a
+        {DEVELOPER}, the developer named on its app store listings. It is a
         working tool for a small company. The things you put in it — decisions, money, staff, suppliers —
         are the company&rsquo;s business and not ours. This page says exactly what
         we hold, who else ever sees it, how long we keep it, and how to make it go
@@ -111,7 +111,7 @@ export default function Privacy() {
       <Section title="What we do not do">
         <ul className="list-disc space-y-1.5 pl-5">
           <li><B>No screen recording.</B> Session replay is switched off. Nobody watches your screens.</li>
-          <li><B>No advertising.</B> No ad identifiers, no ad networks, no profiles sold or shared for advertising. The Android app requests no advertising ID at all.</li>
+          <li><B>No advertising.</B> No ad identifiers, no ad networks, no profiles sold or shared for advertising. The app requests no advertising ID at all.</li>
           <li><B>We do not sell your data</B>, and we do not use your company&rsquo;s records to train AI models.</li>
         </ul>
       </Section>

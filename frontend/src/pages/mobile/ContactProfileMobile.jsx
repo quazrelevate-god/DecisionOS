@@ -26,10 +26,10 @@ const humanDate = (iso) => dueLabel(iso)?.text || null;
 function Accordion({ id, title, icon: Icon, count, defaultOpen = false, children }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    /* KM-10 — .kr-bento, the app's card material, instead of .nm-raised: a
+    /* KM-10 — .ng-bento, the app's card material, instead of .nm-raised: a
        raised block with a hairline was the flat idiom the redesign replaced
        everywhere else on the phone. */
-    <section className="kr-bento mt-3 overflow-hidden rounded-cardlg" data-testid={`cp-section-${id}`}>
+    <section className="ng-bento mt-3 overflow-hidden rounded-cardlg" data-testid={`cp-section-${id}`}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -150,7 +150,7 @@ export default function ContactProfileMobile({ canManage = false, onEdit, onLogC
               data-testid="cp-call"
               /* KM-10 — ink, not bg-primary (the retired indigo), and a pill at the
                  app's control height. */
-              className="kr-lift flex h-12 flex-1 items-center justify-center gap-2 rounded-pill bg-kr-ink px-4 text-sm font-semibold text-white"
+              className="ng-lift flex h-12 flex-1 items-center justify-center gap-2 rounded-pill bg-ng-ink px-4 text-sm font-semibold text-white"
               style={{ minHeight: "var(--control-h-md)" }}
             >
               <Phone size={20} weight="bold" /> Call
@@ -160,7 +160,7 @@ export default function ContactProfileMobile({ canManage = false, onEdit, onLogC
             <a
               href={`mailto:${c.email}`}
               data-testid="cp-email"
-              className="kr-pop flex h-12 items-center justify-center gap-2 rounded-pill px-4 text-sm font-semibold text-foreground"
+              className="ng-pop flex h-12 items-center justify-center gap-2 rounded-pill px-4 text-sm font-semibold text-foreground"
               style={{ minHeight: "var(--control-h-md)" }}
             >
               <EnvelopeSimple size={20} weight="bold" /> Email
@@ -171,13 +171,13 @@ export default function ContactProfileMobile({ canManage = false, onEdit, onLogC
           <div className="mt-2 flex flex-wrap gap-touch-gap" data-testid="cp-actions">
             {onLogComplaint && (
               <button type="button" onClick={onLogComplaint} data-testid="cp-log-complaint"
-                className="kr-pop flex flex-1 items-center justify-center gap-2 rounded-pill px-4 text-sm font-semibold text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
+                className="ng-pop flex flex-1 items-center justify-center gap-2 rounded-pill px-4 text-sm font-semibold text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline"
                 style={{ minHeight: "var(--control-h-md)" }}>
                 <Warning size={20} weight="bold" aria-hidden="true" /> Log complaint
               </button>
             )}
             <button type="button" onClick={onEdit} data-testid="cp-edit"
-              className="kr-pop flex flex-1 items-center justify-center gap-2 rounded-pill px-4 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
+              className="ng-pop flex flex-1 items-center justify-center gap-2 rounded-pill px-4 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline"
               style={{ minHeight: "var(--control-h-md)" }}>
               <PencilSimple size={20} weight="bold" aria-hidden="true" /> Edit
             </button>

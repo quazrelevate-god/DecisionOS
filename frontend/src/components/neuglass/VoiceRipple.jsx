@@ -1,0 +1,739 @@
+/* ASK-44 / ASK-45 / ASK-47 · VoiceRipple — a neumorphic ripple that listens.
+ *
+ * IT IS IN THE APP NOW. ASK-44 built it in the design lab on the founder's
+ * instruction ("once we finalize it we will add it to our web application"),
+ * and ASK-47 is that: it is the centrepiece of the Desk's Dex well on a phone.
+ * The move is the one the header promised — the file changed folder and gained
+ * a way to be handed a level from outside. Nothing else about it moved.
+ *
+ * TWO WAYS TO DRIVE IT.
+ *   · Its own microphone, which is what the lab uses: press the hub, it opens
+ *     a stream, reads it and closes it again.
+ *   · Somebody else's, which is what the Desk uses: `readLevel` is a function
+ *     returning 0..1 and `listening` says whether that source is live, so the
+ *     ripple runs off the capture the page already owns (useDexCapture's meter)
+ *     instead of opening a second stream onto the same microphone. `onPress`
+ *     then belongs to the page too.
+ * Give it neither and it is self-contained; give it both and it never touches
+ * getUserMedia at all.
+ *
+ * ── WHAT MAKES IT NEUMORPHIC RATHER THAN A GLOWING CIRCLE ────────────────
+ * The app's neumorphism has one light source and it is the top-left corner:
+ * .ng-pressed is `inset 4px 4px … hsl(230 22% 34% / .22)` with
+ * `inset -4px -4px … white/.72`, i.e. dark where the surface falls away from
+ * the light and white where it rises into it. A ripple drawn as a flat stroke
+ * would be a different material on the same page.
+ * So every ring is drawn TWICE: a white arc offset up-and-left and a
+ * blue-grey arc offset down-and-right, both blurred. That is a ridge in the
+ * surface, lit from where everything else in the app is lit from — the wave
+ * reads as the stage itself moving rather than as ink on top of it.
+ *
+ * ── ASK-45 · WHAT MAKES IT WATER RATHER THAN A CIRCLE ────────────────────
+ * It was three fixed sine harmonics, which is a wobble with a period: watch it
+ * for ten seconds and the eye finds the repeat. Every ring now carries its own
+ * RANDOM shape — a handful of control points around the circle, smoothed with
+ * a Catmull-Rom curve so there are no corners, and each ring gets a fresh set.
+ * Two of them, in fact: the ring is born with one and morphs into the second as
+ * it travels, which is what stops the outline being a rigid object flying
+ * outward. `water` is how far those points are allowed to push (0 is a perfect
+ * circle), and the deformation RELAXES as the ring ages — surface tension pulls
+ * a real wave back toward round, so this one does too.
+ *
+ * ── ASK-45 · AND THE ELASTIC RETURN ──────────────────────────────────────
+ * The radius is a damped spring rather than a ramp: it rushes out, overshoots,
+ * pulls back and settles into its travel. `elastic` is the size of that
+ * overshoot, and the same spring rings through the ridge's depth, so a wave
+ * that springs back also breathes darker and lighter as it goes.
+ *
+ * ── THE LEVEL IS REAL ────────────────────────────────────────────────────
+ * AnalyserNode on the live stream, RMS per frame, then the app's own curve
+ * (Math.pow(rms * 3.2, 0.65) — the same one hooks/useDexCapture uses for the
+ * dock's wave, so this surface and that one respond alike). An attack/release
+ * envelope follows the voice up quickly and down slowly, which is the
+ * difference between fluid and jittery.
+ *
+ * ── 2026-09-21 · INWARD, FOR THE DESKTOP WELL ────────────────────────────
+ * `mode="in"` turns the same surface around. The stage is no longer a square
+ * round the mic: it fills its container, and the waves are born at the
+ * container's own inner wall and travel IN to the mic, fading as they go so
+ * that nothing arrives at the centre as a hard ring. At the wall a wave is the
+ * wall's shape — a superellipse sized to the box, close to its rounded corners
+ * — and it rounds into a circle as it closes on the mic. The phone keeps
+ * `mode="out"` (the default), drawn exactly as before.
+ *
+ * ── REDUCED MOTION ───────────────────────────────────────────────────────
+ * Nothing travels. One ring answers the level by thickening — the app's rule
+ * since ASK-34 is that a decorative animation does not run when the system asks
+ * for stillness, and a ripple is decorative even when the data behind it is
+ * real.
+ */
+import { useCallback, useEffect, useRef, useState } from "react";
+// B02 — the mic sentence, which differs inside the APK.
+import { micProblem } from "../../lib/native/mic";
+
+/* The app's own metering curve (hooks/useDexCapture): RMS × 3.2 on a 0.65
+   power, so ordinary speech uses the top half of the range instead of hugging
+   the floor. Kept identical so this does not become a second opinion about
+   what "loud" means. */
+const LEVEL = (rms) => Math.min(1, Math.pow(rms * 3.2, 0.65));
+const ATTACK = 0.34;   // how fast the envelope rises toward a louder frame
+const RELEASE = 0.07;  // …and how slowly it falls back
+const RING_MS_LOUD = 190;   // cadence at full voice, before `density`
+const RING_MS_QUIET = 620;  // …and in a quiet room
+const LIFE_MS = 2600;       // a ring's travel time, before `speed`
+const POINTS = 7;           // control points around a ring's outline
+
+/* ASK-45 · THE DEFAULTS ARE THE THING BEING JUDGED, so they live here in one
+   block rather than scattered through the drawing code. The lab's knobs write
+   these same keys; whatever the founder settles on is what gets pasted back. */
+export const RIPPLE_DEFAULTS = {
+  gain: 1,        // how hard a voice pushes the surface
+  thickness: 1,   // how heavy a wave's ridge is
+  softness: 1,    // how far the ridge blurs into the page
+  water: 0.55,    // 0 = a circle · 1 = a wave with its own mind
+  elastic: 0.45,  // the overshoot-and-settle as it travels
+  speed: 1,       // travel time
+  density: 1,     // how many waves are in flight at once
+};
+
+/* ASK-48 — THE FOUNDER'S OWN NUMBERS, dialled in the design lab and handed
+   over as JSON. This is what the Desk's well runs; RIPPLE_DEFAULTS stays the
+   lab's starting point so the knobs still open on neutral ground. A heavier
+   push (gain), a much heavier ridge (thickness), water all the way up and no
+   elastic at all — a swell rather than a ping — travelling at a little under
+   half speed. Second pass, 2026-09-18: harder push, the ridge blurred much
+   further into the page (softness 1.7 -> 2.5) and fewer waves in flight
+   (density .8 -> .55) — softer and less busy, the same swell with more room
+   around it. */
+export const DESK_RIPPLE = {
+  gain: 2,
+  thickness: 3,
+  softness: 2.5,
+  water: 1,
+  elastic: 0,
+  speed: 0.45,
+  density: 0.55,
+};
+
+const reduced = () =>
+  typeof window !== "undefined" &&
+  !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+/* A ring's own outline: POINTS random offsets around the circle. Two sets per
+   ring (see the header) so the shape can morph while it travels. */
+const seed = () => Array.from({ length: POINTS }, () => Math.random() * 2 - 1);
+
+/* Catmull-Rom through the control points — the curve that reads as water.
+   Linear interpolation would give the outline corners, and cosine gives it a
+   regular bulge at every control point; this one passes through the points with
+   a continuous tangent, which is why the result looks poured rather than
+   drawn. */
+const smooth = (ring, th) => {
+  const k = ring.length;
+  const x = (th / (Math.PI * 2)) * k;
+  const i = Math.floor(x);
+  const f = x - i;
+  const p0 = ring[(i - 1 + k) % k];
+  const p1 = ring[i % k];
+  const p2 = ring[(i + 1) % k];
+  const p3 = ring[(i + 2) % k];
+  return 0.5 * (
+    (2 * p1) +
+    (-p0 + p2) * f +
+    (2 * p0 - 5 * p1 + 4 * p2 - p3) * f * f +
+    (-p0 + 3 * p1 - 3 * p2 + p3) * f * f * f
+  );
+};
+
+export function VoiceRipple({
+  size = 320,
+  config = RIPPLE_DEFAULTS,
+  /* ASK-48 — the mic, as a share of the stage. It was 0.27 and the founder
+     asked for thirty per cent more of it. */
+  hub = 0.351,
+  simulate = false,
+  // The external drive (see the header). `readLevel` present ⇒ no own mic.
+  readLevel = null,
+  listening = false,
+  onPress = null,
+  disabled = false,
+  label,
+  // How alive the surface is when nothing is being said. The founder asked for
+  // "subtly waving" at rest, which is this and not zero.
+  idle = 0.13,
+  /* 2026-09-21 — "out" (the phone: waves leave the mic for the rim) or "in"
+     (the desktop well: waves leave the container's wall for the mic). In "in"
+     the stage fills its positioned parent; `hubPx` is the mic's diameter and
+     `hubAt` its centre, both in the stage's own pixels (default: the middle). */
+  mode = "out",
+  hubPx = 64,
+  hubAt = null,
+  /* WHICH WAY THE WAVES GO, in mode="in" only.
+     "wall"   (default) born at the container's inner wall, travelling in to the
+              mic — the Dex well's own behaviour since 2026-09-21, where the
+              well IS the dish and the sound is arriving at the microphone.
+     "center" born at the mic and travelling out to the wall. The founder's call
+              for the slider: there the hub is a handle sitting in a channel,
+              not a dish, and a wave collapsing onto it reads as something being
+              sucked in rather than as the control speaking. */
+  from = "wall",
+  /* DECORATIVE — the surface without the control. The slider on the phone's
+     Desk wants this material looping inside its well, but it already HAS a
+     handle, and a second `voice-ripple-mic` in the document would be a second
+     answer to every locator that presses the real one. So the hub's button is
+     not rendered at all here: no testid, no aria, nothing focusable, nothing
+     to press. The swell stays, because that is the surface rising, not a
+     button. Only meaningful with mode="in"; `onPress` is ignored. */
+  decorative = false,
+}) {
+  const inward = mode === "in";
+  const external = typeof readLevel === "function";
+  const canvasRef = useRef(null);
+  const stageRef = useRef(null);
+  const [live, setLive] = useState(false);
+  const [error, setError] = useState(null);
+  const still = reduced();
+
+  /* Everything the frame loop touches is a ref, not state: the loop runs at
+     60fps and React does not need to hear about any of it (the same reason
+     Layout drives the dock's wave from `dexLevelsRef`). */
+  const levelRef = useRef(0);      // the smoothed envelope, 0..1
+  const ringsRef = useRef([]);     // { born, push, a, b, spin }
+  const audioRef = useRef(null);   // { ctx, stream, analyser, data }
+  const rafRef = useRef(0);
+  const lastRingRef = useRef(0);
+  /* Read inside the animation frame, so a direction change takes effect without
+     tearing down the canvas — the same reason every other setting is a ref. */
+  const fromRef = useRef(from);
+  fromRef.current = from;
+  const cfgRef = useRef({ ...RIPPLE_DEFAULTS, simulate, live: false });
+  cfgRef.current = {
+    ...RIPPLE_DEFAULTS, ...config, simulate,
+    live: external ? listening : live,
+    external, readLevel, idle, hubPx, hubAt,
+  };
+
+  /* ── the microphone ──────────────────────────────────────────────────── */
+  const stop = useCallback(() => {
+    const a = audioRef.current;
+    audioRef.current = null;
+    if (a) {
+      try { a.stream.getTracks().forEach((t) => t.stop()); } catch { /* already gone */ }
+      try { a.ctx.close(); } catch { /* already closed */ }
+    }
+    levelRef.current = 0;
+    setLive(false);
+  }, []);
+
+  const start = useCallback(async () => {
+    setError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) throw new Error("This browser has no AudioContext.");
+      const ctx = new Ctx();
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      // A little smoothing in the node itself; the rest is the envelope below.
+      analyser.smoothingTimeConstant = 0.6;
+      source.connect(analyser);
+      audioRef.current = { ctx, stream, analyser, data: new Uint8Array(analyser.fftSize) };
+      setLive(true);
+    } catch (e) {
+      // B02 — one source for this sentence, which differs in the APK.
+      setError(micProblem(e));
+      setLive(false);
+    }
+  }, []);
+
+  useEffect(() => stop, [stop]);
+
+  /* ── the frame loop: read the room, move the waves, draw the surface ──── */
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return undefined;
+    const ctx2d = canvas.getContext("2d");
+    /* ASK-50 — WHETHER THE BLUR ACTUALLY RENDERS, NOT WHETHER IT EXISTS.
+       Canvas `filter` is the cleanest blur there is, and it is the one the
+       design lab was tuned on — but the founder's iPhone drew the ripple with
+       hard rings. Two faults, both mine. The check was `typeof ctx.filter`,
+       which a browser can pass while drawing no blur at all. And the fallback
+       below it was wrong: it stroked the ring AND added a shadowBlur, which
+       draws the ring crisp and puts a soft halo round it — the hard line this
+       comment used to promise it avoided. Reproduced in Chrome by hiding
+       ctx.filter: the same double rings as the phone's screenshot.
+       So: ask the canvas. Blur a small square into a scratch canvas and look
+       outside it — a working blur has put ink there, a missing or inert one
+       has not. */
+    const filterWorks = (() => {
+      try {
+        const probe = document.createElement("canvas");
+        probe.width = 16;
+        probe.height = 16;
+        const p2d = probe.getContext("2d");
+        if (typeof p2d.filter !== "string") return false;
+        p2d.filter = "blur(3px)";
+        p2d.fillStyle = "#000";
+        p2d.fillRect(6, 6, 4, 4);
+        return p2d.getImageData(3, 8, 1, 1).data[3] > 0;
+      } catch {
+        return false;
+      }
+    })();
+
+    /* TWO PIXEL SPACES, RECONCILED — the lesson ASK-43 wrote into the Desk's
+       row fit. getBoundingClientRect is in VISUAL pixels (the app is CSS
+       zoomed: 0.8 on a phone, up to 1.3 on a big monitor) and offsetWidth is in
+       the element's own. The backing store has to be sized in visual pixels
+       times the device ratio or the ripple is soft in the wrong way; the
+       drawing happens in the element's own pixels, which is what `size` means. */
+    // Backing-store pixels per own pixel; the shadow fallback needs it (below).
+    let px = 1;
+    // The inward stage's height; the outward one is square, so `box` is both.
+    let boxH = size;
+    const fit = () => {
+      const rect = canvas.getBoundingClientRect();
+      const own = canvas.offsetWidth || size;
+      const ownH = inward ? (canvas.offsetHeight || own) : own;
+      const zoom = rect.width ? rect.width / own : 1;
+      /* The inward stage is the whole well — several times the phone's square —
+         and every ring is blurred across all of it, so its backing store stops
+         at twice the screen's pixels. The phone's is untouched. */
+      const dpr = window.devicePixelRatio || 1;
+      const scale = (inward ? Math.min(2, dpr) : dpr) * zoom;
+      canvas.width = Math.round(own * scale);
+      canvas.height = Math.round(ownH * scale);
+      ctx2d.setTransform(scale, 0, 0, scale, 0, 0);
+      px = scale;
+      boxH = ownH;
+      return own;
+    };
+    let box = fit();
+    const refit = () => { box = fit(); };
+    const ro = new ResizeObserver(refit);
+    ro.observe(canvas);
+    /* AND ON WINDOW RESIZE, which is not the same event. The observer fires
+       when the canvas's OWN size changes; the app's zoom step changes on resize
+       (hooks/useUiScale) and that leaves the element's own size exactly where it
+       was, so nothing above would have said the backing store is now the wrong
+       number of real pixels. */
+    window.addEventListener("resize", refit);
+
+    const read = (now) => {
+      const { gain, simulate: sim, live: isLive, external: ext, readLevel: rl, idle: idleAmp } = cfgRef.current;
+      let raw = 0;
+      if (ext) {
+        /* Somebody else's meter. It is already the app's own curve (the Desk
+           hands over useDexCapture's, the same one this file's own reader
+           uses), so it is taken as given — and when that source is not live,
+           the surface breathes instead of dying, which is the "subtly waving"
+           the founder asked for at rest. */
+        raw = isLive ? Math.max(0, Math.min(1, Number(rl()) || 0)) : 0;
+        if (!isLive) raw = idleAmp * (0.55 + 0.45 * Math.sin(now / 1400));
+      } else if (sim) {
+        /* A stand-in so the motion can be judged without granting the mic:
+           two slow sines and a little noise, which is roughly the envelope of
+           someone talking. Labelled in the UI — it is never a fallback for a
+           real level, only an alternative to having none. */
+        const t = now / 1000;
+        raw = Math.max(0, 0.46 + 0.34 * Math.sin(t * 2.1) + 0.2 * Math.sin(t * 5.7 + 1.3))
+          * (0.85 + 0.15 * Math.random());
+      } else if (isLive && audioRef.current) {
+        const { analyser, data } = audioRef.current;
+        analyser.getByteTimeDomainData(data);
+        let sum = 0;
+        for (let i = 0; i < data.length; i += 1) {
+          const v = (data[i] - 128) / 128;
+          sum += v * v;
+        }
+        raw = LEVEL(Math.sqrt(sum / data.length));
+      }
+      const target = Math.min(1, raw * gain);
+      // Fast up, slow down: a voice's attack is sharp and its tail is not.
+      const k = target > levelRef.current ? ATTACK : RELEASE;
+      levelRef.current += (target - levelRef.current) * k;
+      return levelRef.current;
+    };
+
+    /* One wave. `shape` is the ring's own outline (two random sets, blended by
+       age), `amp` how far it is allowed to push, `relief` how deep the ridge
+       is, `weight` the line, `soft` the blur. */
+    const drawWave = (cx, cy, R, alpha, relief, shape, amp, spin, weight, soft, radiusAt = null) => {
+      if (R <= 2 || alpha <= 0.002) return;
+      const STEPS = 128;
+      const path = new Path2D();
+      for (let i = 0; i <= STEPS; i += 1) {
+        const th = (i / STEPS) * Math.PI * 2;
+        const r = radiusAt ? radiusAt(th) : R * (1 + amp * shape(th + spin));
+        const x = cx + Math.cos(th) * r;
+        const y = cy + Math.sin(th) * r;
+        if (i === 0) path.moveTo(x, y); else path.lineTo(x, y);
+      }
+      path.closePath();
+
+      /* THE RIDGE. Dark down-and-right, white up-and-left, both blurred — the
+         same light the rest of the app is lit by (.ng-pressed's inset pair). */
+      const off = (1 + 2.2 * relief) * Math.min(1.6, weight);
+      const blur = 0.6 + 2.4 * soft * (1 - relief * 0.4);
+      ctx2d.lineWidth = (1 + 2.6 * relief) * weight;
+      ctx2d.lineJoin = "round";
+      const ridge = (dx, dy, colour) => {
+        ctx2d.save();
+        if (filterWorks) {
+          ctx2d.filter = `blur(${blur.toFixed(2)}px)`;
+          ctx2d.translate(dx, dy);
+          ctx2d.strokeStyle = colour;
+          ctx2d.stroke(path);
+        } else {
+          /* ONLY THE SHADOW LANDS. The ring is stroked FAR off the canvas and
+             its shadow is offset back onto it, so what is drawn is the blur and
+             nothing else — no crisp core. The OFFSET is in the backing
+             store's pixels (the transform does not scale it), hence `px`. The
+             BLUR is not multiplied by it, and that was measured, not assumed:
+             the filter's blur(σ) turned out to be σ backing-store pixels too,
+             and with `px` in the fallback came out 2.4x softer than the design
+             lab on a phone. A shadowBlur of b is a Gaussian of σ = b/2 — hence
+             the 2. Side by side at DPR 3 the two paths now match. */
+          const FAR = 4096;
+          ctx2d.shadowColor = colour;
+          ctx2d.shadowBlur = blur * 2;
+          ctx2d.shadowOffsetX = (FAR + dx) * px;
+          ctx2d.shadowOffsetY = dy * px;
+          ctx2d.translate(-FAR, 0);
+          ctx2d.strokeStyle = "#000";
+          ctx2d.stroke(path);
+        }
+        ctx2d.restore();
+      };
+      ridge(off, off, `hsl(230 22% 34% / ${(alpha * 0.30).toFixed(3)})`);
+      ridge(-off, -off, `hsl(0 0% 100% / ${(alpha * 0.85).toFixed(3)})`);
+    };
+
+    /* 2026-09-21 · THE INWARD FRAME (mode="in"). The waves are born at the
+       container's inner wall and travel in to the mic.
+       SHAPE. At the wall a wave is a superellipse, |x/a|^n + |y/b|^n = 1, with
+       its four half-extents measured from the mic to each wall — so it fits
+       the box even when the mic is not in the box's middle — and n high enough
+       to read as the well's own rounded rectangle. As it travels, the extents
+       close on the mic and n falls to 2: the wave rounds into a circle.
+       LIGHT. It is born at nothing (a wave does not pop out of a wall), is at
+       its fullest while it is still near the wall, and thins away as it closes
+       in — gone before it reaches the mic, so the centre never receives a hard
+       ring. The same ridge, the same blur, the same founder's settings. */
+    const fromCenter = fromRef.current === "center";
+    const inwardFrame = (now) => {
+      const { softness, thickness, water, speed, density, hubPx: hp, hubAt: at } = cfgRef.current;
+      const level = read(now);
+      const W = box;
+      const H = boxH;
+      const cx = at?.x ?? W / 2;
+      const cy = at?.y ?? H / 2;
+      const hubR = (hp || 64) / 2;
+      ctx2d.clearRect(0, 0, W, H);
+
+      // The mic's bloom, as in the outward surface.
+      const auraR = hubR * (1.15 + 0.9 * level);
+      const aura = ctx2d.createRadialGradient(cx, cy, hubR * 0.6, cx, cy, auraR);
+      aura.addColorStop(0, `hsl(0 0% 100% / ${(0.40 + 0.35 * level).toFixed(3)})`);
+      aura.addColorStop(1, "hsl(0 0% 100% / 0)");
+      ctx2d.fillStyle = aura;
+      ctx2d.beginPath();
+      ctx2d.arc(cx, cy, auraR, 0, Math.PI * 2);
+      ctx2d.fill();
+
+      const INSET = 3;
+      const wall = {
+        l: Math.max(hubR, cx - INSET), r: Math.max(hubR, W - cx - INSET),
+        t: Math.max(hubR, cy - INSET), b: Math.max(hubR, H - cy - INSET),
+      };
+      const end = hubR * 1.18;          // where a wave would arrive — it is gone by then
+      const N_WALL = 7;                 // squareness at the wall: the well's rounded box
+      const radiusAt = (e, amp, shape, spin) => (th) => {
+        const n = N_WALL + (2 - N_WALL) * e;
+        const c = Math.cos(th);
+        const s = Math.sin(th);
+        const ax = (c >= 0 ? wall.r : wall.l) + (end - (c >= 0 ? wall.r : wall.l)) * e;
+        const by = (s >= 0 ? wall.b : wall.t) + (end - (s >= 0 ? wall.b : wall.t)) * e;
+        const base = Math.pow(Math.pow(Math.abs(c / ax), n) + Math.pow(Math.abs(s / by), n), -1 / n);
+        return base * (1 + amp * shape(th + spin));
+      };
+
+      if (still) {
+        const ring = ringsRef.current[0] || (ringsRef.current[0] = newRing(0, 0.5));
+        drawWave(cx, cy, end * 3, 0.5, 0.25 + 0.55 * level, null, 0, 0, thickness, softness,
+          radiusAt(0.55, 0, seedShape(ring, 1), 0));
+        return;
+      }
+
+      const cadence = (RING_MS_QUIET - (RING_MS_QUIET - RING_MS_LOUD) * level) / Math.max(0.2, density);
+      if (now - lastRingRef.current > cadence) {
+        lastRingRef.current = now;
+        ringsRef.current.push(newRing(now, 0.12 + 0.88 * level));
+      }
+      const rings = ringsRef.current;
+      for (let i = rings.length - 1; i >= 0; i -= 1) {
+        const ring = rings[i];
+        const age = (now - ring.born) / ((LIFE_MS / Math.max(0.2, speed)) * (1.25 - 0.45 * ring.push));
+        if (age >= 1) { rings.splice(i, 1); continue; }
+        /* `e` is "how far along the journey", and radiusAt reads e=0 as the wall
+           and e=1 as the mic — so reversing the direction is reversing e, not
+           re-deriving the geometry. Out of the centre it leaves briskly and
+           eases as it nears the wall, which is the same curve the other way up. */
+        const e = fromCenter ? Math.pow(1 - age, 1.7) : 1 - Math.pow(1 - age, 1.7);
+        const born = Math.min(1, age / 0.16);            // nothing pops into being
+        // …and nothing arrives hard: at the mic going in, at the wall coming out.
+        const fade = fromCenter ? Math.pow(e, 0.8) : Math.pow(1 - e, 1.5);
+        const alpha = ring.push * born * fade;
+        const relief = ring.push * born * (fromCenter ? e : 1 - e);
+        // Irregular in its middle life, calm at the wall and as it rounds up.
+        const amp = water * 0.07 * ring.push * Math.sin(Math.PI * Math.min(1, (fromCenter ? 1 - e : e) * 1.05));
+        drawWave(cx, cy, end * 3, alpha, Math.max(0, relief), null, 0, 0, thickness, softness,
+          radiusAt(e, amp, seedShape(ring, age), ring.spin * age));
+      }
+    };
+
+    const frame = (now) => {
+      rafRef.current = requestAnimationFrame(frame);
+      if (inward) { inwardFrame(now); return; }
+      const { softness, thickness, water, elastic, speed, density } = cfgRef.current;
+      const level = read(now);
+      const cx = box / 2;
+      const cy = box / 2;
+      const hub = box * 0.135;             // the mic's own radius
+      const rim = box * 0.5 - 6;           // where a wave dies
+      ctx2d.clearRect(0, 0, box, box);
+
+      /* The aura under the mic: a soft bloom that breathes with the voice. It
+         is the one part that is a fill rather than a ridge, because what it
+         represents is light spilling out of the hub, not a wave. */
+      const auraR = hub * (1.15 + 0.9 * level);
+      const aura = ctx2d.createRadialGradient(cx, cy, hub * 0.6, cx, cy, auraR);
+      aura.addColorStop(0, `hsl(0 0% 100% / ${(0.40 + 0.35 * level).toFixed(3)})`);
+      aura.addColorStop(1, "hsl(0 0% 100% / 0)");
+      ctx2d.fillStyle = aura;
+      ctx2d.beginPath();
+      ctx2d.arc(cx, cy, auraR, 0, Math.PI * 2);
+      ctx2d.fill();
+
+      if (still) {
+        /* Reduced motion: one ring, no travel. Its weight is the level, so the
+           surface still answers a voice — it just does not move. */
+        const s = seedShape(ringsRef.current[0] || (ringsRef.current[0] = newRing(0, 0.5)), 1);
+        drawWave(cx, cy, hub + (rim - hub) * 0.42, 0.55, 0.25 + 0.55 * level,
+          s, water * 0.05, 0, thickness, softness);
+        return;
+      }
+
+      // Emit: louder rooms send waves more often, and `density` scales that.
+      const cadence = (RING_MS_QUIET - (RING_MS_QUIET - RING_MS_LOUD) * level) / Math.max(0.2, density);
+      if (now - lastRingRef.current > cadence) {
+        lastRingRef.current = now;
+        ringsRef.current.push(newRing(now, 0.12 + 0.88 * level));
+      }
+
+      const rings = ringsRef.current;
+      for (let i = rings.length - 1; i >= 0; i -= 1) {
+        const ring = rings[i];
+        // Life runs faster when the wave was born loud: a shout travels.
+        const age = (now - ring.born) / ((LIFE_MS / Math.max(0.2, speed)) * (1.25 - 0.45 * ring.push));
+        if (age >= 1) { rings.splice(i, 1); continue; }
+
+        /* ASK-45 · THE ELASTIC RETURN. The base travel is an ease-out — quick
+           away from the hub, drifting at the rim. On top of it rides a damped
+           oscillation: the wave overshoots, pulls back, overshoots less, and
+           settles. `elastic` is how much of that is allowed, and the same term
+           rings through the ridge's depth below, so a wave that springs also
+           breathes darker and lighter as it goes. */
+        const ease = 1 - Math.pow(1 - age, 2.2);
+        const spring = Math.exp(-3.4 * age) * Math.sin(age * Math.PI * 3.1);
+        const t = Math.max(0, Math.min(1.08, ease + elastic * 0.18 * spring));
+        const R = hub + (rim - hub) * t;
+
+        // Fades to nothing at the rim; nothing ends on a hard line.
+        const alpha = ring.push * Math.pow(1 - age, 1.35);
+        const relief = (1 - age) * ring.push * (1 + elastic * 0.35 * spring);
+        /* Surface tension: the outline relaxes toward round as it travels, so a
+           wave is at its most irregular where it is born. */
+        const amp = water * 0.11 * ring.push * (1 - age * 0.55);
+        drawWave(cx, cy, R, alpha, Math.max(0, relief), seedShape(ring, age), amp,
+          ring.spin * age, thickness, softness);
+      }
+    };
+
+    /* A ring's outline at a given age: its first random set morphing into its
+       second, so the shape is alive while it travels rather than a rigid
+       object flying outward. */
+    function seedShape(ring, age) {
+      const w = Math.min(1, age * 1.2);
+      return (th) => smooth(ring.a, th) * (1 - w) + smooth(ring.b, th) * w;
+    }
+    function newRing(born, push) {
+      return { born, push, a: seed(), b: seed(), spin: (Math.random() - 0.5) * 1.2 };
+    }
+
+    rafRef.current = requestAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
+      window.removeEventListener("resize", refit);
+    };
+  }, [size, still, inward, from]);
+
+  /* The hub's swell follows the level without a re-render: the loop writes a
+     CSS variable and the halo reads it.
+     THE HALO IS NOT THE BUTTON, and that is deliberate. The scale was on the
+     button itself at first, which looked right and was wrong twice over: a
+     control that is never geometrically still cannot be clicked by anything
+     that waits for it to settle (Playwright times out on it, which is how this
+     was found, and a real thumb on a moving target is the same problem in
+     slower motion), and a permanent transform swallows the :active press the
+     material is supposed to answer with. The swell moved to a decorative ring
+     behind it; the button is exactly where the eye put it.
+     The variable is written ON THE STAGE and read by inheritance, so there is
+     one writer, and the number a test (or the next person) wants to look at is
+     on the element they would look at first. */
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      stageRef.current?.style.setProperty("--vr-level", levelRef.current.toFixed(3));
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  /* The mic's box: the square stage's own centre outward, or wherever the
+     inward stage was told the mic is. */
+  const hubD = inward ? hubPx : size * hub;
+  const hubBox = (scale) => (inward ? {
+    position: "absolute",
+    left: (hubAt?.x ?? 0) - (hubD * scale) / 2,
+    top: (hubAt?.y ?? 0) - (hubD * scale) / 2,
+    ...(hubAt ? {} : { left: `calc(50% - ${(hubD * scale) / 2}px)`, top: `calc(50% - ${(hubD * scale) / 2}px)` }),
+  } : {});
+
+  return (
+    /* Inward: the whole container, clipped to its rounded corners so no wave
+       is ever drawn outside the wall it starts from. */
+    <div className={inward ? "pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]" : "flex flex-col items-center gap-3"}>
+      <div
+        ref={stageRef}
+        className={inward ? "absolute inset-0" : "relative grid place-items-center"}
+        style={inward ? undefined : { width: size, height: size }}
+        data-testid="voice-ripple"
+        data-mode={mode}
+        data-live={live ? "true" : undefined}
+      >
+        {/* ASK-45 — NO DISH. The stage was a .ng-pressed well, which drew a hard
+            circular rim around the whole thing; the founder's call is that the
+            rim goes. The waves now happen on the page's own ground and the only
+            edges on screen are the ones the sound makes. */}
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 h-full w-full"
+          style={inward ? undefined : { width: size, height: size }}
+          aria-hidden="true"
+        />
+        {/* The hub's own swell — a ridge of the surface right at the mic's
+            edge, so the button looks seated in something that is moving. */}
+        {/* ASK-48 — NO EDGE ON IT. This was a hairline ring and a small pair of
+            shadows, which drew a button sitting ON the surface. The founder
+            wants the mic to be the same material as the waves: "not a distinct
+            button… just like how we have the fluid like ripple effect, that
+            soft edged popping up kind of neumorphic button style". So the ring
+            is gone and the swell is a radial that fades out before it reaches
+            its own boundary — the surface rising, with nothing to say where it
+            stops. The shadow pair keeps the app's light (top-left), wider and
+            softer than the ring's was so the rise reads as a rise. */}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute rounded-full"
+          style={{
+            width: hubD * 1.28,
+            height: hubD * 1.28,
+            ...hubBox(1.28),
+            transform: "scale(calc(1 + 0.085 * var(--vr-level, 0)))",
+            /* No box-shadow anywhere near this. A shadow is drawn at the
+               element's BOUNDARY, so it redraws the very edge the founder
+               asked to lose — the first cut of this had a soft gradient with a
+               crisp ring around it, which is worse than the ring it replaced.
+               The mound is radials only, and a radial has no edge. */
+            background:
+              "radial-gradient(circle at 50% 50%, hsl(0 0% 100% / .40) 0%, hsl(0 0% 100% / .18) 52%, hsl(0 0% 100% / 0) 76%)",
+          }}
+        />
+        {!decorative && (
+        <button
+          type="button"
+          onClick={onPress || (() => (live ? stop() : start()))}
+          disabled={disabled}
+          data-testid="voice-ripple-mic"
+          aria-pressed={external ? listening : live}
+          aria-label={label || ((external ? listening : live) ? "Stop listening" : "Start listening")}
+          className={[
+            "relative grid place-items-center rounded-full transition-[box-shadow,transform,background] duration-150",
+            inward && "pointer-events-auto",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-ink/60",
+            disabled && "opacity-50",
+          ].join(" ")}
+          /* The button itself is the soft rise, drawn here rather than by
+             .ng-pop: that recipe ends in a hard circle, which is the thing the
+             founder asked to lose. Pressed, the light swaps sides and the
+             gradient sinks — the same grammar as .ng-pressed, without a rim. */
+          /* THREE RADIALS AND NOTHING ELSE — no border, no ring, no shadow, so
+             there is no boundary anywhere: a highlight up at the top-left, a
+             shade down at the bottom-right, and a body that fades out before
+             it reaches the element's own circle. That is a mound of the same
+             surface rather than a button placed on it, which is what the
+             founder asked for. Pressed, the highlight and the shade swap
+             corners and the body dips — .ng-pressed's grammar, drawn in light
+             instead of in edges. */
+          style={{
+            width: hubD,
+            height: hubD,
+            ...hubBox(1),
+            background: (external ? listening : live)
+              ? [
+                  "radial-gradient(circle at 68% 72%, hsl(0 0% 100% / .92), hsl(0 0% 100% / 0) 58%)",
+                  "radial-gradient(circle at 34% 28%, hsl(230 22% 34% / .26), hsl(230 22% 34% / 0) 56%)",
+                  "radial-gradient(circle at 50% 50%, hsl(0 0% 100% / .30) 0%, hsl(0 0% 100% / .12) 54%, hsl(0 0% 100% / 0) 78%)",
+                ].join(", ")
+              : [
+                  "radial-gradient(circle at 36% 30%, hsl(0 0% 100% / .98), hsl(0 0% 100% / 0) 60%)",
+                  "radial-gradient(circle at 70% 74%, hsl(230 22% 34% / .20), hsl(230 22% 34% / 0) 56%)",
+                  "radial-gradient(circle at 50% 50%, hsl(0 0% 100% / .72) 0%, hsl(0 0% 100% / .42) 50%, hsl(0 0% 100% / 0) 78%)",
+                ].join(", "),
+          }}
+        >
+          {/* The glyph is the app's own mic, drawn rather than imported so this
+              file stays standalone (Phosphor's Microphone, same geometry). */}
+          <svg viewBox="0 0 24 24" width={hubD * 0.48} height={hubD * 0.48} aria-hidden="true"
+            fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+            className="text-foreground">
+            <rect x="9" y="2.5" width="6" height="11" rx="3" />
+            <path d="M5.5 11a6.5 6.5 0 0 0 13 0" />
+            <path d="M12 17.5V21" />
+          </svg>
+        </button>
+        )}
+      </div>
+
+      {!external && !inward && (
+      <p className="text-center text-sm text-muted-foreground" role="status">
+        {error
+          ? <span className="text-ng-accent">{error}</span>
+          : still
+            ? "Reduced motion is on, so the surface holds still — the ring answers the level instead."
+            : live
+              ? "Listening — speak, and the surface answers."
+              : simulate
+                ? "Simulated level. Press the mic for the real one."
+                : "Press the mic and speak."}
+      </p>
+      )}
+    </div>
+  );
+}
+
+export default VoiceRipple;

@@ -3,7 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth, takeReturnTo } from "../context/AuthContext";
 import api, { formatApiError } from "../lib/api";
-import { KarmaLogo } from "../components/karma/Logo";
+import { NeuGlassLogo } from "../components/neuglass/Logo";
 import OtpBoxes from "../components/auth/OtpBoxes";
 import { DeviceMobile, ArrowRight, ArrowLeft } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -42,7 +42,7 @@ const DEMO = STORE_BUILD ? [] : [
    trough for anything you type into, a raised pill for anything you press.
    `.signup-stage`/.login-stage restyle both against the photograph, so the two
    auth screens are now one design rather than two that happen to adjoin. */
-const inputCls = "kr-pressed w-full rounded-pill bg-transparent px-4 py-3 text-base lg:text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 min-h-touch-lg lg:min-h-0";
+const inputCls = "ng-pressed w-full rounded-pill bg-transparent px-4 py-3 text-base lg:text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 min-h-touch-lg lg:min-h-0";
 const labelCls = "label-mono text-muted-foreground";
 
 // Masks a phone to show only the last 4 digits, e.g. +91 98765 43210 -> +91 ••••• •3210
@@ -316,7 +316,7 @@ export default function Login() {
 
       {/* Header — signup's exact header: on a phone the wordmark alone,
           centred; on desktop a floating glass pill with the way out on the
-          right. KarmaLogo replaces the PNG Wordmark, which is the founder's
+          right. NeuGlassLogo replaces the PNG Wordmark, which is the founder's
           "replace the old DecisionOS logo with our current one": the app shell
           has worn the text mark since KR-14 and this was the last screen still
           showing the old lockup. */}
@@ -330,9 +330,9 @@ export default function Login() {
           Same shape the app shell already uses (Layout.js:941). --sa-top is
           0 in a browser, so desktop and web are unchanged. */}
       <header className="px-4 pt-[calc(var(--sa-top)+1rem)] lg:px-8 lg:pt-6">
-        <div className="mx-auto flex w-full max-w-5xl items-center justify-center gap-4 rounded-pill px-4 py-2.5 lg:kr-frost lg:justify-between lg:px-6">
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-center gap-4 rounded-pill px-4 py-2.5 lg:ng-frost lg:justify-between lg:px-6">
           <Link to="/" className="flex shrink-0 items-center gap-2.5" data-testid="login-logo">
-            <KarmaLogo size="md" />
+            <NeuGlassLogo size="md" />
           </Link>
           <Link
             to="/signup"
@@ -349,7 +349,7 @@ export default function Login() {
                this number" offered to a number we do not know. Desktop keeps
                the pill: there it sits at the far right of a wide header,
                nowhere near the form, and nobody has complained about it. */
-            className="kr-pop hidden h-9 shrink-0 items-center rounded-pill px-4 text-xs font-medium lg:flex"
+            className="ng-pop hidden h-9 shrink-0 items-center rounded-pill px-4 text-xs font-medium lg:flex"
           >
             Create a workspace
           </Link>
@@ -374,8 +374,8 @@ export default function Login() {
           where this app keeps its values — and it has to answer a question
           Tailwind cannot ask here: how tall is the screen. */}
       <main className="login-stage__main flex flex-1 items-start justify-center px-4 pb-8 lg:items-center lg:px-8 lg:pb-12">
-        <div className="kr-well w-full max-w-md" data-testid="login-card">
-          <div className="kr-well__pane rounded-[1.75rem] p-6 sm:p-8">
+        <div className="ng-well w-full max-w-md" data-testid="login-card">
+          <div className="ng-well__pane rounded-[1.75rem] p-6 sm:p-8">
           {/* KM-66 — the whole card swaps between two panes: SIGN IN and
               LIVE DEMO. Not a section-inside-a-card, a full-card swap.
               AnimatePresence with mode="wait" so the exit finishes before
@@ -397,16 +397,16 @@ export default function Login() {
           {/* A sunken track with a raised pill on the live tab — the same
               "selected means pushed in" grammar as signup's phase rail, and
               the app's segmented controls. No transition-colors on these: the
-              .kr-pop/.kr-pressed pair swaps an outset shadow list for an inset
+              .ng-pop/.ng-pressed pair swaps an outset shadow list for an inset
               one and those do not interpolate, so a transition makes the
               selection snap through a broken frame instead of moving. */}
-          <div className="kr-pressed mb-5 flex gap-1 rounded-pill p-1" data-testid="login-tabs">
+          <div className="ng-pressed mb-5 flex gap-1 rounded-pill p-1" data-testid="login-tabs">
             <button onClick={() => { setLoginTab("password"); setError(""); }} data-testid="login-tab-password"
-              className={`flex-1 rounded-pill px-3 py-2 text-xs font-medium ${loginTab === "password" ? "kr-pop" : "text-foreground/60 hover:text-foreground"}`}>
+              className={`flex-1 rounded-pill px-3 py-2 text-xs font-medium ${loginTab === "password" ? "ng-pop" : "text-foreground/60 hover:text-foreground"}`}>
               Email &amp; Password
             </button>
             <button onClick={() => { setLoginTab("otp"); setError(""); }} data-testid="login-tab-otp"
-              className={`flex-1 flex items-center justify-center gap-1.5 rounded-pill px-3 py-2 text-xs font-medium ${loginTab === "otp" ? "kr-pop" : "text-foreground/60 hover:text-foreground"}`}>
+              className={`flex-1 flex items-center justify-center gap-1.5 rounded-pill px-3 py-2 text-xs font-medium ${loginTab === "otp" ? "ng-pop" : "text-foreground/60 hover:text-foreground"}`}>
               <DeviceMobile size={14} weight="bold" /> Mobile number
             </button>
           </div>
@@ -431,7 +431,7 @@ export default function Login() {
                   </button>.
                 </p>
               )}
-              <button type="submit" disabled={busy} data-testid="auth-submit-button" className="kr-lift flex h-12 w-full items-center justify-center rounded-pill bg-kr-ink text-sm font-medium text-white disabled:opacity-50">{busy ? "…" : "Sign in"}</button>
+              <button type="submit" disabled={busy} data-testid="auth-submit-button" className="ng-lift flex h-12 w-full items-center justify-center rounded-pill bg-ng-ink text-sm font-medium text-white disabled:opacity-50">{busy ? "…" : "Sign in"}</button>
               {/* 2026-09-17 — where a person looks for it: under the password
                   they just failed to remember. */}
               <div className="text-center">
@@ -448,7 +448,7 @@ export default function Login() {
               {/* B09 — the link is bad: say so, name who to ask, and offer
                   nothing that starts a different company. */}
               {inviteError && (
-                <div className="kr-pressed rounded-cardlg p-3" data-testid="invite-error" role="alert">
+                <div className="ng-pressed rounded-cardlg p-3" data-testid="invite-error" role="alert">
                   <p className="text-sm font-medium tracking-tight">This invite link doesn&rsquo;t work any more</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {inviteError} Ask whoever invited you to send a new one — your place in their workspace is still there.
@@ -458,13 +458,13 @@ export default function Login() {
               {/* B26 — and while we are still asking, the form is not the
                   answer: the number it would text is the one on the invite. */}
               {inviteLoading && !inviteError && (
-                <div className="kr-pressed rounded-cardlg p-3" data-testid="invite-loading" role="status">
+                <div className="ng-pressed rounded-cardlg p-3" data-testid="invite-loading" role="status">
                   <p className="text-sm font-medium tracking-tight">Opening your invite…</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">One moment — we&rsquo;re sending a code to the number it was sent to.</p>
                 </div>
               )}
               {invite && (
-                <div className="kr-pressed rounded-cardlg p-3" data-testid="invite-welcome">
+                <div className="ng-pressed rounded-cardlg p-3" data-testid="invite-welcome">
                   <p className="font-medium uppercase tracking-tight text-sm">Welcome, {invite.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">You've been invited to <strong>{invite.company}</strong>. Enter the code we sent to {invite.phone_masked} to sign in — no password needed.</p>
                 </div>
@@ -490,7 +490,7 @@ export default function Login() {
                         <button key={c.tenant_id} type="button" disabled={busy}
                           onClick={() => requestOtp(null, c.tenant_id)}
                           data-testid={`otp-workspace-${c.tenant_id}`}
-                          className="kr-pop flex w-full items-center justify-between rounded-pill px-4 py-3 text-left text-sm disabled:opacity-50">
+                          className="ng-pop flex w-full items-center justify-between rounded-pill px-4 py-3 text-left text-sm disabled:opacity-50">
                           <span className="font-semibold">{c.tenant_name || "Workspace"}</span>
                           {c.user_name && <span className="text-xs text-muted-foreground">as {c.user_name}</span>}
                         </button>
@@ -510,7 +510,7 @@ export default function Login() {
                   {unknownNumber && !inviteToken && (
                     <button type="button" data-testid="otp-start-company"
                       onClick={() => navigate(currentDraft() ? "/signup" : `/signup?phone=${encodeURIComponent(otpPhone)}`)}
-                      className="kr-pop flex h-12 w-full items-center justify-center rounded-pill px-4 text-sm font-medium">
+                      className="ng-pop flex h-12 w-full items-center justify-center rounded-pill px-4 text-sm font-medium">
                       {currentDraft() ? "Finish setting up your company" : "Start a new company with this number"}
                     </button>
                   )}
@@ -522,14 +522,14 @@ export default function Login() {
                   {/* While the workspaces are on screen they ARE the buttons:
                       a Send OTP beside them would only ask the question again. */}
                   {!otpChoices && (
-                    <button type="submit" disabled={busy} data-testid="otp-submit-button" className="kr-lift flex h-12 w-full items-center justify-center rounded-pill bg-kr-ink text-sm font-medium text-white disabled:opacity-50">
+                    <button type="submit" disabled={busy} data-testid="otp-submit-button" className="ng-lift flex h-12 w-full items-center justify-center rounded-pill bg-ng-ink text-sm font-medium text-white disabled:opacity-50">
                       {busy ? "Sending…" : "Text me a code"}
                     </button>
                   )}
                 </>
               ) : (
                 <>
-                  <div className="kr-pressed flex items-center justify-between rounded-pill px-3 py-2.5" data-testid="otp-phone-confirm">
+                  <div className="ng-pressed flex items-center justify-between rounded-pill px-3 py-2.5" data-testid="otp-phone-confirm">
                     <div className="flex items-center gap-2 min-w-0">
                       <DeviceMobile size={16} weight="bold" className="shrink-0 text-foreground/70" />
                       <span className="text-sm font-mono truncate">Code sent to <strong>{invite?.phone_masked || maskPhone(otpPhone)}</strong></span>
@@ -554,7 +554,7 @@ export default function Login() {
                         <button key={c.tenant_id} type="button" disabled={busy}
                           onClick={() => pickCompany(c.tenant_id)}
                           data-testid={`otp-workspace-${c.tenant_id}`}
-                          className="kr-pop flex w-full items-center justify-between rounded-pill px-4 py-3 text-left text-sm disabled:opacity-50">
+                          className="ng-pop flex w-full items-center justify-between rounded-pill px-4 py-3 text-left text-sm disabled:opacity-50">
                           <span className="font-semibold">{c.tenant_name || "Workspace"}</span>
                           {c.user_name && <span className="text-xs text-muted-foreground">as {c.user_name}</span>}
                         </button>
@@ -582,7 +582,7 @@ export default function Login() {
                     </div>
                   </div>
                   {error && <p data-testid="auth-error" className="text-sm text-danger-600 font-semibold">{error}</p>}
-                  <button type="submit" disabled={busy || otpCode.length !== 6} data-testid="otp-submit-button" className="kr-lift flex h-12 w-full items-center justify-center rounded-pill bg-kr-ink text-sm font-medium text-white disabled:opacity-50">
+                  <button type="submit" disabled={busy || otpCode.length !== 6} data-testid="otp-submit-button" className="ng-lift flex h-12 w-full items-center justify-center rounded-pill bg-ng-ink text-sm font-medium text-white disabled:opacity-50">
                     {busy ? "Verifying…" : "Verify & sign in"}
                   </button>
                   <div className="text-center text-sm" data-testid="otp-resend-row">
@@ -662,7 +662,7 @@ export default function Login() {
                 type="button"
                 onClick={() => { setError(""); setDemoOpen(false); }}
                 data-testid="demo-close"
-                className="kr-pop inline-flex shrink-0 items-center gap-1 rounded-pill px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground/70 hover:text-foreground"
+                className="ng-pop inline-flex shrink-0 items-center gap-1 rounded-pill px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground/70 hover:text-foreground"
                 aria-label="Back to sign in"
               >
                 <ArrowLeft size={12} weight="bold" /> Back
@@ -716,7 +716,7 @@ export default function Login() {
           11px muted type printed straight onto a photograph failed contrast
           there, and a ground fixes it without changing the colour. */}
       <footer className="flex justify-center px-4 pb-5 lg:px-8">
-        <p className="kr-frost w-fit max-w-full rounded-pill px-4 py-1.5 text-center text-[11px] text-muted-foreground">
+        <p className="ng-frost w-fit max-w-full rounded-pill px-4 py-1.5 text-center text-[11px] text-muted-foreground">
           {/* J1-03 / J2-02 (JOURNEY-1, founder 24 Sep) — THE THREE THINGS THIS
               IS, in the founder's own words: the workflow engine is the
               product, the Decision Desk and Workflows are what it runs, Dex is

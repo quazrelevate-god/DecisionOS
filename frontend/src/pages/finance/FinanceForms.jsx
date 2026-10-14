@@ -16,11 +16,11 @@ import { Dialog, DialogContent } from "../../components/ui/dialog";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "../../components/ui/dropdown-menu";
-import { GlassSelect } from "../../components/karma/GlassSelect";
-import { GLASS_MENU, GLASS_MENU_ITEM, INK_PILL } from "../../components/karma/glass";
+import { GlassSelect } from "../../components/neuglass/GlassSelect";
+import { GLASS_MENU, GLASS_MENU_ITEM, INK_PILL } from "../../components/neuglass/glass";
 import { AREA, FIELD, Field, FileField, SHEET_CONTENT, SheetFoot, SheetHead, fmt } from "./financeKit";
-import { DraftNote } from "../../components/karma/DraftNote";
-import { PartyPicker } from "../../components/karma/PartyPicker";
+import { DraftNote } from "../../components/neuglass/DraftNote";
+import { PartyPicker } from "../../components/neuglass/PartyPicker";
 import { useDraft } from "../../hooks/useDraft";
 import { InvoiceBuilderDialog } from "./MoneyActions";
 
@@ -91,7 +91,7 @@ function CategoryField({ kind, value, onChange, categories, withAuto = false, au
             Cancel
           </button>
         </div>
-        {error && <p role="alert" className="text-xs font-medium text-kr-accent">{error}</p>}
+        {error && <p role="alert" className="text-xs font-medium text-ng-accent">{error}</p>}
       </div>
     );
   }

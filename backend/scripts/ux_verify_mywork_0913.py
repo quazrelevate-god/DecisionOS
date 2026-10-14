@@ -151,13 +151,13 @@ def audit_mywork(p, vp, desktop, shots):
                         off: Math.round((lr.left+lr.width/2) - (br.left+br.width/2))};
               });
               // Per-column frames: the half of 21142be that actually matters.
-              // .kr-frost sets `background` shorthand, so lg:bg-transparent
+              // .ng-frost sets `background` shorthand, so lg:bg-transparent
               // cleared only the colour and left the gradient IMAGE painting a
               // white card behind every stage. lg:bg-none clears the image too.
               const cols = [...document.querySelectorAll('[data-testid^="stage-column-"]')]
                 .filter(e => e.getBoundingClientRect().width > 0)
                 .map(e => getComputedStyle(e).backgroundImage);
-              return {well: b.className.includes('kr-glass-well'),
+              return {well: b.className.includes('ng-glass-well'),
                       bg: getComputedStyle(b).backgroundImage.slice(0,40) + '|' + getComputedStyle(b).backgroundColor,
                       colBgs: cols, colsPainted: cols.filter(v => v && v !== 'none').length,
                       heads, scroll: [b.scrollWidth, b.clientWidth]};
@@ -192,7 +192,7 @@ def audit_mywork(p, vp, desktop, shots):
       const kids = [...g.children].filter(c=>c.getBoundingClientRect().width>0);
       const lefts = [...new Set(kids.map(c=>Math.round(c.getBoundingClientRect().left)))];
       const widths = [...new Set(kids.map(c=>Math.round(c.getBoundingClientRect().width)))];
-      const card = g.querySelector('.kr-bento');
+      const card = g.querySelector('.ng-bento');
       return {cols: lefts.length, n: kids.length, gridW: Math.round(g.getBoundingClientRect().width), widths,
               radius: card ? getComputedStyle(card).borderRadius : null,
               docOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth};

@@ -48,11 +48,11 @@ import { cn } from "../../lib/utils";
 import { useDexCapture } from "../../hooks/useDexCapture";
 import { enableProximity, disableProximity } from "../../lib/native/proximity";
 import { useDexConversation } from "../../hooks/useDexConversation";
-import { InsightWell } from "../../components/karma";
+import { InsightWell } from "../../components/neuglass";
 // ASK-47 — the ripple the founder signed off in the lab, now the mic.
-import { VoiceRipple, DESK_RIPPLE } from "../../components/karma/VoiceRipple";
+import { VoiceRipple, DESK_RIPPLE } from "../../components/neuglass/VoiceRipple";
 import { DexWave } from "../../components/mobile/DexWave";
-import { DraftNote } from "../../components/karma/DraftNote";
+import { DraftNote } from "../../components/neuglass/DraftNote";
 import { KeptPill } from "./KeptPill";
 import { DexCapturePopup } from "./DexCapturePopup";
 
@@ -72,7 +72,7 @@ const STATUS_LINE = {
   slow: "Still working on it",
 };
 
-/* The floor's circles: the raised .kr-pop the compact well has always used
+/* The floor's circles: the raised .ng-pop the compact well has always used
    (ASK-25), pressed out of the same sheet the well is pressed into. 40px from
    lg, as the old Chase-it pill and Brain circle were; below lg the app's own
    touch rule (index.css, --control-h-sm) lifts every button to 44px (MPWA-01
@@ -86,7 +86,7 @@ const STATUS_LINE = {
    it there is a separate decision with its own layout to re-measure. */
 const DOOR_CIRCLE = "h-14 w-14";
 const CIRCLE =
-  "kr-pop relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60 disabled:opacity-40";
+  "ng-pop relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-ink/60 disabled:opacity-40";
 
 /** One attached file: a preview (the image itself, or a file glyph), its name,
  *  and a remove. Removing only drops it from the next note; the upload stays
@@ -117,7 +117,7 @@ function AttachmentChip({ file, onRemove, disabled }) {
         onClick={onRemove}
         disabled={disabled}
         aria-label={`Remove ${file.name}`}
-        className="relative grid h-6 w-6 shrink-0 place-items-center rounded-full text-foreground/60 hover:bg-slate-900/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60 disabled:opacity-40"
+        className="relative grid h-6 w-6 shrink-0 place-items-center rounded-full text-foreground/60 hover:bg-slate-900/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-ink/60 disabled:opacity-40"
       >
         <X size={11} weight="bold" aria-hidden="true" />
       </button>
@@ -810,12 +810,12 @@ export function DeskDexWell({ className, style, testid, phone = false, onReview,
       /* The same opaque pill as the kept note beside it (KeptPill): these two
          are the only things that appear in this spot, they appear over the
          Desk's black sheet, and a 38% white wash on black is a smudge. */
-      className="mb-1.5 flex min-h-11 w-fit max-w-full items-center gap-2 rounded-pill bg-white px-4 text-sm text-slate-900 shadow-[0_6px_20px_rgb(0_0_0/.28)] ring-1 ring-black/[.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60"
+      className="mb-1.5 flex min-h-11 w-fit max-w-full items-center gap-2 rounded-pill bg-white px-4 text-sm text-slate-900 shadow-[0_6px_20px_rgb(0_0_0/.28)] ring-1 ring-black/[.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-ink/60"
     >
       {statusKey === "reading" ? (
         <span aria-hidden="true" className="relative grid h-3 w-3 shrink-0 place-items-center">
-          <span className="absolute inset-0 animate-ping rounded-full bg-kr-ink/25 motion-reduce:animate-none" />
-          <span className="h-1.5 w-1.5 rounded-full bg-kr-ink" />
+          <span className="absolute inset-0 animate-ping rounded-full bg-ng-ink/25 motion-reduce:animate-none" />
+          <span className="h-1.5 w-1.5 rounded-full bg-ng-ink" />
         </span>
       ) : (
         <Check size={14} weight="bold" aria-hidden="true" className="shrink-0" />
@@ -857,7 +857,7 @@ export function DeskDexWell({ className, style, testid, phone = false, onReview,
           exist only while the mic is live, and their reach answers the meter,
           so a loud sentence pushes further than a quiet one. */}
       {recording && (
-        <span ref={waveRef} aria-hidden="true" className="kr-mic-waves">
+        <span ref={waveRef} aria-hidden="true" className="ng-mic-waves">
           <i style={{ animationDelay: "0s" }} />
           <i style={{ animationDelay: "0.7s" }} />
           <i style={{ animationDelay: "1.4s" }} />
@@ -874,14 +874,14 @@ export function DeskDexWell({ className, style, testid, phone = false, onReview,
         className={cn(
           "relative grid place-items-center rounded-full transition-transform duration-200",
           "h-[7.5rem] w-[7.5rem] disabled:opacity-40",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline",
           /* PRESSED, NOT A RED SQUARE. A filled stop glyph in the alert colour
              read as a warning on a screen where nothing is wrong — and in this
              app the alert colour means money or a deadline at risk. The button
              is the same microphone throughout; listening, it is held down. The
              state is still announced properly through aria-pressed, which is
              what a screen reader reads, not the glyph. */
-          recording ? "kr-pressed scale-[0.97]" : "kr-pop"
+          recording ? "ng-pressed scale-[0.97]" : "ng-pop"
         )}
       >
         <Microphone
@@ -1144,8 +1144,8 @@ export function DeskDexWell({ className, style, testid, phone = false, onReview,
         testid={testid}
         wellRef={wellRef}
         /* ASK-42 A — 12px of padding on a phone, not 16. ASK-48 —
-           `kr-well--sunk` below lg: a dimmer wash and a deeper press. */
-        paneClassName={cn("max-lg:flex-1 max-lg:p-3", phone && "kr-well--sunk")}
+           `ng-well--sunk` below lg: a dimmer wash and a deeper press. */
+        paneClassName={cn("max-lg:flex-1 max-lg:p-3", phone && "ng-well--sunk")}
       />
       )}
       <DexCapturePopup
@@ -1194,7 +1194,7 @@ export function DeskDexWell({ className, style, testid, phone = false, onReview,
           style={{ position: "fixed", left: 0, right: 0, bottom: kb.bottom, zIndex: composerZ + 10 }}
           className="px-3"
         >
-          <div className="kr-pop mx-auto flex max-w-[34rem] items-end gap-2 rounded-[1.6rem] p-2">
+          <div className="ng-pop mx-auto flex max-w-[34rem] items-end gap-2 rounded-[1.6rem] p-2">
             <div className="nm-field flex min-w-0 flex-1 items-center overflow-hidden rounded-[1.2rem]">
               <textarea
                 ref={fieldRef}

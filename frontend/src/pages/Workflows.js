@@ -69,8 +69,8 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { StickyHeader, LoadFailed, Loader } from "../components/common";
 import {
   DRAWER_FIELD, GLASS_MENU, GLASS_MENU_ITEM, INK_PILL,
-} from "../components/karma/glass";
-import { GlassSelect } from "../components/karma/GlassSelect";
+} from "../components/neuglass/glass";
+import { GlassSelect } from "../components/neuglass/GlassSelect";
 import WorkflowDetail from "../components/workflow/WorkflowDetail";
 import { LeftoverReview } from "../components/workflow/LeftoverReview";
 /* C2 (2026-09-21) — stuck / late / needs-you, computed in ONE place. These
@@ -89,7 +89,7 @@ function _initials(name) {
 }
 
 /* 2026-09-14, founder — the New card window (New Distribution, New
-   Production…) is styled on New Task (pages/Tasks.js): the frosted .kr-bento
+   Production…) is styled on New Task (pages/Tasks.js): the frosted .ng-bento
    card with a round close, the same sunken fields under plain labels, the
    buyer or supplier as a GlassSelect (never the operating system's list),
    and the black ink Create. */
@@ -137,11 +137,11 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
     }
   };
   /* The New Task dialog's field and label recipes, verbatim (pages/Tasks.js):
-     a sunken .kr-pressed groove with a hairline that goes to full ink on
+     a sunken .ng-pressed groove with a hairline that goes to full ink on
      focus — thin and black, not the 2px brand outline — and a plain sans
-     label above every field. `border-solid` is load-bearing: .kr-pressed sets
+     label above every field. `border-solid` is load-bearing: .ng-pressed sets
      `border: 0`, which also resets the style to none. */
-  const inp = "w-full kr-pressed rounded-control border border-solid border-kr-ink/25 px-3.5 py-2.5 text-sm text-foreground placeholder:text-foreground/40 transition-colors focus:border-kr-ink focus:outline-none focus-visible:outline-none";
+  const inp = "w-full ng-pressed rounded-control border border-solid border-ng-ink/25 px-3.5 py-2.5 text-sm text-foreground placeholder:text-foreground/40 transition-colors focus:border-ng-ink focus:outline-none focus-visible:outline-none";
   const lbl = "block text-xs font-medium text-muted-foreground";
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setTitleError(""); }}>
@@ -149,17 +149,17 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
         <button data-testid="new-workflow-button"
           /* KM-31 — neumorphic, not a black slab. It is this page's own
              primary action and the app paints those in depth. */
-          className="kr-pop flex h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-sm font-medium">
+          className="ng-pop flex h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-sm font-medium">
           <Plus size={16} weight="bold" aria-hidden="true" /> {t("workflows.new")}
         </button>
       </DialogTrigger>
-      {/* The New Task dialog's shell (pages/Tasks.js): a frosted .kr-bento
+      {/* The New Task dialog's shell (pages/Tasks.js): a frosted .ng-bento
           sheet, full-screen on the phone, a centred card from lg with its
           own round close. The card takes its natural height under the same
           viewport ceiling New Task uses (divided by the UI scale: CSS zoom
           leaves viewport units alone). */}
       <DialogContent
-        className="kr-bento flex flex-col border-0 [&>button.absolute]:hidden
+        className="ng-bento flex flex-col border-0 [&>button.absolute]:hidden
                    left-0 top-0 h-full max-h-none w-full max-w-none translate-x-0 translate-y-0
                    [border-radius:0]
                    [padding-top:max(1rem,var(--sa-top))]
@@ -177,7 +177,7 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
           <DialogPrimitiveClose
             data-testid="wf-dialog-close"
             aria-label="Close"
-            className="kr-pop absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full text-foreground/70">
+            className="ng-pop absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full text-foreground/70">
             <X size={15} weight="bold" aria-hidden="true" />
           </DialogPrimitiveClose>
           <DialogTitle className="font-display text-xl">{t("workflows.dlg_title", { type: typeLabel })}</DialogTitle>
@@ -196,11 +196,11 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
               onChange={(e) => { setForm({ ...form, title: e.target.value }); if (titleError) setTitleError(""); }}
               onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); create(); } }} />
             {titleError && (
-              <p id="wf-title-error" data-testid="wf-title-error" className="mt-1.5 text-xs font-medium text-kr-accent">{titleError}</p>
+              <p id="wf-title-error" data-testid="wf-title-error" className="mt-1.5 text-xs font-medium text-ng-accent">{titleError}</p>
             )}
           </div>
 
-          <div className="kr-form-row">
+          <div className="ng-form-row">
             <div>
               <label className={lbl} htmlFor="wf-contact">{contactLabel}</label>
               {/* 2026-09-14, founder — GlassSelect, as on New Task: the field
@@ -288,7 +288,7 @@ function OverrideReasonDialog({ open, onOpenChange, wfTitle, blockedReason, targ
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 font-display text-xl">
-            <WarningCircle size={18} weight="bold" aria-hidden="true" className="text-kr-accent" />
+            <WarningCircle size={18} weight="bold" aria-hidden="true" className="text-ng-accent" />
             Stage not ready
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
@@ -323,7 +323,7 @@ function OverrideReasonDialog({ open, onOpenChange, wfTitle, blockedReason, targ
           <button data-testid="wf-override-confirm"
             onClick={() => { if (reason.trim()) onConfirm(reason.trim()); }}
             disabled={!reason.trim()}
-            className="kr-lift rounded-pill bg-danger-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-danger-600/90 disabled:opacity-50">
+            className="ng-lift rounded-pill bg-danger-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-danger-600/90 disabled:opacity-50">
             Override
           </button>
         </DialogFooter>
@@ -339,7 +339,7 @@ function OverrideReasonDialog({ open, onOpenChange, wfTitle, blockedReason, targ
    action beside it. The old page put the pipeline pills on their own wrapping
    row and the New-workflow button somewhere else again, which is two rows and
    two visual weights for what is really one control strip.
-   The action is .kr-pop, not a filled slab: it is the page's own control, and
+   The action is .ng-pop, not a filled slab: it is the page's own control, and
    the app paints those in depth rather than in fill. */
 function StandaloneHeader({ show, title, pipelines, activeKey, countOf, onPick, newDialog }) {
   if (!show) return null;
@@ -353,7 +353,7 @@ function StandaloneHeader({ show, title, pipelines, activeKey, countOf, onPick, 
           <DropdownMenuTrigger asChild>
             <button type="button" data-testid="workflows-pipeline-menu"
               aria-label="Choose pipeline"
-              className="kr-pop flex h-11 min-w-0 flex-1 items-center gap-2 rounded-pill px-4 text-sm font-medium">
+              className="ng-pop flex h-11 min-w-0 flex-1 items-center gap-2 rounded-pill px-4 text-sm font-medium">
               <ListBullets size={16} weight="bold" aria-hidden="true" className="shrink-0" />
               <span className="min-w-0 flex-1 truncate text-left">{active?.label || "Pipeline"}</span>
               {/* 2026-09-19 — the phone showed which pipeline, never how many. */}
@@ -650,12 +650,12 @@ export default function Workflows() {
               <button key={pip.key} onClick={() => setTab(pip.key)} data-testid={`workflow-tab-${pip.key}`}
                 title={pip.sub || undefined} aria-pressed={active}
                 /* No transition on the swap — same wedged-transition bug My
-                   Work's toolbar hit: .kr-pop's outset shadow pair and
-                   .kr-pressed's inset pair are not interpolable, and the
+                   Work's toolbar hit: .ng-pop's outset shadow pair and
+                   .ng-pressed's inset pair are not interpolable, and the
                    stalled animation leaves the element painting its previous
                    colour. Selection snaps. */
                 className={`flex h-10 items-center gap-2 rounded-pill px-4 text-sm ${
-                  active ? "kr-pressed font-semibold text-foreground" : "kr-pop text-foreground/75"
+                  active ? "ng-pressed font-semibold text-foreground" : "ng-pop text-foreground/75"
                 }`}>
                 {pip.label}
                 {count != null && (
@@ -692,7 +692,7 @@ export default function Workflows() {
         {attention.needAttention > 0 ? (
           <>
             <span aria-hidden="true" className="h-1 w-1 rounded-full bg-muted-foreground/50" />
-            <span data-testid="workflow-summary-attention" className="font-medium text-kr-accent">
+            <span data-testid="workflow-summary-attention" className="font-medium text-ng-accent">
               {attention.needAttention} need{attention.needAttention === 1 ? "s" : ""} attention
             </span>
             {attention.you > 0 && <span data-testid="workflow-summary-you">· {attention.you} on you</span>}
@@ -739,8 +739,8 @@ export default function Workflows() {
       {boardFailed && !data ? (
         <LoadFailed what="this pipeline" onRetry={() => refetchBoard()} testid="workflows-load-failed" />
       ) : (
-      <div className="flex flex-col gap-3 lg:kr-glass-well lg:min-h-0 lg:flex-1 lg:gap-0 lg:p-4 lg:overflow-x-auto" data-testid="workflow-board">
-        {/* 2026-09-14 — lg:pb-6 is room for the lanes' drop shadow (.kr-lane).
+      <div className="flex flex-col gap-3 lg:ng-glass-well lg:min-h-0 lg:flex-1 lg:gap-0 lg:p-4 lg:overflow-x-auto" data-testid="workflow-board">
+        {/* 2026-09-14 — lg:pb-6 is room for the lanes' drop shadow (.ng-lane).
             The board scrolls, so it clips at its padding edge, and with ASK-25
             stretching every lane to the board's floor that shadow would end
             in a hard line along the bottom. */}
@@ -775,18 +775,18 @@ export default function Workflows() {
                 /* While a drag is live the column also says "this one accepts"
                    or "this one does not".
                    KM-31 — the mobile stage was .nm-tile: a solid white slab
-                   sitting on the sky like a sticker. It is .kr-frost now — the
+                   sitting on the sky like a sticker. It is .ng-frost now — the
                    same light glass the Desk's "today's read" wears — so the
                    bloom reads through it.
                    2026-09-14, founder — desktop drops the transparent column
                    it had kept since ASK-18: with only the blur left, the lane
                    blended into the board and the cards into the lane. It wears
-                   .kr-lane (index.css), glass drawn by depth and a rim glow,
+                   .ng-lane (index.css), glass drawn by depth and a rim glow,
                    padded so the cards sit inside it rather than on its edge.
                    lg:min-h-0 is ASK-25's: the lane shrinks to the board so its
                    card list scrolls inside it. */
-                className={`flex w-full flex-col rounded-tile transition-all kr-frost p-2 lg:kr-lane lg:p-2.5 lg:w-[300px] lg:shrink-0 lg:min-h-0 ${
-                  isTarget ? "bg-kr-accent/10 ring-2 ring-kr-accent/60"
+                className={`flex w-full flex-col rounded-tile transition-all ng-frost p-2 lg:ng-lane lg:p-2.5 lg:w-[300px] lg:shrink-0 lg:min-h-0 ${
+                  isTarget ? "bg-ng-accent/10 ring-2 ring-ng-accent/60"
                   : dropOk ? "ring-1 ring-dashed ring-foreground/30"
                   : dragId && !isSource ? "opacity-40"
                   : ""
@@ -872,10 +872,10 @@ export default function Workflows() {
                            the height floors rather than fixes, so a short card
                            is short. The scroller keeps its fixed 256px track
                            from lg up, where several columns are side by side. */
-                        className={`kr-bento group cursor-grab p-3 active:cursor-grabbing w-full min-h-[220px] lg:w-64 lg:h-[260px] lg:shrink-0 flex flex-col overflow-hidden text-left lg:h-auto lg:w-auto lg:overflow-visible lg:p-3.5 ${
+                        className={`ng-bento group cursor-grab p-3 active:cursor-grabbing w-full min-h-[220px] lg:w-64 lg:h-[260px] lg:shrink-0 flex flex-col overflow-hidden text-left lg:h-auto lg:w-auto lg:overflow-visible lg:p-3.5 ${
                           dragging ? "opacity-40" : ""
                         } ${busyId === w.id ? "opacity-60" : ""} ${
-                          w.id === focusWf ? "ring-2 ring-kr-ink ring-offset-2" : ""
+                          w.id === focusWf ? "ring-2 ring-ng-ink ring-offset-2" : ""
                         }`}
                       >
                         <div className="flex items-start gap-2">
@@ -900,7 +900,7 @@ export default function Workflows() {
                                  distinguish them. w.title is already to
                                  hand where this button renders. */
                               aria-label={`${t("workflows.delete_card")}: ${w.title}`}
-                              className="shrink-0 text-muted-foreground transition-colors hover:text-kr-accent">
+                              className="shrink-0 text-muted-foreground transition-colors hover:text-ng-accent">
                               <Trash size={14} weight="bold" aria-hidden="true" />
                             </button>
                           )}
@@ -981,7 +981,7 @@ export default function Workflows() {
                                 data-testid={`wf-card-task-${w.id}-${tk.id}`}
                                 draggable={false}
                                 className="flex items-center gap-1.5 rounded-control bg-nm-sunken px-1.5 py-1 text-[11px] transition-colors hover:bg-nm-sunken/70">
-                                <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-kr-ink text-[9px] font-bold text-white"
+                                <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-ng-ink text-[9px] font-bold text-white"
                                   title={tk.assignee_name || tk.assignee_role || "Unassigned"}>
                                   {_initials(tk.assignee_name) || (tk.assignee_role ? tk.assignee_role.slice(0, 1).toUpperCase() : "?")}
                                 </span>
@@ -1016,10 +1016,10 @@ export default function Workflows() {
                             /* KM-31 — .nm-btn was the retired flat outline. The
                                advance button is the one thing on the card that
                                DOES something, so it wears the app's raised
-                               control material. No transition utility: .kr-pop
+                               control material. No transition utility: .ng-pop
                                swaps an outset shadow list for an inset one on
                                press and those do not interpolate. */
-                            className="kr-pop mt-3 flex h-10 w-full items-center justify-center gap-1.5 rounded-pill text-xs font-medium disabled:opacity-50">
+                            className="ng-pop mt-3 flex h-10 w-full items-center justify-center gap-1.5 rounded-pill text-xs font-medium disabled:opacity-50">
                             {/* Audit C-09 (2026-10-08) — a move takes a few seconds (the
                                 stage's work is laid out on the way); the button said
                                 nothing while it ran, so it was pressed again. */}
@@ -1027,11 +1027,11 @@ export default function Workflows() {
                               <><Loader size={14} label="Moving" testid={`advance-workflow-busy-${w.id}`} /> Moving to {labelOf(nextKey)}…</>
                             ) : (<>
                             {t("workflows.advance")} to {labelOf(nextKey)}
-                            <ArrowRight size={12} weight="bold" aria-hidden="true" className="kr-arrow transition-transform duration-200" />
+                            <ArrowRight size={12} weight="bold" aria-hidden="true" className="ng-arrow transition-transform duration-200" />
                             </>)}
                           </button>
                         ) : (
-                          <p className="mt-3 flex items-center justify-center gap-1.5 rounded-control bg-kr-ink py-2 text-xs font-semibold text-white">
+                          <p className="mt-3 flex items-center justify-center gap-1.5 rounded-control bg-ng-ink py-2 text-xs font-semibold text-white">
                             <Check size={12} weight="bold" aria-hidden="true" /> {labelOf(w.stage)}
                           </p>
                         )}

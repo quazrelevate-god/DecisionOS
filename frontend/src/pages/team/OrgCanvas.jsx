@@ -20,8 +20,8 @@
 // dialogs.
 import { Fragment, forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AirplaneTakeoff, CaretRight, Plus, User } from "@phosphor-icons/react";
-import { PersonAvatar } from "../../components/karma/PersonAvatar";
-import { GLASS_PILL } from "../../components/karma/glass";
+import { PersonAvatar } from "../../components/neuglass/PersonAvatar";
+import { GLASS_PILL } from "../../components/neuglass/glass";
 import { MEMBER_STATUS, teamIcon } from "./OrgTree";
 
 // ---------------------------------------------------------------------------

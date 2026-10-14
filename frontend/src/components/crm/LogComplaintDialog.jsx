@@ -18,9 +18,9 @@ import { Warning, X } from "@phosphor-icons/react";
 import api from "../../lib/api";
 import { cn } from "../../lib/utils";
 import { useDraft } from "../../hooks/useDraft";
-import { DraftNote } from "../karma/DraftNote";
+import { DraftNote } from "../neuglass/DraftNote";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
-import { DRAWER_TRACK, GLASS_ICON_BTN, GLASS_PILL, GLASS_SHEET, INK_PILL } from "../karma/glass";
+import { DRAWER_TRACK, GLASS_ICON_BTN, GLASS_PILL, GLASS_SHEET, INK_PILL } from "../neuglass/glass";
 
 export const SEVERITY = [
   { key: "low", label: "Minor" },
@@ -112,7 +112,7 @@ export function LogComplaintDialog({ contact, onClose, onSaved }) {
               return (
                 <button key={s.key} type="button" role="radio" aria-checked={on} data-testid={`complaint-severity-${s.key}`}
                   onClick={() => setForm((f) => ({ ...f, severity: s.key }))}
-                  className={cn("flex min-h-11 min-w-0 flex-1 items-center justify-center rounded-pill px-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
+                  className={cn("flex min-h-11 min-w-0 flex-1 items-center justify-center rounded-pill px-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline",
                     on ? `${GLASS_PILL} text-slate-900` : "text-slate-500 hover:text-slate-800")}>
                   {s.label}
                 </button>
@@ -123,11 +123,11 @@ export function LogComplaintDialog({ contact, onClose, onSaved }) {
 
         <div className="flex justify-end gap-2">
           <button type="button" onClick={() => { draft.discard(); onClose(); }} disabled={busy} data-testid="complaint-cancel"
-            className={`min-h-11 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline disabled:opacity-40 ${GLASS_PILL}`}>
+            className={`min-h-11 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline disabled:opacity-40 ${GLASS_PILL}`}>
             Cancel
           </button>
           <button type="button" onClick={save} disabled={busy} data-testid="complaint-save"
-            className={`min-h-11 rounded-pill px-6 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline disabled:opacity-50 ${INK_PILL}`}>
+            className={`min-h-11 rounded-pill px-6 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline disabled:opacity-50 ${INK_PILL}`}>
             {busy ? "Logging…" : "Log complaint"}
           </button>
         </div>

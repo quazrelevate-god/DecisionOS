@@ -7,8 +7,8 @@ import { roleLabel } from "../lib/departments";
 import { hasPerm } from "../lib/perms";
 import { PageHeader, StickyHeader, EmptyState, LoadFailed } from "../components/common";
 import { timeAgo, dayRange } from "../lib/format";
-import { GlassSelect } from "../components/karma/GlassSelect";
-import { GlassDateField } from "../components/karma/GlassDateField";
+import { GlassSelect } from "../components/neuglass/GlassSelect";
+import { GlassDateField } from "../components/neuglass/GlassDateField";
 import { toast } from "sonner";
 import {
   Plus, WarningOctagon, CheckCircle, XCircle, ChatCircleText, Gear, Clock, ArrowCounterClockwise, PaperPlaneTilt,
@@ -22,7 +22,7 @@ import {
 } from "../components/ui/dialog";
 import {
   CHIP, QUIET_CHIP, DRAWER_FIELD, DRAWER_TRACK, GLASS_PILL, INK_PILL, MAROON_PILL,
-} from "../components/karma/glass";
+} from "../components/neuglass/glass";
 
 const LEAVE_TYPES = [
   { key: "casual", label: "Casual" },
@@ -40,7 +40,7 @@ const ABSENCE_REASONS = [
 ];
 /* 2026-09-14, founder — the leave card joins the task cards' vocabulary: every
    chip is the ASK-25 recipe (soft tint, hairline ring in the same hue) with an
-   icon, and its actions are the task drawer's pills (components/karma/glass).
+   icon, and its actions are the task drawer's pills (components/neuglass/glass).
    Waiting on a decision is amber, as a waiting task is; a question back to the
    requester is violet, so the two open states never read alike. */
 export const STATUS_META = {
@@ -107,7 +107,7 @@ export function RequestLeaveDialog({ onDone, triggerClassName }) {
         <button
           data-testid="request-leave-button"
           title="Plan time off in advance -- needs approval"
-          className={triggerClassName || "kr-pop flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium"}
+          className={triggerClassName || "ng-pop flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium"}
         >
           <Plus size={16} weight="bold" /> Mark Leave
         </button>
@@ -149,11 +149,11 @@ export function RequestLeaveDialog({ onDone, triggerClassName }) {
             </div>
           </div>
           {/* KM-3 — same track treatment as leave-tabs above. */}
-          <div className="kr-pressed flex items-center gap-1 rounded-pill p-1" data-testid="leave-portion-toggle">
+          <div className="ng-pressed flex items-center gap-1 rounded-pill p-1" data-testid="leave-portion-toggle">
             <button type="button" onClick={() => setForm({ ...form, day_portion: "full" })}
-              className={`flex-1 rounded-pill px-3 py-2 text-xs font-medium transition-all ${form.day_portion === "full" ? "kr-pop text-foreground" : "text-foreground/60 hover:text-foreground/85"}`}>Full Day</button>
+              className={`flex-1 rounded-pill px-3 py-2 text-xs font-medium transition-all ${form.day_portion === "full" ? "ng-pop text-foreground" : "text-foreground/60 hover:text-foreground/85"}`}>Full Day</button>
             <button type="button" onClick={() => setForm({ ...form, day_portion: "half" })}
-              className={`flex-1 rounded-pill px-3 py-2 text-xs font-medium transition-all ${form.day_portion === "half" ? "kr-pop text-foreground" : "text-foreground/60 hover:text-foreground/85"}`}>Half Day</button>
+              className={`flex-1 rounded-pill px-3 py-2 text-xs font-medium transition-all ${form.day_portion === "half" ? "ng-pop text-foreground" : "text-foreground/60 hover:text-foreground/85"}`}>Half Day</button>
           </div>
           <textarea data-testid="leave-reason-input" className={inp} rows={2} placeholder="Reason" value={form.reason} onChange={set("reason")} />
           {iApprove && (
@@ -174,7 +174,7 @@ export function RequestLeaveDialog({ onDone, triggerClassName }) {
           )}
         </div>
         <DialogFooter>
-          <button data-testid="leave-submit" onClick={submit} className="kr-lift rounded-pill bg-kr-ink px-5 py-2.5 text-sm font-medium text-white transition-all">Submit</button>
+          <button data-testid="leave-submit" onClick={submit} className="ng-lift rounded-pill bg-ng-ink px-5 py-2.5 text-sm font-medium text-white transition-all">Submit</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -200,7 +200,7 @@ function AbsenceDialog({ onDone }) {
         <button
           data-testid="report-absence-button"
           title="Same-day unplanned absence -- no approval needed"
-          className="kr-pop flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium"
+          className="ng-pop flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium"
         >
           <WarningOctagon size={16} weight="bold" /> Report Absence Today
         </button>
@@ -221,7 +221,7 @@ function AbsenceDialog({ onDone }) {
           <textarea data-testid="absence-note-input" className={inp} rows={2} placeholder="Optional note" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
         </div>
         <DialogFooter>
-          <button data-testid="absence-submit" onClick={submit} className="kr-lift rounded-pill bg-kr-ink px-5 py-2.5 text-sm font-medium text-white transition-all">Notify Now</button>
+          <button data-testid="absence-submit" onClick={submit} className="ng-lift rounded-pill bg-ng-ink px-5 py-2.5 text-sm font-medium text-white transition-all">Notify Now</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -315,7 +315,7 @@ export function LeaveCard({ lv, canAct, onRefresh, highlight, mine = false }) {
 
   const StatusIcon = st.icon;
   return (
-    <div data-testid={`leave-card-${lv.id}`} className={`kr-bento p-5 ${highlight ? "ring-2 ring-neutral-900/70 ring-offset-2" : ""}`}>
+    <div data-testid={`leave-card-${lv.id}`} className={`ng-bento p-5 ${highlight ? "ring-2 ring-neutral-900/70 ring-offset-2" : ""}`}>
       <div className="mb-3 flex flex-wrap items-center gap-1.5">
         <span className={`${CHIP} ${st.tone}`} data-testid={`leave-status-${lv.id}`}>
           <StatusIcon size={11} weight="bold" aria-hidden="true" /> {st.label}
@@ -467,7 +467,7 @@ export function ApproverConfig({ roleOptions, members }) {
     } catch (e) { toast.error(e.response?.data?.detail || "Save failed"); }
   };
   return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="leave-approver-config">
+    <div className="ng-bento p-5 sm:p-6" data-testid="leave-approver-config">
       <div className="flex items-center gap-2 mb-1"><Gear size={18} weight="regular" aria-hidden="true" className="text-muted-foreground" />
         <h2 className="text-base font-medium">Who approves leave</h2></div>
       <p className="text-xs text-muted-foreground mb-3">Choose who approves leave for each team. If someone has a reporting manager (set on their Team card), that manager decides. Otherwise this person does, then the owner.</p>
@@ -476,7 +476,7 @@ export function ApproverConfig({ roleOptions, members }) {
           <div key={r.key} className="flex items-center gap-3">
             <span className="w-32 shrink-0 text-sm font-semibold">{r.label}</span>
             <GlassSelect variant="field" testid={`leave-approver-${r.key}`} ariaLabel={`Who approves ${r.label || r.key}`}
-              triggerClassName="kr-pressed h-11 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--kr-gold))]"
+              triggerClassName="ng-pressed h-11 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ng-gold))]"
               value={map[r.key] || ""} onChange={(v) => setMap({ ...map, [r.key]: v })}
               options={[
                 // Audit B-01: a team named in the sign-up interview ("HR
@@ -488,7 +488,7 @@ export function ApproverConfig({ roleOptions, members }) {
           </div>
         ))}
       </div>
-        <button onClick={save} data-testid="save-leave-approvers" className="kr-pop mt-4 flex h-11 items-center rounded-pill px-5 text-sm font-medium">Save approvers</button>
+        <button onClick={save} data-testid="save-leave-approvers" className="ng-pop mt-4 flex h-11 items-center rounded-pill px-5 text-sm font-medium">Save approvers</button>
     </div>
   );
 }
@@ -551,7 +551,7 @@ export default function Leave() {
   );
 
   const stat = (label, value, testid) => (
-    <div className="kr-pressed flex min-w-0 flex-1 flex-col rounded-2xl px-4 py-3" data-testid={testid}>
+    <div className="ng-pressed flex min-w-0 flex-1 flex-col rounded-2xl px-4 py-3" data-testid={testid}>
       <span className="font-display text-2xl tabular-nums leading-none">{value}</span>
       <span className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">{label}</span>
     </div>

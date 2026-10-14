@@ -1,4 +1,4 @@
-// KR-4 · useReveal — "appear as you arrive", the Karma dark band's entrance.
+// KR-4 · useReveal — "appear as you arrive", the Neu-glassmorphism dark band's entrance.
 //
 // An IntersectionObserver that stamps `is-in` on the element the first time
 // 15% of it enters the viewport, then disconnects — a reveal is a first
@@ -6,7 +6,7 @@
 // founder scrolls back up.
 //
 // Reduced motion: the element is marked in IMMEDIATELY (no observer at all).
-// The CSS pair (.kr-reveal / .is-in) also neutralises itself under the media
+// The CSS pair (.ng-reveal / .is-in) also neutralises itself under the media
 // query, so the guard is belt-and-braces — either alone is sufficient, and
 // the double coverage means a future edit can break one without breaking the
 // promise.

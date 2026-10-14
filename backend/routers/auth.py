@@ -97,6 +97,7 @@ from models.auth import (  # noqa: F401
     ProfileUpdateInput, ChangePasswordInput, PasswordForgotInput, PasswordResetInput, PasswordResetCheckInput,
     PhoneChangeCodeInput,
     OwnerCredentialsInput,
+    TourDoneInput,
 )
 
 
@@ -1392,6 +1393,20 @@ async def welcome_done(user: dict = Depends(get_current_user)):
     """The member's one-time welcome card was saved or put off (2026-09-19)."""
     await db.users.update_one({"id": user["id"]}, {"$unset": {"welcome_pending": ""}})
     return {"ok": True}
+
+
+@router.post("/tour/done")
+async def tour_done(inp: TourDoneInput, user: dict = Depends(get_current_user)):
+    """The phone walkthrough was finished or skipped (2026-10-12).
+
+    Kept on the person, not the device, so a reinstall or a second phone does
+    not play it again. The client sends the version it showed; a later tour
+    with a higher number plays once more for everyone who saw an older one.
+    """
+    version = max(1, min(int(inp.version or 1), 99))
+    tour = {"version": version, "at": now_iso()}
+    await db.users.update_one({"id": user["id"]}, {"$set": {"tour_seen": tour}})
+    return {"ok": True, "tour_seen": tour}
 
 
 @router.post("/change-password")

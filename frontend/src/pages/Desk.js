@@ -1,4 +1,4 @@
-// /inbox — the founder's dashboard, KR-8: the Health Karma reference,
+// /inbox — the founder's dashboard, KR-8: the Health Neu-glassmorphism reference,
 // replicated on real data.
 //
 // LAYOUT (ASK-25 · the Decision Desk redesign, 2026-09-13):
@@ -38,7 +38,7 @@ import { inrCompact } from "../lib/format";
 import { cn } from "../lib/utils";
 // ASK-36 2 — which decisions the founder read and set aside (see the file).
 import { saveAsDraft, subscribeDrafts, draftOverrides, isDraft, settleDraft } from "../lib/decisionDrafts";
-import { selfScore } from "../lib/karmaScore";
+import { selfScore } from "../lib/neuglassScore";
 import { isDemoTenant, demoDelta } from "./_operatingScoreDemo";
 import { opModel } from "../lib/operatingModel";
 // ASK-52 — the Workflows card and the numbers behind it.
@@ -47,8 +47,8 @@ import { workflowAttention } from "./desk/workflowAttention";
 import {
   ArcGauge, StatTile, ScopeSlider,
   BigNumeral, KDeltaChip, MiniBars, CircleDots, TinySpark,
-} from "../components/karma";
-import { INK_PLATE } from "../components/karma/glass";
+} from "../components/neuglass";
+import { INK_PLATE } from "../components/neuglass/glass";
 import { useDeskMetrics } from "./desk/useDeskMetrics";
 /* ASK-34 B — one DOM, not two. The phone's tabbed card and the desktop's three
    columns are different trees, and hiding one with `lg:hidden` would leave a
@@ -92,6 +92,36 @@ const PHONE_ROWS = 3;
    when it is open. It must never cover the bar. */
 const POP_MS = 260;
 const POP_SEAM = 10;
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+/* ASK-43's two spaces: a fixed element inside the zoomed app is positioned in
+   the app's OWN pixels, and every rect is in visual ones. Exactly 1 wherever
+   there is no zoom. */
+const ownScale = (el) => {
+  const s = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale"));
+  if (s > 0) return 1 / s;
+  const r = el.getBoundingClientRect();
+  return r.width ? el.offsetWidth / r.width : 1;
+};
+/* Where the lifted card goes for a given height, held inside the same lines
+   every time: `p` carries the resting rect and the top bar / dock it measured.
+   DESK-SHEET (2026-10-09) — A SHEET GROWS UP FROM THE FLOOR. It already runs
+   off the bottom of the screen under the dock, so its foot stays where it is
+   and its top rises toward the top bar, the way a sheet climbs to a taller
+   detent. Otherwise it grows from its centre — never above the top bar, never
+   over the dock. */
+function popGeometry(p, want, sheet) {
+  const { rest, topOwn, dockTopOwn } = p;
+  if (sheet) {
+    const floor = rest.top + rest.height;
+    const height = Math.min(want, floor - topOwn);
+    return { ...rest, top: floor - height, height };
+  }
+  const height = Math.min(want, Math.max(rest.height, dockTopOwn - POP_SEAM - topOwn));
+  const centre = rest.top + rest.height / 2;
+  const top = Math.max(topOwn, Math.min(centre - height / 2, dockTopOwn - POP_SEAM - height));
+  return { ...rest, top, height };
+}
 /* The gap the phone card leaves between its last pixel and the top of the
    floating dock. One seam, not a margin: the sheet's own dock clearance is what
    keeps the two apart, and this is only what the measurement holds back so the
@@ -127,13 +157,13 @@ const DOCK_SEAM = 4; */
    absorb what a growing parent hands it; this grows the tile ITSELF, so the
    space is spent on the thing the founder wanted bigger and the board takes
    what is left. --desk-kpi-floor is the number, in one place. */
-const PHONE_TILE = "kr-kpi-tile max-lg:min-h-[var(--desk-kpi-floor)] max-lg:p-3 max-lg:rounded-[1.25rem]";
+const PHONE_TILE = "ng-kpi-tile max-lg:min-h-[var(--desk-kpi-floor)] max-lg:p-3 max-lg:rounded-[1.25rem]";
 /* ASK-35 1.4 — the inner card's material, lifted from the recipe the desktop
-   top nav shelf is cut from (INK_PILL / .kr-navplate::before) so the two stay
+   top nav shelf is cut from (INK_PILL / .ng-navplate::before) so the two stay
    the same black. Only the fill and the lit top edge: INK_PILL's drop shadow
    and its hover brighten belong to a pressable pill, and this is a surface. */
 // ASK-41 — the same string that More's tiles and the dock's live slot use,
-// from the one place it is written (components/karma/glass.js).
+// from the one place it is written (components/neuglass/glass.js).
 const PHONE_CARD_INK = INK_PLATE;
 // ASK-25 — the three chips the Desk still asks /desk for. `important` is
 // gone: its builder returns an empty list (see _cards_important) so the box
@@ -146,7 +176,7 @@ const SECTIONS = [
 ];
 
 /* ASK-25 — the section identities. `tone` is the class that carries the
-   two-tone hue variables (.kr-desk--* and .kr-glass--warm in index.css).
+   two-tone hue variables (.ng-desk--* and .ng-glass--warm in index.css).
    2026-09-14, founder — the board is ONE BLACK CONTAINER now, not three
    frost cards ("instead of glass or frost glass we go with the black
    container, print the text on the container itself in white font, use
@@ -155,11 +185,11 @@ const SECTIONS = [
    and the action pill carry the hue; on the white stack cards the title
    prints the hue's deep end as before. */
 const TONE = {
-  needs: "kr-desk--needs",
-  flag:  "kr-desk--flag",
-  today: "kr-desk--today",
-  fire:  "kr-desk--fire",
-  warm:  "kr-glass--warm",
+  needs: "ng-desk--needs",
+  flag:  "ng-desk--flag",
+  today: "ng-desk--today",
+  fire:  "ng-desk--fire",
+  warm:  "ng-glass--warm",
 };
 
 const daysSince = (iso) => {
@@ -208,7 +238,7 @@ const newestFirst = (cards) => {
   return [...review.reverse(), ...follow.reverse()];
 };
 
-/* ASK-25 — the row's one action: open the thing. A raised .kr-pop circle
+/* ASK-25 — the row's one action: open the thing. A raised .ng-pop circle
    with the open-in-page glyph; the whole row is also the link, the circle
    is where the eye lands. */
 function OpenButton({ onClick, label }) {
@@ -220,13 +250,13 @@ function OpenButton({ onClick, label }) {
       title="Open"
       /* On the black board: a white-glass circle, no blur (nothing behind it
          to blur), lit a step on hover. */
-      /* kr-desk-row-open — IT SCALES WITH THE ROW (2026-10-06). h-8 alone is a
+      /* ng-desk-row-open — IT SCALES WITH THE ROW (2026-10-06). h-8 alone is a
          32px floor under a row whose type bends: on a 375x667 the titles came
          down to 11pt and the rows still would not fit, because this circle held
          them open and the leftover was taken out of the text, which clipped. In
          the sheet it is sized off --desk-row-scale like everything else in the
          pill (index.css); elsewhere it stays exactly 32. */
-      className="kr-desk-row-open grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/[.10] text-white/80 transition-colors hover:bg-white/[.20] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+      className="ng-desk-row-open grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/[.10] text-white/80 transition-colors hover:bg-white/[.20] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
     >
       {/* DEX-R1 audit — on a phone a box-and-arrow means "this leaves the
           app", and this opens the decision right here. A chevron is the
@@ -319,7 +349,7 @@ function DeskRow({ r, first, testid, roomy = false }) {
          are read in index.css, where the hues live beside the Watch cards'
          so the two cannot drift. */
       data-tone={roomy ? (r.priority || "low") : undefined}
-      className={`flex cursor-pointer items-center justify-between gap-3 ${roomy ? "kr-desk-pill kr-desk-row-roomy min-h-0 flex-1 overflow-hidden" : `max-lg:py-1 py-[7px] ${first ? "" : "border-t border-white/[.14]"}`} ${
+      className={`flex cursor-pointer items-center justify-between gap-3 ${roomy ? "ng-desk-pill ng-desk-row-roomy min-h-0 flex-1 overflow-hidden" : `max-lg:py-1 py-[7px] ${first ? "" : "border-t border-white/[.14]"}`} ${
         roomy ? "" :
         /* ASK-42 E — THE MARK IS LOUDER. It was a 2px bar and a 5% white wash,
            which on near-black is a shade of the same black: the founder could
@@ -333,7 +363,7 @@ function DeskRow({ r, first, testid, roomy = false }) {
            that yellow colour code, give it as draft, so people can understand
            the yellow means draft". The hue stays the section's own. */
         r.deferred
-          ? "-mx-2 rounded-xl border-l-[3px] border-l-[hsl(var(--kr-glass-from))] bg-[hsl(var(--kr-glass-from)/0.16)] px-2 shadow-[inset_0_0_0_1px_hsl(var(--kr-glass-from)/0.30),0_0_16px_-4px_hsl(var(--kr-glass-from)/0.55)]"
+          ? "-mx-2 rounded-xl border-l-[3px] border-l-[hsl(var(--ng-glass-from))] bg-[hsl(var(--ng-glass-from)/0.16)] px-2 shadow-[inset_0_0_0_1px_hsl(var(--ng-glass-from)/0.30),0_0_16px_-4px_hsl(var(--ng-glass-from)/0.55)]"
           : ""
       }`}
     >
@@ -348,13 +378,13 @@ function DeskRow({ r, first, testid, roomy = false }) {
           /* In the sheet the pill owns the ink: a draft is painted solid
              white and needs dark type on it, which a Tailwind colour here
              could only fight. index.css sets both cases together. */
-          className={`truncate ${roomy ? "kr-desk-row-title" : `text-[15px] leading-5 ${r.deferred ? "text-white" : "text-neutral-300"}`} font-medium tracking-[-0.006em] lg:whitespace-normal lg:line-clamp-2 lg:text-[15px] lg:leading-5`}>{r.title}</p>
+          className={`truncate ${roomy ? "ng-desk-row-title" : `text-[15px] leading-5 ${r.deferred ? "text-white" : "text-neutral-300"}`} font-medium tracking-[-0.006em] lg:whitespace-normal lg:line-clamp-2 lg:text-[15px] lg:leading-5`}>{r.title}</p>
         {(r.meta || r.deferred) && (
           /* text-sm + neutral-400, measured: the supporting line was 12px
              (9.6pt after --ui-scale) at 3.87:1 on the board's own ink, against
              an 11pt floor and a 4.5:1 requirement. 14px is 11.2pt. */
-          <p title={r.meta || undefined} className={`truncate ${roomy ? "kr-desk-row-meta lg:text-sm lg:leading-5" : "text-sm leading-5 text-neutral-400"}`}>
-            {r.deferred && <span className={`font-medium ${roomy ? "kr-desk-row-draftword" : "text-neutral-300"}`}>Draft</span>}
+          <p title={r.meta || undefined} className={`truncate ${roomy ? "ng-desk-row-meta lg:text-sm lg:leading-5" : "text-sm leading-5 text-neutral-400"}`}>
+            {r.deferred && <span className={`font-medium ${roomy ? "ng-desk-row-draftword" : "text-neutral-300"}`}>Draft</span>}
             {r.deferred && r.meta ? " · " : ""}
             {r.meta}
           </p>
@@ -364,7 +394,7 @@ function DeskRow({ r, first, testid, roomy = false }) {
           cross that used to sit between them are gone; the row is the link and
           the window it opens is where a decision is taken. */}
       <span className="flex shrink-0 items-center gap-2.5">
-        {r.amount && <span className={`font-mono ${roomy ? "kr-desk-row-amount text-[15px] leading-6 lg:text-sm lg:leading-5" : "text-sm leading-5 text-neutral-300"}`}>{r.amount}</span>}
+        {r.amount && <span className={`font-mono ${roomy ? "ng-desk-row-amount text-[15px] leading-6 lg:text-sm lg:leading-5" : "text-sm leading-5 text-neutral-300"}`}>{r.amount}</span>}
         <OpenButton onClick={(e) => { e.stopPropagation(); r.onOpen(); }} label={`Open: ${r.title}`} />
       </span>
     </div>
@@ -375,7 +405,7 @@ function CountPill({ n, onInk = false }) {
   return (
     // ASK-43 — 1.5px of vertical padding below lg, so a count inside a Watch
     // card cannot make that card taller than the decision row it now matches.
-    <span className={`rounded-pill px-2 py-0.5 text-xs font-semibold tabular-nums max-lg:px-1.5 max-lg:py-0 ${onInk ? "bg-white/[.10] text-white/80" : "bg-kr-ink/[.08]"}`}>
+    <span className={`rounded-pill px-2 py-0.5 text-xs font-semibold tabular-nums max-lg:px-1.5 max-lg:py-0 ${onInk ? "bg-white/[.10] text-white/80" : "bg-ng-ink/[.08]"}`}>
       {n ?? "—"}
     </span>
   );
@@ -388,7 +418,7 @@ function CountPill({ n, onInk = false }) {
 function DeskHeading({ tone, title, count, note, className = "" }) {
   return (
     <div className={`${TONE[tone]} flex min-w-0 items-center gap-2.5 border-b border-white/[.14] pb-2.5 ${className}`}>
-      <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full bg-[hsl(var(--kr-glass-from))]" />
+      <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full bg-[hsl(var(--ng-glass-from))]" />
       {/* 2026-09-14, founder — "white is too bright": medium weight and
           white at 85%, never full white, everywhere on the board. */}
       <h3 className="text-base font-medium tracking-[-0.006em] text-white/85">{title}</h3>
@@ -519,10 +549,10 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
              is untouched: it does not grow and it does not scroll.
              ASK-40 4 — and it shows NO BAR. `scrollbar-width: thin` was still
              a bar, permanent on any platform that paints them, running down
-             the column's edge next to the real rule; .kr-scroll-quiet
+             the column's edge next to the real rule; .ng-scroll-quiet
              (index.css) hides it and leaves the scrolling alone. The heading's
              "N more waiting" is what says there is more. */
-          className={`min-h-0 flex-1 overflow-hidden ${scroll ? "kr-scroll-quiet lg:overflow-y-auto lg:pr-1" : ""}`}
+          className={`min-h-0 flex-1 overflow-hidden ${scroll ? "ng-scroll-quiet lg:overflow-y-auto lg:pr-1" : ""}`}
         >
           {loading && (
             <div className="space-y-2 pt-2" aria-hidden="true">
@@ -560,7 +590,7 @@ function DeskCard({ tone, title, count, note, rows, loading, empty, moreSuffix =
               data-testid={`${testid}-cta`}
               /* ASK-25 — MATTE. The section's bright hue as a flat fill: no
                  lip, no glow, no shadow (the founder: "no glow just matte"). */
-              className="flex h-9 shrink-0 items-center gap-1.5 rounded-pill bg-[hsl(var(--kr-glass-from))] px-4 text-xs font-semibold text-[hsl(var(--kr-glass-btn-fg,0_0%_100%))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+              className="flex h-9 shrink-0 items-center gap-1.5 rounded-pill bg-[hsl(var(--ng-glass-from))] px-4 text-xs font-semibold text-[hsl(var(--ng-glass-btn-fg,0_0%_100%))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
             >
               {cta}
               <CaretRight size={11} weight="bold" aria-hidden="true" />
@@ -893,9 +923,9 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
           sits straight on the sheet (above); everything a tab holds sits on a
           card inside it, so the sheet reads as a surface with something on it
           rather than as one undifferentiated black rectangle.
-          THE FILL IS THE DESKTOP TOP NAV SHELF'S — INK_PILL / .kr-navplate's
+          THE FILL IS THE DESKTOP TOP NAV SHELF'S — INK_PILL / .ng-navplate's
           ::before: a 24%->6% vertical gradient with a 16% white lip on the top
-          edge. Taken from the recipe (components/karma/glass.js) rather than
+          edge. Taken from the recipe (components/neuglass/glass.js) rather than
           retyped, so the two cannot drift. Against the sheet's hsl(240 4% 9%)
           ground the card is lighter at its head and all but equal at its foot,
           which is the step that does the work — no border and no ring, because
@@ -947,11 +977,11 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
         {/* gap-2 in the sheet: the pills are separate objects now, and the
             space between them is what says so. */}
         <div ref={listRef} className={cn(
-          scrolls ? "kr-scroll-quiet min-h-0 flex-1 overflow-y-auto" : !open ? "flex min-h-0 flex-1 flex-col" : undefined,
-          /* kr-desk-sheet-list — the one handle index.css needs to tighten the
+          scrolls ? "ng-scroll-quiet min-h-0 flex-1 overflow-y-auto" : !open ? "flex min-h-0 flex-1 flex-col" : undefined,
+          /* ng-desk-sheet-list — the one handle index.css needs to tighten the
              space between the pills when the card is tight (see data-desk-tight
              above); the gap itself stays Tailwind's. */
-          roomy && !open && "kr-desk-sheet-list gap-2.5")}
+          roomy && !open && "ng-desk-sheet-list gap-2.5")}
           /* How many slots the rows are cut into (index.css, ONE CARD HEIGHT):
              the rows this screen seats, which is three on every phone but the
              smallest. */
@@ -1031,8 +1061,8 @@ function PhoneTabCard({ tone, testid, rows, loading, empty, tabs, tab, onTab, op
  *  on one line, one line of content, and a single centred chevron — the card
  *  is the link.
  *  2026-09-14, founder — "use the card color in the image": the old dark
- *  band's cards, i.e. .kr-glass in the section's hue at the .10/.05 tint the
- *  .kr-desk--* variants dial it to, with the recipe's own white hairline. The
+ *  band's cards, i.e. .ng-glass in the section's hue at the .10/.05 tint the
+ *  .ng-desk--* variants dial it to, with the recipe's own white hairline. The
  *  tone class sits on the card itself so the glass reads its hue. */
 function StackCard({ tone, title, count, line, tail, loading, empty, to, testid }) {
   return (
@@ -1049,10 +1079,10 @@ function StackCard({ tone, title, count, line, tail, loading, empty, to, testid 
       data-row=""
       /* min-h-0 is the DESKTOP's: there the three cards share one column and
          must be allowed to shrink. In the phone's sheet the list's own rule
-         (.kr-desk-sheet-list [data-row], index.css) overrides it with a
+         (.ng-desk-sheet-list [data-row], index.css) overrides it with a
          min-content floor, which is what stops a row being squeezed under its
          own words — see that rule for why it has to exist at all. */
-      className={`kr-glass kr-lift ${TONE[tone]} flex min-h-0 flex-1 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70`}
+      className={`ng-glass ng-lift ${TONE[tone]} flex min-h-0 flex-1 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70`}
     >
       {/* ASK-43 — ON A PHONE THIS CARD IS A ROW. Watch's three feeds sat at
           70px each against the 52px of a decision or an approval in the tabs
@@ -1065,26 +1095,26 @@ function StackCard({ tone, title, count, line, tail, loading, empty, to, testid 
       <div className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 max-lg:gap-2 max-lg:px-2.5 max-lg:py-1.5">
         <div className="flex min-w-0 flex-col gap-1 max-lg:gap-0.5">
           <div className="flex min-w-0 items-center gap-2 max-lg:gap-1.5">
-            <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full bg-[hsl(var(--kr-glass-from))] max-lg:h-2 max-lg:w-2" />
-            {/* kr-desk-row-title/meta below lg (2026-10-06): the SAME two rules
+            <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full bg-[hsl(var(--ng-glass-from))] max-lg:h-2 max-lg:w-2" />
+            {/* ng-desk-row-title/meta below lg (2026-10-06): the SAME two rules
                 the sheet's pills are written against, so Watch's cards and the
                 Decisions rows are one typeface at one size and bend by the same
                 --desk-row-scale when a short screen needs them smaller. The
                 max-lg sizes these used to carry were a copy of DeskRow's taken
                 before the sheet existed, and the two had since drifted apart —
                 15/12 here against 17/15 there. Desktop (lg:) is untouched. */}
-            <h3 className="kr-desk-row-title text-base font-medium tracking-[-0.006em] text-white/85 lg:text-base lg:leading-6">{title}</h3>
+            <h3 className="ng-desk-row-title text-base font-medium tracking-[-0.006em] text-white/85 lg:text-base lg:leading-6">{title}</h3>
             <CountPill n={count} onInk />
           </div>
           {loading
             ? <div className="ds-skeleton h-4 w-2/3 rounded-control" aria-hidden="true" />
-            : <p className="kr-desk-row-meta truncate text-sm text-neutral-300 lg:text-sm lg:leading-5">
+            : <p className="ng-desk-row-meta truncate text-sm text-neutral-300 lg:text-sm lg:leading-5">
                 {line
                   ? <>{line}{tail && <span className="text-neutral-500"> &middot; {tail}</span>}</>
                   : <span className="text-neutral-500">{empty}</span>}
               </p>}
         </div>
-        <CaretRight size={22} weight="bold" aria-hidden="true" className="kr-arrow shrink-0 text-white/50 transition-transform duration-200 max-lg:h-[18px] max-lg:w-[18px]" />
+        <CaretRight size={22} weight="bold" aria-hidden="true" className="ng-arrow shrink-0 text-white/50 transition-transform duration-200 max-lg:h-[18px] max-lg:w-[18px]" />
       </div>
     </Link>
   );
@@ -1383,6 +1413,35 @@ export default function Desk() {
     return () => ro.disconnect();
   }, [isMobile, deskSheet]);
   const [pop, setPop] = useState(null); // { rest, full, at: "rest" | "full" }
+  // True when the pop is placed without its glide (reduced motion, or a glide that did not land).
+  const [popSnap, setPopSnap] = useState(false);
+  const popRef = useRef(null);
+  /* AND IT KEEPS GROWING UNTIL THE LIST STOPS SCROLLING (2026-10-13, founder's
+     OnePlus). The grow below is measured once, two frames after the tap — and
+     on the device a real finger's tap committed late enough that the measure
+     read a card with nothing hidden in it: `full` came out equal to `rest`,
+     and four decisions sat in a scroller inside a sheet that never rose. One
+     perfectly timed reading cannot be trusted on every phone, so the sheet
+     corrects itself: whenever it is up and its list still has rows below the
+     fold, it grows by exactly that much, up to the top bar.
+     Read against the TARGET, not the box as drawn: mid-glide the board is
+     shorter than `full`, and the list will get that difference back when the
+     glide lands — so it is subtracted, or a glide in flight would read as a
+     shortfall and the sheet would overshoot. */
+  const growToList = useCallback(() => {
+    const p = popRef.current;
+    const board = boardRef.current;
+    if (!p || p.at !== "full" || !board) return;
+    const list = board.querySelector('[data-testid="desk-phone-card-card"]')?.firstElementChild;
+    if (!list) return;
+    const drawn = board.getBoundingClientRect().height * ownScale(board);
+    const short = list.scrollHeight - list.clientHeight - (p.full.height - drawn);
+    if (short <= 1) return;
+    const full = popGeometry(p, p.full.height + short, deskSheet);
+    if (full.height <= p.full.height + 0.5) return;
+    setPop((prev) => (prev && prev.at === "full" ? { ...prev, full } : prev));
+  }, [deskSheet]);
+  useLayoutEffect(() => { popRef.current = pop; growToList(); });
   useEffect(() => {
     if (!isMobile) { setPop(null); return undefined; }
     const board = boardRef.current;
@@ -1396,11 +1455,7 @@ export default function Desk() {
     }
 
     const rect = board.getBoundingClientRect();
-    /* ASK-43's two spaces again: a fixed element inside the zoomed app is
-       positioned in the app's OWN pixels, and every rect here is in visual
-       ones. `k` converts, and is exactly 1 wherever there is no zoom. */
-    const scaleVar = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale"));
-    const k = scaleVar > 0 ? 1 / scaleVar : (rect.width ? board.offsetWidth / rect.width : 1);
+    const k = ownScale(board);
     const dock = document.querySelector('[data-testid="floating-dock"]');
     const topBar = document.querySelector('[data-testid="desk-topbar"]');
     const topOwn = (topBar ? topBar.getBoundingClientRect().top : rect.top) * k;
@@ -1425,43 +1480,47 @@ export default function Desk() {
        the resting geometry: scrollHeight then reports what the content wants.
        (Which is also why the inner list only becomes a scroller at `full` —
        measuring a scroller would report the box, not the content.) */
-    setPop({ rest, full: rest, at: "rest" });
+    const base = { rest, topOwn, dockTopOwn };
+    setPop({ ...base, full: rest, at: "rest" });
+    setPopSnap(prefersReducedMotion());
+    let raf2 = 0;
+    let settle = 0;
+    /* THE GROW MUST LAND EVEN WHEN IT CANNOT GLIDE (2026-10-13, founder's
+       OnePlus). With Android's animation scales at 0 the WebView left the
+       top/height transition frozen at its first frame: the list switched to
+       its scroller at `full` while the sheet stayed at `rest`, which read as
+       "Show all" turning the card into a tiny scrolling box. So once the glide
+       has had its time, look: a sheet that is not where `full` put it drops
+       the transition and is placed there outright. */
+    const landed = (full) => {
+      settle = setTimeout(() => {
+        const h = board.getBoundingClientRect().height * k;
+        if (Math.abs(h - (popRef.current?.full.height ?? full.height)) > 1.5) setPopSnap(true);
+        growToList();
+      }, POP_MS + 160);
+    };
     const raf = requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const maxH = Math.max(rest.height, dockTopOwn - POP_SEAM - topOwn);
+      raf2 = requestAnimationFrame(() => {
         /* How much MORE the content wants than the box it is in. The board is
            a grid whose row is minmax(0,1fr), so the overflow does not surface
            on the board itself — it surfaces on the first descendant the row
-           squeezes, which is the list's own card. Take whichever reports it. */
+           squeezes, which is the list's own card — or, if the list is already
+           a scroller, on the list. Take whichever reports it. */
         const inner = board.querySelector(`[data-testid="desk-phone-card-card"]`);
+        const list = inner && inner.firstElementChild;
         const extra = Math.max(
           board.scrollHeight - board.clientHeight,
           inner ? inner.scrollHeight - inner.clientHeight : 0,
+          list ? list.scrollHeight - list.clientHeight : 0,
           0
         );
-        /* DESK-SHEET (2026-10-09) — A SHEET GROWS UP FROM THE FLOOR. It already
-           runs off the bottom of the screen under the dock, so "never over the
-           dock" and "grow from the centre" no longer describe anything: its
-           foot stays where it is and its top rises toward the top bar, the way
-           a sheet climbs to a taller detent. The dock's clearance is padding
-           inside it, so the rows still stop above the bar. */
-        if (deskSheet) {
-          const floor = rest.top + rest.height;
-          const height = Math.min(rest.height + extra, floor - topOwn);
-          setPop((prev) => (prev ? { ...prev, full: { ...rest, top: floor - height, height }, at: "full" } : prev));
-          return;
-        }
-        const height = Math.min(rest.height + extra, maxH);
-        /* AND IT GROWS FROM ITS CENTRE — up and down at once, which is the
-           whole of the founder's ask. Held inside the same two lines: never
-           above the top bar, never over the dock. */
-        const centre = rest.top + rest.height / 2;
-        const top = Math.max(topOwn, Math.min(centre - height / 2, dockTopOwn - POP_SEAM - height));
-        setPop((prev) => (prev ? { ...prev, full: { ...rest, top, height }, at: "full" } : prev));
+        const full = popGeometry(base, rest.height + extra, deskSheet);
+        setPop((prev) => (prev ? { ...prev, full, at: "full" } : prev));
+        landed(full);
       });
     });
-    return () => cancelAnimationFrame(raf);
-  }, [phoneExpanded, isMobile, phoneTab, deskSheet]);
+    return () => { cancelAnimationFrame(raf); cancelAnimationFrame(raf2); clearTimeout(settle); };
+  }, [phoneExpanded, isMobile, phoneTab, deskSheet, growToList]);
 
   // Escape closes it, like every other layer in the app.
   useEffect(() => {
@@ -1490,7 +1549,7 @@ export default function Desk() {
      signal at all would leave nothing to tell the founder a tab is worth
      switching to, which is the only reason tabs exist here. So the active one
      carries its number in a badge and an inactive one with anything in it
-     carries a dot in its own section hue (the TONE class sets --kr-glass-from
+     carries a dot in its own section hue (the TONE class sets --ng-glass-from
      on the element the dot reads it from). Empty tabs carry nothing, and the
      dot's meaning is spoken for screen readers rather than left to colour. */
   const tabOption = (key, label, n, tone) => ({
@@ -1504,7 +1563,7 @@ export default function Desk() {
           </span>
         ) : (
           <>
-            <span aria-hidden="true" className={`${TONE[tone]} h-1.5 w-1.5 rounded-full bg-[hsl(var(--kr-glass-from))]`} />
+            <span aria-hidden="true" className={`${TONE[tone]} h-1.5 w-1.5 rounded-full bg-[hsl(var(--ng-glass-from))]`} />
             <span className="sr-only">, {n} waiting</span>
           </>
         ))}
@@ -1688,7 +1747,7 @@ export default function Desk() {
       {(cachedAt || m.failed?.any || (workflowsQ.isError && !workflowsQ.data)) && (
         <StaleStamp at={cachedAt} failed={m.failed?.any || (workflowsQ.isError && !workflowsQ.data)}
           offline={typeof navigator !== "undefined" && navigator.onLine === false}
-          onRetry={() => qc.invalidateQueries()} className="shrink-0" data-testid="desk-stale" />
+          onRetry={() => qc.invalidateQueries()} data-testid="desk-stale" />
       )}
       {/* Audit A-16 — until the first person is added, for whoever can add them. */}
       <TeamNudge className="shrink-0" />
@@ -1700,7 +1759,7 @@ export default function Desk() {
           the well, so eight pixels each is 24 handed to the sheet — and on a
           6.1" screen with a 47px notch inset and a 34px home indicator, 24px is
           what a row of the list costs. Desktop is untouched. */}
-      <div className={cn("kr-hero flex flex-col gap-2.5 lg:grid lg:shrink-0 lg:grid-cols-[minmax(0,29fr)_minmax(0,45fr)] lg:gap-20",
+      <div className={cn("ng-hero flex flex-col gap-2.5 lg:grid lg:shrink-0 lg:grid-cols-[minmax(0,29fr)_minmax(0,45fr)] lg:gap-20",
           /* DEX-SLIDER Part 1 — THE TILES TAKE THE SLACK. The slider gives back
              about 150px that the 17rem well was holding. Rather than type a new
              tile height (which would be right on one phone and wrong on the
@@ -2112,8 +2171,15 @@ export default function Desk() {
           moment the card lifted, which is the one thing this rearrangement is
           not allowed to do. */}
       {/* The sheet's own break-out margins, so the place it holds is the room
-          the sheet took — not a gutter and a dock's clearance more. */}
-      {pop && <div aria-hidden="true" style={{ height: pop.rest.height }} className={deskSheet ? "kr-desk-sheet-floor" : undefined} data-testid="desk-board-spacer" />}
+          the sheet took — not a gutter and a dock's clearance more.
+          AND THE SHEET'S OWN ORDER (2026-10-13, founder's Android). Below lg
+          the hero is `order-1` and the board `order-2`; a spacer with no order
+          is `order: 0`, which flex lays out FIRST — above the greeting, so
+          the whole page slid down under the scrim by the sheet's height the
+          moment Show all was tapped. It stands where the board stood, so it
+          takes the board's order, and it never shrinks below the height it
+          is holding. */}
+      {pop && <div aria-hidden="true" style={{ height: pop.rest.height }} className={cn(DEX_SLIDER && "order-2 shrink-0 lg:order-none", deskSheet && "ng-desk-sheet-floor")} data-testid="desk-board-spacer" />}
       {/* THE PAGE BEHIND IT, dimmed and blurred — subtly, both. It sits under
           the card (9001) and under the dock (10000), so the bar keeps its own
           material and its own sharpness: the blur only ever touches what is
@@ -2124,7 +2190,7 @@ export default function Desk() {
           data-testid="desk-board-scrim"
           onClick={() => setPhoneExpanded(false)}
           aria-hidden="true"
-          className="fixed inset-0 z-[9000] bg-kr-ink/[0.10] backdrop-blur-[3px] transition-opacity duration-[260ms] lg:hidden"
+          className="fixed inset-0 z-[9000] bg-ng-ink/[0.10] backdrop-blur-[3px] transition-opacity duration-[260ms] motion-reduce:transition-none lg:hidden"
           style={{ opacity: pop.at === "full" ? 1 : 0 }}
         />
       )}
@@ -2174,10 +2240,10 @@ export default function Desk() {
           top: pop[pop.at].top,
           width: pop[pop.at].width,
           height: pop[pop.at].height,
-          transition: `top ${POP_MS}ms cubic-bezier(.22,1,.36,1), height ${POP_MS}ms cubic-bezier(.22,1,.36,1)`,
+          transition: popSnap ? "none" : `top ${POP_MS}ms cubic-bezier(.22,1,.36,1), height ${POP_MS}ms cubic-bezier(.22,1,.36,1)`,
         } : undefined}
         className={cn(
-          "kr-desk-board grid gap-5 lg:-mx-3 lg:-mb-2 lg:min-h-0 lg:flex-1 lg:gap-0 lg:grid-rows-[minmax(0,1fr)]",
+          "ng-desk-board grid gap-5 lg:-mx-3 lg:-mb-2 lg:min-h-0 lg:flex-1 lg:gap-0 lg:grid-rows-[minmax(0,1fr)]",
           /* DEX-SLIDER Part 1 — the card and the Dex control swap places on a
              phone: the card sits directly on the slider, the slider directly
              on the dock. Order only — the card is the same card, the same
@@ -2216,13 +2282,13 @@ export default function Desk() {
              ago and the reasoning left with it, so the sheet was wearing a
              56px curve at the bottom against 24px at the top for no object at
              all. Founder: "all corners should have the same corner radius."
-             Nothing here now: .kr-desk-board's own --radius-tile applies to
+             Nothing here now: .ng-desk-board's own --radius-tile applies to
              all four. */
           /* DESK-SHEET (2026-10-09) — and it is a sheet again: full-bleed, run
              on under the dock to the floor, top corners concentric with the tab
-             strip. The geometry is all in index.css (.kr-desk-sheet-floor); it
+             strip. The geometry is all in index.css (.ng-desk-sheet-floor); it
              replaces the -mb-2 seam, which that padding now carries. */
-          deskSheet && "kr-desk-sheet-floor max-lg:flex max-lg:flex-col",
+          deskSheet && "ng-desk-sheet-floor max-lg:flex max-lg:flex-col",
           showDecisions && "lg:grid-cols-[calc((100%-5rem)*29/74+2.5rem)_minmax(0,1fr)]",
           /* PILOT — the card stays its minimal content height on a phone (it does
              NOT grow to fill). The stack is top-aligned, so closing the demo

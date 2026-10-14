@@ -5,7 +5,7 @@
 // with the time, and offers a retry.
 import * as React from "react";
 import { CloudSlash, ArrowClockwise } from "@phosphor-icons/react";
-import { cn } from "@/lib/utils";
+import { TopNotice, NoticePill } from "@/components/TopNotice";
 
 const timeOf = (iso) => {
   const d = iso ? new Date(iso) : new Date();
@@ -26,47 +26,48 @@ const timeOf = (iso) => {
    loading ended, which reads as "nothing needs you" when the truth is
    "nobody asked". `failed` swaps the sentence; the retry is the one this
    strip already had. */
+/* 2026-10-12 (founder) — AN OVERLAY, NOT A CARD. This strip sat at the top of
+   the Desk's own column, so the moment a fetch failed or the device went
+   offline the whole Desk slid down by its height. It is a pill in the
+   top-notice stack now (components/TopNotice), floating under the status bar,
+   with Refresh and a close. Closed, it stays closed until what it says changes. */
 export function StaleStamp({
   at,
   onRetry,
   offline = false,
   failed = false,
-  className,
   "data-testid": testId = "stale-stamp",
 }) {
   const t = timeOf(at);
+  const message = failed && !t
+    ? "Some numbers couldn't be loaded."
+    : `Showing data from ${t}.`;
+  const [closed, setClosed] = React.useState(null);
   if (!t && !failed) return null;
+  // Offline is said once, by ConnectionNotice's own pill right above this one.
+  const key = `${message}|${offline}`;
+  if (closed === key) return null;
   return (
-    <div
-      role="status"
-      data-testid={testId}
-      className={cn(
-        // DS-5: the badge tokens, not ramp steps. `bg-caution-50` had no dark
-        // sibling, so this strip stayed cream on a near-black screen.
-        "flex items-center gap-2 rounded-lg border border-badge-pending-line bg-badge-pending px-3 py-2",
-        "text-sm text-badge-pending-fg",
-        className
-      )}
-    >
-      <CloudSlash size={20} weight="bold" aria-hidden="true" className="shrink-0" />
-      <p className="min-w-0 flex-1 leading-snug">
-        {failed && !t
-          ? (offline ? "You're offline. Some numbers couldn't be loaded." : "Some numbers couldn't be loaded.")
-          : `${offline ? "You're offline. " : ""}Showing data from ${t}.`}
-      </p>
-      {onRetry && (
-        <button
-          type="button"
-          onClick={onRetry}
-          data-testid={`${testId}-retry`}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-caution-300 bg-white/60 px-2.5 text-sm font-semibold text-caution-900 transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          style={{ minHeight: "var(--control-h-sm)" }}
-        >
-          <ArrowClockwise size={16} weight="bold" />
-          Refresh
-        </button>
-      )}
-    </div>
+    <TopNotice order={1}>
+      <NoticePill
+        icon={CloudSlash}
+        testid={testId}
+        onClose={() => setClosed(key)}
+        action={onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            data-testid={`${testId}-retry`}
+            className="flex h-8 shrink-0 items-center gap-1.5 rounded-pill bg-white/15 px-3 text-[13px] font-semibold text-white transition-colors hover:bg-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+          >
+            <ArrowClockwise size={14} weight="bold" aria-hidden="true" />
+            Refresh
+          </button>
+        )}
+      >
+        {message}
+      </NoticePill>
+    </TopNotice>
   );
 }
 

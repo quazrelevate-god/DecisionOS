@@ -21,14 +21,14 @@ import {
   AirplaneTakeoff, Briefcase, Camera, ChatText, Copy, EnvelopeSimple, Eye, LinkSimple, MagnifyingGlass,
   PencilSimple, Phone, Plus, Pulse, ShieldCheck, Trash, User, WhatsappLogo, X,
 } from "@phosphor-icons/react";
-import { PersonAvatar } from "../components/karma/PersonAvatar";
+import { PersonAvatar } from "../components/neuglass/PersonAvatar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { StickyHeader, ConfirmAction } from "../components/common";
 import {
   CHIP, QUIET_CHIP, DRAWER_CARD, DRAWER_FIELD, DRAWER_LABEL, DRAWER_TRACK,
   GLASS_ICON_BTN, GLASS_PILL, GLASS_SHEET, INK_PILL,
-} from "../components/karma/glass";
-import { GlassSelect } from "../components/karma/GlassSelect";
+} from "../components/neuglass/glass";
+import { GlassSelect } from "../components/neuglass/GlassSelect";
 import { ReportButton } from "../components/ReportButton";
 import { AddMemberTile, MEMBER_STATUS, MemberNode, OrgTree, orderByReportingLine } from "./team/OrgTree";
 // 2026-09-16, founder: at lg and up the tree is the reference's left-to-right
@@ -47,9 +47,9 @@ import { STORE_BUILD } from "../lib/storeBuild";
 const SHEET = `gap-5 rounded-[1.75rem] p-6 sm:rounded-[1.75rem] [&>button.absolute]:hidden ${GLASS_SHEET}`;
 /* 2026-09-16, founder: the profile pop-up is frosted glass like the Team tree's
    cards, not the grey sheet. A near-opaque white wash (it sits on the dialog's
-   dark backdrop, where a thin .kr-frost would read grey), a blur, a white rim
+   dark backdrop, where a thin .ng-frost would read grey), a blur, a white rim
    with a top-lip highlight and a long soft shadow. Its tiles and chips are the
-   quieter glass (.kr-frost-min's idea): drawn by a white rim over the card's
+   quieter glass (.ng-frost-min's idea): drawn by a white rim over the card's
    own blur, with no second backdrop-filter. */
 // The profile pop-up is see-through glass (founder, 2026-09-16): a thin white
 // wash and a heavy blur over a barely dimmed page, so the tree reads through
@@ -1255,7 +1255,7 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
           <ul className="mt-3 flex flex-col gap-2">
             {(goneQ.data || []).map((u) => (
               <li key={u.id} data-testid={`deactivated-${u.id}`}
-                className="kr-pop flex flex-wrap items-center gap-3 rounded-2xl px-3 py-2.5">
+                className="ng-pop flex flex-wrap items-center gap-3 rounded-2xl px-3 py-2.5">
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-foreground">{u.name}</span>
                   <span className="block truncate text-xs text-muted-foreground">
@@ -1265,13 +1265,13 @@ export function TeamPanel({ readOnly = false, title, subtitle } = {}) {
                 <button type="button" data-testid={`reactivate-${u.id}`}
                   disabled={teamBusy}
                   onClick={() => runTeam(() => api.post(`/users/${u.id}/reactivate`), `${u.name} is back on the team`)}
-                  className="kr-lift rounded-pill bg-kr-ink px-4 py-2 text-xs font-medium text-white">
+                  className="ng-lift rounded-pill bg-ng-ink px-4 py-2 text-xs font-medium text-white">
                   Bring back
                 </button>
                 {isOwner && (
                   <button type="button" data-testid={`erase-${u.id}`} disabled={teamBusy}
                     onClick={() => setPendingErase(u)}
-                    className="rounded-pill px-3 py-2 text-xs font-medium text-kr-accent hover:bg-kr-accent/10">
+                    className="rounded-pill px-3 py-2 text-xs font-medium text-ng-accent hover:bg-ng-accent/10">
                     Erase for good
                   </button>
                 )}
@@ -1493,9 +1493,9 @@ function MemberProfileDialog({
               up each column is its own scroll area (founder, 2026-09-16): a long
               leave history scrolls on the right without moving the details on
               the left, and the left scrolls only if its own content is too tall. */}
-          <div className={`grid min-h-0 flex-1 gap-6 overflow-y-auto border-t border-slate-900/[0.06] px-6 pt-5 [scrollbar-width:thin] md:grid-rows-[minmax(0,1fr)] md:overflow-hidden ${showLeave ? "md:grid-cols-2" : ""}`}>
+          <div className={`grid min-h-0 flex-1 gap-6 overflow-y-auto border-t border-slate-900/[0.06] px-6 pt-5 md:grid-rows-[minmax(0,1fr)] md:overflow-hidden ${showLeave ? "md:grid-cols-2" : ""}`}>
             {/* Left: personal details and access. */}
-            <div className="min-w-0 space-y-5 pb-6 md:min-h-0 md:overflow-y-auto md:[scrollbar-width:thin]">
+            <div className="min-w-0 space-y-5 pb-6 md:min-h-0 md:overflow-y-auto">
           <section>
             <p className={DRAWER_LABEL}>Personal details</p>
             {/* Each fact is its own glass tile; email spans the row, since it
@@ -1562,7 +1562,7 @@ function MemberProfileDialog({
 
             {/* Right: their leave, as a timeline (team managers and the person themselves). */}
             {showLeave && (
-              <div className="min-w-0 pb-6 md:min-h-0 md:overflow-y-auto md:border-l md:border-slate-900/[0.06] md:pl-6 md:pr-1 md:[scrollbar-width:thin]" data-testid="profile-leave-scroll">
+              <div className="min-w-0 pb-6 md:min-h-0 md:overflow-y-auto md:border-l md:border-slate-900/[0.06] md:pl-6 md:pr-1" data-testid="profile-leave-scroll">
                 <MemberLeaveTimeline userId={u.id} />
               </div>
             )}

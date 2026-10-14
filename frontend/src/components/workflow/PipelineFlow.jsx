@@ -104,8 +104,8 @@ function Station({ stage, index, pipeline, selected, onSelect, teamLabel, still,
         className={cn(
           "relative z-[1] grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-semibold tabular-nums transition-[transform,box-shadow] duration-200",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 motion-reduce:transition-none",
-          signOff ? "bg-[hsl(var(--kr-gold))] text-slate-900 shadow-[0_0_0_4px_hsl(var(--kr-gold)/.25)]"
-            : selected ? "bg-kr-ink text-white" : "bg-white text-slate-700 ring-1 ring-inset ring-slate-900/15 hover:ring-slate-900/30",
+          signOff ? "bg-[hsl(var(--ng-gold))] text-slate-900 shadow-[0_0_0_4px_hsl(var(--ng-gold)/.25)]"
+            : selected ? "bg-ng-ink text-white" : "bg-white text-slate-700 ring-1 ring-inset ring-slate-900/15 hover:ring-slate-900/30",
           selected && "scale-110",
         )}>
         {signOff ? <ShieldCheck size={15} weight="fill" aria-hidden="true" /> : index + 1}
@@ -119,7 +119,7 @@ function Station({ stage, index, pipeline, selected, onSelect, teamLabel, still,
         {stage.role && (
           // The team's whole name: it wraps rather than being cut to "Sales & Merchan…".
           <span className={cn("mt-1 inline-flex max-w-full items-start gap-1 rounded-xl px-2 py-0.5 text-left text-[11px] font-medium leading-snug",
-            stage.role === "owner" ? "bg-[hsl(var(--kr-gold)/.22)] text-slate-800" : "bg-slate-900/[0.06] text-slate-600")}>
+            stage.role === "owner" ? "bg-[hsl(var(--ng-gold)/.22)] text-slate-800" : "bg-slate-900/[0.06] text-slate-600")}>
             <UsersThree size={11} aria-hidden="true" className="mt-0.5 shrink-0" />
             <span className="min-w-0 [overflow-wrap:anywhere]">{teamLabel(stage.role)}</span>
           </span>
@@ -128,7 +128,7 @@ function Station({ stage, index, pipeline, selected, onSelect, teamLabel, still,
           {tasks.length ? `${tasks.length} piece${tasks.length === 1 ? "" : "s"} of work` : "No set work"}
         </span>
         {signOff && (
-          <span className="mt-1.5 inline-block rounded-xl bg-[hsl(var(--kr-gold)/.18)] px-2 py-1 text-[11px] font-medium leading-snug text-slate-800"
+          <span className="mt-1.5 inline-block rounded-xl bg-[hsl(var(--ng-gold)/.18)] px-2 py-1 text-[11px] font-medium leading-snug text-slate-800"
             data-testid="flow-signoff-line">
             {signOffLine(pipeline, teamLabel)}
           </span>
@@ -185,7 +185,7 @@ export function PipelineFlow({ pipelines, teams, still = false, testid = "pipeli
             <button key={x.key} type="button" role="tab" aria-selected={i === pi} onClick={() => setPi(i)}
               data-testid={`flow-pipeline-${x.key}`}
               className={cn("h-9 rounded-pill px-3.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25",
-                i === pi ? "bg-kr-ink text-white" : "bg-white/80 text-slate-700 ring-1 ring-inset ring-slate-900/10 hover:bg-white")}>
+                i === pi ? "bg-ng-ink text-white" : "bg-white/80 text-slate-700 ring-1 ring-inset ring-slate-900/10 hover:bg-white")}>
               {x.label}
               <span className={cn("ml-1.5 tabular-nums", i === pi ? "text-white/70" : "text-slate-400")}>{(x.stages || []).length}</span>
             </button>
@@ -229,7 +229,7 @@ export function PipelineFlow({ pipelines, teams, still = false, testid = "pipeli
             {stage.role && <span className="font-normal text-slate-500"> · {stage.role === "owner" ? "you own this step" : `${teamLabel(stage.role)} owns this step`}</span>}
           </p>
           {signOffHere && (
-            <p className="mt-2 flex items-start gap-1.5 rounded-xl bg-[hsl(var(--kr-gold)/.16)] px-2.5 py-2 text-xs text-slate-800">
+            <p className="mt-2 flex items-start gap-1.5 rounded-xl bg-[hsl(var(--ng-gold)/.16)] px-2.5 py-2 text-xs text-slate-800">
               <ShieldCheck size={14} weight="fill" aria-hidden="true" className="mt-px shrink-0" />
               <span>Sign-off: {signOffLine(p, teamLabel)}. Nothing moves into this step until it is cleared.</span>
             </p>

@@ -27,7 +27,7 @@ The popover also refused to open at all on error (`open && (rows.length > 0
 from pathlib import Path
 
 FE = Path(__file__).resolve().parents[2] / "frontend" / "src"
-PICKER = (FE / "components" / "karma" / "PartyPicker.jsx").read_text(encoding="utf-8")
+PICKER = (FE / "components" / "neuglass" / "PartyPicker.jsx").read_text(encoding="utf-8")
 
 
 def test_the_picker_says_its_list_never_arrived():

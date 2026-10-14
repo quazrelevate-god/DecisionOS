@@ -5,6 +5,7 @@
   "dependencies": {
     "@capacitor/android": "^8.5.2",
     "@capacitor/app": "^8.1.1",
+    "@capacitor/browser": "^8.0.5",
     "@capacitor/core": "^8.5.2",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/ios": "^8.5.2",
@@ -92,7 +93,8 @@
     "build:prod": "REACT_APP_BACKEND_URL=https://backend-production-c8640.up.railway.app craco build",
     "cap:sync:prod": "GENERATE_SOURCEMAP=false REACT_APP_NATIVE=1 npm run build:prod && npm run cap:prune && npx cap sync",
     "cap:prune": "node scripts/prune-native-assets.mjs",
-    "verify:slider": "node scripts/verify-dex-slider.mjs"
+    "verify:slider": "node scripts/verify-dex-slider.mjs",
+    "verify:guide": "node scripts/verify-guide.mjs"
   },
   "browserslist": {
     "production": [

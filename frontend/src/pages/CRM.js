@@ -39,9 +39,9 @@ import {
 import {
   CHIP, QUIET_CHIP, DRAWER_FIELD, DRAWER_LABEL, DRAWER_TRACK, GLASS_ICON_BTN,
   GLASS_MENU, GLASS_MENU_ITEM, GLASS_PILL, GLASS_SHEET, INK_PILL,
-} from "../components/karma/glass";
-import { GlassSelect } from "../components/karma/GlassSelect";
-import { DraftNote } from "../components/karma/DraftNote";
+} from "../components/neuglass/glass";
+import { GlassSelect } from "../components/neuglass/GlassSelect";
+import { DraftNote } from "../components/neuglass/DraftNote";
 import { useDraft } from "../hooks/useDraft";
 import { cn } from "@/lib/utils";
 import { LogComplaintDialog, severityLabel } from "../components/crm/LogComplaintDialog";
@@ -88,7 +88,7 @@ const statusesFor = (type) => (VENDOR_TYPES.includes(type)
   : STATUSES);
 
 // E2-03: lifecycle stages. Customers travel a sales funnel, suppliers a
-// procurement journey. Each stage is a card chip tone (components/karma/glass
+// procurement journey. Each stage is a card chip tone (components/neuglass/glass
 // CHIP): neutral for not started or ended, emerald for healthy, rose for at
 // risk, amber for on hold.
 const CUSTOMER_STAGES = [
@@ -734,7 +734,7 @@ export function CrmContactDialog({ type, contact, onClose, onSaved, users, label
               warning ink: it is the one control here that cannot be undone. */}
           {editing && (
             <button type="button" onClick={() => setConfirmDelete(true)} disabled={busy} data-testid="crm-contact-delete"
-              className="flex min-h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-kr-accent transition-colors hover:bg-kr-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline disabled:opacity-40">
+              className="flex min-h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-ng-accent transition-colors hover:bg-ng-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline disabled:opacity-40">
               <Trash size={15} weight="bold" aria-hidden="true" /> Delete
             </button>
           )}
@@ -743,7 +743,7 @@ export function CrmContactDialog({ type, contact, onClose, onSaved, users, label
               had it before the split and have the same reason to need it. */}
           {editing && onLogComplaint && BUYER_TYPES.includes(form.type) && (
             <button type="button" onClick={() => onLogComplaint(contact)} disabled={busy} data-testid="crm-contact-log-complaint"
-              className={`mr-auto flex min-h-11 items-center gap-2 rounded-pill px-5 text-sm font-medium text-rose-700 transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline disabled:opacity-40 ${GLASS_PILL}`}>
+              className={`mr-auto flex min-h-11 items-center gap-2 rounded-pill px-5 text-sm font-medium text-rose-700 transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline disabled:opacity-40 ${GLASS_PILL}`}>
               <Warning size={15} weight="bold" aria-hidden="true" /> Log complaint
             </button>
           )}

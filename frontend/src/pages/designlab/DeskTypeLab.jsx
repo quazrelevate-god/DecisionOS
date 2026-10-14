@@ -78,7 +78,7 @@ export const DESK_TYPE_VARIANTS = [
 
 const fontHref = (gf) => `https://fonts.googleapis.com/css2?family=${gf}&display=swap`;
 
-/** The variant as CSS, scoped to the Desk's own hooks (data-testid + kr-desk-*). */
+/** The variant as CSS, scoped to the Desk's own hooks (data-testid + ng-desk-*). */
 export function deskTypeCss(variant) {
   const s = SIZE[variant.size];
   const sp = SPACE[variant.space];
@@ -99,28 +99,28 @@ html body, html body *:not(svg):not(svg *) { font-family: ${fam} !important; }
 
 /* KPI tiles */
 [data-testid="desk-kpi-grid"] { gap: ${sp.kpiGap}px !important; }
-[data-testid="desk-kpi-grid"] .kr-kpi-tile { padding: ${sp.tilePad}px !important; border-radius: ${sp.tileR}px !important; }
+[data-testid="desk-kpi-grid"] .ng-kpi-tile { padding: ${sp.tilePad}px !important; border-radius: ${sp.tileR}px !important; }
 [data-testid="desk-kpi-grid"] .text-4xl { font-size: ${s.kpiNum}px !important; font-weight: ${w.num} !important; letter-spacing: ${track.display} !important; }
 [data-testid="desk-kpi-grid"] .text-lg { font-size: ${Math.round(s.kpiNum * 0.5)}px !important; }
 [data-testid="desk-kpi-grid"] .text-sm,
-[data-testid="desk-kpi-grid"] .kr-stat__label { font-size: ${s.label}px !important; line-height: ${lh.label} !important; font-weight: ${w.label} !important; }
+[data-testid="desk-kpi-grid"] .ng-stat__label { font-size: ${s.label}px !important; line-height: ${lh.label} !important; font-weight: ${w.label} !important; }
 [data-testid="kpi-workflows-open"] { font-size: ${s.button}px !important; font-weight: ${w.strong} !important; }
 /* The label sits BESIDE the 32px icon today, which leaves it ~52px of a
    117px tile: at a readable size "Complaints" becomes "Complai". It moves
    under the icon here and gets the tile's whole width. */
-[data-testid="desk-kpi-grid"] > a.kr-kpi-tile > div:first-child { flex-wrap: wrap; row-gap: ${sp.lineGap + 6}px; }
-[data-testid="desk-kpi-grid"] > a.kr-kpi-tile > div:first-child > p { flex-basis: 100%; }
+[data-testid="desk-kpi-grid"] > a.ng-kpi-tile > div:first-child { flex-wrap: wrap; row-gap: ${sp.lineGap + 6}px; }
+[data-testid="desk-kpi-grid"] > a.ng-kpi-tile > div:first-child > p { flex-basis: 100%; }
 
 /* the sheet: tabs, pills, show all */
-.kr-desk-board { padding-inline: ${sp.sheetX}px !important; }
+.ng-desk-board { padding-inline: ${sp.sheetX}px !important; }
 [data-testid^="desk-tab-"]:not([data-testid="desk-tab-slider"]) { font-size: ${s.tab}px !important; font-weight: ${w.strong} !important; }
-.kr-desk-sheet-list { --desk-row-gap: ${sp.listGap}px !important; gap: var(--desk-row-gap) !important; }
-.kr-desk-pill { padding-inline: ${sp.pillX}px !important; border-radius: ${sp.pillR}px !important; }
-.kr-desk-row-roomy { padding-block: ${row(sp.pillY)} !important; }
-.kr-desk-pill > div:first-child { gap: ${sp.lineGap}px !important; }
-.kr-desk-row-title { font-size: ${row(s.title)} !important; line-height: ${row(s.title * lh.title)} !important; font-weight: ${w.title} !important; letter-spacing: ${track.title} !important; }
-.kr-desk-row-meta { font-size: ${row(s.meta)} !important; line-height: ${row(s.meta * lh.meta)} !important; font-weight: ${w.body} !important; }
-.kr-desk-row-amount { font-size: ${row(s.amount)} !important; font-weight: ${w.title} !important; font-variant-numeric: tabular-nums; }
+.ng-desk-sheet-list { --desk-row-gap: ${sp.listGap}px !important; gap: var(--desk-row-gap) !important; }
+.ng-desk-pill { padding-inline: ${sp.pillX}px !important; border-radius: ${sp.pillR}px !important; }
+.ng-desk-row-roomy { padding-block: ${row(sp.pillY)} !important; }
+.ng-desk-pill > div:first-child { gap: ${sp.lineGap}px !important; }
+.ng-desk-row-title { font-size: ${row(s.title)} !important; line-height: ${row(s.title * lh.title)} !important; font-weight: ${w.title} !important; letter-spacing: ${track.title} !important; }
+.ng-desk-row-meta { font-size: ${row(s.meta)} !important; line-height: ${row(s.meta * lh.meta)} !important; font-weight: ${w.body} !important; }
+.ng-desk-row-amount { font-size: ${row(s.amount)} !important; font-weight: ${w.title} !important; font-variant-numeric: tabular-nums; }
 [data-testid="desk-phone-more"] { font-size: ${s.tab}px !important; font-weight: ${w.strong} !important; }
 
 /* dock */

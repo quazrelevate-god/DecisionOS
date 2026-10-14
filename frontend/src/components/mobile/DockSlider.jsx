@@ -33,7 +33,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { X, DotsThree } from "@phosphor-icons/react";
 import { AnimatePresence } from "framer-motion";
-import { DexSlider } from "../karma/DexSlider";
+import { DexSlider } from "../neuglass/DexSlider";
 import { dockSlots, DockItem } from "./FloatingDock";
 import { Bubble, Outcome } from "./DexChat";
 import { AiNotice } from "../ReportButton";
@@ -144,7 +144,7 @@ export function DockSlider({
       data-testid="dock-slider-items"
     >
       {items(left)}
-      {/* The handle's own width (kr-slider-knob, 5.375rem): the space beside
+      {/* The handle's own width (ng-slider-knob, 5.375rem): the space beside
           it then counts as one of the even gaps, not a bigger one. */}
       <span className="w-[5.375rem] shrink-0" aria-hidden="true" />
       {items(right)}
@@ -270,7 +270,7 @@ function DockMore({ user, onClose }) {   // onClose: picked a destination
       {/* Five rows of two, on the dock's own ink — no card between them and it.
           It scrolls only if a role ever has more than fits, which no role does
           today; the panel is sized to its content. */}
-      <div className="kr-scroll-quiet min-h-0 max-h-[calc(58dvh/var(--ui-scale,1))] overflow-y-auto overscroll-contain px-2 py-2">
+      <div className="ng-scroll-quiet min-h-0 max-h-[calc(58dvh/var(--ui-scale,1))] overflow-y-auto overscroll-contain px-2 py-2">
         <div className="grid grid-cols-2 gap-2" data-testid="dock-more-grid">
           {items.map((it) => {
             const Icon = it.icon;
@@ -288,7 +288,7 @@ function DockMore({ user, onClose }) {   // onClose: picked a destination
                 className={cn(
                   "flex min-h-touch items-center gap-2 rounded-pill bg-white/[.92] px-2.5 py-2 text-left",
                   it.wide && "col-span-2",
-                  "text-[hsl(var(--kr-ink))] shadow-[0_1px_2px_rgb(0_0_0/.18)]",
+                  "text-[hsl(var(--ng-ink))] shadow-[0_1px_2px_rgb(0_0_0/.18)]",
                   "transition-colors duration-150 hover:bg-white",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
                 )}
@@ -352,7 +352,7 @@ function DockAskPanel({ chat, onClose, onOpenDecision, children }) {
   return (
     <div
       ref={panelRef}
-      className="kr-dock-chat flex flex-col overflow-hidden rounded-[var(--radius-card)]"
+      className="ng-dock-chat flex flex-col overflow-hidden rounded-[var(--radius-card)]"
       data-testid="dock-ask-panel"
     >
       <div className="flex shrink-0 items-center justify-between gap-2 px-3 pt-2.5">
@@ -383,7 +383,7 @@ function DockAskPanel({ chat, onClose, onOpenDecision, children }) {
 
       {/* The transcript. Bottom-anchored, so a short conversation sits on the
           control rather than floating at the top of a tall empty panel. */}
-      <div className="kr-scroll-quiet min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2">
+      <div className="ng-scroll-quiet min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2">
         <div className="flex min-h-full flex-col justify-end gap-2.5">
           <AnimatePresence initial={false}>
             {log.map((m, i) => (

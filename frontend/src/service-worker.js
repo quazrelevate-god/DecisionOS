@@ -89,9 +89,12 @@ self.addEventListener('install', (event) => {
 //
 // The pattern allows a query string ("/?utm=..." is still the root) but not
 // "/inbox", which must keep resolving to the shell.
+// 2026-10-12 — and the user guide (/guide) is a static page of its own, served
+// by server.js like the landing page; the shell here would answer it with the
+// app's not-found screen.
 registerRoute(
   new NavigationRoute(createHandlerBoundToURL('/index.html'), {
-    denylist: [/^\/(\?|$)/, /^\/admin/, /^\/api/],
+    denylist: [/^\/(\?|$)/, /^\/admin/, /^\/api/, /^\/guide(\/|$)/],
   })
 );
 
@@ -103,7 +106,7 @@ registerRoute(
 // no-cache/must-revalidate for /landing/, so this simply matches the origin's
 // own intent; the cache remains as an offline fallback.
 registerRoute(
-  ({ url }) => url.pathname.startsWith('/landing/'),
+  ({ url }) => url.pathname.startsWith('/landing/') || url.pathname.startsWith('/guide/'),
   new NetworkFirst({
     cacheName: 'decisionos-landing',
     networkTimeoutSeconds: 4,

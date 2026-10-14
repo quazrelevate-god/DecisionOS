@@ -99,7 +99,7 @@ export default function DeleteAccount() {
           </p>
           <button type="button" data-testid="delete-account-signin"
             onClick={() => navigate(`/login?next=${encodeURIComponent("/delete-account")}`)}
-            className="kr-pop mt-4 flex h-11 items-center rounded-pill px-6 text-sm font-medium text-foreground">
+            className="ng-pop mt-4 flex h-11 items-center rounded-pill px-6 text-sm font-medium text-foreground">
             Sign in to continue
           </button>
           <p className="mt-6 text-xs text-muted-foreground">
@@ -152,7 +152,7 @@ export default function DeleteAccount() {
                 placeholder={phrase} />
               <button type="button" onClick={doIt} disabled={busy || typed.trim() !== phrase}
                 data-testid="delete-account-confirm-button"
-                className="mt-4 flex h-11 w-full items-center justify-center rounded-pill bg-kr-accent px-6 text-sm font-medium text-white disabled:opacity-40">
+                className="mt-4 flex h-11 w-full items-center justify-center rounded-pill bg-ng-accent px-6 text-sm font-medium text-white disabled:opacity-40">
                 {busy ? "Deleting…" : "Delete my account for good"}
               </button>
             </>

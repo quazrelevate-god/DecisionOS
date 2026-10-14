@@ -14,8 +14,8 @@ const WA_STATUS_STYLE = {
   received: "bg-caution-50 text-caution-800",
   draft: "bg-nm-sunken text-muted-foreground",
   attention: "bg-caution-100 text-caution-800",
-  filed: "bg-kr-ink text-white",
-  structured: "bg-kr-ink text-white",
+  filed: "bg-ng-ink text-white",
+  structured: "bg-ng-ink text-white",
   ignored: "bg-nm-sunken text-muted-foreground",
   rejected: "bg-danger-600 text-white",
   signature_mismatch: "bg-danger-600 text-white",
@@ -40,7 +40,7 @@ export default function WhatsAppCard() {
    plus a translucent ground destroys the contrast a camera needs to lock on.
    So the shell is glass and the code sits on an opaque white plate inside
    it. (See the QR block below.) */
-    <div className="kr-frost p-5 mb-8" data-testid="whatsapp-card">
+    <div className="ng-frost p-5 mb-8" data-testid="whatsapp-card">
       {!st?.configured && (
         <div className="flex items-center gap-2 mb-4">
           <Chip value="not connected" className="bg-nm-sunken text-muted-foreground" />
@@ -55,7 +55,7 @@ export default function WhatsAppCard() {
                  be glass. A camera needs the code's own black-on-white
                  contrast, and a translucent ground with a blur behind it
                  hands it a moving background instead. */
-              className="kr-lift rounded-cardlg bg-white p-3">
+              className="ng-lift rounded-cardlg bg-white p-3">
               <QRCodeSVG value={waLink} size={132} level="M" />
             </a>
           ) : (

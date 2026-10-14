@@ -4,11 +4,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 /* KM-43 — the app's wordmark, not the PNG lockup. Founder: "use the black
    version of decision os logo in the signup page which is used inside the
-   inbox page and everywhere in mobile pwa". KarmaLogo is text — "Decision" at
+   inbox page and everywhere in mobile pwa". NeuGlassLogo is text — "Decision" at
    full ink, "OS" dropped to 55% — which is what the app shell has worn since
    KR-8.2. The PNG (Wordmark.jsx) keeps Landing and Login, the two marketing
    surfaces that still carry the registered artwork. */
-import { KarmaLogo } from "../components/karma/Logo";
+import { NeuGlassLogo } from "../components/neuglass/Logo";
 import { Check } from "@phosphor-icons/react";
 import { BasicsFlow } from "./onboarding/BasicsFlow";
 import { startOrResume, saveStep, clearDraft, currentDraft, formFromDraft, hasSavedAnswers, worldFromDraft, progressFromDraft } from "../lib/onboardingDraft";
@@ -27,7 +27,7 @@ const PHASES = [
   { key: "build", label: "Your OS" },
 ];
 
-// KM-19 · the founder onboarding, rebuilt on the Karma material.
+// KM-19 · the founder onboarding, rebuilt on the Neu-glassmorphism material.
 //
 // WHAT THIS REPLACED. The whole flow was the last stretch of the retired
 // brutalist system: a flat `bg-brand-paper` page, `border-b border-border`
@@ -35,7 +35,7 @@ const PHASES = [
 // hard-edged progress ticks. It was the first screen a founder ever saw and
 // the only one that looked nothing like the product behind it.
 //
-// Every surface is now .kr-well / .kr-pop / .kr-pressed.
+// Every surface is now .ng-well / .ng-pop / .ng-pressed.
 //
 // ON THE FLAT WHITE GROUND (founder's call). The first pass put signup on
 // .app-sky, so it carried the same amber weather as the app and had the
@@ -44,7 +44,7 @@ const PHASES = [
 // <html data-page> for a sky this page no longer has.
 //
 // WHAT THAT COSTS, so the next person knows. Neumorphism needs a ground it
-// can be lighter AND darker than: .kr-pop's raised lip and .kr-pressed's
+// can be lighter AND darker than: .ng-pop's raised lip and .ng-pressed's
 // inner highlight are both white, so against #fff they have nothing to show
 // against and only the dark half of each pair survives. The app itself sits
 // on --nm-bg, an off-white, for exactly that reason. The panes here still
@@ -320,7 +320,7 @@ export default function Signup() {
      the stacking context with it, and the glow rendered as a white page. */
   return (
     /* KM-42 — `signup-stage` is the scoping hook for the desktop treatment,
-       and it earns its keep: .kr-well is used on Ledger, Operating Score and
+       and it earns its keep: .ng-well is used on Ledger, Operating Score and
        InsightWell too, all of which sit on the app's pale canvas where the
        neumorphic pane is correct. Only here does it sit on a photograph.
        bg-white stays as the load fallback — the picture covers it once it
@@ -351,9 +351,9 @@ export default function Signup() {
           Same shape the app shell already uses (Layout.js:941). --sa-top is
           0 in a browser, so desktop and web are unchanged. */}
       <header className="px-4 pt-[calc(var(--sa-top)+1rem)] lg:px-8 lg:pt-6">
-        <div className="mx-auto flex w-full max-w-5xl items-center justify-center gap-4 rounded-pill px-4 py-2.5 lg:kr-frost lg:justify-between lg:px-6">
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-center gap-4 rounded-pill px-4 py-2.5 lg:ng-frost lg:justify-between lg:px-6">
           <Link to="/" className="flex shrink-0 items-center gap-2.5" data-testid="signup-logo">
-            <KarmaLogo size="md" />
+            <NeuGlassLogo size="md" />
           </Link>
 
           {/* The phase rail. Sunken track, raised pill on the live phase —
@@ -365,7 +365,7 @@ export default function Signup() {
               that covers the nav items, and increase the transparency of the
               inside pill that highlights them."
 
-              .kr-pressed drew a sunken trough behind all four phases. On the
+              .ng-pressed drew a sunken trough behind all four phases. On the
               app's pale canvas that reads as a segmented control; on a
               photograph it reads as a slab laid over the picture, and it was
               sitting inside the header's own glass pill as well — a second
@@ -405,7 +405,7 @@ export default function Signup() {
                     <span
                       aria-hidden="true"
                       className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                        live ? "bg-[hsl(var(--kr-gold))]" : "bg-foreground/15"
+                        live ? "bg-[hsl(var(--ng-gold))]" : "bg-foreground/15"
                       }`}
                     />
                   )}
@@ -426,7 +426,7 @@ export default function Signup() {
           <Link
             to="/login"
             data-testid="signup-signin-link"
-            className="kr-pop hidden h-9 shrink-0 items-center rounded-pill px-4 text-xs font-medium lg:flex"
+            className="ng-pop hidden h-9 shrink-0 items-center rounded-pill px-4 text-xs font-medium lg:flex"
           >
             Sign in
           </Link>
@@ -450,7 +450,7 @@ export default function Signup() {
             anything. Nothing is keyed until we know which phase they are on,
             and the waiting card lives out here where no key can strand it. */}
         {!draftReady ? (
-          <div className="mx-auto w-full max-w-xl kr-well px-6 py-16 text-center"
+          <div className="mx-auto w-full max-w-xl ng-well px-6 py-16 text-center"
                data-testid="signup-restoring">
             <Loader size={28} />
             <p className="mt-4 text-sm text-muted-foreground">
@@ -560,12 +560,12 @@ export default function Signup() {
           picture it read 1.38:1 against a 4.5 requirement: 11px muted type
           printed straight onto a photograph, and the photograph is dark
           exactly there. A glass chip is the fix rather than a colour change —
-          it matches the header's own floating pill, and .kr-frost carries the
+          it matches the header's own floating pill, and .ng-frost carries the
           darkened --text-secondary re-scope, so the text gets a lighter ground
           AND darker ink from one class. `w-fit` keeps the chip the width of
           the sentence instead of a bar across the page. */}
       <footer className="flex justify-center px-4 pb-5 lg:px-8">
-        <p className="kr-frost w-fit max-w-full rounded-pill px-4 py-1.5 text-center text-[11px] text-muted-foreground">
+        <p className="ng-frost w-fit max-w-full rounded-pill px-4 py-1.5 text-center text-[11px] text-muted-foreground">
           No credit card · 2 minutes · built around how you actually run
         </p>
       </footer>

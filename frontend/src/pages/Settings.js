@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api, { formatApiError } from "../lib/api";
 import { hasPerm, userPerms, PERMISSIONS, PERMISSION_GROUPS } from "../lib/perms";
 import { roleLabel } from "../lib/departments";
 import { PageHeader } from "../components/common";
 import { CompanyDetails } from "../components/CompanyDetails";
-import { GlassSelect } from "../components/karma/GlassSelect";
+import { GlassSelect } from "../components/neuglass/GlassSelect";
 import { BusinessVocabulary } from "../components/BusinessVocabulary";
 // 2026-10-05 — teams and their access get a tab of their own; task templates
 // move to Operations. Both were sections at the bottom of Company Details.
@@ -28,7 +28,10 @@ import { ProfileForm, ChangePasswordForm } from "../components/ProfileDialog";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { CurrencyCircleDollar, ShieldCheck, FloppyDisk, Info, UserCircle, Translate, Lock, Buildings, FlowArrow, User, SignOut, UsersThree } from "@phosphor-icons/react";
+import { CurrencyCircleDollar, ShieldCheck, FloppyDisk, Info, UserCircle, Translate, Lock, Buildings, FlowArrow, User, SignOut, UsersThree, Lifebuoy, BookOpenText, PlayCircle } from "@phosphor-icons/react";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { openGuide } from "../lib/guide";
+import { INK_PILL } from "../components/neuglass/glass";
 
 const CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "AUD"];
 const inp = "w-full nm-field px-3 py-2 text-sm";
@@ -36,7 +39,7 @@ const inp = "w-full nm-field px-3 py-2 text-sm";
 function LanguageCard() {
   const { t } = useTranslation();
   return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="settings-language-card">
+    <div className="ng-bento p-5 sm:p-6" data-testid="settings-language-card">
       <div className="flex items-center gap-2 mb-1">
         <Translate size={20} weight="bold" aria-hidden="true" className="text-muted-foreground" />
         <h2 className="text-base font-medium">{t("settings.language_title")}</h2>
@@ -49,7 +52,7 @@ function LanguageCard() {
 
 function ProfileCard() {
   return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="settings-profile-card">
+    <div className="ng-bento p-5 sm:p-6" data-testid="settings-profile-card">
       <div className="flex items-center gap-2 mb-1">
         <UserCircle size={20} weight="bold" aria-hidden="true" className="text-muted-foreground" />
         <h2 className="text-base font-medium">Your Profile</h2>
@@ -62,7 +65,7 @@ function ProfileCard() {
 
 function SecurityCard() {
   return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="settings-security-card">
+    <div className="ng-bento p-5 sm:p-6" data-testid="settings-security-card">
       <div className="flex items-center gap-2 mb-1">
         <Lock size={20} weight="bold" aria-hidden="true" className="text-muted-foreground" />
         <h2 className="text-base font-medium">Password & Security</h2>
@@ -99,7 +102,7 @@ function MoneyAndApprovalsCard() {
   };
 
   return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="settings-money-card">
+    <div className="ng-bento p-5 sm:p-6" data-testid="settings-money-card">
       <div className="flex items-center gap-2 mb-1">
         <CurrencyCircleDollar size={20} weight="bold" aria-hidden="true" className="text-muted-foreground" />
         {/* U7-11.1 (2026-08-17): match the uppercase / extrabold
@@ -131,7 +134,7 @@ function MoneyAndApprovalsCard() {
 
         <button type="button" onClick={() => setSignoff(!signoff)} data-testid="settings-signoff-toggle"
           className="nm-inset flex w-full items-start gap-3 p-3.5 text-left transition-colors">
-          <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border border-kr-outline ${signoff ? "bg-kr-ink text-white" : "bg-nm-raised"}`}>
+          <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border border-ng-outline ${signoff ? "bg-ng-ink text-white" : "bg-nm-raised"}`}>
             {signoff && <ShieldCheck size={13} weight="bold" />}
           </span>
           <span>
@@ -142,7 +145,7 @@ function MoneyAndApprovalsCard() {
       </div>
 
       <button onClick={save} disabled={saving} data-testid="settings-save"
-        className="kr-lift mt-6 flex items-center gap-2 rounded-pill bg-kr-ink px-5 py-2.5 text-sm font-medium text-white transition-all disabled:opacity-60">
+        className="ng-lift mt-6 flex items-center gap-2 rounded-pill bg-ng-ink px-5 py-2.5 text-sm font-medium text-white transition-all disabled:opacity-60">
         <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Settings"}
       </button>
     </div>
@@ -225,14 +228,31 @@ function AiConsentCard() {
     } finally { setBusy(false); }
   };
   const on = !!s?.active;
-  const pill = "kr-pop flex h-11 shrink-0 items-center justify-center rounded-pill px-4 text-sm font-medium text-foreground disabled:opacity-50";
+  const pill = "ng-pop flex h-11 shrink-0 items-center justify-center rounded-pill px-4 text-sm font-medium text-foreground disabled:opacity-50";
   return (
-    <div id="ai-consent" className="kr-bento scroll-mt-24 p-5 sm:p-6" data-testid="settings-ai-consent-card">
+    <div id="ai-consent" className="ng-bento scroll-mt-24 p-5 sm:p-6" data-testid="settings-ai-consent-card">
       <h2 className="text-base font-medium">AI processing</h2>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Dex, reading voice notes and documents, and AI suggestions send the text involved to DecisionOS&rsquo;s AI providers.
-        They stay off until an owner agrees.
-      </p>
+      {/* WHO, BY NAME (2026-10-14, App Store audit). App Review Guideline
+          5.1.2(i), as changed on 13 Nov 2025, asks an app to say clearly where
+          personal data goes — "including with third-party AI" — and to get
+          explicit permission first. This card IS that permission for an
+          existing workspace (and for the App Review account, which never sees
+          signup), so it names the providers and what each receives, the same
+          way signup's own consent step does. */}
+      <div className="mt-1 space-y-1.5 text-xs text-muted-foreground" data-testid="ai-consent-disclosure">
+        <p>
+          Dex, Ask, reading bills and documents, voice notes and AI suggestions send what the feature
+          needs — the text you type, your voice recordings, the photos and documents you add, and the
+          workspace records involved — to DecisionOS&rsquo;s AI providers: <strong className="font-semibold text-foreground">Anthropic,
+          OpenAI and Google (Gemini)</strong> for text and documents, and <strong className="font-semibold text-foreground">Sarvam
+          and OpenAI</strong> to turn speech into text.
+        </p>
+        <p>
+          Nothing is used to train AI models and nothing is sold. These features stay off until an owner
+          agrees, and can be turned off here at any time.{" "}
+          <Link to="/privacy" className="font-medium text-foreground underline underline-offset-2" data-testid="ai-consent-privacy">How we handle it</Link>
+        </p>
+      </div>
       {!s ? (
         <div className="ds-skeleton mt-4 h-12 rounded-xl" aria-hidden="true" />
       ) : s.error ? (
@@ -266,7 +286,7 @@ function AiConsentCard() {
             )
           ) : (
             <button type="button" onClick={grant} disabled={busy} data-testid="ai-consent-on"
-              className="flex h-11 shrink-0 items-center justify-center rounded-pill bg-kr-ink px-4 text-sm font-medium text-white disabled:opacity-50">
+              className="flex h-11 shrink-0 items-center justify-center rounded-pill bg-ng-ink px-4 text-sm font-medium text-white disabled:opacity-50">
               {busy ? "Turning on…" : "Agree and turn on"}
             </button>
           )}
@@ -276,8 +296,8 @@ function AiConsentCard() {
   );
 }
 
-const PILL = "kr-pop flex h-11 shrink-0 items-center justify-center rounded-pill px-4 text-sm font-medium text-foreground disabled:opacity-50";
-const INK = "flex h-11 shrink-0 items-center justify-center rounded-pill bg-kr-ink px-4 text-sm font-medium text-white disabled:opacity-50";
+const PILL = "ng-pop flex h-11 shrink-0 items-center justify-center rounded-pill px-4 text-sm font-medium text-foreground disabled:opacity-50";
+const INK = "flex h-11 shrink-0 items-center justify-center rounded-pill bg-ng-ink px-4 text-sm font-medium text-white disabled:opacity-50";
 const FIELD = "w-full rounded-2xl bg-white/80 px-4 py-2.5 text-sm text-slate-800 ring-1 ring-inset ring-slate-900/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25";
 const dayLabel = (iso) => (iso ? new Date(`${String(iso).slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "");
 
@@ -339,7 +359,7 @@ function DelegationCard() {
     || (usersQ.data || []).some((m) => m.reporting_manager_id === user?.id);
   if (!approves && !ac) return null;
   return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="settings-delegation-card">
+    <div className="ng-bento p-5 sm:p-6" data-testid="settings-delegation-card">
       <h2 className="text-base font-medium">While you&rsquo;re away</h2>
       <p className="mt-1 text-xs text-muted-foreground">
         Hand your approvals to someone for a few days. They can approve tasks and decide decisions that wait on you, and they&rsquo;re told when new ones arrive.
@@ -407,7 +427,7 @@ function EscalationCard() {
     } finally { setBusy(false); }
   };
   return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="settings-escalation-card">
+    <div className="ng-bento p-5 sm:p-6" data-testid="settings-escalation-card">
       <h2 className="text-base font-medium">Deadlines</h2>
       <p className="mt-1 text-xs text-muted-foreground">
         The people on a task hear before it&rsquo;s due, again the day it&rsquo;s due and the day after.
@@ -482,7 +502,7 @@ function AiKeysCard() {
     } finally { setBusy(false); }
   };
   return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="settings-ai-keys-card">
+    <div className="ng-bento p-5 sm:p-6" data-testid="settings-ai-keys-card">
       <h2 className="text-base font-medium">AI and WhatsApp keys</h2>
       <p className="mt-1 text-xs text-muted-foreground">Use your company&rsquo;s own AI and WhatsApp Business accounts instead of DecisionOS&rsquo;s. Keys are stored for your company only and never shown in full.</p>
       {!data ? <div className="ds-skeleton mt-4 h-16 rounded-xl" aria-hidden="true" />
@@ -537,7 +557,7 @@ function YourAccessCard() {
   const mine = userPerms(user);
   const teamLabel = roleLabel(user?.role, tenant?.roles, "No team");
   return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="settings-your-access-card">
+    <div className="ng-bento p-5 sm:p-6" data-testid="settings-your-access-card">
       <h2 className="text-base font-medium">Your access</h2>
       <p className="mt-1 text-xs text-muted-foreground">
         What you can open in {tenant?.name || "this company"}, as {teamLabel}. To change it, ask an owner or whoever manages the team.
@@ -588,7 +608,7 @@ function OwnerExclusionsCard() {
   };
   const areaName = (k) => PERMISSIONS.find((p) => p.key === k)?.label || k;
   return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="settings-owner-exclusions-card">
+    <div className="ng-bento p-5 sm:p-6" data-testid="settings-owner-exclusions-card">
       <h2 className="text-base font-medium">What owners can open</h2>
       <p className="mt-1 text-xs text-muted-foreground">
         Every owner can open everything. Switch an area off to keep it from all owners, you included &mdash; for example a co-founder who shouldn&rsquo;t see finance. Manage team (and with it Manage people) always stays on, so you can always come back here.
@@ -656,7 +676,7 @@ function AuditLogCard() {
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const what = (a) => (a || "").replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
   return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="settings-audit-card">
+    <div className="ng-bento p-5 sm:p-6" data-testid="settings-audit-card">
       <h2 className="text-base font-medium">Audit log</h2>
       <p className="mt-1 text-xs text-muted-foreground">Sign-ins, access changes, removals, AI consent and keys, newest first. It can&rsquo;t be edited.</p>
       {!rows ? <div className="ds-skeleton mt-4 h-24 rounded-xl" aria-hidden="true" /> : rows.length === 0 ? (
@@ -717,11 +737,49 @@ const VALID_TAB_KEYS = new Set(TABS.map((t) => t.key));
    Appearance card had nothing left to offer. Account holds language, profile,
    password and session. */
 
+/* 2026-10-12 — HELP, at the top of Settings (on the phone, "Preferences").
+   The founder moved it out of the More menu: the user guide (a web page,
+   lib/guide) and, on a phone, the walkthrough again. It sits above the tabs so
+   it is the first thing on the page for an owner and a member alike. The
+   walkthrough plays on the screen it was written for — the Desk for anyone who
+   decides, My Work for everyone else. */
+function HelpStrip() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
+  const home = hasPerm(user, "inbox") ? "/inbox" : "/my-work";
+  return (
+    <div className="ng-bento mb-5 p-4 sm:p-5" data-testid="settings-help-card">
+      <div className="flex items-center gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-neutral-900 text-white" aria-hidden="true">
+          <Lifebuoy size={18} weight="bold" />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold">Help &amp; guide</h2>
+          <p className="text-xs text-muted-foreground">Every screen, step by step{isMobile ? " — or the quick walkthrough again" : ""}.</p>
+        </div>
+      </div>
+      <div className="mt-3.5 flex flex-wrap gap-2">
+        <button type="button" onClick={() => openGuide()} data-testid="settings-open-guide"
+          className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-semibold ${INK_PILL}`}>
+          <BookOpenText size={15} weight="bold" aria-hidden="true" /> Open the user guide
+        </button>
+        {isMobile && (
+          <button type="button" onClick={() => navigate(`${home}?tour=1`)} data-testid="settings-replay-tour"
+            className="ng-pop flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-foreground">
+            <PlayCircle size={15} weight="bold" aria-hidden="true" /> Replay the walkthrough
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SignOutCard() {
   const { logout } = useAuth();
   const navigate = useNavigate();
   return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="settings-signout-card">
+    <div className="ng-bento p-5 sm:p-6" data-testid="settings-signout-card">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
           <h3 className="text-base font-semibold">Session</h3>
@@ -742,7 +800,7 @@ function SignOutCard() {
             navigates through the router, which cancels nothing. */}
         <button type="button" onClick={async () => { await logout(); navigate("/login", { replace: true }); }}
           data-testid="settings-signout"
-          className="kr-pop flex h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-sm font-medium text-foreground">
+          className="ng-pop flex h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-sm font-medium text-foreground">
           <SignOut size={15} weight="bold" aria-hidden="true" /> Sign out
         </button>
       </div>
@@ -814,7 +872,7 @@ function DeleteAccountCard() {
   const toggleAlso = (id) => setAlsoDelete((xs) => (xs.includes(id) ? xs.filter((x) => x !== id) : [...xs, id]));
 
   return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="settings-delete-account">
+    <div className="ng-bento p-5 sm:p-6" data-testid="settings-delete-account">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
           <h3 className="text-base font-semibold">Delete your account</h3>
@@ -828,7 +886,7 @@ function DeleteAccountCard() {
         {!open && (
           <button type="button" onClick={look} disabled={busy}
             data-testid="delete-account-start"
-            className="shrink-0 rounded-pill px-4 py-2.5 text-sm font-medium text-kr-accent hover:bg-kr-accent/10 disabled:opacity-50">
+            className="shrink-0 rounded-pill px-4 py-2.5 text-sm font-medium text-ng-accent hover:bg-ng-accent/10 disabled:opacity-50">
             {busy ? "Checking…" : "Delete my account"}
           </button>
         )}
@@ -878,7 +936,7 @@ function DeleteAccountCard() {
                 <button type="button" onClick={doIt}
                   disabled={busy || typed.trim() !== phrase}
                   data-testid="delete-account-confirm-button"
-                  className="rounded-pill bg-kr-accent px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40">
+                  className="rounded-pill bg-ng-accent px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40">
                   {busy ? "Deleting…" : "Delete for good"}
                 </button>
               </div>
@@ -976,11 +1034,15 @@ function SettingsShell({ eyebrow, nav, sectionsKey, children }) {
     <div className="mx-auto max-w-6xl">
       <header className="mb-7">
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{eyebrow}</p>
-        <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">Settings</h1>
+        {/* 2026-10-12 (founder) — "Preferences" on the phone; the desktop keeps "Settings". */}
+        <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">
+          <span className="lg:hidden">Preferences</span><span className="hidden lg:inline">Settings</span>
+        </h1>
       </header>
+      <HelpStrip />
       <div className="lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start lg:gap-8 xl:grid-cols-[17.5rem_minmax(0,1fr)]">
         <aside className="hidden lg:sticky lg:top-6 lg:block" data-testid="settings-side-panel">
-          <div className="kr-bento p-4">
+          <div className="ng-bento p-4">
             <div className="flex items-center gap-3 border-b border-slate-900/[0.06] pb-4">
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-neutral-900 text-sm font-semibold text-white" aria-hidden="true">{initials}</span>
               <div className="min-w-0">
@@ -1109,7 +1171,7 @@ export default function Settings() {
       <div className="lg:hidden">
         {/* scroll-px-1: the open tab scrolls into view INSIDE the row's
             padding, not flush against its rounded end (Workspace was clipped). */}
-        <div className="kr-pressed mb-3 flex scroll-px-1 items-center gap-1 overflow-x-auto rounded-pill p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        <div className="ng-pressed mb-3 flex scroll-px-1 items-center gap-1 overflow-x-auto rounded-pill p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
              role="tablist" aria-label="Settings sections" data-testid="settings-tabs">
           {visibleTabs.map((t) => {
             const isActive = t.key === tab;
@@ -1118,7 +1180,7 @@ export default function Settings() {
                 data-testid={`settings-tab-${t.key}`} role="tab" aria-selected={isActive}
                 ref={isActive ? (el) => el?.scrollIntoView?.({ block: "nearest", inline: "nearest" }) : undefined}
                 className={`flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-pill px-3.5 text-xs ${
-                  isActive ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
+                  isActive ? "ng-pop font-semibold text-foreground" : "text-foreground/60"}`}>
                 {t.label}
               </button>
             );

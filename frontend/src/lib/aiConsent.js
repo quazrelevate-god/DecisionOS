@@ -53,11 +53,18 @@ export function isAiConsentError(x) {
   return typeof detail === "string" && detail.includes(AI_CONSENT_CODE);
 }
 
+/* On a phone the Settings screen is called Preferences (More → Preferences),
+   so the way there has to use the name the person can actually see. */
+const settingsName = () => {
+  try { return window.matchMedia("(max-width: 1023.98px)").matches ? "Preferences" : "Settings"; }
+  catch { return "Settings"; }
+};
+
 /** The sentence for the person looking at it. */
 export function aiConsentMessage(isOwner = _viewerIsOwner) {
   return isOwner
-    ? "AI is off for this company. Turn it on in Settings → AI processing, then try again."
-    : "AI is off for this company. An owner has to turn it on in Settings → AI processing.";
+    ? `AI is off for this company. Turn it on in ${settingsName()} → AI processing, then try again.`
+    : `AI is off for this company. An owner has to turn it on in ${settingsName()} → AI processing.`;
 }
 
 /* One toast at a time: a screen that fires five AI calls must not stack five

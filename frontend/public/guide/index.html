@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DecisionOS Guide</title>
+<meta name="description" content="Learn DecisionOS step by step: sign in, tell Dex a decision, approve what's waiting, ask Dex, and run your work from your phone.">
+<meta name="theme-color" content="#ECEDEF">
+<link rel="icon" href="/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/guide/guide.css?v=4">
+<script defer src="/guide/guide.js?v=3"></script>
+</head>
+<body>
+<a class="skip" href="#guide">Skip to the guide</a>
+<div class="sky" aria-hidden="true"></div>
+
+<header class="top">
+  <div class="top-bar">
+    <a class="brand" href="#top" aria-label="DecisionOS Guide, back to top">
+      <span class="wordmark">Decision<span>OS</span></span><span class="brand-tag">Guide</span>
+    </a>
+    <div class="top-search" role="search">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input class="search-input" id="search" type="search" placeholder="Search the guide" autocomplete="off" aria-label="Search the guide" aria-controls="results" aria-expanded="false">
+      <span class="search-key" aria-hidden="true">/</span>
+      <div class="results" id="results" role="listbox" aria-label="Search results"></div>
+    </div>
+    <button class="icon-btn" type="button" data-open-toc aria-label="Search and contents">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    </button>
+    <a class="btn-ink" href="/login"><span>Open DecisionOS</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero" aria-labelledby="hero-title">
+    <div>
+      <div class="eyebrow">DecisionOS · User guide</div>
+      <h1 id="hero-title">Learn DecisionOS in <em>ten&nbsp;minutes.</em></h1>
+      <p class="hero-lede">Short chapters, real screens, and the exact place to tap lit up on every step.</p>
+      <div class="role-label" id="role-label">Start with who you are</div>
+      <div class="roles" role="group" aria-labelledby="role-label">
+        <button class="role" type="button" data-role="owner" aria-pressed="true">I run the company</button>
+        <button class="role" type="button" data-role="manager" aria-pressed="false">I manage a team</button>
+        <button class="role" type="button" data-role="member" aria-pressed="false">I'm on the team</button>
+      </div>
+      <div class="path">
+        <div class="path-title" id="path-title">Your path</div>
+        <ol class="path-list" aria-labelledby="path-title"></ol>
+      </div>
+    </div>
+    <div class="hero-stage">
+      <div class="phone" data-shot="desk" data-target="dex-slider-handle" data-alt="The DecisionOS Desk on a phone, with the Dex handle in the middle of the bar"></div>
+      <span class="callout callout-desk"><span class="dot"></span>Your Desk: what needs you</span>
+      <span class="callout callout-ask">← Swipe left to ask</span>
+      <span class="callout callout-decide">Swipe right to decide →</span>
+    </div>
+  </section>
+
+  <section class="sheet" id="start" aria-labelledby="start-title">
+    <div class="sheet-head">
+      <div>
+        <div class="eyebrow">Start here</div>
+        <h2 id="start-title">Five things to know first</h2>
+      </div>
+      <p class="sheet-note">Everything else builds on these. Each one opens its chapter.</p>
+    </div>
+    <ol class="five">
+      <li><a href="#decide"><span class="n">01</span><b>Swipe right to decide</b><span>Say what you decided. Dex writes the tasks and waits for your OK.</span><span class="go">See how →</span></a></li>
+      <li><a href="#ask"><span class="n">02</span><b>Swipe left to ask</b><span>Ask anything about your company and get an answer from your own records.</span><span class="go">See how →</span></a></li>
+      <li><a href="#desk"><span class="n">03</span><b>The Desk shows what needs you</b><span>Your score, what's late, and decisions waiting for your call.</span><span class="go">See how →</span></a></li>
+      <li><a href="#my-work"><span class="n">04</span><b>Work is where tasks get done</b><span>Update a task, add a photo as proof, mark it complete.</span><span class="go">See how →</span></a></li>
+      <li><a href="#find-your-way"><span class="n">05</span><b>More has everything else</b><span>Approvals, leave, customers, team, and Preferences, where this guide lives.</span><span class="go">See how →</span></a></li>
+    </ol>
+  </section>
+
+  <div class="layout" id="guide">
+    <nav class="rail" aria-label="Chapters"></nav>
+
+    <div class="chapters">
+
+      <section class="chapter" id="sign-in" data-group="Get started" data-roles="owner manager member" data-keywords="login log in otp code mobile number password email invite">
+        <h2>Sign in</h2>
+        <p class="lede">You sign in with your mobile number and a code we text you. There's no password to remember.</p>
+        <ol class="steps">
+          <li data-shot="login" data-target="otp-phone-input">Type the <b>mobile number</b> your company registered for you.</li>
+          <li data-shot="login" data-target="otp-submit-button">Tap <b>Text me a code</b>, then type the 6-digit code from the SMS. That's it, you're in.</li>
+          <li data-shot="login" data-target="login-tab-password">Prefer email? Owners can switch to <b>Email &amp; Password</b>.</li>
+        </ol>
+        <p class="tip">Joining a team? Your manager adds you and shares an invite link. Open it on your phone and confirm with the code we send.</p>
+      </section>
+
+      <section class="chapter" id="find-your-way" data-group="Get started" data-roles="owner manager member" data-where="The bar at the bottom" data-keywords="navigation dock bar menu more bell notifications help guide walkthrough">
+        <h2>Find your way</h2>
+        <p class="lede">The bar at the bottom of the screen is home base. It's the same on every screen.</p>
+        <ol class="steps">
+          <li data-shot="desk" data-target="dock-desk+dock-work"><b>Desk</b> is what needs you today. <b>Work</b> is your task list.</li>
+          <li data-shot="desk" data-target="dex-slider-handle"><b>Dex</b> lives in the middle: slide right to decide, left to ask.</li>
+          <li data-shot="desk" data-target="dock-money"><b>Money</b> holds invoices, bills and the numbers.</li>
+          <li data-shot="more" data-target="dock-more-grid"><b>More</b> opens every other screen: Approvals, Workflows, CRM, Team, Company Brain, Leave, and <b>Preferences</b>.</li>
+          <li data-shot="desk" data-target="desk-topbar-bell">The <b>bell</b> holds your notifications. Tap one to jump straight to it.</li>
+          <li data-shot="tour-3" data-target="walkthrough-card">The first time you open the app, a short <b>walkthrough</b> points all this out. Replay it from More → Preferences → Help &amp; guide.</li>
+        </ol>
+      </section>
+
+      <section class="chapter" id="desk" data-group="Every day" data-roles="owner manager" data-where="Desk" data-keywords="desk home score kpi delayed complaints collect workflows sheet decisions approvals watch">
+        <h2>Your Desk</h2>
+        <p class="lede">One screen that says how the company is doing, and what's waiting for you.</p>
+        <ol class="steps">
+          <li data-shot="desk" data-target="desk-score-link-phone">Your <b>operating score</b> out of 100. Tap it to see what's pulling it up or down.</li>
+          <li data-shot="desk" data-target="desk-kpi-grid">The numbers that need you: <b>delayed</b> work, <b>complaints</b>, money <b>to collect</b>, and workflows at risk.</li>
+          <li data-shot="desk-approvals" data-target="desk-tab-slider">The black sheet has three tabs: <b>Decisions</b>, <b>Approvals</b> and <b>Watch</b>.</li>
+          <li data-shot="desk" data-target="desk-phone-more"><b>Show all</b> opens the whole list.</li>
+        </ol>
+      </section>
+
+      <section class="chapter" id="decide" data-group="Every day" data-roles="owner manager" data-where="Desk → Dex" data-keywords="decide voice speak record capture dex decision tasks proposal approve draft reject cancel">
+        <h2>Tell Dex a decision</h2>
+        <p class="lede">Say it once. Dex writes the tasks, picks the people and dates, and waits for your OK. Nothing goes out until you approve.</p>
+        <ol class="steps">
+          <li data-shot="slide-decide" data-target="dex-slider-handle">Press the round handle and slide it <b>right</b>, all the way to <b>Decide</b>.</li>
+          <li data-shot="decide-listening" data-target="dex-slider">Speak naturally: <i>“Approve 35,000 for a second cutting table, Amit to buy it by Friday.”</i> Tap the handle to stop.</li>
+          <li data-shot="decide-said" data-target="dex-popup-transcript">Check what Dex heard. Fix any word, then tap <b>Next</b>.</li>
+          <li data-shot="decide-reading" data-target="dex-popup-hide">Dex builds it in a few seconds. You can close this; it keeps working and the decision lands on your Desk.</li>
+          <li data-shot="decide-made" data-target="dex-popup-counts">See everything it will create — decision, tasks, people, approvals — <b>before</b> anything is created.</li>
+          <li data-shot="decide-made" data-target="decision-panel-actions"><b>Approve</b> to send the tasks out. Or <b>Save as draft</b>, or <b>Reject</b>.</li>
+        </ol>
+        <p class="tip">Changed your mind mid-sentence? Slide the handle back to the middle. The recording is thrown away and nothing is sent.</p>
+      </section>
+
+      <section class="chapter" id="review" data-group="Every day" data-roles="owner manager" data-where="Desk → Decisions" data-keywords="approve reject draft decision review your call sign off">
+        <h2>Approve what's waiting</h2>
+        <p class="lede">Decisions your team raises wait for you on the Desk, with everything they will set in motion.</p>
+        <ol class="steps">
+          <li data-shot="desk" data-target="desk-phone-card-card">Tap a decision on your Desk.</li>
+          <li data-shot="decision" data-target="decision-said-card">Read what was said, the amount, and the tasks it will create.</li>
+          <li data-shot="decision" data-target="decision-actions-card"><b>Your call</b> stays at the bottom: <b>Approve</b> or <b>Reject</b>, or <b>Save as draft</b> to decide later.</li>
+        </ol>
+      </section>
+
+      <section class="chapter" id="ask" data-group="Every day" data-roles="owner manager member" data-where="The bar · swipe left" data-keywords="ask question dex brain answer search records documents sop type">
+        <h2>Ask Dex</h2>
+        <p class="lede">Ask anything about your company: numbers, customers, a document. Dex answers from your own records.</p>
+        <ol class="steps">
+          <li data-shot="slide-ask" data-target="dex-slider-handle">Slide the handle <b>left</b> to <b>Ask</b>, and speak your question.</li>
+          <li data-shot="ask-listening" data-target="dex-slider">Dex opens right in the bar while you speak. Tap the handle to send.</li>
+          <li data-shot="ask-answer" data-target="dock-ask-panel">The answer appears in the same place, from your own records and documents, like the <b>Quality Check SOP</b> here.</li>
+        </ol>
+      </section>
+
+      <section class="chapter" id="my-work" data-group="Every day" data-roles="owner manager member" data-where="Work" data-keywords="tasks my work update status doing complete proof photo document voice new task assign">
+        <h2>My Work</h2>
+        <p class="lede">Your tasks, soonest first. Open one to update it, prove it, and close it.</p>
+        <ol class="steps">
+          <li data-shot="mywork" data-target="mywork-list">Your tasks. The coloured stripe is the <b>priority</b>; the date chip is when it's <b>due</b>.</li>
+          <li data-shot="mywork-lens" data-target="work-mobile-view-sheet">Tap <b>My Tasks</b> to switch: tasks you asked others for, or everyone's.</li>
+          <li data-shot="task" data-target="status-pills-m-fc8365a6-e969-418f-ac6c-eabcc784c11a">Open a task and move it to <b>Doing</b> when you start.</li>
+          <li data-shot="task-proof" data-target="proof-block-m-fc8365a6-e969-418f-ac6c-eabcc784c11a">Add <b>proof of work</b>: a photo, a document or a voice note. Some tasks need it before they can close.</li>
+          <li data-shot="task" data-target="complete-m-fc8365a6-e969-418f-ac6c-eabcc784c11a">Tap <b>Complete</b> when it's done. Whoever asked is told.</li>
+          <li data-shot="task-new" data-target="task-title-input+task-assign-select">Tap <b>+</b> to ask someone for something: what, who, and by when.</li>
+        </ol>
+      </section>
+
+      <section class="chapter" id="approvals" data-group="Every day" data-roles="owner manager" data-where="More → Approvals" data-keywords="approvals sign off tasks leave approve reject info">
+        <h2>Approvals</h2>
+        <p class="lede">Everything your team needs you to sign off, in one place.</p>
+        <ol class="steps">
+          <li data-shot="approvals" data-target="approvals-sub"><b>Tasks</b> and <b>Leave</b>, side by side.</li>
+          <li data-shot="approvals" data-target="mywork-grid">Each card says who asked and why. Open it to approve or send it back.</li>
+          <li data-shot="approvals-leave" data-target="leave-approve-96288009-91c1-451c-b4fe-1a4bfc91f928+leave-info-96288009-91c1-451c-b4fe-1a4bfc91f928">Leave: <b>Approve</b>, <b>Reject</b>, or ask for more <b>Info</b>.</li>
+        </ol>
+      </section>
+
+      <section class="chapter" id="leave" data-group="Every day" data-roles="owner manager member" data-where="More → Leave" data-keywords="leave holiday time off absence sick report delegate cover">
+        <h2>Leave</h2>
+        <p class="lede">Ask for time off, or tell your approver you're out today.</p>
+        <ol class="steps">
+          <li data-shot="leave" data-target="request-leave-button">Tap <b>Mark Leave</b> to ask for time off.</li>
+          <li data-shot="leave-form" data-target="leave-type-select+leave-to-date">Pick the <b>type</b> and the <b>dates</b>. Add a reason if you like.</li>
+          <li data-shot="leave-form" data-target="leave-delegate-select">Choose <b>who covers your approvals</b> while you're away, then send it.</li>
+          <li data-shot="leave" data-target="report-absence-button">Unwell today? <b>Report Absence Today</b> tells your approver straight away.</li>
+        </ol>
+      </section>
+
+      <section class="chapter" id="workflows" data-group="Running the company" data-roles="owner manager" data-where="More → Workflows" data-keywords="workflows pipeline procurement distribution production stage advance gate card">
+        <h2>Workflows</h2>
+        <p class="lede">Orders, purchases and production move through stages. You see where each one is, and what's holding it.</p>
+        <ol class="steps">
+          <li data-shot="workflows" data-target="workflows-pipeline-menu">Pick a <b>pipeline</b>: Procurement, Distribution, Production…</li>
+          <li data-shot="workflows" data-target="workflow-board">Each stage folds open to show its cards.</li>
+          <li data-shot="workflow-card" data-target="workflow-card-a91944e7-51a5-4ed5-af4d-45e445fa3c81">A card shows the amount, the open task, and how long it has been at this stage.</li>
+          <li data-shot="workflow-card" data-target="advance-workflow-a91944e7-51a5-4ed5-af4d-45e445fa3c81"><b>Advance</b> moves it on to the next stage.</li>
+          <li data-shot="workflow-gate" data-target="wf-leftover-review">Work still open? You're asked what happens to it first: <b>Done</b>, <b>Not needed</b>, or <b>Keep</b>.</li>
+        </ol>
+      </section>
+
+      <section class="chapter" id="money" data-group="Running the company" data-roles="owner" data-where="Money" data-keywords="finance money invoice gst bill receipt upload expense revenue pdf">
+        <h2>Money</h2>
+        <p class="lede">Invoices, bills and the numbers behind them. Dex reads your bills so you don't type them.</p>
+        <ol class="steps">
+          <li data-shot="money" data-target="ledger-tabs-mobile"><b>Overview</b>, Revenue, Expenses, Assets, Inventory and Inbox.</li>
+          <li data-shot="money" data-target="finance-hero-doc-m+finance-hero-photo-m"><b>Upload a bill</b> or snap a <b>photo</b>. Dex reads it for you.</li>
+          <li data-shot="bill-review" data-target="ingest-file-button">Check what Dex read, then tap <b>File it</b>. Nothing is saved until you do.</li>
+          <li data-shot="add-record" data-target="add-record-list"><b>Add record</b> for an invoice, income, expense, asset or stock.</li>
+          <li data-shot="gst" data-target="invoice-buyer+invoice-gstin">A <b>GST invoice</b>: buyer, GSTIN and lines. Tax and totals are worked out, and it downloads as a PDF.</li>
+        </ol>
+      </section>
+
+      <section class="chapter" id="crm" data-group="Running the company" data-roles="owner manager" data-where="More → CRM" data-keywords="crm customers buyers suppliers partners contact complaint owed">
+        <h2>Customers &amp; suppliers</h2>
+        <p class="lede">Everyone you buy from and sell to, with what they owe and what they've said.</p>
+        <ol class="steps">
+          <li data-shot="crm" data-target="crm-scope-chips"><b>Buyers</b>, <b>Partners</b> and <b>Suppliers</b>.</li>
+          <li data-shot="crm" data-target="crm-search">Search by name, company or phone.</li>
+          <li data-shot="crm" data-target="crm-card-6ca5eb17-b365-43ef-9e6d-007f5fb7be89">Each card flags what matters, like money owed or an open complaint.</li>
+          <li data-shot="contact" data-target="cp-actions">Open a contact to <b>log a complaint</b> or edit it; call or email from the top.</li>
+          <li data-shot="contact" data-target="cp-section-financial">See what they owe, their invoices, workflows and activity.</li>
+        </ol>
+      </section>
+
+      <section class="chapter" id="team" data-group="Running the company" data-roles="owner manager" data-where="More → Team" data-keywords="team people add member invite reporting org chart roles">
+        <h2>Team</h2>
+        <p class="lede">Who works here, who reports to whom, and how to bring someone in.</p>
+        <ol class="steps">
+          <li data-shot="team" data-target="add-user-button"><b>Add</b> a member with their name, mobile and team. Share the invite link it gives you; they confirm with a code.</li>
+          <li data-shot="team" data-target="team-tree">Your organisation, by team: tap a person to see their access and work.</li>
+        </ol>
+      </section>
+
+      <section class="chapter" id="brain" data-group="Running the company" data-roles="owner manager" data-where="More → Company Brain" data-keywords="company brain documents sop policy price list upload knowledge">
+        <h2>Company Brain</h2>
+        <p class="lede">Your SOPs, price lists and policies, in one place, and Dex reads them.</p>
+        <ol class="steps">
+          <li data-shot="brain" data-target="brain-doc-add-btn"><b>Add document</b>: upload a PDF, tag it, choose who can see it.</li>
+          <li data-shot="brain" data-target="brain-doc-grid">Everything is searchable, and Dex uses it to answer questions.</li>
+          <li data-shot="brain-hint" data-target="dex-slider">To ask Dex about it, <b>swipe left</b> on the bar. The handle shows you the move when the page opens.</li>
+        </ol>
+      </section>
+
+      <section class="chapter" id="score" data-group="Running the company" data-roles="owner manager member" data-where="More → Ops" data-keywords="operating score ops execution finance decisions responsiveness performance">
+        <h2>Operating score</h2>
+        <p class="lede">One number for how well the company is running, and what would lift it.</p>
+        <ol class="steps">
+          <li data-shot="score" data-target="operating-overall">The company's score, out of 100.</li>
+          <li data-shot="score" data-target="operating-categories">Four parts: <b>Execution</b>, <b>Finance</b>, <b>Decisions</b> and <b>Responsiveness</b>.</li>
+          <li data-shot="score" data-target="operating-next-moves"><b>Do these first</b>: the moves that lift it most.</li>
+          <li data-shot="score-member" data-target="operating-self-hero+operating-self-stats">Team members see their <b>own</b> score: completed, open, overdue, and proof added.</li>
+        </ol>
+      </section>
+
+      <section class="chapter" id="settings" data-group="Preferences &amp; help" data-roles="owner manager member" data-where="More → Preferences" data-keywords="settings preferences account language hindi tamil profile password help guide walkthrough delete">
+        <h2>Preferences</h2>
+        <p class="lede">Help, your profile, language and security. Owners also set up the business here.</p>
+        <ol class="steps">
+          <li data-shot="settings" data-target="settings-help-card"><b>Help &amp; guide</b> is at the top: open this guide, or play the walkthrough again.</li>
+          <li data-shot="settings" data-target="settings-tabs">Owners set the business up in <b>Business</b>, <b>Team &amp; access</b>, <b>Operations</b> and <b>Money</b>. Your own settings live under <b>Account</b>.</li>
+          <li data-shot="settings-language" data-target="settings-language-card">Pick <b>English</b>, <b>हिन्दी</b> or <b>தமிழ்</b>.</li>
+        </ol>
+      </section>
+
+      <section class="chapter faq" id="faq" data-group="Preferences &amp; help" data-roles="owner manager member" data-keywords="faq questions help support contact privacy delete account code type">
+        <h2>Questions</h2>
+        <details><summary>Can I type instead of speaking?</summary><p>For a decision, yes: after you stop recording, edit or replace what Dex heard before you tap Next. On the phone you ask Dex by voice; on a computer the Dex page also takes a typed question.</p></details>
+        <details><summary>What if Dex gets something wrong?</summary><p>Nothing happens until you approve. Change the summary, the tasks, the people and the dates first, or reject it.</p></details>
+        <details><summary>Who can see what?</summary><p>The owner decides, in Preferences → Team &amp; access. Team members see their own work and what's shared with them.</p></details>
+        <details><summary>I didn't get the code.</summary><p>Wait half a minute and tap Resend. If it still doesn't come, check with your owner that your mobile number is right on the Team page.</p></details>
+        <details><summary>Which languages does it speak?</summary><p>English, Hindi and Tamil. Change it in Preferences → Account → Language.</p></details>
+        <details><summary>Is my data private?</summary><p>Your company's records stay in your workspace. A recording is sent to a speech-to-text provider only to turn it into words. Read the <a href="/privacy">privacy policy</a>.</p></details>
+        <details><summary>How do I delete my account?</summary><p>In Preferences → Account → Delete your account, or at <a href="/delete-account">decisionos.biz/delete-account</a>.</p></details>
+        <div class="contact" id="contact">
+          <p><b>Still stuck?</b> Write to us and a person will reply, usually the same working day.</p>
+          <a class="btn-glass" href="mailto:support@decisionos.biz">support@decisionos.biz</a>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</main>
+
+<footer class="foot">
+  <span>© 2026 DecisionOS</span>
+  <nav aria-label="Footer"><a href="/">decisionos.biz</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="mailto:support@decisionos.biz">Support</a></nav>
+</footer>
+
+<button class="toc-pill" type="button" data-open-toc aria-haspopup="dialog">
+  <span class="ic" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span>
+  <span class="label">Contents</span>
+</button>
+<div class="toc-scrim" data-close-toc></div>
+<div class="toc-sheet" role="dialog" aria-modal="true" aria-label="Search and contents">
+  <div class="toc-grab" aria-hidden="true"></div>
+  <div class="search-wrap" role="search">
+    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input class="search-input" id="toc-search" type="search" placeholder="Search the guide" autocomplete="off" aria-label="Search the guide">
+  </div>
+  <div class="toc-results" role="listbox" aria-label="Search results"></div>
+  <nav class="toc-list" aria-label="Chapters"></nav>
+</div>
+</body>
+</html>

@@ -38,11 +38,11 @@ import { userPerms } from "../../lib/perms";
 import { canAssignPerson } from "../../lib/taskAccess";
 import { money, timeAgo, fullTime } from "../../lib/format";
 import { deptName } from "../../lib/departments";
-import { GlassSelect } from "../karma/GlassSelect";
+import { GlassSelect } from "../neuglass/GlassSelect";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "../ui/sheet";
 import {
   DRAWER_CARD, DRAWER_FIELD, DRAWER_LABEL, GLASS_PILL, INK_PILL, CHIP, QUIET_CHIP,
-} from "../karma/glass";
+} from "../neuglass/glass";
 
 const CLOSED = new Set(["done", "cancelled"]);
 
@@ -255,7 +255,7 @@ function AddTaskToStage({ workflowId, stage, members, user, tenant, onAdded, pri
         />
       </div>
       {dueError && (
-        <p id={`wf-add-task-due-error-${stage.key}`} role="alert" className="text-xs font-medium text-kr-accent">
+        <p id={`wf-add-task-due-error-${stage.key}`} role="alert" className="text-xs font-medium text-ng-accent">
           {dueError}
         </p>
       )}

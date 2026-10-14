@@ -69,7 +69,7 @@ export function TeamNudge({ className }) {
       <Link
         to="/team?add=1"
         data-testid="desk-team-nudge-add"
-        className="shrink-0 rounded-pill bg-kr-ink px-4 py-2 text-sm font-medium text-white"
+        className="shrink-0 rounded-pill bg-ng-ink px-4 py-2 text-sm font-medium text-white"
       >
         Add people
       </Link>

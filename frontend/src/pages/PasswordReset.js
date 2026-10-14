@@ -93,7 +93,7 @@ export function ForgotPassword() {
       </form>
       {/* A member who signs in by mobile has no password to reset — the API
           refuses those, so point them at the door that does open. */}
-      <div className="kr-pressed mt-6 flex items-start gap-3 rounded-cardlg p-3" data-testid="forgot-password-otp-hint">
+      <div className="ng-pressed mt-6 flex items-start gap-3 rounded-cardlg p-3" data-testid="forgot-password-otp-hint">
         <DeviceMobile size={17} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0 text-muted-foreground" />
         <p className="text-xs leading-relaxed text-muted-foreground">
           Sign in with a code instead? If you sign in with your mobile you have no password —{" "}

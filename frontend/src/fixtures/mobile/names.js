@@ -15,3 +15,7 @@ export const FIXTURE_LABEL = {
   sparse: "B · sparse",
   busy: "C · busy",
 };
+
+// A frame with this window.name never takes a fixture (index.js, activeFixture):
+// the design lab's real-data frame, whatever the rest of the tab has stuck.
+export const REAL_DATA_FRAME = "dos-real-data";

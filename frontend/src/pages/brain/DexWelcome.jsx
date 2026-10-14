@@ -37,7 +37,7 @@ export function DexWelcome({ name, canAsk, noAsk, onAsk }) {
        the greeting, the questions and the bar below share one left line, so
        the page reads as one column (layout › Visual hierarchy). */
     <div className="dex-rise w-full max-w-[640px]" data-testid="brain-empty">
-      <span className="grid h-11 w-11 place-items-center rounded-full bg-kr-ink text-white" aria-hidden="true">
+      <span className="grid h-11 w-11 place-items-center rounded-full bg-ng-ink text-white" aria-hidden="true">
         <Sparkle size={20} weight="fill" />
       </span>
       <h1 className="mt-5 font-display text-[32px] font-semibold leading-[40px] tracking-[-0.015em] text-foreground">

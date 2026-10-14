@@ -134,7 +134,7 @@ function LiveWaveform({ levels = [], live }) {
           key={i}
           className={cn(
             "w-[6px] shrink-0 rounded-full bg-white",
-            live ? "transition-[height] duration-75" : "kr-dex-breathe"
+            live ? "transition-[height] duration-75" : "ng-dex-breathe"
           )}
           style={
             live
@@ -240,7 +240,7 @@ export function DexSheet({ open, onClose, onRecordingChange, onCaptured }) {
          a single `dark:` variant. One size for both states too — idle and
          recording share a layout now, so the sheet no longer resizes under
          your thumb the moment you start speaking. */
-      className="dark border-t-white/10 bg-kr-ink/95 text-white backdrop-blur-2xl"
+      className="dark border-t-white/10 bg-ng-ink/95 text-white backdrop-blur-2xl"
       data-testid="dex-sheet"
       /* KM-3 — the sheet's footer slot is gone. It rendered a SECOND "Open
          Dex" button (dex-sheet-open-full) in a `bg-card` bar, which on an ink
@@ -294,7 +294,7 @@ export function DexSheet({ open, onClose, onRecordingChange, onCaptured }) {
             type="button"
             onClick={() => { onClose?.(); navigate("/brain"); }}
             data-testid="dex-open-full"
-            className="mt-7 flex h-12 w-full items-center justify-center gap-2 rounded-pill bg-white text-sm font-semibold text-kr-ink"
+            className="mt-7 flex h-12 w-full items-center justify-center gap-2 rounded-pill bg-white text-sm font-semibold text-ng-ink"
           >
             {t("dex.open", "Open Dex")}
             <ArrowRight size={15} weight="bold" aria-hidden="true" />

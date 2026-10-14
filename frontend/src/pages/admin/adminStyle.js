@@ -3,7 +3,7 @@
  * Every section used to carry its own copy of the same six constants, in the
  * retired brutalist dark style (black ground, mono uppercase buttons, square
  * borders). The console is now drawn in the app's own language -- the glass
- * cards, pills and quiet labels from components/karma/glass -- so an
+ * cards, pills and quiet labels from components/neuglass/glass -- so an
  * operator moving between a tenant's workspace and the console is not
  * switching products. The red stays as the console's accent, so it is never
  * mistaken for a tenant screen.

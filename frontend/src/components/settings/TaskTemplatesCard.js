@@ -13,8 +13,8 @@ import { ListChecks, Plus, Trash } from "@phosphor-icons/react";
 import api, { formatApiError } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { hasPerm } from "../../lib/perms";
-import { GlassSelect } from "../karma/GlassSelect";
-import { DRAWER_FIELD, GLASS_PILL, INK_PILL } from "../karma/glass";
+import { GlassSelect } from "../neuglass/GlassSelect";
+import { DRAWER_FIELD, GLASS_PILL, INK_PILL } from "../neuglass/glass";
 
 const OP_CATS = ["Presentation", "Meeting", "Documentation", "Proposal", "Planning", "Review", "Administration",
   "Compliance", "Marketing", "HR Activity", "Travel", "Event", "IT Support", "Other"];
@@ -53,7 +53,7 @@ export function TaskTemplatesCard() {
 
   if (!canManage) return null;
   return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="os-blueprint-section">
+    <div className="ng-bento p-5 sm:p-6" data-testid="os-blueprint-section">
       <h2 className="flex items-center gap-2 text-base font-medium">
         <ListChecks size={18} weight="bold" className="text-muted-foreground" aria-hidden="true" /> Task templates
       </h2>

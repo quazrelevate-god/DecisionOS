@@ -122,7 +122,7 @@ export default function OtpBoxes({ value, onChange, disabled, testid = "otp-boxe
           onChange={handleChange(i)}
           onKeyDown={handleKeyDown(i)}
           onFocus={(e) => e.target.select()}
-          className="kr-pressed aspect-square w-full min-w-0 rounded-cardlg bg-transparent text-center text-xl font-medium focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:opacity-50"
+          className="ng-pressed aspect-square w-full min-w-0 rounded-cardlg bg-transparent text-center text-xl font-medium focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:opacity-50"
         />
       ))}
     </div>

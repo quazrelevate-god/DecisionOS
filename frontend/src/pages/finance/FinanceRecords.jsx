@@ -13,10 +13,10 @@ import { cn } from "@/lib/utils";
 import api from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { hasPerm } from "../../lib/perms";
-import { DataList } from "../../components/karma/DataList";
-import { GlassSelect } from "../../components/karma/GlassSelect";
+import { DataList } from "../../components/neuglass/DataList";
+import { GlassSelect } from "../../components/neuglass/GlassSelect";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
-import { DRAWER_TRACK, GLASS_MENU, INK_PILL } from "../../components/karma/glass";
+import { DRAWER_TRACK, GLASS_MENU, INK_PILL } from "../../components/neuglass/glass";
 import { AiPanel } from "./FinanceAi";
 import {
   AttachmentLink, CARD, EmptyNote, FIELD, LoadError, SMALL_INK, SMALL_PILL, SourceTag, TONE_CHIP, Tag, fmt,

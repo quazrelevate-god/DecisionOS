@@ -6,7 +6,7 @@ import api, { formatApiError } from "../lib/api";
 import { opModel } from "../lib/operatingModel";
 import { toast } from "sonner";
 import { FlowArrow, FloppyDisk, Plus, Trash, ArrowUp, ArrowDown, ShieldCheck, ListChecks, Lightning, CaretDown } from "@phosphor-icons/react";
-import { GlassSelect } from "./karma/GlassSelect";
+import { GlassSelect } from "./neuglass/GlassSelect";
 
 // 2026-10-05 — the glass fields every other Settings card uses (were square-bordered).
 const inp = "w-full rounded-2xl bg-white/80 px-3 py-2 text-sm text-slate-800 ring-1 ring-inset ring-slate-900/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25";
@@ -30,7 +30,7 @@ const smSel = `${smInp} h-[34px] justify-between text-left`;
 /* A tap target, not a 22px pixel-hunt. Sprint 16's rule, applied to the
    controls that were hardest to hit precisely because they were half off the
    screen. */
-const iconBtn = "grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted-foreground hover:text-kr-accent disabled:opacity-30";
+const iconBtn = "grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted-foreground hover:text-ng-accent disabled:opacity-30";
 let _uid = 0;
 const uid = () => `k${Date.now()}_${_uid++}`;
 
@@ -297,7 +297,7 @@ export function OperatingModelEditor() {
   };
 
   return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="settings-operating-model-card">
+    <div className="ng-bento p-5 sm:p-6" data-testid="settings-operating-model-card">
       <div className="flex items-center gap-2 mb-1">
         <FlowArrow size={20} weight="bold" className="text-muted-foreground" />
         <h2 className="text-base font-medium">Operating Model</h2>
@@ -431,7 +431,7 @@ export function OperatingModelEditor() {
                         title="Leave empty to need it for every card">
                         only above ₹
                         <input type="number" min="0" inputMode="numeric" data-testid={`op-stage-approval-above-${pi}-${si}`}
-                          className="kr-pressed h-8 w-28 rounded-pill px-2.5 text-[11px] text-foreground"
+                          className="ng-pressed h-8 w-28 rounded-pill px-2.5 text-[11px] text-foreground"
                           placeholder="any value" value={s.approval.above ?? ""}
                           onChange={(e) => setStageApproval(pi, si, { above: e.target.value })} />
                       </label>
@@ -450,7 +450,7 @@ export function OperatingModelEditor() {
                           <span key={se._uid} data-testid={`op-stage-side-effect-${pi}-${si}-${ei}`}
                             className="inline-flex items-center gap-1 rounded-pill bg-white/80 px-2 py-0.5 text-[11px] ring-1 ring-inset ring-slate-900/[0.06]">
                             {se.kind}
-                            <button onClick={() => delSideEffect(pi, si, ei)} title="Remove" className="text-muted-foreground hover:text-kr-accent">
+                            <button onClick={() => delSideEffect(pi, si, ei)} title="Remove" className="text-muted-foreground hover:text-ng-accent">
                               <Trash size={10} weight="bold" />
                             </button>
                           </span>
@@ -523,7 +523,7 @@ export function OperatingModelEditor() {
 
       <div className="mt-6 flex flex-wrap gap-3">
         <button onClick={save} disabled={saving} data-testid="op-save"
-          className="flex h-11 items-center gap-2 rounded-pill bg-kr-ink px-5 text-sm font-medium text-white transition-all hover:brightness-125 disabled:opacity-60">
+          className="flex h-11 items-center gap-2 rounded-pill bg-ng-ink px-5 text-sm font-medium text-white transition-all hover:brightness-125 disabled:opacity-60">
           <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Model"}
         </button>
         <RegenerateWithAi onConfirm={regenerate} busy={regen} testid="op-regenerate"

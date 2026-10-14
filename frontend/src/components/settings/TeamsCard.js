@@ -17,7 +17,7 @@ import { Plus, ShieldCheck, Trash, UsersThree, ArrowRight } from "@phosphor-icon
 import api, { formatApiError } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { hasPerm, PERMISSION_GROUPS, defaultPermsForRole } from "../../lib/perms";
-import { DRAWER_FIELD, GLASS_PILL, INK_PILL } from "../karma/glass";
+import { DRAWER_FIELD, GLASS_PILL, INK_PILL } from "../neuglass/glass";
 import { AccessSwitch } from "./AccessSwitch";
 
 const SUB_LABEL = "mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500";
@@ -91,7 +91,7 @@ export function TeamsCard() {
   const countIn = (key) => members.filter((m) => m.role === key).length;
 
   return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="settings-teams-card">
+    <div className="ng-bento p-5 sm:p-6" data-testid="settings-teams-card">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 text-base font-medium">

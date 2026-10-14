@@ -35,7 +35,7 @@ import {
   ShieldCheck, FlowArrow, GearSix, AddressBook, Books,
 } from "@phosphor-icons/react";
 import { hasPerm } from "@/lib/perms";
-import { INK_PLATE } from "@/components/karma/glass";
+import { INK_PLATE } from "@/components/neuglass/glass";
 import { cn } from "@/lib/utils";
 import { useBodyScrollLock } from "./BottomSheet";
 import { useBackDismiss } from "@/hooks/useBackDismiss";
@@ -133,30 +133,31 @@ export function buildUtility({ user, t }) {
      session-ending action are neither, and putting Sign out one mis-tap from
      Theme in a 4-up strip was the arrangement that made it need a red colour
      to feel safe. Settings is the only utility left, so it is the only one
-     listed. */
+     listed. 2026-10-12 (founder): on the phone it is called Preferences, and
+     Help & guide lives inside it (Settings → Help) rather than here. */
   return [
     // Mobile PWA (2026-09-14): for everyone. Profile, security and Sign out
     // live in Settings, and a non-owner on a phone had no way to reach them.
-    { key: "settings", to: "/settings", label: t("nav.settings", "Settings"), icon: GearSix },
+    { key: "settings", to: "/settings", label: t("nav.preferences", "Preferences"), icon: GearSix },
   ].filter((x) => !x.ownerOnly || user?.role === "owner");
 }
 
 /* ASK-38 · THE TILE IS A DARK CARD.
-   It was .kr-frost-min — a light glass pane drawn by its hairline — in three
+   It was .ng-frost-min — a light glass pane drawn by its hairline — in three
    sizes (large / wide / small) with a `grid-flow-dense` bento packing them.
    The founder's reference is a flat list of equal cards, each with its icon in
    a chip, its name, a line saying what is behind it, and a chevron; and their
    correction to the reference's own light theme is the black the Desk's inner
    card already uses.
    SO THE FILL IS THAT EXACT ONE: pages/Desk.js's PHONE_CARD_INK, which is
-   itself INK_PILL / .kr-navplate::before — a 24%->6% vertical gradient with a
+   itself INK_PILL / .ng-navplate::before — a 24%->6% vertical gradient with a
    16% white lip on the top edge. The same black in both places on purpose;
    this is the app's dark card now, not a new one.
    SIZES ARE GONE. With CRM and Workflows out there is nothing left that earns
    double width, and six equal cards two-up read as a list rather than a puzzle
    — which is what "compact" asks for. `grid-flow-dense` goes with them: it
    existed to fill the holes a mixed-size bento left. */
-// ASK-41 — one copy of the recipe, in components/karma/glass.js, shared with
+// ASK-41 — one copy of the recipe, in components/neuglass/glass.js, shared with
 // the Desk's phone card and the dock's live slot.
 const TILE_INK = INK_PLATE;
 
@@ -332,7 +333,7 @@ export function AllAppsPanel({
                It was `bg-background` — the page's own greige — so More opened
                a copy of the page floating over the page, with a hard
                `border-border` frame and shadow-brutal-lg, both retired.
-               Now .kr-glass (frosted, translucent, blurred) PLUS .dark, which
+               Now .ng-glass (frosted, translucent, blurred) PLUS .dark, which
                KR-2 redefined to mean "inside the ink" rather than a night
                theme: it re-scopes --nm-raised, --hairline, --text-* and the
                shadcn aliases, so every .nm-raised tile and every
@@ -343,7 +344,7 @@ export function AllAppsPanel({
                colour so the two read as one object; the founder's call now is
                that the menu should be light and minimal, so it keeps the
                dock's WIDTH and ANCHOR (still growing out of the bar) but takes
-               .kr-frost — the light-zone glass — instead of ink. The `dark`
+               .ng-frost — the light-zone glass — instead of ink. The `dark`
                token re-scope goes with it, so every label inside returns to
                the light palette on its own. */
             /* focus:outline-none — the panel takes focus itself on open (see
@@ -352,10 +353,10 @@ export function AllAppsPanel({
                drawing its default ring around the whole sheet. The focus trap
                still has its anchor; it just stops painting a blue rectangle
                around a menu nobody typed into. */
-            /* KM-50 — kr-keep-blur: /finance strips backdrop-filter off .kr-frost
+            /* KM-50 — ng-keep-blur: /finance strips backdrop-filter off .ng-frost
                to stay inside the blur budget, and this panel is not part of
                that budget — it is one overlay, on top, one at a time. */
-            "kr-frost kr-keep-blur rounded-cardlg focus:outline-none focus-visible:outline-none",
+            "ng-frost ng-keep-blur rounded-cardlg focus:outline-none focus-visible:outline-none",
 
             // scale 0.92 -> 1 with opacity, ~180ms ease-out; reverse on close
             // [animation-duration:...] rather than duration-[180ms]: the

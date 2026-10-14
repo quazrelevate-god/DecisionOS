@@ -5,7 +5,7 @@ import { Toaster } from "./components/ui/sonner";
 import { AuthProvider, useAuth, rememberArrival } from "./context/AuthContext";
 import { hasPerm } from "./lib/perms";
 import { LockKey, MapTrifold, ArrowClockwise } from "@phosphor-icons/react";
-import { INK_PILL } from "./components/karma/glass";
+import { INK_PILL } from "./components/neuglass/glass";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Login from "./pages/Login";
@@ -99,7 +99,7 @@ function NotThePage({ testid, Icon, title, body, action, onAction, actionTestid 
         <p className="mt-1.5 text-sm text-muted-foreground">{body}</p>
       </div>
       <button type="button" onClick={onAction} data-testid={actionTestid}
-        className={`mt-2 inline-flex h-11 items-center rounded-pill px-6 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline ${INK_PILL}`}>
+        className={`mt-2 inline-flex h-11 items-center rounded-pill px-6 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline ${INK_PILL}`}>
         {action}
       </button>
     </div>

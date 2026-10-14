@@ -9,7 +9,7 @@ import api, { formatApiError } from "../../lib/api";
 import { DexForge } from "./DexForge";
 import { useAnswerRecorder, useSynthLevels } from "./voice";
 import { DexWave } from "../../components/mobile/DexWave";
-import { CountUp } from "../../components/karma";
+import { CountUp } from "../../components/neuglass";
 // ASK-36 5 — the app's one loading animation.
 import { Loader } from "../../components/common";
 import { currentDraft } from "../../lib/onboardingDraft";
@@ -152,7 +152,7 @@ function CountTile({ c, index, landed, settled, still, glow }) {
 
   /* KM-66 follow-up: heavier glassmorphism, not solid white. The founder
      asked to keep the frost feel and just increase blur + opacity, so the
-     card is 60% white (was ~38% under kr-frost-min) with a 40px backdrop
+     card is 60% white (was ~38% under ng-frost-min) with a 40px backdrop
      blur (was 30px). Enough contrast that the label reads clean, thin
      enough that the photograph still ghosts through the pane. */
   const CARD = "bg-white/60 backdrop-blur-3xl border border-white/55 shadow-[0_8px_28px_-10px_hsl(230_18%_15%/0.35)]";
@@ -171,7 +171,7 @@ function CountTile({ c, index, landed, settled, still, glow }) {
          cannot finish after the tile has already arrived. */
       transition={still ? { duration: 0 } : { duration: CHOREO.travel, ease: [0.16, 1, 0.3, 1] }}
       style={{ willChange: settled ? "auto" : "filter, transform" }}
-      className={`${CARD} rounded-2xl p-4 text-center ${glow ? "kr-new-glow" : ""}`}>
+      className={`${CARD} rounded-2xl p-4 text-center ${glow ? "ng-new-glow" : ""}`}>
       {body}
     </motion.div>
   );
@@ -279,7 +279,7 @@ function PillSection({ label, items, tint, testid, startAt, stagger, still, newK
   if (strs.length === 0) return null;
   let firstNewSeen = false;
   /* KM-66 follow-up: Departments / Recurring tasks panels return to
-     glassmorphism, heavier than the original kr-well__pane. Same values
+     glassmorphism, heavier than the original ng-well__pane. Same values
      as the count tiles so the whole page reads as one material. */
   return (
     <div className="bg-white/60 backdrop-blur-3xl border border-white/55 shadow-[0_10px_32px_-12px_hsl(230_18%_15%/0.35)] rounded-[1.75rem] p-5 sm:p-6">
@@ -309,7 +309,7 @@ function PillSection({ label, items, tint, testid, startAt, stagger, still, newK
               initial={{ opacity: 0, x: -16 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: startAt + PILL_LEAD + i * stagger, duration: PILL_DUR, ease: [0.16, 1, 0.3, 1] }}
-              className={`w-fit max-w-full rounded-pill px-3 py-1.5 text-xs ${tint} ${isNew ? "kr-new-glow" : ""}`}>
+              className={`w-fit max-w-full rounded-pill px-3 py-1.5 text-xs ${tint} ${isNew ? "ng-new-glow" : ""}`}>
               {t}
             </Rise>
           );
@@ -808,14 +808,14 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
        registering and reveal keep the identical wrapper they always had; only
        preview escapes it, widening to max-w-5xl to match the header pill in
        Signup.js and splitting into three bands of its own. */
-    <div className={`kr-well mx-auto w-full ${isPreview ? "max-w-5xl" : "max-w-2xl"}`} data-testid="signup-build">
+    <div className={`ng-well mx-auto w-full ${isPreview ? "max-w-5xl" : "max-w-2xl"}`} data-testid="signup-build">
       <AnimatePresence mode="wait">
         {/* ------------------------------------------------------ BUILDING */}
         {stage === "building" && (
           <motion.div key="building" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
-            className="kr-well__pane rounded-[1.75rem] p-6 text-center sm:p-9">
+            className="ng-well__pane rounded-[1.75rem] p-6 text-center sm:p-9">
             <p className="mb-2 flex items-center justify-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              <Sparkle size={14} weight="fill" className="text-[hsl(var(--kr-gold))]" /> Meet Dex — your build engineer
+              <Sparkle size={14} weight="fill" className="text-[hsl(var(--ng-gold))]" /> Meet Dex — your build engineer
             </p>
             <h1 className="mb-7 font-display text-3xl leading-[1.04] sm:text-4xl lg:text-5xl">
               {/* KM-66 — a refinement no longer enters this stage, so the
@@ -832,10 +832,10 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                 <div className="mx-auto mt-8 max-w-md">
                   {/* The track is pressed into the sheet and the fill is the
                       gold light — the same pair the forge above uses. */}
-                  <div className="kr-pressed h-3 overflow-hidden rounded-pill p-[3px]" data-testid="build-progress-bar">
+                  <div className="ng-pressed h-3 overflow-hidden rounded-pill p-[3px]" data-testid="build-progress-bar">
                     <motion.div
                       className="h-full rounded-pill"
-                      style={{ background: "linear-gradient(90deg, hsl(var(--kr-gold) / .85), hsl(var(--kr-gold)))" }}
+                      style={{ background: "linear-gradient(90deg, hsl(var(--ng-gold) / .85), hsl(var(--ng-gold)))" }}
                       animate={{ width: `${pct}%` }} transition={{ duration: 0.4, ease: "easeOut" }} />
                   </div>
                   <div className="mt-2.5 flex items-center justify-between gap-3">
@@ -867,7 +867,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
               <div className="mt-8">
                 <p data-testid="build-error" className="text-sm text-danger-600 font-semibold mb-3">{error}</p>
                 <button onClick={() => { setTries((n) => n + 1); generate(); }} data-testid="build-retry"
-                  className="kr-pop mx-auto flex h-11 items-center rounded-pill bg-kr-ink px-6 text-sm font-medium text-white">
+                  className="ng-pop mx-auto flex h-11 items-center rounded-pill bg-ng-ink px-6 text-sm font-medium text-white">
                   Try again
                 </button>
                 {tries >= 1 && (
@@ -880,7 +880,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                         a way out. */}
                     <button type="button" data-testid="build-basic"
                       onClick={() => { setError(""); setTries(0); generateBasic(); }}
-                      className="kr-pop flex h-11 items-center rounded-pill px-5 text-sm font-medium text-foreground">
+                      className="ng-pop flex h-11 items-center rounded-pill px-5 text-sm font-medium text-foreground">
                       Start with a basic setup
                     </button>
                   </div>
@@ -898,7 +898,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
             className="space-y-5 lg:space-y-7">
 
             {/* ── BAND 1 · the header ────────────────────────────────────
-                KM-66 follow-up: the wrapping .kr-well__pane came off. The
+                KM-66 follow-up: the wrapping .ng-well__pane came off. The
                 heading and welcome line now print directly onto the page,
                 on their own. This is deliberate: the pane was doing double
                 duty as a frame AND as a contrast floor, and framing the
@@ -929,7 +929,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
             </div>
 
             {/* ── BAND 2 · the counts ────────────────────────────────────
-                Free-standing tiles, no pane of their own — .kr-frost-min IS
+                Free-standing tiles, no pane of their own — .ng-frost-min IS
                 the surface, and it is glass, so the 11px labels inside keep
                 their ground. The grid holds all three cells from the first
                 frame: a tile that has not landed leaves an invisible spacer of
@@ -999,12 +999,12 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
             <div className="grid gap-4 lg:grid-cols-2 lg:gap-5">
               <PillSection
                 label="Departments" items={deptItems} testid="build-dept-pill"
-                tint="kr-pressed bg-white/[.34]"
+                tint="ng-pressed bg-white/[.34]"
                 startAt={CHOREO.sectionsAt} stagger={pillStagger} still={still}
                 newKeys={newKeys} firstNewRef={firstNewRef} />
               <PillSection
                 label="Recurring tasks Dex will keep on rails" items={taskItems} testid="build-task-pill"
-                tint="kr-pressed"
+                tint="ng-pressed"
                 startAt={CHOREO.sectionsAt + deptItems.length * pillStagger + CHOREO.betweenSections}
                 stagger={pillStagger} still={still}
                 newKeys={newKeys} firstNewRef={firstNewRef} />
@@ -1034,7 +1034,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
             {workflowNames.length > 0 && (
               <PillSection
                 label="Workflows — named after how you actually work" items={workflowNames} testid="build-workflow-pill"
-                tint="kr-pressed bg-[hsl(var(--kr-gold)/.22)]"
+                tint="ng-pressed bg-[hsl(var(--ng-gold)/.22)]"
                 startAt={CHOREO.sectionsAt} stagger={pillStagger} still={still}
                 newKeys={newKeys} firstNewRef={firstNewRef} />
             )}
@@ -1046,7 +1046,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
 
               {/* Refine panel — voice or type. KM-66 follow-up: opaque
                   white to match the pill sections above; the old
-                  kr-frost-min made the "Missing something? Tell Dex."
+                  ng-frost-min made the "Missing something? Tell Dex."
                   eyebrow ghost against the photograph. */}
               <div className="bg-white/95 backdrop-blur-xl border border-white/60 shadow-[0_2px_14px_-6px_hsl(230_18%_15%/0.22)] rounded-2xl p-4 sm:p-5" data-testid="build-refine-panel">
                 <div className="mb-3 flex items-center justify-between gap-3">
@@ -1055,7 +1055,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                   </p>
                   {!showRefine && (
                     <button onClick={() => setShowRefine(true)} data-testid="build-refine-open"
-                      className="kr-pop flex h-9 shrink-0 items-center rounded-pill px-3.5 text-[11px] font-medium">
+                      className="ng-pop flex h-9 shrink-0 items-center rounded-pill px-3.5 text-[11px] font-medium">
                       Add a workflow
                     </button>
                   )}
@@ -1086,8 +1086,8 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                         disabled={refining || recorder.transcribing}
                         className={`flex h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-xs font-medium disabled:opacity-50 ${
                           recorder.recording
-                            ? "bg-kr-ink text-[hsl(var(--kr-gold))] shadow-[inset_0_2px_5px_hsl(230_30%_8%/.55),inset_0_-1px_0_hsl(0_0%_100%/.10),0_1px_0_hsl(0_0%_100%/.45)]"
-                            : "kr-pop"
+                            ? "bg-ng-ink text-[hsl(var(--ng-gold))] shadow-[inset_0_2px_5px_hsl(230_30%_8%/.55),inset_0_-1px_0_hsl(0_0%_100%/.10),0_1px_0_hsl(0_0%_100%/.45)]"
+                            : "ng-pop"
                         }`}>
                         {recorder.transcribing ? <Loader size={16} />
                           : recorder.recording ? <Stop size={14} weight="fill" /> : <Sparkle size={14} weight="fill" />}
@@ -1107,7 +1107,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                         data-testid="build-refine-submit"
                         onClick={submitRefinement}
                         disabled={!refineText.trim() || refining}
-                        className="kr-pop flex h-11 shrink-0 items-center gap-2 rounded-pill bg-kr-ink px-5 text-xs font-medium text-white disabled:opacity-40">
+                        className="ng-pop flex h-11 shrink-0 items-center gap-2 rounded-pill bg-ng-ink px-5 text-xs font-medium text-white disabled:opacity-40">
                         {refining ? <Loader size={16} /> : <PaperPlaneRight size={14} weight="bold" />}
                         {refining ? "Applying…" : "Apply to my OS"}
                       </button>
@@ -1130,7 +1130,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                   {phoneIssue && onFixPhone && (
                     <button type="button" onClick={(e) => { e.stopPropagation(); onFixPhone(); }}
                       data-testid="build-error-fix-phone"
-                      className="mt-3 inline-flex h-10 items-center rounded-pill bg-kr-ink px-5 text-sm font-medium text-white">
+                      className="mt-3 inline-flex h-10 items-center rounded-pill bg-ng-ink px-5 text-sm font-medium text-white">
                       Confirm my mobile
                     </button>
                   )}
@@ -1145,12 +1145,12 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                     <div className="mt-3 flex flex-wrap items-center gap-2.5">
                       <Link to={payload?.phone ? `/login?phone=${encodeURIComponent(String(payload.phone).replace(/\D/g, "").slice(-10))}` : "/login"}
                         data-testid="build-error-signin"
-                        className="inline-flex h-10 items-center rounded-pill bg-kr-ink px-5 text-sm font-medium text-white">
+                        className="inline-flex h-10 items-center rounded-pill bg-ng-ink px-5 text-sm font-medium text-white">
                         Sign in instead
                       </Link>
                       {onChangeEmail && (
                         <button type="button" onClick={onChangeEmail} data-testid="build-error-change-email"
-                          className="inline-flex h-10 items-center rounded-pill border border-kr-ink/25 px-5 text-sm font-medium text-foreground transition-colors hover:bg-white/70">
+                          className="inline-flex h-10 items-center rounded-pill border border-ng-ink/25 px-5 text-sm font-medium text-foreground transition-colors hover:bg-white/70">
                           Use a different email
                         </button>
                       )}
@@ -1170,7 +1170,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                     while the sequence runs. */}
                 <button onClick={(e) => { e.stopPropagation(); confirmAndRegister(); }}
                   disabled={refining} data-testid="build-confirm-button"
-                  className="kr-pop flex h-14 items-center gap-2 rounded-pill bg-kr-ink px-8 font-medium text-white disabled:opacity-50">
+                  className="ng-pop flex h-14 items-center gap-2 rounded-pill bg-ng-ink px-8 font-medium text-white disabled:opacity-50">
                   Looks good — Enter DecisionOS <ArrowRight size={18} weight="bold" />
                 </button>
                 {/* 2026-10-08 (Yokesh) — no "bring my team in first" here. Signing up
@@ -1194,9 +1194,9 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
         {/* -------------------------------------------------- REGISTERING */}
         {stage === "registering" && (
           <motion.div key="registering" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
-            className="kr-well__pane rounded-[1.75rem] p-6 text-center sm:p-9" data-testid="signup-registering">
+            className="ng-well__pane rounded-[1.75rem] p-6 text-center sm:p-9" data-testid="signup-registering">
             <p className="mb-2 flex items-center justify-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              <Sparkle size={14} weight="fill" className="text-[hsl(var(--kr-gold))]" /> Locking it in
+              <Sparkle size={14} weight="fill" className="text-[hsl(var(--ng-gold))]" /> Locking it in
             </p>
             <h1 className="mb-7 font-display text-3xl leading-[1.04] sm:text-4xl lg:text-5xl">
               Creating your workspace…

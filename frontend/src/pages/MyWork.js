@@ -24,7 +24,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 // opened there carries Approve / Request changes / Ask clarification
 // natively); leave uses the LeaveCard the register uses.
 import { LeaveCard } from "./Leave";
-import { ScopeSlider } from "../components/karma";
+import { ScopeSlider } from "../components/neuglass";
 // ASK-6 (2026-09-12): Leave no longer embedded here. Register lives on
 // Team, approvals live on Desk, config lives on Settings > Operations.
 // Import retired. If a follow-up ever needs the Request Leave dialog
@@ -48,7 +48,7 @@ import {
   ChartBar, UserPlus, // ASK-27 · % control, add a person
   Hourglass, // ASK-28 TK-07 · Waiting on
 } from "@phosphor-icons/react";
-import { AvatarStack, PersonAvatar } from "../components/karma/PersonAvatar";
+import { AvatarStack, PersonAvatar } from "../components/neuglass/PersonAvatar";
 import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel, AlertDialogAction } from "../components/ui/alert-dialog";
 import { motion, useReducedMotion } from "framer-motion";
 import {
@@ -56,12 +56,12 @@ import {
   DRAWER_FIELD, DRAWER_TRACK, GLASS_SHEET,
   CHIP as PILL, QUIET_CHIP as QUIET_PILL,
   GLASS_MENU, GLASS_MENU_ITEM, GLASS_MENU_LABEL,
-} from "../components/karma/glass";
+} from "../components/neuglass/glass";
 // 2026-09-14, founder — every dropdown on this page is the app's own glass
 // list; none of them opens the operating system's picker.
-import { GlassSelect } from "../components/karma/GlassSelect";
+import { GlassSelect } from "../components/neuglass/GlassSelect";
 import { RoutinesNudge } from "../components/routines/RoutinesSetup";
-import { DraftNote } from "../components/karma/DraftNote";
+import { DraftNote } from "../components/neuglass/DraftNote";
 import { useDraft } from "../hooks/useDraft";
 import { draftScope, hasDraft, hasDraftUnder } from "../lib/drafts";
 import { ReportButton } from "../components/ReportButton";
@@ -103,15 +103,15 @@ import { askBeforeMic } from "../lib/micNotice";
 // seconds. Proved by cloning the live node into the same parent: identical
 // classes, correct colour on the clone, stale colour on the original. Only a
 // running transition can produce that gap.
-// These controls swap between .kr-pop (outset shadow pair) and .kr-pressed
+// These controls swap between .ng-pop (outset shadow pair) and .ng-pressed
 // (inset pair), which are not interpolable, and the wedged animation takes
 // the whole transition group down with it.
 // Selection should snap anyway — a state indicator that fades in over 150ms
-// is a worse indicator. .kr-pop keeps its own hover transition; this is only
+// is a worse indicator. .ng-pop keeps its own hover transition; this is only
 // about the selected/unselected swap.
 const SEG = "flex h-10 items-center justify-center gap-1.5 px-4 text-xs font-medium leading-tight lg:text-sm";
-const SEG_ON = "kr-pressed font-semibold text-foreground";
-const SEG_OFF = "kr-pop text-foreground/70";
+const SEG_ON = "ng-pressed font-semibold text-foreground";
+const SEG_OFF = "ng-pop text-foreground/70";
 // ASK-25 — the Approvals view's Tasks sub-tab lenses. ALL is everything this
 // person may sign off (an owner: the whole tenant); MINE is only what was
 // routed to them by name (approver_id).
@@ -383,7 +383,7 @@ const TIMELINE_KIND = {
 };
 
 /* ASK-27 — the task drawer's material (DRAWER_LABEL, DRAWER_CARD, GLASS_PILL,
-   INK_PILL, MAROON_PILL, the drawer fields…) lives in components/karma/glass.js
+   INK_PILL, MAROON_PILL, the drawer fields…) lives in components/neuglass/glass.js
    now, shared with New Task, the selection bar and Reassign. */
 
 /* ASK-27 — "Set % manually" with no toggle in front of it: the bar IS the
@@ -429,7 +429,7 @@ function ProgressControl({ value, onCommit, testid, valueTestid, checklist }) {
           aria-label={locked ? "Progress, from the Execution Guide" : "Progress"} aria-valuetext={`${shown}%`}
           title={locked ? "Progress follows the Execution Guide — tick its steps to move it" : undefined}
           data-testid={testid}
-          className={`kr-progress-range min-w-0 flex-1 ${locked ? "cursor-default" : "cursor-pointer"}`}
+          className={`ng-progress-range min-w-0 flex-1 ${locked ? "cursor-default" : "cursor-pointer"}`}
           style={{ "--pct": `${shown}%` }} />
         <span className="w-10 shrink-0 text-right text-sm tabular-nums text-slate-600" data-testid={valueTestid}>{shown}%</span>
       </div>
@@ -563,7 +563,7 @@ function TaskTrail({ t, members, roleOptions, onChange, openTrigger = 0, noteOnl
    Note on the arrow sizes: index.css puts a 44px min-height touch floor on
    every button below lg, which would make a stacked pair 88px tall — taller
    than the 62px field they must fit inside. These two are the deliberate
-   exception, declared via .kr-step-nudge in index.css, and they stay
+   exception, declared via .ng-step-nudge in index.css, and they stay
    comfortably tappable because they are the only things in that column. */
 function StepRow({
   step, index, count, editing, inpClass,
@@ -676,12 +676,12 @@ function StepRow({
         <div className="flex w-7 shrink-0 flex-col justify-center gap-1">
           <button type="button" onClick={() => onMove(index, -1)} disabled={index === 0}
             data-testid={`exec-up-${index}`} aria-label="Move step up"
-            className="kr-step-nudge kr-pop grid h-[27px] w-7 place-items-center rounded-full text-foreground/70 disabled:opacity-30">
+            className="ng-step-nudge ng-pop grid h-[27px] w-7 place-items-center rounded-full text-foreground/70 disabled:opacity-30">
             <CaretUp size={11} weight="bold" aria-hidden="true" />
           </button>
           <button type="button" onClick={() => onMove(index, 1)} disabled={index === count - 1}
             data-testid={`exec-down-${index}`} aria-label="Move step down"
-            className="kr-step-nudge kr-pop grid h-[27px] w-7 place-items-center rounded-full text-foreground/70 disabled:opacity-30">
+            className="ng-step-nudge ng-pop grid h-[27px] w-7 place-items-center rounded-full text-foreground/70 disabled:opacity-30">
             <CaretDown size={11} weight="bold" aria-hidden="true" />
           </button>
         </div>
@@ -885,7 +885,7 @@ function ExecutionPlan({ t, onChange, onPatched, members = [], roleOptions = [] 
                  The row was a loose check square, a two-line text plate and
                  two 36px circles floating beside each other, so a checklist
                  read as a stack of separate widgets rather than a list. Now a
-                 single .kr-pop strip holds all of it: check on the left, the
+                 single .ng-pop strip holds all of it: check on the left, the
                  step on ONE line (tap opens the full text), the two actions on
                  the right. Fixed height, so ten steps make ten identical bars.
 
@@ -938,14 +938,14 @@ function ExecutionPlan({ t, onChange, onPatched, members = [], roleOptions = [] 
 
       {editing && (
         /* KM-7 — the add row joins the material. The field is .nm-field like
-           every other input in the app, and the plus is a round .kr-pop button
+           every other input in the app, and the plus is a round .ng-pop button
            rather than a square .nm-tile with a colour hover. */
         <div className="mt-3 flex items-center gap-2">
           <input value={newStep} onChange={(e) => setNewStep(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addStep()}
             placeholder="Add your own step…" data-testid={`exec-newstep-${t.id}`}
             className="h-11 min-w-0 flex-1 rounded-pill bg-white/80 px-4 text-sm text-slate-800 placeholder:text-slate-400 ring-1 ring-inset ring-slate-900/[0.06] shadow-[inset_0_1px_2px_hsl(216_30%_25%/0.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25" />
           <button onClick={addStep} data-testid={`exec-add-${t.id}`} aria-label="Add step"
-            className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground">
+            className="ng-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground">
             <Plus size={15} weight="bold" aria-hidden="true" />
           </button>
         </div>
@@ -978,7 +978,7 @@ function ExecutionPlan({ t, onChange, onPatched, members = [], roleOptions = [] 
           </>
         ) : (
           t.status !== "done" && (
-            /* KM-6 — .kr-pop and a real height, matching every other pill on
+            /* KM-6 — .ng-pop and a real height, matching every other pill on
                this card. It was .nm-btn with a colour hover, the flat idiom
                the redesign replaced, and py-2 left it sitting a few pixels
                short of its neighbours. */
@@ -994,12 +994,12 @@ function ExecutionPlan({ t, onChange, onPatched, members = [], roleOptions = [] 
           system's last corner in this file: a hairline-framed panel, a
           font-heading title and a `label-mono` footnote, with the close X
           inheriting the dialog default and sitting off the title's baseline.
-          Now a .kr-bento sheet, sans throughout, the step itself pressed into
+          Now a .ng-bento sheet, sans throughout, the step itself pressed into
           a .nm-inset well so the text reads as the CONTENT rather than more
-          chrome, and the X replaced by an explicit .kr-pop Close so it is
+          chrome, and the X replaced by an explicit .ng-pop Close so it is
           aligned by the layout instead of floating. */}
       <Dialog open={!!viewStep} onOpenChange={(o) => !o && setViewStep(null)}>
-        <DialogContent className="kr-bento rounded-cardlg border-0 [&>button.absolute]:hidden">
+        <DialogContent className="ng-bento rounded-cardlg border-0 [&>button.absolute]:hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
               <ListChecks size={17} weight="regular" aria-hidden="true" className="text-muted-foreground" />
@@ -1013,7 +1013,7 @@ function ExecutionPlan({ t, onChange, onPatched, members = [], roleOptions = [] 
             </p>
           </div>
           <button type="button" onClick={() => setViewStep(null)} data-testid={`exec-step-close-${t.id}`}
-            className="kr-pop mt-1 flex h-11 w-full items-center justify-center rounded-pill text-sm font-medium text-foreground">
+            className="ng-pop mt-1 flex h-11 w-full items-center justify-center rounded-pill text-sm font-medium text-foreground">
             Close
           </button>
         </DialogContent>
@@ -1225,7 +1225,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-semibold">Delete this task permanently?</span>
                     <button onClick={doDelete} disabled={deleting} data-testid={`delete-task-confirm-${t.id}`}
-                      className="kr-lift rounded-pill bg-kr-ink px-3.5 py-2 text-xs font-medium text-white transition-all disabled:opacity-60">
+                      className="ng-lift rounded-pill bg-ng-ink px-3.5 py-2 text-xs font-medium text-white transition-all disabled:opacity-60">
                       {deleting ? "Deleting…" : "Yes, delete"}
                     </button>
                     <button onClick={() => setConfirmDel(false)} disabled={deleting}
@@ -1251,7 +1251,7 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
   const doneCount = tasks.filter(isTerminal).length;
   return (
     <div
-      /* KR-11 made this bar My Work's one Karma-dark ingredient. 2026-09-14,
+      /* KR-11 made this bar My Work's one Neu-glassmorphism-dark ingredient. 2026-09-14,
          founder: it joins the drawer's material and turns WHITE — a white
          glass strip, Complete as the black ink pill, Reassign as a glass
          pill, Clear as a quiet text button. */
@@ -1318,7 +1318,7 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
    wash, a hairline ring in the same hue, and text dark enough to read on it
    (every pair below clears 4.5:1). Nothing bright — the stripe is the only
    saturated colour on the card, and it is the priority.
-   PILL and QUIET_PILL now live in components/karma/glass (as CHIP and
+   PILL and QUIET_PILL now live in components/neuglass/glass (as CHIP and
    QUIET_CHIP) so the leave cards wear the same chip. */
 const PRIO_STRIPE = { high: "bg-red-500", medium: "bg-blue-500", low: "bg-neutral-500" };
 const PRIO_LABEL = { high: "High", medium: "Medium", low: "Low" };
@@ -1507,7 +1507,7 @@ function TaskWordingEditor({ t, onSaved, onClose }) {
           aria-describedby={error ? `task-wording-error-${t.id}` : undefined}
           onChange={(e) => { setF((s) => ({ ...s, title: e.target.value })); if (error) setError(""); }}
           className="nm-field w-full px-4 py-3 text-base font-medium text-slate-900 placeholder:text-slate-400" />
-        {error && <p id={`task-wording-error-${t.id}`} role="alert" className="mt-1.5 text-xs font-medium text-kr-accent">{error}</p>}
+        {error && <p id={`task-wording-error-${t.id}`} role="alert" className="mt-1.5 text-xs font-medium text-ng-accent">{error}</p>}
       </div>
       <div>
         <label htmlFor={`task-wording-desc-${t.id}`} className={`${DRAWER_LABEL} block`}>Description</label>
@@ -1746,7 +1746,7 @@ function AssigneesEditor({ t, members, roleOptions, canEdit, onPatched }) {
           {t.decision_id ? (
             <Link to={`/inbox?decision=${t.decision_id}`} data-testid={`decision-link-${t.id}`}
               title={t.decision_title ? `Open the decision: ${t.decision_title}` : "Open the decision this task came from"}
-              className="group/dec -mx-1 inline-flex max-w-full items-center gap-1 self-start rounded-lg px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/40">
+              className="group/dec -mx-1 inline-flex max-w-full items-center gap-1 self-start rounded-lg px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-ink/40">
               <span data-testid={`task-asked-by-${t.id}`} className="min-w-0 truncate">
                 <span className="text-slate-500">{t.created_by_name ? "Asked by " : "From "}</span>
                 <span className="font-medium text-slate-800">
@@ -2529,8 +2529,8 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
           doubled on tasks that had all three fields. */}
       <div>
         <span className={`inline-flex rounded-pill px-2.5 py-0.5 text-xs font-medium ${
-          overdue && !terminal ? "bg-kr-accent text-white"
-          : "bg-orange-50 text-kr-accent"
+          overdue && !terminal ? "bg-ng-accent text-white"
+          : "bg-orange-50 text-ng-accent"
         }`}>
           {STATUS_LABEL[t.status] || t.status}
         </span>
@@ -2546,7 +2546,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       {/* Description card (orange) */}
       {t.description && (
         <div className="flex items-start gap-3 rounded-cardlg bg-orange-50/70 p-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-tile bg-orange-100 text-kr-accent">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-tile bg-orange-100 text-ng-accent">
             <FileIcon size={18} weight="regular" />
           </span>
           <p className="text-sm leading-relaxed">{t.description}</p>
@@ -2612,16 +2612,16 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
           not fit one row, so "Waiting" goes on the founder's call. Four
           remain and they are the states work actually moves through.
           It is a segmented bar now rather than five loose chips: a single
-          .kr-pressed track with four equal segments, and the selected one
+          .ng-pressed track with four equal segments, and the selected one
           fills with ITS OWN status colour, so choosing a status visibly
           moves the coloured pill along the track. Not Started stays the
           default and has no segment — it is the absence of a choice, and
           tapping the active segment returns to it.
           No transition utility: the track's children swap fills, and the
-          selected segment also swaps against .kr-pressed's shadow, which is
+          selected segment also swaps against .ng-pressed's shadow, which is
           not interpolable against an outset pair. */}
       {!terminal && !workLocked && rights.work && (
-        <div className="kr-pressed grid grid-cols-2 gap-1 rounded-pill p-1" role="group"
+        <div className="ng-pressed grid grid-cols-2 gap-1 rounded-pill p-1" role="group"
              aria-label="Task status" data-testid={`status-pills-m-${t.id}`}>
           {M_STATUS_PILLS.map((sp) => {
             const on = stageOf(t.status) === sp.key;
@@ -2638,11 +2638,11 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                    four segments TK-07 retired. */
                 className={`flex h-10 min-w-0 items-center justify-center rounded-pill px-2 text-[13px] leading-tight ${
                   /* KM-6 — the selected segment is RAISED, not a flat
-                     swatch: .kr-pop supplies the lift and the colour
+                     swatch: .ng-pop supplies the lift and the colour
                      utility overrides its white ground (utilities layer
                      beats components), so the moving pill reads as a
                      physical thing sitting in the track. */
-                  on ? `kr-pop ${sp.on} font-semibold` : "text-foreground/60"
+                  on ? `ng-pop ${sp.on} font-semibold` : "text-foreground/60"
                 }`}
               >
                 <span className="truncate">{sp.label}</span>
@@ -2826,7 +2826,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
               title={recording ? "Stop and send voice reply" : "Record a voice reply"}
               aria-label={recording ? "Stop recording and send" : undefined}
               className={`flex h-12 min-w-0 flex-1 basis-0 items-center justify-center gap-2 rounded-pill text-[15px] font-medium transition-colors ${
-                recording ? "bg-kr-accent text-white" : `text-slate-700 hover:bg-white ${GLASS_PILL}`
+                recording ? "bg-ng-accent text-white" : `text-slate-700 hover:bg-white ${GLASS_PILL}`
               }`}
             >
               {recording
@@ -2919,7 +2919,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                risk, which is the same rule that keeps Settings' Sign out
                neutral. The trash says what it is and the confirmation — which
                has the red — is where the alarm belongs. */
-            className="mx-auto -mt-2 flex h-11 w-fit items-center justify-center gap-2 rounded-pill px-4 text-sm font-medium text-slate-600 transition-colors hover:bg-white/70 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline">
+            className="mx-auto -mt-2 flex h-11 w-fit items-center justify-center gap-2 rounded-pill px-4 text-sm font-medium text-slate-600 transition-colors hover:bg-white/70 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline">
             <Trash size={16} weight="bold" aria-hidden="true" /> Delete task
           </button>
           <AlertDialog open={confirmDelete} onOpenChange={(o) => { if (!deleting) setConfirmDelete(o); }}>
@@ -2985,7 +2985,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
           </button>
           <button type="button" onClick={toggleVoice} data-testid={`voice-m-${t.id}`}
             aria-label={recording ? "Stop recording and send" : "Record a voice reply"}
-            className={`grid h-12 w-12 shrink-0 place-items-center rounded-full ${recording ? "bg-kr-accent text-white" : `text-slate-700 ${GLASS_PILL}`}`}>
+            className={`grid h-12 w-12 shrink-0 place-items-center rounded-full ${recording ? "bg-ng-accent text-white" : `text-slate-700 ${GLASS_PILL}`}`}>
             {recording ? <Stop size={18} weight="fill" aria-hidden="true" /> : <Microphone size={18} aria-hidden="true" />}
           </button>
           {recording && (
@@ -3105,7 +3105,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
           toggleCard();
         }
       }}
-      className={`kr-bento flex h-full min-w-0 flex-col overflow-hidden cursor-pointer ${highlight ? "ring-2 ring-kr-ink ring-offset-2 ring-offset-background" : ""}`}>
+      className={`ng-bento flex h-full min-w-0 flex-col overflow-hidden cursor-pointer ${highlight ? "ring-2 ring-ng-ink ring-offset-2 ring-offset-background" : ""}`}>
       <div className="flex flex-1 min-h-0">
         <div className="flex-1 min-w-0 flex flex-col">
 
@@ -3121,7 +3121,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
             the workflow stage wear the same pill in their own tints.
           - Assignees are faces at the bottom-right — photos from Team,
             initials until one is set. */}
-      <div className={`group relative flex w-full flex-1 flex-col py-3.5 pl-5 pr-3.5 transition-colors ${selected ? "bg-kr-ink/[0.05]" : ""}`}>
+      <div className={`group relative flex w-full flex-1 flex-col py-3.5 pl-5 pr-3.5 transition-colors ${selected ? "bg-ng-ink/[0.05]" : ""}`}>
         <span aria-hidden="true" data-testid={`priority-stripe-${t.id}`} data-priority={prio}
           className={`absolute bottom-3.5 left-2 top-3.5 w-1 rounded-full ${PRIO_STRIPE[prio]}`} />
         <span className="sr-only">{PRIO_LABEL[prio]} priority.</span>
@@ -3143,7 +3143,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                 checked={selected}
                 onChange={onToggleSelect}
                 data-testid={`bulk-select-${t.id}`}
-                className="peer h-[18px] w-[18px] cursor-pointer appearance-none rounded-[5px] border-[1.5px] border-slate-300 bg-[#fff] transition-colors checked:border-kr-ink checked:bg-kr-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/40"
+                className="peer h-[18px] w-[18px] cursor-pointer appearance-none rounded-[5px] border-[1.5px] border-slate-300 bg-[#fff] transition-colors checked:border-ng-ink checked:bg-ng-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-ink/40"
                 aria-label={`Select task ${t.title}`}
               />
               <Check size={12} weight="bold" aria-hidden="true"
@@ -3271,7 +3271,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                 href={`/workflows?type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
                 onClick={(e) => e.stopPropagation()}
                 data-testid={`wf-chip-${t.id}`}
-                className="group/wf inline-flex min-w-0 items-center rounded-pill focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/40"
+                className="group/wf inline-flex min-w-0 items-center rounded-pill focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-ink/40"
                 title={`Workflow: ${t.workflow_summary.title}${t.workflow_summary.stage ? ` · ${t.workflow_summary.stage.replace(/_/g, " ")}` : ""}`}
               >
                 <span className={`${PILL} ${QUIET_PILL} min-w-0 transition-colors group-hover/wf:bg-slate-500/[0.13]`}>
@@ -3349,7 +3349,7 @@ function FilterDropdown({ testid, label, value, options, counts, onSelect, loadi
     <DropdownMenu onOpenChange={(o) => { if (!o) setQuery(""); }}>
       <DropdownMenuTrigger asChild>
         <button type="button" data-testid={testid} aria-pressed={narrowed}
-          className={`${narrowed ? "kr-pressed" : "kr-pop"} flex h-9 items-center gap-2 rounded-pill pl-3.5 pr-3 text-xs font-medium text-foreground`}>
+          className={`${narrowed ? "ng-pressed" : "ng-pop"} flex h-9 items-center gap-2 rounded-pill pl-3.5 pr-3 text-xs font-medium text-foreground`}>
           <span className="text-muted-foreground">{label}:</span>
           <span className={`max-w-[140px] truncate ${narrowed ? "font-semibold" : ""}`}>{active.label}</span>
           {counts && (
@@ -3428,7 +3428,7 @@ function FilterChipGroup({ testid, label, value, options, counts, onSelect, load
           return (
             <button key={o.key || "__all__"} type="button" aria-pressed={on}
               onClick={() => onSelect(o.key)} data-testid={`${testid}-${o.key || "all"}`}
-              className={`flex min-h-9 items-center gap-1.5 rounded-pill px-3 text-[12px] ${on ? "kr-pressed font-semibold text-foreground" : "kr-pop text-foreground/75"}`}>
+              className={`flex min-h-9 items-center gap-1.5 rounded-pill px-3 text-[12px] ${on ? "ng-pressed font-semibold text-foreground" : "ng-pop text-foreground/75"}`}>
               <span className="max-w-[270px] truncate">{o.label}</span>
               {counts && <span className="tabular-nums opacity-55">{loading ? "—" : counts(o.key)}</span>}
             </button>
@@ -4068,8 +4068,8 @@ export default function MyWork({ only = null }) {
   // stay untouched via `lg:hidden` / `hidden lg:*`.
   // KM-2 · MOBILE HEADER — the founder's arrangement, and it now uses the
   // DESKTOP MATERIAL. The phone was still painting selection as a solid ink
-  // fill (MSEG_ON = bg-kr-ink text-white) while the desktop had long since
-  // moved to depth: .kr-pressed for "you are in this", .kr-pop for "you are
+  // fill (MSEG_ON = bg-ng-ink text-white) while the desktop had long since
+  // moved to depth: .ng-pressed for "you are in this", .ng-pop for "you are
   // not". One app, one grammar.
   //
   //   Row 1: h1 left · [Leave] right-aligned
@@ -4079,7 +4079,7 @@ export default function MyWork({ only = null }) {
   //   Row 3: the active sub-filter caption
   //
   // NO `transition-colors` ANYWHERE IN HERE, and it is load-bearing rather
-  // than an oversight: every control below swaps .kr-pop <-> .kr-pressed,
+  // than an oversight: every control below swaps .ng-pop <-> .ng-pressed,
   // whose box-shadows are an OUTSET list and an INSET list. Shadow lists only
   // interpolate when their lengths and `inset` keywords agree, so the browser
   // falls back to a discrete transition and the button sits visually unchanged
@@ -4088,11 +4088,11 @@ export default function MyWork({ only = null }) {
   // wholesale) drags the LABEL COLOUR into that same dead zone. Selection
   // should snap anyway. See the note at the top of this file.
   const MPILL = "flex h-9 shrink-0 items-center gap-1.5 rounded-pill px-2.5 text-[12px]";
-  const MPILL_ON = "kr-pressed font-semibold text-foreground";
-  const MPILL_OFF = "kr-pop text-foreground/75";
+  const MPILL_ON = "ng-pressed font-semibold text-foreground";
+  const MPILL_OFF = "ng-pop text-foreground/75";
   const MSEG = "flex h-9 shrink-0 items-center justify-center px-2.5 text-[12px]";
-  const MSEG_ON = "kr-pressed font-semibold text-foreground";
-  const MSEG_OFF = "kr-pop text-foreground/70";
+  const MSEG_ON = "ng-pressed font-semibold text-foreground";
+  const MSEG_OFF = "ng-pop text-foreground/70";
   // The two circles on the right of Row 2, and the [+] in the lens group.
   const MCIRCLE = "grid h-9 w-9 shrink-0 place-items-center rounded-full text-foreground";
   const mobileView = (() => {
@@ -4286,11 +4286,11 @@ export default function MyWork({ only = null }) {
               (ASK-3: the [+] New Task circle lives above the list, not here.) */}
           <button type="button" onClick={() => setViewSheetOpen(true)} data-testid="work-mobile-view"
             aria-haspopup="dialog" aria-label={`View: ${mobileViewLabel}`}
-            className="kr-pop flex h-11 min-w-0 shrink items-center gap-1.5 rounded-pill pl-4 pr-3 text-[13px] font-semibold">
+            className="ng-pop flex h-11 min-w-0 shrink items-center gap-1.5 rounded-pill pl-4 pr-3 text-[13px] font-semibold">
             <span className="truncate">{mobileViewLabel}</span>
             {mobileView !== "approvals" && showApprovalsView && waitingOnMe > 0 && (
               <span data-testid="work-mobile-view-badge"
-                className="grid h-5 min-w-[1.25rem] place-items-center rounded-full bg-kr-ink px-1.5 text-[11px] font-semibold tabular-nums text-white">
+                className="grid h-5 min-w-[1.25rem] place-items-center rounded-full bg-ng-ink px-1.5 text-[11px] font-semibold tabular-nums text-white">
                 {waitingOnMe}
               </span>
             )}
@@ -4319,7 +4319,7 @@ export default function MyWork({ only = null }) {
                 aria-pressed={aiPriority} data-testid="work-mobile-priority"
                 aria-label={aiPriority ? t("mywork.ai_priority_on", "Smart priority on") : t("mywork.ai_priority", "Smart priority")}
                 title={scoring ? t("mywork.scoring", "Scoring…") : (aiPriority ? t("mywork.ai_priority_on", "Smart priority on") : t("mywork.ai_priority", "Smart priority"))}
-                className={`${MCIRCLE} ${aiPriority ? "kr-pressed" : "kr-pop"}`}>
+                className={`${MCIRCLE} ${aiPriority ? "ng-pressed" : "ng-pop"}`}>
                 <Sparkle size={15} weight={aiPriority ? "fill" : "bold"} aria-hidden="true"
                   className={scoring ? "animate-pulse" : ""} />
               </button>
@@ -4357,11 +4357,11 @@ export default function MyWork({ only = null }) {
                 aria-label={filtersActive ? `Filters: ${filterSummary}` : "Filters"}
                 aria-haspopup="dialog"
                 title={filtersActive ? `Filters: ${filterSummary}` : "Filters"}
-                className={`${MCIRCLE} relative ${filtersActive ? "kr-pressed" : "kr-pop"}`}>
+                className={`${MCIRCLE} relative ${filtersActive ? "ng-pressed" : "ng-pop"}`}>
                 <SlidersHorizontal size={15} weight="bold" aria-hidden="true" />
                 {filtersActive && (
                   <span aria-hidden="true"
-                    className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-kr-accent" />
+                    className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-ng-accent" />
                 )}
               </button>
             )}
@@ -4406,7 +4406,7 @@ export default function MyWork({ only = null }) {
               <SheetTitle className="text-base">Show</SheetTitle>
               <SheetClose asChild>
                 <button type="button" aria-label="Close" data-testid="work-mobile-view-close"
-                  className="kr-pop grid h-9 w-9 place-items-center rounded-full">
+                  className="ng-pop grid h-9 w-9 place-items-center rounded-full">
                   <X size={14} weight="bold" aria-hidden="true" />
                 </button>
               </SheetClose>
@@ -4417,14 +4417,14 @@ export default function MyWork({ only = null }) {
                 return (
                   <button key={o.key} type="button" aria-pressed={on} data-testid={`work-mobile-view-${o.key}`}
                     onClick={() => { o.pick(); setViewSheetOpen(false); }}
-                    className={`flex h-12 items-center justify-between gap-3 rounded-pill px-5 text-[15px] ${on ? "kr-pressed font-semibold" : "kr-pop font-medium"}`}>
+                    className={`flex h-12 items-center justify-between gap-3 rounded-pill px-5 text-[15px] ${on ? "ng-pressed font-semibold" : "ng-pop font-medium"}`}>
                     <span className="flex min-w-0 items-center gap-2 truncate">
                       {o.leaves && <FlowArrow size={16} weight="bold" aria-hidden="true" className="shrink-0 opacity-70" />}
                       {o.label}
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
                       {o.count > 0 && (
-                        <span className="grid h-6 min-w-[1.5rem] place-items-center rounded-full bg-kr-ink px-2 text-xs font-semibold tabular-nums text-white">
+                        <span className="grid h-6 min-w-[1.5rem] place-items-center rounded-full bg-ng-ink px-2 text-xs font-semibold tabular-nums text-white">
                           {o.count}
                         </span>
                       )}
@@ -4444,7 +4444,7 @@ export default function MyWork({ only = null }) {
               <SheetTitle className="text-base">Filter tasks</SheetTitle>
               <SheetClose asChild>
                 <button type="button" aria-label="Close filters" data-testid="work-mobile-filter-close"
-                  className="kr-pop grid h-9 w-9 place-items-center rounded-full">
+                  className="ng-pop grid h-9 w-9 place-items-center rounded-full">
                   <X size={14} weight="bold" aria-hidden="true" />
                 </button>
               </SheetClose>
@@ -4466,12 +4466,12 @@ export default function MyWork({ only = null }) {
             <div className="flex items-center gap-2 border-t border-slate-900/[0.06] px-5 pb-[max(1.5rem,var(--sa-bottom))] pt-3">
               <button type="button" onClick={clearFilters} disabled={!filtersActive}
                 data-testid="work-sheet-clear"
-                className="kr-pop h-11 flex-1 rounded-pill text-[13px] font-medium disabled:opacity-40">
+                className="ng-pop h-11 flex-1 rounded-pill text-[13px] font-medium disabled:opacity-40">
                 Clear filters
               </button>
               <SheetClose asChild>
                 <button type="button" data-testid="work-sheet-done"
-                  className="kr-lift h-11 flex-1 rounded-pill bg-kr-ink text-[13px] font-medium text-white">
+                  className="ng-lift h-11 flex-1 rounded-pill bg-ng-ink text-[13px] font-medium text-white">
                   Show {tasksLoading ? "" : list.length} {list.length === 1 ? "task" : "tasks"}
                 </button>
               </SheetClose>
@@ -4580,8 +4580,8 @@ export default function MyWork({ only = null }) {
                "Approvals" — and a pipeline board is not one of those, so it
                read as a fourth task filter that then replaced the whole page.
                A circle says "another surface" the way the segment could not,
-               and it is the row's existing vocabulary: same 40px .kr-pop /
-               .kr-pressed pair as the AI toggle beside it. The route, the deep
+               and it is the row's existing vocabulary: same 40px .ng-pop /
+               .ng-pressed pair as the AI toggle beside it. The route, the deep
                links and the view itself are untouched. */
             return (
               <div className="flex flex-wrap items-center gap-2.5" data-testid="mywork-lens-group">
@@ -4596,7 +4596,7 @@ export default function MyWork({ only = null }) {
                     aria-pressed={aiPriority}
                     aria-label={aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
                     title={scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
-                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground ${aiPriority ? "kr-pressed" : "kr-pop"}`}>
+                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground ${aiPriority ? "ng-pressed" : "ng-pop"}`}>
                     <Sparkle size={16} weight={aiPriority ? "fill" : "bold"} aria-hidden="true"
                       className={scoring ? "animate-pulse" : ""} />
                   </button>
@@ -4608,7 +4608,7 @@ export default function MyWork({ only = null }) {
                       const last = i === segments.length - 1;
                       return (
                         <Fragment key={seg.key}>
-                          {!first && <span aria-hidden="true" className="h-6 w-px shrink-0 bg-kr-ink/15" />}
+                          {!first && <span aria-hidden="true" className="h-6 w-px shrink-0 bg-ng-ink/15" />}
                           <button type="button" onClick={seg.onClick} data-testid={seg.testid}
                             aria-pressed={seg.active}
                             className={`${SEG} ${first ? "rounded-l-pill" : ""} ${last ? "rounded-r-pill" : ""} ${seg.active ? SEG_ON : SEG_OFF}`}>
@@ -4616,7 +4616,7 @@ export default function MyWork({ only = null }) {
                             {/* ASK-28 TK-02 — how many are waiting on you. */}
                             {seg.count > 0 && (
                               <span data-testid={`${seg.testid}-count`}
-                                className="ml-1.5 inline-grid h-5 min-w-5 place-items-center rounded-full bg-kr-ink px-1.5 text-[11px] font-semibold tabular-nums leading-none text-white">
+                                className="ml-1.5 inline-grid h-5 min-w-5 place-items-center rounded-full bg-ng-ink px-1.5 text-[11px] font-semibold tabular-nums leading-none text-white">
                                 {seg.count}
                               </span>
                             )}
@@ -4640,8 +4640,8 @@ export default function MyWork({ only = null }) {
         /* ASK-28 TK-04 — say which it is (a task that no longer exists, or one
            this person may not open), and let them put the message away. */
         <div data-testid="access-restricted-banner" data-reason={focusMissing ? "missing" : "denied"}
-          className="mb-6 flex items-center gap-3 rounded-control border-l-[3px] border-kr-accent bg-kr-accent/10 p-4">
-          <LockKey size={20} weight="bold" aria-hidden="true" className="shrink-0 text-kr-accent" />
+          className="mb-6 flex items-center gap-3 rounded-control border-l-[3px] border-ng-accent bg-ng-accent/10 p-4">
+          <LockKey size={20} weight="bold" aria-hidden="true" className="shrink-0 text-ng-accent" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold">{focusMissing ? t("mywork.task_missing", "This task no longer exists") : t("mywork.access_restricted")}</p>
             <p className="text-sm text-muted-foreground">{focusMissing
@@ -4649,7 +4649,7 @@ export default function MyWork({ only = null }) {
               : t("mywork.access_restricted_desc")}</p>
           </div>
           <button type="button" onClick={() => setFilterParams({ task: "", focus: "" })} data-testid="access-restricted-dismiss"
-            className="shrink-0 rounded-pill px-3 py-1.5 text-sm font-medium text-foreground/70 transition-colors hover:bg-kr-ink/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/40">
+            className="shrink-0 rounded-pill px-3 py-1.5 text-sm font-medium text-foreground/70 transition-colors hover:bg-ng-ink/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-ink/40">
             Dismiss
           </button>
         </div>
@@ -4834,18 +4834,18 @@ export default function MyWork({ only = null }) {
                 <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-foreground/70">
                   {t("mywork.filter_priority", "Priority")}
                 </p>
-                {/* NO transition utility: the segments swap .kr-pop's outset
-                    shadows against .kr-pressed's inset ones, which do not
+                {/* NO transition utility: the segments swap .ng-pop's outset
+                    shadows against .ng-pressed's inset ones, which do not
                     interpolate. */}
-                <div className="kr-pressed flex items-center gap-1 rounded-pill p-1"
+                <div className="ng-pressed flex items-center gap-1 rounded-pill p-1"
                      role="group" aria-label="Filter by priority" data-testid="mywork-priority-bands">
                   {BANDS.map((b) => {
                     const n = list.filter((tk) => TIER_OF(tk) === b.key).length;
                     return (
                       <button key={b.key} type="button" onClick={() => pickBand(b.key)}
                         aria-pressed={band === b.key} data-testid={`priority-band-${b.key}`}
-                        className={`kr-seg-compact flex h-9 flex-1 items-center justify-center gap-1.5 rounded-pill px-2 text-[12px] ${
-                          band === b.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
+                        className={`ng-seg-compact flex h-9 flex-1 items-center justify-center gap-1.5 rounded-pill px-2 text-[12px] ${
+                          band === b.key ? "ng-pop font-semibold text-foreground" : "text-foreground/60"}`}>
                         {b.label}
                         <span className="tabular-nums opacity-55">{n}</span>
                       </button>

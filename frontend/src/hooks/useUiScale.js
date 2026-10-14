@@ -1,7 +1,7 @@
 // UI-SCALE · useUiScale — the page scales WITH the screen.
 // (Unnumbered on purpose: ASK-27–31 are the task-drawer rework.)
 //
-// The Karma pages were composed at 1440 CSS px (the 14" laptop the founder
+// The Neu-glassmorphism pages were composed at 1440 CSS px (the 14" laptop the founder
 // signs off on). On a 24" or 27" monitor the same page sat in the middle of
 // the viewport at the same size, with dead space either side: the layout
 // grew, the type and the controls did not. Founder: "based on the screen
@@ -52,6 +52,7 @@
 //     (see Desk's row fitting).
 // Radix poppers are fine: floating-ui ≥1.6.6 reads Element.currentCSSZoom.
 import { useEffect } from "react";
+import { isNativeApp } from "../lib/native/back";
 
 export const UI_SCALE_REFERENCE_WIDTH = 1440;
 const LG = 1024; // Tailwind's lg breakpoint — the desktop tree starts here
@@ -113,13 +114,31 @@ export function useUiScale() {
       return typeof w === "number" && w > 64 ? w : window.innerWidth;
     };
 
-    const effectiveScale = () => {
-      const ruler = document.createElement("div");
-      ruler.style.cssText = "position:absolute;top:-9999px;left:0;width:100px;height:1px;pointer-events:none";
-      document.body.appendChild(ruler);
-      const got = ruler.getBoundingClientRect().width / 100;
-      ruler.remove();
-      return got;
+    /* AND THE TYPE HAS TO LAND TOO, NOT ONLY THE BOXES. (2026-10-13, measured
+       in the iPhone 17 Pro simulator, iOS 26.5.) A third WebKit behaviour, in
+       between the two above: a 100px box came back 80px — zoom honoured — and
+       100px of text came back 100px, with getComputedStyle reporting 125px.
+       Boxes shrank and the words inside them did not, so every line of type
+       was a quarter too big for the room it was laid out in: the greeting
+       wrapped to three lines, the hero grew 75px, and the Desk's sheet, out of
+       room, cut its three rows down to one. A box-only ruler called that a
+       success. So two rulers, a box and a line of type, and zoom counts as
+       landed only when BOTH come back at the scale; anything else takes the
+       viewport route, which scales boxes and type together because it is the
+       page being scaled, not the CSS. */
+    const zoomLanded = (s) => {
+      const box = document.createElement("div");
+      box.style.cssText = "position:absolute;top:-9999px;left:0;width:100px;height:1px;pointer-events:none";
+      const type = document.createElement("span");
+      type.style.cssText = "position:absolute;top:-9999px;left:0;font:100px/1 monospace;white-space:nowrap;pointer-events:none";
+      type.textContent = "M";
+      document.body.appendChild(box);
+      document.body.appendChild(type);
+      const boxAt = box.getBoundingClientRect().width / 100;
+      const typeAt = type.getBoundingClientRect().height / 100;
+      box.remove();
+      type.remove();
+      return Math.abs(boxAt - s) <= 0.01 && Math.abs(typeAt - s) <= 0.02;
     };
 
     const widenViewport = (s) => {
@@ -129,7 +148,17 @@ export function useUiScale() {
          a rounded pixel TALLER than the window — one stray pixel of scroll on
          a page whose whole point is not to scroll. Flooring always asks for
          slightly less than the exact 487.5, so the fit rounds the other way. */
-      meta.setAttribute("content", `width=${Math.floor(deviceWidth() / s)}, viewport-fit=cover`);
+      const width = Math.floor(deviceWidth() / s);
+      /* IN THE APP THE SCALE IS PINNED HERE TOO. lib/native/viewport pins the
+         page at 1 so iOS cannot focus-zoom a field (IOS-3); with the page
+         drawn at 0.8 instead, the pin moves to 0.8 — same three numbers, so
+         nothing can zoom it — and `data-ui-width` tells the pin not to put
+         `width=device-width` back over this. */
+      const fit = (deviceWidth() / width).toFixed(4);
+      meta.setAttribute("content", isNativeApp()
+        ? `width=${width}, initial-scale=${fit}, minimum-scale=${fit}, maximum-scale=${fit}, user-scalable=no, viewport-fit=cover`
+        : `width=${width}, viewport-fit=cover`);
+      meta.setAttribute("data-ui-width", String(width));
     };
 
     /* MERGE 2026-10-06 — AND A HEIGHT CHANGE IS NOT A SCALE CHANGE. From
@@ -174,13 +203,26 @@ export function useUiScale() {
          back TO. A laptop whose web view lacked zoom would simply run at 1,
          which is what it did before any of this existed. */
       if (s === 1 || window.innerWidth >= LG) return;
-      if (Math.abs(effectiveScale() - s) <= 0.01) return;   // zoom landed; done
+      if (zoomLanded(s)) return;                            // boxes AND type at s; done
 
       viaViewport = true;
       document.body.classList.remove("ui-scale");
       try { document.body.style.zoom = ""; } catch (e) { /* never had one */ }
       root.style.setProperty("--ui-scale", "1");
+      const before = window.innerWidth;
       widenViewport(s);
+      /* AND SAY SO. WKWebView re-lays the page out at the new width without
+         firing `resize` (measured: innerWidth 402 → 502, zero events), so
+         everything that measured the screen under the failed zoom kept its
+         answer — the Desk's sheet stayed at its tightest, supporting lines
+         stripped, with room to spare below it. Once the new width has landed,
+         announce it, so every measure takes its reading again. */
+      let tries = 0;
+      const announce = () => {
+        if (window.innerWidth !== before || ++tries > 30) window.dispatchEvent(new Event("resize"));
+        else requestAnimationFrame(announce);
+      };
+      requestAnimationFrame(announce);
     };
     const onResize = () => { if (!raf) raf = requestAnimationFrame(apply); };
     apply();
@@ -191,6 +233,7 @@ export function useUiScale() {
       root.style.removeProperty("--ui-scale");
       try { document.body.style.zoom = ""; } catch (e) { /* never had one */ }
       if (meta && metaWas !== null) meta.setAttribute("content", metaWas);
+      if (meta) meta.removeAttribute("data-ui-width");
       document.body.classList.remove("ui-scale");
     };
   }, []);

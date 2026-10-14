@@ -7,16 +7,16 @@ import { Sparkle } from "@phosphor-icons/react";
 // WHAT THIS REPLACED. A brutalist robot: hard `border-border` boxes, a
 // `bg-primary` torso in the retired indigo, a swinging black hammer and
 // `bg-caution-50` sparks. It was drawn in a system this branch has otherwise
-// finished retiring, so on a Karma surface it read as clip-art parked on
+// finished retiring, so on a Neu-glassmorphism surface it read as clip-art parked on
 // glass — the one element on the page with 1px black outlines.
 //
 // WHAT IT IS NOW. The product assembling itself: a bento of tiles arriving
 // one at a time into an empty bed, which is exactly what the app's home
 // screens are made of.
 //
-// WHY THE BED IS INK. The first cut built it out of .kr-pressed with .kr-pop
+// WHY THE BED IS INK. The first cut built it out of .ng-pressed with .ng-pop
 // tiles, on the argument that those are the app's own materials. Rendered, it
-// was invisible — .kr-pressed fills at white/30 and .kr-pop at white/38, so on
+// was invisible — .ng-pressed fills at white/30 and .ng-pop at white/38, so on
 // the pale canvas it was white tiles on a white tray separated by shadows too
 // soft to survive at 40px. Ink is both the fix and the more correct answer:
 // every Dex surface in this app is already ink (the FAB, the Dex room, the
@@ -36,12 +36,12 @@ const TILES = [
 ];
 
 // On ink, "raised" is carried by fill and a lit top edge rather than by the
-// light-zone shadow pair — .kr-pop's shadows are tuned for a pale ground and
-// vanish here (the same reason index.css carries a .kr-glass.dark .kr-pop
+// light-zone shadow pair — .ng-pop's shadows are tuned for a pale ground and
+// vanish here (the same reason index.css carries a .ng-glass.dark .ng-pop
 // override).
 const TONE = {
   plain: "bg-white/90 shadow-[inset_0_1px_0_hsl(0_0%_100%),0_2px_6px_hsl(0_0%_0%/.45)]",
-  gold:  "bg-[hsl(var(--kr-gold))] shadow-[inset_0_1px_0_hsl(0_0%_100%/.55),0_2px_6px_hsl(0_0%_0%/.45)]",
+  gold:  "bg-[hsl(var(--ng-gold))] shadow-[inset_0_1px_0_hsl(0_0%_100%/.55),0_2px_6px_hsl(0_0%_0%/.45)]",
   ink:   "bg-white/[.07] ring-1 ring-inset ring-white/20",
 };
 
@@ -57,7 +57,7 @@ export function DexForge({ label = "Assembling your workspace" }) {
     >
       {/* The bed. Ink, with a lit inner lip so it reads as a tray with depth
           rather than a black rectangle. */}
-      <div className="bg-kr-ink rounded-[1.75rem] p-3 shadow-[inset_0_1px_0_hsl(0_0%_100%/.14),0_10px_28px_-12px_hsl(216_28%_18%/.55)]">
+      <div className="bg-ng-ink rounded-[1.75rem] p-3 shadow-[inset_0_1px_0_hsl(0_0%_100%/.14),0_10px_28px_-12px_hsl(216_28%_18%/.55)]">
         <div className="grid h-40 grid-cols-4 grid-rows-3 gap-2">
           {TILES.map((t) => (
             <motion.div
@@ -77,7 +77,7 @@ export function DexForge({ label = "Assembling your workspace" }) {
                 <motion.span
                   animate={{ opacity: [0.6, 1, 0.6], scale: [0.94, 1.06, 0.94] }}
                   transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-                  className="text-[hsl(var(--kr-gold))]"
+                  className="text-[hsl(var(--ng-gold))]"
                 >
                   <Sparkle size={26} weight="fill" aria-hidden="true" />
                 </motion.span>
@@ -95,7 +95,7 @@ export function DexForge({ label = "Assembling your workspace" }) {
       <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[1.75rem]">
         <motion.div
           className="absolute inset-y-0 w-28 blur-2xl mix-blend-plus-lighter"
-          style={{ background: "linear-gradient(90deg, transparent, hsl(var(--kr-gold) / .40), transparent)" }}
+          style={{ background: "linear-gradient(90deg, transparent, hsl(var(--ng-gold) / .40), transparent)" }}
           animate={{ x: ["-8rem", "22rem"] }}
           transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut", repeatDelay: 0.5 }}
           aria-hidden="true"

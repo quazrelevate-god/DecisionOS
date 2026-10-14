@@ -5,12 +5,12 @@ import api, { formatApiError } from "../lib/api";
 import { userPerms } from "../lib/perms";
 import { toast } from "sonner";
 import { Tag, FloppyDisk, Plus, X } from "@phosphor-icons/react";
-import { GLASS_PILL } from "./karma/glass";
+import { GLASS_PILL } from "./neuglass/glass";
 
 /* PILOT-1 F — the Settings side of finance categories, on the current design
  * system. It was the last card in Settings still on the retired kit:
  * label-mono captions, hairline nm-edge boxes around bare inputs, a brand-blue
- * "Add" link and a square ink button. Now: the kr-bento card its neighbours
+ * "Add" link and a square ink button. Now: the ng-bento card its neighbours
  * use, plain labels, each category an .nm-field pill with a 44px remove, a
  * glass "Add", and the ink Save pill.
  *
@@ -47,7 +47,7 @@ function CategoryGroup({ title, items, onSet, onAdd, onDel, testid, canEdit }) {
                   data-testid={`${testid}-input-${i}`}
                   onChange={(e) => onSet(i, e.target.value)} />
                 <button type="button" onClick={() => onDel(i)} aria-label={`Remove ${c.label || "this category"}`} title="Remove"
-                  className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-400 transition-colors hover:text-kr-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40">
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-400 transition-colors hover:text-ng-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40">
                   <X size={14} weight="bold" aria-hidden="true" />
                 </button>
               </>
@@ -113,7 +113,7 @@ export function FinanceCategoriesEditor() {
   };
 
   return (
-    <div className="kr-bento p-5 lg:p-6" data-testid="settings-finance-categories-card">
+    <div className="ng-bento p-5 lg:p-6" data-testid="settings-finance-categories-card">
       <div className="mb-1 flex items-center gap-2">
         <Tag size={20} weight="bold" aria-hidden="true" className="text-muted-foreground" />
         <h2 className="text-base font-medium">Finance categories</h2>
@@ -134,7 +134,7 @@ export function FinanceCategoriesEditor() {
       {canEdit ? (
         <div className="mt-6 flex flex-wrap gap-3">
           <button type="button" onClick={save} disabled={saving} data-testid="fc-save"
-            className="kr-lift flex h-11 items-center gap-2 rounded-pill bg-kr-ink px-5 text-sm font-medium text-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40 disabled:opacity-60">
+            className="ng-lift flex h-11 items-center gap-2 rounded-pill bg-ng-ink px-5 text-sm font-medium text-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40 disabled:opacity-60">
             <FloppyDisk size={16} weight="bold" aria-hidden="true" /> {saving ? "Saving…" : "Save categories"}
           </button>
           <RegenerateWithAi onConfirm={regenerate} busy={regen} testid="fc-regenerate"

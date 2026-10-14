@@ -28,6 +28,156 @@ Read §1 before planning any App Store date.
 
 ---
 
+## R · Re-audit, 2026-10-14 — read this first
+
+Everything below §R is the 29–30 Sept audit, kept as history. Since then the
+app has been redesigned, the iOS build compiles and runs (iPhone 17 Pro
+simulator, iOS 26.5 — §7.1's hang is gone), and 1.0.7 removed the in-app demo
+login. This section re-checks every item against Apple's requirements **as of
+14 Oct 2026** (sources: developer.apple.com — App Review Guidelines, last
+updated 8 Jun 2026; Upcoming Requirements; App Store Connect Help).
+
+**Verdict: no code blockers left. What stands between this build and review is
+a production deploy, a reviewer account, and App Store Connect.** All checks in
+R.1 are now pinned by `backend/tests/test_the_ios_app_is_ready_for_the_app_store.py`.
+
+### R.1 · Verified compliant
+
+| Requirement | Rule | State |
+|---|---|---|
+| Built with Xcode 26 / iOS 26 SDK | mandatory since 28 Apr 2026 | Xcode 26.6 ✓ |
+| Deployment target ≥ iOS 13 | since 9 Sep 2026 | 15.0 ✓ |
+| UIScene life cycle | mandatory from the iOS 27 SDK (TN3187) | scene manifest + SceneDelegate ✓ |
+| Purpose strings: microphone, camera, photo library | 5.1.1(ii) — missing = crash | specific wording ✓ |
+| No speech-recognition / location strings needed | | transcription is server-side; no location ✓ |
+| `ITSAppUsesNonExemptEncryption = false` | export compliance | HTTPS only ✓ |
+| 1024×1024 icon, no alpha; `CFBundleIconName` | upload validation | ✓ (Icon Composer layers are optional) |
+| Launch storyboard | since 2020 | ✓ |
+| iPhone-only, portrait, arm64 | 2.4.1 — graded on what you declare | ✓ |
+| `PrivacyInfo.xcprivacy` bundled; required-reason APIs | since 1 May 2024 | UserDefaults CA92.1; Capacitor core and all five plugins checked — no other reason APIs ✓ |
+| Capacitor/Cordova SDK manifests + signatures | third-party SDK list | shipped by capacitor-swift-pm 8.5.2 ✓ |
+| No downloaded/executed code | 2.5.2 | web assets bundled; remote URL only for dev live-reload ✓ |
+| In-app account deletion, for owners **and** staff | 5.1.1(v) | Preferences → Delete your account, plus `/delete-account` ✓ |
+| Sign in with Apple not required | 4.8 — own sign-in only | email/password + mobile OTP ✓ |
+| Nothing sold or pointed to in the app | 3.1.1 / 3.1.3(c) | `STORE_BUILD` hides every plan picker and "choose a plan" line ✓ |
+| Reviewer can sign in without an Indian SMS | 2.1 | Password tab on the sign-in screen ✓ (account still to create — R.3) |
+| AI: disclose providers + explicit permission | **5.1.2(i), changed 13 Nov 2025** | signup consent names them; workspace "Agree and turn on" now names them too (R.2); per-person mic notice names the speech providers ✓ |
+| AI answers can be reported | 1.2 / AI safety | every answer has Report ✓ |
+| Privacy policy in the app and on the web | 5.1.1(i) | `/privacy` names every processor incl. AI and speech ✓ |
+| Push not prompted on iOS | 4.5.4 | iOS returns before the prompt (`push.js`) ✓ |
+
+### R.2 · Fixed on 2026-10-14
+
+1. **Privacy manifest was missing two data types** — *Photos or Videos* (bill
+   and receipt photos are uploaded) and *Other Diagnostic Data* (AI request
+   records, already declared in the Play Data Safety form). Added; `plutil` OK.
+2. **The microphone "denied" message sent iPhone users to Android Settings**
+   (`lib/native/mic.js`) — wrong on iOS and a 2.3.10 "names another platform"
+   risk. Each platform now gets its own path.
+3. **Terms said plans are "bought outside the Android app."** Now
+   platform-neutral: "arranged with the company directly; nothing is sold
+   inside the app."
+4. **The privacy policy called itself the policy for "the app for Android"**
+   and pointed to "its Google Play listing". Now "the DecisionOS mobile app"
+   and "its app store listings". (The push paragraph still says Android — it
+   is the truth, push is Android-only.) Both "Last updated" dates moved to
+   14 Oct 2026; `TERMS_VERSION` deliberately not bumped — the meaning did not
+   change, so nobody is made to re-accept.
+5. **The workspace AI consent card did not name the providers.** It now says
+   what is sent (typed text, voice, photos/documents, the records involved)
+   and to whom (Anthropic, OpenAI, Google Gemini; Sarvam and OpenAI for
+   speech), with a link to the policy. This card is the consent a reviewer
+   meets — the review account never sees signup.
+6. **"AI is off… Turn it on in Settings"** now says *Preferences* on a phone,
+   the name that screen has there.
+7. (2026-10-13) **iOS 26 WebKit zooms boxes but not text** — every word was
+   25% too big; the app now falls back to a pinned, scaled viewport there
+   (`hooks/useUiScale.js`). Without it the Desk showed one row instead of three.
+
+### R.3 · Before you press Submit (not code)
+
+1. **Deploy the current frontend to production first.** `https://www.decisionos.biz/guide/`
+   still serves the app shell, not the guide — so in the app "Help & guide"
+   opens the wrong page (a 2.1 completeness risk), and the guide's contact
+   section is what the Support URL should point at. The privacy/terms
+   wording above also only reaches the store-linked URLs by deploying.
+2. **Accept the updated Apple Developer Program License Agreement**
+   (13 Oct 2026) — the Account Holder must, or the account stops working.
+3. **Create the App Review account in production** — owner, email +
+   password, a fictional business with enough data that every screen has
+   something on it (never the pilot client's). Decide its AI consent:
+   *recommended* **off**, so the reviewer meets the disclosure — the first Dex
+   use offers "Turn on AI", which opens the card above; say so in the notes.
+4. **Build the release from a clean sync.** `frontend/ios/App/App/public`
+   currently holds a *local test* build (localhost:8001). Run
+   `npm run cap:sync:prod`, bump **both** platforms to the next version
+   (1.0.8 / 9 — `MARKETING_VERSION`/`CURRENT_PROJECT_VERSION` and
+   `variables.gradle`; the test enforces they match), set the Team, archive.
+5. **Expect one upload warning:** *ITMS-90078 Missing Push Notification
+   Entitlement*. The push plugin is linked but iOS push is not built (it needs
+   an APNs key and either Firebase's iOS SDK or a direct APNs sender — the
+   backend sends via FCM). A warning, not a rejection; iOS push is a separate
+   piece of work.
+6. **App Store Connect:**
+   - **App Privacy:** Contact Info (name, email, phone), Audio Data, Photos or
+     Videos, Other User Content, Other Financial Info, User ID, Device ID,
+     Product Interaction, Other Diagnostic Data — all *linked*, none
+     *tracking*. Mirror `PrivacyInfo.xcprivacy`.
+   - **Age rating** (new 4+/9+/13+/16+/18+ questionnaire): no unrestricted web
+     access (the in-app browser only opens our guide); generative AI — answer
+     honestly that an AI assistant produces text, with reporting in place.
+   - **Category:** Business (secondary: Productivity).
+   - **URLs:** privacy `https://www.decisionos.biz/privacy`, support
+     `https://www.decisionos.biz/guide/#contact` (after step 1).
+   - **EU DSA trader status — mandatory to declare.** A company selling SaaS
+     is a trader, which publishes an address, phone and email on the EU
+     product page. Simplest first launch: **India only**, and declare.
+   - **Screenshots:** 6.9" (1320×2868, iPhone 17 Pro Max) and 6.3"
+     (1206×2622, iPhone 17 Pro) — both simulators are on this Mac.
+   - **Content rights:** no third-party content.
+7. **Optional:** Accessibility Nutrition Labels (voluntary for now).
+
+### R.4 · The two judgement calls Apple could make
+
+- **4.2 minimum functionality** — a Capacitor app is the shape reviewers
+  test for "repackaged website". Lead with what is native: speaking to Dex
+  through the microphone, photographing bills and proof with the camera,
+  haptics, the screen blanking at your ear while you dictate (proximity
+  sensor), the swipe-to-talk dock control, the in-app guide. Put the
+  microphone in the first screenshot.
+- **3.1.3(c) enterprise services** — the app is sold to businesses for their
+  staff, outside the app, and the app sells nothing. A solo owner signing up
+  is the grey area; say plainly in the notes that plans are arranged with
+  companies and nothing can be bought in the app.
+
+### R.5 · Draft App Review notes
+
+> DecisionOS is a business operations app for Indian small and mid-sized
+> companies, used by an owner and the staff they invite. It is sold to
+> companies directly under a business agreement (Guideline 3.1.3(c)); nothing
+> can be bought inside the app and the app links to no purchase flow.
+>
+> **Sign in:** on the sign-in screen tap **Password**, then use
+> email `[reviewer account]` / password `[password]`. (Mobile-number sign-in
+> sends an SMS code to Indian numbers only.)
+>
+> **AI consent:** AI features are off for this workspace until an owner
+> agrees. The first time you ask Dex anything you will be offered **Turn on
+> AI**; the screen names the AI providers (Anthropic, OpenAI, Google Gemini,
+> and Sarvam/OpenAI for speech) and what is sent, before you agree. It can be
+> turned off again at More → Preferences → AI processing.
+>
+> **To try:** swipe the round button in the dock to the right and say a
+> decision out loud — Dex turns it into tasks, owners and dates for you to
+> approve (swipe left instead to ask a question; slide back to the middle to
+> cancel). Open a decision from the Desk and approve it; add an expense in
+> Money and attach a photo of the bill; Help & guide is under More →
+> Preferences.
+>
+> **Account deletion:** More → Preferences → Delete your account.
+
+---
+
 ## 0 · Nothing on iOS has ever been built
 
 > **Updated 2026-09-30.** The machine has changed since this was written, and

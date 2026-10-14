@@ -12,13 +12,13 @@ import { canAssignPerson, canAssignTeam } from "../lib/taskAccess";
 import { Plus, User, Paperclip, ClockCounterClockwise, X, CloudArrowUp } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
-import { PersonAvatar } from "../components/karma/PersonAvatar";
-import { GLASS_PILL, INK_PILL } from "../components/karma/glass";
-import { ScopeSlider } from "../components/karma/ScopeSlider";
-import { DesignCheckbox } from "../components/karma/DesignCheckbox";
-import { ApprovalPanel } from "../components/karma/ApprovalPanel";
-import { GlassSelect } from "../components/karma/GlassSelect";
-import { DraftNote } from "../components/karma/DraftNote";
+import { PersonAvatar } from "../components/neuglass/PersonAvatar";
+import { GLASS_PILL, INK_PILL } from "../components/neuglass/glass";
+import { ScopeSlider } from "../components/neuglass/ScopeSlider";
+import { DesignCheckbox } from "../components/neuglass/DesignCheckbox";
+import { ApprovalPanel } from "../components/neuglass/ApprovalPanel";
+import { GlassSelect } from "../components/neuglass/GlassSelect";
+import { DraftNote } from "../components/neuglass/DraftNote";
 import { useDraft } from "../hooks/useDraft";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
@@ -49,7 +49,7 @@ export const OP_CATEGORIES = [
 ];
 
 // ASK-28 TK-05 — the approval choices live with their panel now
-// (components/karma/ApprovalPanel), shared with the Decision review card.
+// (components/neuglass/ApprovalPanel), shared with the Decision review card.
 
 const EMPTY_FORM = {
   title: "", description: "", task_type: "",
@@ -241,15 +241,15 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
      neumorphic form. KM-3 moved them off the retired mono/hairline styling
      onto .nm-field, but .nm-field is a RAISED surface with a hairline
      boundary — a white box on a grey sheet — so the form still read flat.
-     .kr-pressed is the concave twin: dark inset from the top-left, light
+     .ng-pressed is the concave twin: dark inset from the top-left, light
      inset from the bottom-right, no border at all. A field you type into
      should look like a groove, not a card. */
   /* ASK-29 follow-up (founder): the groove keeps its inset light, and gets a
      HAIRLINE so the field's edge reads at a glance inside a tight form; on
      focus that hairline goes to full ink — thin and black, not the 2px brand
      outline the global focus net paints. `border-solid` is load-bearing:
-     .kr-pressed sets `border: 0`, which also resets the style to none. */
-  const inp = "w-full kr-pressed rounded-control border border-solid border-kr-ink/25 px-3.5 py-2.5 text-sm text-foreground placeholder:text-foreground/40 transition-colors focus:border-kr-ink focus:outline-none focus-visible:outline-none";
+     .ng-pressed sets `border: 0`, which also resets the style to none. */
+  const inp = "w-full ng-pressed rounded-control border border-solid border-ng-ink/25 px-3.5 py-2.5 text-sm text-foreground placeholder:text-foreground/40 transition-colors focus:border-ng-ink focus:outline-none focus-visible:outline-none";
   const lbl = "block text-xs font-medium text-muted-foreground";
   /* ASK-50 — THE TITLE IS A PLAIN TEXT FIELD. It wore `inp`, the same sunken
      glass as the Department and Assign-to menus under it, so the one thing you
@@ -257,7 +257,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
      no box, a hairline under it that turns ink on focus (the same focus signal
      `inp` uses — the border, not an outline), and the card's own display face
      at the size of what it is, the task's name. */
-  const titleInp = "w-full rounded-none border-0 border-b-2 border-solid border-kr-ink/15 bg-transparent px-0.5 pb-2 pt-1 font-display text-xl text-foreground placeholder:text-foreground/35 transition-colors focus:border-kr-ink focus:outline-none focus-visible:outline-none aria-[invalid=true]:border-kr-accent";
+  const titleInp = "w-full rounded-none border-0 border-b-2 border-solid border-ng-ink/15 bg-transparent px-0.5 pb-2 pt-1 font-display text-xl text-foreground placeholder:text-foreground/35 transition-colors focus:border-ng-ink focus:outline-none focus-visible:outline-none aria-[invalid=true]:border-ng-accent";
   return (
     <Dialog open={open} onOpenChange={(o) => {
       // J9-02: closing with words in the form asks first (keep, or discard).
@@ -280,7 +280,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
           {triggerChildren || (<><Plus size={16} weight="bold" /> New Task</>)}
         </button>
       </DialogTrigger>
-      {/* KM-10 — .kr-bento: the app's glass-over-neumorphic tile, so the sheet
+      {/* KM-10 — .ng-bento: the app's glass-over-neumorphic tile, so the sheet
           the fields sit in is the same material as every card behind it. The
           default close X is hidden and replaced below, aligned with the title
           rather than floating in the corner. */}
@@ -348,7 +348,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
       <DialogContent
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
-        className={`kr-bento flex flex-col border-0 [&>button.absolute]:hidden
+        className={`ng-bento flex flex-col border-0 [&>button.absolute]:hidden
                    left-0 top-0 h-full max-h-none w-full max-w-none translate-x-0 translate-y-0
                    [border-radius:0]
                    [padding-top:max(1rem,var(--sa-top))]
@@ -373,7 +373,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
           <DialogPrimitiveClose
             data-testid="task-dialog-close"
             aria-label="Close"
-            className="kr-pop absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full text-foreground/70 [min-height:var(--touch-min)] [min-width:var(--touch-min)] lg:h-9 lg:w-9 lg:[min-height:auto] lg:[min-width:auto]">
+            className="ng-pop absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full text-foreground/70 [min-height:var(--touch-min)] [min-width:var(--touch-min)] lg:h-9 lg:w-9 lg:[min-height:auto] lg:[min-width:auto]">
             <X size={16} weight="bold" aria-hidden="true" className="lg:hidden" />
             <X size={15} weight="bold" aria-hidden="true" className="hidden lg:block" />
           </DialogPrimitiveClose>
@@ -400,11 +400,11 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
               onChange={(e) => { setForm({ ...form, title: e.target.value }); if (titleError) setTitleError(""); }}
               onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); create(); } }} />
             {titleError && (
-              <p id="task-title-error" role="alert" data-testid="task-title-error" className="mt-1.5 text-sm font-medium text-kr-accent">{titleError}</p>
+              <p id="task-title-error" role="alert" data-testid="task-title-error" className="mt-1.5 text-sm font-medium text-ng-accent">{titleError}</p>
             )}
           </div>
 
-          <div className="kr-form-row">
+          <div className="ng-form-row">
             <div>
               {/* The task's own department, not the doer's: a sales task can be
                   handed to anyone in a small company and still count as Sales. */}
@@ -447,7 +447,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
           )}
 
           <div>
-            <span className={lbl} id="task-due-label">Due <span className="text-kr-accent" aria-hidden="true">*</span></span>
+            <span className={lbl} id="task-due-label">Due <span className="text-ng-accent" aria-hidden="true">*</span></span>
             <div className="mt-1.5 flex flex-wrap gap-1.5" role="group" aria-labelledby="task-due-label"
               aria-describedby={dueError ? "task-due-error" : undefined}>
               {DUE_PRESETS.map((p) => {
@@ -456,7 +456,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                   <button key={p.key} type="button" aria-pressed={on}
                     data-testid={`task-due-${p.key}`}
                     onClick={() => { setForm({ ...form, due_preset: p.key }); if (dueError) setDueError(""); }}
-                    className={`h-9 rounded-pill px-3.5 text-xs ${on ? "kr-pressed font-semibold text-foreground" : "kr-pop text-foreground/75"}`}>
+                    className={`h-9 rounded-pill px-3.5 text-xs ${on ? "ng-pressed font-semibold text-foreground" : "ng-pop text-foreground/75"}`}>
                     {p.label}
                   </button>
                 );
@@ -467,7 +467,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                 value={form.due_date} onChange={(e) => { setForm({ ...form, due_date: e.target.value }); if (dueError) setDueError(""); }} />
             )}
             {dueError && (
-              <p id="task-due-error" role="alert" data-testid="task-due-error" className="mt-1.5 text-xs font-medium text-kr-accent">
+              <p id="task-due-error" role="alert" data-testid="task-due-error" className="mt-1.5 text-xs font-medium text-ng-accent">
                 {dueError}
               </p>
             )}
@@ -541,13 +541,13 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
             {/* ASK-50 — a segment bar, not three pills: the app's one segment
                 material (ScopeSlider, the Company/You control), sliding between
                 the three, its thumb washed — barely — in the priority's own hue
-                (index.css .kr-prio-thumb--*). Same testids on the three. */}
+                (index.css .ng-prio-thumb--*). Same testids on the three. */}
             <div className="lg:col-start-1">
               <span className={lbl} id="task-priority-label">Priority</span>
               <ScopeSlider fluid className="mt-1.5" label="Priority" testid="task-priority"
                 options={[{ key: "low", label: "Low" }, { key: "medium", label: "Medium" }, { key: "high", label: "High" }]}
                 value={form.priority} onChange={(p) => setForm({ ...form, priority: p })}
-                thumbClassName={`kr-prio-thumb--${form.priority}`} />
+                thumbClassName={`ng-prio-thumb--${form.priority}`} />
             </div>
 
               {dueDate && (
@@ -609,7 +609,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                   bare and fills it. Clicking anywhere in it is clicking the
                   field: the whole box is the <label>. */}
               <label htmlFor="task-description" data-testid="task-description-box"
-                className="flex min-h-[8rem] cursor-text flex-col rounded-control border border-solid border-kr-ink/25 px-3.5 pb-2.5 pt-2.5 kr-pressed transition-colors focus-within:border-kr-ink lg:col-start-1">
+                className="flex min-h-[8rem] cursor-text flex-col rounded-control border border-solid border-ng-ink/25 px-3.5 pb-2.5 pt-2.5 ng-pressed transition-colors focus-within:border-ng-ink lg:col-start-1">
                 <span className={lbl}>Description</span>
                 <textarea id="task-description" data-testid="task-description-input" rows={3}
                   className="mt-1 min-h-0 w-full flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-foreground/40 focus:outline-none focus-visible:outline-none"
@@ -617,7 +617,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
               </label>
 
               {/* ASK-28 TK-05 — when the approval happens, chosen per task.
-                  ASK-50 — the panel is components/karma/ApprovalPanel now,
+                  ASK-50 — the panel is components/neuglass/ApprovalPanel now,
                   shared with the Decision review card; same testids. */}
               <ApprovalPanel value={form.approval} testid="task-approval" className="lg:col-start-2"
                 onChange={(k) => setForm({ ...form, approval: k, approver_id: k === "none" ? "" : form.approver_id })} />
@@ -702,7 +702,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
       {/* J9-02 — the ask, on the way out. Escape or a click outside goes back
           to the form, which is the third answer and needs no button. */}
       <AlertDialog open={askLeave} onOpenChange={setAskLeave}>
-        <AlertDialogContent data-testid="new-task-leave-ask" className="kr-bento max-w-md border-0">
+        <AlertDialogContent data-testid="new-task-leave-ask" className="ng-bento max-w-md border-0">
           <AlertDialogHeader>
             <AlertDialogTitle className="font-display text-xl">Keep this task for later?</AlertDialogTitle>
             <AlertDialogDescription className="text-sm text-muted-foreground">

@@ -15,7 +15,7 @@
 //      --sky-core computed AMBER on /team indefinitely; deleting that single
 //      declaration at runtime resolved it to violet in the same frame. The
 //      transition was not slow, it was wedged — the third stalled CSS
-//      transition on this branch (see .kr-pop ⇄ .kr-pressed in MyWork).
+//      transition on this branch (see .ng-pop ⇄ .ng-pressed in MyWork).
 //
 //   3. rAF interpolation of the four colours, writing inline. The hook
 //      reached its animate branch and a MutationObserver on the element
@@ -27,7 +27,7 @@
 //
 // So the sky SNAPS, and this hook now only does the part that works: it
 // stamps data-page. The navigation still reads as a transition because the
-// content layer (.kr-page-in, 320ms rise + fade) is verified working, and
+// content layer (.ng-page-in, 320ms rise + fade) is verified working, and
 // the Dex boundary keeps its blur. Shipping a fourth broken attempt would
 // have been worse than shipping an honest snap.
 import { useEffect } from "react";

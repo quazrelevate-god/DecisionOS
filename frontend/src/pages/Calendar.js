@@ -109,13 +109,13 @@ export default function Calendar() {
 
       {/* Day / Week — the same pressed-track segmented control the rest of the
           app uses for "pick one of these framings of the same data". */}
-      <div className="kr-pressed mb-3 flex w-fit items-center gap-1 rounded-pill p-1"
+      <div className="ng-pressed mb-3 flex w-fit items-center gap-1 rounded-pill p-1"
            role="group" aria-label="Calendar view" data-testid="cal-mode">
         {[{ k: "day", l: "Day" }, { k: "week", l: "Week" }].map((m) => (
           <button key={m.k} type="button" onClick={() => setMode(m.k)}
             aria-pressed={mode === m.k} data-testid={`cal-mode-${m.k}`}
             className={`flex h-9 items-center justify-center rounded-pill px-5 text-sm ${
-              mode === m.k ? "kr-pop font-semibold text-foreground" : "text-foreground/60"
+              mode === m.k ? "ng-pop font-semibold text-foreground" : "text-foreground/60"
             }`}>
             {m.l}
           </button>
@@ -128,7 +128,7 @@ export default function Calendar() {
           under its number. `flex-1 basis-0` rather than a 7-col grid: at 343px
           the cells land at 45px and equal flex basis keeps them even without a
           fixed track that could overflow. */}
-      <div className="kr-bento mb-4 p-3" data-testid="cal-week-strip">
+      <div className="ng-bento mb-4 p-3" data-testid="cal-week-strip">
         <div className="mb-2 flex items-center justify-between">
           <button type="button" onClick={() => shiftWeek(-1)} data-testid="cal-week-prev"
             aria-label="Previous week"
@@ -156,12 +156,12 @@ export default function Calendar() {
                 aria-label={dayTitle(iso)}
                 data-testid={`cal-day-cell-${iso}`}
                 className={`flex flex-1 basis-0 flex-col items-center gap-1 rounded-control py-2 ${
-                  isSel ? "kr-pressed font-semibold" : "text-foreground/75"
+                  isSel ? "ng-pressed font-semibold" : "text-foreground/75"
                 }`}
               >
                 <span className="text-[10px] uppercase tracking-wide opacity-60">{DOW[i]}</span>
                 <span className={`grid h-7 w-7 place-items-center rounded-full text-sm tabular-nums ${
-                  isToday && !isSel ? "ring-1 ring-kr-ink/45" : ""
+                  isToday && !isSel ? "ring-1 ring-ng-ink/45" : ""
                 }`}>
                   {Number(iso.slice(8, 10))}
                 </span>
@@ -169,7 +169,7 @@ export default function Calendar() {
                     a number under a number is noise, and the cell already
                     opens the day. */}
                 <span aria-hidden="true"
-                  className={`h-1 w-1 rounded-full ${evs.length ? "bg-kr-ink/55" : "bg-transparent"}`} />
+                  className={`h-1 w-1 rounded-full ${evs.length ? "bg-ng-ink/55" : "bg-transparent"}`} />
               </button>
             );
           })}
@@ -191,7 +191,7 @@ export default function Calendar() {
             aria-pressed={filter === f.key}
             data-testid={`cal-filter-${f.key}`}
             className={`flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-pill px-3.5 text-xs ${
-              filter === f.key ? "kr-pressed font-semibold text-foreground" : "kr-pop text-foreground/70"
+              filter === f.key ? "ng-pressed font-semibold text-foreground" : "ng-pop text-foreground/70"
             }`}
           >
             {f.key === "all"
@@ -249,7 +249,7 @@ export default function Calendar() {
                         role={clickable ? "button" : undefined}
                         tabIndex={clickable ? 0 : undefined}
                         onKeyDown={clickable ? (ev) => { if (ev.key === "Enter") navigate(`/contacts/${e.contact_id}`); } : undefined}
-                        className={`kr-bento flex items-center gap-3 p-3 ${clickable ? "kr-lift cursor-pointer" : ""}`}
+                        className={`ng-bento flex items-center gap-3 p-3 ${clickable ? "ng-lift cursor-pointer" : ""}`}
                       >
                         <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-tile text-white ${t.dot}`}>
                           <Icon size={17} weight="regular" aria-hidden="true" />
@@ -261,7 +261,7 @@ export default function Calendar() {
                           )}
                         </div>
                         {e.overdue && (
-                          <span className="shrink-0 rounded-pill bg-kr-accent px-2 py-0.5 text-[11px] font-semibold text-white">
+                          <span className="shrink-0 rounded-pill bg-ng-accent px-2 py-0.5 text-[11px] font-semibold text-white">
                             Overdue
                           </span>
                         )}
@@ -283,7 +283,7 @@ export default function Calendar() {
 function DayHeading({ iso, today, n }) {
   return (
     <div className="mb-2.5 flex items-baseline gap-2.5">
-      <span className={`text-sm font-semibold ${iso < today ? "text-kr-accent" : ""}`}>
+      <span className={`text-sm font-semibold ${iso < today ? "text-ng-accent" : ""}`}>
         {dayTitle(iso)}
       </span>
       <span className="h-px flex-1 bg-nm-edge/50" />

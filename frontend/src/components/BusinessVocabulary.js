@@ -67,7 +67,7 @@ export function BusinessVocabulary() {
   };
 
   return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="settings-vocabulary-card">
+    <div className="ng-bento p-5 sm:p-6" data-testid="settings-vocabulary-card">
       <div className="flex items-center gap-2 mb-1">
         <Translate size={20} weight="bold" className="text-muted-foreground" />
         <h2 className="text-base font-medium">Business Vocabulary</h2>
@@ -92,7 +92,7 @@ export function BusinessVocabulary() {
 
       <div className="mt-6 flex flex-wrap gap-3">
         <button onClick={save} disabled={saving} data-testid="vocab-save"
-          className="flex h-11 items-center gap-2 rounded-pill bg-kr-ink px-5 text-sm font-medium text-white transition-all hover:brightness-125 disabled:opacity-60">
+          className="flex h-11 items-center gap-2 rounded-pill bg-ng-ink px-5 text-sm font-medium text-white transition-all hover:brightness-125 disabled:opacity-60">
           <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Vocabulary"}
         </button>
         <RegenerateWithAi onConfirm={regenerate} busy={regen} testid="vocab-regenerate"

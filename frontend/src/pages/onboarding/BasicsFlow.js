@@ -14,11 +14,11 @@ import { roleWords } from "../../lib/departments";
 // B11 — the dev OTP is ignored by a production build (lib/devOtp).
 import { devOtpFrom } from "../../lib/devOtp";
 
-// KM-19 — rebuilt on the Karma material. The step used to be a black
+// KM-19 — rebuilt on the Neu-glassmorphism material. The step used to be a black
 // underline under a huge heading with a square indigo button beside it; the
-// question now sits in a .kr-well pane, the field is a .kr-pressed trough
+// question now sits in a .ng-well pane, the field is a .ng-pressed trough
 // (typing into something recessed is the one gesture this material makes
-// obvious), and every button is .kr-pop.
+// obvious), and every button is .ng-pop.
 const SIZES = ["1-10", "11-50", "51-200", "201-500", "500+"];
 const first = (name) => (name || "").trim().split(/\s+/)[0] || "";
 
@@ -424,8 +424,8 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
   };
 
   return (
-    <div className="kr-well mx-auto w-full max-w-2xl" data-testid="signup-basics">
-      <div className="kr-well__pane rounded-[1.75rem] p-6 sm:p-9">
+    <div className="ng-well mx-auto w-full max-w-2xl" data-testid="signup-basics">
+      <div className="ng-well__pane rounded-[1.75rem] p-6 sm:p-9">
       {/* 2026-09-17 — a founder who closed the tab reopens here, three answers
           in, with no idea why. Say it once, on the step they land on. */}
       {resumed && step.key === initialStep && (
@@ -443,7 +443,7 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
         <motion.div key={step.key} variants={variants} initial="enter" animate="center" exit="exit"
           transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}>
           <p className="mb-3 flex items-center gap-2.5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            <span className="kr-pressed grid h-6 min-w-[1.75rem] place-items-center rounded-pill px-2 text-[11px] tabular-nums">
+            <span className="ng-pressed grid h-6 min-w-[1.75rem] place-items-center rounded-pill px-2 text-[11px] tabular-nums">
               {String(idx + 1).padStart(2, "0")}
             </span>
             {existing ? "Your companies" : step.eyebrow}
@@ -465,7 +465,7 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
             <div data-testid="signup-existing-workspaces" className="space-y-3">
               {existing.workspaces.map((w) => (
                 <div key={w.tenant_id} data-testid={`signup-existing-${w.tenant_id}`}
-                  className="kr-pressed flex items-center justify-between gap-3 rounded-2xl px-4 py-3">
+                  className="ng-pressed flex items-center justify-between gap-3 rounded-2xl px-4 py-3">
                   <span className="min-w-0">
                     <span className="block truncate text-base font-semibold">{w.tenant_name}</span>
                     <span className="text-xs text-muted-foreground">
@@ -474,14 +474,14 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
                   </span>
                   <button type="button" onClick={() => openExisting(w.tenant_id)}
                     data-testid={`signup-open-${w.tenant_id}`}
-                    className="kr-pop h-10 shrink-0 rounded-pill px-5 text-sm font-medium">
+                    className="ng-pop h-10 shrink-0 rounded-pill px-5 text-sm font-medium">
                     Open
                   </button>
                 </div>
               ))}
               {existing.pending_invites.map((p, i) => (
                 <p key={i} data-testid="signup-existing-invite"
-                  className="kr-pressed rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+                  className="ng-pressed rounded-2xl px-4 py-3 text-sm text-muted-foreground">
                   <strong className="font-semibold text-foreground">{p.tenant_name}</strong> invited you —
                   open the invite link they sent to join it the first time.
                 </p>
@@ -489,7 +489,7 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
               <div className="flex flex-wrap items-center gap-4 pt-3">
                 <motion.button onClick={createAnother} data-testid="signup-create-another"
                   whileHover={{ y: -2, scale: 1.03 }} whileTap={{ scale: 0.98 }}
-                  className="kr-pop flex h-12 items-center gap-2 rounded-pill bg-kr-ink px-8 text-sm font-medium text-white">
+                  className="ng-pop flex h-12 items-center gap-2 rounded-pill bg-ng-ink px-8 text-sm font-medium text-white">
                   Create another company <ArrowRight size={16} weight="bold" />
                 </motion.button>
                 <span className="text-xs text-muted-foreground">
@@ -504,20 +504,20 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
                   transition={{ delay: 0.1 + i * 0.06 }}
                   data-testid={`team-size-${s}`}
                   onClick={() => { setVal(s); advance(s); }}
-                  /* No transition utility here: .kr-pop and .kr-pressed swap
+                  /* No transition utility here: .ng-pop and .ng-pressed swap
                      outset for inset shadows, which do not interpolate, so a
                      declared transition would stall the swap. */
                   aria-pressed={value === s}
                   whileHover={value === s ? undefined : { y: -2 }}
                   whileTap={{ scale: 0.98 }}
-                  className={`flex h-12 items-center rounded-pill px-6 text-base font-semibold ${value === s ? "kr-chip-on" : "kr-pop"}`}>
+                  className={`flex h-12 items-center rounded-pill px-6 text-base font-semibold ${value === s ? "ng-chip-on" : "ng-pop"}`}>
                   {s}
                 </motion.button>
               ))}
             </div>
           ) : step.confirmByCode && codeFor ? (
             <div data-testid="signup-phone-code">
-              <div className="kr-pressed flex items-center justify-between gap-3 rounded-pill px-4 py-2.5">
+              <div className="ng-pressed flex items-center justify-between gap-3 rounded-pill px-4 py-2.5">
                 <span className="truncate text-sm">
                   Code sent to <strong data-testid="signup-phone-code-to">{displayIndianMobile(codeFor)}</strong>
                 </span>
@@ -534,7 +534,7 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
                 <motion.button onClick={() => confirmCode()} disabled={sending || code.length !== 6}
                   data-testid="signup-phone-confirm"
                   whileHover={{ y: -2, scale: 1.03 }} whileTap={{ scale: 0.98 }}
-                  className="kr-pop flex h-12 items-center gap-2 rounded-pill bg-kr-ink px-8 text-sm font-medium text-white disabled:opacity-50">
+                  className="ng-pop flex h-12 items-center gap-2 rounded-pill bg-ng-ink px-8 text-sm font-medium text-white disabled:opacity-50">
                   {sending ? <Loader size={18} /> : null}
                   Confirm <ArrowRight size={16} weight="bold" />
                 </motion.button>
@@ -572,7 +572,7 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
                    (foreground/40, ring-1). Full black at ring-2 read as a
                    heavy frame around the field; a single hairline at 40%
                    ink says "focus" without dressing up as a border. */
-                className="kr-pressed w-full rounded-2xl bg-transparent px-5 py-4 pr-14 text-xl font-semibold tracking-tight placeholder:font-normal placeholder:text-foreground/25 focus:outline-none focus:ring-1 focus:ring-foreground/40 sm:text-2xl"
+                className="ng-pressed w-full rounded-2xl bg-transparent px-5 py-4 pr-14 text-xl font-semibold tracking-tight placeholder:font-normal placeholder:text-foreground/25 focus:outline-none focus:ring-1 focus:ring-foreground/40 sm:text-2xl"
               />
               {step.confirmByCode && alreadyConfirmed(normIndianMobile(value)) && (
                 <p className="mt-3 text-sm font-medium text-success-600" data-testid="signup-phone-confirmed">
@@ -603,7 +603,7 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
               <motion.button onClick={() => advance()} disabled={checking || sending} data-testid="signup-basics-next"
                 whileHover={{ y: -2, scale: 1.03 }}
                 whileTap={{ scale: 0.98 }}
-                className="kr-pop flex h-12 items-center gap-2 rounded-pill bg-kr-ink px-8 text-sm font-medium text-white disabled:opacity-50">
+                className="ng-pop flex h-12 items-center gap-2 rounded-pill bg-ng-ink px-8 text-sm font-medium text-white disabled:opacity-50">
                 {checking || sending ? <Loader size={18} /> : null}
                 {step.optional && !value.trim() ? "Skip"
                   : step.confirmByCode && !alreadyConfirmed(normIndianMobile(value)) ? "Text me a code"
@@ -611,12 +611,12 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
               </motion.button>
               {step.checkEmail && unverified === String(value).trim() && unverified ? (
                 <button type="button" onClick={() => advance(undefined, { skipEmailCheck: true })} data-testid="signup-continue-unverified"
-                  className="kr-pop flex h-12 items-center gap-2 rounded-pill px-6 text-sm font-medium text-foreground">
+                  className="ng-pop flex h-12 items-center gap-2 rounded-pill px-6 text-sm font-medium text-foreground">
                   Continue anyway
                 </button>
               ) : (
                 <span className="hidden text-xs text-muted-foreground sm:block">
-                  press <kbd className="kr-pressed rounded-md px-1.5 py-0.5 text-[11px]">Enter ↵</kbd>
+                  press <kbd className="ng-pressed rounded-md px-1.5 py-0.5 text-[11px]">Enter ↵</kbd>
                 </span>
               )}
             </div>
@@ -629,7 +629,7 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
           only showed from the second step, so a mistyped number had no way back. */}
       {(idx > 0 || existing) && (
         <button onClick={back} data-testid="signup-basics-back"
-          className="kr-pop mt-8 flex h-9 items-center gap-1.5 rounded-pill px-4 text-xs font-medium text-muted-foreground">
+          className="ng-pop mt-8 flex h-9 items-center gap-1.5 rounded-pill px-4 text-xs font-medium text-muted-foreground">
           <ArrowLeft size={14} weight="bold" /> Back
         </button>
       )}

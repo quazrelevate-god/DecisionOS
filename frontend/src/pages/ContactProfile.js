@@ -10,7 +10,7 @@ import { hasPerm } from "../lib/perms";
 import { Chip, EmptyState } from "../components/common";
 import { money, typeLabel, formatPhone } from "../lib/format";
 import { lex } from "../lib/lexicon";
-import { GlassSelect } from "../components/karma/GlassSelect";
+import { GlassSelect } from "../components/neuglass/GlassSelect";
 import { CrmContactDialog } from "./CRM";
 import { LogComplaintDialog, severityLabel } from "../components/crm/LogComplaintDialog";
 import { toast } from "sonner";
@@ -295,18 +295,18 @@ export default function ContactProfile() {
           <div className="flex shrink-0 flex-wrap justify-end gap-2" data-testid="profile-actions">
             {!isVendor && (
               <button type="button" onClick={() => setComplaintOpen(true)} data-testid="profile-log-complaint"
-                className="flex min-h-10 items-center gap-1.5 rounded-pill border border-border bg-card px-4 text-sm font-medium text-rose-700 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline">
+                className="flex min-h-10 items-center gap-1.5 rounded-pill border border-border bg-card px-4 text-sm font-medium text-rose-700 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline">
                 <Warning size={15} weight="bold" aria-hidden="true" /> Log complaint
               </button>
             )}
             <button type="button" onClick={() => { setDeleteAsked(false); setEditOpen(true); }} data-testid="profile-edit"
-              className="flex min-h-10 items-center gap-1.5 rounded-pill border border-border bg-card px-4 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline">
+              className="flex min-h-10 items-center gap-1.5 rounded-pill border border-border bg-card px-4 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline">
               <PencilSimple size={15} weight="bold" aria-hidden="true" /> Edit
             </button>
             {/* Audit C-08 — Delete was only inside Edit. It opens the same
                 "this can't be undone" question the edit window asks. */}
             <button type="button" onClick={() => { setDeleteAsked(true); setEditOpen(true); }} data-testid="profile-delete"
-              className="flex min-h-10 items-center gap-1.5 rounded-pill border border-border bg-card px-4 text-sm font-medium text-kr-accent transition-colors hover:bg-kr-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline">
+              className="flex min-h-10 items-center gap-1.5 rounded-pill border border-border bg-card px-4 text-sm font-medium text-ng-accent transition-colors hover:bg-ng-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline">
               <Trash size={15} weight="bold" aria-hidden="true" /> Delete
             </button>
           </div>
@@ -330,7 +330,7 @@ export default function ContactProfile() {
           </div>
         )}
         {summary?.over_credit_limit && (
-          <p className="mt-2 text-sm font-medium text-kr-accent" data-testid="profile-over-limit">
+          <p className="mt-2 text-sm font-medium text-ng-accent" data-testid="profile-over-limit">
             They owe {money(summary.outstanding, cur)} — more than their credit limit.
           </p>
         )}

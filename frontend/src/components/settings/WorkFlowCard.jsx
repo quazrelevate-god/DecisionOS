@@ -13,7 +13,7 @@ export function WorkFlowCard() {
   const pipelines = opModel(tenant).pipelines || [];
   if (!pipelines.length) return null;
   return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="settings-workflow-card">
+    <div className="ng-bento p-5 sm:p-6" data-testid="settings-workflow-card">
       <h2 className="flex items-center gap-2 text-base font-medium">
         <FlowArrow size={18} weight="bold" className="text-muted-foreground" aria-hidden="true" /> How work moves
       </h2>

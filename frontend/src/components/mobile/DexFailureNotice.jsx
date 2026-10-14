@@ -3,6 +3,7 @@
 import * as React from "react";
 import { WarningCircle } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import { TopNotice } from "@/components/TopNotice";
 import { OUTCOME_COPY } from "@/lib/dexOutcome";
 import { getFailureNotices, removeFailureNotice, subscribeFailureNotices } from "@/lib/dexFailureNotices";
 
@@ -30,8 +31,13 @@ export function DexFailureNotice({ placement = "dock", className }) {
 
   React.useEffect(() => { setWaiting(false); }, [notice?.id]);
 
+  /* 2026-10-12 (founder) — the phone's notice is a TOP overlay now (the
+     top-notice stack, components/TopNotice): every error pill floats under the
+     status bar, out of the page. It used to sit over the dock and lengthen the
+     page's scroll by its own height (--dex-notice-space); at the top it covers
+     nothing the page has to make room for, so that clearance is gone. */
   React.useLayoutEffect(() => {
-    if (placement !== "dock") return undefined;
+    if (placement !== "dock-legacy") return undefined;
     const el = boxRef.current;
     if (!el) return undefined;
     const root = document.documentElement;
@@ -55,17 +61,18 @@ export function DexFailureNotice({ placement = "dock", className }) {
     notice.onRetry?.(notice);
   };
 
-  return (
+  const top = placement === "dock";
+  const card = (
     <div
       ref={boxRef}
       role="alert"
       data-testid="dex-failure-notice"
-      data-placement={placement}
+      data-placement={top ? "top" : placement}
       className={cn(
         /* Literal white and ink rather than theme tokens: the Dex sheet opens
            over /brain, which renders in the dark Dex room. */
-        "rounded-3xl bg-[#fff] p-4 text-kr-ink ring-1 ring-slate-900/[0.06] shadow-[0_12px_32px_-12px_hsl(230_30%_18%/.45)]",
-        placement === "dock" && "lg:hidden fixed app-dock-left app-fab-right z-40 bottom-[calc(6.25rem+var(--sa-bottom))]",
+        "rounded-3xl bg-[#fff] p-4 text-ng-ink ring-1 ring-slate-900/[0.06] shadow-[0_12px_32px_-12px_hsl(230_30%_18%/.45)]",
+        top && "pointer-events-auto w-full max-w-md lg:hidden",
         className
       )}
     >
@@ -75,9 +82,9 @@ export function DexFailureNotice({ placement = "dock", className }) {
         <WarningCircle size={18} weight="fill" aria-hidden="true" className="mt-px shrink-0 text-rose-600" />
         <span data-testid="dex-failure-reason" className="min-w-0 break-words">{notice.message}</span>
       </p>
-      {waiting && <p className="mt-1.5 text-[13px] leading-snug text-kr-ink/70">{OUTCOME_COPY.retryWait}</p>}
+      {waiting && <p className="mt-1.5 text-[13px] leading-snug text-ng-ink/70">{OUTCOME_COPY.retryWait}</p>}
       {more > 0 && (
-        <p className="mt-1 text-[13px] leading-snug text-kr-ink/60">
+        <p className="mt-1 text-[13px] leading-snug text-ng-ink/60">
           {more === 1 ? "1 more failed capture after this one" : `${more} more failed captures after this one`}
         </p>
       )}
@@ -88,7 +95,8 @@ export function DexFailureNotice({ placement = "dock", className }) {
             type="button"
             data-testid="dex-failure-retry"
             onClick={retry}
-            className="flex h-14 min-h-touch-lg items-center rounded-pill bg-kr-ink px-6 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60"
+            className={cn("flex items-center rounded-pill bg-ng-ink px-6 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-ink/60",
+              top ? "h-11 min-h-touch" : "h-14 min-h-touch-lg")}
           >
             Retry
           </button>
@@ -97,13 +105,14 @@ export function DexFailureNotice({ placement = "dock", className }) {
           type="button"
           data-testid="dex-failure-dismiss"
           onClick={() => removeFailureNotice(notice.id)}
-          className="flex h-11 min-h-touch items-center rounded-pill bg-slate-900/[0.06] px-4 text-sm font-medium text-kr-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60"
+          className="flex h-11 min-h-touch items-center rounded-pill bg-slate-900/[0.06] px-4 text-sm font-medium text-ng-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-ink/60"
         >
           Dismiss
         </button>
       </div>
     </div>
   );
+  return top ? <TopNotice order={2}>{card}</TopNotice> : card;
 }
 
 export default DexFailureNotice;

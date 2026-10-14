@@ -34,7 +34,7 @@ const LangChip = ({ value, onChange, disabled }) => {
         onClick={() => !disabled && setOpen((o) => !o)}
         disabled={disabled}
         title="Change voice language"
-        className="kr-pop flex h-10 items-center gap-1.5 rounded-pill px-3.5 text-[11px] font-medium disabled:opacity-40"
+        className="ng-pop flex h-10 items-center gap-1.5 rounded-pill px-3.5 text-[11px] font-medium disabled:opacity-40"
       >
         <span>{langLabel(value)}</span>
         <CaretDown size={12} weight="bold" />
@@ -43,7 +43,7 @@ const LangChip = ({ value, onChange, disabled }) => {
         {open && (
           <motion.div
             initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
-            className="kr-frost absolute right-0 z-20 mt-2 max-h-72 min-w-[170px] overflow-y-auto rounded-2xl p-1.5"
+            className="ng-frost absolute right-0 z-20 mt-2 max-h-72 min-w-[170px] overflow-y-auto rounded-2xl p-1.5"
             data-testid="interview-lang-menu"
           >
             {SPOKEN_LANGS.map((l) => (
@@ -51,7 +51,7 @@ const LangChip = ({ value, onChange, disabled }) => {
                 key={l.code}
                 data-testid={`interview-lang-option-${l.code}`}
                 onClick={() => { onChange(l.code); setOpen(false); }}
-                className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-xs ${value === l.code ? "kr-pressed" : "hover:bg-white/50"}`}
+                className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-xs ${value === l.code ? "ng-pressed" : "hover:bg-white/50"}`}
               >
                 <span className="font-semibold">{l.label}</span>
                 {value === l.code && <Check size={12} weight="bold" />}
@@ -68,8 +68,8 @@ const LangChip = ({ value, onChange, disabled }) => {
 // 2026-10-08 — with a Back: this screen had only "Skip", so a founder who
 // wanted to fix their industry from here had no way to it but the browser.
 const LanguagePick = ({ onPick, onSkip, onBack }) => (
-  <div className="kr-well mx-auto w-full max-w-2xl" data-testid="signup-lang-pick">
-   <div className="kr-well__pane rounded-[1.75rem] p-6 sm:p-9">
+  <div className="ng-well mx-auto w-full max-w-2xl" data-testid="signup-lang-pick">
+   <div className="ng-well__pane rounded-[1.75rem] p-6 sm:p-9">
     <p className="mb-3 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
       <Translate size={14} weight="bold" /> Your interview
     </p>
@@ -92,7 +92,7 @@ const LanguagePick = ({ onPick, onSkip, onBack }) => (
           onClick={() => onPick(l.code)}
           whileHover={{ y: -2 }}
           whileTap={{ scale: 0.98 }}
-          className="kr-pop rounded-2xl p-4 text-left"
+          className="ng-pop rounded-2xl p-4 text-left"
         >
           <p className="text-2xl font-semibold leading-none">{l.short}</p>
           <p className="mt-2 text-[11px] font-medium text-muted-foreground">{l.label}</p>
@@ -102,12 +102,12 @@ const LanguagePick = ({ onPick, onSkip, onBack }) => (
     <div className="mt-7 flex flex-wrap items-center gap-3">
       {onBack && (
         <button onClick={onBack} data-testid="lang-pick-back"
-          className="kr-pop flex h-10 items-center gap-1 rounded-pill px-4 text-xs font-medium">
+          className="ng-pop flex h-10 items-center gap-1 rounded-pill px-4 text-xs font-medium">
           <CaretLeft size={12} weight="bold" /> Back
         </button>
       )}
       <button onClick={onSkip} data-testid="interview-skip"
-        className="kr-pop flex h-10 items-center rounded-pill px-5 text-xs font-medium text-muted-foreground">
+        className="ng-pop flex h-10 items-center rounded-pill px-5 text-xs font-medium text-muted-foreground">
         Skip the interview — build from what you have
       </button>
     </div>
@@ -348,17 +348,17 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack, resumeSess
   }
 
   return (
-    <div className="kr-well mx-auto w-full max-w-2xl" data-testid="signup-interview">
-     <div className="kr-well__pane rounded-[1.75rem] p-5 sm:p-8">
+    <div className="ng-well mx-auto w-full max-w-2xl" data-testid="signup-interview">
+     <div className="ng-well__pane rounded-[1.75rem] p-5 sm:p-8">
       {/* Assistant header. The ribbons carry the state; the icon disc only
           names it. Both sit on ink, which is where the app puts Dex too. */}
       <div className="mb-7 flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="kr-pressed grid h-12 w-12 shrink-0 place-items-center rounded-full">
+          <div className="ng-pressed grid h-12 w-12 shrink-0 place-items-center rounded-full">
             {orbState === "thinking"
               ? <Loader size={22} />
               : orbState === "speaking" ? <Waveform size={22} weight="bold" />
-              : <Microphone size={20} weight="bold" className={orbState === "listening" ? "text-[hsl(var(--kr-gold))]" : ""} />}
+              : <Microphone size={20} weight="bold" className={orbState === "listening" ? "text-[hsl(var(--ng-gold))]" : ""} />}
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold leading-none">Dex · your COO interview</p>
@@ -371,7 +371,7 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack, resumeSess
           <LangChip value={lang} onChange={pickLang} disabled={starting} />
           <button onClick={toggleMute} data-testid="interview-mute-toggle" title={muted ? "Unmute voice" : "Mute voice"}
             aria-label={muted ? "Unmute voice" : "Mute voice"}
-            className={`grid h-10 w-10 place-items-center rounded-full ${muted ? "kr-pressed text-muted-foreground" : "kr-pop"}`}>
+            className={`grid h-10 w-10 place-items-center rounded-full ${muted ? "ng-pressed text-muted-foreground" : "ng-pop"}`}>
             {muted ? <SpeakerSlash size={18} weight="bold" /> : <SpeakerHigh size={18} weight="bold" />}
           </button>
         </div>
@@ -383,15 +383,15 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack, resumeSess
           {starting ? (
             <motion.div key="warm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="space-y-3">
-              <div className="kr-pressed h-8 w-4/5 animate-pulse rounded-pill" />
-              <div className="kr-pressed h-8 w-3/5 animate-pulse rounded-pill" />
+              <div className="ng-pressed h-8 w-4/5 animate-pulse rounded-pill" />
+              <div className="ng-pressed h-8 w-3/5 animate-pulse rounded-pill" />
             </motion.div>
           ) : (
             <motion.div key={question} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}
               transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}>
               <div className="flex items-center gap-2 mb-3">
                 <motion.span
-                  className={`inline-block h-1.5 w-1.5 rounded-full ${speaking ? "bg-[hsl(var(--kr-gold))]" : "bg-foreground/25"}`}
+                  className={`inline-block h-1.5 w-1.5 rounded-full ${speaking ? "bg-[hsl(var(--ng-gold))]" : "bg-foreground/25"}`}
                   animate={speaking ? { scale: [1, 1.6, 1], opacity: [1, 0.5, 1] } : { scale: 1, opacity: 0.5 }}
                   transition={speaking ? { repeat: Infinity, duration: 1 } : { duration: 0.2 }}
                 />
@@ -426,7 +426,7 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack, resumeSess
       </div>
 
       {/* Answer area */}
-      <div className="kr-frost-min mt-7 rounded-2xl p-4 focus-within:ring-1 focus-within:ring-foreground/40" data-testid="interview-answer-box">
+      <div className="ng-frost-min mt-7 rounded-2xl p-4 focus-within:ring-1 focus-within:ring-foreground/40" data-testid="interview-answer-box">
         <textarea
           ref={inputRef}
           data-testid="interview-answer-input"
@@ -458,7 +458,7 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack, resumeSess
                speak button's pressed state looks faded so it looks like it's
                in a disabled state."
 
-               They were reading it correctly: `.signup-stage .kr-pressed`
+               They were reading it correctly: `.signup-stage .ng-pressed`
                fills at 20% white with a 1px inset shadow, which on this glass
                is barely a dent — and it sat next to `disabled:opacity-50`,
                so recording and disabled looked like the same thing. The
@@ -467,8 +467,8 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack, resumeSess
                make it unmistakably ON rather than switched off. */
             className={`flex h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-xs font-medium disabled:opacity-50 ${
               recorder.recording
-                ? "bg-kr-ink text-[hsl(var(--kr-gold))] shadow-[inset_0_2px_5px_hsl(230_30%_8%/.55),inset_0_-1px_0_hsl(0_0%_100%/.10),0_1px_0_hsl(0_0%_100%/.45)]"
-                : "kr-pop"
+                ? "bg-ng-ink text-[hsl(var(--ng-gold))] shadow-[inset_0_2px_5px_hsl(230_30%_8%/.55),inset_0_-1px_0_hsl(0_0%_100%/.10),0_1px_0_hsl(0_0%_100%/.45)]"
+                : "ng-pop"
             }`}>
             {recorder.transcribing ? <Loader size={18} />
               : recorder.recording ? <Stop size={16} weight="fill" />
@@ -500,7 +500,7 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack, resumeSess
           </div>
 
           <button onClick={() => send()} disabled={!answer.trim() || thinking || starting} data-testid="interview-send-button"
-            className="kr-pop flex h-11 items-center gap-2 rounded-pill bg-kr-ink px-6 text-xs font-medium text-white disabled:opacity-40">
+            className="ng-pop flex h-11 items-center gap-2 rounded-pill bg-ng-ink px-6 text-xs font-medium text-white disabled:opacity-40">
             {thinking ? <Loader size={18} /> : <PaperPlaneRight size={16} weight="bold" />}
             {thinking ? "Thinking…" : "Answer"}
           </button>
@@ -516,20 +516,20 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack, resumeSess
             disabled={thinking || starting}
             data-testid="interview-back"
             title={index <= 1 ? "Back to your world" : "Go back to the previous question"}
-            className="kr-pop flex h-9 items-center gap-1 rounded-pill px-3.5 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-30">
+            className="ng-pop flex h-9 items-center gap-1 rounded-pill px-3.5 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-30">
             <CaretLeft size={12} weight="bold" /> Back
           </button>
           {/* Progress as depth: the track is pressed in, answered questions
               are filled, the live one is gold. */}
-          <div className="kr-pressed hidden items-center gap-1 rounded-pill p-1 sm:flex">
+          <div className="ng-pressed hidden items-center gap-1 rounded-pill p-1 sm:flex">
             {Array.from({ length: max }).map((_, i) => (
               <div key={`qdot-${i}`}
-                className={`h-1.5 w-6 rounded-pill ${i + 1 < index ? "bg-foreground/45" : i + 1 === index ? "bg-[hsl(var(--kr-gold))]" : "bg-foreground/12"}`} />
+                className={`h-1.5 w-6 rounded-pill ${i + 1 < index ? "bg-foreground/45" : i + 1 === index ? "bg-[hsl(var(--ng-gold))]" : "bg-foreground/12"}`} />
             ))}
           </div>
         </div>
         <button onClick={() => { stopAudio(); onSkip(session, langRef.current); }} data-testid="interview-skip"
-          className="kr-pop flex h-9 items-center rounded-pill px-4 text-xs font-medium text-muted-foreground">
+          className="ng-pop flex h-9 items-center rounded-pill px-4 text-xs font-medium text-muted-foreground">
           Skip — build from what you have
         </button>
       </div>

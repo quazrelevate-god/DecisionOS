@@ -33,7 +33,7 @@ const POINTS = [
 // a motion value that framer writes to inline style every frame, so no CSS
 // transition is involved. That is deliberate on this branch: a transition on
 // a custom property is the failure mode index.css documents four times over
-// (see the notes on .app-sky, .app-sky__art and .kr-pop). A JS-driven value
+// (see the notes on .app-sky, .app-sky__art and .ng-pop). A JS-driven value
 // cannot stall the same way.
 export function WelcomeOverlay() {
   const [name, setName] = useState(null);
@@ -113,7 +113,7 @@ export function WelcomeOverlay() {
           <div
             aria-hidden="true"
             className="pointer-events-none absolute -top-1/4 left-1/2 h-[60vh] w-[60vh] -translate-x-1/2 rounded-full blur-3xl"
-            style={{ background: "radial-gradient(circle, hsl(var(--kr-gold) / .30), transparent 70%)" }}
+            style={{ background: "radial-gradient(circle, hsl(var(--ng-gold) / .30), transparent 70%)" }}
           />
 
           <motion.div
@@ -143,9 +143,9 @@ export function WelcomeOverlay() {
                     key={p.title}
                     initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.55 + i * 0.15 }}
-                    className="kr-frost-min flex items-center gap-4 rounded-2xl px-5 py-4"
+                    className="ng-frost-min flex items-center gap-4 rounded-2xl px-5 py-4"
                   >
-                    <span className="kr-pop grid h-10 w-10 shrink-0 place-items-center rounded-full">
+                    <span className="ng-pop grid h-10 w-10 shrink-0 place-items-center rounded-full">
                       <Icon size={18} weight="bold" aria-hidden="true" />
                     </span>
                     <div className="min-w-0">
@@ -162,7 +162,7 @@ export function WelcomeOverlay() {
               initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.1 }}
               onClick={dismiss}
               data-testid="welcome-dismiss"
-              className="kr-pop flex h-14 items-center gap-2 rounded-pill bg-kr-ink px-9 font-medium text-white"
+              className="ng-pop flex h-14 items-center gap-2 rounded-pill bg-ng-ink px-9 font-medium text-white"
             >
               Step inside <ArrowRight size={18} weight="bold" />
             </motion.button>

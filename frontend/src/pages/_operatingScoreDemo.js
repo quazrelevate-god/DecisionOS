@@ -124,7 +124,7 @@ export const demoDex = {
 // The quarantine flag exists for demo data that is merely unwired; those two
 // were something else. demoActions printed invented point-lifts ("+6 pts")
 // beside live figures, and demoEmpDeltas put fabricated week-over-week arrows
-// on real people's names. lib/karmaScore's scoreActions replaces the first
+// on real people's names. lib/neuglassScore's scoreActions replaces the first
 // with the honest half — the ORDER, derived from stats, claiming no lift —
 // and nothing replaces the second, because no employee history exists to
 // derive it from.

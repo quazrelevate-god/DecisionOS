@@ -19,7 +19,7 @@ const CONTACT = "support@decisionos.biz";
    publisher is not a material change, so TERMS_VERSION is untouched and
    nobody is asked to agree again. */
 const DEVELOPER = "Bhuvanesh Kumar";
-const UPDATED = "10 October 2026";
+const UPDATED = "14 October 2026";
 
 function Section({ title, children }) {
   return (
@@ -120,8 +120,8 @@ export default function Terms() {
       <Section title="Plans and payment">
         <p>
           A company may use DecisionOS on a trial or a paid plan. What a plan
-          includes and costs is shown before it is bought. Paid plans are bought
-          by the company, outside the Android app.
+          includes and costs is shown before it is bought. Paid plans are
+          arranged with the company directly; nothing is sold inside the app.
         </p>
       </Section>
 

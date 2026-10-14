@@ -123,7 +123,7 @@ export function InstallPrompt() {
              design systems this app retired two passes ago; it was the last
              brutalist surface still shipping. Now the same frosted pill the
              rest of the phone UI uses. */
-          className="lg:hidden fixed inset-x-3 z-[10040] mx-auto flex max-w-md items-center gap-3 kr-frost rounded-pill py-2.5 pl-4 pr-2.5 shadow-[0_10px_30px_-12px_hsl(230_30%_18%/.45)]"
+          className="lg:hidden fixed inset-x-3 z-[10040] mx-auto flex max-w-md items-center gap-3 ng-frost rounded-pill py-2.5 pl-4 pr-2.5 shadow-[0_10px_30px_-12px_hsl(230_30%_18%/.45)]"
           // Sits above the dock, like UndoSnackbar, so it never covers the
           // navigation it is asking him to keep using.
           style={{ bottom: "calc(6rem + var(--sa-bottom))" }}
@@ -136,7 +136,7 @@ export function InstallPrompt() {
             type="button"
             onClick={install}
             data-testid="install-prompt-accept"
-            className="kr-pop shrink-0 rounded-pill bg-kr-ink px-4 text-sm font-semibold text-white"
+            className="ng-pop shrink-0 rounded-pill bg-ng-ink px-4 text-sm font-semibold text-white"
             style={{ minHeight: "var(--control-h-sm)" }}
           >
             {t("install.add", "Add")}

@@ -60,7 +60,7 @@ def test_not_one_native_select_is_left(name, src):
 @pytest.mark.parametrize("name,src", FILES, ids=IDS)
 def test_each_one_is_a_glass_select(name, src):
     assert "GlassSelect" in src, name
-    assert 'from "./karma/GlassSelect"' in src, name
+    assert 'from "./neuglass/GlassSelect"' in src, name
 
 
 def test_the_trigger_wears_the_same_border_as_the_inputs_beside_it():
@@ -106,7 +106,7 @@ def test_the_icon_buttons_are_a_tap_target_not_a_pixel_hunt():
     """They were p-1 — about 22px — and hardest to hit precisely because they
     were half off the screen. Sprint 16's rule, applied where it was worst."""
     assert 'const iconBtn = "grid h-9 w-9 shrink-0 place-items-center' in ED
-    assert 'className="p-1 text-muted-foreground hover:text-kr-accent"' not in ED
+    assert 'className="p-1 text-muted-foreground hover:text-ng-accent"' not in ED
     assert "grid h-9 w-9 shrink-0 place-items-center" in SW
 
 

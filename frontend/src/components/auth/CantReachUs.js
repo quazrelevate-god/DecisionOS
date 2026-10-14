@@ -49,7 +49,7 @@ export function CantReachUs() {
         type="button"
         onClick={retryMe}
         data-testid="cant-reach-retry"
-        className="kr-pop flex min-h-touch items-center rounded-pill px-6 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
+        className="ng-pop flex min-h-touch items-center rounded-pill px-6 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline"
       >
         Try now
       </button>

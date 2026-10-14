@@ -18,8 +18,8 @@ import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { PageHeader } from "../components/common";
 import { timeAgo, fullTime } from "../lib/format";
-import { GlassSelect } from "../components/karma/GlassSelect";
-import { DRAWER_FIELD, DRAWER_TRACK, INK_PILL } from "../components/karma/glass";
+import { GlassSelect } from "../components/neuglass/GlassSelect";
+import { DRAWER_FIELD, DRAWER_TRACK, INK_PILL } from "../components/neuglass/glass";
 import { CARD, EmptyNote, SMALL_INK, SMALL_PILL, Tag } from "./finance/financeKit";
 
 const INPUT = cn(DRAWER_FIELD, "h-10 rounded-xl px-3 py-0 text-sm");

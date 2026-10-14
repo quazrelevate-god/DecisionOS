@@ -25,7 +25,7 @@ import { Tray, Wallet, DotsThree, Briefcase, AddressBook } from "@phosphor-icons
 import { hasPerm } from "@/lib/perms";
 import { DexWave } from "./DexWave";
 import { cn } from "@/lib/utils";
-import { INK_PLATE } from "@/components/karma/glass";
+import { INK_PLATE } from "@/components/neuglass/glass";
 
 /**
  * Resolve the dock's destination slots for this user (§8 "Role variance").
@@ -149,7 +149,7 @@ export function DockItem({ to, label, icon: Icon, testid, active, onClick, grid 
        so what it actually does is darken the gradient by 55%, which is the
        contrast the live slot needs against a bar that is no longer flat. */
     active
-      ? "text-white bg-kr-ink/55 backdrop-blur-2xl backdrop-saturate-150 shadow-[inset_0_1px_0_hsl(40_40%_96%/.22)]"
+      ? "text-white bg-ng-ink/55 backdrop-blur-2xl backdrop-saturate-150 shadow-[inset_0_1px_0_hsl(40_40%_96%/.22)]"
       : "text-white/55 hover:text-white/80"
   );
   const common = {

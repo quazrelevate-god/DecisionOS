@@ -106,6 +106,11 @@ class TransferOwnershipInput(BaseModel):
     totp_code: Optional[str] = None
 
 
+class TourDoneInput(BaseModel):
+    """The walkthrough version the app just showed (2026-10-12)."""
+    version: int = 1
+
+
 class ProfileUpdateInput(BaseModel):
     """Your own details (2026-09-16). Role and access are NOT here — those are a
     manager's call and live on PATCH /users. `email` is the sign-in id, so it

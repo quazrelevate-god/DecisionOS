@@ -37,7 +37,7 @@ import { Check, File as FileGlyph, Paperclip, WarningCircle, X } from "@phosphor
 import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "../../components/ui/dialog";
 import { DecisionPanel } from "../../components/DecisionDialog";
-import { GLASS_ICON_BTN, GLASS_PILL, GLASS_SHEET, INK_PILL } from "../../components/karma/glass";
+import { GLASS_ICON_BTN, GLASS_PILL, GLASS_SHEET, INK_PILL } from "../../components/neuglass/glass";
 import { decisionCounts, readyLine, stageLabel, OUTCOME_COPY } from "../../lib/dexOutcome";
 import { cn } from "../../lib/utils";
 import { DexForgeFit } from "../onboarding/DexForge";
@@ -364,7 +364,7 @@ export function DexCapturePopup({
         {(!phone || reduced) && (
           <div className={cn("flex min-h-0 min-w-0 flex-col", phone ? "flex-1 justify-center" : "lg:w-[46%]")}>
             {!phone && sentText && (
-              <blockquote className="kr-scroll-quiet max-h-[12.5rem] overflow-y-auto whitespace-pre-wrap break-words text-[15px] leading-relaxed text-slate-700" data-testid="dex-popup-sent">
+              <blockquote className="ng-scroll-quiet max-h-[12.5rem] overflow-y-auto whitespace-pre-wrap break-words text-[15px] leading-relaxed text-slate-700" data-testid="dex-popup-sent">
                 &ldquo;{sentText}&rdquo;
               </blockquote>
             )}

@@ -78,7 +78,7 @@ export default class ErrorBoundary extends Component {
             <button
               type="button"
               onClick={this.handleReload}
-              className="inline-flex items-center gap-1.5 rounded-pill bg-kr-ink px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+              className="inline-flex items-center gap-1.5 rounded-pill bg-ng-ink px-4 py-2 text-sm font-medium text-white hover:opacity-90"
               data-testid="error-boundary-reload"
             >
               <ArrowClockwise size={14} weight="bold" /> Reload

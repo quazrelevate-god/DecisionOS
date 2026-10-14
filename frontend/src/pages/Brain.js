@@ -56,7 +56,7 @@ const PAGE_ACTION = cn(
 function YourTurn({ m }) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[78%] rounded-[20px] rounded-br-[6px] bg-kr-ink px-4 py-2.5 text-white">
+      <div className="max-w-[78%] rounded-[20px] rounded-br-[6px] bg-ng-ink px-4 py-2.5 text-white">
         {m.text && <p className="whitespace-pre-wrap text-[15px] leading-[22px]">{m.text}</p>}
         {m.files?.length > 0 && (
           <ul className={cn("flex flex-wrap gap-1.5", m.text && "mt-2")} aria-label="Files sent with this question">

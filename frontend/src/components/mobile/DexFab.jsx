@@ -166,7 +166,7 @@ export function DexFab({ onOpen, recording = false, seconds = 0, onStop, intent 
            rather than a black circle parked next to a lit pill. */
         recording
           ? "bg-danger-600 text-white recording-pulse"
-          : "bg-kr-ink text-white hover:opacity-95 ring-1 ring-[hsl(40_30%_92%/.30)] shadow-[0_8px_28px_rgba(0,0,0,.40),0_0_22px_-4px_hsl(40_35%_92%/.45),inset_0_1px_0_hsl(40_40%_96%/.20)]"
+          : "bg-ng-ink text-white hover:opacity-95 ring-1 ring-[hsl(40_30%_92%/.30)] shadow-[0_8px_28px_rgba(0,0,0,.40),0_0_22px_-4px_hsl(40_35%_92%/.45),inset_0_1px_0_hsl(40_40%_96%/.20)]"
       )}
     >
       {recording || intent === "stop" ? (

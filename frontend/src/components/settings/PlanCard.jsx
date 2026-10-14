@@ -57,7 +57,7 @@ export function PlanCard() {
   const paidTop = p && ["business", "enterprise", "grandfathered"].includes(p.key);
 
   return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="settings-plan-card">
+    <div className="ng-bento p-5 sm:p-6" data-testid="settings-plan-card">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-base font-medium">Plan and seats</h2>
@@ -71,7 +71,7 @@ export function PlanCard() {
             through Play billing (lib/storeBuild). The website keeps it. */}
         {p && !paidTop && !STORE_BUILD && (
           <button type="button" onClick={() => setOpen(true)} data-testid="plan-upgrade"
-            className="h-10 shrink-0 rounded-pill bg-kr-ink px-5 text-sm font-medium text-white">
+            className="h-10 shrink-0 rounded-pill bg-ng-ink px-5 text-sm font-medium text-white">
             Choose a plan
           </button>
         )}
@@ -171,7 +171,7 @@ function UpgradeDialog({ open, onOpenChange, current, configured, company }) {
                     <p className="mt-3 text-center text-xs font-medium text-muted-foreground">Your plan</p>
                   ) : configured && !pl.is_talk_to_sales ? (
                     <button type="button" disabled={!!busy} onClick={() => choose(pl.key)} data-testid={`plan-choose-${pl.key}`}
-                      className="mt-3 h-9 rounded-pill bg-kr-ink text-sm font-medium text-white disabled:opacity-50">
+                      className="mt-3 h-9 rounded-pill bg-ng-ink text-sm font-medium text-white disabled:opacity-50">
                       {busy === pl.key ? "Opening…" : `Choose ${pl.name}`}
                     </button>
                   ) : (

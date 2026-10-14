@@ -16,11 +16,11 @@ import { Verdict, Pulse, Queue, Board, Grid, Strip, CompletionRing } from "../co
 import { EmptyState } from "../components/mobile";
 import { inr } from "../lib/format";
 import { Fire, Sun, Stamp, Star, Camera, CheckCircle, Wallet, CalendarBlank, Bell } from "@phosphor-icons/react";
-// KR-4 — the Karma kit under test.
+// KR-4 — the Neu-glassmorphism kit under test.
 import {
   IconChip, ArrowButton, BigNumeral, PillNav, DarkBand,
   DotProgress, MiniBars, CircleDots,
-} from "../components/karma";
+} from "../components/neuglass";
 // KM-19 — the onboarding build animation. It lives three phases deep in
 // /signup, behind a real registration, so this gallery is the only place it
 // can be looked at without creating a tenant to see it.
@@ -33,10 +33,11 @@ import { DexWave } from "../components/mobile/DexWave";
    founder asked for it here first ("once we finalize it we will add it to our
    web application"), so this page is its only call site and the component sits
    in pages/designlab/ rather than in components/ where the app would find it. */
-import { VoiceRipple, RIPPLE_DEFAULTS } from "../components/karma/VoiceRipple";
+import { VoiceRipple, RIPPLE_DEFAULTS } from "../components/neuglass/VoiceRipple";
 // 2026-10-12 — the client's "too thin, too small" on the phone Desk: fifteen
 // type and spacing variations, applied inside their own frames only.
 import DeskTypeLab from "./designlab/DeskTypeLab";
+import ScreenshotCompare from "./designlab/ScreenshotCompare";
 
 const SCREENS = [
   { path: "/inbox", label: "Desk · now" },
@@ -272,19 +273,19 @@ function BlockGallery() {
   );
 }
 
-/* KR-4 — the Karma kit, rendered once in every ambience it must survive:
+/* KR-4 — the Neu-glassmorphism kit, rendered once in every ambience it must survive:
    the light zone, the dark band, and glass. This section is the visual QA
    surface for the whole foundation — if a primitive reads wrong anywhere,
    it reads wrong HERE first, before any page adopts it. */
-function KarmaGallery() {
+function NeuGlassGallery() {
   return (
-    <section className="mb-10" data-testid="karma-gallery">
-      <h2 className="text-h2 mb-3">Karma kit</h2>
+    <section className="mb-10" data-testid="neuglass-gallery">
+      <h2 className="text-h2 mb-3">Neu-glassmorphism kit</h2>
 
       {/* KM-23 · DexWave — all four states side by side, on ink, which is the
           only surface it is ever drawn on. `level` is faked with a slow sine
           for the listening lane so it moves without a microphone. */}
-      <div className="mb-6 rounded-cardlg bg-kr-ink p-5">
+      <div className="mb-6 rounded-cardlg bg-ng-ink p-5">
         <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-white/45">
           DexWave · idle · listening · thinking · speaking
         </p>
@@ -301,7 +302,7 @@ function KarmaGallery() {
       </div>
 
       {/* KM-19 · DexForge — onboarding's build animation, on the same ground
-          the app uses, so a change to .kr-pop or .kr-pressed shows up here. */}
+          the app uses, so a change to .ng-pop or .ng-pressed shows up here. */}
       <div className="app-canvas mb-6 rounded-cardlg p-6" style={{ background: "hsl(var(--nm-bg))" }}>
         <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
           DexForge · /signup build
@@ -315,7 +316,7 @@ function KarmaGallery() {
           <PillNav
             testid="kg-pills"
             items={[
-              { to: "/design-lab", label: "Karma", end: true },
+              { to: "/design-lab", label: "Neu-glassmorphism", end: true },
               { to: "/design-lab?x=1", label: "Credits" },
               { to: "/design-lab?x=2", label: "Money", badge: 3 },
             ]}
@@ -328,7 +329,7 @@ function KarmaGallery() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
-          <div className="nm-raised kr-lift p-5" data-testid="kg-tile">
+          <div className="nm-raised ng-lift p-5" data-testid="kg-tile">
             <div className="flex items-start justify-between">
               <IconChip icon={Wallet} alert />
               <ArrowButton label="Open money" to="/finance" />
@@ -339,7 +340,7 @@ function KarmaGallery() {
               <MiniBars values={[4, 7, 3, 8, 6, 9]} accentIndex={5} />
             </div>
           </div>
-          <div className="nm-raised kr-lift p-5">
+          <div className="nm-raised ng-lift p-5">
             <div className="flex items-start justify-between">
               <IconChip icon={CheckCircle} />
               <ArrowButton label="Open payment history" />
@@ -350,10 +351,10 @@ function KarmaGallery() {
               <DotProgress value={100} total={100} />
             </div>
           </div>
-          <div className="kr-glass kr-glass--blue kr-lift p-5" data-testid="kg-glass">
+          <div className="ng-glass ng-glass--blue ng-lift p-5" data-testid="kg-glass">
             <div className="flex items-start justify-between">
               <IconChip icon={Star} />
-              <ArrowButton label="Open credit use" style={{ "--kr-action-bg": "0 0% 100%", "--kr-action-fg": "var(--kr-ink)" }} />
+              <ArrowButton label="Open credit use" style={{ "--ng-action-bg": "0 0% 100%", "--ng-action-fg": "var(--ng-ink)" }} />
             </div>
             <p className="mt-5 text-sm italic opacity-80">Credit Card Use</p>
             <div className="mt-1 flex items-end justify-between gap-3">
@@ -368,11 +369,11 @@ function KarmaGallery() {
       <DarkBand testid="kg-band" className="mt-6 py-8 rounded-cardlg" reveal={false}>
         <div className="flex flex-wrap items-center gap-4">
           <span className="text-h2">History</span>
-          <span className="inline-flex items-center rounded-pill border border-kr-outline px-3.5 h-9 text-sm">3 months</span>
-          <span className="inline-flex items-center rounded-pill bg-white text-kr-ink px-3.5 h-9 text-sm font-medium">6 months</span>
+          <span className="inline-flex items-center rounded-pill border border-ng-outline px-3.5 h-9 text-sm">3 months</span>
+          <span className="inline-flex items-center rounded-pill bg-white text-ng-ink px-3.5 h-9 text-sm font-medium">6 months</span>
           <ArrowButton label="See all offers" />
           <IconChip icon={Fire} alert={2} />
-          <span className="kr-glass kr-glass--olive px-4 py-3 text-sm" data-testid="kg-band-glass">
+          <span className="ng-glass ng-glass--olive px-4 py-3 text-sm" data-testid="kg-band-glass">
             Bank of America · Rate <strong>8%</strong>
           </span>
           {/* KR-8.12 — `accent` dropped here. It used to mean "orange"; it
@@ -420,7 +421,7 @@ function VoiceRippleLab() {
       <p className="mt-1 max-w-[62ch] text-sm text-muted-foreground">
         The mic at the centre, and the surface around it answering what it hears. Every wave is a
         ridge — white up-and-left, blue-grey down-and-right, both blurred — so it is lit from the
-        same corner as <code>.kr-pressed</code> and reads as the surface moving rather than as ink
+        same corner as <code>.ng-pressed</code> and reads as the surface moving rather than as ink
         on it. Each one carries its OWN random outline (control points on a Catmull-Rom curve, a
         fresh set per wave, morphing as it travels), springs past its mark and settles, and relaxes
         back toward round as it goes, the way surface tension pulls at real water. The level is a
@@ -448,7 +449,7 @@ function VoiceRippleLab() {
                   onChange={set(k.key)}
                   data-testid={`lab-ripple-${k.key}`}
                   aria-label={`${k.label} — ${k.hint}`}
-                  style={{ accentColor: "hsl(var(--kr-ink))" }}
+                  style={{ accentColor: "hsl(var(--ng-ink))" }}
                 />
                 <span className="text-[length:var(--text-label)] leading-4 text-muted-foreground">{k.hint}</span>
               </label>
@@ -619,6 +620,17 @@ export default function DesignLab() {
 
   const shown = useMemo(() => FIXTURE_NAMES.filter((f) => states.includes(f)), [states]);
 
+  /* ?only=compare — the screenshot comparison on its own. The full lab mounts a
+     dozen live Desks, and they queue the backend so deeply that the one frame
+     meant to show the real Desk can wait half a minute for its greeting. */
+  if (new URLSearchParams(window.location.search).get("only") === "compare") {
+    return (
+      <div className="min-h-[calc(100vh/var(--ui-scale,1))] bg-background p-6" data-testid="design-lab">
+        <ScreenshotCompare alone />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-[calc(100vh/var(--ui-scale,1))] bg-background p-6" data-testid="design-lab">
       {/* placed first: it is the question actually open right now */}
@@ -653,13 +665,15 @@ export default function DesignLab() {
         </p>
       </header>
 
+      <ScreenshotCompare />
+
       <DeskTypeLab />
 
       <DeskAcrossDevices />
 
       <VoiceRippleLab />
 
-      <KarmaGallery />
+      <NeuGlassGallery />
 
       <div className="mb-5 flex flex-wrap items-center gap-2">
         {SCREENS.map((s) => (

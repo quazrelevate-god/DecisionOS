@@ -1,7 +1,7 @@
 /**
  * DEX-R1 (2026-10-08) — the composer on /brain.
  *
- * INK, because it is where you act. The Karma rule is that a surface is light
+ * INK, because it is where you act. The Neu-glassmorphism rule is that a surface is light
  * when you are reading it and ink when you are acting on it — the Desk's sheet,
  * the dock — so the one place on this page you DO something is the same black
  * as every other place in the app you do something. The conversation above it
@@ -30,9 +30,9 @@ import {
 import { cn } from "@/lib/utils";
 import { Loader } from "../../components/common";
 
-const RING = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-kr-ink";
+const RING = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ng-ink";
 const GHOST = cn("grid h-10 w-10 shrink-0 place-items-center rounded-full text-white/75 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-35 disabled:hover:bg-transparent", RING);
-const DISC = cn("grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-kr-ink transition-[transform,opacity] hover:scale-[1.04] active:scale-95 disabled:opacity-35 disabled:hover:scale-100", RING);
+const DISC = cn("grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-ng-ink transition-[transform,opacity] hover:scale-[1.04] active:scale-95 disabled:opacity-35 disabled:hover:scale-100", RING);
 
 /** The live level, newest on the right. Flat when the mic hears nothing. */
 function LevelMeter({ levels }) {
@@ -105,7 +105,7 @@ export function DexComposer({ capture, onAsk, thinking, focusKey }) {
 
       <form
         onSubmit={(e) => { e.preventDefault(); submit(); }}
-        className="rounded-[26px] bg-kr-ink p-2 text-white shadow-[0_22px_48px_-20px_hsl(0_0%_0%/0.55),0_2px_6px_-2px_hsl(0_0%_0%/0.25)]"
+        className="rounded-[26px] bg-ng-ink p-2 text-white shadow-[0_22px_48px_-20px_hsl(0_0%_0%/0.55),0_2px_6px_-2px_hsl(0_0%_0%/0.25)]"
       >
         {/* What goes with the next question. Each one can be taken back. */}
         {attachments.length > 0 && (

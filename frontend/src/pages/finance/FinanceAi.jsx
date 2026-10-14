@@ -17,8 +17,8 @@ import { cn } from "@/lib/utils";
 import api from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { Dialog, DialogContent } from "../../components/ui/dialog";
-import { GlassSelect } from "../../components/karma/GlassSelect";
-import { CHIP, INK_PILL } from "../../components/karma/glass";
+import { GlassSelect } from "../../components/neuglass/GlassSelect";
+import { CHIP, INK_PILL } from "../../components/neuglass/glass";
 import { AREA, CARD, FIELD, Field, SHEET_CONTENT, SMALL_INK, SMALL_PILL, SheetFoot, SheetHead } from "./financeKit";
 import { AiNotice } from "../../components/ReportButton";
 
@@ -355,7 +355,7 @@ function CreateTaskFromInsight({ insight, members, roleOptions }) {
                 aria-invalid={dueError ? "true" : undefined} aria-describedby={dueError ? "insight-task-due-error" : undefined}
                 onChange={(e) => { setDue(e.target.value); if (dueError) setDueError(""); }} />
               {dueError && (
-                <p id="insight-task-due-error" role="alert" className="mt-1.5 text-xs font-medium text-kr-accent">{dueError}</p>
+                <p id="insight-task-due-error" role="alert" className="mt-1.5 text-xs font-medium text-ng-accent">{dueError}</p>
               )}
             </Field>
             <div className="grid gap-3 sm:grid-cols-2">

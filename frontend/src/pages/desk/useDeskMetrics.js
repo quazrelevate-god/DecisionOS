@@ -1,6 +1,6 @@
 // KR-8 · useDeskMetrics — the dashboard's data spine. FounderBento's queries
 // and derivations survive HERE (the component died with the bento layout;
-// the wiring was the part worth keeping), plus the ledger summary the Karma
+// the wiring was the part worth keeping), plus the ledger summary the Neu-glassmorphism
 // tiles need.
 //
 // Query keys are the SAME ones the destination pages use, so React Query
@@ -38,7 +38,7 @@ export function useDeskMetrics() {
     queryFn: () => api.get("/desk/summary").then((r) => r.data),
     refetchInterval: 60000,
   });
-  // NOTE: /contacts left the Desk with the Relationships tile — the six Karma
+  // NOTE: /contacts left the Desk with the Relationships tile — the six Neu-glassmorphism
   // tiles are all fed below. One request fewer, recorded in the KR-8 commit.
   const ledgerQ = useQuery({
     queryKey: ["ledger-summary"],

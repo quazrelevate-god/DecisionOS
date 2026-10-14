@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { toast } from "sonner";
 import { Buildings, Package, Plus, Trash, Copy, WhatsappLogo } from "@phosphor-icons/react";
-import { DRAWER_FIELD, GLASS_PILL, INK_PILL } from "./karma/glass";
+import { DRAWER_FIELD, GLASS_PILL, INK_PILL } from "./neuglass/glass";
 
 /* 2026-10-05 — the company and only the company.
  *
@@ -99,7 +99,7 @@ function InvoiceLogo({ canManage, has, onChanged }) {
         )}
         {canManage && (
           <>
-            <label className={`kr-pop inline-flex h-9 cursor-pointer items-center rounded-pill px-4 text-xs font-medium ${busy ? "pointer-events-none opacity-50" : ""}`}>
+            <label className={`ng-pop inline-flex h-9 cursor-pointer items-center rounded-pill px-4 text-xs font-medium ${busy ? "pointer-events-none opacity-50" : ""}`}>
               {has ? "Change logo" : "Upload logo"}
               <input type="file" accept="image/png,image/jpeg" className="sr-only" onChange={pick} data-testid="company-invoice-logo-input" />
             </label>
@@ -176,7 +176,7 @@ export function CompanyDetails() {
   };
 
   return (
-    <div className="kr-bento p-5 sm:p-6" data-testid="settings-company-card">
+    <div className="ng-bento p-5 sm:p-6" data-testid="settings-company-card">
       <h2 className="flex items-center gap-2 text-base font-medium">
         <Buildings size={18} weight="bold" className="text-muted-foreground" aria-hidden="true" /> Company details
       </h2>

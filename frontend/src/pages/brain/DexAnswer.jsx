@@ -33,7 +33,7 @@ import { Loader } from "../../components/common";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from "../../components/ui/dropdown-menu";
-import { GLASS_MENU, GLASS_MENU_ITEM } from "../../components/karma/glass";
+import { GLASS_MENU, GLASS_MENU_ITEM } from "../../components/neuglass/glass";
 import { AiNotice } from "../../components/ReportButton";
 
 const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background";
@@ -516,7 +516,7 @@ function AnswerBody({ m, onGo, onAsk, currency }) {
 function DexMark({ children }) {
   return (
     <p className="mb-2.5 flex items-center gap-2 text-[13px] font-semibold leading-[18px] text-foreground">
-      <span className="grid h-6 w-6 place-items-center rounded-full bg-kr-ink text-white" aria-hidden="true">
+      <span className="grid h-6 w-6 place-items-center rounded-full bg-ng-ink text-white" aria-hidden="true">
         <Sparkle size={12} weight="fill" />
       </span>
       {children}

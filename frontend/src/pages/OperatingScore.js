@@ -29,9 +29,9 @@ import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
 import { hasPerm } from "../lib/perms";
 import { useAuth } from "../context/AuthContext";
-import { selfScore, scoreBand, scoreActions } from "../lib/karmaScore";
+import { selfScore, scoreBand, scoreActions } from "../lib/neuglassScore";
 import { StickyHeader } from "../components/common";
-import { CircleDots } from "../components/karma/MiniViz";
+import { CircleDots } from "../components/neuglass/MiniViz";
 import {
   ArrowLeft, ArrowRight, CalendarBlank, CaretDown, CaretRight, ChartBar, ChartLineUp, ChatCircleText,
   Check, CheckCircle, ClipboardText, Coins, Eye, Flag, Gauge, Info, ListBullets, ListChecks,
@@ -41,8 +41,8 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import {
   DRAWER_CARD, DRAWER_FIELD, DRAWER_LABEL, DRAWER_TRACK, GLASS_ICON_BTN, GLASS_PILL, GLASS_SHEET, INK_PILL,
-} from "../components/karma/glass";
-import { GlassSelect } from "../components/karma/GlassSelect";
+} from "../components/neuglass/glass";
+import { GlassSelect } from "../components/neuglass/GlassSelect";
 import { cn } from "@/lib/utils";
 import { opModel } from "../lib/operatingModel";
 import { roleLabel } from "../lib/departments";
@@ -371,7 +371,7 @@ function CategoryCard({ cat, value, reason, onOpen, canDrill = false, to = null 
 
 const ACTION_ICON = { overdue: CheckCircle, complaints: ChatCircleText, weakest: ChartLineUp, "first-close": Flag };
 
-/** What to do first — derived from real stats (lib/karmaScore), claiming no lift. */
+/** What to do first — derived from real stats (lib/neuglassScore), claiming no lift. */
 function DoTheseFirst({ actions, onDrill, note, sub = "Key actions to improve your operating score.", className = "" }) {
   return (
     <section data-testid="operating-next-moves" className={`flex min-w-0 flex-col p-5 sm:p-6 ${CARD} ${className}`}>
@@ -702,7 +702,7 @@ function OwnerView({ data, windowKey, onWindow }) {
 }
 
 /* The team, on a dark card. The "How is this calculated?" pill sits in a cut
-   carved out of the card's top edge (.kr-notch, lg and up — on a phone the
+   carved out of the card's top edge (.ng-notch, lg and up — on a phone the
    pill sits above the card); its panel, when open, unfolds above both. */
 function TeamExecution({ employees, panel, toggle }) {
   const { tenant } = useAuth();
@@ -734,7 +734,7 @@ function TeamExecution({ employees, panel, toggle }) {
       {toggle && <div className="relative z-10 mb-3 flex justify-center lg:-mb-[22px]">{toggle}</div>}
       {/* A mask clips box-shadow too, so the notched card carries no outer shadow. */}
       <section data-testid="operating-band"
-        className={`relative rounded-[2rem] px-4 pb-5 pt-7 text-white ring-1 ring-inset ring-white/[0.06] sm:px-6 lg:px-7 ${toggle ? "kr-notch lg:pt-12" : ""} ${DARK_BAND}`}>
+        className={`relative rounded-[2rem] px-4 pb-5 pt-7 text-white ring-1 ring-inset ring-white/[0.06] sm:px-6 lg:px-7 ${toggle ? "ng-notch lg:pt-12" : ""} ${DARK_BAND}`}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/[0.08] ring-1 ring-inset ring-white/15">
@@ -1269,7 +1269,7 @@ function FormulaPanel({ open, panelRef }) {
   );
 }
 
-/** 44px tall — .kr-notch's cut is sized to this pill (its lower half + 10px). */
+/** 44px tall — .ng-notch's cut is sized to this pill (its lower half + 10px). */
 function FormulaToggle({ open, onToggle }) {
   return (
     <button type="button" onClick={onToggle} aria-expanded={open} aria-controls="operating-formula-panel" data-testid="operating-formula-toggle"

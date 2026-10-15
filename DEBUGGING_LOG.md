@@ -8,6 +8,45 @@ A running record of issues we investigate and how we resolve them, so we can ref
 
 ---
 
+## 2026-10-15 — Issue 11: Tab rows cut off on a phone (Preferences, Finance › Inbox)  ✅ FIXED
+
+**Symptom (user, Redmi):** Preferences' section tabs ran off the screen — "Account" cut at "A", Workspace invisible — and the Finance inbox's statuses stopped at "Rej…". Nothing showed that the row scrolls.
+
+**Cause:** each was one `overflow-x-auto` row with the scrollbar hidden on purpose. Six tabs at the phone type scale (`text-xs` = 14px since variation 7) need ~1.5 screen widths; the hidden scrollbar left no cue.
+
+**Fix — one shared row, [ScrollTabRow.jsx](frontend/src/components/neuglass/ScrollTabRow.jsx), used by both screens** (each keeps its own look):
+- Below lg the row is a CSS container; each tab is `(100cqi − 3.25rem) / 3` — a third of the row after two gaps and a 2.75rem strip — so **the first three are always whole, at any width**. The next tab peeks into the strip under a fade and a round arrow (press = scroll on); a left arrow appears once scrolled. From lg up nothing changes.
+- The label is 14px and only steps down when a third can't hold the row's longest label: `font-size: clamp(0.625rem, (100cqi − 5.5rem) / (3·fit + 0.3), 0.875rem)`. `fit` = that label's width in ems, **measured in the app's font**: "Team & access" 6.7–6.9 (fit 7), "Needs attention" 7.26 (fit 7.4). Both rows draw 14px from a 360px phone up, ~12–13px on a 320px one.
+
+**Second pass — "the pressed state looks off"** (user screenshot, Operations selected). Three faults in the first cut, plus one they exposed:
+1. The fade began 1rem inside the third tab → the open tab's end faded out. Now the mask fades only inside the peek strip.
+2. The scroll row clipped the open tab's raised shadow (padding had moved to the outer pill). Fixed with `-m-1 p-1` on the row.
+3. `scrollIntoView` read the third tab — ending exactly at the strip — as a hair out of view and nudged the row, so the left arrow covered Business. Replaced with a hand check that scrolls only when a tab is really hidden behind an arrow (4px slack).
+4. Every phone button has a **44px floor** (`--control-h-sm`, index.css ~401), so the 28px arrow was drawn 44px and overlapped the open tab. Now a 44px slot exactly fills the strip, with a 28px disc inside it.
+
+**Verified:** the compiled CSS + markup rendered at 320/360/375/393/412/430/1200px, every state (first, third, middle, last open): no label overflows, first three whole, third-tab-open never scrolls, arrow-to-pill gap > 0 everywhere, desktop untouched. Two source-reading tests that pinned the old Settings markup were rewritten to the same guarantees on the new row.
+
+**Lesson:** a row of things wider than the phone needs a visible cue AND a layout that guarantees what is in view — and measure the label in the real font; my first guess for "Needs attention" (8.3em) was 14% too wide.
+
+---
+
+## 2026-10-15 — Issue 10: A team without the Desk / Decide AI (Sales)  ✅ BUILT (founder spec) · data note on Priya
+
+**Ask (founder):** Sales has Decision Desk and Voice Box switched off, so a Sales user should land on Work, see Work · CRM | slider | Money · More, and get only Ask from the slider whichever way they swipe; rename "Voice Box (Decision Desk capture)" to "Decide AI"; giving the access back must bring it all back.
+
+**Built (all read from the live permissions, so it reverses itself):**
+- [perms.js](frontend/src/lib/perms.js): `voice_capture` labelled "Decide AI" (key unchanged).
+- [FloatingDock.jsx](frontend/src/components/mobile/FloatingDock.jsx) `dockSlots`: without `inbox` → `[Work, CRM, Money]`, CRM shown for EITHER side (`canSeeAnyCrm`). [AllAppsPanel.jsx](frontend/src/components/mobile/AllAppsPanel.jsx): More's CRM tile also opens for either side, but only while the bar has a Desk (nothing in two places). Found on the way: More's CRM tile asked for `people` (both sides), so a buyers-only Sales user had **no door to CRM on a phone at all**.
+- [DexSlider.jsx](frontend/src/components/neuglass/DexSlider.jsx) `askOnly` (passed by [DockSlider.jsx](frontend/src/components/mobile/DockSlider.jsx) when the user lacks `voice_capture`): both ends commit Ask, the heading word/glyph/aria say Ask, the right-hand "Decide" label is gone; the right end's handler IS onAsk. The server already refuses Decide captures without `voice_capture`.
+- [App.js](frontend/src/App.js) `Protected`: no `inbox` on `/inbox` → redirect to `/my-work` (Home already did this).
+- [AuthContext.js](frontend/src/context/AuthContext.js): permissions were read only at start-up / sign-in, and a phone keeps the app alive for days. Now `/auth/me` is re-asked on `visibilitychange` (≤ once a minute), replacing the user only if the answer differs.
+
+**"Why is the Desk still there?" (Priya, Sales) — not a bug, data.** Resolution order on the server (core/permissions.user_perms) is owner → **the person's own access list** → team (tenant role) → built-in default. Priya's profile showed her own 7-area list (Decision Desk, People/Contacts, …) — so the Sales team switches never reached her. The new build was correct for her (slider already Ask-only, since `voice_capture` isn't on her list). Fix is an owner action: Team & access › Sales › "Also make Priya Nair … follow this team" › Save, or switch her to the team's access in her profile.
+
+**Verified:** owner view unchanged on the emulator (Desk/Work | Money/More, right swipe still "Decide", More has CRM, "Decide AI" in Team & access); Priya's dock showed the Ask-only slider. Backend tests reading these files: 301 passed, 1 pre-existing failure (`test_entering_the_app_after_signup::test_nothing_else_raises_that_pane`, fails on the committed code too — the walkthrough commit).
+
+---
+
 ## 2026-10-14 — Issue 9: My Work filter sheet glitches on open/close (Redmi)  ✅ FIXED (measured in the app's WebView)
 
 **Symptom (user, Redmi):** opening or closing the filter on Work makes the whole screen and the bottom sheet glitch.

@@ -151,6 +151,30 @@ export function AuthProvider({ children }) {
     };
   }, [offline, user, askMe]);
 
+  /* 2026-10-15 (founder) — ACCESS CHANGED WHILE THE APP WAS OPEN. What a person
+     may open (Desk, Decide AI, CRM…) is resolved by the server into
+     `effective_permissions` and was read only at start-up and sign-in. A phone
+     keeps the app alive for days, so an owner switching Decide AI back on for
+     Sales changed nothing on their phones until a restart. Ask again whenever
+     the app comes back to the front (at most once a minute), and only replace
+     the user when the answer differs, so an unchanged answer re-renders
+     nothing. */
+  useEffect(() => {
+    if (!user) return undefined;
+    let last = Date.now();
+    const recheck = async () => {
+      if (document.visibilityState !== "visible" || Date.now() - last < 60000) return;
+      last = Date.now();
+      try {
+        const { data } = await api.get("/auth/me");
+        setUser((prev) => (JSON.stringify(prev) === JSON.stringify(data.user) ? prev : data.user));
+        setTenant((prev) => (JSON.stringify(prev) === JSON.stringify(data.tenant) ? prev : data.tenant));
+      } catch (e) { /* a 401 is handled by the session-lost path below; anything else waits for next time */ }
+    };
+    document.addEventListener("visibilitychange", recheck);
+    return () => document.removeEventListener("visibilitychange", recheck);
+  }, [user]);
+
   /* 2026-09-21 — THE SESSION ENDED UNDER THE OPEN APP (see lib/api.js).
      A 401 from any ordinary route while someone is signed in: ask /auth/me
      once — the one question that settles it — and only if that is refused

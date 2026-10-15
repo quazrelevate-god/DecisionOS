@@ -137,6 +137,13 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
                                the one parking left for the one parking right:
                                the handle shot across to the Decide end. */
                             parkSide = null,
+                            /* 2026-10-15 (founder) — NO DECIDE FOR THIS PERSON.
+                               Their team does not hold Decide AI (voice_capture),
+                               so BOTH ends are Ask: either swipe names Ask, shows
+                               Ask's glyph and opens Ask. Read from the live
+                               permission by the dock, so switching Decide AI back
+                               on gives the right end back. */
+                            askOnly = false,
                             /* THE DOCK USES THIS CONTROL AS ITS BAR. (2026-10-06.)
                                On every page but the Desk the founder wants the
                                navbar to BE the slider: its height, its well,
@@ -192,9 +199,9 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
     const max = travel();
     if (max <= 0) return null;
     if (x <= -(max - END_SLOP)) return "ask";
-    if (x >= max - END_SLOP) return "decide";
+    if (x >= max - END_SLOP) return askOnly ? "ask" : "decide";
     return null;
-  }, [travel]);
+  }, [travel, askOnly]);
 
   const settle = React.useCallback(() => { lastDxRef.current = 0; setDx(0); reachedRef.current = null; }, []);
 
@@ -449,7 +456,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
     }
     if (disabled) return;
     if (e.key === "ArrowLeft") { e.preventDefault(); tick("fire"); onAsk?.(); }
-    if (e.key === "ArrowRight") { e.preventDefault(); tick("fire"); onDecide?.(); }
+    if (e.key === "ArrowRight") { e.preventDefault(); tick("fire"); (askOnly ? onAsk : onDecide)?.(); }
   };
 
   const at = end(dx);
@@ -467,7 +474,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
      middle, not only at the stop — half a drag should already tell you which
      room you are opening, so that a drag begun by accident can be read and
      abandoned before it commits. */
-  const heading = capturing ? null : dx < -2 ? "ask" : dx > 2 ? "decide" : null;
+  const heading = capturing ? null : dx < -2 ? "ask" : dx > 2 ? (askOnly ? "ask" : "decide") : null;
   /* HOLLOW, AND ROUND. The filled sparkle read as a sticker on a white disc at
      this size — the founder's word was "not nice". These are all outline forms
      that answer the handle's own circle: an aperture at rest, the chat bubble
@@ -640,7 +647,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
             ) : (
               <>
                 <Label side="ask">{t("desk.slider.ask", "Ask")}</Label>
-                {!composer && <Label side="decide">{t("desk.slider.decide", "Decide")}</Label>}
+                {!composer && !askOnly && <Label side="decide">{t("desk.slider.decide", "Decide")}</Label>}
               </>
             )}
           </>
@@ -655,7 +662,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
             "pointer-events-none absolute inset-y-0 w-32 rounded-pill transition-opacity duration-150",
             capturing && "hidden",
             at ? "opacity-100" : "opacity-0",
-            at === "ask" ? "left-0" : "right-0"
+            dx < 0 ? "left-0" : "right-0"
           )}
           style={{ background: "color-mix(in oklab, var(--brand-600) 14%, transparent)" }}
         />
@@ -667,6 +674,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
           disabled={disabled}
           aria-label={capturing
             ? t("desk.slider.send", "Stop recording and send to Dex")
+            : askOnly ? t("desk.slider.handleAskOnly", "Slide either way to ask Dex")
             : t("desk.slider.handle", "Slide left to ask Dex, right to record a decision")}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}

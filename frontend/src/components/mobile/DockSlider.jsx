@@ -41,6 +41,7 @@ import { Loader } from "../common";
 import { buildTiles, buildUtility } from "./AllAppsPanel";
 import { useBackDismiss } from "@/hooks/useBackDismiss";
 import { cn } from "@/lib/utils";
+import { hasPerm } from "@/lib/perms";
 import { deskSheetTop } from "@/lib/deskSheet";
 
 export function DockSlider({
@@ -63,6 +64,12 @@ export function DockSlider({
   const location = useLocation();
   const navRef = React.useRef(null);
   const slots = React.useMemo(() => dockSlots(user, t), [user, t]);
+  /* 2026-10-15 (founder) — without Decide AI (voice_capture, set per team in
+     Team & access) the slider is Ask at both ends, and the right end can never
+     reach the Decide capture: its handler IS Ask. Live from the permissions, so
+     the owner switching Decide AI back on brings Decide back. */
+  const askOnly = !hasPerm(user, "voice_capture");
+  const decide = askOnly ? onAsk : onDecide;
 
   /* TAP ANYWHERE ELSE AND THE MENU PUTS ITSELF AWAY. (2026-10-07, founder: "no
      need of the X button at the top for closing — when we click outside this
@@ -197,7 +204,8 @@ export function DockSlider({
           onDrag={onDrag}
           onPressChange={setPressed}
           onAsk={onAsk}
-          onDecide={onDecide}
+          onDecide={decide}
+          askOnly={askOnly}
           capturing={capturing}
           recording={recording}
           levelsRef={levelsRef}
@@ -219,7 +227,8 @@ export function DockSlider({
                take is live, or its own stop and cancel would go dead with it. */
             disabled={askBusy && !capturing}
             onAsk={onAsk}
-            onDecide={onDecide}
+            onDecide={decide}
+            askOnly={askOnly}
           />
         </DockAskPanel>
       ) : (
@@ -230,7 +239,8 @@ export function DockSlider({
           onDrag={onDrag}
           onPressChange={setPressed}
           onAsk={onAsk}
-          onDecide={onDecide}
+          onDecide={decide}
+          askOnly={askOnly}
           capturing={capturing}
           recording={recording}
           levelsRef={levelsRef}

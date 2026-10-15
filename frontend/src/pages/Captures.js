@@ -20,6 +20,7 @@ import { PageHeader } from "../components/common";
 import { timeAgo, fullTime } from "../lib/format";
 import { GlassSelect } from "../components/neuglass/GlassSelect";
 import { DRAWER_FIELD, DRAWER_TRACK, INK_PILL } from "../components/neuglass/glass";
+import { ScrollTabRow } from "../components/neuglass/ScrollTabRow";
 import { CARD, EmptyNote, SMALL_INK, SMALL_PILL, Tag } from "./finance/financeKit";
 
 const INPUT = cn(DRAWER_FIELD, "h-10 rounded-xl px-3 py-0 text-sm");
@@ -67,22 +68,17 @@ export function CaptureReview() {
 
   return (
     <div data-testid="captures-page">
-      <div className="-mx-4 mb-5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden">
-        <div role="group" aria-label="Review status" className={`inline-flex gap-1 rounded-pill p-1 ${DRAWER_TRACK}`}>
-          {STATUS_TABS.map((s) => {
-            const active = tab === s.key;
-            return (
-              <button key={s.key} type="button" data-testid={`capture-tab-${s.key}`} onClick={() => setTab(s.key)} aria-pressed={active}
-                className={cn(
-                  "h-9 shrink-0 whitespace-nowrap rounded-pill px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25",
-                  active ? INK_PILL : "text-slate-600 hover:bg-white/80 hover:text-slate-900",
-                )}>
-                {s.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      {/* 2026-10-15 (founder, Redmi) — the statuses were one hidden-scrollbar
+          row that ran off the phone at "Rej…". Same row as Preferences'
+          sections (ScrollTabRow): three in view, an arrow to the rest; its
+          own look kept — the ink pill on the drawer track. */}
+      <ScrollTabRow items={STATUS_TABS} active={tab} onPick={setTab} kind="toggles"
+        className="mb-5 lg:inline-flex" trackClassName={DRAWER_TRACK} label="Review status"
+        testid="capture-tabs" tabTestId={(k) => `capture-tab-${k}`} fit={7.4}
+        tabClassName={(open) => cn(
+          "h-9 px-1.5 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 lg:px-4 lg:text-sm",
+          open ? INK_PILL : "text-slate-600 hover:bg-white/80 hover:text-slate-900",
+        )} />
 
       {isLoading ? (
         <div className="space-y-3" aria-busy="true">

@@ -22,7 +22,7 @@ import * as React from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Tray, Wallet, DotsThree, Briefcase, AddressBook } from "@phosphor-icons/react";
-import { hasPerm } from "@/lib/perms";
+import { hasPerm, canSeeAnyCrm } from "@/lib/perms";
 import { DexWave } from "./DexWave";
 import { cn } from "@/lib/utils";
 import { INK_PLATE } from "@/components/neuglass/glass";
@@ -66,6 +66,20 @@ export function dockSlots(user, t = (k, d) => d) {
      brought it down; this sends it back). `more` is not a destination — the
      caller gives it the handler — so it carries no `to` and the dock renders
      it as a button. */
+  /* 2026-10-15 (founder) — NO DESK, THEN WORK IS HOME AND CRM IS NEXT TO IT.
+     A team without the Desk (Sales, as set up in Team & access) used to get
+     Work · Money on the left and its own CRM nowhere — `crm` above asks for
+     `people`, both sides, which Sales does not hold. Without the Desk the bar
+     reads Work · CRM │ handle │ Money · More, and CRM opens for whichever side
+     this person holds (the same test the CRM page itself makes). Everyone
+     with the Desk is unchanged. Read from the live permissions, so giving the
+     Desk back puts the bar back. */
+  if (!canInbox) {
+    const crmOwn = canSeeAnyCrm(user)
+      ? { to: "/crm", label: t("nav.crm", "CRM"), icon: AddressBook, testid: "dock-crm" }
+      : null;
+    return [work, crmOwn, money].filter(Boolean);
+  }
   const slots = [desk, work, money, crm].filter(Boolean);
   // If a permission collapse duplicated My Work, drop the repeat rather than
   // showing the same destination twice — §8: nothing appears in two places.

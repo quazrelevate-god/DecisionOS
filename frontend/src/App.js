@@ -171,6 +171,10 @@ function Protected({ children, perm, perms, ownerOnly }) {
   if (ownerOnly) denied = user.role !== "owner";
   else if (perms) denied = !perms.some((p) => hasPerm(user, p));
   else if (perm) denied = !hasPerm(user, perm);
+  /* 2026-10-15 (founder) — without the Desk, Work IS home (Home, the dock's
+     first slot), so a Desk link, a notification or the Desk being switched off
+     under an open app lands there rather than on a refusal. */
+  if (denied && perm === "inbox") return <Navigate to="/my-work" replace />;
   return <Layout>{denied ? <AccessDenied /> : <PageBoundary>{children}</PageBoundary>}</Layout>;
 }
 

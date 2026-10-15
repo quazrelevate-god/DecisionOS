@@ -1,7 +1,9 @@
 export const PERMISSIONS = [
   // RBAC P2 (2026-09-16): the key stays "inbox"; on screen it is the Decision Desk.
   { key: "inbox", label: "Decision Desk" },
-  { key: "voice_capture", label: "Voice Box (Decision Desk capture)" },
+  // 2026-10-15 (founder) — named for what the dock calls it: the Decide side of
+  // the slider. The key is unchanged, so every saved setting still holds.
+  { key: "voice_capture", label: "Decide AI" },
   { key: "data_input", label: "Data Input" },
   { key: "people", label: "People / Contacts (both sides of CRM)" },
   /* J7-04 / J8-01 (JOURNEY-1, founder 24 Sep) — CRM SPLITS BY SIDE.

@@ -4591,3 +4591,46 @@ html[data-page="dex"] .app-sky {
     /* The dock's words: --text-label is 15px above; they take the sturdy 700. */
     :root [data-testid="dock-slider-items"] .dock-item span { font-weight: 700; }
 }
+
+/* 2026-10-15 · A ROW OF TABS WIDER THAN THE PHONE (components/neuglass/
+   ScrollTabRow — Preferences' sections, the Finance inbox's statuses). The row
+   is its own container, so every length below is a share of the row's width
+   (cqi), not of a phone we guessed at:
+   - 100cqi is the scrolling row itself (the container's content box, inside
+     the pill's padding); each tab is a third of it after the two gaps between
+     three tabs (0.5rem) and a 2.75rem strip where the next tab peeks out under
+     the arrow (2.75rem = 44px, the phone's touch floor for the arrow itself),
+     so exactly three are whole, at any width;
+   - the label is 14px (the phone's text-xs) and only steps down when a third
+     could not hold the row's longest label (`fit` ems of it, bold) plus its
+     2×0.375rem padding: (third − 0.75rem) ≥ fit·size  ⇒
+     size ≤ (100cqi − 5.5rem) / (3·fit), and --tabrow-div is 3·fit + a little.
+     Measured in the app's font: "Team & access" 6.7–6.9em (Preferences, fit 7),
+     "Needs attention" 7.26em (Finance inbox, fit 7.4) — both draw 14px from a
+     360px phone up and ~12px on a 320px one.
+   Phone only: from lg up the tabs are their own width and nothing scrolls. */
+@media (max-width: 1023.98px) {
+    /* Phone only, like the sizing: a container cannot be sized by what is in
+       it, and from lg up a row may shrink to fit its tabs (lg:inline-flex). */
+    .tabrow { container-type: inline-size; }
+    .tabrow__tab {
+        flex: 0 0 calc((100cqi - 3.25rem) / 3);
+        font-size: clamp(0.625rem, calc((100cqi - 5.5rem) / var(--tabrow-div, 22.5)), 0.875rem);
+        line-height: 1.2rem;
+    }
+}
+/* The fade is on the tabs, not the pill, and ONLY inside the 2.75rem peek strip
+   (the row's box runs 0.25rem past the tabs on each side, -m-1 p-1): the
+   third tab, open or not, is never faded. */
+.tabrow--end {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent calc(100% - 0.75rem));
+    mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent calc(100% - 0.75rem));
+}
+.tabrow--start {
+    -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 3rem), transparent calc(100% - 0.75rem));
+    mask-image: linear-gradient(to left, #000 calc(100% - 3rem), transparent calc(100% - 0.75rem));
+}
+.tabrow--both {
+    -webkit-mask-image: linear-gradient(to right, transparent 0.75rem, #000 3rem, #000 calc(100% - 3rem), transparent calc(100% - 0.75rem));
+    mask-image: linear-gradient(to right, transparent 0.75rem, #000 3rem, #000 calc(100% - 3rem), transparent calc(100% - 0.75rem));
+}

@@ -67,12 +67,18 @@ def test_no_settings_card_is_on_the_old_style():
 
 def test_phone_tabs_scroll_with_whole_labels_and_are_real_tabs():
     s = src("pages/Settings.js")
-    assert "overflow-x-auto rounded-pill p-1" in s
     # (since the two-pane layout the row is phone-only: <div className="lg:hidden">)
-    assert "whitespace-nowrap rounded-pill px-3.5 text-xs" in s
     assert '<div className="lg:hidden">' in s
-    assert 'role="tab"' in s and "aria-selected={isActive}" in s
-    assert "aria-pressed={isActive}" not in s
+    # 2026-10-15 — the row is the shared ScrollTabRow: real tabs (its default
+    # kind), three whole at any width, an arrow to the rest.
+    i = s.index("<ScrollTabRow items={visibleTabs}")
+    row = s[i:i + 600]
+    assert 'kind="toggles"' not in row and 'testid="settings-tabs"' in row
+    c = src("components/neuglass/ScrollTabRow.jsx")
+    assert 'role: "tab", "aria-selected": open' in c
+    assert "overflow-x-auto" in c and "whitespace-nowrap" in c
+    css = src("index.css")
+    assert "flex: 0 0 calc((100cqi - 3.25rem) / 3);" in css      # a third each, less the peek strip
 
 
 def test_a_member_can_see_what_they_can_open():
@@ -166,5 +172,8 @@ def test_the_audit_log_fits_a_phone():
 
 
 def test_the_open_phone_tab_is_not_clipped_by_the_row_end():
-    s = src("pages/Settings.js")
-    assert "flex scroll-px-1 items-center gap-1 overflow-x-auto rounded-pill p-1" in s
+    # 2026-10-15 — brought into view by hand, clear of the arrows (the peek
+    # strip), and only when it is really hidden; scrollIntoView nudged the row.
+    c = src("components/neuglass/ScrollTabRow.jsx")
+    assert "const PEEK = 44, SLACK = 4;" in c
+    assert ".scrollIntoView(" not in c

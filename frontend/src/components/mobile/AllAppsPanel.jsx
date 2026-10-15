@@ -34,7 +34,7 @@ import {
   UsersThree, BookOpen, Gauge, AirplaneTakeoff, CaretRight,
   ShieldCheck, FlowArrow, GearSix, AddressBook, Books,
 } from "@phosphor-icons/react";
-import { hasPerm } from "@/lib/perms";
+import { hasPerm, canSeeAnyCrm } from "@/lib/perms";
 import { INK_PLATE } from "@/components/neuglass/glass";
 import { cn } from "@/lib/utils";
 import { useBodyScrollLock } from "./BottomSheet";
@@ -91,7 +91,13 @@ export function buildTiles({ user, t }) {
        dock now spends that slot on the slider's own More, so CRM returns to the
        panel it came from. Same `people` permission it carried either way, so
        nobody gains or loses access by the move — only the number of taps. */
-    { key: "crm", to: "/crm", label: t("nav.crm", "CRM"), icon: AddressBook, perm: "people" },
+    /* 2026-10-15 — for whichever side of CRM they hold (canSeeAnyCrm, the CRM
+       page's own test), not `people` alone: Sales holds the buyers side only and
+       had no door to CRM on a phone at all. And only while the bar has a Desk —
+       without one, CRM sits in the bar itself (dockSlots), and nothing appears
+       in two places. */
+    { key: "crm", to: "/crm", label: t("nav.crm", "CRM"), icon: AddressBook,
+      show: (u) => canSeeAnyCrm(u) && hasPerm(u, "inbox") },
     /* MERGE 2026-10-06 — both sides added to this list and neither contradicts
        the other: CRM comes back from the dock (above) while Journal stops being
        owner-only and the Company Brain arrives. All three stay. */
@@ -123,6 +129,7 @@ export function buildTiles({ user, t }) {
     if (tile.ownerOnly && user?.role !== "owner") return false;
     // An owner passes every permission gate; hasPerm already says so.
     if (tile.perm && !hasPerm(user, tile.perm)) return false;
+    if (tile.show && !tile.show(user)) return false;
     return true;
   });
 }

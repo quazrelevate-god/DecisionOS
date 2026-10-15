@@ -32,6 +32,7 @@ import { CurrencyCircleDollar, ShieldCheck, FloppyDisk, Info, UserCircle, Transl
 import { useIsMobile } from "../hooks/useIsMobile";
 import { openGuide } from "../lib/guide";
 import { INK_PILL } from "../components/neuglass/glass";
+import { ScrollTabRow } from "../components/neuglass/ScrollTabRow";
 
 const CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "AUD"];
 const inp = "w-full nm-field px-3 py-2 text-sm";
@@ -1169,23 +1170,12 @@ export default function Settings() {
       {/* Below lg the sections are a scrolling row of tabs (KM-5's pressed
           track); from lg up they are the side panel (SettingsShell). */}
       <div className="lg:hidden">
-        {/* scroll-px-1: the open tab scrolls into view INSIDE the row's
-            padding, not flush against its rounded end (Workspace was clipped). */}
-        <div className="ng-pressed mb-3 flex scroll-px-1 items-center gap-1 overflow-x-auto rounded-pill p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-             role="tablist" aria-label="Settings sections" data-testid="settings-tabs">
-          {visibleTabs.map((t) => {
-            const isActive = t.key === tab;
-            return (
-              <button key={t.key} type="button" onClick={() => selectTab(t.key)}
-                data-testid={`settings-tab-${t.key}`} role="tab" aria-selected={isActive}
-                ref={isActive ? (el) => el?.scrollIntoView?.({ block: "nearest", inline: "nearest" }) : undefined}
-                className={`flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-pill px-3.5 text-xs ${
-                  isActive ? "ng-pop font-semibold text-foreground" : "text-foreground/60"}`}>
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+        {/* 2026-10-15 (founder, Redmi) — three sections in view and an arrow
+            to the rest; the row itself is shared (ScrollTabRow). */}
+        <ScrollTabRow items={visibleTabs} active={tab} onPick={selectTab}
+          className="mb-3" trackClassName="ng-pressed" label="Settings sections"
+          testid="settings-tabs" tabTestId={(k) => `settings-tab-${k}`} fit={7.0}
+          tabClassName={(open) => `h-10 px-1.5 ${open ? "ng-pop font-semibold text-foreground" : "font-medium text-foreground/60"}`} />
         <p className="mb-4 text-xs text-muted-foreground">{active.desc}</p>
       </div>
 
